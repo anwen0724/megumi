@@ -63,8 +63,8 @@ export function createRuntimeIpcHandler<
     event: IpcMainInvokeEvent,
     rawRequest: unknown,
   ): Promise<RuntimeIpcResult<TData, TChannel>> => {
+    const startedAt = now();
     const parsed = options.requestSchema.safeParse(rawRequest);
-    const startedAt = parsed.success ? new Date(parsed.data.meta.createdAt) : now();
     const requestId = parsed.success ? parsed.data.requestId : extractRequestId(rawRequest);
     const context = createHandlerContext({
       channel: options.channel,

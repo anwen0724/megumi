@@ -1,6 +1,8 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import path from 'node:path';
 import { redactRuntimeValue } from '@megumi/security/redaction';
+import type { MegumiHomePaths } from './megumi-home.service';
 
 export type RuntimeLogLevel = 'info' | 'warn' | 'error';
 
@@ -43,6 +45,12 @@ export class RuntimeJsonlLogger implements RuntimeLogger {
 
     appendFileSync(this.filePath, `${JSON.stringify(entry)}\n`, 'utf8');
   }
+}
+
+export function createRuntimeJsonlLoggerForMegumiHome(
+  paths: Pick<MegumiHomePaths, 'logsPath'>,
+): RuntimeLogger {
+  return new RuntimeJsonlLogger(path.join(paths.logsPath, 'runtime.jsonl'));
 }
 
 export const noopRuntimeLogger: RuntimeLogger = {

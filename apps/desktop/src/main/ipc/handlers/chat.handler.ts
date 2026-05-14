@@ -16,20 +16,29 @@ import { getDefaultProviderService } from './provider.handler';
 import { createElectronSecretStoreService } from '@megumi/desktop/main/services/secret-store.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
+import type { RuntimeLogger } from '../../services/runtime-logger.service';
 
 export interface ChatHandlersService {
   streamChat(request: ChatRuntimeRequest): AsyncIterable<RuntimeEvent>;
   cancelChat(requestId: string): boolean;
 }
 
+export interface RegisterChatHandlersOptions {
+  logger?: RuntimeLogger;
+}
+
 let defaultChatService: ChatHandlersService | null = null;
 
-export function registerChatHandlers(service = getDefaultChatService()): void {
+export function registerChatHandlers(
+  service = getDefaultChatService(),
+  options: RegisterChatHandlersOptions = {},
+): void {
   ipcMain.handle(
     IPC_CHANNELS.chat.start,
     createRuntimeIpcHandler({
       channel: IPC_CHANNELS.chat.start,
       requestSchema: ChatStartRequestSchema,
+      logger: options.logger,
       handle: async (request, event, context) => {
         const runtimeRequest: ChatRuntimeRequest = {
           ...request.payload,
@@ -38,7 +47,7 @@ export function registerChatHandlers(service = getDefaultChatService()): void {
         };
         const stream = service.streamChat(runtimeRequest);
 
-        void forwardRuntimeEvents(event.sender, stream);
+        void forwardRuntimeEvents(event.sender, stream, { logger: options.logger });
 
         return {
           requestId: request.requestId,
@@ -53,6 +62,7 @@ export function registerChatHandlers(service = getDefaultChatService()): void {
     createRuntimeIpcHandler({
       channel: IPC_CHANNELS.chat.cancel,
       requestSchema: ChatCancelRequestSchema,
+      logger: options.logger,
       handle: async (request) => ({
         cancelled: service.cancelChat(request.payload.targetRequestId),
       }),

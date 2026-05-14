@@ -25,4 +25,18 @@ describe('registerAllHandlers', () => {
     expect(registerProviderHandlers).toHaveBeenCalledTimes(1);
     expect(registerChatHandlers).toHaveBeenCalledTimes(1);
   });
+
+  it('passes the runtime logger to business IPC handlers', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    registerAllHandlers({ logger });
+
+    expect(registerProviderHandlers).toHaveBeenCalledWith(undefined, { logger });
+    expect(registerChatHandlers).toHaveBeenCalledWith(undefined, { logger });
+  });
 });

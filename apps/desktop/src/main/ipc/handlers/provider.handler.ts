@@ -20,6 +20,7 @@ import { initializeElectronMegumiHomeSync } from '@megumi/desktop/main/services/
 import { ProviderSettingsService, type ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/provider-settings.service';
 import { createElectronSecretStoreService } from '@megumi/desktop/main/services/secret-store.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import type { RuntimeLogger } from '../../services/runtime-logger.service';
 
 export interface ProviderHandlersService {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;
@@ -29,14 +30,22 @@ export interface ProviderHandlersService {
   deleteProviderApiKey(providerId: ProviderId): Promise<unknown>;
 }
 
+export interface RegisterProviderHandlersOptions {
+  logger?: RuntimeLogger;
+}
+
 let defaultProviderService: ProviderHandlersService | null = null;
 
-export function registerProviderHandlers(service = getDefaultProviderService()): void {
+export function registerProviderHandlers(
+  service = getDefaultProviderService(),
+  options: RegisterProviderHandlersOptions = {},
+): void {
   ipcMain.handle(
     IPC_CHANNELS.provider.list,
     createRuntimeIpcHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema: ProviderListRequestSchema,
+      logger: options.logger,
       handle: async () => ({
         providers: await service.listProviderStatuses(),
       }),
@@ -49,6 +58,7 @@ export function registerProviderHandlers(service = getDefaultProviderService()):
     createRuntimeIpcHandler({
       channel: IPC_CHANNELS.provider.update,
       requestSchema: ProviderUpdateRequestSchema,
+      logger: options.logger,
       handle: async (request) => {
         const { providerId, ...input } = request.payload;
         await service.updateProviderSettings(providerId, input);
@@ -63,6 +73,7 @@ export function registerProviderHandlers(service = getDefaultProviderService()):
     createRuntimeIpcHandler({
       channel: IPC_CHANNELS.provider.setApiKey,
       requestSchema: ProviderApiKeyRequestSchema,
+      logger: options.logger,
       handle: async (request) => {
         await service.setProviderApiKey(request.payload.providerId, request.payload.apiKey);
         return {};
@@ -76,6 +87,7 @@ export function registerProviderHandlers(service = getDefaultProviderService()):
     createRuntimeIpcHandler({
       channel: IPC_CHANNELS.provider.deleteApiKey,
       requestSchema: ProviderDeleteApiKeyRequestSchema,
+      logger: options.logger,
       handle: async (request) => {
         await service.deleteProviderApiKey(request.payload.providerId);
         return {};

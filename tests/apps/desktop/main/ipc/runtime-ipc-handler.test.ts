@@ -110,7 +110,39 @@ describe('createRuntimeIpcHandler', () => {
         debugId: 'debug-provider-1',
         operationName: 'provider.list',
         handledAt: '2026-05-12T00:00:01.000Z',
-        durationMs: 1000,
+        durationMs: 0,
+      },
+    });
+  });
+
+  it('calculates duration from main-side handler timing instead of renderer request metadata', async () => {
+    const now = vi
+      .fn()
+      .mockReturnValueOnce(new Date('2026-05-12T00:00:10.000Z'))
+      .mockReturnValueOnce(new Date('2026-05-12T00:00:10.025Z'));
+    const handler = createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.provider.list,
+      requestSchema,
+      handle: async () => ({
+        providerId: 'deepseek',
+      }),
+      now,
+    });
+
+    const result = await handler({} as never, {
+      ...createContextRequest(),
+      meta: {
+        channel: IPC_CHANNELS.provider.list,
+        createdAt: '1999-01-01T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      meta: {
+        handledAt: '2026-05-12T00:00:10.025Z',
+        durationMs: 25,
       },
     });
   });

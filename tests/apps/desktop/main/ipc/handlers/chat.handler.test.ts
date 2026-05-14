@@ -229,4 +229,69 @@ describe('registerChatHandlers', () => {
     });
     expect(JSON.stringify(result)).not.toContain('Provider stack leaked.');
   });
+
+  it('uses the injected runtime logger for runtime event forwarding failures', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { registerChatHandlers } = await import('@megumi/desktop/main/ipc/handlers/chat.handler');
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const service = {
+      streamChat: vi.fn(async function* () {
+        yield {
+          eventId: 'event-invalid',
+          schemaVersion: 1,
+          eventType: 'run.failed',
+          requestId: 'ipc-chat-request-1',
+          context: {
+            requestId: 'ipc-chat-request-1',
+            traceId: 'trace-ipc-chat-request-1',
+            debugId: 'debug-ipc-chat-request-1',
+            operationName: 'chat.start',
+            source: 'renderer',
+            createdAt: '2026-05-12T00:00:00.000Z',
+          },
+          runId: 'run-1',
+          sequence: 1,
+          createdAt: '2026-05-12T00:00:01.000Z',
+          source: 'provider',
+          visibility: 'user',
+          persist: 'required',
+          payload: {
+            error: {
+              code: 'provider_auth_failed',
+              message: 'Authorization: Bearer sk-chat-secret',
+              severity: 'error',
+              retryable: false,
+              source: 'provider',
+              recoverable: false,
+            },
+          },
+        } as RuntimeEvent;
+      }),
+      cancelChat: vi.fn(),
+    };
+
+    registerChatHandlers(service, { logger });
+
+    const handler = handle.mock.calls.find(([channel]) => channel === IPC_CHANNELS.chat.start)?.[1];
+    await handler({ sender: { send: vi.fn() } }, createRequest(
+      IPC_CHANNELS.chat.start,
+      createChatStartPayload(),
+    ));
+
+    await vi.waitFor(() => {
+      expect(logger.warn).toHaveBeenCalledWith(
+        'runtime_event_invalid',
+        expect.objectContaining({
+          eventType: 'run.failed',
+          debugId: 'debug-ipc-chat-request-1',
+        }),
+      );
+    });
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('sk-chat-secret');
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('recoverable');
+  });
 });
