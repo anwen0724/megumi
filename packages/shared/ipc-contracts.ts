@@ -2,6 +2,10 @@ import { z } from 'zod';
 import type { IsoDateTime } from './ids';
 import { IPC_CHANNELS } from './ipc-channels';
 import { RuntimeIpcErrorSchema, type RuntimeIpcError } from './ipc-errors';
+import { RuntimeContextSchema, RuntimeResultMetaSchema, type RuntimeContext } from './runtime-context';
+import { IsoDateTimeSchema, RuntimeIdSchema } from './runtime-validation';
+
+export { IsoDateTimeSchema };
 
 export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.provider.list,
@@ -21,13 +25,7 @@ const BUSINESS_IPC_CHANNEL_VALUES = [...BUSINESS_IPC_CHANNELS] as [
 
 export const BusinessIpcChannelSchema = z.enum(BUSINESS_IPC_CHANNEL_VALUES);
 
-export const RuntimeIpcRequestIdSchema = z
-  .string()
-  .min(1)
-  .max(128)
-  .regex(/^[A-Za-z0-9:_-]+$/, 'Request id must contain only letters, numbers, colon, underscore, or hyphen.');
-
-export const IsoDateTimeSchema = z.string().datetime({ offset: true });
+export const RuntimeIpcRequestIdSchema = RuntimeIdSchema;
 
 export const RuntimeIpcRequestMetaSchema = z
   .object({
@@ -37,14 +35,10 @@ export const RuntimeIpcRequestMetaSchema = z
   })
   .strict();
 
-export const RuntimeIpcResponseMetaSchema = z
-  .object({
-    requestId: RuntimeIpcRequestIdSchema,
-    channel: BusinessIpcChannelSchema,
-    handledAt: IsoDateTimeSchema,
-    durationMs: z.number().nonnegative().optional(),
-  })
-  .strict();
+export const RuntimeIpcResponseMetaSchema = RuntimeResultMetaSchema.extend({
+  requestId: RuntimeIpcRequestIdSchema,
+  channel: BusinessIpcChannelSchema,
+}).strict();
 
 export interface RuntimeIpcRequestMeta<TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
   channel: TChannel;
@@ -56,11 +50,15 @@ export interface RuntimeIpcRequest<TPayload, TChannel extends BusinessIpcChannel
   requestId: string;
   payload: TPayload;
   meta: RuntimeIpcRequestMeta<TChannel>;
+  context?: RuntimeContext;
 }
 
 export interface RuntimeIpcResponseMeta<TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
   requestId: string;
   channel: TChannel;
+  traceId?: string;
+  debugId?: string;
+  operationName?: string;
   handledAt: IsoDateTime;
   durationMs?: number;
 }
@@ -93,6 +91,7 @@ export function createRuntimeIpcRequestSchema<TPayload extends z.ZodTypeAny, TCh
       meta: RuntimeIpcRequestMetaSchema.extend({
         channel: z.literal(channel),
       }).strict(),
+      context: RuntimeContextSchema.optional(),
     })
     .strict();
 }
