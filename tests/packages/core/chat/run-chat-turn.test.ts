@@ -23,6 +23,20 @@ const request: ChatRuntimeRequest = {
   ],
 };
 
+const runtimeContext = {
+  requestId: 'request-1',
+  traceId: 'trace-chat-1',
+  debugId: 'debug-chat-1',
+  operationName: 'chat.start',
+  source: 'main',
+  createdAt: '2026-05-11T00:00:00.000Z',
+} as const;
+
+const requestWithRuntimeContext: ChatRuntimeRequest = {
+  ...request,
+  runtimeContext,
+};
+
 let eventIds = 1;
 
 beforeEach(() => {
@@ -157,5 +171,67 @@ describe('runChatTurn', () => {
         },
       },
     });
+  });
+
+  it('propagates runtime context to all lifecycle and provider events', async () => {
+    const aiPort: AiPort = {
+      async *streamChat(input) {
+        yield createAssistantDeltaEvent({
+          eventId: input.eventIdFactory(),
+          request: input.request,
+          runId: input.runId,
+          sequence: input.nextSequence(),
+          delta: 'Hello',
+          createdAt: clock.now(),
+        });
+      },
+    };
+
+    const events = await collect(runChatTurn({
+      request: requestWithRuntimeContext,
+      aiPort,
+      runIdFactory: () => 'run-1',
+      eventIdFactory: () => `event-${eventIds++}`,
+      clock,
+    }));
+
+    expect(events.map((event) => event.context)).toEqual([
+      runtimeContext,
+      runtimeContext,
+      runtimeContext,
+    ]);
+  });
+
+  it('normalizes thrown provider errors into display-safe failed events with debug id', async () => {
+    const aiPort: AiPort = {
+      async *streamChat() {
+        throw new Error('network exploded with sk-raw-secret');
+      },
+    };
+
+    const events = await collect(runChatTurn({
+      request: requestWithRuntimeContext,
+      aiPort,
+      runIdFactory: () => 'run-1',
+      eventIdFactory: () => `event-${eventIds++}`,
+      clock,
+    }));
+
+    expect(events[1]).toMatchObject({
+      eventType: 'run.failed',
+      context: runtimeContext,
+      payload: {
+        error: {
+          code: 'runtime_unknown',
+          message: 'Chat runtime failed.',
+          severity: 'error',
+          retryable: true,
+          source: 'core',
+          debugId: 'debug-chat-1',
+        },
+      },
+    });
+    expect(JSON.stringify(events)).not.toContain('sk-raw-secret');
+    expect(JSON.stringify(events)).not.toContain('network exploded');
   });
 });

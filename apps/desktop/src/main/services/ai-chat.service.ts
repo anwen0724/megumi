@@ -1,9 +1,11 @@
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
+import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError, RuntimeErrorCode } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { createRunFailedEvent } from '@megumi/core/chat/events';
 import { runChatTurn } from '@megumi/core/chat/run-chat-turn';
+import { normalizeRuntimeError } from '@megumi/core/runtime-exception';
 import type { AiPort } from '@megumi/core/ports/ai-port';
 import type { ChatRuntimeClock } from '@megumi/core/chat/types';
 import type {
@@ -17,6 +19,7 @@ export interface AiChatRuntimeResolverPort {
   resolveProviderRuntimeConfig(input: {
     providerId: ProviderId;
     modelId?: string;
+    runtimeContext?: RuntimeContext;
   }): Promise<ProviderRuntimeConfig>;
 }
 
@@ -54,6 +57,7 @@ export class AiChatService {
       const config = await this.options.resolver.resolveProviderRuntimeConfig({
         providerId: request.providerId,
         modelId: String(request.modelId),
+        runtimeContext: request.runtimeContext,
       });
       const adapter = this.options.registry.getAdapter(config.providerId);
       const aiPort: AiPort = {
@@ -111,6 +115,7 @@ function toRuntimeError(error: unknown, request: ChatRuntimeRequest): RuntimeErr
       severity: 'error',
       retryable: error.payload.retryable,
       source: 'provider',
+      ...(error.payload.debugId ? { debugId: error.payload.debugId } : {}),
       details: {
         providerId: request.providerId,
         modelId: String(request.modelId),
@@ -119,11 +124,11 @@ function toRuntimeError(error: unknown, request: ChatRuntimeRequest): RuntimeErr
   }
 
   return {
-    code: 'runtime_unknown',
-    message: 'Chat service failed.',
-    severity: 'error',
-    retryable: false,
-    source: 'main',
+    ...normalizeRuntimeError(error, {
+      source: 'main',
+      debugId: request.runtimeContext?.debugId ?? `debug:${request.requestId}`,
+      fallbackMessage: 'Chat service failed.',
+    }),
     details: {
       providerId: request.providerId,
       modelId: String(request.modelId),

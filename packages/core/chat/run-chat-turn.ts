@@ -1,4 +1,5 @@
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { normalizeRuntimeError } from '../runtime-exception';
 import {
   createRunCancelledEvent,
   createRunCompletedEvent,
@@ -65,20 +66,18 @@ export async function* runChatTurn(input: RunChatTurnInput): AsyncIterable<Runti
         createdAt: clock.now(),
       });
     }
-  } catch {
+  } catch (error) {
     yield createRunFailedEvent({
       eventId: eventIdFactory(),
       request: input.request,
       runId,
       sequence: nextSequence(),
       createdAt: clock.now(),
-      error: {
-        code: 'runtime_unknown',
-        message: 'Chat runtime failed.',
-        severity: 'error',
-        retryable: false,
+      error: normalizeRuntimeError(error, {
         source: 'core',
-      },
+        debugId: input.request.runtimeContext?.debugId ?? `debug:${input.request.requestId}`,
+        fallbackMessage: 'Chat runtime failed.',
+      }),
     });
   }
 }

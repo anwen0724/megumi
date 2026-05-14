@@ -29,6 +29,20 @@ const request: ChatRuntimeRequest = {
   ],
 };
 
+const runtimeContext = {
+  requestId: 'request-1',
+  traceId: 'trace-chat-1',
+  debugId: 'debug-chat-1',
+  operationName: 'chat.start',
+  source: 'main',
+  createdAt: '2026-05-11T00:00:00.000Z',
+} as const;
+
+const requestWithRuntimeContext: ChatRuntimeRequest = {
+  ...request,
+  runtimeContext,
+};
+
 const config: ProviderRuntimeConfig = {
   providerId: 'deepseek',
   kind: 'openai-compatible',
@@ -48,7 +62,14 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
 describe('AiChatService', () => {
   it('resolves runtime config and streams through the selected adapter', async () => {
     const resolver: AiChatRuntimeResolverPort = {
-      resolveProviderRuntimeConfig: async () => config,
+      resolveProviderRuntimeConfig: async (input) => {
+        expect(input).toEqual({
+          providerId: 'deepseek',
+          modelId: 'deepseek-v4-flash',
+          runtimeContext,
+        });
+        return config;
+      },
     };
 
     const registry: AiChatProviderRegistryPort = {
@@ -56,12 +77,12 @@ describe('AiChatService', () => {
         providerId: 'deepseek',
         async *streamChat(input) {
           expect(input.config).toBe(config);
-          expect(input.request).toBe(request);
+          expect(input.request).toBe(requestWithRuntimeContext);
           expect(input.runId).toBe('run-1');
 
           yield createAssistantDeltaEvent({
             eventId: input.eventIdFactory(),
-            request,
+            request: input.request,
             runId: 'run-1',
             sequence: input.nextSequence(),
             delta: 'Hello',
@@ -69,7 +90,7 @@ describe('AiChatService', () => {
           });
           yield createAssistantCompletedEvent({
             eventId: input.eventIdFactory(),
-            request,
+            request: input.request,
             runId: 'run-1',
             sequence: input.nextSequence(),
             createdAt: '2026-05-11T00:00:03.000Z',
@@ -88,7 +109,7 @@ describe('AiChatService', () => {
       clock: { now: () => '2026-05-11T00:00:01.000Z' },
     });
 
-    const events = await collect(service.streamChat(request));
+    const events = await collect(service.streamChat(requestWithRuntimeContext));
 
     expect(events.map((event) => event.eventType)).toEqual([
       'run.started',
@@ -107,6 +128,12 @@ describe('AiChatService', () => {
         runKind: 'chat',
       },
     });
+    expect(events.map((event) => event.context)).toEqual([
+      runtimeContext,
+      runtimeContext,
+      runtimeContext,
+      runtimeContext,
+    ]);
   });
 
   it('maps runtime resolution errors to failed stream events', async () => {
@@ -181,7 +208,10 @@ describe('AiChatService', () => {
       clock: { now: () => '2026-05-11T00:00:01.000Z' },
     });
 
-    const events = await collect(service.streamChat(request));
+    const events = await collect(service.streamChat({
+      ...requestWithRuntimeContext,
+      providerId: 'deepseek',
+    }));
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -193,8 +223,9 @@ describe('AiChatService', () => {
           error: expect.objectContaining({
             code: 'runtime_unknown',
             message: 'Chat service failed.',
-            retryable: false,
+            retryable: true,
             source: 'main',
+            debugId: 'debug-chat-1',
             details: {
               providerId: 'deepseek',
               modelId: 'deepseek-v4-flash',
