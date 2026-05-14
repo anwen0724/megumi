@@ -1,5 +1,6 @@
 import type { ChatRuntimeRequest } from './chat-contracts';
 import type { RunId } from './ids';
+import type { RuntimeContext } from './runtime-context';
 import type { RuntimeError } from './runtime-errors';
 import type {
   AssistantOutputCompletedPayload,
@@ -21,6 +22,7 @@ export interface RuntimeEventFactoryInput<TType extends RuntimeEventType> {
   eventType: TType;
   runId: RunId | string;
   request: ChatRuntimeRequest;
+  runtimeContext?: RuntimeContext;
   sequence: number;
   createdAt: string;
   source: RuntimeEventSource;
@@ -32,6 +34,8 @@ export interface RuntimeEventFactoryInput<TType extends RuntimeEventType> {
 export function createRuntimeEvent<TType extends RuntimeEventType>(
   input: RuntimeEventFactoryInput<TType>,
 ): RuntimeEvent<RuntimeEventPayloadByType[TType]> & { eventType: TType } {
+  const context = input.runtimeContext ?? input.request.runtimeContext;
+
   return {
     eventId: input.eventId,
     schemaVersion: 1,
@@ -39,6 +43,7 @@ export function createRuntimeEvent<TType extends RuntimeEventType>(
     runId: input.runId,
     sessionId: input.request.sessionId,
     requestId: input.request.requestId,
+    ...(context ? { context } : {}),
     sequence: input.sequence,
     createdAt: input.createdAt,
     source: input.source,

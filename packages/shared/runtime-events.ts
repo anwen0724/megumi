@@ -1,5 +1,6 @@
 import type { JsonValue } from './json';
 import type { RuntimeError } from './runtime-errors';
+import type { RuntimeContext } from './runtime-context';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
@@ -61,6 +62,7 @@ export interface RuntimeEvent<TPayload extends object = object> {
   runId: string;
   sessionId?: string;
   requestId?: string;
+  context?: RuntimeContext;
   sequence: number;
   createdAt: string;
   source: RuntimeEventSource;

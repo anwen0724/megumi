@@ -5,7 +5,17 @@ import {
   isTerminalRuntimeEvent,
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime-event-schemas';
+import { createRunStartedEvent } from '@megumi/shared/runtime-event-factory';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+
+const runtimeContext = {
+  requestId: 'ipc-chat-start-1',
+  traceId: 'trace-runtime-1',
+  debugId: 'debug-runtime-1',
+  operationName: 'chat.start',
+  source: 'renderer',
+  createdAt: '2026-05-12T10:00:00.000Z',
+} as const;
 
 describe('runtime event contracts', () => {
   it('accepts run.started events', () => {
@@ -119,5 +129,57 @@ describe('runtime event contracts', () => {
 
     expect(schema.eventType).toBe('assistant.output.delta');
     expect(schema.payload).toEqual({ delta: 'hi' });
+  });
+
+  it('accepts optional runtime context on event envelopes', () => {
+    const event = RuntimeEventSchema.parse({
+      eventId: 'event-with-context',
+      schemaVersion: 1,
+      eventType: 'run.started',
+      runId: 'run-1',
+      requestId: 'ipc-chat-start-1',
+      context: runtimeContext,
+      sequence: 1,
+      createdAt: '2026-05-12T10:00:01.000Z',
+      source: 'core',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        runKind: 'chat',
+      },
+    });
+
+    expect(event.context).toEqual(runtimeContext);
+  });
+
+  it('copies runtime context from ChatRuntimeRequest when creating runtime events', () => {
+    const event = createRunStartedEvent({
+      eventId: 'event-from-factory',
+      runId: 'run-1',
+      sequence: 1,
+      createdAt: '2026-05-12T10:00:01.000Z',
+      request: {
+        requestId: 'ipc-chat-start-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        createdAt: '2026-05-12T10:00:00.000Z',
+        runtimeContext,
+        messages: [
+          {
+            id: 'message-1',
+            role: 'user',
+            content: 'Hello',
+            createdAt: '2026-05-12T10:00:00.000Z',
+          },
+        ],
+      },
+    });
+
+    expect(event).toMatchObject({
+      requestId: 'ipc-chat-start-1',
+      context: runtimeContext,
+    });
   });
 });

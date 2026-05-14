@@ -1,6 +1,7 @@
 import type { IsoDateTime, MessageId, RunId, SessionId, WorkspaceId } from './ids';
 import type { ModelId } from './model-contracts';
 import type { ProviderId } from './provider-contracts';
+import type { RuntimeContext } from './runtime-context';
 
 export const CHAT_ROLES = ['system', 'user', 'assistant', 'tool'] as const;
 
@@ -32,6 +33,7 @@ export interface ChatRuntimeRequest {
   modelId: ModelId | string;
   messages: ChatMessage[];
   context?: ChatRuntimeContext;
+  runtimeContext?: RuntimeContext;
   createdAt: IsoDateTime;
 }
 

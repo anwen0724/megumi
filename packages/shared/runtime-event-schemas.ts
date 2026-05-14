@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { JsonObjectSchema } from './json';
+import { RuntimeContextSchema } from './runtime-context';
 import { RuntimeErrorSchema } from './runtime-errors';
 import {
   RUNTIME_EVENT_PERSIST_MODES,
@@ -52,6 +53,7 @@ const RuntimeEventBaseSchema = z
     runId: z.string().min(1),
     sessionId: z.string().min(1).optional(),
     requestId: z.string().min(1).optional(),
+    context: RuntimeContextSchema.optional(),
     sequence: RuntimeEventSequenceSchema,
     createdAt: RuntimeEventIsoDateTimeSchema,
     source: RuntimeEventSourceSchema,
