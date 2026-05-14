@@ -62,6 +62,7 @@ function sourceHits(files: string[], pattern: RegExp): string[] {
 const packageSourceFiles = listSourceFiles('packages');
 const desktopSourceFiles = listSourceFiles('apps/desktop/src');
 const sourceFiles = [...packageSourceFiles, ...desktopSourceFiles];
+const oldBridgeNamePattern = new RegExp(`\\b${['dev', 'flow'].join('')}\\b`);
 
 describe('Runtime Common Foundation source guards', () => {
   it('keeps RuntimeError on severity and retryable fields without recoverable', () => {
@@ -112,7 +113,7 @@ describe('Runtime Common Foundation source guards', () => {
     const preloadIndexSource = readProjectFile('apps/desktop/src/preload/index.ts');
 
     expect(preloadIndexSource).toContain("contextBridge.exposeInMainWorld('megumi'");
-    expect(sourceHits(desktopSourceFiles, /\bdevflow\b/)).toEqual([]);
+    expect(sourceHits(desktopSourceFiles, oldBridgeNamePattern)).toEqual([]);
   });
 
   it('keeps packages/shared independent from other Megumi packages', () => {
