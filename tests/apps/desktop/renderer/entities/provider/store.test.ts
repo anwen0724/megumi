@@ -21,6 +21,8 @@ function createSuccessMeta(channel: string, requestId = 'ipc-provider-request-1'
   return {
     requestId,
     channel,
+    traceId: 'trace-provider-request-1',
+    operationName: channel.replace(':', '.'),
     handledAt: '2026-05-12T00:00:00.100Z',
   };
 }
@@ -87,6 +89,12 @@ describe('useProviderStore', () => {
         channel: IPC_CHANNELS.provider.list,
         source: 'renderer',
       }),
+      context: expect.objectContaining({
+        requestId: expect.stringMatching(/^ipc-/),
+        traceId: expect.stringMatching(/^trace-/),
+        operationName: 'provider.list',
+        source: 'renderer',
+      }),
     }));
     expect(useProviderStore.getState().providers).toEqual(providers);
     expect(useProviderStore.getState().status).toBe('ready');
@@ -112,6 +120,10 @@ describe('useProviderStore', () => {
       },
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.provider.update,
+        source: 'renderer',
+      }),
+      context: expect.objectContaining({
+        operationName: 'provider.update',
         source: 'renderer',
       }),
     }));
@@ -158,8 +170,12 @@ describe('useProviderStore', () => {
               severity: 'error',
               retryable: false,
               source: 'config',
+              debugId: 'debug-provider-list-1',
             },
-            meta: createSuccessMeta(IPC_CHANNELS.provider.list),
+            meta: {
+              ...createSuccessMeta(IPC_CHANNELS.provider.list),
+              debugId: 'debug-provider-list-1',
+            },
           }),
         },
       },
@@ -171,5 +187,7 @@ describe('useProviderStore', () => {
       status: 'error',
       error: 'Megumi config is invalid. Fix C:\\Users\\anwen\\.megumi\\config.json and try again.',
     });
+    expect(JSON.stringify(useProviderStore.getState())).not.toContain('stack trace');
+    expect(JSON.stringify(useProviderStore.getState())).not.toContain('sk-test-secret');
   });
 });

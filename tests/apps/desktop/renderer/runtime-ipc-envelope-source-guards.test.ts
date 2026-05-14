@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
@@ -22,6 +22,7 @@ describe('runtime ipc envelope renderer source guards', () => {
     expect(source).not.toContain('throw new Error(result.error');
     expect(source).toContain('RuntimeIpcResult');
     expect(source).toContain('createRendererRuntimeIpcRequest');
+    expect(source).toContain('getRuntimeIpcErrorMessage');
   });
 
   it('runtime chat hook does not cast old ok/error results', () => {
@@ -31,6 +32,7 @@ describe('runtime ipc envelope renderer source guards', () => {
     expect(source).not.toContain('throw new Error(result.error');
     expect(source).not.toContain('window.megumi.chat.cancel({ requestId })');
     expect(source).toContain('createRendererRuntimeIpcRequest');
+    expect(source).toContain('activeTraceIdRef');
     expect(source).toContain('targetRequestId');
   });
 
@@ -45,5 +47,23 @@ describe('runtime ipc envelope renderer source guards', () => {
     expect(source).not.toContain('window.megumi.provider.setApiKey(input)');
     expect(source).not.toContain('window.megumi.provider.deleteApiKey(input)');
     expect(source).not.toContain('window.megumi.chat.start(request) as');
+    expect(source).not.toContain('window.megumi.chat.cancel({');
+  });
+
+  it('renderer runtime request helper builds RuntimeContext for business IPC', () => {
+    const source = readProjectFile('apps/desktop/src/renderer/shared/ipc/runtime-request.ts');
+
+    expect(source).toContain('createRuntimeContext');
+    expect(source).toContain('createRuntimeTraceId');
+    expect(source).toContain('context,');
+    expect(source).toContain("source: 'renderer'");
+  });
+
+  it('window controls stay outside business runtime context helper', () => {
+    const source = readProjectFile('apps/desktop/src/renderer/shared/ipc/client.ts');
+
+    expect(source).toContain('window.megumi.windowControls.minimize()');
+    expect(source).not.toContain('createRendererRuntimeIpcRequest');
+    expect(source).not.toContain('RuntimeIpcResult');
   });
 });

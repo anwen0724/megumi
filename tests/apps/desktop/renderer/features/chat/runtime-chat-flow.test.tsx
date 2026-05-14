@@ -38,6 +38,8 @@ function installMegumiMock() {
       meta: {
         requestId: request.requestId,
         channel: IPC_CHANNELS.chat.start,
+        traceId: request.context.traceId,
+        operationName: request.context.operationName,
         handledAt: '2026-05-12T00:00:00.100Z',
       },
     })),
@@ -136,6 +138,12 @@ describe('useRuntimeChat', () => {
         channel: IPC_CHANNELS.chat.start,
         source: 'renderer',
       }),
+      context: expect.objectContaining({
+        requestId: expect.stringMatching(/^ipc-chat-/),
+        traceId: expect.stringMatching(/^trace-/),
+        operationName: 'chat.start',
+        source: 'renderer',
+      }),
     }));
     const requestId = chat.start.mock.calls[0][0].requestId;
     expect(useAgentStore.getState().sessions[0].title).toBe('Hello Megumi');
@@ -209,10 +217,14 @@ describe('useRuntimeChat', () => {
         severity: 'error',
         retryable: false,
         source: 'provider',
+        debugId: 'debug-chat-start-1',
       },
       meta: {
         requestId: 'ipc-chat-start-1',
         channel: IPC_CHANNELS.chat.start,
+        traceId: 'trace-chat-start-1',
+        debugId: 'debug-chat-start-1',
+        operationName: 'chat.start',
         handledAt: '2026-05-12T00:00:00.100Z',
       },
     });
@@ -372,6 +384,7 @@ describe('useRuntimeChat', () => {
     });
 
     const startRequestId = chat.start.mock.calls[0][0].requestId;
+    const startTraceId = chat.start.mock.calls[0][0].context.traceId;
 
     await act(async () => {
       await result.current.cancelRuntimeChat();
@@ -383,6 +396,11 @@ describe('useRuntimeChat', () => {
       },
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.chat.cancel,
+        source: 'renderer',
+      }),
+      context: expect.objectContaining({
+        traceId: startTraceId,
+        operationName: 'chat.cancel',
         source: 'renderer',
       }),
     }));
