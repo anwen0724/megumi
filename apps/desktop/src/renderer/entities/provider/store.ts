@@ -8,7 +8,10 @@ import type {
   ProviderUpdatePayload,
 } from '@megumi/shared/ipc-schemas';
 import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider-contracts';
-import { createRendererRuntimeIpcRequest } from '../../shared/ipc/runtime-request';
+import {
+  createRendererRuntimeIpcRequest,
+  getRuntimeIpcErrorMessage,
+} from '../../shared/ipc';
 
 export type ProviderStoreStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
@@ -37,10 +40,6 @@ interface ProviderStoreState {
   updateProvider: (input: ProviderUpdateInput) => Promise<void>;
   setApiKey: (input: ProviderApiKeyInput) => Promise<void>;
   deleteApiKey: (input: ProviderDeleteApiKeyInput) => Promise<void>;
-}
-
-function getRuntimeIpcErrorMessage(result: RuntimeIpcResult<object>): string {
-  return result.ok ? 'Request succeeded.' : result.error.message;
 }
 
 export const useProviderStore = create<ProviderStoreState>((set, get) => ({

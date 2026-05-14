@@ -234,6 +234,7 @@ function failChatStart(payload: ComposerSubmitPayload, message: string) {
 
 export function useRuntimeChat() {
   const activeRequestIdRef = useRef<string | null>(null);
+  const activeTraceIdRef = useRef<string | null>(null);
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
   const processedSequencesRef = useRef<Map<string, number>>(new Map());
@@ -272,6 +273,7 @@ export function useRuntimeChat() {
       { requestId },
     );
     activeRequestIdRef.current = request.requestId;
+    activeTraceIdRef.current = request.context?.traceId ?? null;
     processedSequencesRef.current.clear();
     completedContentsRef.current.clear();
 
@@ -310,6 +312,8 @@ export function useRuntimeChat() {
     await window.megumi.chat.cancel(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.cancel, {
         targetRequestId: requestId,
+      }, {
+        traceId: activeTraceIdRef.current ?? undefined,
       }),
     );
   }, []);
