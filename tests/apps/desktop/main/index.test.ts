@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const homePath = 'C:/tmp/megumi-runtime-logger-review';
+  const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
   const logsPath = `${homePath}/logs`;
   return {
     homePath,
