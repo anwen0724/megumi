@@ -15,6 +15,7 @@ import { ProviderRuntimeService } from '@megumi/desktop/main/services/provider-r
 import { getDefaultProviderService } from './provider.handler';
 import { createElectronSecretStoreService } from '@megumi/desktop/main/services/secret-store.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export interface ChatHandlersService {
   streamChat(request: ChatRuntimeRequest): AsyncIterable<RuntimeEvent>;
@@ -29,10 +30,11 @@ export function registerChatHandlers(service = getDefaultChatService()): void {
     createRuntimeIpcHandler({
       channel: IPC_CHANNELS.chat.start,
       requestSchema: ChatStartRequestSchema,
-      handle: async (request, event) => {
+      handle: async (request, event, context) => {
         const runtimeRequest: ChatRuntimeRequest = {
           ...request.payload,
           requestId: request.requestId,
+          runtimeContext: context,
         };
         const stream = service.streamChat(runtimeRequest);
 
@@ -57,15 +59,6 @@ export function registerChatHandlers(service = getDefaultChatService()): void {
       mapError: mapChatIpcError,
     }),
   );
-}
-
-async function forwardRuntimeEvents(
-  sender: { send(channel: string, event: RuntimeEvent): void },
-  stream: AsyncIterable<RuntimeEvent>,
-): Promise<void> {
-  for await (const runtimeEvent of stream) {
-    sender.send(IPC_CHANNELS.runtime.event, runtimeEvent);
-  }
 }
 
 function mapChatIpcError(): RuntimeIpcError {

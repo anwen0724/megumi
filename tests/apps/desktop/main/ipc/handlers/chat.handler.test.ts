@@ -19,6 +19,14 @@ function createRequest(channel: string, payload: Record<string, unknown>, reques
       createdAt: '2026-05-12T00:00:00.000Z',
       source: 'renderer',
     },
+    context: {
+      requestId,
+      traceId: `trace-${requestId}`,
+      debugId: `debug-${requestId}`,
+      operationName: channel === 'chat:start' ? 'chat.start' : 'chat.cancel',
+      source: 'renderer',
+      createdAt: '2026-05-12T00:00:00.000Z',
+    },
   };
 }
 
@@ -126,6 +134,14 @@ describe('registerChatHandlers', () => {
     expect(service.streamChat).toHaveBeenCalledWith({
       ...createChatStartPayload(),
       requestId: 'ipc-chat-request-1',
+      runtimeContext: {
+        requestId: 'ipc-chat-request-1',
+        traceId: 'trace-ipc-chat-request-1',
+        debugId: 'debug-ipc-chat-request-1',
+        operationName: 'chat.start',
+        source: 'renderer',
+        createdAt: '2026-05-12T00:00:00.000Z',
+      },
     });
     expect(eventSender.send).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, expect.objectContaining({
       eventType: 'run.started',
