@@ -114,11 +114,15 @@ describe('preload api', () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { api } = await import('@megumi/desktop/preload/api');
     const request = createRequest(IPC_CHANNELS.provider.list, {});
-    delete request.context.debugId;
+    const { debugId: _debugId, ...contextWithoutDebugId } = request.context;
+    const requestWithoutDebugId = {
+      ...request,
+      context: contextWithoutDebugId,
+    };
 
     invoke.mockRejectedValue(new Error('native failure'));
 
-    const result = await api.provider.list(request);
+    const result = await api.provider.list(requestWithoutDebugId);
 
     expect(result).toMatchObject({
       ok: false,

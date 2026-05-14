@@ -7,6 +7,7 @@ import type {
   RuntimeIpcResult,
 } from '@megumi/shared/ipc-contracts';
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type {
   ChatCancelData,
   ChatCancelPayload,
@@ -29,25 +30,31 @@ async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends
   try {
     return await ipcRenderer.invoke(channel, request) as RuntimeIpcResult<TData, TChannel>;
   } catch {
+    const debugId = request.context?.debugId ?? createRuntimeDebugId();
+
     return {
       ok: false,
-      error: createPreloadInvokeError(),
+      error: createPreloadInvokeError(debugId),
       meta: {
         requestId: request.requestId,
         channel,
+        traceId: request.context?.traceId,
+        debugId,
+        operationName: request.context?.operationName,
         handledAt: new Date().toISOString(),
       },
     };
   }
 }
 
-function createPreloadInvokeError(): RuntimeIpcError {
+function createPreloadInvokeError(debugId: string): RuntimeIpcError {
   return {
     code: 'ipc_invoke_failed',
     message: 'Megumi could not reach the main process.',
     severity: 'error',
     retryable: true,
     source: 'preload',
+    debugId,
   };
 }
 
