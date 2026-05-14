@@ -11,7 +11,9 @@ import {
 describe('createRendererRuntimeIpcRequest', () => {
   it('creates a business ipc request envelope with RuntimeContext', () => {
     vi.spyOn(Date.prototype, 'toISOString').mockReturnValue('2026-05-12T00:00:00.000Z');
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue('trace-renderer-uuid-1');
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      'trace-renderer-uuid-1' as `${string}-${string}-${string}-${string}-${string}`,
+    );
 
     const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.provider.update, {
       providerId: 'deepseek',
