@@ -1,0 +1,95 @@
+// @vitest-environment node
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const repoRoot = resolve(__dirname, '../../../../..');
+
+function readSource(path: string): string {
+  return readFileSync(resolve(repoRoot, path), 'utf8');
+}
+
+describe('interaction baseline source guards', () => {
+  it('keeps the custom shell entry points wired together', () => {
+    const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
+
+    expect(appShell).toContain("from './WindowTitleBar'");
+    expect(appShell).toContain("from './LeftSidebar'");
+    expect(appShell).toContain("from './RightWorkspacePanel'");
+    expect(appShell).toContain("from '../features/chat'");
+  });
+
+  it('keeps deleted old visual UI files absent', () => {
+    const oldFlowFile = 'mock-' + 'agent-flow';
+    const oldHookFile = 'use-' + oldFlowFile;
+    const oldVisualFiles = [
+      'apps/desktop/src/renderer/shell/TopBar.tsx',
+      'apps/desktop/src/renderer/shell/MainWorkspace.tsx',
+      'apps/desktop/src/renderer/shell/RightPanel.tsx',
+      'apps/desktop/src/renderer/shell/FileTree.tsx',
+      'apps/desktop/src/renderer/shell/ContextPanel.tsx',
+      'apps/desktop/src/renderer/features/chat/components/ChatView.tsx',
+      'apps/desktop/src/renderer/features/chat/components/ChatInput.tsx',
+      'apps/desktop/src/renderer/entities/message/MessageBubble.tsx',
+      'apps/desktop/src/renderer/entities/tool-call/ToolCallCard.tsx',
+      `apps/desktop/src/renderer/features/chat/components/${oldFlowFile}.ts`,
+      `apps/desktop/src/renderer/features/chat/hooks/${oldHookFile}.ts`,
+    ];
+
+    for (const file of oldVisualFiles) {
+      expect(existsSync(resolve(repoRoot, file)), file).toBe(false);
+    }
+  });
+
+  it('keeps chat feature independent from workspace-panel feature', () => {
+    const chatFiles = [
+      'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
+      'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts',
+      'apps/desktop/src/renderer/features/chat/index.ts',
+    ];
+
+    for (const file of chatFiles) {
+      const source = readSource(file);
+      expect(source, file).not.toContain('features/workspace-panel');
+      expect(source, file).not.toContain('../workspace-panel');
+      expect(source, file).not.toContain('../../workspace-panel');
+    }
+  });
+
+  it('keeps workspace-state entity independent from features', () => {
+    const workspaceStateFiles = [
+      'apps/desktop/src/renderer/entities/workspace-state/store.ts',
+      'apps/desktop/src/renderer/entities/workspace-state/WorkspaceTaskCard.tsx',
+      'apps/desktop/src/renderer/entities/workspace-state/index.ts',
+    ];
+
+    for (const file of workspaceStateFiles) {
+      const source = readSource(file);
+      expect(source, file).not.toContain('features/');
+      expect(source, file).not.toContain('../features');
+    }
+  });
+
+  it('keeps renderer out of direct Electron imports', () => {
+    const rendererEntryFiles = [
+      'apps/desktop/src/renderer/shell/WindowTitleBar.tsx',
+      'apps/desktop/src/renderer/shared/ipc/client.ts',
+      'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
+      'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts',
+    ];
+
+    for (const file of rendererEntryFiles) {
+      const source = readSource(file);
+      expect(source, file).not.toMatch(/from ['"]electron['"]/);
+      expect(source, file).not.toMatch(/require\(['"]electron['"]\)/);
+    }
+  });
+
+  it('keeps visible keyboard focus and quiet scrollbars in global styles', () => {
+    const globals = readSource('apps/desktop/src/renderer/shared/styles/globals.css');
+
+    expect(globals).toContain(':focus-visible');
+    expect(globals).toContain('outline: 2px solid var(--color-focus)');
+    expect(globals).toContain('scrollbar-color: var(--color-border-strong) transparent');
+  });
+});

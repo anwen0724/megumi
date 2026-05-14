@@ -1,0 +1,17 @@
+### CUSTOM ###
+node_modules/
+.vite/
+out/
+dist/
+*.db
+*.db-shm
+*.db-wal
+data/
+.env
+.env.*
+!.env.example
+.superpowers/
+.claude/worktrees/
+.claude/settings.local.json
+.claude/*.local.json
+.idea/

@@ -1,0 +1,166 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatStartPayload } from '@megumi/shared/ipc-schemas';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+
+const { invoke, on, removeListener } = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  on: vi.fn(),
+  removeListener: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+  ipcRenderer: {
+    invoke,
+    on,
+    removeListener,
+    removeAllListeners: vi.fn(),
+  },
+}));
+
+function createRequest<const TChannel extends string, const TPayload extends Record<string, unknown>>(
+  channel: TChannel,
+  payload: TPayload,
+  requestId = 'ipc-preload-request-1',
+) {
+  return {
+    requestId,
+    payload,
+    meta: {
+      channel,
+      createdAt: '2026-05-12T00:00:00.000Z',
+      source: 'renderer' as const,
+    },
+  };
+}
+
+describe('preload api', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    invoke.mockReset();
+    on.mockReset();
+    removeListener.mockReset();
+  });
+
+  it('exposes provider methods on shared IPC channels with runtime requests', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { api } = await import('@megumi/desktop/preload/api');
+
+    invoke.mockResolvedValue({
+      ok: true,
+      data: {},
+      meta: { requestId: 'ipc-preload-request-1', channel: 'provider:list', handledAt: 'now' },
+    });
+
+    const listRequest = createRequest(IPC_CHANNELS.provider.list, {});
+    const updateRequest = createRequest(IPC_CHANNELS.provider.update, { providerId: 'deepseek', enabled: false });
+    const keyRequest = createRequest(IPC_CHANNELS.provider.setApiKey, {
+      providerId: 'deepseek',
+      apiKey: 'test-api-key-fixture',
+    });
+    const deleteRequest = createRequest(IPC_CHANNELS.provider.deleteApiKey, { providerId: 'deepseek' });
+
+    await api.provider.list(listRequest);
+    await api.provider.update(updateRequest);
+    await api.provider.setApiKey(keyRequest);
+    await api.provider.deleteApiKey(deleteRequest);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.provider.list, listRequest);
+    expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.provider.update, updateRequest);
+    expect(invoke).toHaveBeenNthCalledWith(3, IPC_CHANNELS.provider.setApiKey, keyRequest);
+    expect(invoke).toHaveBeenNthCalledWith(4, IPC_CHANNELS.provider.deleteApiKey, deleteRequest);
+  });
+
+  it('converts rejected provider invokes to ipc_invoke_failed results', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { api } = await import('@megumi/desktop/preload/api');
+
+    invoke.mockRejectedValue(new Error('Error invoking remote ' + 'method provider:list: stack trace'));
+
+    const result = await api.provider.list(createRequest(IPC_CHANNELS.provider.list, {}));
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'ipc_invoke_failed',
+        message: 'Megumi could not reach the main process.',
+        severity: 'error',
+        retryable: true,
+        source: 'preload',
+      },
+      meta: {
+        requestId: 'ipc-preload-request-1',
+        channel: IPC_CHANNELS.provider.list,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('Error invoking remote ' + 'method');
+    expect(JSON.stringify(result)).not.toContain('stack trace');
+  });
+
+  it('exposes chat start, cancel, and runtime event subscription', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { api } = await import('@megumi/desktop/preload/api');
+    const startPayload: ChatStartPayload = {
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      createdAt: '2026-05-12T00:00:00.000Z',
+      messages: [],
+    };
+    const startRequest = createRequest(IPC_CHANNELS.chat.start, startPayload);
+    const cancelRequest = createRequest(IPC_CHANNELS.chat.cancel, {
+      targetRequestId: 'ipc-preload-request-1',
+    }, 'ipc-preload-cancel-1');
+    const callback = vi.fn();
+
+    invoke.mockResolvedValue({
+      ok: true,
+      data: {},
+      meta: { requestId: 'ipc-preload-request-1', channel: 'chat:start', handledAt: 'now' },
+    });
+
+    await api.chat.start(startRequest);
+    await api.chat.cancel(cancelRequest);
+    const unsubscribe = api.runtime.onEvent(callback);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.chat.start, startRequest);
+    expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.chat.cancel, cancelRequest);
+    expect(on).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, expect.any(Function));
+
+    const listener = on.mock.calls[0][1];
+    const runtimeEvent: RuntimeEvent = {
+      eventId: 'event-1',
+      schemaVersion: 1,
+      eventType: 'assistant.output.delta',
+      requestId: 'request-1',
+      runId: 'run-1',
+      sequence: 1,
+      createdAt: '2026-05-12T10:00:00.000Z',
+      source: 'provider',
+      visibility: 'user',
+      persist: 'transient',
+      payload: { delta: 'Hi' },
+    };
+    listener({}, runtimeEvent);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'assistant.output.delta',
+    }));
+
+    unsubscribe();
+    expect(removeListener).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, listener);
+  });
+
+  it('keeps window controls as lightweight shell ipc', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { api } = await import('@megumi/desktop/preload/api');
+
+    invoke.mockResolvedValue(undefined);
+
+    await api.windowControls.minimize();
+    await api.windowControls.toggleMaximize();
+    await api.windowControls.close();
+
+    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.window.minimize);
+    expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.window.toggleMaximize);
+    expect(invoke).toHaveBeenNthCalledWith(3, IPC_CHANNELS.window.close);
+  });
+});

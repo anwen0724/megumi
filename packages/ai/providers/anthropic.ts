@@ -1,0 +1,35 @@
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { createRunFailedEvent } from '@megumi/shared/runtime-event-factory';
+import type { AiChatAdapterRequest, AiProviderAdapter, Clock } from '../types';
+import { systemClock } from '../types';
+
+export interface AnthropicAdapterOptions {
+  clock?: Clock;
+}
+
+export function createAnthropicAdapter(options: AnthropicAdapterOptions = {}): AiProviderAdapter {
+  const clock = options.clock ?? systemClock;
+
+  return {
+    providerId: 'anthropic',
+    async *streamChat(input: AiChatAdapterRequest): AsyncIterable<RuntimeEvent> {
+      yield createRunFailedEvent({
+        eventId: input.eventIdFactory(),
+        request: input.request,
+        runId: input.runId,
+        sequence: input.nextSequence(),
+        createdAt: clock.now(),
+        error: {
+          code: 'provider_unsupported',
+          message: 'Anthropic provider is not implemented yet.',
+          severity: 'warning',
+          retryable: false,
+          source: 'provider',
+          details: {
+            providerId: 'anthropic',
+          },
+        },
+      });
+    },
+  };
+}

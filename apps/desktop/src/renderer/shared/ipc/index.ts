@@ -1,0 +1,1 @@
+export { windowControls } from './client';

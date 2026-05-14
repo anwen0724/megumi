@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@megumi/desktop/*": ["apps/desktop/src/*"],
+      "@megumi/core": ["packages/core/index.ts"],
+      "@megumi/core/*": ["packages/core/*"],
+      "@megumi/ai": ["packages/ai/index.ts"],
+      "@megumi/ai/*": ["packages/ai/*"],
+      "@megumi/tools": ["packages/tools/index.ts"],
+      "@megumi/tools/*": ["packages/tools/*"],
+      "@megumi/memory": ["packages/memory/index.ts"],
+      "@megumi/memory/*": ["packages/memory/*"],
+      "@megumi/db": ["packages/db/index.ts"],
+      "@megumi/db/*": ["packages/db/*"],
+      "@megumi/security": ["packages/security/index.ts"],
+      "@megumi/security/*": ["packages/security/*"],
+      "@megumi/shared": ["packages/shared/index.ts"],
+      "@megumi/shared/*": ["packages/shared/*"]
+    }
+  },
+  "include": ["apps/**/*", "packages/**/*", "tests/**/*"],
+  "exclude": ["node_modules"]
+}

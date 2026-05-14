@@ -1,0 +1,289 @@
+﻿// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
+import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
+import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
+import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
+import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
+import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
+
+const { minimize, toggleMaximize, close } = vi.hoisted(() => ({
+  minimize: vi.fn(),
+  toggleMaximize: vi.fn(),
+  close: vi.fn(),
+}));
+
+vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
+  windowControls: {
+    minimize,
+    toggleMaximize,
+    close,
+  },
+}));
+
+function installMegumiMock() {
+  Object.defineProperty(window, 'megumi', {
+    configurable: true,
+    value: {
+      provider: {
+        list: vi.fn().mockResolvedValue({ ok: true, providers: [] }),
+        update: vi.fn().mockResolvedValue({ ok: true }),
+        setApiKey: vi.fn().mockResolvedValue({ ok: true }),
+        deleteApiKey: vi.fn().mockResolvedValue({ ok: true }),
+      },
+      chat: {
+        start: vi.fn().mockResolvedValue({ ok: true }),
+        cancel: vi.fn().mockResolvedValue({ ok: true, cancelled: true }),
+      },
+      runtime: {
+        onEvent: vi.fn(() => () => undefined),
+      },
+    },
+  });
+}
+
+function createMessage(overrides: Partial<TimelineMessageData> = {}): TimelineMessageData {
+  return {
+    id: 'message-1',
+    role: 'assistant',
+    content: 'Hello from Megumi',
+    stepNum: 1,
+    timestamp: '2026-05-10T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function renderShell() {
+  return render(
+    <ThemeProvider>
+      <AppShell />
+    </ThemeProvider>,
+  );
+}
+
+describe('AppShell', () => {
+  beforeEach(() => {
+    minimize.mockReset();
+    toggleMaximize.mockReset();
+    close.mockReset();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-10T12:00:00.000Z'));
+    installMegumiMock();
+
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Megumi',
+          description: 'Warm agent desktop companion',
+          repoPath: 'C:/all/work/study/megumi',
+          type: 'existing_feature',
+          createdAt: '2026-05-10T00:00:00.000Z',
+          context: {},
+        },
+      ],
+      currentProjectId: 'project-1',
+      loading: false,
+    });
+
+    useAgentStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'Planning the UI',
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          agentType: 'reviewer',
+          title: 'Review notes',
+          createdAt: '2026-05-10T00:10:00.000Z',
+          updatedAt: '2026-05-10T00:10:00.000Z',
+        },
+      ],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+
+    useChatStore.setState({
+      messages: [],
+      streamingText: '',
+      isStreaming: false,
+      pendingToolCalls: [],
+      completedToolActivities: [],
+      sessionSnapshots: {},
+      agentStatus: 'idle',
+      lastError: null,
+    });
+
+    useWorkspaceStateStore.setState({
+      tasks: [],
+      artifacts: [],
+      memoryNotes: [],
+      activeRunId: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('renders the warm agent workspace shell with sidebar session actions', () => {
+    renderShell();
+
+    expect(screen.getByTestId('window-titlebar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
+    expect(screen.getByText('Planning the UI')).toBeInTheDocument();
+    expect(screen.getByText('Review notes')).toBeInTheDocument();
+    expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Context' })).toBeVisible();
+  });
+
+  it('creates and selects a local session from the sidebar', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    const state = useAgentStore.getState();
+    expect(state.sessions[0].title).toBe('New session');
+    expect(state.sessions[0].projectId).toBe('project-1');
+    expect(state.activeSessionId).toBe(state.sessions[0].id);
+    expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
+  });
+
+  it('creates a local session without a selected project', async () => {
+    useProjectStore.setState({
+      projects: [],
+      currentProjectId: null,
+      loading: false,
+    });
+
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    const state = useAgentStore.getState();
+    expect(state.sessions[0].projectId).toBe('local-workspace');
+    expect(state.activeSessionId).toBe(state.sessions[0].id);
+  });
+
+  it('selects an existing session from the sidebar', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: /Review notes/ }));
+
+    expect(useAgentStore.getState().activeSessionId).toBe('session-2');
+  });
+
+  it('collapses and expands the left sidebar while keeping new-session access in the rail', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(screen.queryByText('Planning the UI')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+    expect(useAgentStore.getState().sessions[0].title).toBe('New session');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
+  });
+
+  it('opens and closes settings from the expanded sidebar', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close settings' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+
+  it('opens settings from the collapsed sidebar rail', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: 'Settings' })).getAllByText('Local desktop preferences')).toHaveLength(2);
+  });
+
+  it('clears the center timeline when creating a new local session', async () => {
+    useChatStore.getState().setMessages([
+      createMessage({
+        id: 'session-1-user',
+        role: 'user',
+        content: 'Message from the first session',
+        stepNum: 1,
+      }),
+    ]);
+
+    renderShell();
+
+    expect(screen.getByText('Message from the first session')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    expect(screen.queryByText('Message from the first session')).not.toBeInTheDocument();
+    expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(useChatStore.getState().sessionSnapshots['session-1'].messages[0].content).toBe(
+      'Message from the first session',
+    );
+  });
+
+  it('restores the previous session timeline when selecting it again', async () => {
+    useChatStore.getState().setMessages([
+      createMessage({
+        id: 'session-1-user',
+        role: 'user',
+        content: 'Saved in planning session',
+        stepNum: 1,
+      }),
+    ]);
+
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    const createdSession = useAgentStore.getState().sessions[0];
+    expect(createdSession.title).toBe('New session');
+    expect(screen.queryByText('Saved in planning session')).not.toBeInTheDocument();
+
+    useChatStore.getState().setMessages([
+      createMessage({
+        id: 'session-new-user',
+        role: 'user',
+        content: 'Message in new session',
+        stepNum: 1,
+      }),
+    ]);
+
+    await userEvent.click(screen.getByRole('button', { name: /Planning the UI/ }));
+
+    expect(screen.getByText('Saved in planning session')).toBeInTheDocument();
+    expect(screen.queryByText('Message in new session')).not.toBeInTheDocument();
+    expect(useChatStore.getState().sessionSnapshots[createdSession.id].messages[0].content).toBe(
+      'Message in new session',
+    );
+  });
+
+  it('collapses and expands the right workspace panel', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse workspace panel' }));
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
+    expect(screen.getByRole('tab', { name: 'Context' })).toBeInTheDocument();
+  });
+});
