@@ -28,7 +28,7 @@ describe('runtime ipc envelope renderer source guards', () => {
   it('runtime chat hook does not cast old ok/error results', () => {
     const source = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts');
 
-    expect(source).not.toContain('as { ok: boolean; error?: string }');
+    expect(source).not.toContain('as { ok: boolean; ' + 'error?: string }');
     expect(source).not.toContain('throw new Error(result.error');
     expect(source).not.toContain('window.megumi.chat.cancel({ requestId })');
     expect(source).toContain('createRendererRuntimeIpcRequest');
