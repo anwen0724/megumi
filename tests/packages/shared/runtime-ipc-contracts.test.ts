@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import {
   RuntimeIpcErrorSchema as BarrelRuntimeIpcErrorSchema,
+  RuntimeContextSchema as BarrelRuntimeContextSchema,
   createRuntimeIpcRequestSchema as barrelCreateRuntimeIpcRequestSchema,
+  createRuntimeRequestSchema as barrelCreateRuntimeRequestSchema,
 } from '@megumi/shared';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { JsonObjectSchema, JsonValueSchema } from '@megumi/shared/json';
@@ -231,6 +233,88 @@ describe('runtime ipc request and result schemas', () => {
   });
 });
 
+describe('runtime ipc context adapter', () => {
+  const payloadSchema = z.object({ providerId: z.literal('deepseek') }).strict();
+  const requestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.provider.list, payloadSchema);
+  const resultSchema = createRuntimeIpcResultSchema(
+    z.object({
+      providers: z.array(z.object({ providerId: z.string() })),
+    }).strict(),
+    IPC_CHANNELS.provider.list,
+  );
+
+  it('accepts optional runtime context on the current IPC request envelope', () => {
+    const request = {
+      requestId: 'ipc-provider-list-1',
+      payload: {
+        providerId: 'deepseek',
+      },
+      meta: {
+        channel: IPC_CHANNELS.provider.list,
+        createdAt: '2026-05-14T00:00:00.000Z',
+        source: 'renderer',
+      },
+      context: {
+        requestId: 'ipc-provider-list-1',
+        traceId: 'trace-provider-1',
+        operationName: 'provider.list',
+        source: 'renderer',
+        createdAt: '2026-05-14T00:00:00.000Z',
+      },
+    };
+
+    expect(requestSchema.parse(request)).toEqual(request);
+  });
+
+  it('keeps runtime context optional during IPC migration', () => {
+    const request = {
+      requestId: 'ipc-provider-list-1',
+      payload: {
+        providerId: 'deepseek',
+      },
+      meta: {
+        channel: IPC_CHANNELS.provider.list,
+        createdAt: '2026-05-14T00:00:00.000Z',
+        source: 'renderer',
+      },
+    };
+
+    expect(requestSchema.parse(request)).toEqual(request);
+  });
+
+  it('accepts trace/debug metadata on IPC response meta', () => {
+    const result = {
+      ok: false,
+      error: {
+        code: 'runtime_unknown',
+        message: 'Unexpected runtime error.',
+        severity: 'error',
+        retryable: true,
+        source: 'main',
+        debugId: 'debug-provider-1',
+      },
+      meta: {
+        requestId: 'ipc-provider-list-1',
+        channel: IPC_CHANNELS.provider.list,
+        traceId: 'trace-provider-1',
+        debugId: 'debug-provider-1',
+        operationName: 'provider.list',
+        handledAt: '2026-05-14T00:00:01.000Z',
+        durationMs: 12,
+      },
+    };
+
+    expect(resultSchema.parse(result)).toEqual(result);
+  });
+
+  it('does not turn window controls or runtime events into business IPC', () => {
+    expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.window.minimize).success).toBe(false);
+    expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.window.toggleMaximize).success).toBe(false);
+    expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.window.close).success).toBe(false);
+    expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.runtime.event).success).toBe(false);
+  });
+});
+
 describe('provider and chat ipc schemas', () => {
   it('validates provider list and update requests', () => {
     const list = ProviderListRequestSchema.safeParse({
@@ -373,7 +457,7 @@ describe('provider and chat ipc schemas', () => {
 });
 
 describe('shared barrel exports', () => {
-  it('exports runtime ipc contracts from @megumi/shared', () => {
+  it('exports runtime ipc and runtime common contracts from @megumi/shared', () => {
     const error = BarrelRuntimeIpcErrorSchema.safeParse({
       code: 'runtime_unknown',
       message: 'Request failed.',
@@ -381,8 +465,18 @@ describe('shared barrel exports', () => {
       retryable: true,
       source: 'unknown',
     });
+    const context = BarrelRuntimeContextSchema.safeParse({
+      requestId: 'ipc-provider-list-1',
+      traceId: 'trace-provider-1',
+      operationName: 'provider.list',
+      source: 'renderer',
+      createdAt: '2026-05-14T00:00:00.000Z',
+    });
+    const runtimeRequestSchema = barrelCreateRuntimeRequestSchema(z.object({ message: z.string() }).strict());
 
     expect(error.success).toBe(true);
+    expect(context.success).toBe(true);
     expect(typeof barrelCreateRuntimeIpcRequestSchema).toBe('function');
+    expect(typeof runtimeRequestSchema.parse).toBe('function');
   });
 });
