@@ -31,6 +31,14 @@ function createRequest<const TChannel extends string, const TPayload extends Rec
       createdAt: '2026-05-12T00:00:00.000Z',
       source: 'renderer' as const,
     },
+    context: {
+      requestId,
+      traceId: 'trace-preload-request-1',
+      debugId: 'debug-preload-request-1',
+      operationName: channel.replace(':', '.'),
+      source: 'renderer' as const,
+      createdAt: '2026-05-12T00:00:00.000Z',
+    },
   };
 }
 
@@ -75,7 +83,7 @@ describe('preload api', () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { api } = await import('@megumi/desktop/preload/api');
 
-    invoke.mockRejectedValue(new Error('Error invoking remote ' + 'method provider:list: stack trace'));
+    invoke.mockRejectedValue(new Error('Error invoking remote ' + 'method provider:list: stack trace sk-test-secret'));
 
     const result = await api.provider.list(createRequest(IPC_CHANNELS.provider.list, {}));
 
@@ -87,14 +95,46 @@ describe('preload api', () => {
         severity: 'error',
         retryable: true,
         source: 'preload',
+        debugId: 'debug-preload-request-1',
       },
       meta: {
         requestId: 'ipc-preload-request-1',
         channel: IPC_CHANNELS.provider.list,
+        traceId: 'trace-preload-request-1',
+        debugId: 'debug-preload-request-1',
+        operationName: 'provider.list',
       },
     });
     expect(JSON.stringify(result)).not.toContain('Error invoking remote ' + 'method');
     expect(JSON.stringify(result)).not.toContain('stack trace');
+    expect(JSON.stringify(result)).not.toContain('sk-test-secret');
+  });
+
+  it('creates a debug id for rejected invokes when request context has no debug id', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { api } = await import('@megumi/desktop/preload/api');
+    const request = createRequest(IPC_CHANNELS.provider.list, {});
+    delete request.context.debugId;
+
+    invoke.mockRejectedValue(new Error('native failure'));
+
+    const result = await api.provider.list(request);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'ipc_invoke_failed',
+        source: 'preload',
+        debugId: expect.stringMatching(/^debug-/),
+      },
+      meta: {
+        requestId: 'ipc-preload-request-1',
+        channel: IPC_CHANNELS.provider.list,
+        traceId: 'trace-preload-request-1',
+        debugId: expect.stringMatching(/^debug-/),
+        operationName: 'provider.list',
+      },
+    });
   });
 
   it('exposes chat start, cancel, and runtime event subscription', async () => {
