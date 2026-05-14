@@ -1,0 +1,23 @@
+import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import type { BusinessIpcChannel } from '@megumi/shared/ipc-contracts';
+
+export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): string {
+  switch (channel) {
+    case IPC_CHANNELS.provider.list:
+      return 'provider.list';
+    case IPC_CHANNELS.provider.update:
+      return 'provider.update';
+    case IPC_CHANNELS.provider.setApiKey:
+      return 'provider.set-api-key';
+    case IPC_CHANNELS.provider.deleteApiKey:
+      return 'provider.delete-api-key';
+    case IPC_CHANNELS.chat.start:
+      return 'chat.start';
+    case IPC_CHANNELS.chat.cancel:
+      return 'chat.cancel';
+    default: {
+      const exhaustive: never = channel;
+      return exhaustive;
+    }
+  }
+}
