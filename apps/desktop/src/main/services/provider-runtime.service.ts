@@ -1,4 +1,5 @@
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type {
   ProviderId,
   ProviderSettings,
@@ -24,6 +25,7 @@ export interface ProviderRuntimeConfigCredentialPort {
 export interface ResolveProviderRuntimeConfigInput {
   providerId: ProviderId;
   modelId?: string;
+  runtimeContext?: RuntimeContext;
 }
 
 export interface ProviderRuntimeServiceOptions {
@@ -71,7 +73,7 @@ export class ProviderRuntimeService {
           providerId: input.providerId,
           ...(error instanceof Error ? { cause: error.message } : {}),
         },
-      });
+      }, input.runtimeContext);
     }
 
     if (!settings.enabled) {
@@ -85,7 +87,7 @@ export class ProviderRuntimeService {
           providerId: settings.providerId,
           modelId: input.modelId ?? String(settings.defaultModelId),
         },
-      });
+      }, input.runtimeContext);
     }
 
     if (settings.kind === 'openai-compatible' && !settings.baseUrl) {
@@ -99,10 +101,10 @@ export class ProviderRuntimeService {
           providerId: settings.providerId,
           modelId: input.modelId ?? String(settings.defaultModelId),
         },
-      });
+      }, input.runtimeContext);
     }
 
-    const apiKey = await this.resolveApiKey(settings);
+    const apiKey = await this.resolveApiKey(settings, input.runtimeContext);
 
     if (!apiKey) {
       throw this.error({
@@ -115,7 +117,7 @@ export class ProviderRuntimeService {
           providerId: settings.providerId,
           modelId: input.modelId ?? String(settings.defaultModelId),
         },
-      });
+      }, input.runtimeContext);
     }
 
     return {
@@ -127,15 +129,18 @@ export class ProviderRuntimeService {
     };
   }
 
-  private async resolveApiKey(settings: ProviderSettings): Promise<string | null> {
-    const envKey = await this.resolveConfiguredEnvKey(settings);
+  private async resolveApiKey(
+    settings: ProviderSettings,
+    runtimeContext?: RuntimeContext,
+  ): Promise<string | null> {
+    const envKey = await this.resolveConfiguredEnvKey(settings, runtimeContext);
     const envValue = this.env[envKey]?.trim();
 
     if (envValue) {
       return envValue;
     }
 
-    const plaintextConfigApiKey = await this.resolvePlaintextConfigApiKey(settings);
+    const plaintextConfigApiKey = await this.resolvePlaintextConfigApiKey(settings, runtimeContext);
 
     if (plaintextConfigApiKey?.trim()) {
       return plaintextConfigApiKey.trim();
@@ -145,25 +150,35 @@ export class ProviderRuntimeService {
     return this.options.secretStore.readSecret(secretRef);
   }
 
-  private async resolveConfiguredEnvKey(settings: ProviderSettings): Promise<string> {
+  private async resolveConfiguredEnvKey(
+    settings: ProviderSettings,
+    runtimeContext?: RuntimeContext,
+  ): Promise<string> {
     try {
       return (
         await this.options.configCredentials?.getProviderApiKeyEnv(settings.providerId)
       ) ?? PROVIDER_API_KEY_ENV[settings.providerId];
     } catch (error) {
-      this.throwConfigError(error, settings);
+      this.throwConfigError(error, settings, runtimeContext);
     }
   }
 
-  private async resolvePlaintextConfigApiKey(settings: ProviderSettings): Promise<string | null | undefined> {
+  private async resolvePlaintextConfigApiKey(
+    settings: ProviderSettings,
+    runtimeContext?: RuntimeContext,
+  ): Promise<string | null | undefined> {
     try {
       return await this.options.configCredentials?.getPlaintextProviderApiKey(settings.providerId);
     } catch (error) {
-      this.throwConfigError(error, settings);
+      this.throwConfigError(error, settings, runtimeContext);
     }
   }
 
-  private throwConfigError(error: unknown, settings: ProviderSettings): never {
+  private throwConfigError(
+    error: unknown,
+    settings: ProviderSettings,
+    runtimeContext?: RuntimeContext,
+  ): never {
     if (error instanceof MegumiHomeConfigParseError) {
       throw this.error({
         code: 'config_invalid',
@@ -176,13 +191,16 @@ export class ProviderRuntimeService {
           modelId: String(settings.defaultModelId),
           cause: error.message,
         },
-      });
+      }, runtimeContext);
     }
 
     throw error;
   }
 
-  private error(payload: RuntimeError): ProviderRuntimeResolutionError {
-    return new ProviderRuntimeResolutionError(payload);
+  private error(payload: RuntimeError, runtimeContext?: RuntimeContext): ProviderRuntimeResolutionError {
+    return new ProviderRuntimeResolutionError({
+      ...payload,
+      ...(runtimeContext?.debugId && !payload.debugId ? { debugId: runtimeContext.debugId } : {}),
+    });
   }
 }

@@ -259,4 +259,54 @@ describe('ProviderRuntimeService', () => {
       },
     });
   });
+
+  it('attaches runtime debug id to provider resolution errors', async () => {
+    const service = new ProviderRuntimeService({
+      settings,
+      secretStore,
+      env: {},
+    });
+
+    await expect(service.resolveProviderRuntimeConfig({
+      providerId: 'deepseek',
+      runtimeContext: {
+        requestId: 'ipc-chat-start-1',
+        traceId: 'trace-provider-1',
+        debugId: 'debug-provider-1',
+        operationName: 'chat.start',
+        source: 'main',
+        createdAt: '2026-05-12T00:00:00.000Z',
+      },
+    })).rejects.toMatchObject({
+      payload: {
+        code: 'provider_missing_api_key',
+        severity: 'error',
+        retryable: false,
+        source: 'provider',
+        debugId: 'debug-provider-1',
+      },
+    });
+  });
+
+  it('keeps provider resolution errors on severity and retryable fields', async () => {
+    const service = new ProviderRuntimeService({
+      settings,
+      secretStore,
+      env: {},
+    });
+
+    try {
+      await service.resolveProviderRuntimeConfig({ providerId: 'deepseek' });
+      throw new Error('Expected provider runtime resolution to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ProviderRuntimeResolutionError);
+      const payload = (error as ProviderRuntimeResolutionError).payload;
+
+      expect(payload).toMatchObject({
+        severity: 'error',
+        retryable: false,
+      });
+      expect(payload).not.toHaveProperty('recoverable');
+    }
+  });
 });
