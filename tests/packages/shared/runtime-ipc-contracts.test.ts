@@ -23,6 +23,9 @@ import {
   isBusinessIpcChannel,
 } from '@megumi/shared/ipc-contracts';
 import {
+  AgentRunStartRequestSchema,
+  AgentSessionCreateRequestSchema,
+  AgentSessionListRequestSchema,
   ChatCancelPayloadSchema,
   ChatCancelRequestSchema,
   ChatStartPayloadSchema,
@@ -453,6 +456,48 @@ describe('provider and chat ipc schemas', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('agent lifecycle ipc contracts', () => {
+  it('validates agent lifecycle runtime ipc requests', () => {
+    expect(AgentSessionCreateRequestSchema.parse({
+      requestId: 'ipc-agent-session-create-1',
+      payload: {
+        title: 'New session',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.session.create,
+        source: 'renderer',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+    }).payload.title).toBe('New session');
+
+    expect(AgentSessionListRequestSchema.parse({
+      requestId: 'ipc-agent-session-list-1',
+      payload: {},
+      meta: {
+        channel: IPC_CHANNELS.agent.session.list,
+        source: 'renderer',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+    }).meta.channel).toBe('agent:session:list');
+
+    expect(AgentRunStartRequestSchema.parse({
+      requestId: 'ipc-agent-run-start-1',
+      payload: {
+        sessionId: 'session-1',
+        goal: 'Answer',
+        mode: 'chat',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.run.start,
+        source: 'renderer',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+    }).payload.goal).toBe('Answer');
   });
 });
 

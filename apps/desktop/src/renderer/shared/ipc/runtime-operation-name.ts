@@ -15,6 +15,12 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'chat.start';
     case IPC_CHANNELS.chat.cancel:
       return 'chat.cancel';
+    case IPC_CHANNELS.agent.session.create:
+      return 'agent.session.create';
+    case IPC_CHANNELS.agent.session.list:
+      return 'agent.session.list';
+    case IPC_CHANNELS.agent.run.start:
+      return 'agent.run.start';
     default: {
       const exhaustive: never = channel;
       return exhaustive;

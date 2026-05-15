@@ -14,13 +14,24 @@ export const IPC_CHANNELS = {
     start: 'chat:start',
     cancel: 'chat:cancel',
   },
+  agent: {
+    session: {
+      create: 'agent:session:create',
+      list: 'agent:session:list',
+    },
+    run: {
+      start: 'agent:run:start',
+    },
+  },
   runtime: {
     event: 'runtime:event',
   },
 } as const;
 
 type ValueOf<T> = T[keyof T];
-type NestedValueOf<T> = ValueOf<{ [K in keyof T]: ValueOf<T[K]> }>;
+type NestedValueOf<T> = T extends string
+  ? T
+  : ValueOf<{ [K in keyof T]: NestedValueOf<T[K]> }>;
 
 export type IpcChannel = NestedValueOf<typeof IPC_CHANNELS>;
 
@@ -34,6 +45,9 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.provider.deleteApiKey,
   IPC_CHANNELS.chat.start,
   IPC_CHANNELS.chat.cancel,
+  IPC_CHANNELS.agent.session.create,
+  IPC_CHANNELS.agent.session.list,
+  IPC_CHANNELS.agent.run.start,
   IPC_CHANNELS.runtime.event,
 ] as const;
 

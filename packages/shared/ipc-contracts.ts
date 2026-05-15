@@ -14,6 +14,9 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.provider.deleteApiKey,
   IPC_CHANNELS.chat.start,
   IPC_CHANNELS.chat.cancel,
+  IPC_CHANNELS.agent.session.create,
+  IPC_CHANNELS.agent.session.list,
+  IPC_CHANNELS.agent.run.start,
 ] as const;
 
 export type BusinessIpcChannel = (typeof BUSINESS_IPC_CHANNELS)[number];

@@ -5,6 +5,11 @@ import {
   IsoDateTimeSchema,
   RuntimeIpcRequestIdSchema,
 } from './ipc-contracts';
+import {
+  AgentRunSchema,
+  AgentSessionSchema,
+  MessageSchema,
+} from './agent-lifecycle-contracts';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
 
@@ -178,6 +183,72 @@ export const ChatCancelResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.chat.cancel,
 );
 
+export const AgentSessionCreatePayloadSchema = z
+  .object({
+    title: z.string().min(1),
+    workspaceId: z.string().min(1).optional(),
+    workspacePath: z.string().min(1).optional(),
+    createdAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentSessionCreateDataSchema = z.object({ session: AgentSessionSchema }).strict();
+
+export const AgentSessionListPayloadSchema = z.object({}).strict();
+
+export const AgentSessionListDataSchema = z
+  .object({
+    sessions: z.array(AgentSessionSchema),
+  })
+  .strict();
+
+export const AgentRunStartPayloadSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    triggerMessageId: z.string().min(1).optional(),
+    goal: z.string().min(1),
+    mode: z.string().min(1),
+    createdAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentRunStartDataSchema = z
+  .object({
+    run: AgentRunSchema,
+    message: MessageSchema.optional(),
+  })
+  .strict();
+
+export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.session.create,
+  AgentSessionCreatePayloadSchema,
+);
+
+export const AgentSessionListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.session.list,
+  AgentSessionListPayloadSchema,
+);
+
+export const AgentRunStartRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.run.start,
+  AgentRunStartPayloadSchema,
+);
+
+export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
+  AgentSessionCreateDataSchema,
+  IPC_CHANNELS.agent.session.create,
+);
+
+export const AgentSessionListResultSchema = createRuntimeIpcResultSchema(
+  AgentSessionListDataSchema,
+  IPC_CHANNELS.agent.session.list,
+);
+
+export const AgentRunStartResultSchema = createRuntimeIpcResultSchema(
+  AgentRunStartDataSchema,
+  IPC_CHANNELS.agent.run.start,
+);
+
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;
 export type ProviderListData = z.infer<typeof ProviderListDataSchema>;
 export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
@@ -188,3 +259,9 @@ export type ChatStartPayload = z.infer<typeof ChatStartPayloadSchema>;
 export type ChatStartData = z.infer<typeof ChatStartDataSchema>;
 export type ChatCancelPayload = z.infer<typeof ChatCancelPayloadSchema>;
 export type ChatCancelData = z.infer<typeof ChatCancelDataSchema>;
+export type AgentSessionCreatePayload = z.infer<typeof AgentSessionCreatePayloadSchema>;
+export type AgentSessionCreateData = z.infer<typeof AgentSessionCreateDataSchema>;
+export type AgentSessionListPayload = z.infer<typeof AgentSessionListPayloadSchema>;
+export type AgentSessionListData = z.infer<typeof AgentSessionListDataSchema>;
+export type AgentRunStartPayload = z.infer<typeof AgentRunStartPayloadSchema>;
+export type AgentRunStartData = z.infer<typeof AgentRunStartDataSchema>;
