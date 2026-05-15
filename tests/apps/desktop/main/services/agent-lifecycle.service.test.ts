@@ -5,6 +5,7 @@ import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
 import { AgentLifecycleService } from '@megumi/desktop/main/services/agent-lifecycle.service';
 import type { AgentContext } from '@megumi/shared/agent-context-contracts';
+import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/agent-run-mode-contracts';
 
 let db: Database.Database | null = null;
 
@@ -95,6 +96,45 @@ function createServiceWithContextRecorder(records: unknown[]) {
   });
 }
 
+function createServiceWithRunModeRecorder(records: unknown[]) {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new AgentLifecycleRepository(db);
+  return new AgentLifecycleService({
+    repository,
+    runModeService: {
+      createModeSnapshot: (input) => {
+        records.push({ type: 'snapshot', input });
+        return {
+          modeSnapshotId: 'mode-snapshot:1',
+          runId: input.runId,
+          modeLabel: input.mode,
+          mode: input.modeSnapshot ?? RUN_MODE_PRESET_DEFAULTS.chat,
+          createdAt: input.createdAt,
+        };
+      },
+      linkAcceptedSourcePlan: (input) => {
+        records.push({ type: 'sourcePlan', input });
+        return input;
+      },
+      createPlanRecordForRun: (input) => {
+        records.push({ type: 'planRecord', input });
+        return undefined;
+      },
+    },
+    clock: { now: () => '2026-05-15T00:00:00.000Z' },
+    ids: {
+      sessionId: () => 'session-1',
+      runId: () => 'run-1',
+      stepId: () => 'step-1',
+      actionId: () => 'action-1',
+      observationId: () => 'observation-1',
+      eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      messageId: () => 'message-1',
+    },
+  });
+}
+
 afterEach(() => {
   db?.close();
   db = null;
@@ -163,5 +203,30 @@ describe('AgentLifecycleService', () => {
         workspacePath: 'C:/all/work/study/megumi',
       }),
     ]);
+  });
+
+  it('passes mode snapshots and source plan ids into the core run', async () => {
+    const records: unknown[] = [];
+    const service = createServiceWithRunModeRecorder(records);
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    const result = await service.startRun({
+      sessionId: 'session-1',
+      goal: 'Execute plan',
+      mode: 'execute',
+      modeSnapshot: RUN_MODE_PRESET_DEFAULTS.execute,
+      sourcePlanId: 'plan:accepted',
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    expect(result.run.modeSnapshotRef).toBe('mode-snapshot:1');
+    expect(result.run.sourcePlanId).toBe('plan:accepted');
+    expect(records).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'snapshot' }),
+      expect.objectContaining({ type: 'sourcePlan' }),
+    ]));
   });
 });

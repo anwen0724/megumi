@@ -3,6 +3,7 @@ import { runAgentTurn } from '@megumi/core/agent-runtime/run-agent-turn';
 import type { AgentRuntimeIdFactory } from '@megumi/core/agent-runtime/types';
 import { createDatabase } from '@megumi/db/connection';
 import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
+import { AgentRunModeRepository } from '@megumi/db/repos/agent-run-mode.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type {
   AgentContext,
@@ -14,6 +15,7 @@ import type {
   AgentSessionCreatePayload,
 } from '@megumi/shared/ipc-schemas';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { AgentRunModeService } from './agent-run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface AgentLifecycleServiceClock {
@@ -37,6 +39,10 @@ export interface AgentRunContextService {
 export interface AgentLifecycleServiceOptions {
   repository: AgentLifecycleRepository;
   contextService?: AgentRunContextService;
+  runModeService?: Pick<
+    AgentRunModeService,
+    'createModeSnapshot' | 'linkAcceptedSourcePlan' | 'createPlanRecordForRun'
+  >;
   clock?: AgentLifecycleServiceClock;
   ids?: Partial<AgentLifecycleServiceIds>;
 }
@@ -69,12 +75,17 @@ function createDefaultIds(): AgentLifecycleServiceIds {
 export class AgentLifecycleService {
   private readonly repository: AgentLifecycleRepository;
   private readonly contextService?: AgentRunContextService;
+  private readonly runModeService?: Pick<
+    AgentRunModeService,
+    'createModeSnapshot' | 'linkAcceptedSourcePlan' | 'createPlanRecordForRun'
+  >;
   private readonly clock: AgentLifecycleServiceClock;
   private readonly ids: AgentLifecycleServiceIds;
 
   constructor(options: AgentLifecycleServiceOptions) {
     this.repository = options.repository;
     this.contextService = options.contextService;
+    this.runModeService = options.runModeService;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
   }
@@ -98,6 +109,21 @@ export class AgentLifecycleService {
   async startRun(payload: AgentRunStartPayload): Promise<{ run: AgentRun; events: RuntimeEvent[] }> {
     const session = this.repository.getSession(payload.sessionId);
     const runId = this.ids.runId();
+    const modeSnapshot = this.runModeService?.createModeSnapshot({
+      runId,
+      mode: payload.mode,
+      modeSnapshot: payload.modeSnapshot,
+      createdAt: payload.createdAt,
+    });
+
+    if (payload.sourcePlanId && this.runModeService) {
+      this.runModeService.linkAcceptedSourcePlan({
+        runId,
+        sourcePlanId: payload.sourcePlanId,
+        linkedAt: payload.createdAt,
+      });
+    }
+
     const initialContext = this.createInitialContextForRun({
       runId,
       payload,
@@ -108,6 +134,11 @@ export class AgentLifecycleService {
       sessionId: payload.sessionId,
       ...(payload.triggerMessageId ? { triggerMessageId: payload.triggerMessageId } : {}),
       mode: payload.mode,
+      ...(modeSnapshot ? {
+        modeSnapshot: modeSnapshot.mode,
+        modeSnapshotRef: modeSnapshot.modeSnapshotId,
+      } : payload.modeSnapshot ? { modeSnapshot: payload.modeSnapshot } : {}),
+      ...(payload.sourcePlanId ? { sourcePlanId: payload.sourcePlanId } : {}),
       goal: payload.goal,
       clock: this.clock,
       ids: {
@@ -146,6 +177,15 @@ export class AgentLifecycleService {
       },
     });
 
+    if (modeSnapshot && this.runModeService) {
+      this.runModeService.createPlanRecordForRun({
+        runId,
+        goal: payload.goal,
+        mode: modeSnapshot.mode,
+        createdAt: result.run.completedAt ?? payload.createdAt,
+      });
+    }
+
     return { run: result.run, events: result.events };
   }
 
@@ -182,9 +222,11 @@ export function createDefaultAgentLifecycleService(
 ): AgentLifecycleService {
   const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
   migrateDatabase(database);
+  const runModeRepository = new AgentRunModeRepository(database);
 
   return new AgentLifecycleService({
     repository: new AgentLifecycleRepository(database),
+    runModeService: new AgentRunModeService({ repository: runModeRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
   });
 }
