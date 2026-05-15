@@ -135,6 +135,12 @@ export class AgentLifecycleRepository {
     return row ? fromSessionRow(row) : undefined;
   }
 
+  listSessions(): AgentSession[] {
+    return (this.database
+      .prepare('SELECT * FROM agent_sessions ORDER BY updated_at DESC')
+      .all() as SessionRow[]).map(fromSessionRow);
+  }
+
   saveMessage(message: Message): Message {
     this.database.prepare(`
       INSERT INTO messages (
