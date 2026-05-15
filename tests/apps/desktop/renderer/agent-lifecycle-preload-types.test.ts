@@ -19,6 +19,10 @@ describe('agent lifecycle preload API shape', () => {
           baselineGet: vi.fn(),
           sourcesList: vi.fn(),
         },
+        plan: {
+          byRunGet: vi.fn(),
+          statusUpdate: vi.fn(),
+        },
       },
     };
 

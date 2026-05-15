@@ -13,6 +13,10 @@ import type {
   AgentContextBaselineGetPayload,
   AgentContextSourcesListData,
   AgentContextSourcesListPayload,
+  AgentPlanByRunGetData,
+  AgentPlanByRunGetPayload,
+  AgentPlanStatusUpdateData,
+  AgentPlanStatusUpdatePayload,
   AgentRunStartData,
   AgentRunStartPayload,
   AgentSessionCreateData,
@@ -146,6 +150,26 @@ export const api = {
         AgentContextSourcesListData,
         typeof IPC_CHANNELS.agent.context.sourcesList
       >> => invokeRuntimeIpc(IPC_CHANNELS.agent.context.sourcesList, request),
+    },
+    plan: {
+      byRunGet: (
+        request: BusinessRequest<
+          AgentPlanByRunGetPayload,
+          typeof IPC_CHANNELS.agent.plan.byRunGet
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentPlanByRunGetData,
+        typeof IPC_CHANNELS.agent.plan.byRunGet
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.plan.byRunGet, request),
+      statusUpdate: (
+        request: BusinessRequest<
+          AgentPlanStatusUpdatePayload,
+          typeof IPC_CHANNELS.agent.plan.statusUpdate
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentPlanStatusUpdateData,
+        typeof IPC_CHANNELS.agent.plan.statusUpdate
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.plan.statusUpdate, request),
     },
   },
   runtime: {
