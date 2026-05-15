@@ -6,12 +6,17 @@ import {
   registerAgentContextHandlers,
   type AgentContextHandlersService,
 } from './handlers/agent-context.handler';
+import {
+  registerAgentPlanHandlers,
+  type AgentPlanHandlersService,
+} from './handlers/agent-plan.handler';
 import type { RuntimeLogger } from '../services/runtime-logger.service';
 
 export interface RegisterAllHandlersOptions {
   logger?: RuntimeLogger;
   agentService?: AgentHandlersService;
   agentContextService?: AgentContextHandlersService;
+  agentPlanService?: AgentPlanHandlersService;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -25,5 +30,9 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.agentContextService) {
     registerAgentContextHandlers(options.agentContextService, { logger: options.logger });
+  }
+
+  if (options.agentPlanService) {
+    registerAgentPlanHandlers(options.agentPlanService, { logger: options.logger });
   }
 }

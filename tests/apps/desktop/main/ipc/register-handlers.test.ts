@@ -6,12 +6,14 @@ const registerProviderHandlers = vi.fn();
 const registerChatHandlers = vi.fn();
 const registerAgentHandlers = vi.fn();
 const registerAgentContextHandlers = vi.fn();
+const registerAgentPlanHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/chat.handler', () => ({ registerChatHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent.handler', () => ({ registerAgentHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-context.handler', () => ({ registerAgentContextHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/agent-plan.handler', () => ({ registerAgentPlanHandlers }));
 
 describe('registerAllHandlers', () => {
   beforeEach(() => {
@@ -20,6 +22,7 @@ describe('registerAllHandlers', () => {
     registerChatHandlers.mockReset();
     registerAgentHandlers.mockReset();
     registerAgentContextHandlers.mockReset();
+    registerAgentPlanHandlers.mockReset();
   });
 
   it('registers only existing runtime handlers when no agent service is provided', async () => {
@@ -32,6 +35,7 @@ describe('registerAllHandlers', () => {
     expect(registerChatHandlers).toHaveBeenCalledTimes(1);
     expect(registerAgentHandlers).not.toHaveBeenCalled();
     expect(registerAgentContextHandlers).not.toHaveBeenCalled();
+    expect(registerAgentPlanHandlers).not.toHaveBeenCalled();
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
@@ -71,5 +75,17 @@ describe('registerAllHandlers', () => {
     registerAllHandlers({ agentContextService });
 
     expect(registerAgentContextHandlers).toHaveBeenCalledWith(agentContextService, { logger: undefined });
+  });
+
+  it('registers agent plan handlers when a plan service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const agentPlanService = {
+      getPlanByRun: vi.fn(),
+      updatePlanStatus: vi.fn(),
+    };
+
+    registerAllHandlers({ agentPlanService });
+
+    expect(registerAgentPlanHandlers).toHaveBeenCalledWith(agentPlanService, { logger: undefined });
   });
 });
