@@ -11,7 +11,6 @@ data/
 .env.*
 !.env.example
 .superpowers/
-.local-docs/
 .claude/worktrees/
 .claude/settings.local.json
 .claude/*.local.json
