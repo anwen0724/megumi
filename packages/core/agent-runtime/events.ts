@@ -4,6 +4,18 @@ import type {
   AgentRun,
   AgentStep,
 } from '@megumi/shared/agent-lifecycle-contracts';
+import {
+  createContextEffectiveUpdatedEvent,
+  createContextPatchAppliedEvent,
+  createContextPatchRejectedEvent,
+  createContextPatchRequestedEvent,
+} from '@megumi/shared/runtime-event-factory';
+import type {
+  ContextEffectiveUpdatedPayload,
+  ContextPatchAppliedPayload,
+  ContextPatchRejectedPayload,
+  ContextPatchRequestedPayload,
+} from '@megumi/shared/agent-context-contracts';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -234,4 +246,37 @@ export function createAgentObservationReceivedEvent(input: BaseEventInput & {
       ...(input.observation.summary ? { summary: input.observation.summary } : {}),
     },
   };
+}
+
+export function createAgentContextPatchRequestedEvent(input: BaseEventInput & {
+  stepId?: string;
+  actionId?: string;
+  payload: ContextPatchRequestedPayload;
+}): RuntimeEvent {
+  return createContextPatchRequestedEvent(input);
+}
+
+export function createAgentContextPatchAppliedEvent(input: BaseEventInput & {
+  stepId?: string;
+  actionId?: string;
+  observationId?: string;
+  payload: ContextPatchAppliedPayload;
+}): RuntimeEvent {
+  return createContextPatchAppliedEvent(input);
+}
+
+export function createAgentContextPatchRejectedEvent(input: BaseEventInput & {
+  stepId?: string;
+  actionId?: string;
+  observationId?: string;
+  payload: ContextPatchRejectedPayload;
+}): RuntimeEvent {
+  return createContextPatchRejectedEvent(input);
+}
+
+export function createAgentContextEffectiveUpdatedEvent(input: BaseEventInput & {
+  stepId?: string;
+  payload: ContextEffectiveUpdatedPayload;
+}): RuntimeEvent {
+  return createContextEffectiveUpdatedEvent(input);
 }

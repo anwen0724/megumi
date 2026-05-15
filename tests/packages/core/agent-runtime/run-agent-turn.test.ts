@@ -156,4 +156,69 @@ describe('agent runtime lifecycle events', () => {
     });
     expect(JSON.stringify(events)).not.toContain('sk-test-1234567890abcdef');
   });
+
+  it('emits context patch events around update_context actions', async () => {
+    const { sink, events } = createSink();
+
+    const result = await runAgentTurn({
+      sessionId: 'session-1',
+      mode: 'chat',
+      goal: 'Use workspace context',
+      actionKind: 'update_context',
+      contextPatch: {
+        patchId: 'patch-1',
+        runId: 'run-1',
+        requestedBy: 'agent',
+        operation: 'add',
+        sourceRef: 'source-1',
+        reason: 'Need shared context contracts.',
+        createdAt: '2026-05-15T00:00:00.000Z',
+        status: 'requested',
+      },
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation-1',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'workspace',
+          kind: 'context_patch_applied',
+          receivedAt: '2026-05-15T00:00:00.000Z',
+          summary: 'Context patch add applied.',
+          metadata: {
+            patchId: 'patch-1',
+            operation: 'add',
+            requestedBy: 'agent',
+            effectiveContextBuildId: 'build-1',
+          },
+        }),
+      },
+      clock: { now: () => '2026-05-15T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: vi.fn()
+          .mockReturnValueOnce('event-1')
+          .mockReturnValueOnce('event-2')
+          .mockReturnValueOnce('event-3')
+          .mockReturnValueOnce('event-4')
+          .mockReturnValueOnce('event-5')
+          .mockReturnValueOnce('event-6')
+          .mockReturnValueOnce('event-7')
+          .mockReturnValueOnce('event-8')
+          .mockReturnValueOnce('event-9')
+          .mockReturnValueOnce('event-10')
+          .mockReturnValueOnce('event-11')
+          .mockReturnValueOnce('event-12')
+          .mockReturnValueOnce('event-13')
+          .mockReturnValueOnce('event-14'),
+      },
+    });
+
+    expect(result.action.kind).toBe('update_context');
+    expect(events.map((event) => event.eventType)).toContain('context.patch.requested');
+    expect(events.map((event) => event.eventType)).toContain('context.patch.applied');
+    expect(events.map((event) => event.eventType)).toContain('context.effective.updated');
+    expect(JSON.stringify(events)).not.toContain('raw full prompt');
+  });
 });

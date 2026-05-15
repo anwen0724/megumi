@@ -7,7 +7,16 @@ import type {
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { normalizeRuntimeError } from '../runtime-exception';
 import {
+  createContextUpdateInputPreview,
+  toContextPatchAppliedPayload,
+  toContextPatchRejectedPayload,
+} from './context';
+import {
   createAgentActionRequestedEvent,
+  createAgentContextEffectiveUpdatedEvent,
+  createAgentContextPatchAppliedEvent,
+  createAgentContextPatchRejectedEvent,
+  createAgentContextPatchRequestedEvent,
   createAgentObservationReceivedEvent,
   createAgentRunCompletedEvent,
   createAgentRunCreatedEvent,
@@ -116,14 +125,19 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
     to: 'running',
   }));
 
+  const actionKind = input.actionKind ?? (input.contextPatch ? 'update_context' : 'emit_message');
+  const actionInputPreview: AgentAction['inputPreview'] | undefined = input.contextPatch
+    ? createContextUpdateInputPreview(input.contextPatch) as unknown as AgentAction['inputPreview']
+    : input.actionInputPreview;
+
   let action: AgentAction = {
     actionId: ids.actionId(),
     runId,
     stepId: step.stepId,
-    kind: input.actionKind ?? 'emit_message',
+    kind: actionKind,
     status: 'requested',
     requestedAt: clock.now(),
-    ...(input.actionInputPreview ? { inputPreview: input.actionInputPreview } : {}),
+    ...(actionInputPreview ? { inputPreview: actionInputPreview } : {}),
   };
   await input.lifecycle.saveAction(action);
   await emit(createAgentActionRequestedEvent({
@@ -134,6 +148,18 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
     createdAt: action.requestedAt,
     action,
   }));
+  if (action.kind === 'update_context' && input.contextPatch) {
+    await emit(createAgentContextPatchRequestedEvent({
+      eventId: ids.eventId(),
+      runId,
+      sessionId: input.sessionId,
+      stepId: step.stepId,
+      actionId: action.actionId,
+      sequence: nextSequence(),
+      createdAt: action.requestedAt,
+      payload: createContextUpdateInputPreview(input.contextPatch),
+    }));
+  }
 
   try {
     const observation = await input.hostBoundary.handleAction(action);
@@ -148,6 +174,54 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       createdAt: observation.receivedAt,
       observation,
     }));
+    const appliedPayload = toContextPatchAppliedPayload(observation);
+    const rejectedPayload = toContextPatchRejectedPayload(observation);
+
+    if (appliedPayload) {
+      await emit(createAgentContextPatchAppliedEvent({
+        eventId: ids.eventId(),
+        runId,
+        sessionId: input.sessionId,
+        stepId: step.stepId,
+        actionId: action.actionId,
+        observationId: observation.observationId,
+        sequence: nextSequence(),
+        createdAt: observation.receivedAt,
+        payload: appliedPayload,
+      }));
+
+      if (appliedPayload.effectiveContextBuildId) {
+        await emit(createAgentContextEffectiveUpdatedEvent({
+          eventId: ids.eventId(),
+          runId,
+          sessionId: input.sessionId,
+          stepId: step.stepId,
+          sequence: nextSequence(),
+          createdAt: observation.receivedAt,
+          payload: {
+            contextId: String(input.initialContext?.contextId ?? 'unknown-context'),
+            effectiveContextBuildId: appliedPayload.effectiveContextBuildId,
+            sourceCount: 0,
+            redactionCount: 0,
+            truncationCount: 0,
+          },
+        }));
+      }
+    }
+
+    if (rejectedPayload) {
+      await emit(createAgentContextPatchRejectedEvent({
+        eventId: ids.eventId(),
+        runId,
+        sessionId: input.sessionId,
+        stepId: step.stepId,
+        actionId: action.actionId,
+        observationId: observation.observationId,
+        sequence: nextSequence(),
+        createdAt: observation.receivedAt,
+        payload: rejectedPayload,
+      }));
+    }
 
     const stepCompletedAt = clock.now();
     step = { ...step, status: 'succeeded', completedAt: stepCompletedAt };
@@ -191,7 +265,7 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       createdAt: runCompletedAt,
     }));
 
-    return { run, step, action, observation, events };
+    return { run, step, action, observation, events, context: input.initialContext };
   } catch (error) {
     const runtimeError = normalizeRuntimeError(error, {
       source: 'core',
@@ -263,6 +337,6 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       error: runtimeError,
     }));
 
-    return { run, step, action, observation, events };
+    return { run, step, action, observation, events, context: input.initialContext };
   }
 }

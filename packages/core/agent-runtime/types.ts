@@ -5,6 +5,10 @@ import type {
   AgentStep,
   Message,
 } from '@megumi/shared/agent-lifecycle-contracts';
+import type {
+  AgentContext,
+  ContextPatch,
+} from '@megumi/shared/agent-context-contracts';
 import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -42,6 +46,8 @@ export interface RunAgentTurnInput {
   goal: string;
   actionKind?: AgentAction['kind'];
   actionInputPreview?: AgentAction['inputPreview'];
+  initialContext?: AgentContext;
+  contextPatch?: ContextPatch;
   lifecycle: AgentRuntimeLifecycleSink;
   hostBoundary: AgentHostBoundaryPort;
   clock?: AgentRuntimeClock;
@@ -54,6 +60,7 @@ export interface RunAgentTurnResult {
   action: AgentAction;
   observation: AgentObservation;
   events: RuntimeEvent[];
+  context?: AgentContext;
 }
 
 export const defaultAgentRuntimeClock: AgentRuntimeClock = {
