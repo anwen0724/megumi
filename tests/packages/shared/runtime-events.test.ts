@@ -183,3 +183,47 @@ describe('runtime event contracts', () => {
     });
   });
 });
+
+describe('agent lifecycle runtime events', () => {
+  it('accepts 02 lifecycle events with lifecycle ids', () => {
+    const event = RuntimeEventSchema.parse({
+      eventId: 'event-1',
+      schemaVersion: 1,
+      eventType: 'step.status.changed',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        from: 'running',
+        to: 'succeeded',
+      },
+    });
+
+    expect(event.eventType).toBe('step.status.changed');
+    expect(event.stepId).toBe('step-1');
+  });
+
+  it('keeps message.delta separate from assistant.output.delta', () => {
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-2',
+      schemaVersion: 1,
+      eventType: 'message.delta',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 2,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        messageId: 'message-1',
+        delta: 'Hello',
+      },
+    }).eventType).toBe('message.delta');
+  });
+});

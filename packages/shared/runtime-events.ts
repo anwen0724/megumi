@@ -1,14 +1,38 @@
 import type { JsonValue } from './json';
 import type { RuntimeError } from './runtime-errors';
 import type { RuntimeContext } from './runtime-context';
+import type {
+  AgentActionKind,
+  AgentActionStatus,
+  AgentObservationSource,
+  AgentRunStatus,
+  AgentSessionStatus,
+  AgentStepKind,
+  AgentStepStatus,
+  MessageStatus,
+} from './agent-lifecycle-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
 export const RUNTIME_EVENT_TYPES = [
+  'session.created',
+  'session.updated',
+  'run.created',
   'run.started',
+  'run.status.changed',
   'run.completed',
   'run.failed',
   'run.cancelled',
+  'step.created',
+  'step.started',
+  'step.status.changed',
+  'step.completed',
+  'step.failed',
+  'action.requested',
+  'observation.received',
+  'message.delta',
+  'message.completed',
+  'error.raised',
   'assistant.output.delta',
   'assistant.output.completed',
   'tool.call.requested',
@@ -61,6 +85,10 @@ export interface RuntimeEvent<TPayload extends object = object> {
   eventType: RuntimeEventType;
   runId: string;
   sessionId?: string;
+  stepId?: string;
+  actionId?: string;
+  observationId?: string;
+  messageId?: string;
   requestId?: string;
   context?: RuntimeContext;
   sequence: number;
@@ -71,10 +99,81 @@ export interface RuntimeEvent<TPayload extends object = object> {
   payload: TPayload;
 }
 
+export interface SessionCreatedPayload {
+  title: string;
+  status: AgentSessionStatus;
+}
+
+export interface SessionUpdatedPayload {
+  changedFields: string[];
+}
+
+export interface RunCreatedPayload {
+  status: AgentRunStatus;
+  mode: string;
+  goal: string;
+  triggerMessageId?: string;
+}
+
 export interface RunStartedPayload {
   providerId?: string;
   modelId?: string;
   runKind: 'chat' | 'agent';
+}
+
+export interface RunStatusChangedPayload {
+  from: AgentRunStatus;
+  to: AgentRunStatus;
+}
+
+export interface StepCreatedPayload {
+  kind: AgentStepKind;
+  status: AgentStepStatus;
+  title?: string;
+}
+
+export interface StepStartedPayload {
+  kind: AgentStepKind;
+}
+
+export interface StepStatusChangedPayload {
+  from: AgentStepStatus;
+  to: AgentStepStatus;
+}
+
+export interface StepCompletedPayload {
+  kind: AgentStepKind;
+}
+
+export interface StepFailedPayload {
+  kind: AgentStepKind;
+  error: RuntimeError;
+}
+
+export interface ActionRequestedPayload {
+  kind: AgentActionKind;
+  status: AgentActionStatus;
+  inputPreview?: Record<string, JsonValue>;
+}
+
+export interface ObservationReceivedPayload {
+  source: AgentObservationSource;
+  kind: string;
+  summary?: string;
+}
+
+export interface MessageDeltaPayload {
+  messageId: string;
+  delta: string;
+}
+
+export interface MessageCompletedPayload {
+  messageId: string;
+  status: MessageStatus;
+}
+
+export interface ErrorRaisedPayload {
+  error: RuntimeError;
 }
 
 export interface AssistantOutputDeltaPayload {
@@ -160,10 +259,24 @@ export interface MemoryCreatedPayload {
 }
 
 export type RuntimeEventPayloadByType = {
+  'session.created': SessionCreatedPayload;
+  'session.updated': SessionUpdatedPayload;
+  'run.created': RunCreatedPayload;
   'run.started': RunStartedPayload;
+  'run.status.changed': RunStatusChangedPayload;
   'run.completed': RunCompletedPayload;
   'run.failed': RunFailedPayload;
   'run.cancelled': RunCancelledPayload;
+  'step.created': StepCreatedPayload;
+  'step.started': StepStartedPayload;
+  'step.status.changed': StepStatusChangedPayload;
+  'step.completed': StepCompletedPayload;
+  'step.failed': StepFailedPayload;
+  'action.requested': ActionRequestedPayload;
+  'observation.received': ObservationReceivedPayload;
+  'message.delta': MessageDeltaPayload;
+  'message.completed': MessageCompletedPayload;
+  'error.raised': ErrorRaisedPayload;
   'assistant.output.delta': AssistantOutputDeltaPayload;
   'assistant.output.completed': AssistantOutputCompletedPayload;
   'tool.call.requested': ToolCallRequestedPayload;
