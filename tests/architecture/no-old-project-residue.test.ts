@@ -75,6 +75,12 @@ const allowedCurrentLifecycleTerms = new Map<string, string[]>([
   ['packages/shared/agent-lifecycle-contracts.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
+  ['packages/shared/agent-run-mode-contracts.ts', [
+    joinForbidden('ARTIFACT', '_'),
+  ]],
+  ['tests/packages/shared/agent-run-mode-contracts.test.ts', [
+    joinForbidden('ARTIFACT', '_'),
+  ]],
 ]);
 
 function shouldIgnore(filePath: string): boolean {
