@@ -56,4 +56,37 @@ describe('provider settings migrations', () => {
 
     expect(table).toEqual({ name: 'provider_settings' });
   });
+
+  it('creates agent lifecycle tables and indexes', () => {
+    const database = createTestDb();
+
+    migrateDatabase(database);
+
+    const rows = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name ASC")
+      .all() as Array<{ name: string }>;
+
+    expect(rows.map((row) => row.name)).toEqual(expect.arrayContaining([
+      'agent_actions',
+      'agent_observations',
+      'agent_runs',
+      'agent_sessions',
+      'agent_steps',
+      'messages',
+      'runtime_events',
+    ]));
+
+    const indexes = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name ASC")
+      .all() as Array<{ name: string }>;
+
+    expect(indexes.map((row) => row.name)).toEqual(expect.arrayContaining([
+      'idx_agent_actions_step_id',
+      'idx_agent_observations_run_id',
+      'idx_agent_runs_session_id',
+      'idx_agent_steps_run_id',
+      'idx_messages_session_id',
+      'idx_runtime_events_run_sequence',
+    ]));
+  });
 });
