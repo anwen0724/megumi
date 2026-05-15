@@ -9,6 +9,7 @@ import type {
   AgentContext,
   ContextPatch,
 } from '@megumi/shared/agent-context-contracts';
+import type { RunMode } from '@megumi/shared/agent-run-mode-contracts';
 import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -43,6 +44,9 @@ export interface RunAgentTurnInput {
   sessionId: string;
   triggerMessageId?: string;
   mode: string;
+  modeSnapshot?: RunMode;
+  modeSnapshotRef?: string;
+  sourcePlanId?: string;
   goal: string;
   actionKind?: AgentAction['kind'];
   actionInputPreview?: AgentAction['inputPreview'];

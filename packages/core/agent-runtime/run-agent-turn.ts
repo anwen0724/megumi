@@ -4,6 +4,8 @@ import type {
   AgentRun,
   AgentStep,
 } from '@megumi/shared/agent-lifecycle-contracts';
+import type { RunMode } from '@megumi/shared/agent-run-mode-contracts';
+import type { JsonObject } from '@megumi/shared/json';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { normalizeRuntimeError } from '../runtime-exception';
 import {
@@ -35,6 +37,11 @@ import {
   type RunAgentTurnInput,
   type RunAgentTurnResult,
 } from './types';
+import {
+  createRunModeRuntimeInstruction,
+  defaultActionKindForRunMode,
+  resolveRunModeSnapshot,
+} from './run-mode';
 
 export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTurnResult> {
   const clock = input.clock ?? defaultAgentRuntimeClock;
@@ -51,15 +58,29 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
   };
   const runId = ids.runId();
   const createdAt = clock.now();
+  const resolvedMode = resolveRunModeSnapshot({
+    mode: input.mode,
+    modeSnapshot: input.modeSnapshot,
+  });
+  const runModeInstruction = createRunModeRuntimeInstruction(resolvedMode);
 
   let run: AgentRun = {
     runId,
     sessionId: input.sessionId,
     ...(input.triggerMessageId ? { triggerMessageId: input.triggerMessageId } : {}),
-    mode: input.mode,
+    mode: resolvedMode.preset ?? input.mode,
+    ...(input.modeSnapshotRef ? { modeSnapshotRef: input.modeSnapshotRef } : {}),
     goal: input.goal,
     status: 'queued',
     createdAt,
+    ...(input.sourcePlanId ? { sourcePlanId: input.sourcePlanId } : {}),
+    metadata: {
+      runMode: {
+        taskIntent: runModeInstruction.taskIntent,
+        permissionMode: runModeInstruction.permissionMode,
+        outputExpectation: runModeInstruction.outputExpectation,
+      },
+    } satisfies JsonObject,
   };
 
   await input.lifecycle.saveRun(run);
@@ -125,10 +146,11 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
     to: 'running',
   }));
 
-  const actionKind = input.actionKind ?? (input.contextPatch ? 'update_context' : 'emit_message');
+  const actionKind = input.actionKind
+    ?? (input.contextPatch ? 'update_context' : defaultActionKindForRunMode(resolvedMode));
   const actionInputPreview: AgentAction['inputPreview'] | undefined = input.contextPatch
     ? createContextUpdateInputPreview(input.contextPatch) as unknown as AgentAction['inputPreview']
-    : input.actionInputPreview;
+    : input.actionInputPreview ?? createDefaultRunModeActionInputPreview(resolvedMode);
 
   let action: AgentAction = {
     actionId: ids.actionId(),
@@ -339,4 +361,17 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
 
     return { run, step, action, observation, events, context: input.initialContext };
   }
+}
+
+function createDefaultRunModeActionInputPreview(mode: RunMode): AgentAction['inputPreview'] | undefined {
+  if (mode.outputExpectation !== 'implementation_plan_artifact') {
+    return undefined;
+  }
+
+  return {
+    artifactKind: 'implementation_plan',
+    taskIntent: mode.taskIntent,
+    permissionMode: mode.permissionMode,
+    outputExpectation: mode.outputExpectation,
+  };
 }

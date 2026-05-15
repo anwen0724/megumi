@@ -221,4 +221,94 @@ describe('agent runtime lifecycle events', () => {
     expect(events.map((event) => event.eventType)).toContain('context.effective.updated');
     expect(JSON.stringify(events)).not.toContain('raw full prompt');
   });
+
+  it('persists mode snapshot refs and source plan ids on the run', async () => {
+    const { sink } = createSink();
+
+    const result = await runAgentTurn({
+      sessionId: 'session-1',
+      mode: 'execute',
+      modeSnapshotRef: 'mode-snapshot:execute',
+      modeSnapshot: {
+        preset: 'execute',
+        taskIntent: 'work',
+        permissionMode: 'default',
+        outputExpectation: 'execution_result',
+        selectionSource: 'user_selected',
+      },
+      sourcePlanId: 'plan:accepted',
+      goal: 'Execute accepted plan',
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation-1',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'runtime',
+          kind: 'message_emitted',
+          receivedAt: '2026-05-15T00:00:00.000Z',
+          summary: 'Message emitted',
+        }),
+      },
+      clock: { now: () => '2026-05-15T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(result.run.mode).toBe('execute');
+    expect(result.run.modeSnapshotRef).toBe('mode-snapshot:execute');
+    expect(result.run.sourcePlanId).toBe('plan:accepted');
+    expect(result.run.metadata?.runMode).toEqual({
+      taskIntent: 'work',
+      permissionMode: 'default',
+      outputExpectation: 'execution_result',
+    });
+  });
+
+  it('uses create_artifact as plan mode default action intent', async () => {
+    const { sink } = createSink();
+
+    const result = await runAgentTurn({
+      sessionId: 'session-1',
+      mode: 'plan',
+      modeSnapshotRef: 'mode-snapshot:plan',
+      modeSnapshot: {
+        preset: 'plan',
+        taskIntent: 'plan',
+        permissionMode: 'plan',
+        outputExpectation: 'implementation_plan_artifact',
+        selectionSource: 'user_selected',
+      },
+      goal: 'Write a plan',
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation-1',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'runtime',
+          kind: 'plan_artifact_requested',
+          receivedAt: '2026-05-15T00:00:00.000Z',
+          summary: 'Implementation plan artifact requested.',
+        }),
+      },
+      clock: { now: () => '2026-05-15T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(result.action.kind).toBe('create_artifact');
+    expect(result.action.inputPreview).toEqual({
+      artifactKind: 'implementation_plan',
+      taskIntent: 'plan',
+      permissionMode: 'plan',
+      outputExpectation: 'implementation_plan_artifact',
+    });
+  });
 });
