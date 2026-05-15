@@ -26,7 +26,7 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
     case IPC_CHANNELS.agent.context.sourcesList:
       return 'agent.context.sources.list';
     case IPC_CHANNELS.agent.plan.byRunGet:
-      return 'agent.plan.byRun.get';
+      return 'agent.plan.by-run.get';
     case IPC_CHANNELS.agent.plan.statusUpdate:
       return 'agent.plan.status.update';
     default: {
