@@ -19,6 +19,8 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.agent.run.start,
   IPC_CHANNELS.agent.context.baselineGet,
   IPC_CHANNELS.agent.context.sourcesList,
+  IPC_CHANNELS.agent.plan.byRunGet,
+  IPC_CHANNELS.agent.plan.statusUpdate,
 ] as const;
 
 export type BusinessIpcChannel = (typeof BUSINESS_IPC_CHANNELS)[number];

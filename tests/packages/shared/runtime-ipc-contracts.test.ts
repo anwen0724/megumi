@@ -16,6 +16,7 @@ import {
   sanitizeZodIssues,
 } from '@megumi/shared/ipc-errors';
 import {
+  BUSINESS_IPC_CHANNELS,
   BusinessIpcChannelSchema,
   RuntimeIpcRequestIdSchema,
   createRuntimeIpcRequestSchema,
@@ -23,6 +24,7 @@ import {
   isBusinessIpcChannel,
 } from '@megumi/shared/ipc-contracts';
 import {
+  AgentPlanByRunGetRequestSchema,
   AgentContextBaselineGetRequestSchema,
   AgentContextSourcesListRequestSchema,
   AgentRunStartRequestSchema,
@@ -500,6 +502,48 @@ describe('agent lifecycle ipc contracts', () => {
         createdAt: '2026-05-15T00:00:00.000Z',
       },
     }).payload.goal).toBe('Answer');
+  });
+
+  it('accepts mode snapshots and source plan ids in agent run start payloads', () => {
+    const parsed = AgentRunStartRequestSchema.parse({
+      requestId: 'request:run-mode',
+      payload: {
+        sessionId: 'session:1',
+        goal: 'Execute accepted plan',
+        mode: 'execute',
+        modeSnapshot: {
+          preset: 'execute',
+          taskIntent: 'work',
+          permissionMode: 'default',
+          outputExpectation: 'execution_result',
+          selectionSource: 'user_selected',
+        },
+        sourcePlanId: 'plan:accepted',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.run.start,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(parsed.payload.modeSnapshot?.permissionMode).toBe('default');
+    expect(parsed.payload.sourcePlanId).toBe('plan:accepted');
+  });
+
+  it('registers plan-specific IPC channels in the runtime envelope', () => {
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.plan.byRunGet);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.plan.statusUpdate);
+    expect(AgentPlanByRunGetRequestSchema.parse({
+      requestId: 'request:plan-get',
+      payload: { runId: 'run:plan' },
+      meta: {
+        channel: IPC_CHANNELS.agent.plan.byRunGet,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.runId).toBe('run:plan');
   });
 });
 
