@@ -22,6 +22,10 @@ export const IPC_CHANNELS = {
     run: {
       start: 'agent:run:start',
     },
+    context: {
+      baselineGet: 'agent:context:baseline:get',
+      sourcesList: 'agent:context:sources:list',
+    },
   },
   runtime: {
     event: 'runtime:event',
@@ -48,6 +52,8 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.agent.session.create,
   IPC_CHANNELS.agent.session.list,
   IPC_CHANNELS.agent.run.start,
+  IPC_CHANNELS.agent.context.baselineGet,
+  IPC_CHANNELS.agent.context.sourcesList,
   IPC_CHANNELS.runtime.event,
 ] as const;
 

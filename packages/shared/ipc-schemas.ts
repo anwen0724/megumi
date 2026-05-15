@@ -10,6 +10,10 @@ import {
   AgentSessionSchema,
   MessageSchema,
 } from './agent-lifecycle-contracts';
+import {
+  AgentContextSchema,
+  ContextSourceRefSchema,
+} from './agent-context-contracts';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
 
@@ -219,6 +223,30 @@ export const AgentRunStartDataSchema = z
   })
   .strict();
 
+export const AgentContextBaselineGetPayloadSchema = z
+  .object({
+    runId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentContextBaselineGetDataSchema = z
+  .object({
+    context: AgentContextSchema.optional(),
+  })
+  .strict();
+
+export const AgentContextSourcesListPayloadSchema = z
+  .object({
+    runId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentContextSourcesListDataSchema = z
+  .object({
+    sources: z.array(ContextSourceRefSchema),
+  })
+  .strict();
+
 export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.session.create,
   AgentSessionCreatePayloadSchema,
@@ -234,6 +262,16 @@ export const AgentRunStartRequestSchema = createRuntimeIpcRequestSchema(
   AgentRunStartPayloadSchema,
 );
 
+export const AgentContextBaselineGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.context.baselineGet,
+  AgentContextBaselineGetPayloadSchema,
+);
+
+export const AgentContextSourcesListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.context.sourcesList,
+  AgentContextSourcesListPayloadSchema,
+);
+
 export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
   AgentSessionCreateDataSchema,
   IPC_CHANNELS.agent.session.create,
@@ -247,6 +285,16 @@ export const AgentSessionListResultSchema = createRuntimeIpcResultSchema(
 export const AgentRunStartResultSchema = createRuntimeIpcResultSchema(
   AgentRunStartDataSchema,
   IPC_CHANNELS.agent.run.start,
+);
+
+export const AgentContextBaselineGetResultSchema = createRuntimeIpcResultSchema(
+  AgentContextBaselineGetDataSchema,
+  IPC_CHANNELS.agent.context.baselineGet,
+);
+
+export const AgentContextSourcesListResultSchema = createRuntimeIpcResultSchema(
+  AgentContextSourcesListDataSchema,
+  IPC_CHANNELS.agent.context.sourcesList,
 );
 
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;
@@ -265,3 +313,7 @@ export type AgentSessionListPayload = z.infer<typeof AgentSessionListPayloadSche
 export type AgentSessionListData = z.infer<typeof AgentSessionListDataSchema>;
 export type AgentRunStartPayload = z.infer<typeof AgentRunStartPayloadSchema>;
 export type AgentRunStartData = z.infer<typeof AgentRunStartDataSchema>;
+export type AgentContextBaselineGetPayload = z.infer<typeof AgentContextBaselineGetPayloadSchema>;
+export type AgentContextBaselineGetData = z.infer<typeof AgentContextBaselineGetDataSchema>;
+export type AgentContextSourcesListPayload = z.infer<typeof AgentContextSourcesListPayloadSchema>;
+export type AgentContextSourcesListData = z.infer<typeof AgentContextSourcesListDataSchema>;

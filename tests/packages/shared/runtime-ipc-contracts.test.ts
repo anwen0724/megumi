@@ -23,6 +23,8 @@ import {
   isBusinessIpcChannel,
 } from '@megumi/shared/ipc-contracts';
 import {
+  AgentContextBaselineGetRequestSchema,
+  AgentContextSourcesListRequestSchema,
   AgentRunStartRequestSchema,
   AgentSessionCreateRequestSchema,
   AgentSessionListRequestSchema,
@@ -498,6 +500,40 @@ describe('agent lifecycle ipc contracts', () => {
         createdAt: '2026-05-15T00:00:00.000Z',
       },
     }).payload.goal).toBe('Answer');
+  });
+});
+
+describe('agent context runtime IPC schemas', () => {
+  it('keeps context channel in request.meta.channel instead of top-level channel', () => {
+    const parsed = AgentContextBaselineGetRequestSchema.parse({
+      requestId: 'ipc-context-1',
+      payload: {
+        runId: 'run-1',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.context.baselineGet,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(parsed.meta.channel).toBe(IPC_CHANNELS.agent.context.baselineGet);
+    expect('channel' in parsed).toBe(false);
+  });
+
+  it('rejects top-level channel on context requests', () => {
+    expect(() => AgentContextSourcesListRequestSchema.parse({
+      requestId: 'ipc-context-2',
+      channel: IPC_CHANNELS.agent.context.sourcesList,
+      payload: {
+        runId: 'run-1',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.context.sourcesList,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        source: 'renderer',
+      },
+    })).toThrow();
   });
 });
 

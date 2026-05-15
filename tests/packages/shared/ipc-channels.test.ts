@@ -19,3 +19,12 @@ describe('ipc channel contracts', () => {
     expect(isIpcChannel('legacy:unknown')).toBe(false);
   });
 });
+
+describe('agent context IPC channels', () => {
+  it('registers context channels under window.megumi agent namespace', () => {
+    expect(IPC_CHANNELS.agent.context.baselineGet).toBe('agent:context:baseline:get');
+    expect(IPC_CHANNELS.agent.context.sourcesList).toBe('agent:context:sources:list');
+    expect(isIpcChannel(IPC_CHANNELS.agent.context.baselineGet)).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.agent.context.sourcesList)).toBe(true);
+  });
+});
