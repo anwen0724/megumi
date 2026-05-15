@@ -9,6 +9,10 @@ import type {
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type {
+  AgentContextBaselineGetData,
+  AgentContextBaselineGetPayload,
+  AgentContextSourcesListData,
+  AgentContextSourcesListPayload,
   AgentRunStartData,
   AgentRunStartPayload,
   AgentSessionCreateData,
@@ -122,6 +126,26 @@ export const api = {
         request: BusinessRequest<AgentRunStartPayload, typeof IPC_CHANNELS.agent.run.start>,
       ): Promise<RuntimeIpcResult<AgentRunStartData, typeof IPC_CHANNELS.agent.run.start>> =>
         invokeRuntimeIpc(IPC_CHANNELS.agent.run.start, request),
+    },
+    context: {
+      baselineGet: (
+        request: BusinessRequest<
+          AgentContextBaselineGetPayload,
+          typeof IPC_CHANNELS.agent.context.baselineGet
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentContextBaselineGetData,
+        typeof IPC_CHANNELS.agent.context.baselineGet
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.context.baselineGet, request),
+      sourcesList: (
+        request: BusinessRequest<
+          AgentContextSourcesListPayload,
+          typeof IPC_CHANNELS.agent.context.sourcesList
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentContextSourcesListData,
+        typeof IPC_CHANNELS.agent.context.sourcesList
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.context.sourcesList, request),
     },
   },
   runtime: {

@@ -4,8 +4,8 @@ import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared/ipc/runtime-request';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 
-describe('agent lifecycle preload API shape', () => {
-  it('supports typed agent session and run methods on window.megumi', async () => {
+describe('agent context preload API shape', () => {
+  it('supports typed context methods on window.megumi.agent.context', async () => {
     const api: Pick<MegumiAPI, 'agent'> = {
       agent: {
         session: {
@@ -22,20 +22,18 @@ describe('agent lifecycle preload API shape', () => {
       },
     };
 
-    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.session.create, {
-      title: 'Agent lifecycle',
-      createdAt: '2026-05-15T00:00:00.000Z',
+    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.context.baselineGet, {
+      runId: 'run-1',
     });
 
-    await api.agent.session.create(request);
+    await api.agent.context.baselineGet(request);
 
-    expect(api.agent.session.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(api.agent.context.baselineGet).toHaveBeenCalledWith(expect.objectContaining({
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.agent.session.create,
+        channel: IPC_CHANNELS.agent.context.baselineGet,
       }),
       payload: {
-        title: 'Agent lifecycle',
-        createdAt: '2026-05-15T00:00:00.000Z',
+        runId: 'run-1',
       },
     }));
   });
