@@ -11,6 +11,12 @@ import type {
   AgentStepStatus,
   MessageStatus,
 } from './agent-lifecycle-contracts';
+import type {
+  ContextEffectiveUpdatedPayload,
+  ContextPatchAppliedPayload,
+  ContextPatchRejectedPayload,
+  ContextPatchRequestedPayload,
+} from './agent-context-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
@@ -30,6 +36,10 @@ export const RUNTIME_EVENT_TYPES = [
   'step.failed',
   'action.requested',
   'observation.received',
+  'context.patch.requested',
+  'context.patch.applied',
+  'context.patch.rejected',
+  'context.effective.updated',
   'message.delta',
   'message.completed',
   'error.raised',
@@ -274,6 +284,10 @@ export type RuntimeEventPayloadByType = {
   'step.failed': StepFailedPayload;
   'action.requested': ActionRequestedPayload;
   'observation.received': ObservationReceivedPayload;
+  'context.patch.requested': ContextPatchRequestedPayload;
+  'context.patch.applied': ContextPatchAppliedPayload;
+  'context.patch.rejected': ContextPatchRejectedPayload;
+  'context.effective.updated': ContextEffectiveUpdatedPayload;
   'message.delta': MessageDeltaPayload;
   'message.completed': MessageCompletedPayload;
   'error.raised': ErrorRaisedPayload;

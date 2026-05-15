@@ -13,6 +13,10 @@ import {
   MessageStatusSchema,
 } from './agent-lifecycle-contracts';
 import {
+  CONTEXT_PATCH_OPERATIONS,
+  CONTEXT_PATCH_REQUESTERS,
+} from './agent-context-contracts';
+import {
   RUNTIME_EVENT_PERSIST_MODES,
   RUNTIME_EVENT_SCHEMA_VERSION,
   RUNTIME_EVENT_SOURCES,
@@ -167,6 +171,41 @@ const ObservationReceivedPayloadSchema = z
   })
   .strict();
 
+const ContextPatchRequestedPayloadSchema = z
+  .object({
+    patchId: z.string().min(1),
+    operation: z.enum(CONTEXT_PATCH_OPERATIONS),
+    requestedBy: z.enum(CONTEXT_PATCH_REQUESTERS),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+const ContextPatchAppliedPayloadSchema = z
+  .object({
+    patchId: z.string().min(1),
+    operation: z.enum(CONTEXT_PATCH_OPERATIONS),
+    effectiveContextBuildId: z.string().min(1).optional(),
+  })
+  .strict();
+
+const ContextPatchRejectedPayloadSchema = z
+  .object({
+    patchId: z.string().min(1),
+    operation: z.enum(CONTEXT_PATCH_OPERATIONS),
+    rejectionReason: z.string().min(1),
+  })
+  .strict();
+
+const ContextEffectiveUpdatedPayloadSchema = z
+  .object({
+    contextId: z.string().min(1),
+    effectiveContextBuildId: z.string().min(1),
+    sourceCount: z.number().int().nonnegative(),
+    redactionCount: z.number().int().nonnegative(),
+    truncationCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
 const MessageDeltaPayloadSchema = z
   .object({
     messageId: z.string().min(1),
@@ -306,6 +345,22 @@ export const StepCompletedEventSchema = eventSchema('step.completed', StepComple
 export const StepFailedEventSchema = eventSchema('step.failed', StepFailedPayloadSchema);
 export const ActionRequestedEventSchema = eventSchema('action.requested', ActionRequestedPayloadSchema);
 export const ObservationReceivedEventSchema = eventSchema('observation.received', ObservationReceivedPayloadSchema);
+export const ContextPatchRequestedEventSchema = eventSchema(
+  'context.patch.requested',
+  ContextPatchRequestedPayloadSchema,
+);
+export const ContextPatchAppliedEventSchema = eventSchema(
+  'context.patch.applied',
+  ContextPatchAppliedPayloadSchema,
+);
+export const ContextPatchRejectedEventSchema = eventSchema(
+  'context.patch.rejected',
+  ContextPatchRejectedPayloadSchema,
+);
+export const ContextEffectiveUpdatedEventSchema = eventSchema(
+  'context.effective.updated',
+  ContextEffectiveUpdatedPayloadSchema,
+);
 export const MessageDeltaEventSchema = eventSchema('message.delta', MessageDeltaPayloadSchema);
 export const MessageCompletedEventSchema = eventSchema('message.completed', MessageCompletedPayloadSchema);
 export const ErrorRaisedEventSchema = eventSchema('error.raised', ErrorRaisedPayloadSchema);
@@ -339,6 +394,10 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   StepFailedEventSchema,
   ActionRequestedEventSchema,
   ObservationReceivedEventSchema,
+  ContextPatchRequestedEventSchema,
+  ContextPatchAppliedEventSchema,
+  ContextPatchRejectedEventSchema,
+  ContextEffectiveUpdatedEventSchema,
   MessageDeltaEventSchema,
   MessageCompletedEventSchema,
   ErrorRaisedEventSchema,

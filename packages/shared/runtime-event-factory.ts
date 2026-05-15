@@ -3,6 +3,12 @@ import type { RunId } from './ids';
 import type { RuntimeContext } from './runtime-context';
 import type { RuntimeError } from './runtime-errors';
 import type {
+  ContextEffectiveUpdatedPayload,
+  ContextPatchAppliedPayload,
+  ContextPatchRejectedPayload,
+  ContextPatchRequestedPayload,
+} from './agent-context-contracts';
+import type {
   AssistantOutputCompletedPayload,
   AssistantOutputDeltaPayload,
   RunCancelledPayload,
@@ -17,7 +23,7 @@ import type {
   RuntimeEventVisibility,
 } from './runtime-events';
 
-export interface RuntimeEventFactoryInput<TType extends RuntimeEventType> {
+export interface ChatRuntimeEventFactoryInput<TType extends RuntimeEventType> {
   eventId: string;
   eventType: TType;
   runId: RunId | string;
@@ -31,8 +37,8 @@ export interface RuntimeEventFactoryInput<TType extends RuntimeEventType> {
   payload: RuntimeEventPayloadByType[TType];
 }
 
-export function createRuntimeEvent<TType extends RuntimeEventType>(
-  input: RuntimeEventFactoryInput<TType>,
+export function createChatRuntimeEvent<TType extends RuntimeEventType>(
+  input: ChatRuntimeEventFactoryInput<TType>,
 ): RuntimeEvent<RuntimeEventPayloadByType[TType]> & { eventType: TType } {
   const context = input.runtimeContext ?? input.request.runtimeContext;
 
@@ -53,6 +59,128 @@ export function createRuntimeEvent<TType extends RuntimeEventType>(
   };
 }
 
+export interface AgentRuntimeEventFactoryInput<TType extends RuntimeEventType> {
+  eventId: string;
+  eventType: TType;
+  runId: RunId | string;
+  sessionId?: string;
+  stepId?: string;
+  actionId?: string;
+  observationId?: string;
+  requestId?: string;
+  runtimeContext?: RuntimeContext;
+  sequence: number;
+  createdAt: string;
+  source: RuntimeEventSource;
+  visibility: RuntimeEventVisibility;
+  persist: RuntimeEventPersistMode;
+  payload: RuntimeEventPayloadByType[TType];
+}
+
+export function createRuntimeEvent<TType extends RuntimeEventType>(
+  input: AgentRuntimeEventFactoryInput<TType>,
+): RuntimeEvent<RuntimeEventPayloadByType[TType]> & { eventType: TType } {
+  return {
+    eventId: input.eventId,
+    schemaVersion: 1,
+    eventType: input.eventType,
+    runId: input.runId,
+    ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+    ...(input.stepId ? { stepId: input.stepId } : {}),
+    ...(input.actionId ? { actionId: input.actionId } : {}),
+    ...(input.observationId ? { observationId: input.observationId } : {}),
+    requestId: input.requestId ?? input.runtimeContext?.requestId,
+    ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+    sequence: input.sequence,
+    createdAt: input.createdAt,
+    source: input.source,
+    visibility: input.visibility,
+    persist: input.persist,
+    payload: input.payload,
+  };
+}
+
+export function createContextPatchRequestedEvent(input: {
+  eventId: string;
+  runId: string;
+  sessionId?: string;
+  stepId?: string;
+  actionId?: string;
+  sequence: number;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+  payload: ContextPatchRequestedPayload;
+}): RuntimeEvent<ContextPatchRequestedPayload> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'context.patch.requested',
+    source: 'core',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createContextPatchAppliedEvent(input: {
+  eventId: string;
+  runId: string;
+  sessionId?: string;
+  stepId?: string;
+  actionId?: string;
+  observationId?: string;
+  sequence: number;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+  payload: ContextPatchAppliedPayload;
+}): RuntimeEvent<ContextPatchAppliedPayload> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'context.patch.applied',
+    source: 'core',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createContextPatchRejectedEvent(input: {
+  eventId: string;
+  runId: string;
+  sessionId?: string;
+  stepId?: string;
+  actionId?: string;
+  observationId?: string;
+  sequence: number;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+  payload: ContextPatchRejectedPayload;
+}): RuntimeEvent<ContextPatchRejectedPayload> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'context.patch.rejected',
+    source: 'core',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createContextEffectiveUpdatedEvent(input: {
+  eventId: string;
+  runId: string;
+  sessionId?: string;
+  stepId?: string;
+  sequence: number;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+  payload: ContextEffectiveUpdatedPayload;
+}): RuntimeEvent<ContextEffectiveUpdatedPayload> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'context.effective.updated',
+    source: 'core',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
 export function createRunStartedEvent(input: {
   eventId: string;
   request: ChatRuntimeRequest;
@@ -60,7 +188,7 @@ export function createRunStartedEvent(input: {
   sequence: number;
   createdAt: string;
 }): RuntimeEvent<RunStartedPayload> {
-  return createRuntimeEvent({
+  return createChatRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.started',
     request: input.request,
@@ -86,7 +214,7 @@ export function createRunCompletedEvent(input: {
   createdAt: string;
   payload?: RunCompletedPayload;
 }): RuntimeEvent<RunCompletedPayload> {
-  return createRuntimeEvent({
+  return createChatRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.completed',
     request: input.request,
@@ -108,7 +236,7 @@ export function createRunFailedEvent(input: {
   createdAt: string;
   error: RuntimeError;
 }): RuntimeEvent<RunFailedPayload> {
-  return createRuntimeEvent({
+  return createChatRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.failed',
     request: input.request,
@@ -132,7 +260,7 @@ export function createRunCancelledEvent(input: {
   createdAt: string;
   reason: string;
 }): RuntimeEvent<RunCancelledPayload> {
-  return createRuntimeEvent({
+  return createChatRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.cancelled',
     request: input.request,
@@ -156,7 +284,7 @@ export function createAssistantDeltaEvent(input: {
   createdAt: string;
   delta: string;
 }): RuntimeEvent<AssistantOutputDeltaPayload> {
-  return createRuntimeEvent({
+  return createChatRuntimeEvent({
     eventId: input.eventId,
     eventType: 'assistant.output.delta',
     request: input.request,
@@ -180,7 +308,7 @@ export function createAssistantCompletedEvent(input: {
   createdAt: string;
   payload: AssistantOutputCompletedPayload;
 }): RuntimeEvent<AssistantOutputCompletedPayload> {
-  return createRuntimeEvent({
+  return createChatRuntimeEvent({
     eventId: input.eventId,
     eventType: 'assistant.output.completed',
     request: input.request,

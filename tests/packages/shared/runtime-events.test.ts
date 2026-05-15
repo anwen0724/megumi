@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ContextPatchRequestedEventSchema,
   RuntimeEventSchema,
   RuntimeEventTypeSchema,
   isTerminalRuntimeEvent,
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime-event-schemas';
-import { createRunStartedEvent } from '@megumi/shared/runtime-event-factory';
+import {
+  createContextPatchRequestedEvent,
+  createRunStartedEvent,
+  createRuntimeEvent,
+} from '@megumi/shared/runtime-event-factory';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 const runtimeContext = {
@@ -249,5 +254,85 @@ describe('agent lifecycle runtime events', () => {
         delta: 'Hello',
       },
     }).eventType).toBe('message.delta');
+  });
+});
+
+describe('context runtime events', () => {
+  it('registers context patch requested events in shared schemas', () => {
+    const event = {
+      eventId: 'event-context-1',
+      schemaVersion: 1,
+      eventType: 'context.patch.requested',
+      runId: 'run-1',
+      stepId: 'step-1',
+      actionId: 'action-1',
+      sequence: 1,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      source: 'core',
+      visibility: 'debug',
+      persist: 'required',
+      payload: {
+        patchId: 'patch-1',
+        operation: 'add',
+        requestedBy: 'agent',
+        reason: 'Need package contracts for this task.',
+      },
+    };
+
+    expect(ContextPatchRequestedEventSchema.parse(event)).toMatchObject({
+      eventType: 'context.patch.requested',
+      payload: { patchId: 'patch-1' },
+    });
+    expect(RuntimeEventSchema.parse(event).eventType).toBe('context.patch.requested');
+  });
+
+  it('creates typed context events with runtime context propagation', () => {
+    const event = createContextPatchRequestedEvent({
+      eventId: 'event-context-2',
+      runId: 'run-1',
+      stepId: 'step-1',
+      actionId: 'action-1',
+      sequence: 2,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      runtimeContext: {
+        requestId: 'request-1',
+        traceId: 'trace-1',
+        operationName: 'agent.context.patch.request',
+        source: 'core',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+      payload: {
+        patchId: 'patch-1',
+        operation: 'add',
+        requestedBy: 'agent',
+        reason: 'Need package contracts for this task.',
+      },
+    });
+
+    expect(event.context?.traceId).toBe('trace-1');
+    expect(event.requestId).toBe('request-1');
+    expect(JSON.stringify(event)).not.toContain('sk-test');
+  });
+
+  it('keeps generic runtime factory compatible with context events', () => {
+    const event = createRuntimeEvent({
+      eventId: 'event-context-3',
+      eventType: 'context.effective.updated',
+      runId: 'run-1',
+      sequence: 3,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      source: 'core',
+      visibility: 'debug',
+      persist: 'required',
+      payload: {
+        contextId: 'context-1',
+        effectiveContextBuildId: 'build-1',
+        sourceCount: 1,
+        redactionCount: 0,
+        truncationCount: 0,
+      },
+    });
+
+    expect(event.eventType).toBe('context.effective.updated');
   });
 });
