@@ -3,3 +3,4 @@ export * from './schema';
 export * from './repos/provider-settings.repo';
 export * from './repos/agent-lifecycle.repo';
 export * from './repos/agent-context.repo';
+export * from './repos/agent-run-mode.repo';
