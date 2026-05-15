@@ -32,6 +32,10 @@ const mocks = vi.hoisted(() => {
       listSessions: vi.fn(),
       startRun: vi.fn(),
     })),
+    createDefaultAgentContextService: vi.fn(() => ({
+      getBaselineContext: vi.fn(),
+      listWorkspaceSourcesByRun: vi.fn(),
+    })),
   };
 });
 
@@ -63,6 +67,10 @@ vi.mock('@megumi/desktop/main/services/agent-lifecycle.service', () => ({
   createDefaultAgentLifecycleService: mocks.createDefaultAgentLifecycleService,
 }));
 
+vi.mock('@megumi/desktop/main/services/agent-context.service', () => ({
+  createDefaultAgentContextService: mocks.createDefaultAgentContextService,
+}));
+
 describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -73,6 +81,7 @@ describe('main runtime logger composition', () => {
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
     mocks.createDefaultAgentLifecycleService.mockClear();
+    mocks.createDefaultAgentContextService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
@@ -85,6 +94,7 @@ describe('main runtime logger composition', () => {
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
     const agentService = mocks.createDefaultAgentLifecycleService.mock.results[0]?.value;
+    const agentContextService = mocks.createDefaultAgentContextService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -94,12 +104,17 @@ describe('main runtime logger composition', () => {
     const lifecycleOptions = mocks.registerAppLifecycle.mock.calls[0]?.[0];
     lifecycleOptions.registerAllHandlers();
 
+    expect(mocks.createDefaultAgentContextService).toHaveBeenCalledWith(
+      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
+    );
     expect(mocks.createDefaultAgentLifecycleService).toHaveBeenCalledWith(
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
+      { contextService: agentContextService },
     );
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       agentService,
+      agentContextService,
     });
 
     processLogger.error('runtime_review_probe', {

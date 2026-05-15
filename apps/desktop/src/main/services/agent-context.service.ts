@@ -1,11 +1,14 @@
 import { readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
+import { createDatabase } from '@megumi/db/connection';
 import type {
   AgentContext,
   ContextSourceRef,
   ModelCapabilitySummary,
 } from '@megumi/shared/agent-context-contracts';
-import type { AgentContextRepository } from '@megumi/db/repos/agent-context.repo';
+import { AgentContextRepository } from '@megumi/db/repos/agent-context.repo';
+import { migrateDatabase } from '@megumi/db/schema/migrations';
+import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface AgentContextServiceClock {
   now(): string;
@@ -157,4 +160,13 @@ export class AgentContextService {
 
     return sources;
   }
+}
+
+export function createDefaultAgentContextService(homePaths: MegumiHomePaths): AgentContextService {
+  const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
+  migrateDatabase(database);
+
+  return new AgentContextService({
+    contextRepository: new AgentContextRepository(database),
+  });
 }
