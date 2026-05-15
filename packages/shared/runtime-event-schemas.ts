@@ -60,7 +60,7 @@ const RuntimeEventBaseSchema = z
   .object({
     eventId: RuntimeEventIdSchema,
     schemaVersion: z.literal(RUNTIME_EVENT_SCHEMA_VERSION),
-    runId: z.string().min(1),
+    runId: z.string().min(1).optional(),
     sessionId: z.string().min(1).optional(),
     stepId: z.string().min(1).optional(),
     actionId: z.string().min(1).optional(),
@@ -83,6 +83,10 @@ const ChatUsageSchema = z
     totalTokens: z.number().int().nonnegative().optional(),
   })
   .strict();
+
+const RunScopedRuntimeEventBaseSchema = RuntimeEventBaseSchema.extend({
+  runId: z.string().min(1),
+}).strict();
 
 const SessionCreatedPayloadSchema = z
   .object({
@@ -271,14 +275,24 @@ function eventSchema<TType extends RuntimeEventType, TPayloadSchema extends z.Zo
   eventType: TType,
   payload: TPayloadSchema,
 ) {
+  return RunScopedRuntimeEventBaseSchema.extend({
+    eventType: z.literal(eventType),
+    payload,
+  }).strict();
+}
+
+function sessionEventSchema<TType extends 'session.created' | 'session.updated', TPayloadSchema extends z.ZodTypeAny>(
+  eventType: TType,
+  payload: TPayloadSchema,
+) {
   return RuntimeEventBaseSchema.extend({
     eventType: z.literal(eventType),
     payload,
   }).strict();
 }
 
-export const SessionCreatedEventSchema = eventSchema('session.created', SessionCreatedPayloadSchema);
-export const SessionUpdatedEventSchema = eventSchema('session.updated', SessionUpdatedPayloadSchema);
+export const SessionCreatedEventSchema = sessionEventSchema('session.created', SessionCreatedPayloadSchema);
+export const SessionUpdatedEventSchema = sessionEventSchema('session.updated', SessionUpdatedPayloadSchema);
 export const RunCreatedEventSchema = eventSchema('run.created', RunCreatedPayloadSchema);
 export const RunStartedEventSchema = eventSchema('run.started', RunStartedPayloadSchema);
 export const RunStatusChangedEventSchema = eventSchema('run.status.changed', RunStatusChangedPayloadSchema);

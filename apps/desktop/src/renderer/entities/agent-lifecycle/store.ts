@@ -63,6 +63,10 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>((set) => ({
   })),
   setActiveRun: (activeRunId) => set({ activeRunId }),
   applyRuntimeEvent: (event) => set((state) => {
+    if (!event.runId) {
+      return state;
+    }
+
     const runEvents = upsertEvent(state.eventsByRun[event.runId] ?? [], event);
     const nextStatus = statusFromRunEvent(event);
     const existingRun = state.runs[event.runId];

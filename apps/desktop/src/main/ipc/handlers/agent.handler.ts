@@ -3,6 +3,7 @@ import type { AgentSession } from '@megumi/shared/agent-lifecycle-contracts';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type {
   AgentRunStartData,
   AgentRunStartPayload,
@@ -18,6 +19,7 @@ import {
 import type { AgentLifecycleService } from '../../services/agent-lifecycle.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type AgentHandlersService = Pick<AgentLifecycleService, 'createSession' | 'listSessions' | 'startRun'>;
 
@@ -65,8 +67,12 @@ export function registerAgentHandlers(
       logger: options.logger,
       handle: async (
         request: RuntimeIpcRequest<AgentRunStartPayload, typeof IPC_CHANNELS.agent.run.start>,
+        event,
       ): Promise<AgentRunStartData> => {
         const result = await service.startRun(request.payload);
+        await forwardRuntimeEvents(event.sender, asAsyncRuntimeEvents(result.events), {
+          logger: options.logger,
+        });
         return { run: result.run };
       },
       mapError: mapAgentIpcError,
@@ -82,4 +88,12 @@ function mapAgentIpcError(): RuntimeIpcError {
     retryable: true,
     source: 'main',
   };
+}
+
+async function* asAsyncRuntimeEvents(
+  events: Iterable<RuntimeEvent> | AsyncIterable<RuntimeEvent>,
+): AsyncIterable<RuntimeEvent> {
+  for await (const event of events) {
+    yield event;
+  }
 }

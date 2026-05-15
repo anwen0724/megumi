@@ -185,6 +185,30 @@ describe('runtime event contracts', () => {
 });
 
 describe('agent lifecycle runtime events', () => {
+  it('accepts session.created events without a run id', () => {
+    const event = RuntimeEventSchema.parse({
+      eventId: 'event-session-1',
+      schemaVersion: 1,
+      eventType: 'session.created',
+      sessionId: 'session-1',
+      sequence: 1,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        title: 'Agent work',
+        status: 'active',
+      },
+    });
+
+    expect(event).toMatchObject({
+      eventType: 'session.created',
+      sessionId: 'session-1',
+    });
+    expect(event).not.toHaveProperty('runId');
+  });
+
   it('accepts 02 lifecycle events with lifecycle ids', () => {
     const event = RuntimeEventSchema.parse({
       eventId: 'event-1',

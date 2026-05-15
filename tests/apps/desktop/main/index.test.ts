@@ -27,6 +27,11 @@ const mocks = vi.hoisted(() => {
     registerRuntimeProcessErrorHandlers: vi.fn(),
     registerAppLifecycle: vi.fn(),
     createMainWindow: vi.fn(),
+    createDefaultAgentLifecycleService: vi.fn(() => ({
+      createSession: vi.fn(),
+      listSessions: vi.fn(),
+      startRun: vi.fn(),
+    })),
   };
 });
 
@@ -54,6 +59,10 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
   createMainWindow: mocks.createMainWindow,
 }));
 
+vi.mock('@megumi/desktop/main/services/agent-lifecycle.service', () => ({
+  createDefaultAgentLifecycleService: mocks.createDefaultAgentLifecycleService,
+}));
+
 describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -63,6 +72,7 @@ describe('main runtime logger composition', () => {
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
+    mocks.createDefaultAgentLifecycleService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
@@ -74,6 +84,7 @@ describe('main runtime logger composition', () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
+    const agentService = mocks.createDefaultAgentLifecycleService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -83,7 +94,13 @@ describe('main runtime logger composition', () => {
     const lifecycleOptions = mocks.registerAppLifecycle.mock.calls[0]?.[0];
     lifecycleOptions.registerAllHandlers();
 
-    expect(mocks.registerAllHandlers).toHaveBeenCalledWith({ logger: processLogger });
+    expect(mocks.createDefaultAgentLifecycleService).toHaveBeenCalledWith(
+      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
+    );
+    expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
+      logger: processLogger,
+      agentService,
+    });
 
     processLogger.error('runtime_review_probe', {
       authorization: 'Bearer sk-runtime-secret',

@@ -16,6 +16,7 @@ import {
   createAgentRunStatusChangedEvent,
   createAgentStepCompletedEvent,
   createAgentStepCreatedEvent,
+  createAgentStepFailedEvent,
   createAgentStepStatusChangedEvent,
 } from './events';
 import {
@@ -224,6 +225,34 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       sequence: nextSequence(),
       createdAt: observation.receivedAt,
       observation,
+    }));
+    await emit(createAgentStepStatusChangedEvent({
+      eventId: ids.eventId(),
+      runId,
+      sessionId: input.sessionId,
+      stepId: step.stepId,
+      sequence: nextSequence(),
+      createdAt: failedAt,
+      from: 'running',
+      to: 'failed',
+    }));
+    await emit(createAgentStepFailedEvent({
+      eventId: ids.eventId(),
+      runId,
+      sessionId: input.sessionId,
+      sequence: nextSequence(),
+      createdAt: failedAt,
+      step,
+      error: runtimeError,
+    }));
+    await emit(createAgentRunStatusChangedEvent({
+      eventId: ids.eventId(),
+      runId,
+      sessionId: input.sessionId,
+      sequence: nextSequence(),
+      createdAt: failedAt,
+      from: 'running',
+      to: 'failed',
     }));
     await emit(createAgentRunFailedEvent({
       eventId: ids.eventId(),

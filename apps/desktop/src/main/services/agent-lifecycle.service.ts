@@ -1,12 +1,16 @@
+import path from 'node:path';
 import { runAgentTurn } from '@megumi/core/agent-runtime/run-agent-turn';
 import type { AgentRuntimeIdFactory } from '@megumi/core/agent-runtime/types';
-import type { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
+import { createDatabase } from '@megumi/db/connection';
+import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
+import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { AgentRun, AgentSession } from '@megumi/shared/agent-lifecycle-contracts';
 import type {
   AgentRunStartPayload,
   AgentSessionCreatePayload,
 } from '@megumi/shared/ipc-schemas';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface AgentLifecycleServiceClock {
   now(): string;
@@ -66,7 +70,7 @@ export class AgentLifecycleService {
     return this.repository.listSessions();
   }
 
-  async startRun(payload: AgentRunStartPayload): Promise<{ run: AgentRun }> {
+  async startRun(payload: AgentRunStartPayload): Promise<{ run: AgentRun; events: RuntimeEvent[] }> {
     const result = await runAgentTurn({
       sessionId: payload.sessionId,
       ...(payload.triggerMessageId ? { triggerMessageId: payload.triggerMessageId } : {}),
@@ -105,10 +109,19 @@ export class AgentLifecycleService {
       },
     });
 
-    return { run: result.run };
+    return { run: result.run, events: result.events };
   }
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
     return this.repository.listRuntimeEventsByRun(runId);
   }
+}
+
+export function createDefaultAgentLifecycleService(homePaths: MegumiHomePaths): AgentLifecycleService {
+  const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
+  migrateDatabase(database);
+
+  return new AgentLifecycleService({
+    repository: new AgentLifecycleRepository(database),
+  });
 }

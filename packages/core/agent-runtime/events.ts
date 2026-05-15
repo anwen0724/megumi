@@ -166,6 +166,29 @@ export function createAgentStepCompletedEvent(input: BaseEventInput & { step: Ag
   };
 }
 
+export function createAgentStepFailedEvent(input: BaseEventInput & {
+  step: AgentStep;
+  error: RuntimeError;
+}): RuntimeEvent {
+  return {
+    eventId: input.eventId,
+    schemaVersion: 1,
+    eventType: 'step.failed',
+    runId: input.runId,
+    sessionId: input.sessionId,
+    stepId: input.step.stepId,
+    sequence: input.sequence,
+    createdAt: input.createdAt,
+    source: 'core',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      kind: input.step.kind,
+      error: input.error,
+    },
+  };
+}
+
 export function createAgentActionRequestedEvent(input: BaseEventInput & { action: AgentAction }): RuntimeEvent {
   return {
     eventId: input.eventId,

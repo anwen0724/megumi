@@ -137,7 +137,17 @@ describe('agent runtime lifecycle events', () => {
     });
 
     expect(result.run.status).toBe('failed');
+    expect(events.map((event) => event.eventType)).toContain('step.status.changed');
+    expect(events.map((event) => event.eventType)).toContain('step.failed');
+    expect(events.map((event) => event.eventType)).toContain('run.status.changed');
     expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(events.find((event) =>
+      event.eventType === 'run.status.changed' &&
+      (event.payload as { to?: string }).to === 'failed',
+    )?.payload).toMatchObject({
+      from: 'running',
+      to: 'failed',
+    });
     expect(events.at(-1)?.payload).toMatchObject({
       error: {
         debugId: 'debug-agent-1',

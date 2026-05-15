@@ -83,7 +83,7 @@ export interface RuntimeEvent<TPayload extends object = object> {
   eventId: string;
   schemaVersion: typeof RUNTIME_EVENT_SCHEMA_VERSION;
   eventType: RuntimeEventType;
-  runId: string;
+  runId?: string;
   sessionId?: string;
   stepId?: string;
   actionId?: string;

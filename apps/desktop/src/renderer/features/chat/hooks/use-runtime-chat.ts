@@ -124,7 +124,7 @@ function shouldProcessRuntimeEvent(
   runSessionId: string | null,
   processedSequences: Map<string, number>,
 ): boolean {
-  if (event.requestId !== activeRequestId || !isRunSessionStillActive(runSessionId)) {
+  if (!event.runId || event.requestId !== activeRequestId || !isRunSessionStillActive(runSessionId)) {
     return false;
   }
 
@@ -150,6 +150,11 @@ function applyRuntimeEvent(
     return;
   }
 
+  const runId = event.runId;
+  if (!runId) {
+    return;
+  }
+
   const chatState = useChatStore.getState();
 
   if (event.eventType === 'run.started') {
@@ -163,15 +168,15 @@ function applyRuntimeEvent(
   }
 
   if (event.eventType === 'assistant.output.completed') {
-    completedContents.set(event.runId, (event.payload as AssistantOutputCompletedPayload).content);
+    completedContents.set(runId, (event.payload as AssistantOutputCompletedPayload).content);
     return;
   }
 
   if (event.eventType === 'run.completed') {
     const state = useChatStore.getState();
-    const completedContent = completedContents.get(event.runId)?.trim();
+    const completedContent = completedContents.get(runId)?.trim();
     const assistantContent = completedContent || state.streamingText.trim() || 'Done.';
-    completedContents.delete(event.runId);
+    completedContents.delete(runId);
     state.commitStream(createLocalMessage('assistant', assistantContent, state.messages.length + 1));
     if (activePayload) {
       useWorkspaceStateStore.getState().completeRuntimeChat({
@@ -190,7 +195,7 @@ function applyRuntimeEvent(
     state.clearStream();
     state.setAgentStatus('error');
     state.setLastError(payload.error.message);
-    completedContents.delete(event.runId);
+    completedContents.delete(runId);
     if (activePayload) {
       useWorkspaceStateStore.getState().failRuntimeChat({
         ...activePayload,
@@ -209,7 +214,7 @@ function applyRuntimeEvent(
     state.addMessage(cancellationMessage);
     state.clearStream();
     state.setLastError(reason);
-    completedContents.delete(event.runId);
+    completedContents.delete(runId);
     if (activePayload) {
       useWorkspaceStateStore.getState().failRuntimeChat({
         ...activePayload,
