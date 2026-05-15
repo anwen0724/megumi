@@ -118,4 +118,18 @@ describe('agent run mode contracts', () => {
 
     expect(relation.sourcePlanId).toBe('plan:1');
   });
+
+  it('exports run mode contracts from the shared package root', async () => {
+    const shared = await import('@megumi/shared');
+
+    expect(shared.RUN_MODE_PRESET_DEFAULTS.plan.permissionMode).toBe('plan');
+    expect(shared.ImplementationPlanArtifactRecordSchema.parse({
+      planArtifactId: 'plan:root-export',
+      producingRunId: 'run:root-export',
+      title: 'Root export plan',
+      status: 'draft',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+    }).status).toBe('draft');
+  });
 });
