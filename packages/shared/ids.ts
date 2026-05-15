@@ -11,6 +11,13 @@ export type AgentObservationId = Brand<string, 'AgentObservationId'>;
 export type AgentDefinitionId = Brand<string, 'AgentDefinitionId'>;
 export type AgentConfigSnapshotRef = Brand<string, 'AgentConfigSnapshotRef'>;
 export type PolicySnapshotRef = Brand<string, 'PolicySnapshotRef'>;
+export type AgentContextId = Brand<string, 'AgentContextId'>;
+export type ContextPatchId = Brand<string, 'ContextPatchId'>;
+export type ContextSourceId = Brand<string, 'ContextSourceId'>;
+export type EffectiveContextBuildId = Brand<string, 'EffectiveContextBuildId'>;
+export type ContextSelectionRecordId = Brand<string, 'ContextSelectionRecordId'>;
+export type ContextRedactionRecordId = Brand<string, 'ContextRedactionRecordId'>;
+export type ContextTruncationRecordId = Brand<string, 'ContextTruncationRecordId'>;
 export type ProviderSettingsId = Brand<string, 'ProviderSettingsId'>;
 export type SecretRefId = Brand<string, 'SecretRefId'>;
 
