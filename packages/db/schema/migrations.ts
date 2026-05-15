@@ -145,6 +145,72 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS agent_context_baselines (
+      context_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      baseline_context_id TEXT,
+      context_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS context_source_refs (
+      source_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      source_kind TEXT NOT NULL,
+      source_uri TEXT NOT NULL,
+      workspace_id TEXT,
+      workspace_path TEXT,
+      relative_path TEXT,
+      content_hash TEXT,
+      mtime TEXT,
+      range_json TEXT,
+      loaded_at TEXT NOT NULL,
+      freshness TEXT NOT NULL,
+      redaction_state TEXT NOT NULL,
+      selection_reason TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS context_patches (
+      patch_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      requested_by TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      target_ref TEXT,
+      source_ref TEXT,
+      reason TEXT NOT NULL,
+      priority INTEGER,
+      created_at TEXT NOT NULL,
+      applied_at TEXT,
+      status TEXT NOT NULL,
+      rejection_reason TEXT,
+      metadata_json TEXT,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS effective_context_builds (
+      build_id TEXT PRIMARY KEY,
+      context_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      source_ids_json TEXT NOT NULL,
+      selection_record_ids_json TEXT NOT NULL,
+      redaction_record_ids_json TEXT NOT NULL,
+      truncation_record_ids_json TEXT NOT NULL,
+      built_at TEXT NOT NULL,
+      snapshot_policy TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(context_id) REFERENCES agent_context_baselines(context_id) ON DELETE CASCADE
+    );
+  `);
+
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_session_id
     ON messages(session_id);
 
@@ -163,5 +229,17 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_events_run_sequence
     ON runtime_events(run_id, sequence)
     WHERE run_id IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_agent_context_baselines_run_id
+    ON agent_context_baselines(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_context_source_refs_run_id
+    ON context_source_refs(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_context_patches_run_id
+    ON context_patches(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_effective_context_builds_run_id
+    ON effective_context_builds(run_id);
   `);
 }
