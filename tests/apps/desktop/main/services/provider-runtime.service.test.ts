@@ -301,12 +301,13 @@ describe('ProviderRuntimeService', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ProviderRuntimeResolutionError);
       const payload = (error as ProviderRuntimeResolutionError).payload;
+      const obsoleteRuntimeErrorField = ['recover', 'able'].join('');
 
       expect(payload).toMatchObject({
         severity: 'error',
         retryable: false,
       });
-      expect(payload).not.toHaveProperty('recoverable');
+      expect(payload).not.toHaveProperty(obsoleteRuntimeErrorField);
     }
   });
 });

@@ -60,6 +60,7 @@ describe('forwardRuntimeEvents', () => {
   it('drops invalid runtime events and logs redacted diagnostics', async () => {
     const sender = { send: vi.fn() };
     const logger = createLogger();
+    const obsoleteRuntimeErrorField = ['recover', 'able'].join('');
     const invalidEvent = {
       eventId: 'event-invalid',
       schemaVersion: 1,
@@ -79,7 +80,7 @@ describe('forwardRuntimeEvents', () => {
           severity: 'error',
           retryable: false,
           source: 'provider',
-          recoverable: false,
+          [obsoleteRuntimeErrorField]: false,
         },
       },
     };
@@ -97,7 +98,7 @@ describe('forwardRuntimeEvents', () => {
       }),
     );
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('sk-raw-secret');
-    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('recoverable');
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(obsoleteRuntimeErrorField);
   });
 
   it('logs send failures without exposing raw event payload', async () => {

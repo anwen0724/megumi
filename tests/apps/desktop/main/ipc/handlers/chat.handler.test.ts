@@ -238,6 +238,7 @@ describe('registerChatHandlers', () => {
       warn: vi.fn(),
       error: vi.fn(),
     };
+    const obsoleteRuntimeErrorField = ['recover', 'able'].join('');
     const service = {
       streamChat: vi.fn(async function* () {
         yield {
@@ -266,7 +267,7 @@ describe('registerChatHandlers', () => {
               severity: 'error',
               retryable: false,
               source: 'provider',
-              recoverable: false,
+              [obsoleteRuntimeErrorField]: false,
             },
           },
         } as RuntimeEvent;
@@ -292,6 +293,6 @@ describe('registerChatHandlers', () => {
       );
     });
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('sk-chat-secret');
-    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('recoverable');
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(obsoleteRuntimeErrorField);
   });
 });

@@ -63,14 +63,15 @@ const packageSourceFiles = listSourceFiles('packages');
 const desktopSourceFiles = listSourceFiles('apps/desktop/src');
 const sourceFiles = [...packageSourceFiles, ...desktopSourceFiles];
 const oldBridgeNamePattern = new RegExp(`\\b${['dev', 'flow'].join('')}\\b`);
+const obsoleteRuntimeErrorFieldPattern = new RegExp(`\\b${['recover', 'able'].join('')}\\b`);
 
 describe('Runtime Common Foundation source guards', () => {
-  it('keeps RuntimeError on severity and retryable fields without recoverable', () => {
+  it('keeps RuntimeError on severity and retryable fields without obsolete aliases', () => {
     const runtimeErrorsSource = readProjectFile('packages/shared/runtime-errors.ts');
 
     expect(runtimeErrorsSource).toContain('severity');
     expect(runtimeErrorsSource).toContain('retryable');
-    expect(sourceHits(sourceFiles, /\brecoverable\b/)).toEqual([]);
+    expect(sourceHits(sourceFiles, obsoleteRuntimeErrorFieldPattern)).toEqual([]);
   });
 
   it('keeps runtime event names and channel stable', () => {
