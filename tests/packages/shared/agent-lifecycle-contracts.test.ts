@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AgentSessionSchema as RootAgentSessionSchema } from '@megumi/shared';
 import {
   AgentActionKindSchema,
   AgentActionSchema,
@@ -64,6 +65,7 @@ describe('agent lifecycle contracts', () => {
     });
 
     expect(parsed.sessionId).toBe('session-1');
+    expect(RootAgentSessionSchema.parse(parsed).sessionId).toBe('session-1');
     expect(() => AgentSessionSchema.parse({ ...parsed, extra: true })).toThrow();
   });
 
