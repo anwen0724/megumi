@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => {
       createSession: vi.fn(),
       listSessions: vi.fn(),
       startRun: vi.fn(),
+      getPlanByRun: vi.fn(),
+      updatePlanStatus: vi.fn(),
     })),
     createDefaultAgentContextService: vi.fn(() => ({
       getBaselineContext: vi.fn(),
@@ -115,6 +117,7 @@ describe('main runtime logger composition', () => {
       logger: processLogger,
       agentService,
       agentContextService,
+      agentPlanService: agentService,
     });
 
     processLogger.error('runtime_review_probe', {

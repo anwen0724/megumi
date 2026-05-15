@@ -5,6 +5,7 @@ import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
 import { AgentLifecycleService } from '@megumi/desktop/main/services/agent-lifecycle.service';
 import type { AgentContext } from '@megumi/shared/agent-context-contracts';
+import type { AgentAction } from '@megumi/shared/agent-lifecycle-contracts';
 import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/agent-run-mode-contracts';
 
 let db: Database.Database | null = null;
@@ -121,6 +122,10 @@ function createServiceWithRunModeRecorder(records: unknown[]) {
         records.push({ type: 'planRecord', input });
         return undefined;
       },
+      getPlanByRun: () => undefined,
+      updatePlanStatus: () => {
+        throw new Error('not implemented');
+      },
     },
     clock: { now: () => '2026-05-15T00:00:00.000Z' },
     ids: {
@@ -131,6 +136,55 @@ function createServiceWithRunModeRecorder(records: unknown[]) {
       observationId: () => 'observation-1',
       eventId: () => `event-${Math.random().toString(36).slice(2)}`,
       messageId: () => 'message-1',
+    },
+  });
+}
+
+function createServiceWithFailingHostBoundary(records: unknown[]) {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new AgentLifecycleRepository(db);
+  return new AgentLifecycleService({
+    repository,
+    runModeService: {
+      createModeSnapshot: (input) => {
+        records.push({ type: 'snapshot', input });
+        return {
+          modeSnapshotId: 'mode-snapshot:1',
+          runId: input.runId,
+          modeLabel: input.mode,
+          mode: input.modeSnapshot ?? RUN_MODE_PRESET_DEFAULTS.plan,
+          createdAt: input.createdAt,
+        };
+      },
+      linkAcceptedSourcePlan: (input) => {
+        records.push({ type: 'sourcePlan', input });
+        return input;
+      },
+      createPlanRecordForRun: (input) => {
+        records.push({ type: 'planRecord', input });
+        return undefined;
+      },
+      getPlanByRun: () => undefined,
+      updatePlanStatus: () => {
+        throw new Error('not implemented');
+      },
+    },
+    hostBoundary: {
+      handleAction: (_action: AgentAction) => {
+        throw new Error('plan failed');
+      },
+    },
+    clock: { now: () => '2026-05-15T00:00:00.000Z' },
+    ids: {
+      sessionId: () => 'session-1',
+      runId: () => 'run-1',
+      stepId: () => 'step-1',
+      actionId: () => 'action-1',
+      observationId: () => 'observation-1',
+      eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      messageId: () => 'message-1',
+      debugId: () => 'debug-1',
     },
   });
 }
@@ -228,5 +282,27 @@ describe('AgentLifecycleService', () => {
       expect.objectContaining({ type: 'snapshot' }),
       expect.objectContaining({ type: 'sourcePlan' }),
     ]));
+  });
+
+  it('does not create a proposed plan artifact for failed plan runs', async () => {
+    const records: unknown[] = [];
+    const service = createServiceWithFailingHostBoundary(records);
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    const result = await service.startRun({
+      sessionId: 'session-1',
+      goal: 'Write a plan',
+      mode: 'plan',
+      modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    expect(result.run.status).toBe('failed');
+    expect(records).toEqual([
+      expect.objectContaining({ type: 'snapshot' }),
+    ]);
   });
 });

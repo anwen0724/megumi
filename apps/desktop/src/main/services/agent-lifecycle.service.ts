@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { runAgentTurn } from '@megumi/core/agent-runtime/run-agent-turn';
-import type { AgentRuntimeIdFactory } from '@megumi/core/agent-runtime/types';
+import type { AgentHostBoundaryPort, AgentRuntimeIdFactory } from '@megumi/core/agent-runtime/types';
 import { createDatabase } from '@megumi/db/connection';
 import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
 import { AgentRunModeRepository } from '@megumi/db/repos/agent-run-mode.repo';
@@ -12,8 +12,10 @@ import type {
 import type { AgentRun, AgentSession } from '@megumi/shared/agent-lifecycle-contracts';
 import type {
   AgentRunStartPayload,
+  AgentPlanStatusUpdatePayload,
   AgentSessionCreatePayload,
 } from '@megumi/shared/ipc-schemas';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/agent-run-mode-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { AgentRunModeService } from './agent-run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
@@ -41,8 +43,13 @@ export interface AgentLifecycleServiceOptions {
   contextService?: AgentRunContextService;
   runModeService?: Pick<
     AgentRunModeService,
-    'createModeSnapshot' | 'linkAcceptedSourcePlan' | 'createPlanRecordForRun'
+    | 'createModeSnapshot'
+    | 'linkAcceptedSourcePlan'
+    | 'createPlanRecordForRun'
+    | 'getPlanByRun'
+    | 'updatePlanStatus'
   >;
+  hostBoundary?: AgentHostBoundaryPort;
   clock?: AgentLifecycleServiceClock;
   ids?: Partial<AgentLifecycleServiceIds>;
 }
@@ -77,8 +84,13 @@ export class AgentLifecycleService {
   private readonly contextService?: AgentRunContextService;
   private readonly runModeService?: Pick<
     AgentRunModeService,
-    'createModeSnapshot' | 'linkAcceptedSourcePlan' | 'createPlanRecordForRun'
+    | 'createModeSnapshot'
+    | 'linkAcceptedSourcePlan'
+    | 'createPlanRecordForRun'
+    | 'getPlanByRun'
+    | 'updatePlanStatus'
   >;
+  private readonly hostBoundary: AgentHostBoundaryPort;
   private readonly clock: AgentLifecycleServiceClock;
   private readonly ids: AgentLifecycleServiceIds;
 
@@ -88,6 +100,7 @@ export class AgentLifecycleService {
     this.runModeService = options.runModeService;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
+    this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
   }
 
   createSession(payload: AgentSessionCreatePayload): AgentSession {
@@ -163,21 +176,10 @@ export class AgentLifecycleService {
           this.repository.appendRuntimeEvent(event);
         },
       },
-      hostBoundary: {
-        handleAction: (action) => ({
-          observationId: this.ids.observationId(),
-          runId: action.runId,
-          stepId: action.stepId,
-          actionId: action.actionId,
-          source: 'runtime',
-          kind: 'message_emitted',
-          receivedAt: this.clock.now(),
-          summary: 'Agent lifecycle run completed without tool execution.',
-        }),
-      },
+      hostBoundary: this.hostBoundary,
     });
 
-    if (modeSnapshot && this.runModeService) {
+    if (modeSnapshot && this.runModeService && result.run.status === 'completed') {
       this.runModeService.createPlanRecordForRun({
         runId,
         goal: payload.goal,
@@ -187,6 +189,14 @@ export class AgentLifecycleService {
     }
 
     return { run: result.run, events: result.events };
+  }
+
+  getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined {
+    return this.requireRunModeService().getPlanByRun(runId);
+  }
+
+  updatePlanStatus(input: AgentPlanStatusUpdatePayload): ImplementationPlanArtifactRecord {
+    return this.requireRunModeService().updatePlanStatus(input);
   }
 
   private createInitialContextForRun(input: {
@@ -210,6 +220,32 @@ export class AgentLifecycleService {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
     return this.repository.listRuntimeEventsByRun(runId);
   }
+
+  private requireRunModeService(): NonNullable<AgentLifecycleServiceOptions['runModeService']> {
+    if (!this.runModeService) {
+      throw new Error('Agent run mode service is not configured.');
+    }
+
+    return this.runModeService;
+  }
+}
+
+function defaultHostBoundary(
+  clock: AgentLifecycleServiceClock,
+  ids: AgentLifecycleServiceIds,
+): AgentHostBoundaryPort {
+  return {
+    handleAction: (action) => ({
+      observationId: ids.observationId(),
+      runId: action.runId,
+      stepId: action.stepId,
+      actionId: action.actionId,
+      source: 'runtime',
+      kind: 'message_emitted',
+      receivedAt: clock.now(),
+      summary: 'Agent lifecycle run completed without tool execution.',
+    }),
+  };
 }
 
 export interface CreateDefaultAgentLifecycleServiceOptions {

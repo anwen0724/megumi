@@ -20,7 +20,12 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 registerAppLifecycle({
   runMigrations: () => megumiHomePaths,
-  registerAllHandlers: () => registerAllHandlers({ logger: runtimeLogger, agentService, agentContextService }),
+  registerAllHandlers: () => registerAllHandlers({
+    logger: runtimeLogger,
+    agentService,
+    agentContextService,
+    agentPlanService: agentService,
+  }),
   createWindow: () => {
     createMainWindow({
       devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
