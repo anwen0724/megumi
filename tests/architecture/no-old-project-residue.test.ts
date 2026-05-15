@@ -71,6 +71,12 @@ const forbiddenTerms = [
   joinForbidden('EXPORT', '_'),
 ];
 
+const allowedCurrentLifecycleTerms = new Map<string, string[]>([
+  ['packages/shared/agent-lifecycle-contracts.ts', [
+    joinForbidden('MESSAGE', '_'),
+  ]],
+]);
+
 function shouldIgnore(filePath: string): boolean {
   const normalized = filePath.replaceAll(path.sep, '/');
   return ignoredPathParts.some((part) => normalized.includes(`/${part}/`));
@@ -130,6 +136,10 @@ describe('old project residue guard', () => {
         const source = fs.readFileSync(file, 'utf8');
 
         for (const term of forbiddenTerms) {
+          if (allowedCurrentLifecycleTerms.get(relative)?.includes(term)) {
+            continue;
+          }
+
           if (source.includes(term)) {
             violations.push(`${relative} contains forbidden residue term`);
           }

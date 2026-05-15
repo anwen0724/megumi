@@ -60,6 +60,12 @@ const forbiddenPatterns = [
   new RegExp(term('\\bset', 'Stages\\b')),
 ];
 
+const allowedCurrentLifecycleTerms = new Map<string, RegExp[]>([
+  ['packages/shared/agent-lifecycle-contracts.ts', [
+    new RegExp(term('\\bMESSAGE', '_')),
+  ]],
+]);
+
 function walkFiles(directory: string): string[] {
   if (!fs.existsSync(directory)) {
     return [];
@@ -88,6 +94,14 @@ function relativePath(filePath: string): string {
   return path.relative(root, filePath).replaceAll(path.sep, '/');
 }
 
+function isAllowedCurrentLifecycleTerm(relative: string, pattern: RegExp): boolean {
+  return allowedCurrentLifecycleTerms.get(relative)?.some((allowedPattern) => {
+    allowedPattern.lastIndex = 0;
+    pattern.lastIndex = 0;
+    return allowedPattern.source === pattern.source;
+  }) ?? false;
+}
+
 describe('active old-runtime boundary', () => {
   it('keeps active app and clean packages disconnected from old runtime code', () => {
     const violations: string[] = [];
@@ -96,11 +110,16 @@ describe('active old-runtime boundary', () => {
       const absoluteRoot = path.join(root, activeRoot);
 
       for (const file of walkFiles(absoluteRoot)) {
+        const relative = relativePath(file);
         const source = fs.readFileSync(file, 'utf8');
 
         for (const pattern of forbiddenPatterns) {
+          if (isAllowedCurrentLifecycleTerm(relative, pattern)) {
+            continue;
+          }
+
           if (pattern.test(source)) {
-            violations.push(`${relativePath(file)} matches forbidden old-runtime pattern`);
+            violations.push(`${relative} matches forbidden old-runtime pattern`);
           }
         }
       }
