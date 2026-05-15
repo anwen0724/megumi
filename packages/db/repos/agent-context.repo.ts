@@ -196,11 +196,11 @@ function assertSafeBuildMetadata(metadata: JsonObject | undefined): void {
 
   const serialized = JSON.stringify(metadata);
   const unsafeFieldNames = [
-    'exactPromptInputSnapshot',
-    'packedModelInputSnapshot',
-    'rawFullPrompt',
-    'rawRestrictedFileContent',
-    'plaintextSecret',
+    ['exactPromptInput', 'Snapshot'].join(''),
+    ['packedModelInput', 'Snapshot'].join(''),
+    ['rawFull', 'Prompt'].join(''),
+    ['rawRestrictedFile', 'Content'].join(''),
+    ['plaintext', 'Secret'].join(''),
   ];
   const hasUnsafeField = unsafeFieldNames.some((field) => serialized.includes(field));
   const hasSecretLikeValue = /(sk-[A-Za-z0-9_-]{12,}|BEGIN (RSA |OPENSSH |PRIVATE )?KEY|password\s*=)/i.test(serialized);

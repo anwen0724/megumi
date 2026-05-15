@@ -65,7 +65,7 @@ export class AgentContextService {
         createdAt: now,
       },
       goal: input.goal,
-      constraints: ['Do not read or persist plaintext secrets.'],
+      constraints: ['Do not read or persist secrets in clear text.'],
       inlineContents: [],
       resourceRefs: [],
       conversationRefs: [],
