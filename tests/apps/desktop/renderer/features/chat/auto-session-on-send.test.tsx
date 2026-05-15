@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { AgentSession } from '@megumi/shared/agent-contracts';
+import type { LocalAgentSession } from '@megumi/shared/agent-contracts';
 import type { Project } from '@megumi/desktop/renderer/entities/project/types';
 import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
@@ -149,7 +149,7 @@ describe('auto session on first send', () => {
   });
 
   it('does not create a duplicate session when one is already active', () => {
-    const existingSession: AgentSession = {
+    const existingSession: LocalAgentSession = {
       id: 'session-existing',
       projectId: 'project-1',
       agentType: 'reviewer',

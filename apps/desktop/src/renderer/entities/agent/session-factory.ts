@@ -1,4 +1,4 @@
-import type { AgentSession, AgentType } from '@megumi/shared/agent-contracts';
+import type { AgentType, LocalAgentSession } from '@megumi/shared/agent-contracts';
 
 interface CreateLocalAgentSessionInput {
   id?: string;
@@ -22,7 +22,7 @@ export function createLocalAgentSession({
   title = 'New session',
   agentType = 'free',
   now = new Date().toISOString(),
-}: CreateLocalAgentSessionInput): AgentSession {
+}: CreateLocalAgentSessionInput): LocalAgentSession {
   const normalizedTitle = title.trim() || 'New session';
 
   return {

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AgentSession, AgentType } from '@megumi/shared/agent-contracts';
+import type { AgentType, LocalAgentSession } from '@megumi/shared/agent-contracts';
 import { createLocalAgentSession } from './session-factory';
 
 interface CreateLocalSessionInput {
@@ -9,15 +9,15 @@ interface CreateLocalSessionInput {
 }
 
 interface AgentState {
-  sessions: AgentSession[];
+  sessions: LocalAgentSession[];
   activeSessionId: string | null;
   activeAgentType: AgentType;
-  setSessions: (sessions: AgentSession[]) => void;
-  addSession: (session: AgentSession) => void;
-  createLocalSession: (input: CreateLocalSessionInput) => AgentSession;
+  setSessions: (sessions: LocalAgentSession[]) => void;
+  addSession: (session: LocalAgentSession) => void;
+  createLocalSession: (input: CreateLocalSessionInput) => LocalAgentSession;
   setActiveSession: (id: string | null) => void;
   setActiveAgentType: (type: AgentType) => void;
-  updateSession: (id: string, data: Partial<AgentSession>) => void;
+  updateSession: (id: string, data: Partial<LocalAgentSession>) => void;
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({

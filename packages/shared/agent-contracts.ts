@@ -20,7 +20,7 @@ export const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
   free: 'General-purpose agent session',
 };
 
-export interface AgentSession {
+export interface LocalAgentSession {
   id: SessionId | string;
   projectId: WorkspaceId | string;
   agentType: AgentType;
