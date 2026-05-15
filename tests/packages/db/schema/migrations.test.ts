@@ -89,4 +89,48 @@ describe('provider settings migrations', () => {
       'idx_runtime_events_run_sequence',
     ]));
   });
+
+  it('creates run mode and implementation plan tables', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+
+    const tables = database.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table'
+      AND name IN (
+        'agent_run_mode_snapshots',
+        'implementation_plan_artifacts',
+        'agent_run_source_plans'
+      )
+      ORDER BY name
+    `).all() as Array<{ name: string }>;
+
+    expect(tables.map((row) => row.name)).toEqual([
+      'agent_run_mode_snapshots',
+      'agent_run_source_plans',
+      'implementation_plan_artifacts',
+    ]);
+  });
+
+  it('indexes run mode and source plan lookup paths', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+
+    const indexes = database.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'index'
+      AND name IN (
+        'idx_agent_run_mode_snapshots_run_id',
+        'idx_implementation_plan_artifacts_producing_run_id',
+        'idx_agent_run_source_plans_source_plan_id'
+      )
+      ORDER BY name
+    `).all() as Array<{ name: string }>;
+
+    expect(indexes.map((row) => row.name)).toEqual([
+      'idx_agent_run_mode_snapshots_run_id',
+      'idx_agent_run_source_plans_source_plan_id',
+      'idx_implementation_plan_artifacts_producing_run_id',
+    ]);
+  });
 });

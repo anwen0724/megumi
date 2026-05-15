@@ -211,6 +211,45 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS agent_run_mode_snapshots (
+      mode_snapshot_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL UNIQUE,
+      mode_label TEXT NOT NULL,
+      mode_json TEXT NOT NULL,
+      permission_mode TEXT NOT NULL,
+      selection_source TEXT,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS implementation_plan_artifacts (
+      plan_artifact_id TEXT PRIMARY KEY,
+      producing_run_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      accepted_at TEXT,
+      rejected_at TEXT,
+      superseded_at TEXT,
+      superseded_by_plan_id TEXT,
+      metadata_json TEXT,
+      FOREIGN KEY(producing_run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(superseded_by_plan_id) REFERENCES implementation_plan_artifacts(plan_artifact_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_run_source_plans (
+      run_id TEXT PRIMARY KEY,
+      source_plan_id TEXT NOT NULL,
+      linked_at TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(source_plan_id) REFERENCES implementation_plan_artifacts(plan_artifact_id) ON DELETE RESTRICT
+    );
+  `);
+
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_session_id
     ON messages(session_id);
 
@@ -241,5 +280,14 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
     CREATE INDEX IF NOT EXISTS idx_effective_context_builds_run_id
     ON effective_context_builds(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_agent_run_mode_snapshots_run_id
+    ON agent_run_mode_snapshots(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_implementation_plan_artifacts_producing_run_id
+    ON implementation_plan_artifacts(producing_run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_agent_run_source_plans_source_plan_id
+    ON agent_run_source_plans(source_plan_id);
   `);
 }
