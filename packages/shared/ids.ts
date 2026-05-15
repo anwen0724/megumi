@@ -5,6 +5,12 @@ export type SessionId = Brand<string, 'SessionId'>;
 export type MessageId = Brand<string, 'MessageId'>;
 export type RunId = Brand<string, 'RunId'>;
 export type RunEventId = Brand<string, 'RunEventId'>;
+export type AgentStepId = Brand<string, 'AgentStepId'>;
+export type AgentActionId = Brand<string, 'AgentActionId'>;
+export type AgentObservationId = Brand<string, 'AgentObservationId'>;
+export type AgentDefinitionId = Brand<string, 'AgentDefinitionId'>;
+export type AgentConfigSnapshotRef = Brand<string, 'AgentConfigSnapshotRef'>;
+export type PolicySnapshotRef = Brand<string, 'PolicySnapshotRef'>;
 export type ProviderSettingsId = Brand<string, 'ProviderSettingsId'>;
 export type SecretRefId = Brand<string, 'SecretRefId'>;
 
