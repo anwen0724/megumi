@@ -3,6 +3,8 @@ export * from './json';
 export * from './provider-contracts';
 export * from './model-contracts';
 export * from './chat-contracts';
+export * from './agent-contracts';
+export * from './agent-lifecycle-contracts';
 export * from './run-contracts';
 export * from './ipc-channels';
 export * from './ipc-errors';
