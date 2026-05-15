@@ -9,6 +9,12 @@ import type {
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type {
+  AgentRunStartData,
+  AgentRunStartPayload,
+  AgentSessionCreateData,
+  AgentSessionCreatePayload,
+  AgentSessionListData,
+  AgentSessionListPayload,
   ChatCancelData,
   ChatCancelPayload,
   ChatStartData,
@@ -99,6 +105,24 @@ export const api = {
       request: BusinessRequest<ChatCancelPayload, typeof IPC_CHANNELS.chat.cancel>,
     ): Promise<RuntimeIpcResult<ChatCancelData, typeof IPC_CHANNELS.chat.cancel>> =>
       invokeRuntimeIpc(IPC_CHANNELS.chat.cancel, request),
+  },
+  agent: {
+    session: {
+      create: (
+        request: BusinessRequest<AgentSessionCreatePayload, typeof IPC_CHANNELS.agent.session.create>,
+      ): Promise<RuntimeIpcResult<AgentSessionCreateData, typeof IPC_CHANNELS.agent.session.create>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.session.create, request),
+      list: (
+        request: BusinessRequest<AgentSessionListPayload, typeof IPC_CHANNELS.agent.session.list>,
+      ): Promise<RuntimeIpcResult<AgentSessionListData, typeof IPC_CHANNELS.agent.session.list>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.session.list, request),
+    },
+    run: {
+      start: (
+        request: BusinessRequest<AgentRunStartPayload, typeof IPC_CHANNELS.agent.run.start>,
+      ): Promise<RuntimeIpcResult<AgentRunStartData, typeof IPC_CHANNELS.agent.run.start>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.run.start, request),
+    },
   },
   runtime: {
     onEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {
