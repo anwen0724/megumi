@@ -29,6 +29,12 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'agent.plan.by-run.get';
     case IPC_CHANNELS.agent.plan.statusUpdate:
       return 'agent.plan.status.update';
+    case IPC_CHANNELS.agent.tool.definitionsList:
+      return 'agent.tool.definitions.list';
+    case IPC_CHANNELS.agent.tool.callGet:
+      return 'agent.tool.call.get';
+    case IPC_CHANNELS.agent.approval.resolve:
+      return 'agent.approval.resolve';
     default: {
       const exhaustive: never = channel;
       return exhaustive;

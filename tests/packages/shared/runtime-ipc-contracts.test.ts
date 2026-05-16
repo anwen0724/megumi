@@ -24,6 +24,7 @@ import {
   isBusinessIpcChannel,
 } from '@megumi/shared/ipc-contracts';
 import {
+  AgentToolDefinitionsListRequestSchema,
   AgentPlanByRunGetRequestSchema,
   AgentContextBaselineGetRequestSchema,
   AgentContextSourcesListRequestSchema,
@@ -578,6 +579,23 @@ describe('agent context runtime IPC schemas', () => {
         source: 'renderer',
       },
     })).toThrow();
+  });
+});
+
+describe('agent tool approval runtime IPC schemas', () => {
+  it('parses agent tool IPC requests with channel in request meta only', () => {
+    const request = AgentToolDefinitionsListRequestSchema.parse({
+      requestId: 'ipc-1',
+      payload: { runId: 'run-1' },
+      meta: {
+        channel: IPC_CHANNELS.agent.tool.definitionsList,
+        createdAt: '2026-05-16T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(request.meta.channel).toBe(IPC_CHANNELS.agent.tool.definitionsList);
+    expect('channel' in request).toBe(false);
   });
 });
 

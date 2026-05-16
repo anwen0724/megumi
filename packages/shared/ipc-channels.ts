@@ -30,6 +30,13 @@ export const IPC_CHANNELS = {
       byRunGet: 'agent:plan:by-run:get',
       statusUpdate: 'agent:plan:status:update',
     },
+    tool: {
+      definitionsList: 'agent:tool:definitions:list',
+      callGet: 'agent:tool:call:get',
+    },
+    approval: {
+      resolve: 'agent:approval:resolve',
+    },
   },
   runtime: {
     event: 'runtime:event',
@@ -60,6 +67,9 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.agent.context.sourcesList,
   IPC_CHANNELS.agent.plan.byRunGet,
   IPC_CHANNELS.agent.plan.statusUpdate,
+  IPC_CHANNELS.agent.tool.definitionsList,
+  IPC_CHANNELS.agent.tool.callGet,
+  IPC_CHANNELS.agent.approval.resolve,
   IPC_CHANNELS.runtime.event,
 ] as const;
 
