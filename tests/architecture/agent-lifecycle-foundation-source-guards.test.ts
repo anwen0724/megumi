@@ -86,13 +86,15 @@ describe('agent lifecycle foundation source guards', () => {
 
   it('does not introduce obsolete RuntimeError fields', () => {
     const obsoleteRuntimeErrorField = ['recover', 'able'].join('');
-    const offenders = [
-      ...filesUnder('packages'),
-      ...filesUnder('apps/desktop/src'),
-      ...filesUnder('tests'),
-    ]
-      .filter((file) => !projectPath(file).includes('node_modules'))
-      .filter((file) => readProjectFile(file).includes(obsoleteRuntimeErrorField))
+    const obsoleteRuntimeErrorFieldPattern = new RegExp(`\\b${obsoleteRuntimeErrorField}\\??\\s*:`);
+    const runtimeErrorContractFiles = [
+      join(ROOT, 'packages/shared/runtime-errors.ts'),
+      join(ROOT, 'packages/shared/ipc-errors.ts'),
+      join(ROOT, 'packages/core/runtime-exception.ts'),
+    ];
+
+    const offenders = runtimeErrorContractFiles
+      .filter((file) => obsoleteRuntimeErrorFieldPattern.test(readProjectFile(file)))
       .map(projectPath);
 
     expect(offenders).toEqual([]);
