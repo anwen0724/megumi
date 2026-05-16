@@ -43,6 +43,20 @@ const mocks = vi.hoisted(() => {
       getToolCall: vi.fn(),
       resolveApproval: vi.fn(),
     })),
+    createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
+    migrateDatabase: vi.fn(),
+    AgentRecoveryRepository: vi.fn(function AgentRecoveryRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
+    createAgentRecoveryService: vi.fn(() => ({
+      listRecoverableRuns: vi.fn(),
+      resumeRun: vi.fn(),
+      cancelRun: vi.fn(),
+      retryRun: vi.fn(),
+    })),
   };
 });
 
@@ -82,6 +96,22 @@ vi.mock('@megumi/desktop/main/services/agent-tool.service', () => ({
   createDefaultAgentToolService: mocks.createDefaultAgentToolService,
 }));
 
+vi.mock('@megumi/desktop/main/services/agent-recovery.service', () => ({
+  createAgentRecoveryService: mocks.createAgentRecoveryService,
+}));
+
+vi.mock('@megumi/db/connection', () => ({
+  createDatabase: mocks.createDatabase,
+}));
+
+vi.mock('@megumi/db/schema/migrations', () => ({
+  migrateDatabase: mocks.migrateDatabase,
+}));
+
+vi.mock('@megumi/db/repos/agent-recovery.repo', () => ({
+  AgentRecoveryRepository: mocks.AgentRecoveryRepository,
+}));
+
 describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -94,6 +124,10 @@ describe('main runtime logger composition', () => {
     mocks.createDefaultAgentLifecycleService.mockClear();
     mocks.createDefaultAgentContextService.mockClear();
     mocks.createDefaultAgentToolService.mockClear();
+    mocks.createDatabase.mockClear();
+    mocks.migrateDatabase.mockClear();
+    mocks.AgentRecoveryRepository.mockClear();
+    mocks.createAgentRecoveryService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
@@ -108,6 +142,7 @@ describe('main runtime logger composition', () => {
     const agentService = mocks.createDefaultAgentLifecycleService.mock.results[0]?.value;
     const agentContextService = mocks.createDefaultAgentContextService.mock.results[0]?.value;
     const agentToolService = mocks.createDefaultAgentToolService.mock.results[0]?.value;
+    const agentRecoveryService = mocks.createAgentRecoveryService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -127,12 +162,25 @@ describe('main runtime logger composition', () => {
     expect(mocks.createDefaultAgentToolService).toHaveBeenCalledWith(
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
     );
+    expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.AgentRecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.createAgentRecoveryService).toHaveBeenCalledWith(expect.objectContaining({
+      repository: expect.any(Object),
+      clock: expect.any(Function),
+      ids: expect.objectContaining({
+        resumeRequestId: expect.any(Function),
+        cancelRequestId: expect.any(Function),
+        retryRequestId: expect.any(Function),
+      }),
+      listRecoverableRuns: expect.any(Function),
+    }));
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       agentService,
       agentContextService,
       agentPlanService: agentService,
       agentToolService,
+      agentRecoveryService,
     });
 
     processLogger.error('runtime_review_probe', {

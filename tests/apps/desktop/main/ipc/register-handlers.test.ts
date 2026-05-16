@@ -8,6 +8,7 @@ const registerAgentHandlers = vi.fn();
 const registerAgentContextHandlers = vi.fn();
 const registerAgentPlanHandlers = vi.fn();
 const registerAgentToolHandlers = vi.fn();
+const registerAgentRecoveryHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
@@ -16,6 +17,7 @@ vi.mock('@megumi/desktop/main/ipc/handlers/agent.handler', () => ({ registerAgen
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-context.handler', () => ({ registerAgentContextHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-plan.handler', () => ({ registerAgentPlanHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-tool.handler', () => ({ registerAgentToolHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/agent-recovery.handler', () => ({ registerAgentRecoveryHandlers }));
 
 describe('registerAllHandlers', () => {
   beforeEach(() => {
@@ -26,6 +28,7 @@ describe('registerAllHandlers', () => {
     registerAgentContextHandlers.mockReset();
     registerAgentPlanHandlers.mockReset();
     registerAgentToolHandlers.mockReset();
+    registerAgentRecoveryHandlers.mockReset();
   });
 
   it('registers only existing runtime handlers when no agent service is provided', async () => {
@@ -40,6 +43,7 @@ describe('registerAllHandlers', () => {
     expect(registerAgentContextHandlers).not.toHaveBeenCalled();
     expect(registerAgentPlanHandlers).not.toHaveBeenCalled();
     expect(registerAgentToolHandlers).not.toHaveBeenCalled();
+    expect(registerAgentRecoveryHandlers).not.toHaveBeenCalled();
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
@@ -104,5 +108,19 @@ describe('registerAllHandlers', () => {
     registerAllHandlers({ agentToolService });
 
     expect(registerAgentToolHandlers).toHaveBeenCalledWith(agentToolService, { logger: undefined });
+  });
+
+  it('registers agent recovery handlers when a recovery service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const agentRecoveryService = {
+      listRecoverableRuns: vi.fn(),
+      resumeRun: vi.fn(),
+      cancelRun: vi.fn(),
+      retryRun: vi.fn(),
+    };
+
+    registerAllHandlers({ agentRecoveryService });
+
+    expect(registerAgentRecoveryHandlers).toHaveBeenCalledWith(agentRecoveryService, { logger: undefined });
   });
 });
