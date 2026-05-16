@@ -1,3 +1,4 @@
+import { ipcMain } from 'electron';
 import { registerWindowHandlers } from './handlers/window.handler';
 import { registerProviderHandlers } from './handlers/provider.handler';
 import { registerChatHandlers } from './handlers/chat.handler';
@@ -19,6 +20,10 @@ import {
   registerAgentArtifactHandlers,
   type AgentArtifactHandlersService,
 } from './handlers/agent-artifact.handler';
+import {
+  registerAgentMemoryHandlers,
+  type AgentMemoryHandlersService,
+} from './handlers/agent-memory.handler';
 import type { AgentRecoveryService } from '../services/agent-recovery.service';
 import type { RuntimeLogger } from '../services/runtime-logger.service';
 
@@ -30,6 +35,7 @@ export interface RegisterAllHandlersOptions {
   agentToolService?: AgentToolHandlersService;
   agentRecoveryService?: AgentRecoveryService;
   agentArtifactService?: AgentArtifactHandlersService;
+  agentMemoryService?: AgentMemoryHandlersService;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -59,5 +65,13 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.agentArtifactService) {
     registerAgentArtifactHandlers(options.agentArtifactService, { logger: options.logger });
+  }
+
+  if (options.agentMemoryService) {
+    registerAgentMemoryHandlers({
+      ipcMain,
+      agentMemoryService: options.agentMemoryService,
+      logger: options.logger,
+    });
   }
 }

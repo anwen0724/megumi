@@ -4,6 +4,7 @@ import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo'
 import { AgentRecoveryRepository } from '@megumi/db/repos/agent-recovery.repo';
 import { AgentRunModeRepository } from '@megumi/db/repos/agent-run-mode.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
+import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
@@ -19,6 +20,7 @@ import { createDefaultAgentToolService } from './services/agent-tool.service';
 import { createAgentRecoveryService } from './services/agent-recovery.service';
 import { ArtifactContentStore } from './services/artifact-content-store.service';
 import { AgentArtifactService } from './services/agent-artifact.service';
+import { createAgentMemoryService } from './services/agent-memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
 
 loadEnvFile();
@@ -29,6 +31,7 @@ const agentToolService = createDefaultAgentToolService(megumiHomePaths);
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(database);
 const artifactRepository = new ArtifactRepository(database);
+const memoryRepository = new MemoryRepository(database);
 const planArtifactCompatibility = new PlanArtifactCompatibilityService({
   repository: artifactRepository,
 });
@@ -47,6 +50,17 @@ const artifactContentStore = new ArtifactContentStore({
 const agentArtifactService = new AgentArtifactService({
   repository: artifactRepository,
   contentStore: artifactContentStore,
+});
+const agentMemoryService = createAgentMemoryService({
+  repository: memoryRepository,
+  now: () => new Date().toISOString(),
+  createId: (prefix) => `${prefix}:${crypto.randomUUID()}`,
+  emitRuntimeEvent: (event) => runtimeLogger.info('runtime.memory.event', {
+    eventId: event.eventId,
+    eventType: event.eventType,
+    runId: event.runId,
+    sessionId: event.sessionId,
+  }),
 });
 const agentRecoveryService = createAgentRecoveryService({
   repository: new AgentRecoveryRepository(database),
@@ -73,6 +87,7 @@ registerAppLifecycle({
     agentToolService,
     agentRecoveryService,
     agentArtifactService,
+    agentMemoryService,
   }),
   createWindow: () => {
     createMainWindow({

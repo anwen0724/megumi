@@ -9,6 +9,7 @@ export * from './agent-context-contracts';
 export * from './agent-run-mode-contracts';
 export * from './agent-recovery-contracts';
 export * from './artifact-contracts';
+export * from './memory-contracts';
 export * from './tool-contracts';
 export * from './run-contracts';
 export * from './ipc-channels';

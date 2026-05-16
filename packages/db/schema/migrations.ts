@@ -523,6 +523,128 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS memory_candidates (
+      candidate_id TEXT PRIMARY KEY,
+      workspace_id TEXT,
+      project_id TEXT,
+      session_id TEXT,
+      scope TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      risk_level TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      content TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      proposed_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      reviewed_at TEXT,
+      reviewed_by TEXT,
+      rejection_reason TEXT,
+      metadata_json TEXT,
+      candidate_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_records (
+      memory_id TEXT PRIMARY KEY,
+      workspace_id TEXT,
+      project_id TEXT,
+      session_id TEXT,
+      scope TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      content TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      created_from_candidate_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      last_accessed_at TEXT,
+      access_count INTEGER,
+      deleted_at TEXT,
+      disabled_at TEXT,
+      metadata_json TEXT,
+      memory_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_source_refs (
+      source_ref_id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      owner_kind TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      ref_id TEXT NOT NULL,
+      label TEXT,
+      excerpt_preview TEXT,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      source_ref_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_recall_requests (
+      recall_request_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      run_id TEXT,
+      workspace_id TEXT,
+      project_id TEXT,
+      query TEXT,
+      scopes_json TEXT NOT NULL,
+      kinds_json TEXT,
+      limit_count INTEGER NOT NULL,
+      budget INTEGER,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      request_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_recall_results (
+      recall_result_id TEXT PRIMARY KEY,
+      recall_request_id TEXT NOT NULL,
+      memory_id TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      relevance_score REAL NOT NULL,
+      confidence REAL NOT NULL,
+      selected_for_context INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      result_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_access_logs (
+      access_log_id TEXT PRIMARY KEY,
+      memory_id TEXT NOT NULL,
+      session_id TEXT,
+      run_id TEXT,
+      recall_request_id TEXT,
+      access_kind TEXT NOT NULL,
+      accessed_at TEXT NOT NULL,
+      selected_for_context INTEGER NOT NULL,
+      metadata_json TEXT,
+      access_log_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_audit_logs (
+      audit_log_id TEXT PRIMARY KEY,
+      target_kind TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      metadata_json TEXT,
+      audit_log_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_settings (
+      workspace_id TEXT PRIMARY KEY,
+      auto_capture_enabled INTEGER NOT NULL,
+      default_candidate_review_mode TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT,
+      settings_json TEXT NOT NULL
+    );
+  `);
+
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_session_id
     ON messages(session_id);
 
@@ -592,5 +714,29 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
     CREATE INDEX IF NOT EXISTS idx_artifact_relations_to_artifact_id
     ON artifact_relations(to_artifact_id);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_candidates_workspace_status
+    ON memory_candidates(workspace_id, status);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_candidates_session_status
+    ON memory_candidates(session_id, status);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_records_scope_status
+    ON memory_records(scope, status);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_records_workspace_status
+    ON memory_records(workspace_id, status);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_source_refs_owner
+    ON memory_source_refs(owner_id, owner_kind);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_recall_results_request_id
+    ON memory_recall_results(recall_request_id);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_access_logs_memory_id
+    ON memory_access_logs(memory_id);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_audit_logs_target
+    ON memory_audit_logs(target_kind, target_id);
   `);
 }

@@ -53,6 +53,14 @@ import {
   ArtifactKindSchema,
   ArtifactStatusSchema,
 } from './artifact-contracts';
+import {
+  MemoryAccessKindSchema,
+  MemoryCandidateStatusSchema,
+  MemoryKindSchema,
+  MemoryRecordStatusSchema,
+  MemoryRiskLevelSchema,
+  MemoryScopeSchema,
+} from './memory-contracts';
 
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
   RuntimeEventType,
@@ -502,11 +510,90 @@ const ArtifactContentWriteFailedPayloadSchema = z
   })
   .strict();
 
-const MemoryCreatedPayloadSchema = z
+const MemoryCandidateProposedPayloadSchema = z
+  .object({
+    candidateId: z.string().min(1),
+    scope: MemoryScopeSchema,
+    kind: MemoryKindSchema,
+    status: MemoryCandidateStatusSchema,
+    riskLevel: MemoryRiskLevelSchema,
+    summary: z.string().min(1),
+    sourceRefCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const MemoryCandidateAcceptedPayloadSchema = z
+  .object({
+    candidateId: z.string().min(1),
+    memoryId: z.string().min(1),
+    reviewedAt: RuntimeEventIsoDateTimeSchema,
+  })
+  .strict();
+
+const MemoryCandidateRejectedPayloadSchema = z
+  .object({
+    candidateId: z.string().min(1),
+    rejectionReason: z.string().min(1),
+    reviewedAt: RuntimeEventIsoDateTimeSchema,
+  })
+  .strict();
+
+const MemoryRecordCreatedPayloadSchema = z
   .object({
     memoryId: z.string().min(1),
-    title: z.string().min(1),
+    scope: MemoryScopeSchema,
+    kind: MemoryKindSchema,
+    status: MemoryRecordStatusSchema,
     summary: z.string().min(1),
+  })
+  .strict();
+
+const MemoryRecordUpdatedPayloadSchema = z
+  .object({
+    memoryId: z.string().min(1),
+    changedFields: z.array(z.string().min(1)).min(1),
+  })
+  .strict();
+
+const MemoryRecordStatusChangedPayloadSchema = z
+  .object({
+    memoryId: z.string().min(1),
+    from: MemoryRecordStatusSchema,
+    to: MemoryRecordStatusSchema,
+    reason: z.string().min(1).optional(),
+  })
+  .strict();
+
+const MemoryRecallRequestedPayloadSchema = z
+  .object({
+    recallRequestId: z.string().min(1),
+    scopes: z.array(MemoryScopeSchema).min(1),
+    kinds: z.array(MemoryKindSchema).optional(),
+    limit: z.number().int().positive(),
+  })
+  .strict();
+
+const MemoryRecallCompletedPayloadSchema = z
+  .object({
+    recallRequestId: z.string().min(1),
+    resultCount: z.number().int().nonnegative(),
+    selectedCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const MemoryRecallFailedPayloadSchema = z
+  .object({
+    recallRequestId: z.string().min(1),
+    error: RuntimeErrorSchema,
+  })
+  .strict();
+
+const MemoryAccessRecordedPayloadSchema = z
+  .object({
+    accessLogId: z.string().min(1),
+    memoryId: z.string().min(1),
+    accessKind: MemoryAccessKindSchema,
+    selectedForContext: z.boolean(),
   })
   .strict();
 
@@ -619,7 +706,28 @@ export const ArtifactContentWriteFailedEventSchema = eventSchema(
   'artifact.content.write.failed',
   ArtifactContentWriteFailedPayloadSchema,
 );
-export const MemoryCreatedEventSchema = eventSchema('memory.created', MemoryCreatedPayloadSchema);
+export const MemoryCandidateProposedEventSchema = eventSchema(
+  'memory.candidate.proposed',
+  MemoryCandidateProposedPayloadSchema,
+);
+export const MemoryCandidateAcceptedEventSchema = eventSchema(
+  'memory.candidate.accepted',
+  MemoryCandidateAcceptedPayloadSchema,
+);
+export const MemoryCandidateRejectedEventSchema = eventSchema(
+  'memory.candidate.rejected',
+  MemoryCandidateRejectedPayloadSchema,
+);
+export const MemoryRecordCreatedEventSchema = eventSchema('memory.record.created', MemoryRecordCreatedPayloadSchema);
+export const MemoryRecordUpdatedEventSchema = eventSchema('memory.record.updated', MemoryRecordUpdatedPayloadSchema);
+export const MemoryRecordStatusChangedEventSchema = eventSchema(
+  'memory.record.status.changed',
+  MemoryRecordStatusChangedPayloadSchema,
+);
+export const MemoryRecallRequestedEventSchema = eventSchema('memory.recall.requested', MemoryRecallRequestedPayloadSchema);
+export const MemoryRecallCompletedEventSchema = eventSchema('memory.recall.completed', MemoryRecallCompletedPayloadSchema);
+export const MemoryRecallFailedEventSchema = eventSchema('memory.recall.failed', MemoryRecallFailedPayloadSchema);
+export const MemoryAccessRecordedEventSchema = eventSchema('memory.access.recorded', MemoryAccessRecordedPayloadSchema);
 
 export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   SessionCreatedEventSchema,
@@ -678,7 +786,16 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ArtifactStatusChangedEventSchema,
   ArtifactReferencedEventSchema,
   ArtifactContentWriteFailedEventSchema,
-  MemoryCreatedEventSchema,
+  MemoryCandidateProposedEventSchema,
+  MemoryCandidateAcceptedEventSchema,
+  MemoryCandidateRejectedEventSchema,
+  MemoryRecordCreatedEventSchema,
+  MemoryRecordUpdatedEventSchema,
+  MemoryRecordStatusChangedEventSchema,
+  MemoryRecallRequestedEventSchema,
+  MemoryRecallCompletedEventSchema,
+  MemoryRecallFailedEventSchema,
+  MemoryAccessRecordedEventSchema,
 ]);
 
 export { isTerminalRuntimeEvent } from './runtime-events';

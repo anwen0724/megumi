@@ -26,6 +26,30 @@ import type {
   AgentContextBaselineGetPayload,
   AgentContextSourcesListData,
   AgentContextSourcesListPayload,
+  AgentMemoryAccessLogsListData,
+  AgentMemoryAccessLogsListPayload,
+  AgentMemoryCandidateAcceptData,
+  AgentMemoryCandidateAcceptPayload,
+  AgentMemoryCandidateData,
+  AgentMemoryCandidateArchivePayload,
+  AgentMemoryCandidateEditAndAcceptPayload,
+  AgentMemoryCandidateListData,
+  AgentMemoryCandidateListPayload,
+  AgentMemoryCandidateRejectPayload,
+  AgentMemoryData,
+  AgentMemoryGetData,
+  AgentMemoryGetPayload,
+  AgentMemoryListData,
+  AgentMemoryListPayload,
+  AgentMemoryRecallPreviewData,
+  AgentMemoryRecallPreviewPayload,
+  AgentMemorySettingsData,
+  AgentMemorySettingsGetPayload,
+  AgentMemorySettingsUpdatePayload,
+  AgentMemorySourceRefsListData,
+  AgentMemorySourceRefsListPayload,
+  AgentMemoryStatusPayload,
+  AgentMemoryUpdatePayload,
   AgentPlanByRunGetData,
   AgentPlanByRunGetPayload,
   AgentPlanStatusUpdateData,
@@ -326,6 +350,126 @@ export const api = {
         AgentArtifactReferenceData,
         typeof IPC_CHANNELS.agent.artifacts.reference
       >> => invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.reference, request),
+    },
+    memory: {
+      settingsGet: (
+        request: BusinessRequest<
+          AgentMemorySettingsGetPayload,
+          typeof IPC_CHANNELS.agent.memory.settingsGet
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemorySettingsData,
+        typeof IPC_CHANNELS.agent.memory.settingsGet
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.settingsGet, request),
+      settingsUpdate: (
+        request: BusinessRequest<
+          AgentMemorySettingsUpdatePayload,
+          typeof IPC_CHANNELS.agent.memory.settingsUpdate
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemorySettingsData,
+        typeof IPC_CHANNELS.agent.memory.settingsUpdate
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.settingsUpdate, request),
+      candidateList: (
+        request: BusinessRequest<
+          AgentMemoryCandidateListPayload,
+          typeof IPC_CHANNELS.agent.memory.candidateList
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemoryCandidateListData,
+        typeof IPC_CHANNELS.agent.memory.candidateList
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.candidateList, request),
+      candidateAccept: (
+        request: BusinessRequest<
+          AgentMemoryCandidateAcceptPayload,
+          typeof IPC_CHANNELS.agent.memory.candidateAccept
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemoryCandidateAcceptData,
+        typeof IPC_CHANNELS.agent.memory.candidateAccept
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.candidateAccept, request),
+      candidateReject: (
+        request: BusinessRequest<
+          AgentMemoryCandidateRejectPayload,
+          typeof IPC_CHANNELS.agent.memory.candidateReject
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemoryCandidateData,
+        typeof IPC_CHANNELS.agent.memory.candidateReject
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.candidateReject, request),
+      candidateArchive: (
+        request: BusinessRequest<
+          AgentMemoryCandidateArchivePayload,
+          typeof IPC_CHANNELS.agent.memory.candidateArchive
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemoryCandidateData,
+        typeof IPC_CHANNELS.agent.memory.candidateArchive
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.candidateArchive, request),
+      candidateEditAndAccept: (
+        request: BusinessRequest<
+          AgentMemoryCandidateEditAndAcceptPayload,
+          typeof IPC_CHANNELS.agent.memory.candidateEditAndAccept
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemoryCandidateAcceptData,
+        typeof IPC_CHANNELS.agent.memory.candidateEditAndAccept
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.candidateEditAndAccept, request),
+      memoryList: (
+        request: BusinessRequest<AgentMemoryListPayload, typeof IPC_CHANNELS.agent.memory.memoryList>,
+      ): Promise<RuntimeIpcResult<AgentMemoryListData, typeof IPC_CHANNELS.agent.memory.memoryList>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.memory.memoryList, request),
+      memoryGet: (
+        request: BusinessRequest<AgentMemoryGetPayload, typeof IPC_CHANNELS.agent.memory.memoryGet>,
+      ): Promise<RuntimeIpcResult<AgentMemoryGetData, typeof IPC_CHANNELS.agent.memory.memoryGet>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.memory.memoryGet, request),
+      memoryUpdate: (
+        request: BusinessRequest<AgentMemoryUpdatePayload, typeof IPC_CHANNELS.agent.memory.memoryUpdate>,
+      ): Promise<RuntimeIpcResult<AgentMemoryData, typeof IPC_CHANNELS.agent.memory.memoryUpdate>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.memory.memoryUpdate, request),
+      memoryArchive: (
+        request: BusinessRequest<AgentMemoryStatusPayload, typeof IPC_CHANNELS.agent.memory.memoryArchive>,
+      ): Promise<RuntimeIpcResult<AgentMemoryData, typeof IPC_CHANNELS.agent.memory.memoryArchive>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.memory.memoryArchive, request),
+      memoryDelete: (
+        request: BusinessRequest<AgentMemoryStatusPayload, typeof IPC_CHANNELS.agent.memory.memoryDelete>,
+      ): Promise<RuntimeIpcResult<AgentMemoryData, typeof IPC_CHANNELS.agent.memory.memoryDelete>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.memory.memoryDelete, request),
+      memoryDisable: (
+        request: BusinessRequest<AgentMemoryStatusPayload, typeof IPC_CHANNELS.agent.memory.memoryDisable>,
+      ): Promise<RuntimeIpcResult<AgentMemoryData, typeof IPC_CHANNELS.agent.memory.memoryDisable>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.memory.memoryDisable, request),
+      memoryEnable: (
+        request: BusinessRequest<AgentMemoryStatusPayload, typeof IPC_CHANNELS.agent.memory.memoryEnable>,
+      ): Promise<RuntimeIpcResult<AgentMemoryData, typeof IPC_CHANNELS.agent.memory.memoryEnable>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.memory.memoryEnable, request),
+      memorySourceRefsList: (
+        request: BusinessRequest<
+          AgentMemorySourceRefsListPayload,
+          typeof IPC_CHANNELS.agent.memory.sourceRefsList
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemorySourceRefsListData,
+        typeof IPC_CHANNELS.agent.memory.sourceRefsList
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.sourceRefsList, request),
+      memoryAccessLogsList: (
+        request: BusinessRequest<
+          AgentMemoryAccessLogsListPayload,
+          typeof IPC_CHANNELS.agent.memory.accessLogsList
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemoryAccessLogsListData,
+        typeof IPC_CHANNELS.agent.memory.accessLogsList
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.accessLogsList, request),
+      recallPreview: (
+        request: BusinessRequest<
+          AgentMemoryRecallPreviewPayload,
+          typeof IPC_CHANNELS.agent.memory.recallPreview
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentMemoryRecallPreviewData,
+        typeof IPC_CHANNELS.agent.memory.recallPreview
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.memory.recallPreview, request),
     },
   },
   runtime: {

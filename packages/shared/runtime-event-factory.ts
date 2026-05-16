@@ -308,6 +308,166 @@ export function createRuntimeArtifactContentWriteFailedEvent(
   });
 }
 
+export function createRuntimeMemoryCandidateProposedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.candidate.proposed'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.candidate.proposed'],
+): TypedRuntimeEvent<'memory.candidate.proposed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.candidate.proposed',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryCandidateAcceptedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.candidate.accepted'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.candidate.accepted'],
+): TypedRuntimeEvent<'memory.candidate.accepted'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.candidate.accepted',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryCandidateRejectedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.candidate.rejected'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.candidate.rejected'],
+): TypedRuntimeEvent<'memory.candidate.rejected'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.candidate.rejected',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryRecordCreatedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.record.created'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.record.created'],
+): TypedRuntimeEvent<'memory.record.created'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.record.created',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryRecordUpdatedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.record.updated'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.record.updated'],
+): TypedRuntimeEvent<'memory.record.updated'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.record.updated',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryRecordStatusChangedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.record.status.changed'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.record.status.changed'],
+): TypedRuntimeEvent<'memory.record.status.changed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.record.status.changed',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryRecallRequestedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.recall.requested'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.recall.requested'],
+): TypedRuntimeEvent<'memory.recall.requested'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.recall.requested',
+    visibility: 'debug',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryRecallCompletedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.recall.completed'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.recall.completed'],
+): TypedRuntimeEvent<'memory.recall.completed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.recall.completed',
+    visibility: 'debug',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryRecallFailedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.recall.failed'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.recall.failed'],
+): TypedRuntimeEvent<'memory.recall.failed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.recall.failed',
+    visibility: 'debug',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeMemoryAccessRecordedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'memory.access.recorded'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['memory.access.recorded'],
+): TypedRuntimeEvent<'memory.access.recorded'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'memory.access.recorded',
+    visibility: 'debug',
+    persist: 'required',
+    payload,
+  });
+}
+
 export function createRunStartedEvent(input: {
   eventId: string;
   request: ChatRuntimeRequest;

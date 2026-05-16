@@ -4,6 +4,7 @@ export * from './chat/run-chat-turn';
 export * from './chat/types';
 export * from './agent-runtime/artifacts';
 export * from './agent-runtime/events';
+export * from './agent-runtime/memory';
 export * from './agent-runtime/recovery';
 export * from './agent-runtime/run-agent-turn';
 export * from './agent-runtime/types';

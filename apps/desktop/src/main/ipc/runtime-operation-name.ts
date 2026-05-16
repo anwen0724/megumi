@@ -57,6 +57,40 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'agent.artifacts.status.update';
     case IPC_CHANNELS.agent.artifacts.reference:
       return 'agent.artifacts.reference';
+    case IPC_CHANNELS.agent.memory.settingsGet:
+      return 'agent.memory.settings.get';
+    case IPC_CHANNELS.agent.memory.settingsUpdate:
+      return 'agent.memory.settings.update';
+    case IPC_CHANNELS.agent.memory.candidateList:
+      return 'agent.memory.candidate.list';
+    case IPC_CHANNELS.agent.memory.candidateAccept:
+      return 'agent.memory.candidate.accept';
+    case IPC_CHANNELS.agent.memory.candidateReject:
+      return 'agent.memory.candidate.reject';
+    case IPC_CHANNELS.agent.memory.candidateArchive:
+      return 'agent.memory.candidate.archive';
+    case IPC_CHANNELS.agent.memory.candidateEditAndAccept:
+      return 'agent.memory.candidate.edit-and-accept';
+    case IPC_CHANNELS.agent.memory.memoryList:
+      return 'agent.memory.memory.list';
+    case IPC_CHANNELS.agent.memory.memoryGet:
+      return 'agent.memory.memory.get';
+    case IPC_CHANNELS.agent.memory.memoryUpdate:
+      return 'agent.memory.memory.update';
+    case IPC_CHANNELS.agent.memory.memoryArchive:
+      return 'agent.memory.memory.archive';
+    case IPC_CHANNELS.agent.memory.memoryDelete:
+      return 'agent.memory.memory.delete';
+    case IPC_CHANNELS.agent.memory.memoryDisable:
+      return 'agent.memory.memory.disable';
+    case IPC_CHANNELS.agent.memory.memoryEnable:
+      return 'agent.memory.memory.enable';
+    case IPC_CHANNELS.agent.memory.sourceRefsList:
+      return 'agent.memory.source-refs.list';
+    case IPC_CHANNELS.agent.memory.accessLogsList:
+      return 'agent.memory.access-logs.list';
+    case IPC_CHANNELS.agent.memory.recallPreview:
+      return 'agent.memory.recall-preview';
     default: {
       const exhaustive: never = channel;
       return exhaustive;

@@ -38,6 +38,19 @@ import {
   ArtifactStatusSchema,
   ArtifactVersionSchema,
 } from './artifact-contracts';
+import {
+  MemoryAccessLogSchema,
+  MemoryCandidateSchema,
+  MemoryCandidateStatusSchema,
+  MemoryKindSchema,
+  MemoryRecallRequestSchema,
+  MemoryRecallResultSchema,
+  MemoryRecordSchema,
+  MemoryRecordStatusSchema,
+  MemoryScopeSchema,
+  MemorySettingsSchema,
+  MemorySourceRefSchema,
+} from './memory-contracts';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
 
@@ -478,6 +491,149 @@ export const AgentArtifactReferenceDataSchema = z
   })
   .strict();
 
+export const AgentMemorySettingsGetPayloadSchema = z
+  .object({
+    workspaceId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentMemorySettingsUpdatePayloadSchema = z
+  .object({
+    workspaceId: z.string().min(1),
+    autoCaptureEnabled: z.boolean(),
+    defaultCandidateReviewMode: z.literal('manual'),
+    updatedAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentMemorySettingsDataSchema = z.object({ settings: MemorySettingsSchema }).strict();
+
+export const AgentMemoryCandidateListPayloadSchema = z
+  .object({
+    workspaceId: z.string().min(1).optional(),
+    sessionId: z.string().min(1).optional(),
+    status: MemoryCandidateStatusSchema.optional(),
+  })
+  .strict();
+
+export const AgentMemoryCandidateAcceptPayloadSchema = z
+  .object({
+    candidateId: z.string().min(1),
+    reviewedAt: IsoDateTimeSchema,
+    reviewedBy: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const AgentMemoryCandidateRejectPayloadSchema = z
+  .object({
+    candidateId: z.string().min(1),
+    rejectionReason: z.string().min(1),
+    reviewedAt: IsoDateTimeSchema,
+    reviewedBy: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const AgentMemoryCandidateArchivePayloadSchema = z
+  .object({
+    candidateId: z.string().min(1),
+    reviewedAt: IsoDateTimeSchema,
+    reviewedBy: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const AgentMemoryCandidateEditAndAcceptPayloadSchema = z
+  .object({
+    candidateId: z.string().min(1),
+    content: z.string().min(1).max(4000),
+    summary: z.string().min(1).max(500).optional(),
+    scope: MemoryScopeSchema.optional(),
+    kind: MemoryKindSchema.optional(),
+    reviewedAt: IsoDateTimeSchema,
+    reviewedBy: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const AgentMemoryCandidateListDataSchema = z.object({ candidates: z.array(MemoryCandidateSchema) }).strict();
+export const AgentMemoryCandidateDataSchema = z.object({ candidate: MemoryCandidateSchema }).strict();
+export const AgentMemoryCandidateAcceptDataSchema = z
+  .object({ candidate: MemoryCandidateSchema, memory: MemoryRecordSchema })
+  .strict();
+
+export const AgentMemoryListPayloadSchema = z
+  .object({
+    workspaceId: z.string().min(1).optional(),
+    projectId: z.string().min(1).optional(),
+    sessionId: z.string().min(1).optional(),
+    scope: MemoryScopeSchema.optional(),
+    kind: MemoryKindSchema.optional(),
+    status: MemoryRecordStatusSchema.optional(),
+    query: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const AgentMemoryGetPayloadSchema = z.object({ memoryId: z.string().min(1) }).strict();
+
+export const AgentMemoryUpdatePayloadSchema = z
+  .object({
+    memoryId: z.string().min(1),
+    content: z.string().min(1).max(4000).optional(),
+    summary: z.string().min(1).max(500).optional(),
+    scope: MemoryScopeSchema.optional(),
+    kind: MemoryKindSchema.optional(),
+    updatedAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentMemoryStatusPayloadSchema = z
+  .object({
+    memoryId: z.string().min(1),
+    updatedAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentMemorySourceRefsListPayloadSchema = z.object({ memoryId: z.string().min(1) }).strict();
+
+export const AgentMemoryAccessLogsListPayloadSchema = z
+  .object({
+    memoryId: z.string().min(1).optional(),
+    sessionId: z.string().min(1).optional(),
+    runId: z.string().min(1).optional(),
+    limit: z.number().int().positive().max(100).optional(),
+  })
+  .strict();
+
+export const AgentMemoryRecallPreviewPayloadSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    runId: z.string().min(1).optional(),
+    workspaceId: z.string().min(1).optional(),
+    projectId: z.string().min(1).optional(),
+    query: z.string().min(1).optional(),
+    scopes: z.array(MemoryScopeSchema).min(1),
+    kinds: z.array(MemoryKindSchema).optional(),
+    limit: z.number().int().positive().max(50),
+    budget: z.number().int().positive().optional(),
+    createdAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentMemoryListDataSchema = z.object({ memories: z.array(MemoryRecordSchema) }).strict();
+export const AgentMemoryGetDataSchema = z
+  .object({
+    memory: MemoryRecordSchema.optional(),
+    sourceRefs: z.array(MemorySourceRefSchema),
+  })
+  .strict();
+export const AgentMemoryDataSchema = z.object({ memory: MemoryRecordSchema }).strict();
+export const AgentMemorySourceRefsListDataSchema = z.object({ sourceRefs: z.array(MemorySourceRefSchema) }).strict();
+export const AgentMemoryAccessLogsListDataSchema = z.object({ accessLogs: z.array(MemoryAccessLogSchema) }).strict();
+export const AgentMemoryRecallPreviewDataSchema = z
+  .object({
+    request: MemoryRecallRequestSchema,
+    results: z.array(MemoryRecallResultSchema),
+  })
+  .strict();
+
 export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.session.create,
   AgentSessionCreatePayloadSchema,
@@ -583,6 +739,91 @@ export const AgentArtifactReferenceRequestSchema = createRuntimeIpcRequestSchema
   AgentArtifactReferencePayloadSchema,
 );
 
+export const AgentMemorySettingsGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.settingsGet,
+  AgentMemorySettingsGetPayloadSchema,
+);
+
+export const AgentMemorySettingsUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.settingsUpdate,
+  AgentMemorySettingsUpdatePayloadSchema,
+);
+
+export const AgentMemoryCandidateListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateList,
+  AgentMemoryCandidateListPayloadSchema,
+);
+
+export const AgentMemoryCandidateAcceptRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateAccept,
+  AgentMemoryCandidateAcceptPayloadSchema,
+);
+
+export const AgentMemoryCandidateRejectRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateReject,
+  AgentMemoryCandidateRejectPayloadSchema,
+);
+
+export const AgentMemoryCandidateArchiveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateArchive,
+  AgentMemoryCandidateArchivePayloadSchema,
+);
+
+export const AgentMemoryCandidateEditAndAcceptRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateEditAndAccept,
+  AgentMemoryCandidateEditAndAcceptPayloadSchema,
+);
+
+export const AgentMemoryListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryList,
+  AgentMemoryListPayloadSchema,
+);
+
+export const AgentMemoryGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryGet,
+  AgentMemoryGetPayloadSchema,
+);
+
+export const AgentMemoryUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryUpdate,
+  AgentMemoryUpdatePayloadSchema,
+);
+
+export const AgentMemoryArchiveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryArchive,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemoryDeleteRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryDelete,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemoryDisableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryDisable,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemoryEnableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryEnable,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemorySourceRefsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.sourceRefsList,
+  AgentMemorySourceRefsListPayloadSchema,
+);
+
+export const AgentMemoryAccessLogsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.accessLogsList,
+  AgentMemoryAccessLogsListPayloadSchema,
+);
+
+export const AgentMemoryRecallPreviewRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.recallPreview,
+  AgentMemoryRecallPreviewPayloadSchema,
+);
+
 export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
   AgentSessionCreateDataSchema,
   IPC_CHANNELS.agent.session.create,
@@ -668,6 +909,97 @@ export const AgentArtifactReferenceResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.agent.artifacts.reference,
 );
 
+export const AgentMemorySettingsGetResultSchema = createRuntimeIpcResultSchema(
+  AgentMemorySettingsDataSchema,
+  IPC_CHANNELS.agent.memory.settingsGet,
+);
+
+export const AgentMemorySettingsUpdateResultSchema = createRuntimeIpcResultSchema(
+  AgentMemorySettingsDataSchema,
+  IPC_CHANNELS.agent.memory.settingsUpdate,
+);
+
+export const AgentMemoryCandidateListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateListDataSchema,
+  IPC_CHANNELS.agent.memory.candidateList,
+);
+
+export const AgentMemoryCandidateAcceptResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateAcceptDataSchema,
+  IPC_CHANNELS.agent.memory.candidateAccept,
+);
+
+export const AgentMemoryCandidateResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateDataSchema,
+);
+
+export const AgentMemoryCandidateRejectResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateDataSchema,
+  IPC_CHANNELS.agent.memory.candidateReject,
+);
+
+export const AgentMemoryCandidateArchiveResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateDataSchema,
+  IPC_CHANNELS.agent.memory.candidateArchive,
+);
+
+export const AgentMemoryCandidateEditAndAcceptResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateAcceptDataSchema,
+  IPC_CHANNELS.agent.memory.candidateEditAndAccept,
+);
+
+export const AgentMemoryListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryListDataSchema,
+  IPC_CHANNELS.agent.memory.memoryList,
+);
+
+export const AgentMemoryGetResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryGetDataSchema,
+  IPC_CHANNELS.agent.memory.memoryGet,
+);
+
+export const AgentMemoryResultSchema = createRuntimeIpcResultSchema(AgentMemoryDataSchema);
+
+export const AgentMemoryUpdateResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryUpdate,
+);
+
+export const AgentMemoryArchiveResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryArchive,
+);
+
+export const AgentMemoryDeleteResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryDelete,
+);
+
+export const AgentMemoryDisableResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryDisable,
+);
+
+export const AgentMemoryEnableResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryEnable,
+);
+
+export const AgentMemorySourceRefsListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemorySourceRefsListDataSchema,
+  IPC_CHANNELS.agent.memory.sourceRefsList,
+);
+
+export const AgentMemoryAccessLogsListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryAccessLogsListDataSchema,
+  IPC_CHANNELS.agent.memory.accessLogsList,
+);
+
+export const AgentMemoryRecallPreviewResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryRecallPreviewDataSchema,
+  IPC_CHANNELS.agent.memory.recallPreview,
+);
+
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;
 export type ProviderListData = z.infer<typeof ProviderListDataSchema>;
 export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
@@ -719,3 +1051,27 @@ export type AgentArtifactVersionGetData = z.infer<typeof AgentArtifactVersionGet
 export type AgentArtifactVersionCreateData = z.infer<typeof AgentArtifactVersionCreateDataSchema>;
 export type AgentArtifactStatusUpdateData = z.infer<typeof AgentArtifactStatusUpdateDataSchema>;
 export type AgentArtifactReferenceData = z.infer<typeof AgentArtifactReferenceDataSchema>;
+export type AgentMemorySettingsGetPayload = z.infer<typeof AgentMemorySettingsGetPayloadSchema>;
+export type AgentMemorySettingsUpdatePayload = z.infer<typeof AgentMemorySettingsUpdatePayloadSchema>;
+export type AgentMemorySettingsData = z.infer<typeof AgentMemorySettingsDataSchema>;
+export type AgentMemoryCandidateListPayload = z.infer<typeof AgentMemoryCandidateListPayloadSchema>;
+export type AgentMemoryCandidateAcceptPayload = z.infer<typeof AgentMemoryCandidateAcceptPayloadSchema>;
+export type AgentMemoryCandidateRejectPayload = z.infer<typeof AgentMemoryCandidateRejectPayloadSchema>;
+export type AgentMemoryCandidateArchivePayload = z.infer<typeof AgentMemoryCandidateArchivePayloadSchema>;
+export type AgentMemoryCandidateEditAndAcceptPayload = z.infer<typeof AgentMemoryCandidateEditAndAcceptPayloadSchema>;
+export type AgentMemoryCandidateListData = z.infer<typeof AgentMemoryCandidateListDataSchema>;
+export type AgentMemoryCandidateData = z.infer<typeof AgentMemoryCandidateDataSchema>;
+export type AgentMemoryCandidateAcceptData = z.infer<typeof AgentMemoryCandidateAcceptDataSchema>;
+export type AgentMemoryListPayload = z.infer<typeof AgentMemoryListPayloadSchema>;
+export type AgentMemoryGetPayload = z.infer<typeof AgentMemoryGetPayloadSchema>;
+export type AgentMemoryUpdatePayload = z.infer<typeof AgentMemoryUpdatePayloadSchema>;
+export type AgentMemoryStatusPayload = z.infer<typeof AgentMemoryStatusPayloadSchema>;
+export type AgentMemorySourceRefsListPayload = z.infer<typeof AgentMemorySourceRefsListPayloadSchema>;
+export type AgentMemoryAccessLogsListPayload = z.infer<typeof AgentMemoryAccessLogsListPayloadSchema>;
+export type AgentMemoryRecallPreviewPayload = z.infer<typeof AgentMemoryRecallPreviewPayloadSchema>;
+export type AgentMemoryListData = z.infer<typeof AgentMemoryListDataSchema>;
+export type AgentMemoryGetData = z.infer<typeof AgentMemoryGetDataSchema>;
+export type AgentMemoryData = z.infer<typeof AgentMemoryDataSchema>;
+export type AgentMemorySourceRefsListData = z.infer<typeof AgentMemorySourceRefsListDataSchema>;
+export type AgentMemoryAccessLogsListData = z.infer<typeof AgentMemoryAccessLogsListDataSchema>;
+export type AgentMemoryRecallPreviewData = z.infer<typeof AgentMemoryRecallPreviewDataSchema>;
