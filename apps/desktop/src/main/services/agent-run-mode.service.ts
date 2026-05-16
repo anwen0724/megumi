@@ -13,6 +13,10 @@ export interface AgentRunModeServiceIds {
   planArtifactId(): string;
 }
 
+export interface PlanArtifactCompatibility {
+  syncImplementationPlanArtifact(plan: ImplementationPlanArtifactRecord): void;
+}
+
 export interface AgentRunModeServiceOptions {
   repository: Pick<
     AgentRunModeRepository,
@@ -23,6 +27,7 @@ export interface AgentRunModeServiceOptions {
     | 'updateImplementationPlanStatus'
     | 'saveSourcePlanRelation'
   >;
+  planArtifactCompatibility?: PlanArtifactCompatibility;
   ids?: AgentRunModeServiceIds;
 }
 
@@ -76,7 +81,7 @@ export class AgentRunModeService {
       return undefined;
     }
 
-    return this.options.repository.saveImplementationPlan({
+    const plan = this.options.repository.saveImplementationPlan({
       planArtifactId: this.ids.planArtifactId(),
       producingRunId: input.runId,
       title: input.goal,
@@ -88,6 +93,9 @@ export class AgentRunModeService {
         modePreset: input.mode.preset ?? 'plan',
       },
     });
+
+    this.options.planArtifactCompatibility?.syncImplementationPlanArtifact(plan);
+    return plan;
   }
 
   getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined {
@@ -106,6 +114,7 @@ export class AgentRunModeService {
       throw new Error('Implementation plan was not found.');
     }
 
+    this.options.planArtifactCompatibility?.syncImplementationPlanArtifact(plan);
     return plan;
   }
 }

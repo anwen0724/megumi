@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/agent-run-mode-contracts';
 import { AgentRunModeService } from '@megumi/desktop/main/services/agent-run-mode.service';
 
@@ -97,5 +97,68 @@ describe('AgentRunModeService', () => {
 
     expect(plan?.planArtifactId).toBe('plan:created');
     expect(plan?.status).toBe('proposed');
+  });
+
+  it('syncs created implementation plans into generic artifact compatibility service', () => {
+    const repo = createRepo();
+    const planArtifactCompatibility = {
+      syncImplementationPlanArtifact: vi.fn(),
+    };
+    const service = new AgentRunModeService({
+      repository: repo,
+      planArtifactCompatibility,
+      ids: {
+        modeSnapshotId: () => 'mode-snapshot:1',
+        planArtifactId: () => 'plan:1',
+      },
+    });
+
+    const plan = service.createPlanRecordForRun({
+      runId: 'run:1',
+      goal: 'Write plans',
+      mode: {
+        taskIntent: 'plan',
+        permissionMode: 'plan',
+        outputExpectation: 'implementation_plan_artifact',
+      },
+      createdAt: '2026-05-16T00:00:00.000Z',
+    });
+
+    expect(planArtifactCompatibility.syncImplementationPlanArtifact).toHaveBeenCalledWith(plan);
+  });
+
+  it('syncs plan status updates into generic artifact compatibility service', () => {
+    const repo = createRepo();
+    const planArtifactCompatibility = {
+      syncImplementationPlanArtifact: vi.fn(),
+    };
+    const service = new AgentRunModeService({
+      repository: repo,
+      planArtifactCompatibility,
+      ids: {
+        modeSnapshotId: () => 'mode-snapshot:1',
+        planArtifactId: () => 'plan:1',
+      },
+    });
+
+    service.createPlanRecordForRun({
+      runId: 'run:1',
+      goal: 'Write plans',
+      mode: {
+        taskIntent: 'plan',
+        permissionMode: 'plan',
+        outputExpectation: 'implementation_plan_artifact',
+      },
+      createdAt: '2026-05-16T00:00:00.000Z',
+    });
+    planArtifactCompatibility.syncImplementationPlanArtifact.mockClear();
+
+    const plan = service.updatePlanStatus({
+      planArtifactId: 'plan:1',
+      status: 'accepted',
+      updatedAt: '2026-05-16T00:00:01.000Z',
+    });
+
+    expect(planArtifactCompatibility.syncImplementationPlanArtifact).toHaveBeenCalledWith(plan);
   });
 });
