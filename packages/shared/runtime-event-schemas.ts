@@ -36,13 +36,16 @@ import {
 } from './tool-contracts';
 import {
   CancelReasonSchema,
+  CancelRequestedBySchema,
   CancelScopeSchema,
   CheckpointBoundarySchema,
   CheckpointReasonSchema,
   ResumeModeSchema,
   ResumeReasonSchema,
+  ResumeRequestedBySchema,
   RetryKindSchema,
   RetryReasonSchema,
+  RetryRequestedBySchema,
 } from './agent-recovery-contracts';
 
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
@@ -285,7 +288,7 @@ const CheckpointStatusChangePayloadSchema = z
 const RunResumeRequestedPayloadSchema = z
   .object({
     resumeRequestId: z.string().min(1),
-    requestedBy: z.enum(['user', 'host', 'system']),
+    requestedBy: ResumeRequestedBySchema,
     reason: ResumeReasonSchema,
     resumeMode: ResumeModeSchema,
     checkpointId: z.string().min(1).optional(),
@@ -309,7 +312,7 @@ const RunResumeFailedPayloadSchema = z
 const RunCancelRequestedPayloadSchema = z
   .object({
     cancelRequestId: z.string().min(1),
-    requestedBy: z.enum(['user', 'host', 'system']),
+    requestedBy: CancelRequestedBySchema,
     reason: CancelReasonSchema,
     scope: CancelScopeSchema,
   })
@@ -331,7 +334,7 @@ const CancelledPayloadSchema = z
 const RunRetryRequestedPayloadSchema = z
   .object({
     retryRequestId: z.string().min(1),
-    requestedBy: z.enum(['user', 'host', 'system']),
+    requestedBy: RetryRequestedBySchema,
     retryKind: RetryKindSchema,
     reason: RetryReasonSchema,
     checkpointId: z.string().min(1).optional(),
@@ -546,16 +549,16 @@ export const CheckpointDiscardedEventSchema = eventSchema(
   'checkpoint.discarded',
   CheckpointStatusChangePayloadSchema,
 );
-export const RunResumeRequestedEventSchema = eventSchema('run.resume_requested', RunResumeRequestedPayloadSchema);
+export const RunResumeRequestedEventSchema = eventSchema('run.resume.requested', RunResumeRequestedPayloadSchema);
 export const RunResumedEventSchema = eventSchema('run.resumed', RunResumedPayloadSchema);
-export const RunResumeFailedEventSchema = eventSchema('run.resume_failed', RunResumeFailedPayloadSchema);
-export const RunCancelRequestedEventSchema = eventSchema('run.cancel_requested', RunCancelRequestedPayloadSchema);
+export const RunResumeFailedEventSchema = eventSchema('run.resume.failed', RunResumeFailedPayloadSchema);
+export const RunCancelRequestedEventSchema = eventSchema('run.cancel.requested', RunCancelRequestedPayloadSchema);
 export const RunCancellingEventSchema = eventSchema('run.cancelling', RunCancellingPayloadSchema);
 export const StepCancelledEventSchema = eventSchema('step.cancelled', CancelledPayloadSchema);
 export const ActionCancelledEventSchema = eventSchema('action.cancelled', CancelledPayloadSchema);
-export const RunRetryRequestedEventSchema = eventSchema('run.retry_requested', RunRetryRequestedPayloadSchema);
-export const StepRetryRequestedEventSchema = eventSchema('step.retry_requested', RunRetryRequestedPayloadSchema);
-export const ActionRetryRequestedEventSchema = eventSchema('action.retry_requested', RunRetryRequestedPayloadSchema);
+export const RunRetryRequestedEventSchema = eventSchema('run.retry.requested', RunRetryRequestedPayloadSchema);
+export const StepRetryRequestedEventSchema = eventSchema('step.retry.requested', RunRetryRequestedPayloadSchema);
+export const ActionRetryRequestedEventSchema = eventSchema('action.retry.requested', RunRetryRequestedPayloadSchema);
 export const RetryStartedEventSchema = eventSchema('retry.started', RetryStartedPayloadSchema);
 export const RetryCompletedEventSchema = eventSchema('retry.completed', RetryCompletedPayloadSchema);
 export const RetryFailedEventSchema = eventSchema('retry.failed', RetryFailedPayloadSchema);

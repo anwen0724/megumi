@@ -465,6 +465,6 @@ describe('agent runtime lifecycle events', () => {
         kind: 'cancel_requested',
       }),
     );
-    expect(events.map((event) => event.eventType)).toContain('run.cancel_requested');
+    expect(events.map((event) => event.eventType)).toContain('run.cancel.requested');
   });
 });

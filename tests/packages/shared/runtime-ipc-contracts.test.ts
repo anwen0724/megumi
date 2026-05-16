@@ -624,7 +624,7 @@ describe('agent recovery runtime IPC schemas', () => {
         runId: 'run_123',
         checkpointId: 'checkpoint_123',
         requestedBy: 'user',
-        reason: 'user_requested',
+        reason: 'manual_resume',
         resumeMode: 'from_checkpoint',
       },
       meta: {
@@ -653,9 +653,9 @@ describe('agent recovery runtime IPC schemas', () => {
       requestId: 'request_126',
       payload: {
         runId: 'run_123',
-        requestedBy: 'user',
-        retryKind: 'run',
-        reason: 'runtime_retryable_error',
+        requestedBy: 'runtime',
+        retryKind: 'retry_run_from_checkpoint',
+        reason: 'runtime_error',
       },
       meta: {
         channel: IPC_CHANNELS.agent.recovery.retry,
@@ -666,7 +666,51 @@ describe('agent recovery runtime IPC schemas', () => {
 
     expect(resumeRequest.payload.resumeMode).toBe('from_checkpoint');
     expect(cancelRequest.payload.scope).toBe('run');
-    expect(retryRequest.payload.retryKind).toBe('run');
+    expect(retryRequest.payload.retryKind).toBe('retry_run_from_checkpoint');
+  });
+
+  it('rejects extra fields in recovery IPC payloads', () => {
+    expect(AgentRecoverableRunListRequestSchema.safeParse({
+      requestId: 'request_recovery_list',
+      payload: { rawFullPrompt: 'secret prompt' },
+      meta: {
+        channel: IPC_CHANNELS.agent.recovery.recoverableRunsList,
+        createdAt: '2026-05-16T10:00:00.000Z',
+        source: 'renderer',
+      },
+    }).success).toBe(false);
+
+    expect(AgentRunResumeRequestSchema.safeParse({
+      requestId: 'request_resume',
+      payload: {
+        runId: 'run_123',
+        requestedBy: 'user',
+        reason: 'manual_resume',
+        resumeMode: 'from_checkpoint',
+        rawStack: 'secret stack',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.recovery.resume,
+        createdAt: '2026-05-16T10:00:01.000Z',
+        source: 'renderer',
+      },
+    }).success).toBe(false);
+
+    expect(AgentRunRetryRequestSchema.safeParse({
+      requestId: 'request_retry',
+      payload: {
+        runId: 'run_123',
+        requestedBy: 'runtime',
+        retryKind: 'retry_step',
+        reason: 'failed',
+        rawProviderBody: 'secret body',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.recovery.retry,
+        createdAt: '2026-05-16T10:00:02.000Z',
+        source: 'renderer',
+      },
+    }).success).toBe(false);
   });
 });
 

@@ -196,12 +196,12 @@ export function createRuntimeCheckpointCreatedEvent(
 }
 
 export function createRuntimeRunResumeRequestedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'run.resume_requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
-  payload: RuntimeEventPayloadByType['run.resume_requested'],
-): TypedRuntimeEvent<'run.resume_requested'> {
+  input: Omit<AgentRuntimeEventFactoryInput<'run.resume.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  payload: RuntimeEventPayloadByType['run.resume.requested'],
+): TypedRuntimeEvent<'run.resume.requested'> {
   return createRuntimeEvent({
     ...input,
-    eventType: 'run.resume_requested',
+    eventType: 'run.resume.requested',
     visibility: 'system',
     persist: 'required',
     payload,
@@ -209,12 +209,12 @@ export function createRuntimeRunResumeRequestedEvent(
 }
 
 export function createRuntimeRunCancelRequestedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'run.cancel_requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
-  payload: RuntimeEventPayloadByType['run.cancel_requested'],
-): TypedRuntimeEvent<'run.cancel_requested'> {
+  input: Omit<AgentRuntimeEventFactoryInput<'run.cancel.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  payload: RuntimeEventPayloadByType['run.cancel.requested'],
+): TypedRuntimeEvent<'run.cancel.requested'> {
   return createRuntimeEvent({
     ...input,
-    eventType: 'run.cancel_requested',
+    eventType: 'run.cancel.requested',
     visibility: 'system',
     persist: 'required',
     payload,
@@ -222,12 +222,12 @@ export function createRuntimeRunCancelRequestedEvent(
 }
 
 export function createRuntimeRunRetryRequestedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'run.retry_requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
-  payload: RuntimeEventPayloadByType['run.retry_requested'],
-): TypedRuntimeEvent<'run.retry_requested'> {
+  input: Omit<AgentRuntimeEventFactoryInput<'run.retry.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  payload: RuntimeEventPayloadByType['run.retry.requested'],
+): TypedRuntimeEvent<'run.retry.requested'> {
   return createRuntimeEvent({
     ...input,
-    eventType: 'run.retry_requested',
+    eventType: 'run.retry.requested',
     visibility: 'system',
     persist: 'required',
     payload,

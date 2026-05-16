@@ -89,7 +89,7 @@ describe('AgentRecoveryService', () => {
       runId: 'run_123',
       checkpointId: 'checkpoint_123',
       requestedBy: 'user',
-      reason: 'user_requested',
+      reason: 'manual_resume',
       resumeMode: 'from_checkpoint',
     }).resumeRequestId).toBe('resume_request_123');
 
@@ -102,9 +102,9 @@ describe('AgentRecoveryService', () => {
 
     expect(service.retryRun({
       runId: 'run_123',
-      requestedBy: 'user',
-      retryKind: 'run',
-      reason: 'runtime_retryable_error',
+      requestedBy: 'runtime',
+      retryKind: 'retry_run_from_checkpoint',
+      reason: 'runtime_error',
     }).retryRequestId).toBe('retry_request_123');
   });
 });

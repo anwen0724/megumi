@@ -41,34 +41,38 @@ export const CHECKPOINT_BOUNDARIES = [
 
 export const CHECKPOINT_CREATED_BY = ['runtime', 'host', 'system', 'user'] as const;
 
-export const RESUME_REQUESTED_BY = ['user', 'host', 'system'] as const;
+export const RESUME_REQUESTED_BY = ['user', 'host', 'system', 'approval_flow', 'retry_flow', 'crash_recovery'] as const;
 export const RESUME_REASONS = [
-  'user_requested',
-  'app_restart',
+  'continue_session',
   'approval_resolved',
-  'runtime_recovery',
-  'system_requested',
+  'retry_requested',
+  'app_restarted',
+  'manual_resume',
+  'recover_from_error',
+  'recover_after_cancel',
 ] as const;
-export const RESUME_MODES = ['from_checkpoint', 'continue_waiting', 'restart_step'] as const;
+export const RESUME_MODES = ['same_run', 'rehydrate_runtime', 'from_checkpoint', 'from_latest_recoverable'] as const;
 
-export const CANCEL_REQUESTED_BY = ['user', 'host', 'system'] as const;
+export const CANCEL_REQUESTED_BY = ['user', 'host', 'runtime'] as const;
 export const CANCEL_REASONS = [
   'user_requested',
-  'app_shutdown',
-  'approval_rejected',
-  'runtime_policy',
-  'superseded_by_retry',
+  'superseded_by_new_input',
+  'permission_changed',
+  'host_shutdown',
+  'timeout',
+  'policy_denied',
+  'runtime_error',
 ] as const;
-export const CANCEL_SCOPES = ['run', 'step', 'action'] as const;
+export const CANCEL_SCOPES = ['run', 'step', 'action', 'background_process'] as const;
 
-export const RETRY_REQUESTED_BY = ['user', 'host', 'system'] as const;
-export const RETRY_KINDS = ['run', 'step', 'action'] as const;
+export const RETRY_REQUESTED_BY = ['user', 'host', 'runtime'] as const;
+export const RETRY_KINDS = ['retry_action', 'retry_step', 'retry_run_from_checkpoint'] as const;
 export const RETRY_REASONS = [
   'user_requested',
-  'runtime_retryable_error',
-  'provider_retryable_error',
-  'tool_retryable_error',
+  'failed',
+  'cancelled',
   'approval_resolved',
+  'runtime_error',
 ] as const;
 
 export const CHECKPOINT_RESTORE_STATUSES = ['restored', 'failed'] as const;
@@ -103,7 +107,7 @@ export const SideEffectRefSchema = z.object({
   summary: z.string().min(1),
   reversible: z.boolean(),
   metadata: JsonObjectSchema.optional(),
-});
+}).strict();
 
 export type SideEffectRef = z.infer<typeof SideEffectRefSchema>;
 
@@ -131,7 +135,7 @@ export const AgentCheckpointSchema = z.object({
   stateSummary: z.string().min(1),
   stateRef: z.string().min(1).optional(),
   metadata: JsonObjectSchema.optional(),
-});
+}).strict();
 
 export type AgentCheckpoint = z.infer<typeof AgentCheckpointSchema>;
 
@@ -144,7 +148,7 @@ export const AgentResumeRequestSchema = z.object({
   resumeMode: ResumeModeSchema,
   createdAt: IsoDateTimeSchema,
   metadata: JsonObjectSchema.optional(),
-});
+}).strict();
 
 export type AgentResumeRequest = z.infer<typeof AgentResumeRequestSchema>;
 
@@ -158,7 +162,7 @@ export const AgentCancelRequestSchema = z.object({
   scope: CancelScopeSchema,
   createdAt: IsoDateTimeSchema,
   metadata: JsonObjectSchema.optional(),
-});
+}).strict();
 
 export type AgentCancelRequest = z.infer<typeof AgentCancelRequestSchema>;
 
@@ -173,7 +177,7 @@ export const AgentRetryRequestSchema = z.object({
   reason: RetryReasonSchema,
   createdAt: IsoDateTimeSchema,
   metadata: JsonObjectSchema.optional(),
-});
+}).strict();
 
 export type AgentRetryRequest = z.infer<typeof AgentRetryRequestSchema>;
 
@@ -186,7 +190,7 @@ export const CheckpointRestoreRecordSchema = z.object({
   restoredAt: IsoDateTimeSchema,
   error: RuntimeErrorSchema.optional(),
   metadata: JsonObjectSchema.optional(),
-});
+}).strict();
 
 export type CheckpointRestoreRecord = z.infer<typeof CheckpointRestoreRecordSchema>;
 
@@ -200,16 +204,19 @@ export const AgentRecoverableRunSummarySchema = z.object({
   title: z.string().min(1).optional(),
   preview: z.string().min(1).optional(),
   metadata: JsonObjectSchema.optional(),
-});
+}).strict();
 
 export type AgentRecoverableRunSummary = z.infer<typeof AgentRecoverableRunSummarySchema>;
 
 export type CheckpointReason = z.infer<typeof CheckpointReasonSchema>;
 export type CheckpointStatus = z.infer<typeof CheckpointStatusSchema>;
 export type CheckpointBoundary = z.infer<typeof CheckpointBoundarySchema>;
+export type ResumeRequestedBy = z.infer<typeof ResumeRequestedBySchema>;
 export type ResumeReason = z.infer<typeof ResumeReasonSchema>;
 export type ResumeMode = z.infer<typeof ResumeModeSchema>;
+export type CancelRequestedBy = z.infer<typeof CancelRequestedBySchema>;
 export type CancelReason = z.infer<typeof CancelReasonSchema>;
 export type CancelScope = z.infer<typeof CancelScopeSchema>;
+export type RetryRequestedBy = z.infer<typeof RetryRequestedBySchema>;
 export type RetryKind = z.infer<typeof RetryKindSchema>;
 export type RetryReason = z.infer<typeof RetryReasonSchema>;

@@ -9,6 +9,15 @@ import {
   CHECKPOINT_BOUNDARIES,
   CHECKPOINT_REASONS,
   CHECKPOINT_STATUSES,
+  CANCEL_REASONS,
+  CANCEL_REQUESTED_BY,
+  CANCEL_SCOPES,
+  RESUME_MODES,
+  RESUME_REASONS,
+  RESUME_REQUESTED_BY,
+  RETRY_KINDS,
+  RETRY_REASONS,
+  RETRY_REQUESTED_BY,
 } from '@megumi/shared/agent-recovery-contracts';
 
 describe('agent recovery contracts', () => {
@@ -76,7 +85,7 @@ describe('agent recovery contracts', () => {
         runId: 'run_123',
         checkpointId: 'checkpoint_123',
         requestedBy: 'user',
-        reason: 'user_requested',
+        reason: 'manual_resume',
         resumeMode: 'from_checkpoint',
         createdAt: '2026-05-16T10:00:00.000Z',
         metadata: { entry: 'run_detail' },
@@ -101,12 +110,44 @@ describe('agent recovery contracts', () => {
         stepId: 'step_123',
         actionId: 'action_123',
         checkpointId: 'checkpoint_123',
-        requestedBy: 'user',
-        retryKind: 'action',
-        reason: 'runtime_retryable_error',
+        requestedBy: 'runtime',
+        retryKind: 'retry_action',
+        reason: 'runtime_error',
         createdAt: '2026-05-16T10:00:02.000Z',
       }).retryKind,
-    ).toBe('action');
+    ).toBe('retry_action');
+  });
+
+  it('rejects extra fields in recovery request records', () => {
+    expect(AgentResumeRequestSchema.safeParse({
+      resumeRequestId: 'resume_request_123',
+      runId: 'run_123',
+      requestedBy: 'user',
+      reason: 'manual_resume',
+      resumeMode: 'from_checkpoint',
+      createdAt: '2026-05-16T10:00:00.000Z',
+      rawStack: 'secret stack',
+    }).success).toBe(false);
+
+    expect(AgentCancelRequestSchema.safeParse({
+      cancelRequestId: 'cancel_request_123',
+      runId: 'run_123',
+      requestedBy: 'runtime',
+      reason: 'runtime_error',
+      scope: 'run',
+      createdAt: '2026-05-16T10:00:01.000Z',
+      rawCause: 'secret cause',
+    }).success).toBe(false);
+
+    expect(AgentRetryRequestSchema.safeParse({
+      retryRequestId: 'retry_request_123',
+      runId: 'run_123',
+      requestedBy: 'runtime',
+      retryKind: 'retry_step',
+      reason: 'failed',
+      createdAt: '2026-05-16T10:00:02.000Z',
+      rawProviderBody: 'secret body',
+    }).success).toBe(false);
   });
 
   it('parses recoverable run summary without changing RuntimeError model', () => {
@@ -130,5 +171,36 @@ describe('agent recovery contracts', () => {
     expect(CHECKPOINT_REASONS).toContain('before_approval_wait');
     expect(CHECKPOINT_STATUSES).toContain('restored');
     expect(CHECKPOINT_BOUNDARIES).toContain('tool_boundary');
+    expect(RESUME_REQUESTED_BY).toEqual(['user', 'host', 'system', 'approval_flow', 'retry_flow', 'crash_recovery']);
+    expect(RESUME_REASONS).toEqual([
+      'continue_session',
+      'approval_resolved',
+      'retry_requested',
+      'app_restarted',
+      'manual_resume',
+      'recover_from_error',
+      'recover_after_cancel',
+    ]);
+    expect(RESUME_MODES).toEqual(['same_run', 'rehydrate_runtime', 'from_checkpoint', 'from_latest_recoverable']);
+    expect(CANCEL_REQUESTED_BY).toEqual(['user', 'host', 'runtime']);
+    expect(CANCEL_REASONS).toEqual([
+      'user_requested',
+      'superseded_by_new_input',
+      'permission_changed',
+      'host_shutdown',
+      'timeout',
+      'policy_denied',
+      'runtime_error',
+    ]);
+    expect(CANCEL_SCOPES).toEqual(['run', 'step', 'action', 'background_process']);
+    expect(RETRY_REQUESTED_BY).toEqual(['user', 'host', 'runtime']);
+    expect(RETRY_KINDS).toEqual(['retry_action', 'retry_step', 'retry_run_from_checkpoint']);
+    expect(RETRY_REASONS).toEqual([
+      'user_requested',
+      'failed',
+      'cancelled',
+      'approval_resolved',
+      'runtime_error',
+    ]);
   });
 });

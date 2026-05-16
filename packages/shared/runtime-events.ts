@@ -25,13 +25,16 @@ import type {
 } from './tool-contracts';
 import type {
   CancelReason,
+  CancelRequestedBy,
   CancelScope,
   CheckpointBoundary,
   CheckpointReason,
   ResumeMode,
   ResumeReason,
+  ResumeRequestedBy,
   RetryKind,
   RetryReason,
+  RetryRequestedBy,
 } from './agent-recovery-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
@@ -75,16 +78,16 @@ export const RUNTIME_EVENT_TYPES = [
   'checkpoint.restored',
   'checkpoint.invalidated',
   'checkpoint.discarded',
-  'run.resume_requested',
+  'run.resume.requested',
   'run.resumed',
-  'run.resume_failed',
-  'run.cancel_requested',
+  'run.resume.failed',
+  'run.cancel.requested',
   'run.cancelling',
   'step.cancelled',
   'action.cancelled',
-  'run.retry_requested',
-  'step.retry_requested',
-  'action.retry_requested',
+  'run.retry.requested',
+  'step.retry.requested',
+  'action.retry.requested',
   'retry.started',
   'retry.completed',
   'retry.failed',
@@ -277,7 +280,7 @@ export interface CheckpointDiscardedPayload {
 
 export interface RunResumeRequestedPayload {
   resumeRequestId: string;
-  requestedBy: 'user' | 'host' | 'system';
+  requestedBy: ResumeRequestedBy;
   reason: ResumeReason;
   resumeMode: ResumeMode;
   checkpointId?: string;
@@ -295,7 +298,7 @@ export interface RunResumeFailedPayload {
 
 export interface RunCancelRequestedPayload {
   cancelRequestId: string;
-  requestedBy: 'user' | 'host' | 'system';
+  requestedBy: CancelRequestedBy;
   reason: CancelReason;
   scope: CancelScope;
 }
@@ -316,7 +319,7 @@ export interface ActionCancelledPayload {
 
 export interface RunRetryRequestedPayload {
   retryRequestId: string;
-  requestedBy: 'user' | 'host' | 'system';
+  requestedBy: RetryRequestedBy;
   retryKind: RetryKind;
   reason: RetryReason;
   checkpointId?: string;
@@ -457,16 +460,16 @@ export type RuntimeEventPayloadByType = {
   'checkpoint.restored': CheckpointRestoredPayload;
   'checkpoint.invalidated': CheckpointInvalidatedPayload;
   'checkpoint.discarded': CheckpointDiscardedPayload;
-  'run.resume_requested': RunResumeRequestedPayload;
+  'run.resume.requested': RunResumeRequestedPayload;
   'run.resumed': RunResumedPayload;
-  'run.resume_failed': RunResumeFailedPayload;
-  'run.cancel_requested': RunCancelRequestedPayload;
+  'run.resume.failed': RunResumeFailedPayload;
+  'run.cancel.requested': RunCancelRequestedPayload;
   'run.cancelling': RunCancellingPayload;
   'step.cancelled': StepCancelledPayload;
   'action.cancelled': ActionCancelledPayload;
-  'run.retry_requested': RunRetryRequestedPayload;
-  'step.retry_requested': RunRetryRequestedPayload;
-  'action.retry_requested': RunRetryRequestedPayload;
+  'run.retry.requested': RunRetryRequestedPayload;
+  'step.retry.requested': RunRetryRequestedPayload;
+  'action.retry.requested': RunRetryRequestedPayload;
   'retry.started': RetryStartedPayload;
   'retry.completed': RetryCompletedPayload;
   'retry.failed': RetryFailedPayload;

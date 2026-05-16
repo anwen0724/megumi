@@ -332,38 +332,46 @@ export const AgentApprovalResolveDataSchema = z
   })
   .strict();
 
-export const AgentRecoverableRunListPayloadSchema = z.object({});
+export const AgentRecoverableRunListPayloadSchema = z.object({}).strict();
 
-export const AgentRecoverableRunListDataSchema = z.object({
-  runs: z.array(AgentRecoverableRunSummarySchema),
-});
+export const AgentRecoverableRunListDataSchema = z
+  .object({
+    runs: z.array(AgentRecoverableRunSummarySchema),
+  })
+  .strict();
 
 export const AgentRunResumePayloadSchema = AgentResumeRequestSchema.omit({
   resumeRequestId: true,
   createdAt: true,
-});
+}).strict();
 
-export const AgentRunResumeDataSchema = z.object({
-  request: AgentResumeRequestSchema,
-});
+export const AgentRunResumeDataSchema = z
+  .object({
+    request: AgentResumeRequestSchema,
+  })
+  .strict();
 
 export const AgentRunCancelPayloadSchema = AgentCancelRequestSchema.omit({
   cancelRequestId: true,
   createdAt: true,
-});
+}).strict();
 
-export const AgentRunCancelDataSchema = z.object({
-  request: AgentCancelRequestSchema,
-});
+export const AgentRunCancelDataSchema = z
+  .object({
+    request: AgentCancelRequestSchema,
+  })
+  .strict();
 
 export const AgentRunRetryPayloadSchema = AgentRetryRequestSchema.omit({
   retryRequestId: true,
   createdAt: true,
-});
+}).strict();
 
-export const AgentRunRetryDataSchema = z.object({
-  request: AgentRetryRequestSchema,
-});
+export const AgentRunRetryDataSchema = z
+  .object({
+    request: AgentRetryRequestSchema,
+  })
+  .strict();
 
 export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.session.create,

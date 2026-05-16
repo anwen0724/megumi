@@ -61,7 +61,7 @@ describe('agent recovery renderer store', () => {
       runId: 'run_123',
       checkpointId: 'checkpoint_123',
       requestedBy: 'user',
-      reason: 'user_requested',
+      reason: 'manual_resume',
       resumeMode: 'from_checkpoint',
     });
 
@@ -74,9 +74,9 @@ describe('agent recovery renderer store', () => {
 
     await store.getState().retryRun({
       runId: 'run_123',
-      requestedBy: 'user',
-      retryKind: 'run',
-      reason: 'runtime_retryable_error',
+      requestedBy: 'runtime',
+      retryKind: 'retry_run_from_checkpoint',
+      reason: 'runtime_error',
     });
 
     expect(api.resume).toHaveBeenCalledTimes(1);

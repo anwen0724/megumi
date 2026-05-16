@@ -77,7 +77,7 @@ describe('AgentRecoveryRepository', () => {
       runId: 'run_123',
       checkpointId: 'checkpoint_123',
       requestedBy: 'user',
-      reason: 'user_requested',
+      reason: 'manual_resume',
       resumeMode: 'from_checkpoint',
       createdAt: '2026-05-16T10:00:00.000Z',
     };
@@ -95,9 +95,9 @@ describe('AgentRecoveryRepository', () => {
       retryRequestId: 'retry_request_123',
       runId: 'run_123',
       checkpointId: 'checkpoint_123',
-      requestedBy: 'user',
-      retryKind: 'run',
-      reason: 'runtime_retryable_error',
+      requestedBy: 'runtime',
+      retryKind: 'retry_run_from_checkpoint',
+      reason: 'runtime_error',
       createdAt: '2026-05-16T10:00:02.000Z',
     };
 

@@ -294,21 +294,21 @@ export function createAgentCheckpointCreatedEvent(
 
 export function createAgentRunResumeRequestedEvent(
   input: BaseEventInput,
-  payload: RuntimeEventPayloadByType['run.resume_requested'],
+  payload: RuntimeEventPayloadByType['run.resume.requested'],
 ): RuntimeEvent {
   return createRuntimeRunResumeRequestedEvent({ ...input, source: 'core' }, payload);
 }
 
 export function createAgentRunCancelRequestedEvent(
   input: BaseEventInput,
-  payload: RuntimeEventPayloadByType['run.cancel_requested'],
+  payload: RuntimeEventPayloadByType['run.cancel.requested'],
 ): RuntimeEvent {
   return createRuntimeRunCancelRequestedEvent({ ...input, source: 'core' }, payload);
 }
 
 export function createAgentRunRetryRequestedEvent(
   input: BaseEventInput,
-  payload: RuntimeEventPayloadByType['run.retry_requested'],
+  payload: RuntimeEventPayloadByType['run.retry.requested'],
 ): RuntimeEvent {
   return createRuntimeRunRetryRequestedEvent({ ...input, source: 'core' }, payload);
 }

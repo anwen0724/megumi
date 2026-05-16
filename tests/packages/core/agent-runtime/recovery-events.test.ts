@@ -34,10 +34,10 @@ describe('core recovery runtime events', () => {
       createAgentRunResumeRequestedEvent(base, {
         resumeRequestId: 'resume_request_123',
         requestedBy: 'user',
-        reason: 'user_requested',
+        reason: 'manual_resume',
         resumeMode: 'from_checkpoint',
       }).eventType,
-    ).toBe('run.resume_requested');
+    ).toBe('run.resume.requested');
 
     expect(
       createAgentRunCancelRequestedEvent(base, {
@@ -46,15 +46,15 @@ describe('core recovery runtime events', () => {
         reason: 'user_requested',
         scope: 'run',
       }).eventType,
-    ).toBe('run.cancel_requested');
+    ).toBe('run.cancel.requested');
 
     expect(
       createAgentRunRetryRequestedEvent(base, {
         retryRequestId: 'retry_request_123',
-        requestedBy: 'user',
-        retryKind: 'action',
-        reason: 'runtime_retryable_error',
+        requestedBy: 'runtime',
+        retryKind: 'retry_action',
+        reason: 'runtime_error',
       }).eventType,
-    ).toBe('run.retry_requested');
+    ).toBe('run.retry.requested');
   });
 });

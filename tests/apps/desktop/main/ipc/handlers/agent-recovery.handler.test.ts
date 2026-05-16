@@ -58,7 +58,7 @@ describe('registerAgentRecoveryHandlers', () => {
         runId: 'run_123',
         checkpointId: 'checkpoint_123',
         requestedBy: 'user',
-        reason: 'user_requested',
+        reason: 'manual_resume',
         resumeMode: 'from_checkpoint',
       },
       meta: {
