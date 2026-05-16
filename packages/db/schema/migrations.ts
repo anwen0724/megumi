@@ -250,6 +250,98 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS tool_calls (
+      tool_call_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      input_preview_json TEXT NOT NULL,
+      capabilities_json TEXT NOT NULL,
+      risk_level TEXT NOT NULL,
+      side_effect TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      started_at TEXT,
+      completed_at TEXT,
+      error_json TEXT,
+      metadata_json TEXT,
+      tool_call_json TEXT NOT NULL,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE,
+      FOREIGN KEY(action_id) REFERENCES agent_actions(action_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS tool_policy_decisions (
+      policy_decision_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      effective_risk_level TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      required_approval_json TEXT,
+      required_sandbox_json TEXT,
+      evaluated_at TEXT NOT NULL,
+      metadata_json TEXT,
+      decision_json TEXT NOT NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS approval_requests (
+      approval_request_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_scope TEXT NOT NULL,
+      risk_level TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT,
+      resolved_at TEXT,
+      request_json TEXT NOT NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS approval_records (
+      approval_record_id TEXT PRIMARY KEY,
+      approval_request_id TEXT NOT NULL,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      decided_by TEXT NOT NULL,
+      decided_at TEXT NOT NULL,
+      record_json TEXT NOT NULL,
+      FOREIGN KEY(approval_request_id) REFERENCES approval_requests(approval_request_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS tool_observations (
+      observation_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      text_preview TEXT,
+      content_refs_json TEXT,
+      error_json TEXT,
+      created_at TEXT NOT NULL,
+      observation_json TEXT NOT NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE
+    );
+  `);
+
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_session_id
     ON messages(session_id);
 
@@ -289,5 +381,17 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
     CREATE INDEX IF NOT EXISTS idx_agent_run_source_plans_source_plan_id
     ON agent_run_source_plans(source_plan_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_run_id
+    ON tool_calls(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_status
+    ON tool_calls(status);
+
+    CREATE INDEX IF NOT EXISTS idx_approval_requests_tool_call_id
+    ON approval_requests(tool_call_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_observations_tool_call_id
+    ON tool_observations(tool_call_id);
   `);
 }
