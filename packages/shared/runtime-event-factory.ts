@@ -234,6 +234,80 @@ export function createRuntimeRunRetryRequestedEvent(
   });
 }
 
+export function createRuntimeArtifactCreatedEvent(
+  input: Omit<AgentRuntimeEventFactoryInput<'artifact.created'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  payload: RuntimeEventPayloadByType['artifact.created'],
+): TypedRuntimeEvent<'artifact.created'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'artifact.created',
+    visibility: 'user',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeArtifactVersionCreatedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'artifact.version.created'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['artifact.version.created'],
+): TypedRuntimeEvent<'artifact.version.created'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'artifact.version.created',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeArtifactStatusChangedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'artifact.status.changed'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['artifact.status.changed'],
+): TypedRuntimeEvent<'artifact.status.changed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'artifact.status.changed',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeArtifactReferencedEvent(
+  input: Omit<AgentRuntimeEventFactoryInput<'artifact.referenced'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  payload: RuntimeEventPayloadByType['artifact.referenced'],
+): TypedRuntimeEvent<'artifact.referenced'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'artifact.referenced',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
+export function createRuntimeArtifactContentWriteFailedEvent(
+  input: Omit<
+    AgentRuntimeEventFactoryInput<'artifact.content.write.failed'>,
+    'eventType' | 'visibility' | 'persist' | 'payload'
+  >,
+  payload: RuntimeEventPayloadByType['artifact.content.write.failed'],
+): TypedRuntimeEvent<'artifact.content.write.failed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'artifact.content.write.failed',
+    visibility: 'system',
+    persist: 'required',
+    payload,
+  });
+}
+
 export function createRunStartedEvent(input: {
   eventId: string;
   request: ChatRuntimeRequest;

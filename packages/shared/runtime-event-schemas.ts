@@ -47,6 +47,12 @@ import {
   RetryReasonSchema,
   RetryRequestedBySchema,
 } from './agent-recovery-contracts';
+import {
+  ArtifactContentStorageSchema,
+  ArtifactContentTypeSchema,
+  ArtifactKindSchema,
+  ArtifactStatusSchema,
+} from './artifact-contracts';
 
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
   RuntimeEventType,
@@ -453,9 +459,46 @@ const ApprovalExpiredPayloadSchema = z
 const ArtifactCreatedPayloadSchema = z
   .object({
     artifactId: z.string().min(1),
+    artifactVersionId: z.string().min(1).optional(),
+    kind: ArtifactKindSchema,
     title: z.string().min(1),
-    kind: z.enum(['file', 'document', 'code', 'image', 'other']),
-    path: z.string().min(1).optional(),
+    status: ArtifactStatusSchema,
+  })
+  .strict();
+
+const ArtifactVersionCreatedPayloadSchema = z
+  .object({
+    artifactId: z.string().min(1),
+    artifactVersionId: z.string().min(1),
+    versionNumber: z.number().int().positive(),
+    contentType: ArtifactContentTypeSchema,
+    textPreview: z.string(),
+  })
+  .strict();
+
+const ArtifactStatusChangedPayloadSchema = z
+  .object({
+    artifactId: z.string().min(1),
+    from: ArtifactStatusSchema,
+    to: ArtifactStatusSchema,
+  })
+  .strict();
+
+const ArtifactReferencedPayloadSchema = z
+  .object({
+    artifactId: z.string().min(1),
+    artifactVersionId: z.string().min(1).optional(),
+    referencedByKind: z.enum(['run', 'step', 'artifact', 'message']),
+    referencedById: z.string().min(1),
+  })
+  .strict();
+
+const ArtifactContentWriteFailedPayloadSchema = z
+  .object({
+    artifactId: z.string().min(1).optional(),
+    artifactVersionId: z.string().min(1).optional(),
+    storage: ArtifactContentStorageSchema,
+    error: RuntimeErrorSchema,
   })
   .strict();
 
@@ -563,6 +606,19 @@ export const RetryStartedEventSchema = eventSchema('retry.started', RetryStarted
 export const RetryCompletedEventSchema = eventSchema('retry.completed', RetryCompletedPayloadSchema);
 export const RetryFailedEventSchema = eventSchema('retry.failed', RetryFailedPayloadSchema);
 export const ArtifactCreatedEventSchema = eventSchema('artifact.created', ArtifactCreatedPayloadSchema);
+export const ArtifactVersionCreatedEventSchema = eventSchema(
+  'artifact.version.created',
+  ArtifactVersionCreatedPayloadSchema,
+);
+export const ArtifactStatusChangedEventSchema = eventSchema(
+  'artifact.status.changed',
+  ArtifactStatusChangedPayloadSchema,
+);
+export const ArtifactReferencedEventSchema = eventSchema('artifact.referenced', ArtifactReferencedPayloadSchema);
+export const ArtifactContentWriteFailedEventSchema = eventSchema(
+  'artifact.content.write.failed',
+  ArtifactContentWriteFailedPayloadSchema,
+);
 export const MemoryCreatedEventSchema = eventSchema('memory.created', MemoryCreatedPayloadSchema);
 
 export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
@@ -618,6 +674,10 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   RetryCompletedEventSchema,
   RetryFailedEventSchema,
   ArtifactCreatedEventSchema,
+  ArtifactVersionCreatedEventSchema,
+  ArtifactStatusChangedEventSchema,
+  ArtifactReferencedEventSchema,
+  ArtifactContentWriteFailedEventSchema,
   MemoryCreatedEventSchema,
 ]);
 

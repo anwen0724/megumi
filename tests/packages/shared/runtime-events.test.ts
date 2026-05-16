@@ -15,6 +15,8 @@ import {
   createRuntimeRunCancelRequestedEvent,
   createRuntimeRunRetryRequestedEvent,
   createRuntimeRunResumeRequestedEvent,
+  createRuntimeArtifactCreatedEvent,
+  createRuntimeArtifactVersionCreatedEvent,
   createContextPatchRequestedEvent,
   createRunStartedEvent,
   createRuntimeEvent,
@@ -496,5 +498,141 @@ describe('agent recovery runtime events', () => {
         }),
       ).eventType,
     ).toBe('run.retry.requested');
+  });
+});
+
+describe('artifact runtime events', () => {
+  it('accepts artifact lifecycle events with eventType and safe payload refs', () => {
+    const created = RuntimeEventSchema.parse({
+      eventId: 'event-artifact-created',
+      schemaVersion: 1,
+      eventType: 'artifact.created',
+      runId: 'run:artifact',
+      stepId: 'step:artifact',
+      sequence: 1,
+      createdAt: '2026-05-16T00:00:00.000Z',
+      source: 'artifact',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        artifactId: 'artifact:1',
+        artifactVersionId: 'artifact-version:1',
+        kind: 'report',
+        title: 'Architecture report',
+        status: 'draft',
+      },
+    });
+
+    const version = RuntimeEventSchema.parse({
+      eventId: 'event-artifact-version',
+      schemaVersion: 1,
+      eventType: 'artifact.version.created',
+      runId: 'run:artifact',
+      sequence: 2,
+      createdAt: '2026-05-16T00:00:01.000Z',
+      source: 'artifact',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        artifactId: 'artifact:1',
+        artifactVersionId: 'artifact-version:2',
+        versionNumber: 2,
+        contentType: 'markdown',
+        textPreview: 'Updated summary',
+      },
+    });
+
+    expect(created.eventType).toBe('artifact.created');
+    expect(version.payload).not.toHaveProperty('inlineText');
+  });
+
+  it('accepts artifact status changed referenced and content write failed events', () => {
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-artifact-status',
+      schemaVersion: 1,
+      eventType: 'artifact.status.changed',
+      runId: 'run:artifact',
+      sequence: 1,
+      createdAt: '2026-05-16T00:00:00.000Z',
+      source: 'artifact',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        artifactId: 'artifact:1',
+        from: 'draft',
+        to: 'active',
+      },
+    }).payload.to).toBe('active');
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-artifact-ref',
+      schemaVersion: 1,
+      eventType: 'artifact.referenced',
+      runId: 'run:artifact',
+      sequence: 2,
+      createdAt: '2026-05-16T00:00:01.000Z',
+      source: 'artifact',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        artifactId: 'artifact:1',
+        artifactVersionId: 'artifact-version:1',
+        referencedByKind: 'run',
+        referencedById: 'run:next',
+      },
+    }).payload.referencedByKind).toBe('run');
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-artifact-write-failed',
+      schemaVersion: 1,
+      eventType: 'artifact.content.write.failed',
+      runId: 'run:artifact',
+      sequence: 3,
+      createdAt: '2026-05-16T00:00:02.000Z',
+      source: 'artifact',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        artifactId: 'artifact:1',
+        artifactVersionId: 'artifact-version:1',
+        storage: 'megumi_home',
+        error: {
+          code: 'artifact_write_failed',
+          message: 'Artifact content write failed.',
+          severity: 'error',
+          retryable: true,
+          source: 'filesystem',
+        },
+      },
+    }).payload.error).not.toHaveProperty('recoverable');
+  });
+
+  it('creates artifact events through factory helpers', () => {
+    const base = {
+      eventId: 'event-artifact-factory',
+      runId: 'run:artifact',
+      source: 'core' as const,
+      sequence: 1,
+      createdAt: '2026-05-16T00:00:00.000Z',
+    };
+
+    expect(createRuntimeArtifactCreatedEvent(base, {
+      artifactId: 'artifact:1',
+      artifactVersionId: 'artifact-version:1',
+      kind: 'report',
+      title: 'Report',
+      status: 'draft',
+    }).eventType).toBe('artifact.created');
+
+    expect(createRuntimeArtifactVersionCreatedEvent({
+      ...base,
+      eventId: 'event-artifact-version-factory',
+    }, {
+      artifactId: 'artifact:1',
+      artifactVersionId: 'artifact-version:2',
+      versionNumber: 2,
+      contentType: 'markdown',
+      textPreview: 'Preview only',
+    }).payload).not.toHaveProperty('inlineText');
   });
 });

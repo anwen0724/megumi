@@ -36,6 +36,12 @@ import type {
   RetryReason,
   RetryRequestedBy,
 } from './agent-recovery-contracts';
+import type {
+  ArtifactContentStorage,
+  ArtifactContentType,
+  ArtifactKind,
+  ArtifactStatus,
+} from './artifact-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
@@ -92,6 +98,10 @@ export const RUNTIME_EVENT_TYPES = [
   'retry.completed',
   'retry.failed',
   'artifact.created',
+  'artifact.version.created',
+  'artifact.status.changed',
+  'artifact.referenced',
+  'artifact.content.write.failed',
   'memory.created',
 ] as const;
 
@@ -410,9 +420,38 @@ export interface ApprovalExpiredPayload {
 
 export interface ArtifactCreatedPayload {
   artifactId: string;
+  artifactVersionId?: string;
+  kind: ArtifactKind;
   title: string;
-  kind: 'file' | 'document' | 'code' | 'image' | 'other';
-  path?: string;
+  status: ArtifactStatus;
+}
+
+export interface ArtifactVersionCreatedPayload {
+  artifactId: string;
+  artifactVersionId: string;
+  versionNumber: number;
+  contentType: ArtifactContentType;
+  textPreview: string;
+}
+
+export interface ArtifactStatusChangedPayload {
+  artifactId: string;
+  from: ArtifactStatus;
+  to: ArtifactStatus;
+}
+
+export interface ArtifactReferencedPayload {
+  artifactId: string;
+  artifactVersionId?: string;
+  referencedByKind: 'run' | 'step' | 'artifact' | 'message';
+  referencedById: string;
+}
+
+export interface ArtifactContentWriteFailedPayload {
+  artifactId?: string;
+  artifactVersionId?: string;
+  storage: ArtifactContentStorage;
+  error: RuntimeError;
 }
 
 export interface MemoryCreatedPayload {
@@ -474,6 +513,10 @@ export type RuntimeEventPayloadByType = {
   'retry.completed': RetryCompletedPayload;
   'retry.failed': RetryFailedPayload;
   'artifact.created': ArtifactCreatedPayload;
+  'artifact.version.created': ArtifactVersionCreatedPayload;
+  'artifact.status.changed': ArtifactStatusChangedPayload;
+  'artifact.referenced': ArtifactReferencedPayload;
+  'artifact.content.write.failed': ArtifactContentWriteFailedPayload;
   'memory.created': MemoryCreatedPayload;
 };
 
