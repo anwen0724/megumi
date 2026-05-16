@@ -15,13 +15,16 @@ import {
   createRuntimeRunCancelRequestedEvent,
   createRuntimeRunRetryRequestedEvent,
   createRuntimeRunResumeRequestedEvent,
+  createRuntimeMemoryCandidateProposedEvent,
+  createRuntimeMemoryRecallFailedEvent,
+  createRuntimeMemoryRecordStatusChangedEvent,
   createRuntimeArtifactCreatedEvent,
   createRuntimeArtifactVersionCreatedEvent,
   createContextPatchRequestedEvent,
   createRunStartedEvent,
   createRuntimeEvent,
 } from '@megumi/shared/runtime-event-factory';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { RUNTIME_EVENT_TYPES, type RuntimeEvent } from '@megumi/shared/runtime-events';
 
 const runtimeContext = {
   requestId: 'ipc-chat-start-1',
@@ -634,5 +637,88 @@ describe('artifact runtime events', () => {
       contentType: 'markdown',
       textPreview: 'Preview only',
     }).payload).not.toHaveProperty('inlineText');
+  });
+});
+
+describe('memory runtime events', () => {
+  it('registers 08 memory event types and no longer relies on memory.created', () => {
+    expect(RUNTIME_EVENT_TYPES).toContain('memory.candidate.proposed');
+    expect(RUNTIME_EVENT_TYPES).toContain('memory.record.status.changed');
+    expect(RUNTIME_EVENT_TYPES).toContain('memory.recall.failed');
+    expect(RUNTIME_EVENT_TYPES).not.toContain('memory.created');
+  });
+
+  it('parses memory events using eventType and safe payload refs', () => {
+    const event = createRuntimeMemoryCandidateProposedEvent(
+      {
+        eventId: 'event:memory-candidate',
+        runId: 'run:1',
+        sessionId: 'session:1',
+        sequence: 1,
+        createdAt: '2026-05-16T00:00:00.000Z',
+        source: 'memory',
+      },
+      {
+        candidateId: 'memory-candidate:1',
+        scope: 'workspace',
+        kind: 'workflow',
+        status: 'proposed',
+        riskLevel: 'low',
+        summary: '使用 spec -> brief -> plans 流程。',
+        sourceRefCount: 1,
+      },
+    );
+
+    expect(RuntimeEventSchema.parse(event).eventType).toBe('memory.candidate.proposed');
+    expect(event).not.toHaveProperty('type');
+    expect(JSON.stringify(event)).not.toContain('raw full prompt');
+  });
+
+  it('parses status change and failed recall events with RuntimeError severity and retryable', () => {
+    expect(
+      RuntimeEventSchema.parse(
+        createRuntimeMemoryRecordStatusChangedEvent(
+          {
+            eventId: 'event:memory-status',
+            runId: 'run:1',
+            sequence: 2,
+            createdAt: '2026-05-16T00:00:01.000Z',
+            source: 'memory',
+          },
+          {
+            memoryId: 'memory:1',
+            from: 'active',
+            to: 'disabled',
+            reason: 'User disabled memory.',
+          },
+        ),
+      ).eventType,
+    ).toBe('memory.record.status.changed');
+
+    const failed = RuntimeEventSchema.parse(
+      createRuntimeMemoryRecallFailedEvent(
+        {
+          eventId: 'event:memory-recall-failed',
+          runId: 'run:1',
+          sequence: 3,
+          createdAt: '2026-05-16T00:00:02.000Z',
+          source: 'memory',
+        },
+        {
+          recallRequestId: 'memory-recall:1',
+          error: {
+            code: 'runtime_unknown',
+            message: 'Memory recall failed.',
+            severity: 'error',
+            retryable: true,
+            source: 'memory',
+            debugId: 'debug:memory-recall',
+          },
+        },
+      ),
+    );
+
+    expect(failed.eventType).toBe('memory.recall.failed');
+    expect(JSON.stringify(failed)).not.toContain('recoverable');
   });
 });

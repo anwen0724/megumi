@@ -42,6 +42,14 @@ import type {
   ArtifactKind,
   ArtifactStatus,
 } from './artifact-contracts';
+import type {
+  MemoryAccessKind,
+  MemoryCandidateStatus,
+  MemoryKind,
+  MemoryRecordStatus,
+  MemoryRiskLevel,
+  MemoryScope,
+} from './memory-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
@@ -102,7 +110,16 @@ export const RUNTIME_EVENT_TYPES = [
   'artifact.status.changed',
   'artifact.referenced',
   'artifact.content.write.failed',
-  'memory.created',
+  'memory.candidate.proposed',
+  'memory.candidate.accepted',
+  'memory.candidate.rejected',
+  'memory.record.created',
+  'memory.record.updated',
+  'memory.record.status.changed',
+  'memory.recall.requested',
+  'memory.recall.completed',
+  'memory.recall.failed',
+  'memory.access.recorded',
 ] as const;
 
 export type RuntimeEventType = (typeof RUNTIME_EVENT_TYPES)[number];
@@ -454,10 +471,71 @@ export interface ArtifactContentWriteFailedPayload {
   error: RuntimeError;
 }
 
-export interface MemoryCreatedPayload {
-  memoryId: string;
-  title: string;
+export interface MemoryCandidateProposedPayload {
+  candidateId: string;
+  scope: MemoryScope;
+  kind: MemoryKind;
+  status: MemoryCandidateStatus;
+  riskLevel: MemoryRiskLevel;
   summary: string;
+  sourceRefCount: number;
+}
+
+export interface MemoryCandidateAcceptedPayload {
+  candidateId: string;
+  memoryId: string;
+  reviewedAt: string;
+}
+
+export interface MemoryCandidateRejectedPayload {
+  candidateId: string;
+  rejectionReason: string;
+  reviewedAt: string;
+}
+
+export interface MemoryRecordCreatedPayload {
+  memoryId: string;
+  scope: MemoryScope;
+  kind: MemoryKind;
+  status: MemoryRecordStatus;
+  summary: string;
+}
+
+export interface MemoryRecordUpdatedPayload {
+  memoryId: string;
+  changedFields: string[];
+}
+
+export interface MemoryRecordStatusChangedPayload {
+  memoryId: string;
+  from: MemoryRecordStatus;
+  to: MemoryRecordStatus;
+  reason?: string;
+}
+
+export interface MemoryRecallRequestedPayload {
+  recallRequestId: string;
+  scopes: MemoryScope[];
+  kinds?: MemoryKind[];
+  limit: number;
+}
+
+export interface MemoryRecallCompletedPayload {
+  recallRequestId: string;
+  resultCount: number;
+  selectedCount: number;
+}
+
+export interface MemoryRecallFailedPayload {
+  recallRequestId: string;
+  error: RuntimeError;
+}
+
+export interface MemoryAccessRecordedPayload {
+  accessLogId: string;
+  memoryId: string;
+  accessKind: MemoryAccessKind;
+  selectedForContext: boolean;
 }
 
 export type RuntimeEventPayloadByType = {
@@ -517,7 +595,16 @@ export type RuntimeEventPayloadByType = {
   'artifact.status.changed': ArtifactStatusChangedPayload;
   'artifact.referenced': ArtifactReferencedPayload;
   'artifact.content.write.failed': ArtifactContentWriteFailedPayload;
-  'memory.created': MemoryCreatedPayload;
+  'memory.candidate.proposed': MemoryCandidateProposedPayload;
+  'memory.candidate.accepted': MemoryCandidateAcceptedPayload;
+  'memory.candidate.rejected': MemoryCandidateRejectedPayload;
+  'memory.record.created': MemoryRecordCreatedPayload;
+  'memory.record.updated': MemoryRecordUpdatedPayload;
+  'memory.record.status.changed': MemoryRecordStatusChangedPayload;
+  'memory.recall.requested': MemoryRecallRequestedPayload;
+  'memory.recall.completed': MemoryRecallCompletedPayload;
+  'memory.recall.failed': MemoryRecallFailedPayload;
+  'memory.access.recorded': MemoryAccessRecordedPayload;
 };
 
 export type TypedRuntimeEvent<TType extends RuntimeEventType> = RuntimeEvent<
