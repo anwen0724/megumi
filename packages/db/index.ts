@@ -5,3 +5,4 @@ export * from './repos/agent-lifecycle.repo';
 export * from './repos/agent-context.repo';
 export * from './repos/agent-run-mode.repo';
 export * from './repos/agent-tool.repo';
+export * from './repos/agent-recovery.repo';
