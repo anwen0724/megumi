@@ -32,6 +32,12 @@ import {
   AgentArtifactGetRequestSchema,
   AgentArtifactGetResultSchema,
   AgentArtifactStatusUpdatePayloadSchema,
+  AgentMemoryCandidateAcceptPayloadSchema,
+  AgentMemoryCandidateListPayloadSchema,
+  AgentMemoryListDataSchema,
+  AgentMemoryRecallPreviewDataSchema,
+  AgentMemoryRecallPreviewPayloadSchema,
+  AgentMemorySettingsUpdatePayloadSchema,
   AgentPlanByRunGetRequestSchema,
   AgentContextBaselineGetRequestSchema,
   AgentContextSourcesListRequestSchema,
@@ -801,6 +807,67 @@ describe('agent artifact IPC contracts', () => {
       updatedAt: '2026-05-16T00:00:00.000Z',
       accepted: true,
     })).toThrow();
+  });
+});
+
+describe('agent memory ipc payload and data schemas', () => {
+  it('parses strict memory payload schemas before channels are wired', () => {
+    expect(
+      AgentMemorySettingsUpdatePayloadSchema.parse({
+        workspaceId: 'workspace:1',
+        autoCaptureEnabled: false,
+        defaultCandidateReviewMode: 'manual',
+        updatedAt: '2026-05-16T00:00:00.000Z',
+      }).defaultCandidateReviewMode,
+    ).toBe('manual');
+
+    expect(
+      AgentMemoryCandidateListPayloadSchema.parse({
+        workspaceId: 'workspace:1',
+        status: 'proposed',
+      }).status,
+    ).toBe('proposed');
+
+    expect(() =>
+      AgentMemoryCandidateAcceptPayloadSchema.parse({
+        candidateId: 'memory-candidate:1',
+        reviewedAt: '2026-05-16T00:00:00.000Z',
+        channel: 'agent:memory:candidate:accept',
+      }),
+    ).toThrow();
+  });
+
+  it('parses memory list and recall preview data without raw source content', () => {
+    const memoryData = AgentMemoryListDataSchema.parse({
+      memories: [],
+    });
+    const recallPayload = AgentMemoryRecallPreviewPayloadSchema.parse({
+      sessionId: 'session:1',
+      workspaceId: 'workspace:1',
+      query: 'workflow',
+      scopes: ['workspace'],
+      kinds: ['workflow'],
+      limit: 3,
+      budget: 500,
+      createdAt: '2026-05-16T00:00:00.000Z',
+    });
+    const recallData = AgentMemoryRecallPreviewDataSchema.parse({
+      request: {
+        recallRequestId: 'memory-recall:1',
+        sessionId: recallPayload.sessionId,
+        workspaceId: recallPayload.workspaceId,
+        query: recallPayload.query,
+        scopes: recallPayload.scopes,
+        kinds: recallPayload.kinds,
+        limit: recallPayload.limit,
+        budget: recallPayload.budget,
+        createdAt: recallPayload.createdAt,
+      },
+      results: [],
+    });
+
+    expect(memoryData.memories).toEqual([]);
+    expect(JSON.stringify(recallData)).not.toContain('raw full prompt');
   });
 });
 
