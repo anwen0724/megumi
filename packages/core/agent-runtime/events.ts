@@ -9,6 +9,10 @@ import {
   createContextPatchAppliedEvent,
   createContextPatchRejectedEvent,
   createContextPatchRequestedEvent,
+  createRuntimeCheckpointCreatedEvent,
+  createRuntimeRunCancelRequestedEvent,
+  createRuntimeRunResumeRequestedEvent,
+  createRuntimeRunRetryRequestedEvent,
 } from '@megumi/shared/runtime-event-factory';
 import type {
   ContextEffectiveUpdatedPayload,
@@ -17,7 +21,7 @@ import type {
   ContextPatchRequestedPayload,
 } from '@megumi/shared/agent-context-contracts';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeEvent, RuntimeEventPayloadByType } from '@megumi/shared/runtime-events';
 
 interface BaseEventInput {
   eventId: string;
@@ -279,4 +283,32 @@ export function createAgentContextEffectiveUpdatedEvent(input: BaseEventInput & 
   payload: ContextEffectiveUpdatedPayload;
 }): RuntimeEvent {
   return createContextEffectiveUpdatedEvent(input);
+}
+
+export function createAgentCheckpointCreatedEvent(
+  input: BaseEventInput,
+  payload: RuntimeEventPayloadByType['checkpoint.created'],
+): RuntimeEvent {
+  return createRuntimeCheckpointCreatedEvent({ ...input, source: 'core' }, payload);
+}
+
+export function createAgentRunResumeRequestedEvent(
+  input: BaseEventInput,
+  payload: RuntimeEventPayloadByType['run.resume_requested'],
+): RuntimeEvent {
+  return createRuntimeRunResumeRequestedEvent({ ...input, source: 'core' }, payload);
+}
+
+export function createAgentRunCancelRequestedEvent(
+  input: BaseEventInput,
+  payload: RuntimeEventPayloadByType['run.cancel_requested'],
+): RuntimeEvent {
+  return createRuntimeRunCancelRequestedEvent({ ...input, source: 'core' }, payload);
+}
+
+export function createAgentRunRetryRequestedEvent(
+  input: BaseEventInput,
+  payload: RuntimeEventPayloadByType['run.retry_requested'],
+): RuntimeEvent {
+  return createRuntimeRunRetryRequestedEvent({ ...input, source: 'core' }, payload);
 }

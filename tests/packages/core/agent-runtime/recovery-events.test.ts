@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  createAgentCheckpointCreatedEvent,
+  createAgentRunCancelRequestedEvent,
+  createAgentRunRetryRequestedEvent,
+  createAgentRunResumeRequestedEvent,
+} from '@megumi/core/agent-runtime/events';
+
+describe('core recovery runtime events', () => {
+  it('creates recovery events with core source and required persistence', () => {
+    const base = {
+      eventId: 'event_123',
+      sessionId: 'session_123',
+      runId: 'run_123',
+      sequence: 1,
+      createdAt: '2026-05-16T10:00:00.000Z',
+    };
+
+    expect(
+      createAgentCheckpointCreatedEvent(base, {
+        checkpointId: 'checkpoint_123',
+        reason: 'step_completed',
+        boundary: 'step_boundary',
+        stateSummary: 'Completed step.',
+      }),
+    ).toMatchObject({
+      eventType: 'checkpoint.created',
+      source: 'core',
+      persist: 'required',
+    });
+
+    expect(
+      createAgentRunResumeRequestedEvent(base, {
+        resumeRequestId: 'resume_request_123',
+        requestedBy: 'user',
+        reason: 'user_requested',
+        resumeMode: 'from_checkpoint',
+      }).eventType,
+    ).toBe('run.resume_requested');
+
+    expect(
+      createAgentRunCancelRequestedEvent(base, {
+        cancelRequestId: 'cancel_request_123',
+        requestedBy: 'user',
+        reason: 'user_requested',
+        scope: 'run',
+      }).eventType,
+    ).toBe('run.cancel_requested');
+
+    expect(
+      createAgentRunRetryRequestedEvent(base, {
+        retryRequestId: 'retry_request_123',
+        requestedBy: 'user',
+        retryKind: 'action',
+        reason: 'runtime_retryable_error',
+      }).eventType,
+    ).toBe('run.retry_requested');
+  });
+});
