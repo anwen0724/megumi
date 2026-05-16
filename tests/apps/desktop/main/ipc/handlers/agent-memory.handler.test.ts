@@ -23,6 +23,82 @@ describe('registerAgentMemoryHandlers', () => {
       expect.any(Function),
     );
   });
+
+  it('passes candidate edit fields through edit-and-accept handler', async () => {
+    const handlers = new Map<string, (...args: any[]) => Promise<unknown>>();
+    const ipcMain = {
+      handle: vi.fn((channel: string, handler: (...args: any[]) => Promise<unknown>) => {
+        handlers.set(channel, handler);
+      }),
+    };
+    const candidate = {
+      candidateId: 'memory-candidate:1',
+      workspaceId: 'workspace:1',
+      scope: 'workspace',
+      kind: 'constraint',
+      content: 'edited candidate content',
+      summary: 'edited summary',
+      sourceRefs: [],
+      confidence: 0.8,
+      riskLevel: 'low',
+      status: 'accepted',
+      proposedBy: 'agent',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+      reviewedAt: '2026-05-16T00:00:00.000Z',
+    };
+    const memory = {
+      memoryId: 'memory:1',
+      workspaceId: 'workspace:1',
+      scope: 'workspace',
+      kind: 'constraint',
+      content: 'edited candidate content',
+      summary: 'edited summary',
+      sourceRefs: [],
+      confidence: 0.8,
+      status: 'active',
+      createdFromCandidateId: 'memory-candidate:1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+    };
+    const service = {
+      acceptCandidate: vi.fn(() => ({ candidate, memory })),
+    };
+
+    registerAgentMemoryHandlers({ ipcMain: ipcMain as any, agentMemoryService: service as any });
+    const handler = handlers.get(IPC_CHANNELS.agent.memory.candidateEditAndAccept);
+
+    const result = await handler?.({} as any, {
+      requestId: 'request:memory:edit',
+      payload: {
+        candidateId: 'memory-candidate:1',
+        content: 'edited candidate content',
+        summary: 'edited summary',
+        kind: 'constraint',
+        reviewedAt: '2026-05-16T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.memory.candidateEditAndAccept,
+        createdAt: '2026-05-16T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(service.acceptCandidate).toHaveBeenCalledWith(expect.objectContaining({
+      candidateId: 'memory-candidate:1',
+      content: 'edited candidate content',
+      summary: 'edited summary',
+      kind: 'constraint',
+    }));
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        memory: {
+          content: 'edited candidate content',
+        },
+      },
+    });
+  });
 });
 
 describe('memory runtime operation names', () => {

@@ -105,11 +105,7 @@ export function registerAgentMemoryHandlers(options: RegisterAgentMemoryHandlers
     channel: IPC_CHANNELS.agent.memory.candidateEditAndAccept,
     requestSchema: AgentMemoryCandidateEditAndAcceptRequestSchema,
     logger,
-    handle: (request) => agentMemoryService.acceptCandidate({
-      candidateId: request.payload.candidateId,
-      reviewedAt: request.payload.reviewedAt,
-      reviewedBy: request.payload.reviewedBy,
-    }),
+    handle: (request) => agentMemoryService.acceptCandidate(request.payload),
     mapError: mapAgentMemoryIpcError,
   }));
 

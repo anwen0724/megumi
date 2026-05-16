@@ -51,6 +51,10 @@ export interface ProposeMemoryCandidateInput {
 
 export interface CandidateReviewInput {
   candidateId: string;
+  content?: string;
+  summary?: string;
+  scope?: MemoryScope;
+  kind?: MemoryKind;
   reviewedAt: string;
   reviewedBy?: string;
 }
@@ -177,15 +181,16 @@ export function createAgentMemoryService(deps: AgentMemoryServiceDependencies): 
       if (!decision.allowed) {
         throw new Error(`Memory candidate blocked: ${decision.reason}`);
       }
+      const candidateId = deps.createId('memory-candidate');
       const candidate = createMemoryCandidateDraft({
-        candidateId: deps.createId('memory-candidate'),
+        candidateId,
         workspaceId: input.workspaceId,
         projectId: input.projectId,
         sessionId: input.sessionId,
         scope: input.scope,
         kind: input.kind,
         content: input.content,
-        sourceRefs: input.sourceRefs.map((ref) => ({ ...ref, ownerId: ref.ownerId || 'memory-candidate', ownerKind: 'candidate' })),
+        sourceRefs: input.sourceRefs.map((ref) => ({ ...ref, ownerId: candidateId, ownerKind: 'candidate' })),
         proposedBy: input.proposedBy,
         riskLevel: decision.riskLevel,
         now: deps.now(),
@@ -207,6 +212,10 @@ export function createAgentMemoryService(deps: AgentMemoryServiceDependencies): 
       const current = requireCandidate(input.candidateId);
       const candidate: MemoryCandidate = {
         ...current,
+        ...(input.content ? { content: input.content } : {}),
+        ...(input.summary ? { summary: input.summary } : {}),
+        ...(input.scope ? { scope: input.scope } : {}),
+        ...(input.kind ? { kind: input.kind } : {}),
         status: 'accepted',
         reviewedAt: input.reviewedAt,
         reviewedBy: input.reviewedBy,
@@ -338,6 +347,15 @@ export function createAgentMemoryService(deps: AgentMemoryServiceDependencies): 
           accessedAt: input.createdAt,
           selectedForContext: result.selectedForContext,
         });
+        const recalled = deps.repository.getMemory(result.memoryId);
+        if (recalled) {
+          deps.repository.saveMemory({
+            ...recalled,
+            lastAccessedAt: input.createdAt,
+            accessCount: (recalled.accessCount ?? 0) + 1,
+            updatedAt: recalled.updatedAt,
+          });
+        }
         emit(createRuntimeMemoryAccessRecordedEvent(eventBase(input.runId, input.sessionId, 2), {
           accessLogId: deps.createId('memory-access-event'),
           memoryId: result.memoryId,

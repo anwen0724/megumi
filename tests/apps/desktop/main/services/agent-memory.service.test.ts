@@ -41,7 +41,7 @@ describe('AgentMemoryService', () => {
         sourceRefs: [
           {
             sourceRefId: 'memory-source:1',
-            ownerId: 'memory-candidate:1',
+            ownerId: 'source-placeholder',
             ownerKind: 'candidate',
             kind: 'message',
             refId: 'message:1',
@@ -53,6 +53,10 @@ describe('AgentMemoryService', () => {
       });
 
       expect(candidate.status).toBe('proposed');
+      expect(candidate.sourceRefs[0]).toMatchObject({
+        ownerId: candidate.candidateId,
+        ownerKind: 'candidate',
+      });
       expect(service.listCandidates({ workspaceId: 'workspace:1', status: 'proposed' })).toHaveLength(1);
 
       const accepted = service.acceptCandidate({
@@ -103,6 +107,10 @@ describe('AgentMemoryService', () => {
 
       expect(preview.results).toHaveLength(1);
       expect(service.listAccessLogs({ memoryId: memory.memoryId })).toHaveLength(1);
+      expect(service.getMemory(memory.memoryId).memory).toMatchObject({
+        lastAccessedAt: now,
+        accessCount: 1,
+      });
       expect(service.deleteMemory({ memoryId: memory.memoryId, updatedAt: now }).status).toBe('deleted');
       expect(service.recallPreview({
         sessionId: 'session:1',
@@ -112,6 +120,42 @@ describe('AgentMemoryService', () => {
         limit: 5,
         createdAt: now,
       }).results).toHaveLength(0);
+    } finally {
+      database.close();
+    }
+  });
+
+  it('applies candidate edits before accepting memory records', () => {
+    const { service, database } = createService();
+    try {
+      const candidate = service.proposeCandidate({
+        workspaceId: 'workspace:1',
+        sessionId: 'session:1',
+        scope: 'workspace',
+        kind: 'workflow',
+        content: 'old candidate content',
+        sourceRefs: [],
+        proposedBy: 'agent',
+      });
+
+      const { memory } = service.acceptCandidate({
+        candidateId: candidate.candidateId,
+        content: 'edited candidate content',
+        summary: 'edited summary',
+        kind: 'constraint',
+        reviewedAt: now,
+      });
+
+      expect(memory).toMatchObject({
+        content: 'edited candidate content',
+        summary: 'edited summary',
+        kind: 'constraint',
+      });
+      expect(service.getMemory(memory.memoryId).memory).toMatchObject({
+        content: 'edited candidate content',
+        summary: 'edited summary',
+        kind: 'constraint',
+      });
     } finally {
       database.close();
     }
