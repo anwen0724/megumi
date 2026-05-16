@@ -11,6 +11,10 @@ import {
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime-event-schemas';
 import {
+  createRuntimeCheckpointCreatedEvent,
+  createRuntimeRunCancelRequestedEvent,
+  createRuntimeRunRetryRequestedEvent,
+  createRuntimeRunResumeRequestedEvent,
   createContextPatchRequestedEvent,
   createRunStartedEvent,
   createRuntimeEvent,
@@ -434,5 +438,63 @@ describe('tool and approval runtime events', () => {
     });
 
     expect(RuntimeEventSchema.parse(event).eventType).toBe('tool.call.policy_decided');
+  });
+});
+
+describe('agent recovery runtime events', () => {
+  it('creates and parses recovery runtime events', () => {
+    const base = {
+      eventId: 'event_123',
+      runId: 'run_123',
+      source: 'core' as const,
+      sequence: 1,
+      createdAt: '2026-05-16T10:00:00.000Z',
+    };
+
+    expect(
+      RuntimeEventSchema.parse(
+        createRuntimeCheckpointCreatedEvent(base, {
+          checkpointId: 'checkpoint_123',
+          reason: 'before_approval_wait',
+          boundary: 'approval_boundary',
+          stateSummary: 'Waiting for approval.',
+        }),
+      ).eventType,
+    ).toBe('checkpoint.created');
+
+    expect(
+      RuntimeEventSchema.parse(
+        createRuntimeRunResumeRequestedEvent(base, {
+          resumeRequestId: 'resume_request_123',
+          requestedBy: 'user',
+          reason: 'user_requested',
+          resumeMode: 'from_checkpoint',
+          checkpointId: 'checkpoint_123',
+        }),
+      ).eventType,
+    ).toBe('run.resume_requested');
+
+    expect(
+      RuntimeEventSchema.parse(
+        createRuntimeRunCancelRequestedEvent(base, {
+          cancelRequestId: 'cancel_request_123',
+          requestedBy: 'user',
+          reason: 'user_requested',
+          scope: 'run',
+        }),
+      ).eventType,
+    ).toBe('run.cancel_requested');
+
+    expect(
+      RuntimeEventSchema.parse(
+        createRuntimeRunRetryRequestedEvent(base, {
+          retryRequestId: 'retry_request_123',
+          requestedBy: 'user',
+          retryKind: 'action',
+          reason: 'runtime_retryable_error',
+          checkpointId: 'checkpoint_123',
+        }),
+      ).eventType,
+    ).toBe('run.retry_requested');
   });
 });

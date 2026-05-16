@@ -34,6 +34,16 @@ import {
   TOOL_RISK_LEVELS,
   type ApprovalScope,
 } from './tool-contracts';
+import {
+  CancelReasonSchema,
+  CancelScopeSchema,
+  CheckpointBoundarySchema,
+  CheckpointReasonSchema,
+  ResumeModeSchema,
+  ResumeReasonSchema,
+  RetryKindSchema,
+  RetryReasonSchema,
+} from './agent-recovery-contracts';
 
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
   RuntimeEventType,
@@ -248,6 +258,109 @@ const RunCancelledPayloadSchema = z
   })
   .strict();
 
+const CheckpointCreatedPayloadSchema = z
+  .object({
+    checkpointId: z.string().min(1),
+    reason: CheckpointReasonSchema,
+    boundary: CheckpointBoundarySchema,
+    stateSummary: z.string().min(1),
+  })
+  .strict();
+
+const CheckpointRestoredPayloadSchema = z
+  .object({
+    checkpointId: z.string().min(1),
+    resumeRequestId: z.string().min(1).optional(),
+    reason: ResumeReasonSchema,
+  })
+  .strict();
+
+const CheckpointStatusChangePayloadSchema = z
+  .object({
+    checkpointId: z.string().min(1),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+const RunResumeRequestedPayloadSchema = z
+  .object({
+    resumeRequestId: z.string().min(1),
+    requestedBy: z.enum(['user', 'host', 'system']),
+    reason: ResumeReasonSchema,
+    resumeMode: ResumeModeSchema,
+    checkpointId: z.string().min(1).optional(),
+  })
+  .strict();
+
+const RunResumedPayloadSchema = z
+  .object({
+    resumeRequestId: z.string().min(1),
+    checkpointId: z.string().min(1).optional(),
+  })
+  .strict();
+
+const RunResumeFailedPayloadSchema = z
+  .object({
+    resumeRequestId: z.string().min(1),
+    error: RuntimeErrorSchema,
+  })
+  .strict();
+
+const RunCancelRequestedPayloadSchema = z
+  .object({
+    cancelRequestId: z.string().min(1),
+    requestedBy: z.enum(['user', 'host', 'system']),
+    reason: CancelReasonSchema,
+    scope: CancelScopeSchema,
+  })
+  .strict();
+
+const RunCancellingPayloadSchema = z
+  .object({
+    cancelRequestId: z.string().min(1),
+  })
+  .strict();
+
+const CancelledPayloadSchema = z
+  .object({
+    cancelRequestId: z.string().min(1),
+    reason: CancelReasonSchema.optional(),
+  })
+  .strict();
+
+const RunRetryRequestedPayloadSchema = z
+  .object({
+    retryRequestId: z.string().min(1),
+    requestedBy: z.enum(['user', 'host', 'system']),
+    retryKind: RetryKindSchema,
+    reason: RetryReasonSchema,
+    checkpointId: z.string().min(1).optional(),
+  })
+  .strict();
+
+const RetryStartedPayloadSchema = z
+  .object({
+    retryRequestId: z.string().min(1),
+    retryKind: RetryKindSchema,
+    checkpointId: z.string().min(1).optional(),
+  })
+  .strict();
+
+const RetryCompletedPayloadSchema = z
+  .object({
+    retryRequestId: z.string().min(1),
+    retryKind: RetryKindSchema,
+  })
+  .strict();
+
+const RetryFailedPayloadSchema = z
+  .object({
+    retryRequestId: z.string().min(1),
+    retryKind: RetryKindSchema,
+    error: RuntimeErrorSchema,
+  })
+  .strict();
+
 const ToolCallRequestedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
@@ -423,6 +536,29 @@ export const ToolCallDeniedEventSchema = eventSchema('tool.call.denied', ToolCal
 export const ApprovalRequestedEventSchema = eventSchema('approval.requested', ApprovalRequestedPayloadSchema);
 export const ApprovalResolvedEventSchema = eventSchema('approval.resolved', ApprovalResolvedPayloadSchema);
 export const ApprovalExpiredEventSchema = eventSchema('approval.expired', ApprovalExpiredPayloadSchema);
+export const CheckpointCreatedEventSchema = eventSchema('checkpoint.created', CheckpointCreatedPayloadSchema);
+export const CheckpointRestoredEventSchema = eventSchema('checkpoint.restored', CheckpointRestoredPayloadSchema);
+export const CheckpointInvalidatedEventSchema = eventSchema(
+  'checkpoint.invalidated',
+  CheckpointStatusChangePayloadSchema,
+);
+export const CheckpointDiscardedEventSchema = eventSchema(
+  'checkpoint.discarded',
+  CheckpointStatusChangePayloadSchema,
+);
+export const RunResumeRequestedEventSchema = eventSchema('run.resume_requested', RunResumeRequestedPayloadSchema);
+export const RunResumedEventSchema = eventSchema('run.resumed', RunResumedPayloadSchema);
+export const RunResumeFailedEventSchema = eventSchema('run.resume_failed', RunResumeFailedPayloadSchema);
+export const RunCancelRequestedEventSchema = eventSchema('run.cancel_requested', RunCancelRequestedPayloadSchema);
+export const RunCancellingEventSchema = eventSchema('run.cancelling', RunCancellingPayloadSchema);
+export const StepCancelledEventSchema = eventSchema('step.cancelled', CancelledPayloadSchema);
+export const ActionCancelledEventSchema = eventSchema('action.cancelled', CancelledPayloadSchema);
+export const RunRetryRequestedEventSchema = eventSchema('run.retry_requested', RunRetryRequestedPayloadSchema);
+export const StepRetryRequestedEventSchema = eventSchema('step.retry_requested', RunRetryRequestedPayloadSchema);
+export const ActionRetryRequestedEventSchema = eventSchema('action.retry_requested', RunRetryRequestedPayloadSchema);
+export const RetryStartedEventSchema = eventSchema('retry.started', RetryStartedPayloadSchema);
+export const RetryCompletedEventSchema = eventSchema('retry.completed', RetryCompletedPayloadSchema);
+export const RetryFailedEventSchema = eventSchema('retry.failed', RetryFailedPayloadSchema);
 export const ArtifactCreatedEventSchema = eventSchema('artifact.created', ArtifactCreatedPayloadSchema);
 export const MemoryCreatedEventSchema = eventSchema('memory.created', MemoryCreatedPayloadSchema);
 
@@ -461,6 +597,23 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema,
   ApprovalExpiredEventSchema,
+  CheckpointCreatedEventSchema,
+  CheckpointRestoredEventSchema,
+  CheckpointInvalidatedEventSchema,
+  CheckpointDiscardedEventSchema,
+  RunResumeRequestedEventSchema,
+  RunResumedEventSchema,
+  RunResumeFailedEventSchema,
+  RunCancelRequestedEventSchema,
+  RunCancellingEventSchema,
+  StepCancelledEventSchema,
+  ActionCancelledEventSchema,
+  RunRetryRequestedEventSchema,
+  StepRetryRequestedEventSchema,
+  ActionRetryRequestedEventSchema,
+  RetryStartedEventSchema,
+  RetryCompletedEventSchema,
+  RetryFailedEventSchema,
   ArtifactCreatedEventSchema,
   MemoryCreatedEventSchema,
 ]);

@@ -23,6 +23,16 @@ import type {
   ToolPolicyDecisionValue,
   ToolRiskLevel,
 } from './tool-contracts';
+import type {
+  CancelReason,
+  CancelScope,
+  CheckpointBoundary,
+  CheckpointReason,
+  ResumeMode,
+  ResumeReason,
+  RetryKind,
+  RetryReason,
+} from './agent-recovery-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
@@ -61,6 +71,23 @@ export const RUNTIME_EVENT_TYPES = [
   'approval.requested',
   'approval.resolved',
   'approval.expired',
+  'checkpoint.created',
+  'checkpoint.restored',
+  'checkpoint.invalidated',
+  'checkpoint.discarded',
+  'run.resume_requested',
+  'run.resumed',
+  'run.resume_failed',
+  'run.cancel_requested',
+  'run.cancelling',
+  'step.cancelled',
+  'action.cancelled',
+  'run.retry_requested',
+  'step.retry_requested',
+  'action.retry_requested',
+  'retry.started',
+  'retry.completed',
+  'retry.failed',
   'artifact.created',
   'memory.created',
 ] as const;
@@ -225,6 +252,93 @@ export interface RunCancelledPayload {
   error?: RuntimeError;
 }
 
+export interface CheckpointCreatedPayload {
+  checkpointId: string;
+  reason: CheckpointReason;
+  boundary: CheckpointBoundary;
+  stateSummary: string;
+}
+
+export interface CheckpointRestoredPayload {
+  checkpointId: string;
+  resumeRequestId?: string;
+  reason: ResumeReason;
+}
+
+export interface CheckpointInvalidatedPayload {
+  checkpointId: string;
+  reason: string;
+}
+
+export interface CheckpointDiscardedPayload {
+  checkpointId: string;
+  reason: string;
+}
+
+export interface RunResumeRequestedPayload {
+  resumeRequestId: string;
+  requestedBy: 'user' | 'host' | 'system';
+  reason: ResumeReason;
+  resumeMode: ResumeMode;
+  checkpointId?: string;
+}
+
+export interface RunResumedPayload {
+  resumeRequestId: string;
+  checkpointId?: string;
+}
+
+export interface RunResumeFailedPayload {
+  resumeRequestId: string;
+  error: RuntimeError;
+}
+
+export interface RunCancelRequestedPayload {
+  cancelRequestId: string;
+  requestedBy: 'user' | 'host' | 'system';
+  reason: CancelReason;
+  scope: CancelScope;
+}
+
+export interface RunCancellingPayload {
+  cancelRequestId: string;
+}
+
+export interface StepCancelledPayload {
+  cancelRequestId: string;
+  reason?: CancelReason;
+}
+
+export interface ActionCancelledPayload {
+  cancelRequestId: string;
+  reason?: CancelReason;
+}
+
+export interface RunRetryRequestedPayload {
+  retryRequestId: string;
+  requestedBy: 'user' | 'host' | 'system';
+  retryKind: RetryKind;
+  reason: RetryReason;
+  checkpointId?: string;
+}
+
+export interface RetryStartedPayload {
+  retryRequestId: string;
+  retryKind: RetryKind;
+  checkpointId?: string;
+}
+
+export interface RetryCompletedPayload {
+  retryRequestId: string;
+  retryKind: RetryKind;
+}
+
+export interface RetryFailedPayload {
+  retryRequestId: string;
+  retryKind: RetryKind;
+  error: RuntimeError;
+}
+
 export interface ToolCallRequestedPayload {
   toolCallId: string;
   toolName: string;
@@ -339,6 +453,23 @@ export type RuntimeEventPayloadByType = {
   'approval.requested': ApprovalRequestedPayload;
   'approval.resolved': ApprovalResolvedPayload;
   'approval.expired': ApprovalExpiredPayload;
+  'checkpoint.created': CheckpointCreatedPayload;
+  'checkpoint.restored': CheckpointRestoredPayload;
+  'checkpoint.invalidated': CheckpointInvalidatedPayload;
+  'checkpoint.discarded': CheckpointDiscardedPayload;
+  'run.resume_requested': RunResumeRequestedPayload;
+  'run.resumed': RunResumedPayload;
+  'run.resume_failed': RunResumeFailedPayload;
+  'run.cancel_requested': RunCancelRequestedPayload;
+  'run.cancelling': RunCancellingPayload;
+  'step.cancelled': StepCancelledPayload;
+  'action.cancelled': ActionCancelledPayload;
+  'run.retry_requested': RunRetryRequestedPayload;
+  'step.retry_requested': RunRetryRequestedPayload;
+  'action.retry_requested': RunRetryRequestedPayload;
+  'retry.started': RetryStartedPayload;
+  'retry.completed': RetryCompletedPayload;
+  'retry.failed': RetryFailedPayload;
   'artifact.created': ArtifactCreatedPayload;
   'memory.created': MemoryCreatedPayload;
 };
