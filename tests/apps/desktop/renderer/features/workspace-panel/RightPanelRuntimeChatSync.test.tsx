@@ -5,6 +5,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
 import type { ChatStartPayload } from '@megumi/shared/ipc-schemas';
+import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
@@ -181,6 +182,7 @@ function resetStores() {
     memoryNotes: [],
     activeRunId: null,
   });
+  useArtifactStore.getState().clearArtifacts();
 }
 
 function renderChatWithRightPanel() {
@@ -230,7 +232,7 @@ describe('right workspace panel runtime chat sync', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
 
     expect(screen.getByText('Runtime response notes')).toBeInTheDocument();
-    expect(screen.getByText('tech_report')).toBeInTheDocument();
+    expect(screen.getByText('report')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
 

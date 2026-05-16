@@ -10,11 +10,13 @@ import type {
   RuntimeEvent,
 } from '@megumi/shared/runtime-events';
 import { useAgentStore } from '../../../entities/agent/store';
+import { useArtifactStore } from '../../../entities/artifact';
 import { createSessionTitleFromPrompt } from '../../../entities/agent/session-title';
 import { useChatStore } from '../../../entities/chat/store';
 import type { TimelineMessageData } from '../../../entities/chat/types';
 import { useProjectStore } from '../../../entities/project/store';
 import { useWorkspaceStateStore } from '../../../entities/workspace-state';
+import { createRuntimeChatRunId } from '../../../entities/workspace-state/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
@@ -114,6 +116,16 @@ function createChatStartPayload(payload: ComposerSubmitPayload, userMessage: Tim
   };
 }
 
+function bridgeRuntimeChatArtifact(payload: ComposerSubmitPayload) {
+  useArtifactStore.getState().upsertArtifact({
+    artifactId: `${createRuntimeChatRunId(payload.message)}-artifact`,
+    title: 'Runtime response notes',
+    kind: 'report',
+    status: 'active',
+    textPreview: `Megumi completed "${payload.message}" in ${payload.mode} mode.`,
+  });
+}
+
 function isRunSessionStillActive(sessionId: string | null): boolean {
   return useAgentStore.getState().activeSessionId === sessionId;
 }
@@ -183,6 +195,7 @@ function applyRuntimeEvent(
         ...activePayload,
         now: event.createdAt,
       });
+      bridgeRuntimeChatArtifact(activePayload);
     }
     return;
   }

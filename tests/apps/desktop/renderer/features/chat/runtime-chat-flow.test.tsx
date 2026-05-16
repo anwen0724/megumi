@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
+import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRuntimeChat } from '@megumi/desktop/renderer/features/chat/hooks/use-runtime-chat';
@@ -104,6 +105,7 @@ describe('useRuntimeChat', () => {
       currentProjectId: null,
       projects: [],
     });
+    useArtifactStore.getState().clearArtifacts();
   });
 
   it('starts backend chat with an ipc request envelope, creates a session, and applies stream events', async () => {
@@ -205,6 +207,50 @@ describe('useRuntimeChat', () => {
       content: 'Hi there',
     });
     expect(useChatStore.getState().agentStatus).toBe('idle');
+  });
+
+  it('bridges completed runtime chat output into artifact state', async () => {
+    const { chat } = installMegumiMock();
+    const { result } = renderHook(() => useRuntimeChat());
+
+    await act(async () => {
+      await result.current.runRuntimeChat({
+        message: 'Summarize runtime chat',
+        mode: 'agent',
+        model: 'deepseek-v4-pro',
+      });
+    });
+
+    const requestId = chat.start.mock.calls[0][0].requestId;
+
+    act(() => {
+      emitRuntimeEvent({
+        eventType: 'assistant.output.completed',
+        requestId,
+        runId: 'run-bridge',
+        visibility: 'system',
+        payload: {
+          content: 'Runtime response summary.',
+        },
+      });
+      emitRuntimeEvent({
+        eventType: 'run.completed',
+        requestId,
+        runId: 'run-bridge',
+        source: 'core',
+        visibility: 'system',
+        payload: {},
+      });
+    });
+
+    expect(useArtifactStore.getState().artifacts).toEqual([
+      expect.objectContaining({
+        title: 'Runtime response notes',
+        kind: 'report',
+        status: 'active',
+        textPreview: 'Megumi completed "Summarize runtime chat" in agent mode.',
+      }),
+    ]);
   });
 
   it('turns chat start failure envelopes into assistant messages', async () => {

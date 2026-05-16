@@ -64,6 +64,12 @@ const allowedCurrentLifecycleTerms = new Map<string, RegExp[]>([
   ['packages/shared/agent-lifecycle-contracts.ts', [
     new RegExp(term('\\bMESSAGE', '_')),
   ]],
+  ['packages/shared/artifact-contracts.ts', [
+    new RegExp(term('\\bARTIFACT', '_')),
+  ]],
+  ['tests/packages/shared/artifact-contracts.test.ts', [
+    new RegExp(term('\\bARTIFACT', '_')),
+  ]],
 ]);
 
 function walkFiles(directory: string): string[] {
