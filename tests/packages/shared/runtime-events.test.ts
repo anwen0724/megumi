@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ApprovalExpiredEventSchema,
+  ApprovalResolvedEventSchema,
   ContextPatchRequestedEventSchema,
   RuntimeEventSchema,
   RuntimeEventTypeSchema,
@@ -389,6 +390,25 @@ describe('tool and approval runtime events', () => {
         expiredAt: '2026-05-16T00:01:00.000Z',
       },
     }).payload.approvalRequestId).toBe('approval-1');
+
+    const resolved = ApprovalResolvedEventSchema.parse({
+      ...base,
+      eventId: 'event-approval-2',
+      eventType: 'approval.resolved',
+      payload: {
+        approvalRequestId: 'approval-1',
+        decision: 'approved',
+        scope: 'once',
+        decidedAt: '2026-05-16T00:01:30.000Z',
+      },
+    });
+
+    expect(resolved.payload).toMatchObject({
+      approvalRequestId: 'approval-1',
+      decision: 'approved',
+      scope: 'once',
+    });
+    expect(resolved.payload).not.toHaveProperty('approvalId');
   });
 
   it('creates typed tool events through the generic runtime event factory', () => {

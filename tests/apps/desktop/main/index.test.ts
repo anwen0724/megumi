@@ -38,6 +38,11 @@ const mocks = vi.hoisted(() => {
       getBaselineContext: vi.fn(),
       listWorkspaceSourcesByRun: vi.fn(),
     })),
+    createDefaultAgentToolService: vi.fn(() => ({
+      listDefinitions: vi.fn(),
+      getToolCall: vi.fn(),
+      resolveApproval: vi.fn(),
+    })),
   };
 });
 
@@ -73,6 +78,10 @@ vi.mock('@megumi/desktop/main/services/agent-context.service', () => ({
   createDefaultAgentContextService: mocks.createDefaultAgentContextService,
 }));
 
+vi.mock('@megumi/desktop/main/services/agent-tool.service', () => ({
+  createDefaultAgentToolService: mocks.createDefaultAgentToolService,
+}));
+
 describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -84,6 +93,7 @@ describe('main runtime logger composition', () => {
     mocks.createMainWindow.mockClear();
     mocks.createDefaultAgentLifecycleService.mockClear();
     mocks.createDefaultAgentContextService.mockClear();
+    mocks.createDefaultAgentToolService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
@@ -97,6 +107,7 @@ describe('main runtime logger composition', () => {
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
     const agentService = mocks.createDefaultAgentLifecycleService.mock.results[0]?.value;
     const agentContextService = mocks.createDefaultAgentContextService.mock.results[0]?.value;
+    const agentToolService = mocks.createDefaultAgentToolService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -113,11 +124,15 @@ describe('main runtime logger composition', () => {
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
       { contextService: agentContextService },
     );
+    expect(mocks.createDefaultAgentToolService).toHaveBeenCalledWith(
+      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
+    );
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       agentService,
       agentContextService,
       agentPlanService: agentService,
+      agentToolService,
     });
 
     processLogger.error('runtime_review_probe', {

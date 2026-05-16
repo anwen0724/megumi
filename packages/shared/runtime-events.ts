@@ -18,6 +18,7 @@ import type {
   ContextPatchRequestedPayload,
 } from './agent-context-contracts';
 import type {
+  ApprovalScope,
   ApprovalStatus,
   ToolPolicyDecisionValue,
   ToolRiskLevel,
@@ -278,8 +279,9 @@ export interface ApprovalRequestedPayload {
 }
 
 export interface ApprovalResolvedPayload {
-  approvalId: string;
+  approvalRequestId: string;
   decision: Exclude<ApprovalStatus, 'pending'>;
+  scope: ApprovalScope;
   decidedAt: string;
 }
 

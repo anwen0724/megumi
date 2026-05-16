@@ -29,8 +29,10 @@ import {
   type RuntimeEventVisibility,
 } from './runtime-events';
 import {
+  APPROVAL_SCOPES,
   TOOL_POLICY_DECISIONS,
   TOOL_RISK_LEVELS,
+  type ApprovalScope,
 } from './tool-contracts';
 
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
@@ -49,6 +51,7 @@ const RUNTIME_EVENT_PERSIST_MODE_VALUES = [...RUNTIME_EVENT_PERSIST_MODES] as [
   RuntimeEventPersistMode,
   ...RuntimeEventPersistMode[],
 ];
+const APPROVAL_SCOPE_VALUES = [...APPROVAL_SCOPES] as [ApprovalScope, ...ApprovalScope[]];
 
 export const RuntimeEventTypeSchema = z.enum(RUNTIME_EVENT_TYPE_VALUES);
 export const RuntimeEventSourceSchema = z.enum(RUNTIME_EVENT_SOURCE_VALUES);
@@ -316,8 +319,9 @@ const ApprovalRequestedPayloadSchema = z
 
 const ApprovalResolvedPayloadSchema = z
   .object({
-    approvalId: z.string().min(1),
+    approvalRequestId: z.string().min(1),
     decision: z.enum(['approved', 'denied', 'expired', 'cancelled']),
+    scope: z.enum(APPROVAL_SCOPE_VALUES),
     decidedAt: RuntimeEventIsoDateTimeSchema,
   })
   .strict();

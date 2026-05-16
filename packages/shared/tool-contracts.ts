@@ -16,7 +16,7 @@ const ToolNameSchema = z
   .string()
   .min(1)
   .max(64)
-  .regex(/^[a-zA-Z0-9_-]+$/, 'Tool name must be Claude-compatible and contain only letters, numbers, underscore, or hyphen.');
+  .regex(/^[a-z][a-z0-9_]{0,63}$/, 'Tool name must be Claude-compatible lowercase snake_case with letters, numbers, and underscores.');
 
 export const ToolNameSchemaForUse = ToolNameSchema;
 export type ToolName = z.infer<typeof ToolNameSchema>;

@@ -54,7 +54,27 @@ describe('tool-contracts', () => {
       riskLevel: 'low',
       sideEffect: 'none',
       availability: { status: 'available' },
-    })).toThrow(/Tool name/);
+    })).toThrow(/lowercase snake_case/);
+  });
+
+  it('rejects uppercase and hyphenated tool names', () => {
+    const invalidToolDefinition = {
+      description: 'Invalid non-snake-case name.',
+      inputSchema: { type: 'object' },
+      capabilities: ['workspace_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      availability: { status: 'available' },
+    } as const;
+
+    expect(() => ToolDefinitionSchema.parse({
+      ...invalidToolDefinition,
+      name: 'WorkspaceReadFile',
+    })).toThrow(/lowercase snake_case/);
+    expect(() => ToolDefinitionSchema.parse({
+      ...invalidToolDefinition,
+      name: 'workspace-read-file',
+    })).toThrow(/lowercase snake_case/);
   });
 
   it('defines tool lifecycle contracts without obsolete error fields', () => {

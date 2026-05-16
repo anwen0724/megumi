@@ -1,4 +1,7 @@
-import type { AgentToolRepository } from '@megumi/db/repos/agent-tool.repo';
+import path from 'node:path';
+import { createDatabase } from '@megumi/db/connection';
+import { AgentToolRepository } from '@megumi/db/repos/agent-tool.repo';
+import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type {
   ApprovalRecord,
   ToolCall,
@@ -8,7 +11,8 @@ import type {
   AgentApprovalResolvePayload,
   AgentToolDefinitionsListPayload,
 } from '@megumi/shared/ipc-schemas';
-import type { ToolRegistry } from '@megumi/tools/registry';
+import { createStaticToolRegistry, type ToolRegistry } from '@megumi/tools/registry';
+import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface AgentToolServiceOptions {
   registry: ToolRegistry;
@@ -63,4 +67,14 @@ export class AgentToolService {
 
     return this.options.repository.saveApprovalRecord(record);
   }
+}
+
+export function createDefaultAgentToolService(homePaths: MegumiHomePaths): AgentToolService {
+  const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
+  migrateDatabase(database);
+
+  return new AgentToolService({
+    repository: new AgentToolRepository(database),
+    registry: createStaticToolRegistry([]),
+  });
 }

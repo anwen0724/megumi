@@ -7,12 +7,14 @@ import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-error
 import { createRuntimeJsonlLoggerForMegumiHome } from './services/runtime-logger.service';
 import { createDefaultAgentLifecycleService } from './services/agent-lifecycle.service';
 import { createDefaultAgentContextService } from './services/agent-context.service';
+import { createDefaultAgentToolService } from './services/agent-tool.service';
 
 loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
 const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
 const agentContextService = createDefaultAgentContextService(megumiHomePaths);
 const agentService = createDefaultAgentLifecycleService(megumiHomePaths, { contextService: agentContextService });
+const agentToolService = createDefaultAgentToolService(megumiHomePaths);
 registerRuntimeProcessErrorHandlers({ logger: runtimeLogger });
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
@@ -25,6 +27,7 @@ registerAppLifecycle({
     agentService,
     agentContextService,
     agentPlanService: agentService,
+    agentToolService,
   }),
   createWindow: () => {
     createMainWindow({
