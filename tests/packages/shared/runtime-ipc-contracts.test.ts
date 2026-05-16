@@ -29,6 +29,9 @@ import {
   AgentRunResumeRequestSchema,
   AgentRunRetryRequestSchema,
   AgentToolDefinitionsListRequestSchema,
+  AgentArtifactGetRequestSchema,
+  AgentArtifactGetResultSchema,
+  AgentArtifactStatusUpdatePayloadSchema,
   AgentPlanByRunGetRequestSchema,
   AgentContextBaselineGetRequestSchema,
   AgentContextSourcesListRequestSchema,
@@ -711,6 +714,93 @@ describe('agent recovery runtime IPC schemas', () => {
         source: 'renderer',
       },
     }).success).toBe(false);
+  });
+});
+
+describe('agent artifact IPC contracts', () => {
+  it('registers artifact IPC channels as business runtime IPC channels', () => {
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.listByRun);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.listBySession);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.get);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.versionGet);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.versionCreate);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.statusUpdate);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.reference);
+    expect(isBusinessIpcChannel(IPC_CHANNELS.agent.artifacts.get)).toBe(true);
+  });
+
+  it('parses artifact IPC requests with channel only in request.meta.channel', () => {
+    const request = AgentArtifactGetRequestSchema.parse({
+      requestId: 'ipc:artifact:get',
+      payload: { artifactId: 'artifact:1' },
+      meta: {
+        channel: IPC_CHANNELS.agent.artifacts.get,
+        createdAt: '2026-05-16T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(request.meta.channel).toBe(IPC_CHANNELS.agent.artifacts.get);
+    expect(request).not.toHaveProperty('channel');
+  });
+
+  it('parses artifact result data using strict schemas', () => {
+    const result = AgentArtifactGetResultSchema.parse({
+      ok: true,
+      data: {
+        artifact: {
+          artifactId: 'artifact:1',
+          kind: 'report',
+          title: 'Report',
+          status: 'active',
+          producingRunId: 'run:1',
+          currentVersionId: 'artifact-version:1',
+          createdAt: '2026-05-16T00:00:00.000Z',
+          updatedAt: '2026-05-16T00:00:00.000Z',
+        },
+        currentVersion: {
+          artifactVersionId: 'artifact-version:1',
+          artifactId: 'artifact:1',
+          versionNumber: 1,
+          contentType: 'markdown',
+          contentFormat: 'text/markdown',
+          contentRef: {
+            storage: 'inline',
+            inlineText: '# Report',
+            mimeType: 'text/markdown',
+            sizeBytes: 8,
+            sha256: 'd'.repeat(64),
+            textPreview: '# Report',
+            redactionState: 'safe',
+            createdAt: '2026-05-16T00:00:00.000Z',
+          },
+          textPreview: '# Report',
+          createdByRunId: 'run:1',
+          createdAt: '2026-05-16T00:00:00.000Z',
+        },
+        sourceRefs: [],
+        relations: [],
+      },
+      meta: {
+        requestId: 'ipc:artifact:get',
+        channel: IPC_CHANNELS.agent.artifacts.get,
+        handledAt: '2026-05-16T00:00:01.000Z',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.artifact?.artifactId).toBe('artifact:1');
+    }
+  });
+
+  it('rejects unknown artifact IPC fields', () => {
+    expect(() => AgentArtifactStatusUpdatePayloadSchema.parse({
+      artifactId: 'artifact:1',
+      status: 'active',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+      accepted: true,
+    })).toThrow();
   });
 });
 

@@ -30,6 +30,14 @@ import {
   AgentResumeRequestSchema,
   AgentRetryRequestSchema,
 } from './agent-recovery-contracts';
+import {
+  ArtifactContentTypeSchema,
+  ArtifactRelationSchema,
+  ArtifactSchema,
+  ArtifactSourceRefSchema,
+  ArtifactStatusSchema,
+  ArtifactVersionSchema,
+} from './artifact-contracts';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
 
@@ -373,6 +381,103 @@ export const AgentRunRetryDataSchema = z
   })
   .strict();
 
+export const AgentArtifactListByRunPayloadSchema = z
+  .object({
+    runId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentArtifactListBySessionPayloadSchema = z
+  .object({
+    sessionId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentArtifactGetPayloadSchema = z
+  .object({
+    artifactId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentArtifactVersionGetPayloadSchema = z
+  .object({
+    artifactVersionId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentArtifactVersionCreatePayloadSchema = z
+  .object({
+    artifactId: z.string().min(1),
+    contentType: ArtifactContentTypeSchema,
+    contentFormat: z.string().min(1),
+    text: z.string(),
+    textPreview: z.string(),
+    changeSummary: z.string().min(1).optional(),
+    createdByRunId: z.string().min(1),
+    createdByStepId: z.string().min(1).optional(),
+    createdAt: IsoDateTimeSchema,
+    metadata: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
+export const AgentArtifactStatusUpdatePayloadSchema = z
+  .object({
+    artifactId: z.string().min(1),
+    status: ArtifactStatusSchema,
+    updatedAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentArtifactReferencePayloadSchema = z
+  .object({
+    artifactId: z.string().min(1),
+    artifactVersionId: z.string().min(1).optional(),
+    referencedByKind: z.enum(['run', 'step', 'artifact', 'message']),
+    referencedById: z.string().min(1),
+    createdAt: IsoDateTimeSchema,
+    metadata: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
+export const AgentArtifactListDataSchema = z
+  .object({
+    artifacts: z.array(ArtifactSchema),
+  })
+  .strict();
+
+export const AgentArtifactGetDataSchema = z
+  .object({
+    artifact: ArtifactSchema.optional(),
+    currentVersion: ArtifactVersionSchema.optional(),
+    sourceRefs: z.array(ArtifactSourceRefSchema),
+    relations: z.array(ArtifactRelationSchema),
+  })
+  .strict();
+
+export const AgentArtifactVersionGetDataSchema = z
+  .object({
+    version: ArtifactVersionSchema.optional(),
+  })
+  .strict();
+
+export const AgentArtifactVersionCreateDataSchema = z
+  .object({
+    version: ArtifactVersionSchema,
+  })
+  .strict();
+
+export const AgentArtifactStatusUpdateDataSchema = z
+  .object({
+    artifact: ArtifactSchema,
+  })
+  .strict();
+
+export const AgentArtifactReferenceDataSchema = z
+  .object({
+    sourceRef: ArtifactSourceRefSchema,
+  })
+  .strict();
+
 export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.session.create,
   AgentSessionCreatePayloadSchema,
@@ -443,6 +548,41 @@ export const AgentRunRetryRequestSchema = createRuntimeIpcRequestSchema(
   AgentRunRetryPayloadSchema,
 );
 
+export const AgentArtifactListByRunRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.artifacts.listByRun,
+  AgentArtifactListByRunPayloadSchema,
+);
+
+export const AgentArtifactListBySessionRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.artifacts.listBySession,
+  AgentArtifactListBySessionPayloadSchema,
+);
+
+export const AgentArtifactGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.artifacts.get,
+  AgentArtifactGetPayloadSchema,
+);
+
+export const AgentArtifactVersionGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.artifacts.versionGet,
+  AgentArtifactVersionGetPayloadSchema,
+);
+
+export const AgentArtifactVersionCreateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.artifacts.versionCreate,
+  AgentArtifactVersionCreatePayloadSchema,
+);
+
+export const AgentArtifactStatusUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.artifacts.statusUpdate,
+  AgentArtifactStatusUpdatePayloadSchema,
+);
+
+export const AgentArtifactReferenceRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.artifacts.reference,
+  AgentArtifactReferencePayloadSchema,
+);
+
 export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
   AgentSessionCreateDataSchema,
   IPC_CHANNELS.agent.session.create,
@@ -493,6 +633,41 @@ export const AgentApprovalResolveResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.agent.approval.resolve,
 );
 
+export const AgentArtifactListByRunResultSchema = createRuntimeIpcResultSchema(
+  AgentArtifactListDataSchema,
+  IPC_CHANNELS.agent.artifacts.listByRun,
+);
+
+export const AgentArtifactListBySessionResultSchema = createRuntimeIpcResultSchema(
+  AgentArtifactListDataSchema,
+  IPC_CHANNELS.agent.artifacts.listBySession,
+);
+
+export const AgentArtifactGetResultSchema = createRuntimeIpcResultSchema(
+  AgentArtifactGetDataSchema,
+  IPC_CHANNELS.agent.artifacts.get,
+);
+
+export const AgentArtifactVersionGetResultSchema = createRuntimeIpcResultSchema(
+  AgentArtifactVersionGetDataSchema,
+  IPC_CHANNELS.agent.artifacts.versionGet,
+);
+
+export const AgentArtifactVersionCreateResultSchema = createRuntimeIpcResultSchema(
+  AgentArtifactVersionCreateDataSchema,
+  IPC_CHANNELS.agent.artifacts.versionCreate,
+);
+
+export const AgentArtifactStatusUpdateResultSchema = createRuntimeIpcResultSchema(
+  AgentArtifactStatusUpdateDataSchema,
+  IPC_CHANNELS.agent.artifacts.statusUpdate,
+);
+
+export const AgentArtifactReferenceResultSchema = createRuntimeIpcResultSchema(
+  AgentArtifactReferenceDataSchema,
+  IPC_CHANNELS.agent.artifacts.reference,
+);
+
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;
 export type ProviderListData = z.infer<typeof ProviderListDataSchema>;
 export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
@@ -531,3 +706,16 @@ export type AgentRunCancelPayload = z.infer<typeof AgentRunCancelPayloadSchema>;
 export type AgentRunCancelData = z.infer<typeof AgentRunCancelDataSchema>;
 export type AgentRunRetryPayload = z.infer<typeof AgentRunRetryPayloadSchema>;
 export type AgentRunRetryData = z.infer<typeof AgentRunRetryDataSchema>;
+export type AgentArtifactListByRunPayload = z.infer<typeof AgentArtifactListByRunPayloadSchema>;
+export type AgentArtifactListBySessionPayload = z.infer<typeof AgentArtifactListBySessionPayloadSchema>;
+export type AgentArtifactGetPayload = z.infer<typeof AgentArtifactGetPayloadSchema>;
+export type AgentArtifactVersionGetPayload = z.infer<typeof AgentArtifactVersionGetPayloadSchema>;
+export type AgentArtifactVersionCreatePayload = z.infer<typeof AgentArtifactVersionCreatePayloadSchema>;
+export type AgentArtifactStatusUpdatePayload = z.infer<typeof AgentArtifactStatusUpdatePayloadSchema>;
+export type AgentArtifactReferencePayload = z.infer<typeof AgentArtifactReferencePayloadSchema>;
+export type AgentArtifactListData = z.infer<typeof AgentArtifactListDataSchema>;
+export type AgentArtifactGetData = z.infer<typeof AgentArtifactGetDataSchema>;
+export type AgentArtifactVersionGetData = z.infer<typeof AgentArtifactVersionGetDataSchema>;
+export type AgentArtifactVersionCreateData = z.infer<typeof AgentArtifactVersionCreateDataSchema>;
+export type AgentArtifactStatusUpdateData = z.infer<typeof AgentArtifactStatusUpdateDataSchema>;
+export type AgentArtifactReferenceData = z.infer<typeof AgentArtifactReferenceDataSchema>;

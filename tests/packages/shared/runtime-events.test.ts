@@ -562,7 +562,7 @@ describe('artifact runtime events', () => {
         from: 'draft',
         to: 'active',
       },
-    }).payload.to).toBe('active');
+    })).toMatchObject({ payload: { to: 'active' } });
 
     expect(RuntimeEventSchema.parse({
       eventId: 'event-artifact-ref',
@@ -580,7 +580,7 @@ describe('artifact runtime events', () => {
         referencedByKind: 'run',
         referencedById: 'run:next',
       },
-    }).payload.referencedByKind).toBe('run');
+    })).toMatchObject({ payload: { referencedByKind: 'run' } });
 
     expect(RuntimeEventSchema.parse({
       eventId: 'event-artifact-write-failed',
@@ -604,7 +604,7 @@ describe('artifact runtime events', () => {
           source: 'filesystem',
         },
       },
-    }).payload.error).not.toHaveProperty('recoverable');
+    })).toMatchObject({ payload: { error: expect.not.objectContaining({ recoverable: expect.anything() }) } });
   });
 
   it('creates artifact events through factory helpers', () => {

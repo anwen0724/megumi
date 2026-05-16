@@ -106,5 +106,12 @@ describe('createRendererRuntimeIpcRequest', () => {
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.provider.deleteApiKey)).toBe('provider.delete-api-key');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.chat.start)).toBe('chat.start');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.chat.cancel)).toBe('chat.cancel');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.listByRun)).toBe('agent.artifacts.list-by-run');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.listBySession)).toBe('agent.artifacts.list-by-session');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.get)).toBe('agent.artifacts.get');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.versionGet)).toBe('agent.artifacts.version.get');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.versionCreate)).toBe('agent.artifacts.version.create');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.statusUpdate)).toBe('agent.artifacts.status.update');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.reference)).toBe('agent.artifacts.reference');
   });
 });

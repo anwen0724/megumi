@@ -43,6 +43,20 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'agent.recovery.cancel';
     case IPC_CHANNELS.agent.recovery.retry:
       return 'agent.recovery.retry';
+    case IPC_CHANNELS.agent.artifacts.listByRun:
+      return 'agent.artifacts.list-by-run';
+    case IPC_CHANNELS.agent.artifacts.listBySession:
+      return 'agent.artifacts.list-by-session';
+    case IPC_CHANNELS.agent.artifacts.get:
+      return 'agent.artifacts.get';
+    case IPC_CHANNELS.agent.artifacts.versionGet:
+      return 'agent.artifacts.version.get';
+    case IPC_CHANNELS.agent.artifacts.versionCreate:
+      return 'agent.artifacts.version.create';
+    case IPC_CHANNELS.agent.artifacts.statusUpdate:
+      return 'agent.artifacts.status.update';
+    case IPC_CHANNELS.agent.artifacts.reference:
+      return 'agent.artifacts.reference';
     default: {
       const exhaustive: never = channel;
       return exhaustive;

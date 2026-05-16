@@ -43,6 +43,15 @@ export const IPC_CHANNELS = {
       cancel: 'agent:recovery:cancel',
       retry: 'agent:recovery:retry',
     },
+    artifacts: {
+      listByRun: 'agent:artifacts:list-by-run',
+      listBySession: 'agent:artifacts:list-by-session',
+      get: 'agent:artifacts:get',
+      versionGet: 'agent:artifacts:version:get',
+      versionCreate: 'agent:artifacts:version:create',
+      statusUpdate: 'agent:artifacts:status:update',
+      reference: 'agent:artifacts:reference',
+    },
   },
   runtime: {
     event: 'runtime:event',
@@ -80,6 +89,13 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.agent.recovery.resume,
   IPC_CHANNELS.agent.recovery.cancel,
   IPC_CHANNELS.agent.recovery.retry,
+  IPC_CHANNELS.agent.artifacts.listByRun,
+  IPC_CHANNELS.agent.artifacts.listBySession,
+  IPC_CHANNELS.agent.artifacts.get,
+  IPC_CHANNELS.agent.artifacts.versionGet,
+  IPC_CHANNELS.agent.artifacts.versionCreate,
+  IPC_CHANNELS.agent.artifacts.statusUpdate,
+  IPC_CHANNELS.agent.artifacts.reference,
   IPC_CHANNELS.runtime.event,
 ] as const;
 
