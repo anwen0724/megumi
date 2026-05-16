@@ -739,6 +739,91 @@ export const AgentArtifactReferenceRequestSchema = createRuntimeIpcRequestSchema
   AgentArtifactReferencePayloadSchema,
 );
 
+export const AgentMemorySettingsGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.settingsGet,
+  AgentMemorySettingsGetPayloadSchema,
+);
+
+export const AgentMemorySettingsUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.settingsUpdate,
+  AgentMemorySettingsUpdatePayloadSchema,
+);
+
+export const AgentMemoryCandidateListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateList,
+  AgentMemoryCandidateListPayloadSchema,
+);
+
+export const AgentMemoryCandidateAcceptRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateAccept,
+  AgentMemoryCandidateAcceptPayloadSchema,
+);
+
+export const AgentMemoryCandidateRejectRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateReject,
+  AgentMemoryCandidateRejectPayloadSchema,
+);
+
+export const AgentMemoryCandidateArchiveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateArchive,
+  AgentMemoryCandidateArchivePayloadSchema,
+);
+
+export const AgentMemoryCandidateEditAndAcceptRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.candidateEditAndAccept,
+  AgentMemoryCandidateEditAndAcceptPayloadSchema,
+);
+
+export const AgentMemoryListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryList,
+  AgentMemoryListPayloadSchema,
+);
+
+export const AgentMemoryGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryGet,
+  AgentMemoryGetPayloadSchema,
+);
+
+export const AgentMemoryUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryUpdate,
+  AgentMemoryUpdatePayloadSchema,
+);
+
+export const AgentMemoryArchiveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryArchive,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemoryDeleteRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryDelete,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemoryDisableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryDisable,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemoryEnableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.memoryEnable,
+  AgentMemoryStatusPayloadSchema,
+);
+
+export const AgentMemorySourceRefsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.sourceRefsList,
+  AgentMemorySourceRefsListPayloadSchema,
+);
+
+export const AgentMemoryAccessLogsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.accessLogsList,
+  AgentMemoryAccessLogsListPayloadSchema,
+);
+
+export const AgentMemoryRecallPreviewRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.memory.recallPreview,
+  AgentMemoryRecallPreviewPayloadSchema,
+);
+
 export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
   AgentSessionCreateDataSchema,
   IPC_CHANNELS.agent.session.create,
@@ -822,6 +907,97 @@ export const AgentArtifactStatusUpdateResultSchema = createRuntimeIpcResultSchem
 export const AgentArtifactReferenceResultSchema = createRuntimeIpcResultSchema(
   AgentArtifactReferenceDataSchema,
   IPC_CHANNELS.agent.artifacts.reference,
+);
+
+export const AgentMemorySettingsGetResultSchema = createRuntimeIpcResultSchema(
+  AgentMemorySettingsDataSchema,
+  IPC_CHANNELS.agent.memory.settingsGet,
+);
+
+export const AgentMemorySettingsUpdateResultSchema = createRuntimeIpcResultSchema(
+  AgentMemorySettingsDataSchema,
+  IPC_CHANNELS.agent.memory.settingsUpdate,
+);
+
+export const AgentMemoryCandidateListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateListDataSchema,
+  IPC_CHANNELS.agent.memory.candidateList,
+);
+
+export const AgentMemoryCandidateAcceptResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateAcceptDataSchema,
+  IPC_CHANNELS.agent.memory.candidateAccept,
+);
+
+export const AgentMemoryCandidateResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateDataSchema,
+);
+
+export const AgentMemoryCandidateRejectResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateDataSchema,
+  IPC_CHANNELS.agent.memory.candidateReject,
+);
+
+export const AgentMemoryCandidateArchiveResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateDataSchema,
+  IPC_CHANNELS.agent.memory.candidateArchive,
+);
+
+export const AgentMemoryCandidateEditAndAcceptResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryCandidateAcceptDataSchema,
+  IPC_CHANNELS.agent.memory.candidateEditAndAccept,
+);
+
+export const AgentMemoryListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryListDataSchema,
+  IPC_CHANNELS.agent.memory.memoryList,
+);
+
+export const AgentMemoryGetResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryGetDataSchema,
+  IPC_CHANNELS.agent.memory.memoryGet,
+);
+
+export const AgentMemoryResultSchema = createRuntimeIpcResultSchema(AgentMemoryDataSchema);
+
+export const AgentMemoryUpdateResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryUpdate,
+);
+
+export const AgentMemoryArchiveResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryArchive,
+);
+
+export const AgentMemoryDeleteResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryDelete,
+);
+
+export const AgentMemoryDisableResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryDisable,
+);
+
+export const AgentMemoryEnableResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryDataSchema,
+  IPC_CHANNELS.agent.memory.memoryEnable,
+);
+
+export const AgentMemorySourceRefsListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemorySourceRefsListDataSchema,
+  IPC_CHANNELS.agent.memory.sourceRefsList,
+);
+
+export const AgentMemoryAccessLogsListResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryAccessLogsListDataSchema,
+  IPC_CHANNELS.agent.memory.accessLogsList,
+);
+
+export const AgentMemoryRecallPreviewResultSchema = createRuntimeIpcResultSchema(
+  AgentMemoryRecallPreviewDataSchema,
+  IPC_CHANNELS.agent.memory.recallPreview,
 );
 
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;

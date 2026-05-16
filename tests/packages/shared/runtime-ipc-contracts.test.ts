@@ -32,6 +32,9 @@ import {
   AgentArtifactGetRequestSchema,
   AgentArtifactGetResultSchema,
   AgentArtifactStatusUpdatePayloadSchema,
+  AgentMemoryRecallPreviewRequestSchema,
+  AgentMemorySettingsGetRequestSchema,
+  AgentMemorySettingsGetResultSchema,
   AgentMemoryCandidateAcceptPayloadSchema,
   AgentMemoryCandidateListPayloadSchema,
   AgentMemoryListDataSchema,
@@ -868,6 +871,68 @@ describe('agent memory ipc payload and data schemas', () => {
 
     expect(memoryData.memories).toEqual([]);
     expect(JSON.stringify(recallData)).not.toContain('raw full prompt');
+  });
+});
+
+describe('agent memory runtime ipc channels', () => {
+  it('registers memory channels as business IPC channels', () => {
+    expect(IPC_CHANNELS.agent.memory.settingsGet).toBe('agent:memory:settings:get');
+    expect(IPC_CHANNELS.agent.memory.recallPreview).toBe('agent:memory:recall-preview');
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.memory.memoryList);
+    expect(isBusinessIpcChannel('agent:memory:memory:list')).toBe(true);
+  });
+
+  it('keeps channel in request meta and rejects top-level channel', () => {
+    const request = AgentMemorySettingsGetRequestSchema.parse({
+      requestId: 'request:memory:settings',
+      payload: { workspaceId: 'workspace:1' },
+      meta: {
+        channel: IPC_CHANNELS.agent.memory.settingsGet,
+        createdAt: '2026-05-16T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(request.meta.channel).toBe(IPC_CHANNELS.agent.memory.settingsGet);
+    expect(() =>
+      AgentMemoryRecallPreviewRequestSchema.parse({
+        requestId: 'request:memory:recall',
+        channel: IPC_CHANNELS.agent.memory.recallPreview,
+        payload: {
+          sessionId: 'session:1',
+          scopes: ['workspace'],
+          limit: 3,
+          createdAt: '2026-05-16T00:00:00.000Z',
+        },
+        meta: {
+          channel: IPC_CHANNELS.agent.memory.recallPreview,
+          createdAt: '2026-05-16T00:00:00.000Z',
+          source: 'renderer',
+        },
+      }),
+    ).toThrow();
+  });
+
+  it('parses memory results with strict runtime ipc metadata', () => {
+    const result = AgentMemorySettingsGetResultSchema.parse({
+      ok: true,
+      data: {
+        settings: {
+          workspaceId: 'workspace:1',
+          autoCaptureEnabled: true,
+          defaultCandidateReviewMode: 'manual',
+          updatedAt: '2026-05-16T00:00:00.000Z',
+        },
+      },
+      meta: {
+        requestId: 'request:memory:settings',
+        channel: IPC_CHANNELS.agent.memory.settingsGet,
+        handledAt: '2026-05-16T00:00:01.000Z',
+        operationName: 'agent.memory.settings.get',
+      },
+    });
+
+    expect(result.ok).toBe(true);
   });
 });
 

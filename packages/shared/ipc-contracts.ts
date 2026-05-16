@@ -35,6 +35,23 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.agent.artifacts.versionCreate,
   IPC_CHANNELS.agent.artifacts.statusUpdate,
   IPC_CHANNELS.agent.artifacts.reference,
+  IPC_CHANNELS.agent.memory.settingsGet,
+  IPC_CHANNELS.agent.memory.settingsUpdate,
+  IPC_CHANNELS.agent.memory.candidateList,
+  IPC_CHANNELS.agent.memory.candidateAccept,
+  IPC_CHANNELS.agent.memory.candidateReject,
+  IPC_CHANNELS.agent.memory.candidateArchive,
+  IPC_CHANNELS.agent.memory.candidateEditAndAccept,
+  IPC_CHANNELS.agent.memory.memoryList,
+  IPC_CHANNELS.agent.memory.memoryGet,
+  IPC_CHANNELS.agent.memory.memoryUpdate,
+  IPC_CHANNELS.agent.memory.memoryArchive,
+  IPC_CHANNELS.agent.memory.memoryDelete,
+  IPC_CHANNELS.agent.memory.memoryDisable,
+  IPC_CHANNELS.agent.memory.memoryEnable,
+  IPC_CHANNELS.agent.memory.sourceRefsList,
+  IPC_CHANNELS.agent.memory.accessLogsList,
+  IPC_CHANNELS.agent.memory.recallPreview,
 ] as const;
 
 export type BusinessIpcChannel = (typeof BUSINESS_IPC_CHANNELS)[number];
