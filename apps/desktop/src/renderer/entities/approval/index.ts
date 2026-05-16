@@ -1,1 +1,2 @@
-export { ApprovalCard } from './ApprovalCard';
+export * from './ApprovalCard';
+export * from './store';
