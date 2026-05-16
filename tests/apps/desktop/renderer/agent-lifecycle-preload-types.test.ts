@@ -30,6 +30,12 @@ describe('agent lifecycle preload API shape', () => {
         approval: {
           resolve: vi.fn(),
         },
+        recovery: {
+          listRecoverableRuns: vi.fn(),
+          resume: vi.fn(),
+          cancel: vi.fn(),
+          retry: vi.fn(),
+        },
       },
     };
 

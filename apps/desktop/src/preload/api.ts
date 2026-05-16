@@ -19,6 +19,14 @@ import type {
   AgentPlanStatusUpdatePayload,
   AgentApprovalResolveData,
   AgentApprovalResolvePayload,
+  AgentRecoverableRunListData,
+  AgentRecoverableRunListPayload,
+  AgentRunCancelData,
+  AgentRunCancelPayload,
+  AgentRunResumeData,
+  AgentRunResumePayload,
+  AgentRunRetryData,
+  AgentRunRetryPayload,
   AgentRunStartData,
   AgentRunStartPayload,
   AgentSessionCreateData,
@@ -207,6 +215,44 @@ export const api = {
         AgentApprovalResolveData,
         typeof IPC_CHANNELS.agent.approval.resolve
       >> => invokeRuntimeIpc(IPC_CHANNELS.agent.approval.resolve, request),
+    },
+    recovery: {
+      listRecoverableRuns: (
+        request: BusinessRequest<
+          AgentRecoverableRunListPayload,
+          typeof IPC_CHANNELS.agent.recovery.recoverableRunsList
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentRecoverableRunListData,
+        typeof IPC_CHANNELS.agent.recovery.recoverableRunsList
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.recovery.recoverableRunsList, request),
+      resume: (
+        request: BusinessRequest<
+          AgentRunResumePayload,
+          typeof IPC_CHANNELS.agent.recovery.resume
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentRunResumeData,
+        typeof IPC_CHANNELS.agent.recovery.resume
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.recovery.resume, request),
+      cancel: (
+        request: BusinessRequest<
+          AgentRunCancelPayload,
+          typeof IPC_CHANNELS.agent.recovery.cancel
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentRunCancelData,
+        typeof IPC_CHANNELS.agent.recovery.cancel
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.recovery.cancel, request),
+      retry: (
+        request: BusinessRequest<
+          AgentRunRetryPayload,
+          typeof IPC_CHANNELS.agent.recovery.retry
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentRunRetryData,
+        typeof IPC_CHANNELS.agent.recovery.retry
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.recovery.retry, request),
     },
   },
   runtime: {
