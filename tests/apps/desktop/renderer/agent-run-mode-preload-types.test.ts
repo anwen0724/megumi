@@ -37,6 +37,15 @@ describe('agent run mode preload API shape', () => {
           cancel: vi.fn(),
           retry: vi.fn(),
         },
+        artifacts: {
+          listByRun: vi.fn(),
+          listBySession: vi.fn(),
+          get: vi.fn(),
+          getVersion: vi.fn(),
+          createVersion: vi.fn(),
+          updateStatus: vi.fn(),
+          reference: vi.fn(),
+        },
       },
     };
 

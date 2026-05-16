@@ -9,6 +9,19 @@ import type {
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type {
+  AgentArtifactGetData,
+  AgentArtifactGetPayload,
+  AgentArtifactListByRunPayload,
+  AgentArtifactListBySessionPayload,
+  AgentArtifactListData,
+  AgentArtifactReferenceData,
+  AgentArtifactReferencePayload,
+  AgentArtifactStatusUpdateData,
+  AgentArtifactStatusUpdatePayload,
+  AgentArtifactVersionCreateData,
+  AgentArtifactVersionCreatePayload,
+  AgentArtifactVersionGetData,
+  AgentArtifactVersionGetPayload,
   AgentContextBaselineGetData,
   AgentContextBaselineGetPayload,
   AgentContextSourcesListData,
@@ -253,6 +266,66 @@ export const api = {
         AgentRunRetryData,
         typeof IPC_CHANNELS.agent.recovery.retry
       >> => invokeRuntimeIpc(IPC_CHANNELS.agent.recovery.retry, request),
+    },
+    artifacts: {
+      listByRun: (
+        request: BusinessRequest<
+          AgentArtifactListByRunPayload,
+          typeof IPC_CHANNELS.agent.artifacts.listByRun
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentArtifactListData,
+        typeof IPC_CHANNELS.agent.artifacts.listByRun
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.listByRun, request),
+      listBySession: (
+        request: BusinessRequest<
+          AgentArtifactListBySessionPayload,
+          typeof IPC_CHANNELS.agent.artifacts.listBySession
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentArtifactListData,
+        typeof IPC_CHANNELS.agent.artifacts.listBySession
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.listBySession, request),
+      get: (
+        request: BusinessRequest<AgentArtifactGetPayload, typeof IPC_CHANNELS.agent.artifacts.get>,
+      ): Promise<RuntimeIpcResult<AgentArtifactGetData, typeof IPC_CHANNELS.agent.artifacts.get>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.get, request),
+      getVersion: (
+        request: BusinessRequest<
+          AgentArtifactVersionGetPayload,
+          typeof IPC_CHANNELS.agent.artifacts.versionGet
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentArtifactVersionGetData,
+        typeof IPC_CHANNELS.agent.artifacts.versionGet
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.versionGet, request),
+      createVersion: (
+        request: BusinessRequest<
+          AgentArtifactVersionCreatePayload,
+          typeof IPC_CHANNELS.agent.artifacts.versionCreate
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentArtifactVersionCreateData,
+        typeof IPC_CHANNELS.agent.artifacts.versionCreate
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.versionCreate, request),
+      updateStatus: (
+        request: BusinessRequest<
+          AgentArtifactStatusUpdatePayload,
+          typeof IPC_CHANNELS.agent.artifacts.statusUpdate
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentArtifactStatusUpdateData,
+        typeof IPC_CHANNELS.agent.artifacts.statusUpdate
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.statusUpdate, request),
+      reference: (
+        request: BusinessRequest<
+          AgentArtifactReferencePayload,
+          typeof IPC_CHANNELS.agent.artifacts.reference
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentArtifactReferenceData,
+        typeof IPC_CHANNELS.agent.artifacts.reference
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.artifacts.reference, request),
     },
   },
   runtime: {
