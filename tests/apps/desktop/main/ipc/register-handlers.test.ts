@@ -10,6 +10,7 @@ const registerAgentPlanHandlers = vi.fn();
 const registerAgentToolHandlers = vi.fn();
 const registerAgentRecoveryHandlers = vi.fn();
 const registerAgentArtifactHandlers = vi.fn();
+const registerAgentMemoryHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
@@ -20,6 +21,10 @@ vi.mock('@megumi/desktop/main/ipc/handlers/agent-plan.handler', () => ({ registe
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-tool.handler', () => ({ registerAgentToolHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-recovery.handler', () => ({ registerAgentRecoveryHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-artifact.handler', () => ({ registerAgentArtifactHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/agent-memory.handler', () => ({ registerAgentMemoryHandlers }));
+vi.mock('electron', () => ({
+  ipcMain: { handle: vi.fn() },
+}));
 
 describe('registerAllHandlers', () => {
   beforeEach(() => {
@@ -32,6 +37,7 @@ describe('registerAllHandlers', () => {
     registerAgentToolHandlers.mockReset();
     registerAgentRecoveryHandlers.mockReset();
     registerAgentArtifactHandlers.mockReset();
+    registerAgentMemoryHandlers.mockReset();
   });
 
   it('registers only existing runtime handlers when no agent service is provided', async () => {
@@ -48,6 +54,7 @@ describe('registerAllHandlers', () => {
     expect(registerAgentToolHandlers).not.toHaveBeenCalled();
     expect(registerAgentRecoveryHandlers).not.toHaveBeenCalled();
     expect(registerAgentArtifactHandlers).not.toHaveBeenCalled();
+    expect(registerAgentMemoryHandlers).not.toHaveBeenCalled();
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
@@ -143,5 +150,35 @@ describe('registerAllHandlers', () => {
     registerAllHandlers({ agentArtifactService });
 
     expect(registerAgentArtifactHandlers).toHaveBeenCalledWith(agentArtifactService, { logger: undefined });
+  });
+
+  it('registers agent memory handlers when a memory service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const agentMemoryService = {
+      getSettings: vi.fn(),
+      updateSettings: vi.fn(),
+      listCandidates: vi.fn(),
+      acceptCandidate: vi.fn(),
+      rejectCandidate: vi.fn(),
+      archiveCandidate: vi.fn(),
+      listMemories: vi.fn(),
+      getMemory: vi.fn(),
+      updateMemory: vi.fn(),
+      archiveMemory: vi.fn(),
+      deleteMemory: vi.fn(),
+      disableMemory: vi.fn(),
+      enableMemory: vi.fn(),
+      listSourceRefs: vi.fn(),
+      listAccessLogs: vi.fn(),
+      recallPreview: vi.fn(),
+    };
+
+    registerAllHandlers({ agentMemoryService });
+
+    expect(registerAgentMemoryHandlers).toHaveBeenCalledWith({
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+      agentMemoryService,
+      logger: undefined,
+    });
   });
 });

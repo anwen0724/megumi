@@ -88,6 +88,12 @@ const mocks = vi.hoisted(() => {
     ) {
       this.database = database;
     }),
+    MemoryRepository: vi.fn(function MemoryRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
     ArtifactContentStore: vi.fn(function ArtifactContentStore(
       this: { options?: unknown },
       options: unknown,
@@ -105,6 +111,25 @@ const mocks = vi.hoisted(() => {
       reference: vi.fn(),
       };
     }),
+    createAgentMemoryService: vi.fn(() => ({
+      getSettings: vi.fn(),
+      updateSettings: vi.fn(),
+      proposeCandidate: vi.fn(),
+      listCandidates: vi.fn(),
+      acceptCandidate: vi.fn(),
+      rejectCandidate: vi.fn(),
+      archiveCandidate: vi.fn(),
+      listMemories: vi.fn(),
+      getMemory: vi.fn(),
+      updateMemory: vi.fn(),
+      archiveMemory: vi.fn(),
+      deleteMemory: vi.fn(),
+      disableMemory: vi.fn(),
+      enableMemory: vi.fn(),
+      listSourceRefs: vi.fn(),
+      listAccessLogs: vi.fn(),
+      recallPreview: vi.fn(),
+    })),
     PlanArtifactCompatibilityService: vi.fn(function PlanArtifactCompatibilityService(
       this: { options?: unknown },
       options: unknown,
@@ -191,12 +216,20 @@ vi.mock('@megumi/db/repos/artifact.repo', () => ({
   ArtifactRepository: mocks.ArtifactRepository,
 }));
 
+vi.mock('@megumi/db/repos/memory.repo', () => ({
+  MemoryRepository: mocks.MemoryRepository,
+}));
+
 vi.mock('@megumi/desktop/main/services/artifact-content-store.service', () => ({
   ArtifactContentStore: mocks.ArtifactContentStore,
 }));
 
 vi.mock('@megumi/desktop/main/services/agent-artifact.service', () => ({
   AgentArtifactService: mocks.AgentArtifactService,
+}));
+
+vi.mock('@megumi/desktop/main/services/agent-memory.service', () => ({
+  createAgentMemoryService: mocks.createAgentMemoryService,
 }));
 
 vi.mock('@megumi/desktop/main/services/plan-artifact-compatibility.service', () => ({
@@ -222,8 +255,10 @@ describe('main runtime logger composition', () => {
     mocks.migrateDatabase.mockClear();
     mocks.AgentRecoveryRepository.mockClear();
     mocks.ArtifactRepository.mockClear();
+    mocks.MemoryRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
     mocks.AgentArtifactService.mockClear();
+    mocks.createAgentMemoryService.mockClear();
     mocks.PlanArtifactCompatibilityService.mockClear();
     mocks.createAgentRecoveryService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
@@ -242,6 +277,7 @@ describe('main runtime logger composition', () => {
     const agentToolService = mocks.createDefaultAgentToolService.mock.results[0]?.value;
     const agentRecoveryService = mocks.createAgentRecoveryService.mock.results[0]?.value;
     const agentArtifactService = mocks.AgentArtifactService.mock.results[0]?.value;
+    const agentMemoryService = mocks.createAgentMemoryService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -262,6 +298,7 @@ describe('main runtime logger composition', () => {
     expect(mocks.AgentRunModeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.AgentRecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.MemoryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactContentStore).toHaveBeenCalledWith({
       artifactRoot: join(mocks.homePath, 'artifacts'),
     });
@@ -283,6 +320,12 @@ describe('main runtime logger composition', () => {
       repository: expect.any(Object),
       contentStore: expect.any(Object),
     });
+    expect(mocks.createAgentMemoryService).toHaveBeenCalledWith(expect.objectContaining({
+      repository: expect.any(Object),
+      now: expect.any(Function),
+      createId: expect.any(Function),
+      emitRuntimeEvent: expect.any(Function),
+    }));
     expect(mocks.createAgentRecoveryService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       clock: expect.any(Function),
@@ -301,6 +344,7 @@ describe('main runtime logger composition', () => {
       agentToolService,
       agentRecoveryService,
       agentArtifactService,
+      agentMemoryService,
     });
 
     processLogger.error('runtime_review_probe', {
