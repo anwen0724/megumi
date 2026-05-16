@@ -27,13 +27,44 @@ const mocks = vi.hoisted(() => {
     registerRuntimeProcessErrorHandlers: vi.fn(),
     registerAppLifecycle: vi.fn(),
     createMainWindow: vi.fn(),
-    createDefaultAgentLifecycleService: vi.fn(() => ({
+    AgentLifecycleRepository: vi.fn(function AgentLifecycleRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
+    AgentRunModeRepository: vi.fn(function AgentRunModeRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
+    AgentRunModeService: vi.fn(function AgentRunModeService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
+        createModeSnapshot: vi.fn(),
+        linkAcceptedSourcePlan: vi.fn(),
+        createPlanRecordForRun: vi.fn(),
+        getPlanByRun: vi.fn(),
+        updatePlanStatus: vi.fn(),
+      };
+    }),
+    AgentLifecycleService: vi.fn(function AgentLifecycleService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
       createSession: vi.fn(),
       listSessions: vi.fn(),
       startRun: vi.fn(),
       getPlanByRun: vi.fn(),
       updatePlanStatus: vi.fn(),
-    })),
+      };
+    }),
     createDefaultAgentContextService: vi.fn(() => ({
       getBaselineContext: vi.fn(),
       listWorkspaceSourcesByRun: vi.fn(),
@@ -74,6 +105,15 @@ const mocks = vi.hoisted(() => {
       reference: vi.fn(),
       };
     }),
+    PlanArtifactCompatibilityService: vi.fn(function PlanArtifactCompatibilityService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
+        syncImplementationPlanArtifact: vi.fn(),
+      };
+    }),
     createAgentRecoveryService: vi.fn(() => ({
       listRecoverableRuns: vi.fn(),
       resumeRun: vi.fn(),
@@ -108,7 +148,7 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
 }));
 
 vi.mock('@megumi/desktop/main/services/agent-lifecycle.service', () => ({
-  createDefaultAgentLifecycleService: mocks.createDefaultAgentLifecycleService,
+  AgentLifecycleService: mocks.AgentLifecycleService,
 }));
 
 vi.mock('@megumi/desktop/main/services/agent-context.service', () => ({
@@ -135,6 +175,18 @@ vi.mock('@megumi/db/repos/agent-recovery.repo', () => ({
   AgentRecoveryRepository: mocks.AgentRecoveryRepository,
 }));
 
+vi.mock('@megumi/db/repos/agent-lifecycle.repo', () => ({
+  AgentLifecycleRepository: mocks.AgentLifecycleRepository,
+}));
+
+vi.mock('@megumi/db/repos/agent-run-mode.repo', () => ({
+  AgentRunModeRepository: mocks.AgentRunModeRepository,
+}));
+
+vi.mock('@megumi/desktop/main/services/agent-run-mode.service', () => ({
+  AgentRunModeService: mocks.AgentRunModeService,
+}));
+
 vi.mock('@megumi/db/repos/artifact.repo', () => ({
   ArtifactRepository: mocks.ArtifactRepository,
 }));
@@ -147,6 +199,10 @@ vi.mock('@megumi/desktop/main/services/agent-artifact.service', () => ({
   AgentArtifactService: mocks.AgentArtifactService,
 }));
 
+vi.mock('@megumi/desktop/main/services/plan-artifact-compatibility.service', () => ({
+  PlanArtifactCompatibilityService: mocks.PlanArtifactCompatibilityService,
+}));
+
 describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -156,7 +212,10 @@ describe('main runtime logger composition', () => {
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
-    mocks.createDefaultAgentLifecycleService.mockClear();
+    mocks.AgentLifecycleRepository.mockClear();
+    mocks.AgentRunModeRepository.mockClear();
+    mocks.AgentRunModeService.mockClear();
+    mocks.AgentLifecycleService.mockClear();
     mocks.createDefaultAgentContextService.mockClear();
     mocks.createDefaultAgentToolService.mockClear();
     mocks.createDatabase.mockClear();
@@ -165,6 +224,7 @@ describe('main runtime logger composition', () => {
     mocks.ArtifactRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
     mocks.AgentArtifactService.mockClear();
+    mocks.PlanArtifactCompatibilityService.mockClear();
     mocks.createAgentRecoveryService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
@@ -177,7 +237,7 @@ describe('main runtime logger composition', () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
-    const agentService = mocks.createDefaultAgentLifecycleService.mock.results[0]?.value;
+    const agentService = mocks.AgentLifecycleService.mock.results[0]?.value;
     const agentContextService = mocks.createDefaultAgentContextService.mock.results[0]?.value;
     const agentToolService = mocks.createDefaultAgentToolService.mock.results[0]?.value;
     const agentRecoveryService = mocks.createAgentRecoveryService.mock.results[0]?.value;
@@ -194,19 +254,31 @@ describe('main runtime logger composition', () => {
     expect(mocks.createDefaultAgentContextService).toHaveBeenCalledWith(
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
     );
-    expect(mocks.createDefaultAgentLifecycleService).toHaveBeenCalledWith(
-      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
-      { contextService: agentContextService },
-    );
     expect(mocks.createDefaultAgentToolService).toHaveBeenCalledWith(
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
     );
     expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.AgentLifecycleRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.AgentRunModeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.AgentRecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactContentStore).toHaveBeenCalledWith({
       artifactRoot: join(mocks.homePath, 'artifacts'),
     });
+    const planArtifactCompatibility = mocks.PlanArtifactCompatibilityService.mock.results[0]?.value;
+    expect(mocks.PlanArtifactCompatibilityService).toHaveBeenCalledWith({
+      repository: expect.any(Object),
+    });
+    const runModeService = mocks.AgentRunModeService.mock.results[0]?.value;
+    expect(mocks.AgentRunModeService).toHaveBeenCalledWith(expect.objectContaining({
+      repository: expect.any(Object),
+      planArtifactCompatibility,
+    }));
+    expect(mocks.AgentLifecycleService).toHaveBeenCalledWith(expect.objectContaining({
+      repository: expect.any(Object),
+      runModeService,
+      contextService: agentContextService,
+    }));
     expect(mocks.AgentArtifactService).toHaveBeenCalledWith({
       repository: expect.any(Object),
       contentStore: expect.any(Object),
