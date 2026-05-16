@@ -15,6 +15,10 @@ import {
   type AgentToolHandlersService,
 } from './handlers/agent-tool.handler';
 import { registerAgentRecoveryHandlers } from './handlers/agent-recovery.handler';
+import {
+  registerAgentArtifactHandlers,
+  type AgentArtifactHandlersService,
+} from './handlers/agent-artifact.handler';
 import type { AgentRecoveryService } from '../services/agent-recovery.service';
 import type { RuntimeLogger } from '../services/runtime-logger.service';
 
@@ -25,6 +29,7 @@ export interface RegisterAllHandlersOptions {
   agentPlanService?: AgentPlanHandlersService;
   agentToolService?: AgentToolHandlersService;
   agentRecoveryService?: AgentRecoveryService;
+  agentArtifactService?: AgentArtifactHandlersService;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -50,5 +55,9 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.agentRecoveryService) {
     registerAgentRecoveryHandlers(options.agentRecoveryService, { logger: options.logger });
+  }
+
+  if (options.agentArtifactService) {
+    registerAgentArtifactHandlers(options.agentArtifactService, { logger: options.logger });
   }
 }

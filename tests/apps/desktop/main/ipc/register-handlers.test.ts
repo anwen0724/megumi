@@ -9,6 +9,7 @@ const registerAgentContextHandlers = vi.fn();
 const registerAgentPlanHandlers = vi.fn();
 const registerAgentToolHandlers = vi.fn();
 const registerAgentRecoveryHandlers = vi.fn();
+const registerAgentArtifactHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
@@ -18,6 +19,7 @@ vi.mock('@megumi/desktop/main/ipc/handlers/agent-context.handler', () => ({ regi
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-plan.handler', () => ({ registerAgentPlanHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-tool.handler', () => ({ registerAgentToolHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-recovery.handler', () => ({ registerAgentRecoveryHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/agent-artifact.handler', () => ({ registerAgentArtifactHandlers }));
 
 describe('registerAllHandlers', () => {
   beforeEach(() => {
@@ -29,6 +31,7 @@ describe('registerAllHandlers', () => {
     registerAgentPlanHandlers.mockReset();
     registerAgentToolHandlers.mockReset();
     registerAgentRecoveryHandlers.mockReset();
+    registerAgentArtifactHandlers.mockReset();
   });
 
   it('registers only existing runtime handlers when no agent service is provided', async () => {
@@ -44,6 +47,7 @@ describe('registerAllHandlers', () => {
     expect(registerAgentPlanHandlers).not.toHaveBeenCalled();
     expect(registerAgentToolHandlers).not.toHaveBeenCalled();
     expect(registerAgentRecoveryHandlers).not.toHaveBeenCalled();
+    expect(registerAgentArtifactHandlers).not.toHaveBeenCalled();
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
@@ -122,5 +126,22 @@ describe('registerAllHandlers', () => {
     registerAllHandlers({ agentRecoveryService });
 
     expect(registerAgentRecoveryHandlers).toHaveBeenCalledWith(agentRecoveryService, { logger: undefined });
+  });
+
+  it('registers agent artifact handlers when an artifact service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const agentArtifactService = {
+      listByRun: vi.fn(),
+      listBySession: vi.fn(),
+      get: vi.fn(),
+      getVersion: vi.fn(),
+      createVersion: vi.fn(),
+      updateStatus: vi.fn(),
+      reference: vi.fn(),
+    };
+
+    registerAllHandlers({ agentArtifactService });
+
+    expect(registerAgentArtifactHandlers).toHaveBeenCalledWith(agentArtifactService, { logger: undefined });
   });
 });
