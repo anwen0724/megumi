@@ -7,3 +7,4 @@ export * from './repos/agent-run-mode.repo';
 export * from './repos/agent-tool.repo';
 export * from './repos/agent-recovery.repo';
 export * from './repos/artifact.repo';
+export * from './repos/memory.repo';
