@@ -28,6 +28,10 @@ import {
   type RuntimeEventType,
   type RuntimeEventVisibility,
 } from './runtime-events';
+import {
+  TOOL_POLICY_DECISIONS,
+  TOOL_RISK_LEVELS,
+} from './tool-contracts';
 
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
   RuntimeEventType,
@@ -250,6 +254,23 @@ const ToolCallRequestedPayloadSchema = z
   })
   .strict();
 
+const ToolCallValidatedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    toolName: z.string().min(1),
+  })
+  .strict();
+
+const ToolCallPolicyDecidedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    toolName: z.string().min(1),
+    decision: z.enum(TOOL_POLICY_DECISIONS),
+    effectiveRiskLevel: z.enum(TOOL_RISK_LEVELS),
+    reason: z.string().min(1),
+  })
+  .strict();
+
 const ToolCallStartedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
@@ -275,6 +296,14 @@ const ToolCallFailedPayloadSchema = z
   })
   .strict();
 
+const ToolCallDeniedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    toolName: z.string().min(1),
+    reason: z.string().min(1),
+  })
+  .strict();
+
 const ApprovalRequestedPayloadSchema = z
   .object({
     approvalId: z.string().min(1),
@@ -288,8 +317,16 @@ const ApprovalRequestedPayloadSchema = z
 const ApprovalResolvedPayloadSchema = z
   .object({
     approvalId: z.string().min(1),
-    decision: z.enum(['approved', 'denied']),
+    decision: z.enum(['approved', 'denied', 'expired', 'cancelled']),
     decidedAt: RuntimeEventIsoDateTimeSchema,
+  })
+  .strict();
+
+const ApprovalExpiredPayloadSchema = z
+  .object({
+    approvalRequestId: z.string().min(1),
+    toolCallId: z.string().min(1).optional(),
+    expiredAt: RuntimeEventIsoDateTimeSchema,
   })
   .strict();
 
@@ -370,11 +407,18 @@ export const AssistantOutputCompletedEventSchema = eventSchema(
   AssistantOutputCompletedPayloadSchema,
 );
 export const ToolCallRequestedEventSchema = eventSchema('tool.call.requested', ToolCallRequestedPayloadSchema);
+export const ToolCallValidatedEventSchema = eventSchema('tool.call.validated', ToolCallValidatedPayloadSchema);
+export const ToolCallPolicyDecidedEventSchema = eventSchema(
+  'tool.call.policy_decided',
+  ToolCallPolicyDecidedPayloadSchema,
+);
 export const ToolCallStartedEventSchema = eventSchema('tool.call.started', ToolCallStartedPayloadSchema);
 export const ToolCallCompletedEventSchema = eventSchema('tool.call.completed', ToolCallCompletedPayloadSchema);
 export const ToolCallFailedEventSchema = eventSchema('tool.call.failed', ToolCallFailedPayloadSchema);
+export const ToolCallDeniedEventSchema = eventSchema('tool.call.denied', ToolCallDeniedPayloadSchema);
 export const ApprovalRequestedEventSchema = eventSchema('approval.requested', ApprovalRequestedPayloadSchema);
 export const ApprovalResolvedEventSchema = eventSchema('approval.resolved', ApprovalResolvedPayloadSchema);
+export const ApprovalExpiredEventSchema = eventSchema('approval.expired', ApprovalExpiredPayloadSchema);
 export const ArtifactCreatedEventSchema = eventSchema('artifact.created', ArtifactCreatedPayloadSchema);
 export const MemoryCreatedEventSchema = eventSchema('memory.created', MemoryCreatedPayloadSchema);
 
@@ -404,11 +448,15 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   AssistantOutputDeltaEventSchema,
   AssistantOutputCompletedEventSchema,
   ToolCallRequestedEventSchema,
+  ToolCallValidatedEventSchema,
+  ToolCallPolicyDecidedEventSchema,
   ToolCallStartedEventSchema,
   ToolCallCompletedEventSchema,
   ToolCallFailedEventSchema,
+  ToolCallDeniedEventSchema,
   ApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema,
+  ApprovalExpiredEventSchema,
   ArtifactCreatedEventSchema,
   MemoryCreatedEventSchema,
 ]);

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ApprovalExpiredEventSchema,
   ContextPatchRequestedEventSchema,
   RuntimeEventSchema,
   RuntimeEventTypeSchema,
+  ToolCallDeniedEventSchema,
+  ToolCallPolicyDecidedEventSchema,
   isTerminalRuntimeEvent,
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime-event-schemas';
@@ -334,5 +337,82 @@ describe('context runtime events', () => {
     });
 
     expect(event.eventType).toBe('context.effective.updated');
+  });
+});
+
+describe('tool and approval runtime events', () => {
+  it('validates policy decided, denied, and approval expired events', () => {
+    const base = {
+      eventId: 'event-tool-1',
+      schemaVersion: 1 as const,
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      actionId: 'action-1',
+      sequence: 1,
+      createdAt: '2026-05-16T00:00:00.000Z',
+      source: 'security' as const,
+      visibility: 'debug' as const,
+      persist: 'required' as const,
+    };
+
+    expect(ToolCallPolicyDecidedEventSchema.parse({
+      ...base,
+      eventType: 'tool.call.policy_decided',
+      payload: {
+        toolCallId: 'tool-call-1',
+        toolName: 'workspace_read_file',
+        decision: 'allow',
+        effectiveRiskLevel: 'low',
+        reason: 'Read-only workspace tool.',
+      },
+    }).payload.decision).toBe('allow');
+
+    expect(ToolCallDeniedEventSchema.parse({
+      ...base,
+      eventId: 'event-tool-2',
+      eventType: 'tool.call.denied',
+      payload: {
+        toolCallId: 'tool-call-1',
+        toolName: 'workspace_write_file',
+        reason: 'Plan mode blocks workspace writes.',
+      },
+    }).payload.reason).toContain('Plan mode');
+
+    expect(ApprovalExpiredEventSchema.parse({
+      ...base,
+      eventId: 'event-approval-1',
+      eventType: 'approval.expired',
+      payload: {
+        approvalRequestId: 'approval-1',
+        toolCallId: 'tool-call-1',
+        expiredAt: '2026-05-16T00:01:00.000Z',
+      },
+    }).payload.approvalRequestId).toBe('approval-1');
+  });
+
+  it('creates typed tool events through the generic runtime event factory', () => {
+    const event = createRuntimeEvent({
+      eventId: 'event-tool-3',
+      eventType: 'tool.call.policy_decided',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      actionId: 'action-1',
+      sequence: 1,
+      createdAt: '2026-05-16T00:00:00.000Z',
+      source: 'security',
+      visibility: 'debug',
+      persist: 'required',
+      payload: {
+        toolCallId: 'tool-call-1',
+        toolName: 'workspace_read_file',
+        decision: 'allow',
+        effectiveRiskLevel: 'low',
+        reason: 'Read-only workspace tool.',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(event).eventType).toBe('tool.call.policy_decided');
   });
 });
