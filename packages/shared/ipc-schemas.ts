@@ -24,6 +24,12 @@ import {
   ToolCallSchema,
   ToolDefinitionSchema,
 } from './tool-contracts';
+import {
+  AgentCancelRequestSchema,
+  AgentRecoverableRunSummarySchema,
+  AgentResumeRequestSchema,
+  AgentRetryRequestSchema,
+} from './agent-recovery-contracts';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
 
@@ -326,6 +332,39 @@ export const AgentApprovalResolveDataSchema = z
   })
   .strict();
 
+export const AgentRecoverableRunListPayloadSchema = z.object({});
+
+export const AgentRecoverableRunListDataSchema = z.object({
+  runs: z.array(AgentRecoverableRunSummarySchema),
+});
+
+export const AgentRunResumePayloadSchema = AgentResumeRequestSchema.omit({
+  resumeRequestId: true,
+  createdAt: true,
+});
+
+export const AgentRunResumeDataSchema = z.object({
+  request: AgentResumeRequestSchema,
+});
+
+export const AgentRunCancelPayloadSchema = AgentCancelRequestSchema.omit({
+  cancelRequestId: true,
+  createdAt: true,
+});
+
+export const AgentRunCancelDataSchema = z.object({
+  request: AgentCancelRequestSchema,
+});
+
+export const AgentRunRetryPayloadSchema = AgentRetryRequestSchema.omit({
+  retryRequestId: true,
+  createdAt: true,
+});
+
+export const AgentRunRetryDataSchema = z.object({
+  request: AgentRetryRequestSchema,
+});
+
 export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.session.create,
   AgentSessionCreatePayloadSchema,
@@ -374,6 +413,26 @@ export const AgentToolCallGetRequestSchema = createRuntimeIpcRequestSchema(
 export const AgentApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.approval.resolve,
   AgentApprovalResolvePayloadSchema,
+);
+
+export const AgentRecoverableRunListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.recovery.recoverableRunsList,
+  AgentRecoverableRunListPayloadSchema,
+);
+
+export const AgentRunResumeRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.recovery.resume,
+  AgentRunResumePayloadSchema,
+);
+
+export const AgentRunCancelRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.recovery.cancel,
+  AgentRunCancelPayloadSchema,
+);
+
+export const AgentRunRetryRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.recovery.retry,
+  AgentRunRetryPayloadSchema,
 );
 
 export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
@@ -456,3 +515,11 @@ export type AgentToolCallGetPayload = z.infer<typeof AgentToolCallGetPayloadSche
 export type AgentToolCallGetData = z.infer<typeof AgentToolCallGetDataSchema>;
 export type AgentApprovalResolvePayload = z.infer<typeof AgentApprovalResolvePayloadSchema>;
 export type AgentApprovalResolveData = z.infer<typeof AgentApprovalResolveDataSchema>;
+export type AgentRecoverableRunListPayload = z.infer<typeof AgentRecoverableRunListPayloadSchema>;
+export type AgentRecoverableRunListData = z.infer<typeof AgentRecoverableRunListDataSchema>;
+export type AgentRunResumePayload = z.infer<typeof AgentRunResumePayloadSchema>;
+export type AgentRunResumeData = z.infer<typeof AgentRunResumeDataSchema>;
+export type AgentRunCancelPayload = z.infer<typeof AgentRunCancelPayloadSchema>;
+export type AgentRunCancelData = z.infer<typeof AgentRunCancelDataSchema>;
+export type AgentRunRetryPayload = z.infer<typeof AgentRunRetryPayloadSchema>;
+export type AgentRunRetryData = z.infer<typeof AgentRunRetryDataSchema>;

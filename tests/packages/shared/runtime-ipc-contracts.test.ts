@@ -24,6 +24,10 @@ import {
   isBusinessIpcChannel,
 } from '@megumi/shared/ipc-contracts';
 import {
+  AgentRecoverableRunListRequestSchema,
+  AgentRunCancelRequestSchema,
+  AgentRunResumeRequestSchema,
+  AgentRunRetryRequestSchema,
   AgentToolDefinitionsListRequestSchema,
   AgentPlanByRunGetRequestSchema,
   AgentContextBaselineGetRequestSchema,
@@ -596,6 +600,73 @@ describe('agent tool approval runtime IPC schemas', () => {
 
     expect(request.meta.channel).toBe(IPC_CHANNELS.agent.tool.definitionsList);
     expect('channel' in request).toBe(false);
+  });
+});
+
+describe('agent recovery runtime IPC schemas', () => {
+  it('parses agent recovery runtime ipc requests with meta.channel', () => {
+    const listRequest = AgentRecoverableRunListRequestSchema.parse({
+      requestId: 'request_123',
+      payload: {},
+      meta: {
+        channel: IPC_CHANNELS.agent.recovery.recoverableRunsList,
+        createdAt: '2026-05-16T10:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(listRequest.meta.channel).toBe('agent:recovery:recoverable-runs:list');
+    expect(isBusinessIpcChannel(listRequest.meta.channel)).toBe(true);
+
+    const resumeRequest = AgentRunResumeRequestSchema.parse({
+      requestId: 'request_124',
+      payload: {
+        runId: 'run_123',
+        checkpointId: 'checkpoint_123',
+        requestedBy: 'user',
+        reason: 'user_requested',
+        resumeMode: 'from_checkpoint',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.recovery.resume,
+        createdAt: '2026-05-16T10:00:01.000Z',
+        source: 'renderer',
+      },
+    });
+
+    const cancelRequest = AgentRunCancelRequestSchema.parse({
+      requestId: 'request_125',
+      payload: {
+        runId: 'run_123',
+        requestedBy: 'user',
+        reason: 'user_requested',
+        scope: 'run',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.recovery.cancel,
+        createdAt: '2026-05-16T10:00:02.000Z',
+        source: 'renderer',
+      },
+    });
+
+    const retryRequest = AgentRunRetryRequestSchema.parse({
+      requestId: 'request_126',
+      payload: {
+        runId: 'run_123',
+        requestedBy: 'user',
+        retryKind: 'run',
+        reason: 'runtime_retryable_error',
+      },
+      meta: {
+        channel: IPC_CHANNELS.agent.recovery.retry,
+        createdAt: '2026-05-16T10:00:03.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(resumeRequest.payload.resumeMode).toBe('from_checkpoint');
+    expect(cancelRequest.payload.scope).toBe('run');
+    expect(retryRequest.payload.retryKind).toBe('run');
   });
 });
 

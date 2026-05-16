@@ -35,6 +35,14 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'agent.tool.call.get';
     case IPC_CHANNELS.agent.approval.resolve:
       return 'agent.approval.resolve';
+    case IPC_CHANNELS.agent.recovery.recoverableRunsList:
+      return 'agent.recovery.recoverable-runs.list';
+    case IPC_CHANNELS.agent.recovery.resume:
+      return 'agent.recovery.resume';
+    case IPC_CHANNELS.agent.recovery.cancel:
+      return 'agent.recovery.cancel';
+    case IPC_CHANNELS.agent.recovery.retry:
+      return 'agent.recovery.retry';
     default: {
       const exhaustive: never = channel;
       return exhaustive;

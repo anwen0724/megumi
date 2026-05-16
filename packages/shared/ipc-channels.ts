@@ -37,6 +37,12 @@ export const IPC_CHANNELS = {
     approval: {
       resolve: 'agent:approval:resolve',
     },
+    recovery: {
+      recoverableRunsList: 'agent:recovery:recoverable-runs:list',
+      resume: 'agent:recovery:resume',
+      cancel: 'agent:recovery:cancel',
+      retry: 'agent:recovery:retry',
+    },
   },
   runtime: {
     event: 'runtime:event',
@@ -70,6 +76,10 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.agent.tool.definitionsList,
   IPC_CHANNELS.agent.tool.callGet,
   IPC_CHANNELS.agent.approval.resolve,
+  IPC_CHANNELS.agent.recovery.recoverableRunsList,
+  IPC_CHANNELS.agent.recovery.resume,
+  IPC_CHANNELS.agent.recovery.cancel,
+  IPC_CHANNELS.agent.recovery.retry,
   IPC_CHANNELS.runtime.event,
 ] as const;
 
