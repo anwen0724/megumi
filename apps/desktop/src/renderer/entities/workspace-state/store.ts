@@ -50,6 +50,15 @@ function upsertById<TItem extends { id: string }>(items: TItem[], item: TItem): 
   return items.map((candidate) => (candidate.id === item.id ? item : candidate));
 }
 
+function upsertArtifact(items: ArtifactCardData[], artifact: ArtifactCardData): ArtifactCardData[] {
+  const index = items.findIndex((candidate) => candidate.artifactId === artifact.artifactId);
+  if (index === -1) {
+    return [...items, artifact];
+  }
+
+  return items.map((candidate) => (candidate.artifactId === artifact.artifactId ? artifact : candidate));
+}
+
 export function createWorkspaceRunId(message: string): string {
   return createRunId('mock-run', message);
 }
@@ -92,21 +101,21 @@ function createRuntimeChatTask(input: WorkspaceRunInput, status: WorkspaceTaskSt
 
 function createMockArtifact(input: WorkspaceRunInput): ArtifactCardData {
   return {
-    id: `${createWorkspaceRunId(input.message)}-artifact`,
+    artifactId: `${createWorkspaceRunId(input.message)}-artifact`,
     title: 'Mock response notes',
-    type: 'tech_report',
-    status: 'created',
-    filePath: null,
+    kind: 'report',
+    status: 'active',
+    textPreview: `Megumi explored "${input.message}" in ${input.mode} mode.`,
   };
 }
 
 function createRuntimeChatArtifact(input: WorkspaceRunInput): ArtifactCardData {
   return {
-    id: `${createRuntimeChatRunId(input.message)}-artifact`,
+    artifactId: `${createRuntimeChatRunId(input.message)}-artifact`,
     title: 'Runtime response notes',
-    type: 'tech_report',
-    status: 'created',
-    filePath: null,
+    kind: 'report',
+    status: 'active',
+    textPreview: `Megumi completed "${input.message}" in ${input.mode} mode.`,
   };
 }
 
@@ -146,7 +155,7 @@ export const useWorkspaceStateStore = create<WorkspaceState>((set) => ({
   completeRuntimeChat: (input) => set((state) => ({
     activeRunId: null,
     tasks: state.tasks.filter((task) => task.id !== createRuntimeChatRunId(input.message)),
-    artifacts: upsertById(state.artifacts, createRuntimeChatArtifact(input)),
+    artifacts: upsertArtifact(state.artifacts, createRuntimeChatArtifact(input)),
     memoryNotes: upsertById(state.memoryNotes, createRuntimeChatMemoryNote(input)),
   })),
   failRuntimeChat: (input) => set({
@@ -168,7 +177,7 @@ export const useWorkspaceStateStore = create<WorkspaceState>((set) => ({
   completeMockRun: (input) => set((state) => ({
     activeRunId: null,
     tasks: state.tasks.filter((task) => task.id !== createWorkspaceRunId(input.message)),
-    artifacts: upsertById(state.artifacts, createMockArtifact(input)),
+    artifacts: upsertArtifact(state.artifacts, createMockArtifact(input)),
     memoryNotes: upsertById(state.memoryNotes, createMockMemoryNote(input)),
   })),
   failMockRun: (input) => set({

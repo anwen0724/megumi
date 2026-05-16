@@ -1,34 +1,28 @@
 import { FileText } from 'lucide-react';
-import type { ArtifactType } from './types';
 import { Badge, Panel } from '../../shared/ui';
-
-export type ArtifactStatus = 'draft' | 'created' | 'modified' | 'failed';
-
-export interface ArtifactCardData {
-  id: string;
-  title: string;
-  type: ArtifactType;
-  status: ArtifactStatus;
-  filePath: string | null;
-}
+import type { ArtifactCardData } from './types';
 
 interface ArtifactCardProps {
   artifact: ArtifactCardData;
 }
 
-const statusLabels: Record<ArtifactStatus, string> = {
+const statusLabels = {
   draft: 'Draft',
-  created: 'Created',
-  modified: 'Modified',
+  active: 'Active',
+  superseded: 'Superseded',
+  archived: 'Archived',
   failed: 'Failed',
-};
+  deleted: 'Deleted',
+} as const;
 
-const statusVariants: Record<ArtifactStatus, 'neutral' | 'success' | 'warning' | 'danger'> = {
+const statusVariants = {
   draft: 'neutral',
-  created: 'success',
-  modified: 'warning',
+  active: 'success',
+  superseded: 'warning',
+  archived: 'neutral',
   failed: 'danger',
-};
+  deleted: 'neutral',
+} as const;
 
 export function ArtifactCard({ artifact }: ArtifactCardProps) {
   return (
@@ -42,10 +36,10 @@ export function ArtifactCard({ artifact }: ArtifactCardProps) {
             <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{artifact.title}</h3>
             <Badge variant={statusVariants[artifact.status]}>{statusLabels[artifact.status]}</Badge>
           </div>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">{artifact.type}</p>
-          {artifact.filePath ? (
-            <p className="mt-2 truncate rounded-md bg-[var(--color-surface-muted)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
-              {artifact.filePath}
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">{artifact.kind}</p>
+          {artifact.textPreview ? (
+            <p className="mt-2 line-clamp-2 rounded-md bg-[var(--color-surface-muted)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
+              {artifact.textPreview}
             </p>
           ) : null}
         </div>

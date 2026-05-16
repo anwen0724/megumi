@@ -1,5 +1,4 @@
-import { ArtifactCard, type ArtifactCardData } from '../../../entities/artifact';
-import { useWorkspaceStateStore } from '../../../entities/workspace-state';
+import { ArtifactCard, type ArtifactCardData, useArtifactStore } from '../../../entities/artifact';
 
 interface ArtifactsPanelTabProps {
   artifacts?: ArtifactCardData[];
@@ -7,7 +6,7 @@ interface ArtifactsPanelTabProps {
 }
 
 export function ArtifactsPanelTab({ artifacts, loading = false }: ArtifactsPanelTabProps) {
-  const storedArtifacts = useWorkspaceStateStore((state) => state.artifacts);
+  const storedArtifacts = useArtifactStore((state) => state.artifacts);
   const visibleArtifacts = artifacts ?? storedArtifacts;
 
   if (loading) {
@@ -21,7 +20,7 @@ export function ArtifactsPanelTab({ artifacts, loading = false }: ArtifactsPanel
   return (
     <div className="space-y-3">
       {visibleArtifacts.map((artifact) => (
-        <ArtifactCard key={artifact.id} artifact={artifact} />
+        <ArtifactCard key={artifact.artifactId} artifact={artifact} />
       ))}
     </div>
   );

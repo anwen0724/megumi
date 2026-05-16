@@ -2,10 +2,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ArtifactsPanelTab } from '@megumi/desktop/renderer/features/workspace-panel';
+import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
 
 describe('ArtifactsPanelTab', () => {
   beforeEach(() => {
+    useArtifactStore.getState().clearArtifacts();
     useWorkspaceStateStore.setState({
       tasks: [],
       artifacts: [],
@@ -31,32 +33,35 @@ describe('ArtifactsPanelTab', () => {
       <ArtifactsPanelTab
         artifacts={[
           {
-            id: 'artifact-1',
+            artifactId: 'artifact:1',
             title: 'Implementation plan',
-            type: 'task_list',
-            status: 'created',
-            filePath: 'docs/superpowers/plans/plan.md',
+            kind: 'implementation_plan',
+            status: 'active',
+            textPreview: 'Plan preview',
+            currentVersionId: 'artifact-version:1',
           },
         ]}
       />,
     );
 
     expect(screen.getByText('Implementation plan')).toBeInTheDocument();
-    expect(screen.getByText('Created')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
-  it('renders artifacts from workspace state when props are not provided', () => {
-    useWorkspaceStateStore.getState().completeMockRun({
-      message: 'Start with the shell',
-      mode: 'agent',
-      model: 'deepseek-v4-pro',
-      now: '2026-05-10T00:00:01.000Z',
-    });
+  it('renders artifacts from artifact state when props are not provided', () => {
+    useArtifactStore.getState().setArtifacts([
+      {
+        artifactId: 'artifact:store',
+        title: 'Stored report',
+        kind: 'report',
+        status: 'active',
+        textPreview: 'Store preview',
+        currentVersionId: 'artifact-version:store',
+      },
+    ]);
 
     render(<ArtifactsPanelTab />);
 
-    expect(screen.getByText('Mock response notes')).toBeInTheDocument();
-    expect(screen.getByText('Created')).toBeInTheDocument();
-    expect(screen.getByText('tech_report')).toBeInTheDocument();
+    expect(screen.getByText('Stored report')).toBeInTheDocument();
   });
 });

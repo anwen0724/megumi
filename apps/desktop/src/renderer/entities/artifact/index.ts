@@ -1,2 +1,3 @@
 export { ArtifactCard } from './ArtifactCard';
-export type { ArtifactCardData, ArtifactStatus } from './ArtifactCard';
+export { useArtifactStore } from './store';
+export type { ArtifactCardData } from './types';

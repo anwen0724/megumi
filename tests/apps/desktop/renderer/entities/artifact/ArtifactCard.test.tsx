@@ -4,33 +4,35 @@ import { render, screen } from '@testing-library/react';
 import { ArtifactCard } from '@megumi/desktop/renderer/entities/artifact';
 
 describe('ArtifactCard', () => {
-  it('renders a created artifact with path', () => {
+  it('renders an active artifact without host path exposure', () => {
     render(
       <ArtifactCard
         artifact={{
-          id: 'artifact-1',
-          title: 'UI redesign plan',
-          type: 'task_list',
-          status: 'created',
-          filePath: 'docs/superpowers/plans/plan.md',
+          artifactId: 'artifact:1',
+          title: 'Report',
+          kind: 'report',
+          status: 'active',
+          textPreview: 'Safe preview',
+          currentVersionId: 'artifact-version:1',
         }}
       />,
     );
 
-    expect(screen.getByText('UI redesign plan')).toBeInTheDocument();
-    expect(screen.getByText('Created')).toBeInTheDocument();
-    expect(screen.getByText('docs/superpowers/plans/plan.md')).toBeInTheDocument();
+    expect(screen.getByText('Report')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('Safe preview')).toBeInTheDocument();
+    expect(screen.queryByText(/C:\\/)).not.toBeInTheDocument();
   });
 
   it('renders a failed artifact status', () => {
     render(
       <ArtifactCard
         artifact={{
-          id: 'artifact-2',
+          artifactId: 'artifact:2',
           title: 'Patch draft',
-          type: 'code',
+          kind: 'code_snippet',
           status: 'failed',
-          filePath: null,
+          textPreview: '',
         }}
       />,
     );

@@ -70,11 +70,11 @@ describe('workspace state store', () => {
     expect(useWorkspaceStateStore.getState().tasks).toEqual([]);
     expect(useWorkspaceStateStore.getState().artifacts).toEqual([
       {
-        id: 'mock-run-start-with-the-shell-artifact',
+        artifactId: 'mock-run-start-with-the-shell-artifact',
         title: 'Mock response notes',
-        type: 'tech_report',
-        status: 'created',
-        filePath: null,
+        kind: 'report',
+        status: 'active',
+        textPreview: 'Megumi explored "Start with the shell" in agent mode.',
       },
     ]);
     expect(useWorkspaceStateStore.getState().memoryNotes).toEqual([
