@@ -24,6 +24,10 @@ const ids = {
   stepId: () => 'step-1',
   actionId: () => 'action-1',
   observationId: () => 'observation-1',
+  checkpointId: () => 'checkpoint-1',
+  resumeRequestId: () => 'resume-request-1',
+  cancelRequestId: () => 'cancel-request-1',
+  retryRequestId: () => 'retry-request-1',
   debugId: () => 'debug-agent-1',
   eventId: vi.fn()
     .mockReturnValueOnce('event-1')
@@ -394,5 +398,73 @@ describe('agent runtime lifecycle events', () => {
     expect(result.run.status).toBe('waiting_for_approval');
     expect(result.step.status).toBe('waiting_for_approval');
     expect(result.action.status).toBe('waiting_for_approval');
+  });
+
+  it('emits checkpoint observation and event for save_checkpoint action', async () => {
+    const { sink, events } = createSink();
+
+    const result = await runAgentTurn({
+      sessionId: 'session-1',
+      mode: 'execute',
+      goal: 'Save recovery state',
+      actionKind: 'save_checkpoint',
+      actionInput: {
+        reason: 'manual',
+        boundary: 'run_boundary',
+        stateSummary: 'Manual checkpoint.',
+      },
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: () => {
+          throw new Error('host boundary should not handle checkpoints');
+        },
+      },
+      clock: { now: () => '2026-05-16T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(result.observations).toContainEqual(
+      expect.objectContaining({
+        source: 'checkpoint',
+        kind: 'checkpoint_created',
+        summary: 'Manual checkpoint.',
+      }),
+    );
+    expect(events.map((event) => event.eventType)).toContain('checkpoint.created');
+  });
+
+  it('emits cancel request event for cancel action without executing tools', async () => {
+    const { sink, events } = createSink();
+    const handleAction = vi.fn();
+
+    const result = await runAgentTurn({
+      sessionId: 'session-1',
+      mode: 'execute',
+      goal: 'Cancel the run',
+      actionKind: 'cancel',
+      actionInput: {
+        reason: 'user_requested',
+        scope: 'run',
+      },
+      lifecycle: sink,
+      hostBoundary: { handleAction },
+      clock: { now: () => '2026-05-16T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(handleAction).not.toHaveBeenCalled();
+    expect(result.observations).toContainEqual(
+      expect.objectContaining({
+        source: 'checkpoint',
+        kind: 'cancel_requested',
+      }),
+    );
+    expect(events.map((event) => event.eventType)).toContain('run.cancel_requested');
   });
 });

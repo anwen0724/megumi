@@ -22,6 +22,10 @@ export interface AgentRuntimeIdFactory {
   stepId(): string;
   actionId(): string;
   observationId(): string;
+  checkpointId(): string;
+  resumeRequestId(): string;
+  cancelRequestId(): string;
+  retryRequestId(): string;
   eventId(): string;
   messageId(): string;
   debugId(): string;
@@ -49,6 +53,7 @@ export interface RunAgentTurnInput {
   sourcePlanId?: string;
   goal: string;
   actionKind?: AgentAction['kind'];
+  actionInput?: AgentAction['inputPreview'];
   actionInputPreview?: AgentAction['inputPreview'];
   initialContext?: AgentContext;
   contextPatch?: ContextPatch;
@@ -63,6 +68,7 @@ export interface RunAgentTurnResult {
   step: AgentStep;
   action: AgentAction;
   observation: AgentObservation;
+  observations: AgentObservation[];
   events: RuntimeEvent[];
   context?: AgentContext;
 }
@@ -77,6 +83,10 @@ export function createDefaultAgentRuntimeIds(): AgentRuntimeIdFactory {
     stepId: () => `step:${crypto.randomUUID()}`,
     actionId: () => `action:${crypto.randomUUID()}`,
     observationId: () => `observation:${crypto.randomUUID()}`,
+    checkpointId: () => `checkpoint:${crypto.randomUUID()}`,
+    resumeRequestId: () => `resume-request:${crypto.randomUUID()}`,
+    cancelRequestId: () => `cancel-request:${crypto.randomUUID()}`,
+    retryRequestId: () => `retry-request:${crypto.randomUUID()}`,
     eventId: () => `event:${crypto.randomUUID()}`,
     messageId: () => `message:${crypto.randomUUID()}`,
     debugId: createRuntimeDebugId,

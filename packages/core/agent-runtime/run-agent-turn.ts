@@ -15,11 +15,13 @@ import {
 } from './context';
 import {
   createAgentActionRequestedEvent,
+  createAgentCheckpointCreatedEvent,
   createAgentContextEffectiveUpdatedEvent,
   createAgentContextPatchAppliedEvent,
   createAgentContextPatchRejectedEvent,
   createAgentContextPatchRequestedEvent,
   createAgentObservationReceivedEvent,
+  createAgentRunCancelRequestedEvent,
   createAgentRunCompletedEvent,
   createAgentRunCreatedEvent,
   createAgentRunFailedEvent,
@@ -30,6 +32,11 @@ import {
   createAgentStepFailedEvent,
   createAgentStepStatusChangedEvent,
 } from './events';
+import {
+  createCancelObservation,
+  createCheckpointObservation,
+  toCheckpointCreatedPayload,
+} from './recovery';
 import {
   createDefaultAgentRuntimeIds,
   defaultAgentRuntimeClock,
@@ -48,6 +55,7 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
   const ids = { ...createDefaultAgentRuntimeIds(), ...input.ids } as AgentRuntimeIdFactory;
   let sequence = 0;
   const events: RuntimeEvent[] = [];
+  const observations: AgentObservation[] = [];
   const nextSequence = () => {
     sequence += 1;
     return sequence;
@@ -151,7 +159,7 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
 
   const actionInputPreview: AgentAction['inputPreview'] | undefined = input.contextPatch
     ? createContextUpdateInputPreview(input.contextPatch) as unknown as AgentAction['inputPreview']
-    : input.actionInputPreview ?? createDefaultRunModeActionInputPreview(resolvedMode);
+    : input.actionInput ?? input.actionInputPreview ?? createDefaultRunModeActionInputPreview(resolvedMode);
 
   let action: AgentAction = {
     actionId: ids.actionId(),
@@ -185,7 +193,14 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
   }
 
   try {
-    const observation = await input.hostBoundary.handleAction(action);
+    const recoveryObservation = createRecoveryObservationForAction(action, {
+      ids,
+      clock,
+      runId: run.runId,
+      stepId: step.stepId,
+    });
+    const observation = recoveryObservation ?? await input.hostBoundary.handleAction(action);
+    observations.push(observation);
     action = { ...action, status: 'completed', completedAt: clock.now() };
     await input.lifecycle.saveAction(action);
     await input.lifecycle.saveObservation(observation);
@@ -197,6 +212,29 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       createdAt: observation.receivedAt,
       observation,
     }));
+    if (action.kind === 'save_checkpoint') {
+      await emit(createAgentCheckpointCreatedEvent({
+        eventId: ids.eventId(),
+        runId,
+        sessionId: input.sessionId,
+        sequence: nextSequence(),
+        createdAt: observation.receivedAt,
+      }, toCheckpointCreatedPayload(observation)));
+    }
+    if (action.kind === 'cancel') {
+      await emit(createAgentRunCancelRequestedEvent({
+        eventId: ids.eventId(),
+        runId,
+        sessionId: input.sessionId,
+        sequence: nextSequence(),
+        createdAt: observation.receivedAt,
+      }, {
+        cancelRequestId: readString(observation.metadata ?? {}, 'cancelRequestId'),
+        requestedBy: 'user',
+        reason: readString(observation.metadata ?? {}, 'reason') as never,
+        scope: readString(observation.metadata ?? {}, 'scope') as never,
+      }));
+    }
     const appliedPayload = toContextPatchAppliedPayload(observation);
     const rejectedPayload = toContextPatchRejectedPayload(observation);
 
@@ -273,7 +311,7 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
         from: 'running',
         to: 'waiting_for_approval',
       }));
-      return { run, step, action, observation, events, context: input.initialContext };
+      return { run, step, action, observation, observations, events, context: input.initialContext };
     }
 
     const stepCompletedAt = clock.now();
@@ -318,7 +356,7 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       createdAt: runCompletedAt,
     }));
 
-    return { run, step, action, observation, events, context: input.initialContext };
+    return { run, step, action, observation, observations, events, context: input.initialContext };
   } catch (error) {
     const runtimeError = normalizeRuntimeError(error, {
       source: 'core',
@@ -340,6 +378,7 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       summary: runtimeError.message,
       error: runtimeError,
     };
+    observations.push(observation);
 
     await input.lifecycle.saveAction(action);
     await input.lifecycle.saveStep(step);
@@ -390,8 +429,49 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
       error: runtimeError,
     }));
 
-    return { run, step, action, observation, events, context: input.initialContext };
+    return { run, step, action, observation, observations, events, context: input.initialContext };
   }
+}
+
+function createRecoveryObservationForAction(
+  action: AgentAction,
+  input: {
+    ids: AgentRuntimeIdFactory;
+    clock: { now(): string };
+    runId: string;
+    stepId: string;
+  },
+): AgentObservation | undefined {
+  if (action.kind === 'save_checkpoint') {
+    const metadata = readJsonObject(action.inputPreview);
+    return createCheckpointObservation({
+      observationId: input.ids.observationId(),
+      runId: input.runId,
+      stepId: input.stepId,
+      actionId: action.actionId,
+      checkpointId: input.ids.checkpointId(),
+      reason: readString(metadata, 'reason', 'manual') as never,
+      boundary: readString(metadata, 'boundary', 'run_boundary') as never,
+      stateSummary: readString(metadata, 'stateSummary', 'Checkpoint saved.'),
+      receivedAt: input.clock.now(),
+    });
+  }
+
+  if (action.kind === 'cancel') {
+    const metadata = readJsonObject(action.inputPreview);
+    return createCancelObservation({
+      observationId: input.ids.observationId(),
+      runId: input.runId,
+      stepId: input.stepId,
+      actionId: action.actionId,
+      cancelRequestId: input.ids.cancelRequestId(),
+      reason: readString(metadata, 'reason', 'user_requested') as never,
+      scope: readString(metadata, 'scope', 'run') as never,
+      receivedAt: input.clock.now(),
+    });
+  }
+
+  return undefined;
 }
 
 function createDefaultRunModeActionInputPreview(mode: RunMode): AgentAction['inputPreview'] | undefined {
@@ -405,6 +485,23 @@ function createDefaultRunModeActionInputPreview(mode: RunMode): AgentAction['inp
     permissionMode: mode.permissionMode,
     outputExpectation: mode.outputExpectation,
   };
+}
+
+function readJsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function readString(value: Record<string, unknown>, key: string, fallback?: string): string {
+  const item = value[key];
+  if (typeof item === 'string' && item.length > 0) {
+    return item;
+  }
+  if (fallback !== undefined) {
+    return fallback;
+  }
+  throw new Error(`Missing recovery metadata: ${key}`);
 }
 
 function stepKindForAction(actionKind: AgentAction['kind']): AgentStep['kind'] {
