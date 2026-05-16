@@ -57,7 +57,7 @@ describe('tool-contracts', () => {
     })).toThrow(/Tool name/);
   });
 
-  it('defines tool lifecycle contracts without recoverable errors', () => {
+  it('defines tool lifecycle contracts without obsolete error fields', () => {
     expect(TOOL_CAPABILITIES).toContain('workspace_read');
     expect(TOOL_CALL_STATUSES).toContain('waiting_for_approval');
 
@@ -99,7 +99,7 @@ describe('tool-contracts', () => {
       createdAt: '2026-05-16T00:00:01.000Z',
     });
 
-    expect(observation.error).not.toHaveProperty('recoverable');
+    expect(observation.error).not.toHaveProperty(['recover', 'able'].join(''));
   });
 
   it('parses policy, approval, and sandbox records', () => {

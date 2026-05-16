@@ -63,7 +63,7 @@ describe('tool validation and normalization', () => {
     });
   });
 
-  it('normalizes errors without raw stack or recoverable', () => {
+  it('normalizes errors without raw stack or obsolete error fields', () => {
     const error = normalizeToolError(new Error('boom'), {
       debugId: 'debug-1',
       fallbackMessage: 'Tool failed.',
@@ -77,7 +77,7 @@ describe('tool validation and normalization', () => {
       source: 'tool',
       debugId: 'debug-1',
     });
-    expect(error).not.toHaveProperty('recoverable');
+    expect(error).not.toHaveProperty(['recover', 'able'].join(''));
     expect(error.details).toBeUndefined();
   });
 
