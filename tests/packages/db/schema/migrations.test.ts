@@ -142,4 +142,54 @@ describe('provider settings migrations', () => {
       'idx_implementation_plan_artifacts_producing_run_id',
     ]);
   });
+
+  it('creates agent recovery persistence tables', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+
+    const tables = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name ASC")
+      .all() as Array<{ name: string }>;
+
+    expect(tables.map((row) => row.name)).toEqual(
+      expect.arrayContaining([
+        'agent_checkpoints',
+        'agent_resume_requests',
+        'agent_cancel_requests',
+        'agent_retry_requests',
+        'checkpoint_restore_records',
+      ]),
+    );
+
+    const checkpointColumns = database
+      .prepare('PRAGMA table_info(agent_checkpoints)')
+      .all() as Array<{ name: string }>;
+
+    expect(checkpointColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      'checkpoint_id',
+      'run_id',
+      'step_id',
+      'action_id',
+      'reason',
+      'status',
+      'boundary',
+      'sequence',
+      'schema_version',
+      'created_at',
+      'created_by',
+      'mode_snapshot_ref',
+      'context_build_ref',
+      'policy_snapshot_ref',
+      'tool_registry_snapshot_ref',
+      'approval_request_id',
+      'tool_call_id',
+      'parent_checkpoint_id',
+      'side_effect_refs_json',
+      'resume_cursor',
+      'state_summary',
+      'state_ref',
+      'metadata_json',
+      'checkpoint_json',
+    ]));
+  });
 });

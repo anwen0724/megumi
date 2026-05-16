@@ -342,6 +342,107 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS agent_checkpoints (
+      checkpoint_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      action_id TEXT,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL,
+      boundary TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      schema_version INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      mode_snapshot_ref TEXT,
+      context_build_ref TEXT,
+      policy_snapshot_ref TEXT,
+      tool_registry_snapshot_ref TEXT,
+      approval_request_id TEXT,
+      tool_call_id TEXT,
+      parent_checkpoint_id TEXT,
+      side_effect_refs_json TEXT NOT NULL,
+      resume_cursor TEXT,
+      state_summary TEXT NOT NULL,
+      state_ref TEXT,
+      metadata_json TEXT,
+      checkpoint_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_run_sequence
+      ON agent_checkpoints(run_id, sequence);
+
+    CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_run_status
+      ON agent_checkpoints(run_id, status);
+
+    CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_approval_request
+      ON agent_checkpoints(approval_request_id);
+
+    CREATE TABLE IF NOT EXISTS agent_resume_requests (
+      resume_request_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      checkpoint_id TEXT,
+      requested_by TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      resume_mode TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      request_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_resume_requests_run_created
+      ON agent_resume_requests(run_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS agent_cancel_requests (
+      cancel_request_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      action_id TEXT,
+      requested_by TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      request_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_cancel_requests_run_created
+      ON agent_cancel_requests(run_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS agent_retry_requests (
+      retry_request_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      action_id TEXT,
+      checkpoint_id TEXT,
+      requested_by TEXT NOT NULL,
+      retry_kind TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      request_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_retry_requests_run_created
+      ON agent_retry_requests(run_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS checkpoint_restore_records (
+      restore_record_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      checkpoint_id TEXT NOT NULL,
+      resume_request_id TEXT,
+      status TEXT NOT NULL,
+      restored_at TEXT NOT NULL,
+      error_json TEXT,
+      metadata_json TEXT,
+      restore_record_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_checkpoint_restore_records_run_restored
+      ON checkpoint_restore_records(run_id, restored_at);
+  `);
+
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_session_id
     ON messages(session_id);
 
