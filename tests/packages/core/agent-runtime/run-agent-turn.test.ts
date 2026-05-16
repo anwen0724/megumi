@@ -467,4 +467,46 @@ describe('agent runtime lifecycle events', () => {
     );
     expect(events.map((event) => event.eventType)).toContain('run.cancel.requested');
   });
+
+  it('emits artifact referenced events when host returns artifact reference observation', async () => {
+    const { sink } = createSink();
+    const result = await runAgentTurn({
+      sessionId: 'session:artifact',
+      mode: 'execute',
+      goal: 'Reference report',
+      actionKind: 'create_artifact',
+      actionInputPreview: {
+        artifactId: 'artifact:1',
+        artifactVersionId: 'artifact-version:1',
+        referencedByKind: 'run',
+        referencedById: 'run:next',
+      },
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation:artifact-ref',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'runtime',
+          kind: 'artifact_referenced',
+          receivedAt: '2026-05-16T00:00:00.000Z',
+          summary: 'Artifact referenced.',
+          metadata: {
+            artifactId: 'artifact:1',
+            artifactVersionId: 'artifact-version:1',
+            referencedByKind: 'run',
+            referencedById: 'run:next',
+          },
+        }),
+      },
+      clock: { now: () => '2026-05-16T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(result.events.map((event) => event.eventType)).toContain('artifact.referenced');
+  });
 });

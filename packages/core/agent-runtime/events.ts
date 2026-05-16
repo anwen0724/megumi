@@ -9,6 +9,7 @@ import {
   createContextPatchAppliedEvent,
   createContextPatchRejectedEvent,
   createContextPatchRequestedEvent,
+  createRuntimeArtifactReferencedEvent,
   createRuntimeCheckpointCreatedEvent,
   createRuntimeRunCancelRequestedEvent,
   createRuntimeRunResumeRequestedEvent,
@@ -311,4 +312,15 @@ export function createAgentRunRetryRequestedEvent(
   payload: RuntimeEventPayloadByType['run.retry.requested'],
 ): RuntimeEvent {
   return createRuntimeRunRetryRequestedEvent({ ...input, source: 'core' }, payload);
+}
+
+export function createAgentArtifactReferencedEvent(
+  input: BaseEventInput & {
+    stepId?: string;
+    actionId?: string;
+    observationId?: string;
+  },
+  payload: RuntimeEventPayloadByType['artifact.referenced'],
+): RuntimeEvent {
+  return createRuntimeArtifactReferencedEvent({ ...input, source: 'core' }, payload);
 }

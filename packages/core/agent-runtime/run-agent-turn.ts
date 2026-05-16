@@ -13,8 +13,10 @@ import {
   toContextPatchAppliedPayload,
   toContextPatchRejectedPayload,
 } from './context';
+import { toArtifactReferencedPayload } from './artifacts';
 import {
   createAgentActionRequestedEvent,
+  createAgentArtifactReferencedEvent,
   createAgentCheckpointCreatedEvent,
   createAgentContextEffectiveUpdatedEvent,
   createAgentContextPatchAppliedEvent,
@@ -282,6 +284,21 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
         createdAt: observation.receivedAt,
         payload: rejectedPayload,
       }));
+    }
+
+    const artifactReferencedPayload = toArtifactReferencedPayload(observation);
+
+    if (artifactReferencedPayload) {
+      await emit(createAgentArtifactReferencedEvent({
+        eventId: ids.eventId(),
+        runId,
+        sessionId: input.sessionId,
+        stepId: step.stepId,
+        actionId: action.actionId,
+        observationId: observation.observationId,
+        sequence: nextSequence(),
+        createdAt: observation.receivedAt,
+      }, artifactReferencedPayload));
     }
 
     if (isApprovalWaitObservation(observation)) {
