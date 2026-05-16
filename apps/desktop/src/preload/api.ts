@@ -17,12 +17,18 @@ import type {
   AgentPlanByRunGetPayload,
   AgentPlanStatusUpdateData,
   AgentPlanStatusUpdatePayload,
+  AgentApprovalResolveData,
+  AgentApprovalResolvePayload,
   AgentRunStartData,
   AgentRunStartPayload,
   AgentSessionCreateData,
   AgentSessionCreatePayload,
   AgentSessionListData,
   AgentSessionListPayload,
+  AgentToolCallGetData,
+  AgentToolCallGetPayload,
+  AgentToolDefinitionsListData,
+  AgentToolDefinitionsListPayload,
   ChatCancelData,
   ChatCancelPayload,
   ChatStartData,
@@ -170,6 +176,37 @@ export const api = {
         AgentPlanStatusUpdateData,
         typeof IPC_CHANNELS.agent.plan.statusUpdate
       >> => invokeRuntimeIpc(IPC_CHANNELS.agent.plan.statusUpdate, request),
+    },
+    tool: {
+      definitionsList: (
+        request: BusinessRequest<
+          AgentToolDefinitionsListPayload,
+          typeof IPC_CHANNELS.agent.tool.definitionsList
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentToolDefinitionsListData,
+        typeof IPC_CHANNELS.agent.tool.definitionsList
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.tool.definitionsList, request),
+      callGet: (
+        request: BusinessRequest<
+          AgentToolCallGetPayload,
+          typeof IPC_CHANNELS.agent.tool.callGet
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentToolCallGetData,
+        typeof IPC_CHANNELS.agent.tool.callGet
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.tool.callGet, request),
+    },
+    approval: {
+      resolve: (
+        request: BusinessRequest<
+          AgentApprovalResolvePayload,
+          typeof IPC_CHANNELS.agent.approval.resolve
+        >,
+      ): Promise<RuntimeIpcResult<
+        AgentApprovalResolveData,
+        typeof IPC_CHANNELS.agent.approval.resolve
+      >> => invokeRuntimeIpc(IPC_CHANNELS.agent.approval.resolve, request),
     },
   },
   runtime: {

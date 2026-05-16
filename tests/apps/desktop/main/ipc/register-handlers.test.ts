@@ -7,6 +7,7 @@ const registerChatHandlers = vi.fn();
 const registerAgentHandlers = vi.fn();
 const registerAgentContextHandlers = vi.fn();
 const registerAgentPlanHandlers = vi.fn();
+const registerAgentToolHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
@@ -14,6 +15,7 @@ vi.mock('@megumi/desktop/main/ipc/handlers/chat.handler', () => ({ registerChatH
 vi.mock('@megumi/desktop/main/ipc/handlers/agent.handler', () => ({ registerAgentHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-context.handler', () => ({ registerAgentContextHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-plan.handler', () => ({ registerAgentPlanHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/agent-tool.handler', () => ({ registerAgentToolHandlers }));
 
 describe('registerAllHandlers', () => {
   beforeEach(() => {
@@ -23,6 +25,7 @@ describe('registerAllHandlers', () => {
     registerAgentHandlers.mockReset();
     registerAgentContextHandlers.mockReset();
     registerAgentPlanHandlers.mockReset();
+    registerAgentToolHandlers.mockReset();
   });
 
   it('registers only existing runtime handlers when no agent service is provided', async () => {
@@ -36,6 +39,7 @@ describe('registerAllHandlers', () => {
     expect(registerAgentHandlers).not.toHaveBeenCalled();
     expect(registerAgentContextHandlers).not.toHaveBeenCalled();
     expect(registerAgentPlanHandlers).not.toHaveBeenCalled();
+    expect(registerAgentToolHandlers).not.toHaveBeenCalled();
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
@@ -87,5 +91,18 @@ describe('registerAllHandlers', () => {
     registerAllHandlers({ agentPlanService });
 
     expect(registerAgentPlanHandlers).toHaveBeenCalledWith(agentPlanService, { logger: undefined });
+  });
+
+  it('registers agent tool handlers when a tool service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const agentToolService = {
+      listDefinitions: vi.fn(),
+      getToolCall: vi.fn(),
+      resolveApproval: vi.fn(),
+    };
+
+    registerAllHandlers({ agentToolService });
+
+    expect(registerAgentToolHandlers).toHaveBeenCalledWith(agentToolService, { logger: undefined });
   });
 });

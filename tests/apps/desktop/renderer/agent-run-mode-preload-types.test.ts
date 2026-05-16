@@ -24,6 +24,13 @@ describe('agent run mode preload API shape', () => {
           byRunGet: vi.fn(),
           statusUpdate: vi.fn(),
         },
+        tool: {
+          definitionsList: vi.fn(),
+          callGet: vi.fn(),
+        },
+        approval: {
+          resolve: vi.fn(),
+        },
       },
     };
 

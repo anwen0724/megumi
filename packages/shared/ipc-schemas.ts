@@ -19,6 +19,11 @@ import {
   ImplementationPlanArtifactRecordSchema,
   ImplementationPlanArtifactStatusSchema,
 } from './agent-run-mode-contracts';
+import {
+  ApprovalRecordSchema,
+  ToolCallSchema,
+  ToolDefinitionSchema,
+} from './tool-contracts';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
 
@@ -281,6 +286,46 @@ export const AgentPlanStatusUpdateDataSchema = z
   })
   .strict();
 
+export const AgentToolDefinitionsListPayloadSchema = z
+  .object({
+    runId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentToolDefinitionsListDataSchema = z
+  .object({
+    tools: z.array(ToolDefinitionSchema),
+  })
+  .strict();
+
+export const AgentToolCallGetPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+  })
+  .strict();
+
+export const AgentToolCallGetDataSchema = z
+  .object({
+    toolCall: ToolCallSchema.optional(),
+  })
+  .strict();
+
+export const AgentApprovalResolvePayloadSchema = z
+  .object({
+    approvalRequestId: z.string().min(1),
+    decision: z.enum(['approved', 'denied']),
+    scope: z.enum(['once', 'run']),
+    reason: z.string().min(1).optional(),
+    decidedAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentApprovalResolveDataSchema = z
+  .object({
+    approval: ApprovalRecordSchema,
+  })
+  .strict();
+
 export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.session.create,
   AgentSessionCreatePayloadSchema,
@@ -314,6 +359,21 @@ export const AgentPlanByRunGetRequestSchema = createRuntimeIpcRequestSchema(
 export const AgentPlanStatusUpdateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.plan.statusUpdate,
   AgentPlanStatusUpdatePayloadSchema,
+);
+
+export const AgentToolDefinitionsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.tool.definitionsList,
+  AgentToolDefinitionsListPayloadSchema,
+);
+
+export const AgentToolCallGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.tool.callGet,
+  AgentToolCallGetPayloadSchema,
+);
+
+export const AgentApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.agent.approval.resolve,
+  AgentApprovalResolvePayloadSchema,
 );
 
 export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
@@ -351,6 +411,21 @@ export const AgentPlanStatusUpdateResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.agent.plan.statusUpdate,
 );
 
+export const AgentToolDefinitionsListResultSchema = createRuntimeIpcResultSchema(
+  AgentToolDefinitionsListDataSchema,
+  IPC_CHANNELS.agent.tool.definitionsList,
+);
+
+export const AgentToolCallGetResultSchema = createRuntimeIpcResultSchema(
+  AgentToolCallGetDataSchema,
+  IPC_CHANNELS.agent.tool.callGet,
+);
+
+export const AgentApprovalResolveResultSchema = createRuntimeIpcResultSchema(
+  AgentApprovalResolveDataSchema,
+  IPC_CHANNELS.agent.approval.resolve,
+);
+
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;
 export type ProviderListData = z.infer<typeof ProviderListDataSchema>;
 export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
@@ -375,3 +450,9 @@ export type AgentPlanByRunGetPayload = z.infer<typeof AgentPlanByRunGetPayloadSc
 export type AgentPlanByRunGetData = z.infer<typeof AgentPlanByRunGetDataSchema>;
 export type AgentPlanStatusUpdatePayload = z.infer<typeof AgentPlanStatusUpdatePayloadSchema>;
 export type AgentPlanStatusUpdateData = z.infer<typeof AgentPlanStatusUpdateDataSchema>;
+export type AgentToolDefinitionsListPayload = z.infer<typeof AgentToolDefinitionsListPayloadSchema>;
+export type AgentToolDefinitionsListData = z.infer<typeof AgentToolDefinitionsListDataSchema>;
+export type AgentToolCallGetPayload = z.infer<typeof AgentToolCallGetPayloadSchema>;
+export type AgentToolCallGetData = z.infer<typeof AgentToolCallGetDataSchema>;
+export type AgentApprovalResolvePayload = z.infer<typeof AgentApprovalResolvePayloadSchema>;
+export type AgentApprovalResolveData = z.infer<typeof AgentApprovalResolveDataSchema>;

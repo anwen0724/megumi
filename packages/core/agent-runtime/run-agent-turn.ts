@@ -63,6 +63,9 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
     modeSnapshot: input.modeSnapshot,
   });
   const runModeInstruction = createRunModeRuntimeInstruction(resolvedMode);
+  const actionKind = input.actionKind
+    ?? (input.contextPatch ? 'update_context' : defaultActionKindForRunMode(resolvedMode));
+  const stepKind = stepKindForAction(actionKind);
 
   let run: AgentRun = {
     runId,
@@ -118,9 +121,9 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
   let step: AgentStep = {
     stepId: ids.stepId(),
     runId,
-    kind: 'model',
+    kind: stepKind,
     status: 'pending',
-    title: 'Agent response',
+    title: titleForStepKind(stepKind),
   };
   await input.lifecycle.saveStep(step);
   await emit(createAgentStepCreatedEvent({
@@ -146,8 +149,6 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
     to: 'running',
   }));
 
-  const actionKind = input.actionKind
-    ?? (input.contextPatch ? 'update_context' : defaultActionKindForRunMode(resolvedMode));
   const actionInputPreview: AgentAction['inputPreview'] | undefined = input.contextPatch
     ? createContextUpdateInputPreview(input.contextPatch) as unknown as AgentAction['inputPreview']
     : input.actionInputPreview ?? createDefaultRunModeActionInputPreview(resolvedMode);
@@ -243,6 +244,36 @@ export async function runAgentTurn(input: RunAgentTurnInput): Promise<RunAgentTu
         createdAt: observation.receivedAt,
         payload: rejectedPayload,
       }));
+    }
+
+    if (isApprovalWaitObservation(observation)) {
+      const waitingAt = clock.now();
+      action = { ...action, status: 'waiting_for_approval' };
+      step = { ...step, status: 'waiting_for_approval' };
+      run = { ...run, status: 'waiting_for_approval' };
+      await input.lifecycle.saveAction(action);
+      await input.lifecycle.saveStep(step);
+      await input.lifecycle.saveRun(run);
+      await emit(createAgentStepStatusChangedEvent({
+        eventId: ids.eventId(),
+        runId,
+        sessionId: input.sessionId,
+        stepId: step.stepId,
+        sequence: nextSequence(),
+        createdAt: waitingAt,
+        from: 'running',
+        to: 'waiting_for_approval',
+      }));
+      await emit(createAgentRunStatusChangedEvent({
+        eventId: ids.eventId(),
+        runId,
+        sessionId: input.sessionId,
+        sequence: nextSequence(),
+        createdAt: waitingAt,
+        from: 'running',
+        to: 'waiting_for_approval',
+      }));
+      return { run, step, action, observation, events, context: input.initialContext };
     }
 
     const stepCompletedAt = clock.now();
@@ -374,4 +405,45 @@ function createDefaultRunModeActionInputPreview(mode: RunMode): AgentAction['inp
     permissionMode: mode.permissionMode,
     outputExpectation: mode.outputExpectation,
   };
+}
+
+function stepKindForAction(actionKind: AgentAction['kind']): AgentStep['kind'] {
+  if (actionKind === 'call_tool') {
+    return 'tool';
+  }
+  if (actionKind === 'request_approval') {
+    return 'approval';
+  }
+  if (actionKind === 'update_context') {
+    return 'context';
+  }
+  if (actionKind === 'create_artifact') {
+    return 'artifact';
+  }
+  if (actionKind === 'update_memory') {
+    return 'memory';
+  }
+  if (actionKind === 'save_checkpoint' || actionKind === 'recover' || actionKind === 'cancel') {
+    return 'checkpoint';
+  }
+  return 'model';
+}
+
+function titleForStepKind(kind: AgentStep['kind']): string {
+  if (kind === 'tool') {
+    return 'Tool call';
+  }
+  if (kind === 'approval') {
+    return 'Approval request';
+  }
+  if (kind === 'context') {
+    return 'Context update';
+  }
+  return 'Agent response';
+}
+
+function isApprovalWaitObservation(observation: AgentObservation): boolean {
+  return observation.source === 'approval'
+    && observation.kind === 'approval_requested'
+    && observation.metadata?.status === 'pending';
 }

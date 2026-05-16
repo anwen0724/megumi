@@ -17,6 +17,12 @@ import type {
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
 } from './agent-context-contracts';
+import type {
+  ApprovalScope,
+  ApprovalStatus,
+  ToolPolicyDecisionValue,
+  ToolRiskLevel,
+} from './tool-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
@@ -46,11 +52,15 @@ export const RUNTIME_EVENT_TYPES = [
   'assistant.output.delta',
   'assistant.output.completed',
   'tool.call.requested',
+  'tool.call.validated',
+  'tool.call.policy_decided',
   'tool.call.started',
   'tool.call.completed',
   'tool.call.failed',
+  'tool.call.denied',
   'approval.requested',
   'approval.resolved',
+  'approval.expired',
   'artifact.created',
   'memory.created',
 ] as const;
@@ -222,6 +232,19 @@ export interface ToolCallRequestedPayload {
   approvalRequired: boolean;
 }
 
+export interface ToolCallValidatedPayload {
+  toolCallId: string;
+  toolName: string;
+}
+
+export interface ToolCallPolicyDecidedPayload {
+  toolCallId: string;
+  toolName: string;
+  decision: ToolPolicyDecisionValue;
+  effectiveRiskLevel: ToolRiskLevel;
+  reason: string;
+}
+
 export interface ToolCallStartedPayload {
   toolCallId: string;
   toolName: string;
@@ -241,6 +264,12 @@ export interface ToolCallFailedPayload {
   durationMs?: number;
 }
 
+export interface ToolCallDeniedPayload {
+  toolCallId: string;
+  toolName: string;
+  reason: string;
+}
+
 export interface ApprovalRequestedPayload {
   approvalId: string;
   toolCallId?: string;
@@ -250,9 +279,16 @@ export interface ApprovalRequestedPayload {
 }
 
 export interface ApprovalResolvedPayload {
-  approvalId: string;
-  decision: 'approved' | 'denied';
+  approvalRequestId: string;
+  decision: Exclude<ApprovalStatus, 'pending'>;
+  scope: ApprovalScope;
   decidedAt: string;
+}
+
+export interface ApprovalExpiredPayload {
+  approvalRequestId: string;
+  toolCallId?: string;
+  expiredAt: string;
 }
 
 export interface ArtifactCreatedPayload {
@@ -294,11 +330,15 @@ export type RuntimeEventPayloadByType = {
   'assistant.output.delta': AssistantOutputDeltaPayload;
   'assistant.output.completed': AssistantOutputCompletedPayload;
   'tool.call.requested': ToolCallRequestedPayload;
+  'tool.call.validated': ToolCallValidatedPayload;
+  'tool.call.policy_decided': ToolCallPolicyDecidedPayload;
   'tool.call.started': ToolCallStartedPayload;
   'tool.call.completed': ToolCallCompletedPayload;
   'tool.call.failed': ToolCallFailedPayload;
+  'tool.call.denied': ToolCallDeniedPayload;
   'approval.requested': ApprovalRequestedPayload;
   'approval.resolved': ApprovalResolvedPayload;
+  'approval.expired': ApprovalExpiredPayload;
   'artifact.created': ArtifactCreatedPayload;
   'memory.created': MemoryCreatedPayload;
 };

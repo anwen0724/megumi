@@ -72,8 +72,13 @@ describe('provider settings migrations', () => {
       'agent_runs',
       'agent_sessions',
       'agent_steps',
+      'approval_records',
+      'approval_requests',
       'messages',
       'runtime_events',
+      'tool_calls',
+      'tool_observations',
+      'tool_policy_decisions',
     ]));
 
     const indexes = database
@@ -85,8 +90,12 @@ describe('provider settings migrations', () => {
       'idx_agent_observations_run_id',
       'idx_agent_runs_session_id',
       'idx_agent_steps_run_id',
+      'idx_approval_requests_tool_call_id',
       'idx_messages_session_id',
       'idx_runtime_events_run_sequence',
+      'idx_tool_calls_run_id',
+      'idx_tool_calls_status',
+      'idx_tool_observations_tool_call_id',
     ]));
   });
 
