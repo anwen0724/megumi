@@ -158,6 +158,10 @@ describe('provider settings migrations', () => {
         'agent_cancel_requests',
         'agent_retry_requests',
         'checkpoint_restore_records',
+        'artifacts',
+        'artifact_versions',
+        'artifact_source_refs',
+        'artifact_relations',
       ]),
     );
 
@@ -190,6 +194,19 @@ describe('provider settings migrations', () => {
       'state_ref',
       'metadata_json',
       'checkpoint_json',
+    ]));
+
+    const indexes = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name ASC")
+      .all() as Array<{ name: string }>;
+
+    expect(indexes.map((row) => row.name)).toEqual(expect.arrayContaining([
+      'idx_artifacts_session_id',
+      'idx_artifacts_producing_run_id',
+      'idx_artifact_versions_artifact_id',
+      'idx_artifact_source_refs_artifact_id',
+      'idx_artifact_relations_from_artifact_id',
+      'idx_artifact_relations_to_artifact_id',
     ]));
   });
 });

@@ -443,6 +443,86 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS artifacts (
+      artifact_id TEXT PRIMARY KEY,
+      session_id TEXT,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL,
+      producing_run_id TEXT NOT NULL,
+      producing_step_id TEXT,
+      current_version_id TEXT,
+      pinned_version_ids_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      metadata_json TEXT,
+      artifact_json TEXT NOT NULL,
+      FOREIGN KEY(session_id) REFERENCES agent_sessions(session_id) ON DELETE SET NULL,
+      FOREIGN KEY(producing_run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(producing_step_id) REFERENCES agent_steps(step_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS artifact_versions (
+      artifact_version_id TEXT PRIMARY KEY,
+      artifact_id TEXT NOT NULL,
+      version_number INTEGER NOT NULL,
+      content_type TEXT NOT NULL,
+      content_format TEXT NOT NULL,
+      storage TEXT NOT NULL,
+      content_key TEXT,
+      inline_text TEXT,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      text_preview TEXT NOT NULL,
+      redaction_state TEXT NOT NULL,
+      change_summary TEXT,
+      created_by_run_id TEXT NOT NULL,
+      created_by_step_id TEXT,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      version_json TEXT NOT NULL,
+      UNIQUE(artifact_id, version_number),
+      FOREIGN KEY(artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
+      FOREIGN KEY(created_by_run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(created_by_step_id) REFERENCES agent_steps(step_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS artifact_source_refs (
+      source_ref_id TEXT PRIMARY KEY,
+      artifact_id TEXT NOT NULL,
+      artifact_version_id TEXT,
+      kind TEXT NOT NULL,
+      ref_id TEXT NOT NULL,
+      label TEXT,
+      metadata_json TEXT,
+      created_at TEXT NOT NULL,
+      source_ref_json TEXT NOT NULL,
+      FOREIGN KEY(artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
+      FOREIGN KEY(artifact_version_id) REFERENCES artifact_versions(artifact_version_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS artifact_relations (
+      relation_id TEXT PRIMARY KEY,
+      from_artifact_id TEXT NOT NULL,
+      from_version_id TEXT,
+      to_artifact_id TEXT NOT NULL,
+      to_version_id TEXT,
+      kind TEXT NOT NULL,
+      created_by_run_id TEXT,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      relation_json TEXT NOT NULL,
+      FOREIGN KEY(from_artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
+      FOREIGN KEY(from_version_id) REFERENCES artifact_versions(artifact_version_id) ON DELETE SET NULL,
+      FOREIGN KEY(to_artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
+      FOREIGN KEY(to_version_id) REFERENCES artifact_versions(artifact_version_id) ON DELETE SET NULL,
+      FOREIGN KEY(created_by_run_id) REFERENCES agent_runs(run_id) ON DELETE SET NULL
+    );
+  `);
+
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_session_id
     ON messages(session_id);
 
@@ -494,5 +574,23 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
     CREATE INDEX IF NOT EXISTS idx_tool_observations_tool_call_id
     ON tool_observations(tool_call_id);
+
+    CREATE INDEX IF NOT EXISTS idx_artifacts_session_id
+    ON artifacts(session_id);
+
+    CREATE INDEX IF NOT EXISTS idx_artifacts_producing_run_id
+    ON artifacts(producing_run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_artifact_versions_artifact_id
+    ON artifact_versions(artifact_id);
+
+    CREATE INDEX IF NOT EXISTS idx_artifact_source_refs_artifact_id
+    ON artifact_source_refs(artifact_id);
+
+    CREATE INDEX IF NOT EXISTS idx_artifact_relations_from_artifact_id
+    ON artifact_relations(from_artifact_id);
+
+    CREATE INDEX IF NOT EXISTS idx_artifact_relations_to_artifact_id
+    ON artifact_relations(to_artifact_id);
   `);
 }
