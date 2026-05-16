@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
 import { AgentRecoveryRepository } from '@megumi/db/repos/agent-recovery.repo';
+import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
@@ -13,6 +14,8 @@ import { createDefaultAgentLifecycleService } from './services/agent-lifecycle.s
 import { createDefaultAgentContextService } from './services/agent-context.service';
 import { createDefaultAgentToolService } from './services/agent-tool.service';
 import { createAgentRecoveryService } from './services/agent-recovery.service';
+import { ArtifactContentStore } from './services/artifact-content-store.service';
+import { AgentArtifactService } from './services/agent-artifact.service';
 
 loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
@@ -22,6 +25,14 @@ const agentService = createDefaultAgentLifecycleService(megumiHomePaths, { conte
 const agentToolService = createDefaultAgentToolService(megumiHomePaths);
 const agentRecoveryDatabase = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(agentRecoveryDatabase);
+const artifactRepository = new ArtifactRepository(agentRecoveryDatabase);
+const artifactContentStore = new ArtifactContentStore({
+  artifactRoot: path.join(megumiHomePaths.homePath, 'artifacts'),
+});
+const agentArtifactService = new AgentArtifactService({
+  repository: artifactRepository,
+  contentStore: artifactContentStore,
+});
 const agentRecoveryService = createAgentRecoveryService({
   repository: new AgentRecoveryRepository(agentRecoveryDatabase),
   clock: () => new Date(),
@@ -46,6 +57,7 @@ registerAppLifecycle({
     agentPlanService: agentService,
     agentToolService,
     agentRecoveryService,
+    agentArtifactService,
   }),
   createWindow: () => {
     createMainWindow({

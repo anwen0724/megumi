@@ -51,6 +51,29 @@ const mocks = vi.hoisted(() => {
     ) {
       this.database = database;
     }),
+    ArtifactRepository: vi.fn(function ArtifactRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
+    ArtifactContentStore: vi.fn(function ArtifactContentStore(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+    }),
+    AgentArtifactService: vi.fn(function AgentArtifactService() {
+      return {
+      listByRun: vi.fn(),
+      listBySession: vi.fn(),
+      get: vi.fn(),
+      getVersion: vi.fn(),
+      createVersion: vi.fn(),
+      updateStatus: vi.fn(),
+      reference: vi.fn(),
+      };
+    }),
     createAgentRecoveryService: vi.fn(() => ({
       listRecoverableRuns: vi.fn(),
       resumeRun: vi.fn(),
@@ -112,6 +135,18 @@ vi.mock('@megumi/db/repos/agent-recovery.repo', () => ({
   AgentRecoveryRepository: mocks.AgentRecoveryRepository,
 }));
 
+vi.mock('@megumi/db/repos/artifact.repo', () => ({
+  ArtifactRepository: mocks.ArtifactRepository,
+}));
+
+vi.mock('@megumi/desktop/main/services/artifact-content-store.service', () => ({
+  ArtifactContentStore: mocks.ArtifactContentStore,
+}));
+
+vi.mock('@megumi/desktop/main/services/agent-artifact.service', () => ({
+  AgentArtifactService: mocks.AgentArtifactService,
+}));
+
 describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -127,6 +162,9 @@ describe('main runtime logger composition', () => {
     mocks.createDatabase.mockClear();
     mocks.migrateDatabase.mockClear();
     mocks.AgentRecoveryRepository.mockClear();
+    mocks.ArtifactRepository.mockClear();
+    mocks.ArtifactContentStore.mockClear();
+    mocks.AgentArtifactService.mockClear();
     mocks.createAgentRecoveryService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
@@ -143,6 +181,7 @@ describe('main runtime logger composition', () => {
     const agentContextService = mocks.createDefaultAgentContextService.mock.results[0]?.value;
     const agentToolService = mocks.createDefaultAgentToolService.mock.results[0]?.value;
     const agentRecoveryService = mocks.createAgentRecoveryService.mock.results[0]?.value;
+    const agentArtifactService = mocks.AgentArtifactService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -164,6 +203,14 @@ describe('main runtime logger composition', () => {
     );
     expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.AgentRecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.ArtifactContentStore).toHaveBeenCalledWith({
+      artifactRoot: join(mocks.homePath, 'artifacts'),
+    });
+    expect(mocks.AgentArtifactService).toHaveBeenCalledWith({
+      repository: expect.any(Object),
+      contentStore: expect.any(Object),
+    });
     expect(mocks.createAgentRecoveryService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       clock: expect.any(Function),
@@ -181,6 +228,7 @@ describe('main runtime logger composition', () => {
       agentPlanService: agentService,
       agentToolService,
       agentRecoveryService,
+      agentArtifactService,
     });
 
     processLogger.error('runtime_review_probe', {
