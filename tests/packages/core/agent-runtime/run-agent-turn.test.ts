@@ -311,4 +311,88 @@ describe('agent runtime lifecycle events', () => {
       outputExpectation: 'implementation_plan_artifact',
     });
   });
+
+  it('creates a tool step and consumes a tool observation for call_tool actions', async () => {
+    const { sink, events } = createSink();
+    const result = await runAgentTurn({
+      sessionId: 'session-1',
+      mode: 'execute',
+      goal: 'Read a file',
+      actionKind: 'call_tool',
+      actionInputPreview: {
+        toolName: 'workspace_read_file',
+        summary: 'Read src/index.ts',
+      },
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation-tool-1',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'tool',
+          kind: 'tool_result',
+          receivedAt: '2026-05-16T00:00:04.000Z',
+          summary: 'Read file.',
+          metadata: {
+            toolCallId: 'tool-call-1',
+            toolName: 'workspace_read_file',
+            status: 'succeeded',
+          },
+        }),
+      },
+      clock: { now: () => '2026-05-16T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(result.step.kind).toBe('tool');
+    expect(result.action.kind).toBe('call_tool');
+    expect(result.observation.source).toBe('tool');
+    expect(events.some((event) => event.eventType === 'observation.received')).toBe(true);
+  });
+
+  it('keeps approval waits as waiting_for_approval instead of completing the run', async () => {
+    const { sink } = createSink();
+    const result = await runAgentTurn({
+      sessionId: 'session-1',
+      mode: 'execute',
+      goal: 'Write a file',
+      actionKind: 'request_approval',
+      actionInputPreview: {
+        approvalRequestId: 'approval-1',
+        toolName: 'workspace_write_file',
+        summary: 'Approve write',
+      },
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation-approval-1',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'approval',
+          kind: 'approval_requested',
+          receivedAt: '2026-05-16T00:00:04.000Z',
+          summary: 'Waiting for approval.',
+          metadata: {
+            approvalRequestId: 'approval-1',
+            status: 'pending',
+          },
+        }),
+      },
+      clock: { now: () => '2026-05-16T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(result.step.kind).toBe('approval');
+    expect(result.run.status).toBe('waiting_for_approval');
+    expect(result.step.status).toBe('waiting_for_approval');
+    expect(result.action.status).toBe('waiting_for_approval');
+  });
 });
