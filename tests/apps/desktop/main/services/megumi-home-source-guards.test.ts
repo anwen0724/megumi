@@ -49,12 +49,12 @@ describe('Megumi Home source guards', () => {
     );
   });
 
-  it('uses Megumi Home root when constructing default provider and chat secret stores', () => {
+  it('uses Megumi Home root when constructing provider and model step secret stores', () => {
     const providerHandler = readProjectFile('apps/desktop/src/main/ipc/handlers/provider.handler.ts');
-    const chatHandler = readProjectFile('apps/desktop/src/main/ipc/handlers/chat.handler.ts');
+    const mainComposition = readProjectFile('apps/desktop/src/main/index.ts');
 
     expect(providerHandler).toContain('createElectronSecretStoreService(homePaths.homePath)');
-    expect(chatHandler).toContain('createElectronSecretStoreService(homePaths.homePath)');
+    expect(mainComposition).toContain('createElectronSecretStoreService(megumiHomePaths.homePath)');
   });
 
   it('does not expose plaintext API keys through main-to-renderer send calls', () => {

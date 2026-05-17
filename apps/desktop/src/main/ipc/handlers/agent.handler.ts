@@ -16,12 +16,12 @@ import {
   AgentSessionCreateRequestSchema,
   AgentSessionListRequestSchema,
 } from '@megumi/shared/ipc-schemas';
-import type { AgentLifecycleService } from '../../services/agent-lifecycle.service';
+import type { SessionRunService } from '../../services/session-run.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
-export type AgentHandlersService = Pick<AgentLifecycleService, 'createSession' | 'listSessions' | 'startRun'>;
+export type AgentHandlersService = Pick<SessionRunService, 'createSession' | 'listSessions' | 'startRun'>;
 
 export interface RegisterAgentHandlersOptions {
   logger?: RuntimeLogger;

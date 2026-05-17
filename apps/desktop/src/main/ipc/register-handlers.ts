@@ -1,7 +1,9 @@
 import { ipcMain } from 'electron';
 import { registerWindowHandlers } from './handlers/window.handler';
 import { registerProviderHandlers } from './handlers/provider.handler';
-import { registerChatHandlers } from './handlers/chat.handler';
+import { registerSessionHandlers, type SessionHandlersService } from './handlers/session.handler';
+import { registerRunHandlers, type RunHandlersService } from './handlers/run.handler';
+import { registerChatHandlers, type ChatHandlersService } from './handlers/chat.handler';
 import { registerAgentHandlers, type AgentHandlersService } from './handlers/agent.handler';
 import {
   registerAgentContextHandlers,
@@ -29,6 +31,7 @@ import type { RuntimeLogger } from '../services/runtime-logger.service';
 
 export interface RegisterAllHandlersOptions {
   logger?: RuntimeLogger;
+  sessionRunService?: SessionHandlersService & RunHandlersService & ChatHandlersService;
   agentService?: AgentHandlersService;
   agentContextService?: AgentContextHandlersService;
   agentPlanService?: AgentPlanHandlersService;
@@ -41,7 +44,12 @@ export interface RegisterAllHandlersOptions {
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
   registerWindowHandlers();
   registerProviderHandlers(undefined, { logger: options.logger });
-  registerChatHandlers(undefined, { logger: options.logger });
+
+  if (options.sessionRunService) {
+    registerSessionHandlers(options.sessionRunService, { logger: options.logger });
+    registerRunHandlers(options.sessionRunService, { logger: options.logger });
+    registerChatHandlers(options.sessionRunService, { logger: options.logger });
+  }
 
   if (options.agentService) {
     registerAgentHandlers(options.agentService, { logger: options.logger });

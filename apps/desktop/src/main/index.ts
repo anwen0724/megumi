@@ -6,6 +6,7 @@ import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
+import type { ProviderId } from '@megumi/shared/provider-contracts';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
 import { registerAllHandlers } from './ipc/register-handlers';
@@ -13,7 +14,11 @@ import { createMainWindow } from './app/create-window';
 import { registerAppLifecycle } from './app/lifecycle';
 import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-errors';
 import { createRuntimeJsonlLoggerForMegumiHome } from './services/runtime-logger.service';
-import { AgentLifecycleService } from './services/agent-lifecycle.service';
+import { SessionRunService } from './services/session-run.service';
+import { createModelStepProviderService } from './services/model-step-provider.service';
+import { MegumiHomeConfigService } from './services/megumi-home-config.service';
+import { ProviderRuntimeService } from './services/provider-runtime.service';
+import { createElectronSecretStoreService } from './services/secret-store.service';
 import { AgentRunModeService } from './services/agent-run-mode.service';
 import { createDefaultAgentContextService } from './services/agent-context.service';
 import { createDefaultAgentToolService } from './services/agent-tool.service';
@@ -22,6 +27,7 @@ import { ArtifactContentStore } from './services/artifact-content-store.service'
 import { AgentArtifactService } from './services/agent-artifact.service';
 import { createAgentMemoryService } from './services/agent-memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
+import { getDefaultProviderService } from './ipc/handlers/provider.handler';
 
 loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
@@ -39,10 +45,27 @@ const agentRunModeService = new AgentRunModeService({
   repository: new RunModeRepository(database),
   planArtifactCompatibility,
 });
-const agentService = new AgentLifecycleService({
+const providerSettingsService = getDefaultProviderService();
+const secretStore = createElectronSecretStoreService(megumiHomePaths.homePath);
+const configCredentials = {
+  async getProviderApiKeyEnv(providerId: ProviderId) {
+    return new MegumiHomeConfigService({ configPath: megumiHomePaths.configPath }).getProviderApiKeyEnv(providerId);
+  },
+  async getPlaintextProviderApiKey(providerId: ProviderId) {
+    return new MegumiHomeConfigService({ configPath: megumiHomePaths.configPath }).getPlaintextProviderApiKey(providerId);
+  },
+};
+const providerRuntimeService = new ProviderRuntimeService({
+  settings: providerSettingsService,
+  secretStore,
+  configCredentials,
+});
+const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
+const sessionRunService = new SessionRunService({
   repository: new SessionRunRepository(database),
   runModeService: agentRunModeService,
   contextService: agentContextService,
+  modelStepProvider: modelStepProviderService,
 });
 const artifactContentStore = new ArtifactContentStore({
   artifactRoot: path.join(megumiHomePaths.homePath, 'artifacts'),
@@ -81,9 +104,10 @@ registerAppLifecycle({
   runMigrations: () => megumiHomePaths,
   registerAllHandlers: () => registerAllHandlers({
     logger: runtimeLogger,
-    agentService,
+    sessionRunService,
+    agentService: sessionRunService,
     agentContextService,
-    agentPlanService: agentService,
+    agentPlanService: sessionRunService,
     agentToolService,
     agentRecoveryService,
     agentArtifactService,

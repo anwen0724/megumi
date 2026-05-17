@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const registerWindowHandlers = vi.fn();
 const registerProviderHandlers = vi.fn();
+const registerSessionHandlers = vi.fn();
+const registerRunHandlers = vi.fn();
 const registerChatHandlers = vi.fn();
 const registerAgentHandlers = vi.fn();
 const registerAgentContextHandlers = vi.fn();
@@ -14,6 +16,8 @@ const registerAgentMemoryHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/session.handler', () => ({ registerSessionHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/run.handler', () => ({ registerRunHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/chat.handler', () => ({ registerChatHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent.handler', () => ({ registerAgentHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/agent-context.handler', () => ({ registerAgentContextHandlers }));
@@ -30,6 +34,8 @@ describe('registerAllHandlers', () => {
   beforeEach(() => {
     registerWindowHandlers.mockReset();
     registerProviderHandlers.mockReset();
+    registerSessionHandlers.mockReset();
+    registerRunHandlers.mockReset();
     registerChatHandlers.mockReset();
     registerAgentHandlers.mockReset();
     registerAgentContextHandlers.mockReset();
@@ -40,14 +46,16 @@ describe('registerAllHandlers', () => {
     registerAgentMemoryHandlers.mockReset();
   });
 
-  it('registers only existing runtime handlers when no agent service is provided', async () => {
+  it('registers only existing runtime handlers when no session run or agent service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
 
     registerAllHandlers();
 
     expect(registerWindowHandlers).toHaveBeenCalledTimes(1);
     expect(registerProviderHandlers).toHaveBeenCalledTimes(1);
-    expect(registerChatHandlers).toHaveBeenCalledTimes(1);
+    expect(registerSessionHandlers).not.toHaveBeenCalled();
+    expect(registerRunHandlers).not.toHaveBeenCalled();
+    expect(registerChatHandlers).not.toHaveBeenCalled();
     expect(registerAgentHandlers).not.toHaveBeenCalled();
     expect(registerAgentContextHandlers).not.toHaveBeenCalled();
     expect(registerAgentPlanHandlers).not.toHaveBeenCalled();
@@ -65,10 +73,20 @@ describe('registerAllHandlers', () => {
       error: vi.fn(),
     };
 
-    registerAllHandlers({ logger });
+    const sessionRunService = {
+      createSession: vi.fn(),
+      listSessions: vi.fn(),
+      sendSessionMessage: vi.fn(),
+      cancelSessionMessage: vi.fn(),
+      listRuntimeEventsByRun: vi.fn(),
+    };
+
+    registerAllHandlers({ logger, sessionRunService });
 
     expect(registerProviderHandlers).toHaveBeenCalledWith(undefined, { logger });
-    expect(registerChatHandlers).toHaveBeenCalledWith(undefined, { logger });
+    expect(registerSessionHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
+    expect(registerRunHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
+    expect(registerChatHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
   });
 
   it('registers agent lifecycle handlers when an agent service is provided', async () => {

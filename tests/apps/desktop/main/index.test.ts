@@ -52,18 +52,49 @@ const mocks = vi.hoisted(() => {
         updatePlanStatus: vi.fn(),
       };
     }),
-    AgentLifecycleService: vi.fn(function AgentLifecycleService(
+    SessionRunService: vi.fn(function SessionRunService(
       this: { options?: unknown },
       options: unknown,
     ) {
       this.options = options;
       return {
-      createSession: vi.fn(),
-      listSessions: vi.fn(),
-      startRun: vi.fn(),
-      getPlanByRun: vi.fn(),
-      updatePlanStatus: vi.fn(),
+        createSession: vi.fn(),
+        listSessions: vi.fn(),
+        sendSessionMessage: vi.fn(),
+        cancelSessionMessage: vi.fn(),
+        listRuntimeEventsByRun: vi.fn(),
+        startRun: vi.fn(),
+        getPlanByRun: vi.fn(),
+        updatePlanStatus: vi.fn(),
       };
+    }),
+    createModelStepProviderService: vi.fn(() => ({
+      streamModelStep: vi.fn(),
+      cancelModelStep: vi.fn(),
+    })),
+    getDefaultProviderService: vi.fn(() => ({
+      listProviders: vi.fn(),
+    })),
+    createElectronSecretStoreService: vi.fn(() => ({
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+    })),
+    MegumiHomeConfigService: vi.fn(function MegumiHomeConfigService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
+        getProviderApiKeyEnv: vi.fn(),
+        getPlaintextProviderApiKey: vi.fn(),
+      };
+    }),
+    ProviderRuntimeService: vi.fn(function ProviderRuntimeService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
     }),
     createDefaultAgentContextService: vi.fn(() => ({
       getBaselineContext: vi.fn(),
@@ -102,13 +133,13 @@ const mocks = vi.hoisted(() => {
     }),
     AgentArtifactService: vi.fn(function AgentArtifactService() {
       return {
-      listByRun: vi.fn(),
-      listBySession: vi.fn(),
-      get: vi.fn(),
-      getVersion: vi.fn(),
-      createVersion: vi.fn(),
-      updateStatus: vi.fn(),
-      reference: vi.fn(),
+        listByRun: vi.fn(),
+        listBySession: vi.fn(),
+        get: vi.fn(),
+        getVersion: vi.fn(),
+        createVersion: vi.fn(),
+        updateStatus: vi.fn(),
+        reference: vi.fn(),
       };
     }),
     createAgentMemoryService: vi.fn(() => ({
@@ -172,8 +203,28 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
   createMainWindow: mocks.createMainWindow,
 }));
 
-vi.mock('@megumi/desktop/main/services/agent-lifecycle.service', () => ({
-  AgentLifecycleService: mocks.AgentLifecycleService,
+vi.mock('@megumi/desktop/main/services/session-run.service', () => ({
+  SessionRunService: mocks.SessionRunService,
+}));
+
+vi.mock('@megumi/desktop/main/services/model-step-provider.service', () => ({
+  createModelStepProviderService: mocks.createModelStepProviderService,
+}));
+
+vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({
+  getDefaultProviderService: mocks.getDefaultProviderService,
+}));
+
+vi.mock('@megumi/desktop/main/services/secret-store.service', () => ({
+  createElectronSecretStoreService: mocks.createElectronSecretStoreService,
+}));
+
+vi.mock('@megumi/desktop/main/services/megumi-home-config.service', () => ({
+  MegumiHomeConfigService: mocks.MegumiHomeConfigService,
+}));
+
+vi.mock('@megumi/desktop/main/services/provider-runtime.service', () => ({
+  ProviderRuntimeService: mocks.ProviderRuntimeService,
 }));
 
 vi.mock('@megumi/desktop/main/services/agent-context.service', () => ({
@@ -248,7 +299,12 @@ describe('main runtime logger composition', () => {
     mocks.SessionRunRepository.mockClear();
     mocks.RunModeRepository.mockClear();
     mocks.AgentRunModeService.mockClear();
-    mocks.AgentLifecycleService.mockClear();
+    mocks.SessionRunService.mockClear();
+    mocks.createModelStepProviderService.mockClear();
+    mocks.getDefaultProviderService.mockClear();
+    mocks.createElectronSecretStoreService.mockClear();
+    mocks.MegumiHomeConfigService.mockClear();
+    mocks.ProviderRuntimeService.mockClear();
     mocks.createDefaultAgentContextService.mockClear();
     mocks.createDefaultAgentToolService.mockClear();
     mocks.createDatabase.mockClear();
@@ -272,7 +328,7 @@ describe('main runtime logger composition', () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
-    const agentService = mocks.AgentLifecycleService.mock.results[0]?.value;
+    const sessionRunService = mocks.SessionRunService.mock.results[0]?.value;
     const agentContextService = mocks.createDefaultAgentContextService.mock.results[0]?.value;
     const agentToolService = mocks.createDefaultAgentToolService.mock.results[0]?.value;
     const agentRecoveryService = mocks.createAgentRecoveryService.mock.results[0]?.value;
@@ -311,10 +367,25 @@ describe('main runtime logger composition', () => {
       repository: expect.any(Object),
       planArtifactCompatibility,
     }));
-    expect(mocks.AgentLifecycleService).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.getDefaultProviderService).toHaveBeenCalledTimes(1);
+    expect(mocks.createElectronSecretStoreService).toHaveBeenCalledWith(mocks.homePath);
+    expect(mocks.ProviderRuntimeService).toHaveBeenCalledWith(expect.objectContaining({
+      settings: expect.any(Object),
+      secretStore: expect.any(Object),
+      configCredentials: expect.objectContaining({
+        getProviderApiKeyEnv: expect.any(Function),
+        getPlaintextProviderApiKey: expect.any(Function),
+      }),
+    }));
+    const modelStepProviderService = mocks.createModelStepProviderService.mock.results[0]?.value;
+    expect(mocks.createModelStepProviderService).toHaveBeenCalledWith(
+      mocks.ProviderRuntimeService.mock.results[0]?.value,
+    );
+    expect(mocks.SessionRunService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       runModeService,
       contextService: agentContextService,
+      modelStepProvider: modelStepProviderService,
     }));
     expect(mocks.AgentArtifactService).toHaveBeenCalledWith({
       repository: expect.any(Object),
@@ -338,9 +409,10 @@ describe('main runtime logger composition', () => {
     }));
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      agentService,
+      sessionRunService,
+      agentService: sessionRunService,
       agentContextService,
-      agentPlanService: agentService,
+      agentPlanService: sessionRunService,
       agentToolService,
       agentRecoveryService,
       agentArtifactService,

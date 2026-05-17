@@ -57,8 +57,8 @@ describe('registerChatHandlers', () => {
     const { registerChatHandlers } = await import('@megumi/desktop/main/ipc/handlers/chat.handler');
 
     registerChatHandlers({
-      streamChat: vi.fn(),
-      cancelChat: vi.fn(),
+      sendSessionMessage: vi.fn(),
+      cancelSessionMessage: vi.fn(),
     });
 
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.chat.start, expect.any(Function));
@@ -104,10 +104,13 @@ describe('registerChatHandlers', () => {
       },
     ];
     const service = {
-      streamChat: vi.fn(async function* () {
-        yield* streamEvents;
-      }),
-      cancelChat: vi.fn(),
+      sendSessionMessage: vi.fn(async () => ({
+        data: { requestId: 'ipc-chat-request-1' },
+        events: async function* () {
+          yield* streamEvents;
+        }(),
+      })),
+      cancelSessionMessage: vi.fn(),
     };
 
     registerChatHandlers(service);
@@ -131,9 +134,9 @@ describe('registerChatHandlers', () => {
       expect(eventSender.send).toHaveBeenCalledTimes(2);
     });
 
-    expect(service.streamChat).toHaveBeenCalledWith({
-      ...createChatStartPayload(),
+    expect(service.sendSessionMessage).toHaveBeenCalledWith({
       requestId: 'ipc-chat-request-1',
+      payload: createChatStartPayload(),
       runtimeContext: {
         requestId: 'ipc-chat-request-1',
         traceId: 'trace-ipc-chat-request-1',
@@ -153,8 +156,8 @@ describe('registerChatHandlers', () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { registerChatHandlers } = await import('@megumi/desktop/main/ipc/handlers/chat.handler');
     const service = {
-      streamChat: vi.fn(),
-      cancelChat: vi.fn(),
+      sendSessionMessage: vi.fn(),
+      cancelSessionMessage: vi.fn(),
     };
 
     registerChatHandlers(service);
@@ -168,7 +171,7 @@ describe('registerChatHandlers', () => {
       },
     ));
 
-    expect(service.streamChat).not.toHaveBeenCalled();
+    expect(service.sendSessionMessage).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('ipc_invalid_request');
   });
@@ -177,8 +180,8 @@ describe('registerChatHandlers', () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { registerChatHandlers } = await import('@megumi/desktop/main/ipc/handlers/chat.handler');
     const service = {
-      streamChat: vi.fn(),
-      cancelChat: vi.fn().mockReturnValue(true),
+      sendSessionMessage: vi.fn(),
+      cancelSessionMessage: vi.fn().mockReturnValue(true),
     };
 
     registerChatHandlers(service);
@@ -196,17 +199,19 @@ describe('registerChatHandlers', () => {
         channel: IPC_CHANNELS.chat.cancel,
       },
     });
-    expect(service.cancelChat).toHaveBeenCalledWith('ipc-chat-request-1');
+    expect(service.cancelSessionMessage).toHaveBeenCalledWith({
+      targetRequestId: 'ipc-chat-request-1',
+    });
   });
 
   it('returns a safe error envelope when chat start fails before streaming', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { registerChatHandlers } = await import('@megumi/desktop/main/ipc/handlers/chat.handler');
     const service = {
-      streamChat: vi.fn(() => {
+      sendSessionMessage: vi.fn(() => {
         throw new Error('Provider stack leaked.');
       }),
-      cancelChat: vi.fn(),
+      cancelSessionMessage: vi.fn(),
     };
 
     registerChatHandlers(service);
@@ -240,39 +245,42 @@ describe('registerChatHandlers', () => {
     };
     const obsoleteRuntimeErrorField = ['recover', 'able'].join('');
     const service = {
-      streamChat: vi.fn(async function* () {
-        yield {
-          eventId: 'event-invalid',
-          schemaVersion: 1,
-          eventType: 'run.failed',
-          requestId: 'ipc-chat-request-1',
-          context: {
+      sendSessionMessage: vi.fn(async () => ({
+        data: { requestId: 'ipc-chat-request-1' },
+        events: async function* () {
+          yield {
+            eventId: 'event-invalid',
+            schemaVersion: 1,
+            eventType: 'run.failed',
             requestId: 'ipc-chat-request-1',
-            traceId: 'trace-ipc-chat-request-1',
-            debugId: 'debug-ipc-chat-request-1',
-            operationName: 'chat.start',
-            source: 'renderer',
-            createdAt: '2026-05-12T00:00:00.000Z',
-          },
-          runId: 'run-1',
-          sequence: 1,
-          createdAt: '2026-05-12T00:00:01.000Z',
-          source: 'provider',
-          visibility: 'user',
-          persist: 'required',
-          payload: {
-            error: {
-              code: 'provider_auth_failed',
-              message: 'Authorization: Bearer sk-chat-secret',
-              severity: 'error',
-              retryable: false,
-              source: 'provider',
-              [obsoleteRuntimeErrorField]: false,
+            context: {
+              requestId: 'ipc-chat-request-1',
+              traceId: 'trace-ipc-chat-request-1',
+              debugId: 'debug-ipc-chat-request-1',
+              operationName: 'chat.start',
+              source: 'renderer',
+              createdAt: '2026-05-12T00:00:00.000Z',
             },
-          },
-        } as RuntimeEvent;
-      }),
-      cancelChat: vi.fn(),
+            runId: 'run-1',
+            sequence: 1,
+            createdAt: '2026-05-12T00:00:01.000Z',
+            source: 'provider',
+            visibility: 'user',
+            persist: 'required',
+            payload: {
+              error: {
+                code: 'provider_auth_failed',
+                message: 'Authorization: Bearer sk-chat-secret',
+                severity: 'error',
+                retryable: false,
+                source: 'provider',
+                [obsoleteRuntimeErrorField]: false,
+              },
+            },
+          } as RuntimeEvent;
+        }(),
+      })),
+      cancelSessionMessage: vi.fn(),
     };
 
     registerChatHandlers(service, { logger });

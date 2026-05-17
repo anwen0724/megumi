@@ -1,36 +1,36 @@
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeContext } from '@megumi/shared/runtime-context';
+import type {
+  SessionMessageCancelPayload,
+  SessionMessageSendData,
+  SessionMessageSendPayload,
+} from '@megumi/shared/ipc-schemas';
 import {
   ChatCancelRequestSchema,
   ChatStartRequestSchema,
 } from '@megumi/shared/ipc-schemas';
-import type { ProviderId } from '@megumi/shared/provider-contracts';
-import { createAiChatService } from '@megumi/desktop/main/services/ai-chat.service';
-import { MegumiHomeConfigService } from '@megumi/desktop/main/services/megumi-home-config.service';
-import { initializeElectronMegumiHomeSync } from '@megumi/desktop/main/services/megumi-home.service';
-import { ProviderRuntimeService } from '@megumi/desktop/main/services/provider-runtime.service';
-import { getDefaultProviderService } from './provider.handler';
-import { createElectronSecretStoreService } from '@megumi/desktop/main/services/secret-store.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 
 export interface ChatHandlersService {
-  streamChat(request: ChatRuntimeRequest): AsyncIterable<RuntimeEvent>;
-  cancelChat(requestId: string): boolean;
+  sendSessionMessage(input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+  }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
+  cancelSessionMessage(payload: SessionMessageCancelPayload): boolean;
 }
 
 export interface RegisterChatHandlersOptions {
   logger?: RuntimeLogger;
 }
 
-let defaultChatService: ChatHandlersService | null = null;
-
 export function registerChatHandlers(
-  service = getDefaultChatService(),
+  service: ChatHandlersService,
   options: RegisterChatHandlersOptions = {},
 ): void {
   ipcMain.handle(
@@ -40,18 +40,15 @@ export function registerChatHandlers(
       requestSchema: ChatStartRequestSchema,
       logger: options.logger,
       handle: async (request, event, context) => {
-        const runtimeRequest: ChatRuntimeRequest = {
-          ...request.payload,
+        const result = await service.sendSessionMessage({
           requestId: request.requestId,
+          payload: request.payload,
           runtimeContext: context,
-        };
-        const stream = service.streamChat(runtimeRequest);
+        });
 
-        void forwardRuntimeEvents(event.sender, stream, { logger: options.logger });
+        void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
 
-        return {
-          requestId: request.requestId,
-        };
+        return result.data;
       },
       mapError: mapChatIpcError,
     }),
@@ -64,7 +61,7 @@ export function registerChatHandlers(
       requestSchema: ChatCancelRequestSchema,
       logger: options.logger,
       handle: async (request) => ({
-        cancelled: service.cancelChat(request.payload.targetRequestId),
+        cancelled: service.cancelSessionMessage(request.payload),
       }),
       mapError: mapChatIpcError,
     }),
@@ -79,29 +76,4 @@ function mapChatIpcError(): RuntimeIpcError {
     retryable: true,
     source: 'main',
   };
-}
-
-export function getDefaultChatService(): ChatHandlersService {
-  if (!defaultChatService) {
-    const providerSettings = getDefaultProviderService();
-    const homePaths = initializeElectronMegumiHomeSync();
-    const secretStore = createElectronSecretStoreService(homePaths.homePath);
-    const configCredentials = {
-      async getProviderApiKeyEnv(providerId: ProviderId) {
-        return new MegumiHomeConfigService({ configPath: homePaths.configPath }).getProviderApiKeyEnv(providerId);
-      },
-      async getPlaintextProviderApiKey(providerId: ProviderId) {
-        return new MegumiHomeConfigService({ configPath: homePaths.configPath }).getPlaintextProviderApiKey(providerId);
-      },
-    };
-    const resolver = new ProviderRuntimeService({
-      settings: providerSettings,
-      secretStore,
-      configCredentials,
-    });
-
-    defaultChatService = createAiChatService(resolver);
-  }
-
-  return defaultChatService;
 }

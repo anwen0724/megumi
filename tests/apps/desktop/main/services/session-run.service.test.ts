@@ -3,10 +3,11 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { AgentLifecycleService } from '@megumi/desktop/main/services/agent-lifecycle.service';
+import { SessionRunService } from '@megumi/desktop/main/services/session-run.service';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
 import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 let db: Database.Database | null = null;
 
@@ -14,7 +15,7 @@ function createService() {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentLifecycleService({
+  return new SessionRunService({
     repository,
     clock: { now: () => '2026-05-15T00:00:00.000Z' },
     ids: {
@@ -33,7 +34,7 @@ function createServiceWithContextRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentLifecycleService({
+  return new SessionRunService({
     repository,
     contextService: {
       createBaselineContext: (input) => {
@@ -101,7 +102,7 @@ function createServiceWithRunModeRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentLifecycleService({
+  return new SessionRunService({
     repository,
     runModeService: {
       createModeSnapshot: (input) => {
@@ -144,7 +145,7 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentLifecycleService({
+  return new SessionRunService({
     repository,
     runModeService: {
       createModeSnapshot: (input) => {
@@ -189,12 +190,43 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
   });
 }
 
+function createServiceWithModelStepStream(events: RuntimeEvent[]) {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new SessionRunRepository(db);
+  return new SessionRunService({
+    repository,
+    modelStepProvider: {
+      streamModelStep: async function* () {
+        yield* events;
+      },
+      cancelModelStep: () => true,
+    },
+    clock: { now: () => '2026-05-17T00:00:00.000Z' },
+    ids: {
+      sessionId: () => 'session-1',
+      runId: () => 'run-1',
+      stepId: () => 'step-1',
+      actionId: () => 'action-1',
+      observationId: () => 'observation-1',
+      eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      messageId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `message-${index}`;
+        };
+      })(),
+    },
+  });
+}
+
 afterEach(() => {
   db?.close();
   db = null;
 });
 
-describe('AgentLifecycleService', () => {
+describe('SessionRunService', () => {
   it('creates durable sessions', () => {
     const service = createService();
 
@@ -304,5 +336,186 @@ describe('AgentLifecycleService', () => {
     expect(records).toEqual([
       expect.objectContaining({ type: 'snapshot' }),
     ]);
+  });
+
+  it('sends a session message by persisting user message, run, and model step', async () => {
+    const service = createServiceWithModelStepStream([
+      {
+        eventId: 'event-assistant-delta',
+        schemaVersion: 1,
+        eventType: 'assistant.output.delta',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 1,
+        createdAt: '2026-05-17T00:00:01.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'transient',
+        payload: { delta: 'Hello' },
+      },
+      {
+        eventId: 'event-assistant-completed',
+        schemaVersion: 1,
+        eventType: 'assistant.output.completed',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 2,
+        createdAt: '2026-05-17T00:00:02.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'required',
+        payload: { content: 'Hello' },
+      },
+    ]);
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(result.data).toEqual({ requestId: 'ipc-session-message-send-1' });
+    expect(streamed.map((event) => event.eventType)).toContain('assistant.output.delta');
+    expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toContain('assistant.output.completed');
+    expect(service.listMessagesBySession('session-1')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
+      expect.objectContaining({ role: 'assistant', content: 'Hello', runId: 'run-1' }),
+    ]));
+  });
+
+  it('adds request metadata to session message runtime events', async () => {
+    const service = createServiceWithModelStepStream([
+      {
+        eventId: 'event-assistant-delta',
+        schemaVersion: 1,
+        eventType: 'assistant.output.delta',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 1,
+        createdAt: '2026-05-17T00:00:01.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'transient',
+        payload: { delta: 'Hello' },
+      },
+    ]);
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      runtimeContext: {
+        requestId: 'ipc-session-message-send-1',
+        traceId: 'trace-ipc-session-message-send-1',
+        debugId: 'debug-ipc-session-message-send-1',
+        operationName: 'session.message.send',
+        source: 'renderer',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        eventType: 'run.completed',
+        requestId: 'ipc-session-message-send-1',
+        context: expect.objectContaining({
+          operationName: 'session.message.send',
+        }),
+      }),
+    ]));
+    expect(streamed.every((event) => event.requestId === 'ipc-session-message-send-1')).toBe(true);
+  });
+
+  it('does not mark a session message run completed after provider failure', async () => {
+    const service = createServiceWithModelStepStream([
+      {
+        eventId: 'event-run-failed',
+        schemaVersion: 1,
+        eventType: 'run.failed',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 1,
+        createdAt: '2026-05-17T00:00:01.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'required',
+        payload: {
+          error: {
+            code: 'provider_auth_failed',
+            message: 'Provider failed.',
+            severity: 'error',
+            retryable: false,
+            source: 'provider',
+          },
+        },
+      },
+    ]);
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed.map((event) => event.eventType)).toEqual(['run.failed']);
+    expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toEqual(['run.failed']);
   });
 });
