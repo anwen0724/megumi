@@ -13,7 +13,7 @@ describe('registerAgentPlanHandlers', () => {
     vi.clearAllMocks();
   });
 
-  it('registers runtime envelope handlers for plan queries and status updates', async () => {
+  it('registers primary plan IPC channels and deprecated agent bridges', async () => {
     const { ipcMain } = await import('electron');
     const service = {
       getPlanByRun: vi.fn(),
@@ -22,6 +22,14 @@ describe('registerAgentPlanHandlers', () => {
 
     registerAgentPlanHandlers(service);
 
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.plan.byRunGet,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.plan.statusUpdate,
+      expect.any(Function),
+    );
     expect(ipcMain.handle).toHaveBeenCalledWith(
       IPC_CHANNELS.agent.plan.byRunGet,
       expect.any(Function),

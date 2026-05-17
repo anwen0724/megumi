@@ -1,19 +1,19 @@
 import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type {
-  AgentMemoryAccessLogsListPayload,
-  AgentMemoryAccessLogsListData,
-  AgentMemoryCandidateAcceptData,
-  AgentMemoryCandidateData,
-  AgentMemoryCandidateListData,
-  AgentMemoryCandidateListPayload,
-  AgentMemoryData,
-  AgentMemoryGetData,
-  AgentMemoryListData,
-  AgentMemoryListPayload,
-  AgentMemoryRecallPreviewData,
-  AgentMemoryRecallPreviewPayload,
-  AgentMemorySettingsData,
+  MemoryAccessLogsListPayload,
+  MemoryAccessLogsListData,
+  MemoryCandidateAcceptData,
+  MemoryCandidateData,
+  MemoryCandidateListData,
+  MemoryCandidateListPayload,
+  MemoryData,
+  MemoryGetData,
+  MemoryListData,
+  MemoryListPayload,
+  MemoryRecallPreviewData,
+  MemoryRecallPreviewPayload,
+  MemorySettingsData,
 } from '@megumi/shared/ipc-schemas';
 import type {
   MemoryAccessLog,
@@ -42,8 +42,8 @@ interface MemoryState {
   loading: boolean;
   error?: string;
   loadSettings: (workspaceId: string) => Promise<void>;
-  loadCandidates: (input: AgentMemoryCandidateListPayload) => Promise<void>;
-  loadMemories: (input: AgentMemoryListPayload) => Promise<void>;
+  loadCandidates: (input: MemoryCandidateListPayload) => Promise<void>;
+  loadMemories: (input: MemoryListPayload) => Promise<void>;
   getMemory: (memoryId: string) => Promise<void>;
   acceptCandidate: (candidateId: string, reviewedAt: string) => Promise<void>;
   rejectCandidate: (candidateId: string, rejectionReason: string, reviewedAt: string) => Promise<void>;
@@ -53,12 +53,12 @@ interface MemoryState {
     memoryId: string,
     updatedAt: string,
   ) => Promise<void>;
-  loadAccessLogs: (input: AgentMemoryAccessLogsListPayload) => Promise<void>;
-  previewRecall: (input: AgentMemoryRecallPreviewPayload) => Promise<void>;
+  loadAccessLogs: (input: MemoryAccessLogsListPayload) => Promise<void>;
+  previewRecall: (input: MemoryRecallPreviewPayload) => Promise<void>;
 }
 
 function memoryApi() {
-  return window.megumi.agent.memory;
+  return window.megumi.memory;
 }
 
 function errorMessage(value: unknown): string {
@@ -84,8 +84,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   async loadSettings(workspaceId) {
     set({ loading: true, error: undefined });
     try {
-      const data = await applyResult<AgentMemorySettingsData>(memoryApi().settingsGet(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.settingsGet, { workspaceId }),
+      const data = await applyResult<MemorySettingsData>(memoryApi().settingsGet(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.settingsGet, { workspaceId }),
       ));
       set({ settings: data.settings, loading: false });
     } catch (error) {
@@ -95,8 +95,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   async loadCandidates(input) {
     set({ loading: true, error: undefined });
     try {
-      const data = await applyResult<AgentMemoryCandidateListData>(memoryApi().candidateList(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.candidateList, input),
+      const data = await applyResult<MemoryCandidateListData>(memoryApi().candidateList(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.candidateList, input),
       ));
       set({ candidates: data.candidates, loading: false });
     } catch (error) {
@@ -106,8 +106,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   async loadMemories(input) {
     set({ loading: true, error: undefined });
     try {
-      const data = await applyResult<AgentMemoryListData>(memoryApi().memoryList(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.memoryList, input),
+      const data = await applyResult<MemoryListData>(memoryApi().memoryList(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.memoryList, input),
       ));
       set({ memories: data.memories, loading: false });
     } catch (error) {
@@ -117,8 +117,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   async getMemory(memoryId) {
     set({ loading: true, error: undefined });
     try {
-      const data = await applyResult<AgentMemoryGetData>(memoryApi().memoryGet(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.memoryGet, { memoryId }),
+      const data = await applyResult<MemoryGetData>(memoryApi().memoryGet(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.memoryGet, { memoryId }),
       ));
       set({ selectedMemory: data.memory, selectedSourceRefs: data.sourceRefs, loading: false });
     } catch (error) {
@@ -126,46 +126,46 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
   async acceptCandidate(candidateId, reviewedAt) {
-    await applyResult<AgentMemoryCandidateAcceptData>(memoryApi().candidateAccept(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.candidateAccept, { candidateId, reviewedAt }),
+    await applyResult<MemoryCandidateAcceptData>(memoryApi().candidateAccept(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.candidateAccept, { candidateId, reviewedAt }),
     ));
     await get().loadCandidates({ status: 'proposed' });
   },
   async rejectCandidate(candidateId, rejectionReason, reviewedAt) {
-    await applyResult<AgentMemoryCandidateData>(memoryApi().candidateReject(
+    await applyResult<MemoryCandidateData>(memoryApi().candidateReject(
       createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.agent.memory.candidateReject,
+        IPC_CHANNELS.memory.candidateReject,
         { candidateId, rejectionReason, reviewedAt },
       ),
     ));
     await get().loadCandidates({ status: 'proposed' });
   },
   async archiveCandidate(candidateId, reviewedAt) {
-    await applyResult<AgentMemoryCandidateData>(memoryApi().candidateArchive(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.candidateArchive, { candidateId, reviewedAt }),
+    await applyResult<MemoryCandidateData>(memoryApi().candidateArchive(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.candidateArchive, { candidateId, reviewedAt }),
     ));
     await get().loadCandidates({ status: 'proposed' });
   },
   async updateMemoryStatus(operation, memoryId, updatedAt) {
     const input = { memoryId, updatedAt };
     if (operation === 'archive') {
-      await applyResult<AgentMemoryData>(memoryApi().memoryArchive(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.memoryArchive, input),
+      await applyResult<MemoryData>(memoryApi().memoryArchive(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.memoryArchive, input),
       ));
     }
     if (operation === 'delete') {
-      await applyResult<AgentMemoryData>(memoryApi().memoryDelete(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.memoryDelete, input),
+      await applyResult<MemoryData>(memoryApi().memoryDelete(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.memoryDelete, input),
       ));
     }
     if (operation === 'disable') {
-      await applyResult<AgentMemoryData>(memoryApi().memoryDisable(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.memoryDisable, input),
+      await applyResult<MemoryData>(memoryApi().memoryDisable(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.memoryDisable, input),
       ));
     }
     if (operation === 'enable') {
-      await applyResult<AgentMemoryData>(memoryApi().memoryEnable(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.memoryEnable, input),
+      await applyResult<MemoryData>(memoryApi().memoryEnable(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.memoryEnable, input),
       ));
     }
     await get().loadMemories({ status: 'active' });
@@ -173,8 +173,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   async loadAccessLogs(input) {
     set({ loading: true, error: undefined });
     try {
-      const data = await applyResult<AgentMemoryAccessLogsListData>(memoryApi().memoryAccessLogsList(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.accessLogsList, input),
+      const data = await applyResult<MemoryAccessLogsListData>(memoryApi().memoryAccessLogsList(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.accessLogsList, input),
       ));
       set({ accessLogs: data.accessLogs, loading: false });
     } catch (error) {
@@ -184,8 +184,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   async previewRecall(input) {
     set({ loading: true, error: undefined });
     try {
-      const data = await applyResult<AgentMemoryRecallPreviewData>(memoryApi().recallPreview(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.memory.recallPreview, input),
+      const data = await applyResult<MemoryRecallPreviewData>(memoryApi().recallPreview(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.recallPreview, input),
       ));
       set({ recallPreview: data, loading: false });
     } catch (error) {

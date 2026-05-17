@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { ChatMessage } from '@megumi/shared/chat-contracts';
-import type { ChatStartPayload } from '@megumi/shared/ipc-schemas';
+import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import type {
   AssistantOutputCompletedPayload,
   AssistantOutputDeltaPayload,
@@ -94,7 +94,10 @@ function toRuntimeMessage(message: TimelineMessageData): ChatMessage {
   };
 }
 
-function createChatStartPayload(payload: ComposerSubmitPayload, userMessage: TimelineMessageData): ChatStartPayload {
+function createSessionMessageSendPayload(
+  payload: ComposerSubmitPayload,
+  userMessage: TimelineMessageData,
+): SessionMessageSendPayload {
   const agentState = useAgentStore.getState();
   const projectState = useProjectStore.getState();
   const providerId = getProviderIdForModel(payload.model);
@@ -284,10 +287,10 @@ export function useRuntimeChat() {
     renameEmptyManualSessionFromPrompt(payload, state.messages.length);
 
     const userMessage = createLocalMessage('user', payload.message, state.messages.length + 1);
-    const requestId = `ipc-chat-${createId('request')}`;
+    const requestId = `ipc-session-message-${createId('request')}`;
     const request = createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.chat.start,
-      createChatStartPayload(payload, userMessage),
+      IPC_CHANNELS.session.message.send,
+      createSessionMessageSendPayload(payload, userMessage),
       { requestId },
     );
     activeRequestIdRef.current = request.requestId;
@@ -302,7 +305,7 @@ export function useRuntimeChat() {
     state.clearCompletedToolActivities();
     useWorkspaceStateStore.getState().beginRuntimeChat(payload);
 
-    const result = await window.megumi.chat.start(request);
+    const result = await window.megumi.session.message.send(request);
 
     if (!result.ok) {
       failChatStart(payload, result.error.message);
@@ -327,8 +330,8 @@ export function useRuntimeChat() {
       return;
     }
 
-    await window.megumi.chat.cancel(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.cancel, {
+    await window.megumi.session.message.cancel(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.cancel, {
         targetRequestId: requestId,
       }, {
         traceId: activeTraceIdRef.current ?? undefined,

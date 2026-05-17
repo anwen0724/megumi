@@ -24,7 +24,7 @@ describe('registerAgentRecoveryHandlers', () => {
     vi.clearAllMocks();
   });
 
-  it('registers recovery handlers with runtime envelope schemas', async () => {
+  it('registers primary recovery handlers and deprecated agent bridges with runtime envelope schemas', async () => {
     const logger = {
       info: vi.fn(),
       warn: vi.fn(),
@@ -50,6 +50,27 @@ describe('registerAgentRecoveryHandlers', () => {
     };
 
     registerAgentRecoveryHandlers(service, { logger });
+
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.recovery.recoverableRunsList,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.recovery.resume,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.recovery.cancel,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.recovery.retry,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.agent.recovery.resume,
+      expect.any(Function),
+    );
 
     const resumeHandler = getRegisteredHandler(IPC_CHANNELS.agent.recovery.resume);
     const response = await resumeHandler({} as never, {

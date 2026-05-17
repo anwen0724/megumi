@@ -14,7 +14,7 @@ describe('registerAgentArtifactHandlers', () => {
     vi.clearAllMocks();
   });
 
-  it('registers artifact runtime IPC handlers', () => {
+  it('registers primary artifact IPC channels and deprecated agent bridges', () => {
     registerAgentArtifactHandlers({
       listByRun: vi.fn(),
       listBySession: vi.fn(),
@@ -25,6 +25,14 @@ describe('registerAgentArtifactHandlers', () => {
       reference: vi.fn(),
     });
 
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.artifacts.listByRun,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.artifacts.reference,
+      expect.any(Function),
+    );
     expect(ipcMain.handle).toHaveBeenCalledWith(
       IPC_CHANNELS.agent.artifacts.listByRun,
       expect.any(Function),

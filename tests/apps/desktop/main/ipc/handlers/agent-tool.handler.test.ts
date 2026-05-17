@@ -12,7 +12,7 @@ describe('registerAgentToolHandlers', () => {
     vi.clearAllMocks();
   });
 
-  it('registers tool and approval handlers', () => {
+  it('registers primary tool/approval IPC channels and deprecated agent bridges', () => {
     registerAgentToolHandlers({
       listDefinitions: () => [],
       getToolCall: () => undefined,
@@ -29,6 +29,18 @@ describe('registerAgentToolHandlers', () => {
       }),
     });
 
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.tool.definitionsList,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.tool.callGet,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.approval.resolve,
+      expect.any(Function),
+    );
     expect(ipcMain.handle).toHaveBeenCalledWith(
       IPC_CHANNELS.agent.tool.definitionsList,
       expect.any(Function),

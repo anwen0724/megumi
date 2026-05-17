@@ -7,10 +7,16 @@ import type {
   AgentContextBaselineGetPayload,
   AgentContextSourcesListData,
   AgentContextSourcesListPayload,
+  RunContextBaselineGetData,
+  RunContextBaselineGetPayload,
+  RunContextSourcesListData,
+  RunContextSourcesListPayload,
 } from '@megumi/shared/ipc-schemas';
 import {
   AgentContextBaselineGetRequestSchema,
   AgentContextSourcesListRequestSchema,
+  RunContextBaselineGetRequestSchema,
+  RunContextSourcesListRequestSchema,
 } from '@megumi/shared/ipc-schemas';
 import type { AgentContextService } from '../../services/agent-context.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
@@ -29,6 +35,42 @@ export function registerAgentContextHandlers(
   service: AgentContextHandlersService,
   options: RegisterAgentContextHandlersOptions = {},
 ): void {
+  ipcMain.handle(
+    IPC_CHANNELS.runContext.baselineGet,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.runContext.baselineGet,
+      requestSchema: RunContextBaselineGetRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<
+          RunContextBaselineGetPayload,
+          typeof IPC_CHANNELS.runContext.baselineGet
+        >,
+      ): RunContextBaselineGetData => ({
+        context: service.getBaselineContext(request.payload.runId),
+      }),
+      mapError: mapAgentContextIpcError,
+    }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.runContext.sourcesList,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.runContext.sourcesList,
+      requestSchema: RunContextSourcesListRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<
+          RunContextSourcesListPayload,
+          typeof IPC_CHANNELS.runContext.sourcesList
+        >,
+      ): RunContextSourcesListData => ({
+        sources: service.listWorkspaceSourcesByRun(request.payload.runId),
+      }),
+      mapError: mapAgentContextIpcError,
+    }),
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.agent.context.baselineGet,
     createRuntimeIpcHandler({

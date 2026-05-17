@@ -37,7 +37,12 @@ function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
-      chat,
+      session: {
+        message: {
+          send: chat.start,
+          cancel: chat.cancel,
+        },
+      },
       runtime: {
         onEvent: vi.fn(() => () => undefined),
       },

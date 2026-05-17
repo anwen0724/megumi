@@ -66,7 +66,7 @@ function installMegumiMock() {
       data: { requestId: request.requestId },
       meta: {
         requestId: request.requestId,
-        channel: IPC_CHANNELS.chat.start,
+        channel: IPC_CHANNELS.session.message.send,
         handledAt: '2026-05-10T12:00:00.100Z',
       },
     })),
@@ -74,8 +74,8 @@ function installMegumiMock() {
       ok: true,
       data: { cancelled: true },
       meta: {
-        requestId: 'ipc-chat-cancel-1',
-        channel: IPC_CHANNELS.chat.cancel,
+        requestId: 'ipc-session-message-cancel-1',
+        channel: IPC_CHANNELS.session.message.cancel,
         handledAt: '2026-05-10T12:00:00.100Z',
       },
     }),
@@ -84,7 +84,12 @@ function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
-      chat,
+      session: {
+        message: {
+          send: chat.start,
+          cancel: chat.cancel,
+        },
+      },
       runtime: {
         onEvent: vi.fn(() => () => undefined),
       },

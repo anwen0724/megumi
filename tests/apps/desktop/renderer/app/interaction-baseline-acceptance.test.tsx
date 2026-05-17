@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { ChatStartPayload } from '@megumi/shared/ipc-schemas';
+import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
@@ -28,7 +28,10 @@ vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let sequence = 1;
-type ChatStartRequest = RuntimeIpcRequest<ChatStartPayload, typeof IPC_CHANNELS.chat.start>;
+type SessionMessageSendRequest = RuntimeIpcRequest<
+  SessionMessageSendPayload,
+  typeof IPC_CHANNELS.session.message.send
+>;
 
 function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' | 'sequence' | 'createdAt' | 'source' | 'visibility' | 'persist'> & {
   source?: RuntimeEvent['source'];
@@ -51,12 +54,12 @@ function installMegumiMock() {
   runtimeEventCallback = null;
   sequence = 1;
   const chat = {
-    start: vi.fn().mockImplementation((request: ChatStartRequest) => Promise.resolve({
+    start: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
       ok: true,
       data: { requestId: request.requestId },
       meta: {
         requestId: request.requestId,
-        channel: IPC_CHANNELS.chat.start,
+        channel: IPC_CHANNELS.session.message.send,
         handledAt: '2026-05-10T12:00:00.100Z',
       },
     })),
@@ -64,8 +67,8 @@ function installMegumiMock() {
       ok: true,
       data: { cancelled: true },
       meta: {
-        requestId: 'ipc-chat-cancel-1',
-        channel: IPC_CHANNELS.chat.cancel,
+        requestId: 'ipc-session-message-cancel-1',
+        channel: IPC_CHANNELS.session.message.cancel,
         handledAt: '2026-05-10T12:00:00.100Z',
       },
     }),
@@ -88,7 +91,12 @@ function installMegumiMock() {
         setApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
         deleteApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
       },
-      chat,
+      session: {
+        message: {
+          send: chat.start,
+          cancel: chat.cancel,
+        },
+      },
       runtime: {
         onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
           runtimeEventCallback = callback;
@@ -103,8 +111,8 @@ function installMegumiMock() {
   return chat;
 }
 
-function latestRequest(chat: ReturnType<typeof installMegumiMock>): ChatStartRequest {
-  const request = chat.start.mock.calls.at(-1)?.[0] as ChatStartRequest | undefined;
+function latestRequest(chat: ReturnType<typeof installMegumiMock>): SessionMessageSendRequest {
+  const request = chat.start.mock.calls.at(-1)?.[0] as SessionMessageSendRequest | undefined;
 
   if (!request) {
     throw new Error('Expected chat.start to have been called.');
@@ -113,7 +121,7 @@ function latestRequest(chat: ReturnType<typeof installMegumiMock>): ChatStartReq
   return request;
 }
 
-function emitRuntimeSuccess(request: ChatStartRequest, content: string) {
+function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string) {
   act(() => {
     emitRuntimeEvent({
       eventType: 'run.started',
@@ -156,7 +164,7 @@ function emitRuntimeSuccess(request: ChatStartRequest, content: string) {
   });
 }
 
-function emitRuntimeFailure(request: ChatStartRequest, message: string) {
+function emitRuntimeFailure(request: SessionMessageSendRequest, message: string) {
   act(() => {
     emitRuntimeEvent({
       eventType: 'run.failed',
@@ -291,7 +299,7 @@ describe('interaction baseline acceptance', () => {
         ]),
       }),
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.chat.start,
+        channel: IPC_CHANNELS.session.message.send,
         source: 'renderer',
       }),
     });

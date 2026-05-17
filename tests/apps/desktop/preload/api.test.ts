@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatStartPayload, SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 const { invoke, on, removeListener } = vi.hoisted(() => ({
@@ -141,42 +140,49 @@ describe('preload api', () => {
     });
   });
 
-  it('exposes primary session message methods, deprecated chat aliases, and runtime event subscription', async () => {
+  it('exposes session message, run event, and runtime event APIs without old chat or agent namespaces', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { api } = await import('@megumi/desktop/preload/api');
-    const startPayload: SessionMessageSendPayload = {
-      providerId: 'deepseek',
+    const sendPayload = {
+      providerId: 'deepseek' as const,
       modelId: 'deepseek-v4-flash',
-      createdAt: '2026-05-12T00:00:00.000Z',
-      messages: [],
+      createdAt: '2026-05-17T00:00:00.000Z',
+      messages: [{
+        id: 'message-1',
+        role: 'user' as const,
+        content: 'Hello Megumi',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      }],
     };
-    const startRequest = createRequest(IPC_CHANNELS.session.message.send, startPayload);
+    const sendRequest = createRequest(IPC_CHANNELS.session.message.send, sendPayload);
     const cancelRequest = createRequest(IPC_CHANNELS.session.message.cancel, {
       targetRequestId: 'ipc-preload-request-1',
     }, 'ipc-preload-cancel-1');
-    const deprecatedStartPayload: ChatStartPayload = startPayload;
-    const deprecatedStartRequest = createRequest(IPC_CHANNELS.chat.start, deprecatedStartPayload);
-    const deprecatedCancelRequest = createRequest(IPC_CHANNELS.chat.cancel, {
-      targetRequestId: 'ipc-preload-request-1',
-    }, 'ipc-preload-deprecated-cancel-1');
+    const eventsRequest = createRequest(IPC_CHANNELS.run.events.list, {
+      runId: 'run-1',
+    }, 'ipc-run-events-list-1');
     const callback = vi.fn();
 
     invoke.mockResolvedValue({
       ok: true,
       data: {},
-      meta: { requestId: 'ipc-preload-request-1', channel: 'session:message:send', handledAt: 'now' },
+      meta: {
+        requestId: 'ipc-preload-request-1',
+        channel: IPC_CHANNELS.session.message.send,
+        handledAt: 'now',
+      },
     });
 
-    await api.session.message.send(startRequest);
+    await api.session.message.send(sendRequest);
     await api.session.message.cancel(cancelRequest);
-    await api.chat.start(deprecatedStartRequest);
-    await api.chat.cancel(deprecatedCancelRequest);
+    await api.run.events.list(eventsRequest);
     const unsubscribe = api.runtime.onEvent(callback);
 
-    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.session.message.send, startRequest);
+    expect('chat' in api).toBe(false);
+    expect('agent' in api).toBe(false);
+    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.session.message.send, sendRequest);
     expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.session.message.cancel, cancelRequest);
-    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.chat.start, deprecatedStartRequest);
-    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.chat.cancel, deprecatedCancelRequest);
+    expect(invoke).toHaveBeenNthCalledWith(3, IPC_CHANNELS.run.events.list, eventsRequest);
     expect(on).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, expect.any(Function));
 
     const listener = on.mock.calls[0][1];
@@ -200,6 +206,17 @@ describe('preload api', () => {
 
     unsubscribe();
     expect(removeListener).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, listener);
+  });
+
+  it('does not expose old chat or agent preload namespaces in source', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const source = readFileSync(join(process.cwd(), 'apps/desktop/src/preload/api.ts'), 'utf8');
+
+    expect(source).not.toMatch(/\bchat:\s*\{/);
+    expect(source).not.toMatch(/\bagent:\s*\{/);
+    expect(source).not.toContain('IPC_CHANNELS.chat');
+    expect(source).not.toContain('IPC_CHANNELS.agent');
   });
 
   it('keeps window controls as lightweight shell ipc', async () => {

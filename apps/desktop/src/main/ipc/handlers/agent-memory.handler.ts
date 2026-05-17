@@ -19,6 +19,23 @@ import {
   AgentMemorySettingsUpdateRequestSchema,
   AgentMemorySourceRefsListRequestSchema,
   AgentMemoryUpdateRequestSchema,
+  MemoryAccessLogsListRequestSchema,
+  MemoryArchiveRequestSchema,
+  MemoryCandidateAcceptRequestSchema,
+  MemoryCandidateArchiveRequestSchema,
+  MemoryCandidateEditAndAcceptRequestSchema,
+  MemoryCandidateListRequestSchema,
+  MemoryCandidateRejectRequestSchema,
+  MemoryDeleteRequestSchema,
+  MemoryDisableRequestSchema,
+  MemoryEnableRequestSchema,
+  MemoryGetRequestSchema,
+  MemoryListRequestSchema,
+  MemoryRecallPreviewRequestSchema,
+  MemorySettingsGetRequestSchema,
+  MemorySettingsUpdateRequestSchema,
+  MemorySourceRefsListRequestSchema,
+  MemoryUpdateRequestSchema,
 } from '@megumi/shared/ipc-schemas';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import type { AgentMemoryService } from '../../services/agent-memory.service';
@@ -52,6 +69,142 @@ export interface RegisterAgentMemoryHandlersOptions {
 
 export function registerAgentMemoryHandlers(options: RegisterAgentMemoryHandlersOptions): void {
   const { ipcMain, agentMemoryService, logger } = options;
+
+  ipcMain.handle(IPC_CHANNELS.memory.settingsGet, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.settingsGet,
+    requestSchema: MemorySettingsGetRequestSchema,
+    logger,
+    handle: (request) => ({ settings: agentMemoryService.getSettings(request.payload.workspaceId) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.settingsUpdate, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.settingsUpdate,
+    requestSchema: MemorySettingsUpdateRequestSchema,
+    logger,
+    handle: (request) => ({ settings: agentMemoryService.updateSettings(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.candidateList, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.candidateList,
+    requestSchema: MemoryCandidateListRequestSchema,
+    logger,
+    handle: (request) => ({ candidates: agentMemoryService.listCandidates(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.candidateAccept, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.candidateAccept,
+    requestSchema: MemoryCandidateAcceptRequestSchema,
+    logger,
+    handle: (request) => agentMemoryService.acceptCandidate(request.payload),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.candidateReject, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.candidateReject,
+    requestSchema: MemoryCandidateRejectRequestSchema,
+    logger,
+    handle: (request) => ({ candidate: agentMemoryService.rejectCandidate(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.candidateArchive, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.candidateArchive,
+    requestSchema: MemoryCandidateArchiveRequestSchema,
+    logger,
+    handle: (request) => ({ candidate: agentMemoryService.archiveCandidate(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.candidateEditAndAccept, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.candidateEditAndAccept,
+    requestSchema: MemoryCandidateEditAndAcceptRequestSchema,
+    logger,
+    handle: (request) => agentMemoryService.acceptCandidate(request.payload),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.memoryList, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.memoryList,
+    requestSchema: MemoryListRequestSchema,
+    logger,
+    handle: (request) => ({ memories: agentMemoryService.listMemories(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.memoryGet, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.memoryGet,
+    requestSchema: MemoryGetRequestSchema,
+    logger,
+    handle: (request) => agentMemoryService.getMemory(request.payload.memoryId),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.memoryUpdate, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.memoryUpdate,
+    requestSchema: MemoryUpdateRequestSchema,
+    logger,
+    handle: (request) => ({ memory: agentMemoryService.updateMemory(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.memoryArchive, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.memoryArchive,
+    requestSchema: MemoryArchiveRequestSchema,
+    logger,
+    handle: (request) => ({ memory: agentMemoryService.archiveMemory(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.memoryDelete, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.memoryDelete,
+    requestSchema: MemoryDeleteRequestSchema,
+    logger,
+    handle: (request) => ({ memory: agentMemoryService.deleteMemory(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.memoryDisable, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.memoryDisable,
+    requestSchema: MemoryDisableRequestSchema,
+    logger,
+    handle: (request) => ({ memory: agentMemoryService.disableMemory(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.memoryEnable, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.memoryEnable,
+    requestSchema: MemoryEnableRequestSchema,
+    logger,
+    handle: (request) => ({ memory: agentMemoryService.enableMemory(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.sourceRefsList, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.sourceRefsList,
+    requestSchema: MemorySourceRefsListRequestSchema,
+    logger,
+    handle: (request) => ({ sourceRefs: agentMemoryService.listSourceRefs(request.payload.memoryId) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.accessLogsList, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.accessLogsList,
+    requestSchema: MemoryAccessLogsListRequestSchema,
+    logger,
+    handle: (request) => ({ accessLogs: agentMemoryService.listAccessLogs(request.payload) }),
+    mapError: mapAgentMemoryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.memory.recallPreview, createRuntimeIpcHandler({
+    channel: IPC_CHANNELS.memory.recallPreview,
+    requestSchema: MemoryRecallPreviewRequestSchema,
+    logger,
+    handle: (request) => agentMemoryService.recallPreview(request.payload),
+    mapError: mapAgentMemoryIpcError,
+  }));
 
   ipcMain.handle(IPC_CHANNELS.agent.memory.settingsGet, createRuntimeIpcHandler({
     channel: IPC_CHANNELS.agent.memory.settingsGet,

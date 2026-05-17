@@ -9,11 +9,20 @@ import type {
   AgentToolCallGetPayload,
   AgentToolDefinitionsListData,
   AgentToolDefinitionsListPayload,
+  ApprovalResolveData,
+  ApprovalResolvePayload,
+  ToolCallGetData,
+  ToolCallGetPayload,
+  ToolDefinitionsListData,
+  ToolDefinitionsListPayload,
 } from '@megumi/shared/ipc-schemas';
 import {
   AgentApprovalResolveRequestSchema,
   AgentToolCallGetRequestSchema,
   AgentToolDefinitionsListRequestSchema,
+  ApprovalResolveRequestSchema,
+  ToolCallGetRequestSchema,
+  ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc-schemas';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import type { AgentToolService } from '../../services/agent-tool.service';
@@ -32,6 +41,51 @@ export function registerAgentToolHandlers(
   service: AgentToolHandlersService,
   options: RegisterAgentToolHandlersOptions = {},
 ): void {
+  ipcMain.handle(
+    IPC_CHANNELS.tool.definitionsList,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.tool.definitionsList,
+      requestSchema: ToolDefinitionsListRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<ToolDefinitionsListPayload, typeof IPC_CHANNELS.tool.definitionsList>,
+      ): ToolDefinitionsListData => ({
+        tools: service.listDefinitions(request.payload),
+      }),
+      mapError: mapAgentToolIpcError,
+    }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.tool.callGet,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.tool.callGet,
+      requestSchema: ToolCallGetRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<ToolCallGetPayload, typeof IPC_CHANNELS.tool.callGet>,
+      ): ToolCallGetData => ({
+        toolCall: service.getToolCall(request.payload.toolCallId),
+      }),
+      mapError: mapAgentToolIpcError,
+    }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.approval.resolve,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.approval.resolve,
+      requestSchema: ApprovalResolveRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
+      ): ApprovalResolveData => ({
+        approval: service.resolveApproval(request.payload),
+      }),
+      mapError: mapAgentToolIpcError,
+    }),
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.agent.tool.definitionsList,
     createRuntimeIpcHandler({

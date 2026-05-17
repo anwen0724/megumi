@@ -15,7 +15,7 @@ describe('registerAgentContextHandlers', () => {
     vi.mocked(ipcMain.handle).mockClear();
   });
 
-  it('registers context IPC channels', async () => {
+  it('registers primary run context IPC channels and deprecated agent bridges', async () => {
     const { ipcMain } = await import('electron');
 
     registerAgentContextHandlers({
@@ -23,6 +23,14 @@ describe('registerAgentContextHandlers', () => {
       listWorkspaceSourcesByRun: vi.fn(),
     });
 
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.runContext.baselineGet,
+      expect.any(Function),
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.runContext.sourcesList,
+      expect.any(Function),
+    );
     expect(ipcMain.handle).toHaveBeenCalledWith(
       IPC_CHANNELS.agent.context.baselineGet,
       expect.any(Function),

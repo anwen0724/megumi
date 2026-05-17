@@ -8,10 +8,16 @@ import type {
   AgentPlanByRunGetPayload,
   AgentPlanStatusUpdateData,
   AgentPlanStatusUpdatePayload,
+  PlanByRunGetData,
+  PlanByRunGetPayload,
+  PlanStatusUpdateData,
+  PlanStatusUpdatePayload,
 } from '@megumi/shared/ipc-schemas';
 import {
   AgentPlanByRunGetRequestSchema,
   AgentPlanStatusUpdateRequestSchema,
+  PlanByRunGetRequestSchema,
+  PlanStatusUpdateRequestSchema,
 } from '@megumi/shared/ipc-schemas';
 import type { AgentRunModeService } from '../../services/agent-run-mode.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
@@ -30,6 +36,36 @@ export function registerAgentPlanHandlers(
   service: AgentPlanHandlersService,
   options: RegisterAgentPlanHandlersOptions = {},
 ): void {
+  ipcMain.handle(
+    IPC_CHANNELS.plan.byRunGet,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.plan.byRunGet,
+      requestSchema: PlanByRunGetRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<PlanByRunGetPayload, typeof IPC_CHANNELS.plan.byRunGet>,
+      ): PlanByRunGetData => ({
+        plan: service.getPlanByRun(request.payload.runId) as ImplementationPlanArtifactRecord | undefined,
+      }),
+      mapError: mapAgentPlanIpcError,
+    }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.plan.statusUpdate,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.plan.statusUpdate,
+      requestSchema: PlanStatusUpdateRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<PlanStatusUpdatePayload, typeof IPC_CHANNELS.plan.statusUpdate>,
+      ): PlanStatusUpdateData => ({
+        plan: service.updatePlanStatus(request.payload),
+      }),
+      mapError: mapAgentPlanIpcError,
+    }),
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.agent.plan.byRunGet,
     createRuntimeIpcHandler({

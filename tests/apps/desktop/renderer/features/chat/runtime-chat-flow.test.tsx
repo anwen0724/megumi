@@ -38,7 +38,7 @@ function installMegumiMock() {
       },
       meta: {
         requestId: request.requestId,
-        channel: IPC_CHANNELS.chat.start,
+        channel: IPC_CHANNELS.session.message.send,
         traceId: request.context.traceId,
         operationName: request.context.operationName,
         handledAt: '2026-05-12T00:00:00.100Z',
@@ -50,8 +50,8 @@ function installMegumiMock() {
         cancelled: true,
       },
       meta: {
-        requestId: 'ipc-chat-cancel-1',
-        channel: IPC_CHANNELS.chat.cancel,
+        requestId: 'ipc-session-message-cancel-1',
+        channel: IPC_CHANNELS.session.message.cancel,
         handledAt: '2026-05-12T00:00:00.100Z',
       },
     }),
@@ -68,7 +68,12 @@ function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
-      chat,
+      session: {
+        message: {
+          send: chat.start,
+          cancel: chat.cancel,
+        },
+      },
       provider: {
         list: vi.fn(),
         update: vi.fn(),
@@ -121,7 +126,7 @@ describe('useRuntimeChat', () => {
     });
 
     expect(chat.start).toHaveBeenCalledWith(expect.objectContaining({
-      requestId: expect.stringMatching(/^ipc-chat-/),
+      requestId: expect.stringMatching(/^ipc-session-message-/),
       payload: expect.objectContaining({
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
@@ -137,13 +142,13 @@ describe('useRuntimeChat', () => {
         ]),
       }),
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.chat.start,
+        channel: IPC_CHANNELS.session.message.send,
         source: 'renderer',
       }),
       context: expect.objectContaining({
-        requestId: expect.stringMatching(/^ipc-chat-/),
+        requestId: expect.stringMatching(/^ipc-session-message-/),
         traceId: expect.stringMatching(/^trace-/),
-        operationName: 'chat.start',
+        operationName: 'session.message.send',
         source: 'renderer',
       }),
     }));
@@ -266,11 +271,11 @@ describe('useRuntimeChat', () => {
         debugId: 'debug-chat-start-1',
       },
       meta: {
-        requestId: 'ipc-chat-start-1',
-        channel: IPC_CHANNELS.chat.start,
+        requestId: 'ipc-session-message-send-1',
+        channel: IPC_CHANNELS.session.message.send,
         traceId: 'trace-chat-start-1',
         debugId: 'debug-chat-start-1',
-        operationName: 'chat.start',
+        operationName: 'session.message.send',
         handledAt: '2026-05-12T00:00:00.100Z',
       },
     });
@@ -441,12 +446,12 @@ describe('useRuntimeChat', () => {
         targetRequestId: startRequestId,
       },
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.chat.cancel,
+        channel: IPC_CHANNELS.session.message.cancel,
         source: 'renderer',
       }),
       context: expect.objectContaining({
         traceId: startTraceId,
-        operationName: 'chat.cancel',
+        operationName: 'session.message.cancel',
         source: 'renderer',
       }),
     }));
