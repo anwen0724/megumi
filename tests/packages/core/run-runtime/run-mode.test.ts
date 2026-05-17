@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/agent-run-mode-contracts';
+import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 import {
   assertRuntimePermissionModeSupported,
   createRunModeRuntimeInstruction,
   defaultActionKindForRunMode,
   resolveRunModeSnapshot,
-} from '@megumi/core/agent-runtime/run-mode';
+} from '@megumi/core/run-runtime/run-mode';
 
 describe('core run mode helpers', () => {
   it('resolves preset defaults when no explicit snapshot is provided', () => {

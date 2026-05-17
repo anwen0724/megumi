@@ -6,7 +6,7 @@ const root = process.cwd();
 
 const recoveryProductionFiles = [
   'packages/shared/agent-recovery-contracts.ts',
-  'packages/core/agent-runtime/recovery.ts',
+  'packages/core/run-runtime/recovery.ts',
   'apps/desktop/src/main/services/agent-recovery.service.ts',
   'apps/desktop/src/main/ipc/handlers/agent-recovery.handler.ts',
   'apps/desktop/src/renderer/entities/agent-recovery/store.ts',
@@ -52,7 +52,7 @@ describe('agent recovery foundation source guards', () => {
   });
 
   it('keeps core recovery platform independent', () => {
-    const coreRecovery = read('packages/core/agent-runtime/recovery.ts');
+    const coreRecovery = read('packages/core/run-runtime/recovery.ts');
 
     expect(coreRecovery).not.toMatch(/from ['"]electron['"]/);
     expect(coreRecovery).not.toMatch(/from ['"]node:fs['"]/);

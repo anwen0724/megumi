@@ -3,8 +3,8 @@ import {
   createContextPatchObservation,
   createContextUpdateInputPreview,
   isContextPatchObservation,
-} from '@megumi/core/agent-runtime/context';
-import type { ContextPatch } from '@megumi/shared/agent-context-contracts';
+} from '@megumi/core/run-runtime/context';
+import type { ContextPatch } from '@megumi/shared/run-context-contracts';
 
 const patch: ContextPatch = {
   patchId: 'patch-1',
@@ -18,7 +18,7 @@ const patch: ContextPatch = {
   status: 'requested',
 };
 
-describe('agent runtime context helpers', () => {
+describe('run runtime context helpers', () => {
   it('creates safe update_context input previews', () => {
     expect(createContextUpdateInputPreview(patch)).toEqual({
       patchId: 'patch-1',

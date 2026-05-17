@@ -4,7 +4,7 @@ import {
   createArtifactReferenceObservation,
   toArtifactReferencedPayload,
   toArtifactVersionCreatedPayload,
-} from '@megumi/core/agent-runtime/artifacts';
+} from '@megumi/core/run-runtime/artifacts';
 
 describe('core artifact runtime helpers', () => {
   it('creates safe artifact action input previews', () => {

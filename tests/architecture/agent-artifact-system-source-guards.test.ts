@@ -55,7 +55,7 @@ describe('agent artifact system source guards', () => {
 
   it('keeps core artifact helpers free of Host privileges and persistence', () => {
     const offenders = filesUnder('packages/core')
-      .filter((file) => projectPath(file).includes('agent-runtime/artifacts'))
+      .filter((file) => projectPath(file).includes('run-runtime/artifacts'))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|path|node:path|child_process|node:child_process)/.test(source);

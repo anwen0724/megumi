@@ -4,7 +4,7 @@ import {
   createMemoryUpdateIntent,
   createMemoryRecallContextSource,
   selectMemoryRecallIdsForContext,
-} from '@megumi/core/agent-runtime/memory';
+} from '@megumi/core/run-runtime/memory';
 import type { MemoryRecallResult } from '@megumi/shared/memory-contracts';
 
 const now = '2026-05-16T00:00:00.000Z';
@@ -62,7 +62,7 @@ describe('core memory runtime helpers', () => {
     expect(intent.inputPreview?.operation).toBe('candidate_proposed');
   });
 
-  it('bridges selected recall results into AgentContext memory refs', () => {
+  it('bridges selected recall results into RunContext memory refs', () => {
     const selected = result('selected', true);
     const skipped = result('skipped', false);
 

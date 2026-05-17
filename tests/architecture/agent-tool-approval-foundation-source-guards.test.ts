@@ -14,7 +14,7 @@ const productionRoots = [
 
 const concreteToolBoundaryTargets = [
   join(process.cwd(), 'packages/tools'),
-  join(process.cwd(), 'packages/core/agent-runtime'),
+  join(process.cwd(), 'packages/core/run-runtime'),
   join(process.cwd(), 'apps/desktop/src/main/services/agent-tool.service.ts'),
   join(process.cwd(), 'apps/desktop/src/main/ipc/handlers/agent-tool.handler.ts'),
   join(process.cwd(), 'apps/desktop/src/preload/api.ts'),

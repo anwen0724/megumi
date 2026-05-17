@@ -53,9 +53,9 @@ describe('agent lifecycle foundation source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps packages/core agent runtime free of Host privileges and concrete persistence', () => {
+  it('keeps packages/core run runtime free of Host privileges and concrete persistence', () => {
     const offenders = filesUnder('packages/core')
-      .filter((file) => projectPath(file).includes('agent-runtime'))
+      .filter((file) => projectPath(file).includes('run-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process)/.test(source);
@@ -63,6 +63,15 @@ describe('agent lifecycle foundation source guards', () => {
       .map(projectPath);
 
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps run runtime implementation under the run-runtime path', () => {
+    const runRuntimeFiles = filesUnder('packages/core/run-runtime');
+    expect(runRuntimeFiles.length).toBeGreaterThan(0);
+    const activeAgentRuntimeFiles = filesUnder('packages/core/agent-runtime')
+      .filter((file) => !readProjectFile(file).includes("from '../run-runtime/"));
+
+    expect(activeAgentRuntimeFiles.map(projectPath)).toEqual([]);
   });
 
   it('keeps renderer lifecycle code behind typed preload and away from core or DB', () => {
@@ -107,7 +116,7 @@ describe('agent lifecycle foundation source guards', () => {
       ...filesUnder('packages/db'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
-    ].filter((file) => /agent-lifecycle|agent-runtime|agent\.handler/.test(projectPath(file)));
+    ].filter((file) => /agent-lifecycle|run-runtime|agent\.handler/.test(projectPath(file)));
 
     const forbiddenPatterns = [
       /workspace context packing/i,

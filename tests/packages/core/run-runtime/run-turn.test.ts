@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runAgentTurn } from '@megumi/core/agent-runtime/run-agent-turn';
-import { createAgentRunCreatedEvent } from '@megumi/core/agent-runtime/events';
-import type { AgentRuntimeLifecycleSink } from '@megumi/core/agent-runtime/types';
+import { runTurn } from '@megumi/core/run-runtime/run-turn';
+import { createRunCreatedEvent } from '@megumi/core/run-runtime/events';
+import type { RunLifecycleSink } from '@megumi/core/run-runtime/types';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 function createSink() {
   const events: RuntimeEvent[] = [];
-  const sink: AgentRuntimeLifecycleSink = {
+  const sink: RunLifecycleSink = {
     saveRun: vi.fn(),
     saveStep: vi.fn(),
     saveAction: vi.fn(),
@@ -44,9 +44,9 @@ const ids = {
   messageId: () => 'message-1',
 };
 
-describe('agent runtime lifecycle events', () => {
+describe('run runtime lifecycle events', () => {
   it('creates run.created events with stable lifecycle payloads', () => {
-    expect(createAgentRunCreatedEvent({
+    expect(createRunCreatedEvent({
       eventId: 'event-1',
       runId: 'run-1',
       sessionId: 'session-1',
@@ -75,7 +75,7 @@ describe('agent runtime lifecycle events', () => {
   it('runs the minimal Action -> Host -> Observation loop and persists lifecycle facts', async () => {
     const { sink, events } = createSink();
 
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       triggerMessageId: 'message-1',
       mode: 'chat',
@@ -99,6 +99,11 @@ describe('agent runtime lifecycle events', () => {
 
     expect(result.run.status).toBe('completed');
     expect(result.step.status).toBe('succeeded');
+    expect(result.step).toMatchObject({
+      kind: 'model',
+      status: 'succeeded',
+      title: 'Model response',
+    });
     expect(result.action.kind).toBe('emit_message');
     expect(result.observation.kind).toBe('message_emitted');
     expect(events.map((event) => event.eventType)).toEqual([
@@ -115,15 +120,54 @@ describe('agent runtime lifecycle events', () => {
       'run.completed',
     ]);
     expect(sink.saveRun).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
-    expect(sink.saveStep).toHaveBeenCalledWith(expect.objectContaining({ status: 'succeeded' }));
+    expect(sink.saveStep).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'model',
+      status: 'succeeded',
+      title: 'Model response',
+    }));
     expect(sink.saveAction).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
     expect(sink.saveObservation).toHaveBeenCalledWith(expect.objectContaining({ kind: 'message_emitted' }));
+  });
+
+  it('creates a model step as the default run step foundation', async () => {
+    const { sink } = createSink();
+
+    const result = await runTurn({
+      sessionId: 'session-1',
+      triggerMessageId: 'message-1',
+      mode: 'chat',
+      goal: 'Answer the user',
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation-1',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'runtime',
+          kind: 'message_emitted',
+          receivedAt: '2026-05-15T00:00:00.000Z',
+          summary: 'Message emitted',
+        }),
+      },
+      clock: { now: () => '2026-05-15T00:00:00.000Z' },
+      ids,
+    });
+
+    expect(result.step).toMatchObject({
+      stepId: 'step-1',
+      runId: 'run-1',
+      kind: 'model',
+      status: 'succeeded',
+      title: 'Model response',
+    });
+    expect(result.action.kind).toBe('emit_message');
   });
 
   it('normalizes host boundary failures into failed run state and run.failed event', async () => {
     const { sink, events } = createSink();
 
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'chat',
       goal: 'Fail safely',
@@ -164,7 +208,7 @@ describe('agent runtime lifecycle events', () => {
   it('emits context patch events around update_context actions', async () => {
     const { sink, events } = createSink();
 
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'chat',
       goal: 'Use workspace context',
@@ -229,7 +273,7 @@ describe('agent runtime lifecycle events', () => {
   it('persists mode snapshot refs and source plan ids on the run', async () => {
     const { sink } = createSink();
 
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'execute',
       modeSnapshotRef: 'mode-snapshot:execute',
@@ -275,7 +319,7 @@ describe('agent runtime lifecycle events', () => {
   it('uses create_artifact as plan mode default action intent', async () => {
     const { sink } = createSink();
 
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'plan',
       modeSnapshotRef: 'mode-snapshot:plan',
@@ -318,7 +362,7 @@ describe('agent runtime lifecycle events', () => {
 
   it('creates a tool step and consumes a tool observation for call_tool actions', async () => {
     const { sink, events } = createSink();
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'execute',
       goal: 'Read a file',
@@ -360,7 +404,7 @@ describe('agent runtime lifecycle events', () => {
 
   it('keeps approval waits as waiting_for_approval instead of completing the run', async () => {
     const { sink } = createSink();
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'execute',
       goal: 'Write a file',
@@ -403,7 +447,7 @@ describe('agent runtime lifecycle events', () => {
   it('emits checkpoint observation and event for save_checkpoint action', async () => {
     const { sink, events } = createSink();
 
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'execute',
       goal: 'Save recovery state',
@@ -440,7 +484,7 @@ describe('agent runtime lifecycle events', () => {
     const { sink, events } = createSink();
     const handleAction = vi.fn();
 
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session-1',
       mode: 'execute',
       goal: 'Cancel the run',
@@ -470,7 +514,7 @@ describe('agent runtime lifecycle events', () => {
 
   it('emits artifact referenced events when host returns artifact reference observation', async () => {
     const { sink } = createSink();
-    const result = await runAgentTurn({
+    const result = await runTurn({
       sessionId: 'session:artifact',
       mode: 'execute',
       goal: 'Reference report',

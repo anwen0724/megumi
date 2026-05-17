@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  createAgentCheckpointCreatedEvent,
-  createAgentRunCancelRequestedEvent,
-  createAgentRunRetryRequestedEvent,
-  createAgentRunResumeRequestedEvent,
-} from '@megumi/core/agent-runtime/events';
+  createCheckpointCreatedEvent,
+  createRunCancelRequestedEvent,
+  createRunRetryRequestedEvent,
+  createRunResumeRequestedEvent,
+} from '@megumi/core/run-runtime/events';
 
 describe('core recovery runtime events', () => {
   it('creates recovery events with core source and required persistence', () => {
@@ -18,7 +18,7 @@ describe('core recovery runtime events', () => {
     };
 
     expect(
-      createAgentCheckpointCreatedEvent(base, {
+      createCheckpointCreatedEvent(base, {
         checkpointId: 'checkpoint_123',
         reason: 'step_completed',
         boundary: 'step_boundary',
@@ -31,7 +31,7 @@ describe('core recovery runtime events', () => {
     });
 
     expect(
-      createAgentRunResumeRequestedEvent(base, {
+      createRunResumeRequestedEvent(base, {
         resumeRequestId: 'resume_request_123',
         requestedBy: 'user',
         reason: 'manual_resume',
@@ -40,7 +40,7 @@ describe('core recovery runtime events', () => {
     ).toBe('run.resume.requested');
 
     expect(
-      createAgentRunCancelRequestedEvent(base, {
+      createRunCancelRequestedEvent(base, {
         cancelRequestId: 'cancel_request_123',
         requestedBy: 'user',
         reason: 'user_requested',
@@ -49,7 +49,7 @@ describe('core recovery runtime events', () => {
     ).toBe('run.cancel.requested');
 
     expect(
-      createAgentRunRetryRequestedEvent(base, {
+      createRunRetryRequestedEvent(base, {
         retryRequestId: 'retry_request_123',
         requestedBy: 'runtime',
         retryKind: 'retry_action',

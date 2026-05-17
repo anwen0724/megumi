@@ -55,7 +55,7 @@ describe('agent run modes and plan artifact source guards', () => {
 
   it('keeps core run mode runtime free of Host privileges and concrete persistence', () => {
     const offenders = filesUnder('packages/core')
-      .filter((file) => projectPath(file).includes('agent-runtime'))
+      .filter((file) => projectPath(file).includes('run-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process|node:http|node:https|node:net)/.test(source);
