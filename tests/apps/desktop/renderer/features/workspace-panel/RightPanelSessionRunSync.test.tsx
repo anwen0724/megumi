@@ -7,7 +7,8 @@ import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
-import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
+import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
+import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
 import { RightWorkspacePanel } from '@megumi/desktop/renderer/shell/RightWorkspacePanel';
 
@@ -108,7 +109,7 @@ function latestSessionMessageSendRequest(session: ReturnType<typeof installMegum
   return request;
 }
 
-function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string) {
+function emitRuntimeStarted(request: SessionMessageSendRequest) {
   act(() => {
     emitRuntimeEvent({
       eventType: 'run.started',
@@ -122,6 +123,11 @@ function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string)
         runKind: 'chat',
       },
     });
+  });
+}
+
+function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string) {
+  act(() => {
     emitRuntimeEvent({
       eventType: 'assistant.output.delta',
       requestId: request.requestId,
@@ -186,13 +192,19 @@ function resetStores() {
     agentStatus: 'idle',
     lastError: null,
   });
-  useWorkspaceStateStore.setState({
-    tasks: [],
-    artifacts: [],
-    memoryNotes: [],
-    activeRunId: null,
-  });
+  useRunStore.getState().resetRuns();
   useArtifactStore.getState().clearArtifacts();
+  useMemoryStore.setState({
+    settings: undefined,
+    candidates: [],
+    memories: [],
+    selectedMemory: undefined,
+    selectedSourceRefs: [],
+    accessLogs: [],
+    recallPreview: undefined,
+    loading: false,
+    error: undefined,
+  });
 }
 
 function renderChatWithRightPanel() {
@@ -204,7 +216,7 @@ function renderChatWithRightPanel() {
   );
 }
 
-describe('right workspace panel runtime chat sync', () => {
+describe('right workspace panel session run sync', () => {
   beforeEach(() => {
     installMegumiMock();
     resetStores();
@@ -214,7 +226,7 @@ describe('right workspace panel runtime chat sync', () => {
     runtimeEventCallback = null;
   });
 
-  it('shows task, artifact, and memory state from runtime chat stream events', async () => {
+  it('shows session run state from runtime stream events without mock workspace rows', async () => {
     const session = installMegumiMock();
     renderChatWithRightPanel();
 
@@ -229,25 +241,26 @@ describe('right workspace panel runtime chat sync', () => {
     fireEvent.click(sendButton);
     await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
     const request = latestSessionMessageSendRequest(session);
+    emitRuntimeStarted(request);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
 
     expect(screen.getByText('Session tasks')).toBeInTheDocument();
-    expect(screen.getByText('Runtime chat request')).toBeInTheDocument();
-    expect(screen.getByText('Streaming provider response for "Start with the shell".')).toBeInTheDocument();
+    expect(screen.getByText('Running session message')).toBeInTheDocument();
+    expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
 
     expect(request.requestId).toBe(session.message.send.mock.calls[0][0].requestId);
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the shell.');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
 
-    expect(screen.getByText('Runtime response notes')).toBeInTheDocument();
-    expect(screen.getByText('report')).toBeInTheDocument();
+    expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
 
-    expect(screen.getByText('Session note')).toBeInTheDocument();
-    expect(screen.getByText('Megumi completed "Start with the shell" in agent mode using deepseek-v4-pro.')).toBeInTheDocument();
+    expect(screen.getByText('No pending candidates.')).toBeInTheDocument();
+    expect(screen.queryByText('Session note')).not.toBeInTheDocument();
   });
 
   it('does not reset the center timeline when switching right panel tabs', async () => {
@@ -261,6 +274,7 @@ describe('right workspace panel runtime chat sync', () => {
     fireEvent.click(sendButton);
     await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
 
+    emitRuntimeStarted(latestSessionMessageSendRequest(session));
     emitRuntimeSuccess(latestSessionMessageSendRequest(session), 'Runtime response from deepseek-v4-flash for timeline persistence.');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
@@ -287,8 +301,8 @@ describe('right workspace panel runtime chat sync', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
 
-    expect(screen.getByText('Runtime chat request')).toBeInTheDocument();
-    expect(screen.getAllByText('Failed').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Failed session message')).toBeInTheDocument();
+    expect(screen.getByText('failed')).toBeInTheDocument();
     expect(screen.getAllByText('Runtime chat failed for "please fail this run".').length).toBeGreaterThanOrEqual(1);
   });
 });

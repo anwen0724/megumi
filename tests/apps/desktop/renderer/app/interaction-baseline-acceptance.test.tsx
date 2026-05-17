@@ -8,7 +8,9 @@ import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
-import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
+import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
+import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
+import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
 import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
 
@@ -224,11 +226,18 @@ function resetStores() {
     lastError: null,
   });
 
-  useWorkspaceStateStore.setState({
-    tasks: [],
-    artifacts: [],
-    memoryNotes: [],
-    activeRunId: null,
+  useRunStore.getState().resetRuns();
+  useArtifactStore.getState().clearArtifacts();
+  useMemoryStore.setState({
+    settings: undefined,
+    candidates: [],
+    memories: [],
+    selectedMemory: undefined,
+    selectedSourceRefs: [],
+    accessLogs: [],
+    recallPreview: undefined,
+    loading: false,
+    error: undefined,
   });
 }
 
@@ -308,27 +317,24 @@ describe('interaction baseline acceptance', () => {
     expect(screen.getByText('Finish the interaction baseline')).toBeInTheDocument();
     expect(screen.getByText('Sending')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
-
-    expect(screen.getByText('Session tasks')).toBeInTheDocument();
-    expect(screen.getByText('Runtime chat request')).toBeInTheDocument();
-    expect(screen.getByText('Streaming provider response for "Finish the interaction baseline".')).toBeInTheDocument();
-
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the interaction baseline.');
     expect(screen.getByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
+
+    expect(screen.getByText('Session tasks')).toBeInTheDocument();
+    expect(screen.getByText('Completed session message')).toBeInTheDocument();
+    expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
 
-    expect(screen.getByText('Runtime response notes')).toBeInTheDocument();
+    expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
 
-    expect(screen.getByText('Session note')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Megumi completed "Finish the interaction baseline" in agent mode using deepseek-v4-pro.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('No pending candidates.')).toBeInTheDocument();
+    expect(screen.getByText('No active memories.')).toBeInTheDocument();
   });
 
   it('keeps right panel collapse and tab switching from clearing chat state', async () => {
@@ -379,7 +385,8 @@ describe('interaction baseline acceptance', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
 
-    expect(screen.getAllByText('Failed').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Failed session message')).toBeInTheDocument();
+    expect(screen.getByText('failed')).toBeInTheDocument();
     expect(
       screen.getAllByText(
         'Runtime chat failed for "please fail this run".',

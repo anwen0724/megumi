@@ -5,9 +5,9 @@ import {
   type PermissionMode,
   type RunModeSnapshot,
   isActivePermissionMode,
-} from '@megumi/shared/agent-run-mode-contracts';
+} from '@megumi/shared/run-mode-contracts';
 
-interface AgentRunModeState {
+interface RunModeState {
   activeRunId: string | null;
   modeSnapshotsByRun: Record<string, RunModeSnapshot>;
   plansByRun: Record<string, ImplementationPlanArtifactRecord>;
@@ -23,7 +23,7 @@ interface AgentRunModeState {
   clearRunModeState: () => void;
 }
 
-export const useAgentRunModeStore = create<AgentRunModeState>((set) => ({
+export const useRunModeStore = create<RunModeState>((set) => ({
   activeRunId: null,
   modeSnapshotsByRun: {},
   plansByRun: {},

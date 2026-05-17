@@ -3,17 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ArtifactsPanelTab } from '@megumi/desktop/renderer/features/workspace-panel';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
-import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
 
 describe('ArtifactsPanelTab', () => {
   beforeEach(() => {
     useArtifactStore.getState().clearArtifacts();
-    useWorkspaceStateStore.setState({
-      tasks: [],
-      artifacts: [],
-      memoryNotes: [],
-      activeRunId: null,
-    });
   });
 
   it('renders loading state', () => {

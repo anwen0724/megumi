@@ -7,7 +7,9 @@ import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
-import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
+import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
+import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
+import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 
 const { minimize, toggleMaximize, close } = vi.hoisted(() => ({
@@ -125,11 +127,18 @@ describe('AppShell', () => {
       lastError: null,
     });
 
-    useWorkspaceStateStore.setState({
-      tasks: [],
-      artifacts: [],
-      memoryNotes: [],
-      activeRunId: null,
+    useRunStore.getState().resetRuns();
+    useArtifactStore.getState().clearArtifacts();
+    useMemoryStore.setState({
+      settings: undefined,
+      candidates: [],
+      memories: [],
+      selectedMemory: undefined,
+      selectedSourceRefs: [],
+      accessLogs: [],
+      recallPreview: undefined,
+      loading: false,
+      error: undefined,
     });
   });
 

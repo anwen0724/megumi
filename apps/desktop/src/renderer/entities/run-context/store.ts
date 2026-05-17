@@ -1,18 +1,18 @@
 import { create } from 'zustand';
 import type {
-  AgentContext,
-  ContextSourceRef,
-} from '@megumi/shared/agent-context-contracts';
+  RunContext,
+  RunContextSource,
+} from '@megumi/shared/run-context-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
-interface AgentContextState {
-  baselineByRun: Record<string, AgentContext>;
-  sourcesByRun: Record<string, ContextSourceRef[]>;
+interface RunContextState {
+  baselineByRun: Record<string, RunContext>;
+  sourcesByRun: Record<string, RunContextSource[]>;
   contextEventsByRun: Record<string, RuntimeEvent[]>;
   activeContextRunId: string | null;
   lastError: string | null;
-  setBaseline: (runId: string, context: AgentContext) => void;
-  setSources: (runId: string, sources: ContextSourceRef[]) => void;
+  setBaseline: (runId: string, context: RunContext) => void;
+  setSources: (runId: string, sources: RunContextSource[]) => void;
   applyRuntimeEvent: (event: RuntimeEvent) => void;
   clearContext: () => void;
 }
@@ -29,7 +29,7 @@ function upsertEvent(events: RuntimeEvent[], event: RuntimeEvent): RuntimeEvent[
   return [...events, event].sort((left, right) => left.sequence - right.sequence);
 }
 
-export const useAgentContextStore = create<AgentContextState>((set) => ({
+export const useRunContextStore = create<RunContextState>((set) => ({
   baselineByRun: {},
   sourcesByRun: {},
   contextEventsByRun: {},

@@ -213,7 +213,7 @@ describe('useSessionTimeline', () => {
     expect(useChatStore.getState().agentStatus).toBe('idle');
   });
 
-  it('bridges completed runtime chat output into artifact state', async () => {
+  it('does not synthesize artifact state from completed runtime chat output', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
 
@@ -247,14 +247,7 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    expect(useArtifactStore.getState().artifacts).toEqual([
-      expect.objectContaining({
-        title: 'Runtime response notes',
-        kind: 'report',
-        status: 'active',
-        textPreview: 'Megumi completed "Summarize runtime chat" in agent mode.',
-      }),
-    ]);
+    expect(useArtifactStore.getState().artifacts).toEqual([]);
   });
 
   it('turns session message send failure envelopes into assistant messages', async () => {

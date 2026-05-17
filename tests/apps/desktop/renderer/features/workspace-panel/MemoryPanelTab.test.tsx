@@ -2,15 +2,20 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryPanelTab } from '@megumi/desktop/renderer/features/workspace-panel';
-import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
+import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 
 describe('MemoryPanelTab', () => {
   beforeEach(() => {
-    useWorkspaceStateStore.setState({
-      tasks: [],
-      artifacts: [],
-      memoryNotes: [],
-      activeRunId: null,
+    useMemoryStore.setState({
+      settings: undefined,
+      candidates: [],
+      memories: [],
+      selectedMemory: undefined,
+      selectedSourceRefs: [],
+      accessLogs: [],
+      recallPreview: undefined,
+      loading: false,
+      error: undefined,
     });
   });
 
@@ -44,18 +49,33 @@ describe('MemoryPanelTab', () => {
     expect(screen.getByText('Summary')).toBeInTheDocument();
   });
 
-  it('renders memory notes from workspace state when props are not provided', () => {
-    useWorkspaceStateStore.getState().completeMockRun({
-      message: 'Start with the shell',
-      mode: 'agent',
-      model: 'deepseek-v4-pro',
-      now: '2026-05-10T00:00:01.000Z',
+  it('renders memory domain records when props are not provided', () => {
+    useMemoryStore.setState({
+      settings: {
+        workspaceId: 'workspace-1',
+        autoCaptureEnabled: true,
+        defaultCandidateReviewMode: 'manual',
+        updatedAt: '2026-05-10T00:00:00.000Z',
+      },
+      memories: [
+        {
+          memoryId: 'memory-record-1',
+          scope: 'workspace',
+          kind: 'project_fact',
+          content: 'The user wants clean session run panels.',
+          status: 'active',
+          summary: 'The user wants clean session run panels.',
+          sourceRefs: [],
+          confidence: 0.9,
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+      ],
     });
 
     render(<MemoryPanelTab />);
 
-    expect(screen.getByText('Session note')).toBeInTheDocument();
-    expect(screen.getByText('Summary')).toBeInTheDocument();
-    expect(screen.getByText('Megumi explored "Start with the shell" in agent mode using deepseek-v4-pro.')).toBeInTheDocument();
+    expect(screen.getByText('The user wants clean session run panels.')).toBeInTheDocument();
+    expect(screen.getByText('workspace / project_fact')).toBeInTheDocument();
   });
 });

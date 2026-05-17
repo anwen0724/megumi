@@ -60,7 +60,7 @@ describe('session timeline source guards', () => {
     expect(hookSource).toContain('useSessionTimeline');
     expect(hookSource).toContain('IPC_CHANNELS.session.message.send');
     expect(hookSource).toContain('window.megumi.session.message.send');
-    expect(hookSource).toContain('beginRuntimeChat');
+    expect(hookSource).not.toContain('beginRuntimeChat');
     expect(hookSource).not.toContain('IPC_CHANNELS.chat.start');
     expect(hookSource).not.toContain('window.megumi.chat');
     expect(hookSource).not.toContain('useRuntimeChat');

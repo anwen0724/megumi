@@ -56,7 +56,7 @@ describe('interaction baseline source guards', () => {
     }
   });
 
-  it('keeps workspace-state entity independent from features', () => {
+  it('keeps obsolete workspace-state entity absent', () => {
     const workspaceStateFiles = [
       'apps/desktop/src/renderer/entities/workspace-state/store.ts',
       'apps/desktop/src/renderer/entities/workspace-state/WorkspaceTaskCard.tsx',
@@ -64,9 +64,7 @@ describe('interaction baseline source guards', () => {
     ];
 
     for (const file of workspaceStateFiles) {
-      const source = readSource(file);
-      expect(source, file).not.toContain('features/');
-      expect(source, file).not.toContain('../features');
+      expect(existsSync(resolve(repoRoot, file)), file).toBe(false);
     }
   });
 

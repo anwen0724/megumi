@@ -7,7 +7,7 @@ import type { LocalRendererSession } from '@megumi/desktop/renderer/entities/ses
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
-import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
+import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
 
 const project: Project = {
@@ -44,12 +44,7 @@ function resetStores() {
     lastError: null,
   });
 
-  useWorkspaceStateStore.setState({
-    tasks: [],
-    artifacts: [],
-    memoryNotes: [],
-    activeRunId: null,
-  });
+  useRunStore.getState().resetRuns();
 }
 
 function submitPrompt(prompt: string) {

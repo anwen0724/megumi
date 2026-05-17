@@ -1,6 +1,5 @@
 import { MemoryNoteCard, type MemoryNote } from '../../../entities/memory';
 import { useMemoryStore } from '../../../entities/memory/store';
-import { useWorkspaceStateStore } from '../../../entities/workspace-state';
 
 interface MemoryPanelTabProps {
   notes?: MemoryNote[];
@@ -8,15 +7,14 @@ interface MemoryPanelTabProps {
 }
 
 export function MemoryPanelTab({ notes, loading: legacyLoading = false }: MemoryPanelTabProps) {
-  const storedNotes = useWorkspaceStateStore((state) => state.memoryNotes);
   const { settings, candidates, memories, recallPreview, loading, error } = useMemoryStore();
-  const visibleNotes = notes ?? storedNotes;
+  const visibleNotes = notes ?? [];
 
   if (legacyLoading) {
     return <p className="text-sm text-[var(--color-text-muted)]">Loading memory</p>;
   }
 
-  if (notes || visibleNotes.length > 0) {
+  if (notes && visibleNotes.length > 0) {
     if (visibleNotes.length === 0) {
       return <p className="text-sm text-[var(--color-text-muted)]">No memory notes yet</p>;
     }
@@ -28,6 +26,10 @@ export function MemoryPanelTab({ notes, loading: legacyLoading = false }: Memory
         ))}
       </div>
     );
+  }
+
+  if (notes) {
+    return <p className="text-sm text-[var(--color-text-muted)]">No memory notes yet</p>;
   }
 
   return (

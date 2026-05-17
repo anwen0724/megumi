@@ -2,15 +2,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { ChatMessage } from '@megumi/shared/chat-contracts';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
-import type { RunCancelledPayload, RunFailedPayload, RuntimeEvent } from '@megumi/shared/runtime-events';
-import { useArtifactStore } from '../../../entities/artifact';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useChatStore } from '../../../entities/chat/store';
 import type { TimelineMessageData } from '../../../entities/chat/types';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
-import { useWorkspaceStateStore } from '../../../entities/workspace-state';
-import { createRuntimeChatRunId } from '../../../entities/workspace-state/store';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
@@ -114,16 +111,6 @@ function createSessionMessageSendPayload(
   };
 }
 
-function bridgeRuntimeChatArtifact(payload: ComposerSubmitPayload) {
-  useArtifactStore.getState().upsertArtifact({
-    artifactId: `${createRuntimeChatRunId(payload.message)}-artifact`,
-    title: 'Runtime response notes',
-    kind: 'report',
-    status: 'active',
-    textPreview: `Megumi completed "${payload.message}" in ${payload.mode} mode.`,
-  });
-}
-
 function isRunSessionStillActive(sessionId: string | null): boolean {
   return useSessionStore.getState().activeSessionId === sessionId;
 }
@@ -148,51 +135,12 @@ function shouldProcessRuntimeEvent(
   return true;
 }
 
-function applyWorkspaceRuntimeBridge(event: RuntimeEvent, activePayload: ComposerSubmitPayload | null) {
-  if (!activePayload || !event.runId) {
-    return;
-  }
-
-  if (event.eventType === 'run.completed') {
-    useWorkspaceStateStore.getState().completeRuntimeChat({
-      ...activePayload,
-      now: event.createdAt,
-    });
-    bridgeRuntimeChatArtifact(activePayload);
-    return;
-  }
-
-  if (event.eventType === 'run.failed') {
-    const payload = event.payload as RunFailedPayload;
-    useWorkspaceStateStore.getState().failRuntimeChat({
-      ...activePayload,
-      error: payload.error.message,
-      now: event.createdAt,
-    });
-    return;
-  }
-
-  if (event.eventType === 'run.cancelled') {
-    const payload = event.payload as RunCancelledPayload;
-    const reason = payload.reason ?? payload.error?.message ?? 'Session message was cancelled.';
-    useWorkspaceStateStore.getState().failRuntimeChat({
-      ...activePayload,
-      error: reason,
-      now: event.createdAt,
-    });
-  }
-}
-
-function failSessionMessageSend(payload: ComposerSubmitPayload, message: string) {
+function failSessionMessageSend(message: string) {
   const current = useChatStore.getState();
   current.addMessage(createLocalMessage('assistant', message, current.messages.length + 1));
   current.clearStream();
   current.setAgentStatus('error');
   current.setLastError(message);
-  useWorkspaceStateStore.getState().failRuntimeChat({
-    ...payload,
-    error: message,
-  });
 }
 
 export function useSessionTimeline() {
@@ -215,7 +163,6 @@ export function useSessionTimeline() {
         processedSequencesRef.current,
       )) {
         dispatchRuntimeEvent(event);
-        applyWorkspaceRuntimeBridge(event, lastPayloadRef.current);
       }
     });
   }, []);
@@ -244,12 +191,11 @@ export function useSessionTimeline() {
     state.setLastError(null);
     state.clearToolCalls();
     state.clearCompletedToolActivities();
-    useWorkspaceStateStore.getState().beginRuntimeChat(payload);
 
     const result = await window.megumi.session.message.send(request);
 
     if (!result.ok) {
-      failSessionMessageSend(payload, result.error.message);
+      failSessionMessageSend(result.error.message);
     }
   }, []);
 
