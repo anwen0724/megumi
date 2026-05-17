@@ -43,7 +43,7 @@ function filesUnder(path: string): string[] {
 describe('agent run modes and plan artifact source guards', () => {
   it('keeps shared run mode contracts platform-independent', () => {
     const offenders = filesUnder('packages/shared')
-      .filter((file) => projectPath(file).includes('agent-run-mode-contracts'))
+      .filter((file) => /agent-run-mode-contracts|run-mode-contracts/.test(projectPath(file)))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/core|@megumi\/desktop|fs|node:fs|path|node:path)/.test(source);
@@ -66,14 +66,14 @@ describe('agent run modes and plan artifact source guards', () => {
   });
 
   it('does not define plan as an AgentAction kind', () => {
-    const contracts = readProjectFile(join(ROOT, 'packages/shared/agent-lifecycle-contracts.ts'));
+    const contracts = readProjectFile(join(ROOT, 'packages/shared/session-run-contracts.ts'));
 
     expect(contracts).toContain("'create_artifact'");
-    expect(contracts).not.toMatch(/AGENT_ACTION_KINDS[\s\S]*['"]plan['"]/);
+    expect(contracts).not.toMatch(/RUN_ACTION_KINDS[\s\S]*['"]plan['"]/);
   });
 
   it('keeps only default and plan permission modes active in 04', () => {
-    const source = readProjectFile(join(ROOT, 'packages/shared/agent-run-mode-contracts.ts'));
+    const source = readProjectFile(join(ROOT, 'packages/shared/run-mode-contracts.ts'));
 
     expect(source).toContain("export const ACTIVE_PERMISSION_MODES = ['default', 'plan'] as const");
     expect(source).toContain("'accept_edits'");

@@ -78,10 +78,10 @@ describe('agent lifecycle foundation source guards', () => {
   });
 
   it('does not define plan as an AgentAction kind', () => {
-    const contracts = readProjectFile(join(ROOT, 'packages/shared/agent-lifecycle-contracts.ts'));
+    const contracts = readProjectFile(join(ROOT, 'packages/shared/session-run-contracts.ts'));
 
     expect(contracts).toContain("'emit_message'");
-    expect(contracts).not.toMatch(/AGENT_ACTION_KINDS[\s\S]*['"]plan['"]/);
+    expect(contracts).not.toMatch(/RUN_ACTION_KINDS[\s\S]*['"]plan['"]/);
   });
 
   it('does not introduce obsolete RuntimeError fields', () => {

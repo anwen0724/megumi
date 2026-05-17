@@ -2,21 +2,21 @@ import type { JsonValue } from './json';
 import type { RuntimeError } from './runtime-errors';
 import type { RuntimeContext } from './runtime-context';
 import type {
-  AgentActionKind,
-  AgentActionStatus,
-  AgentObservationSource,
-  AgentRunStatus,
-  AgentSessionStatus,
-  AgentStepKind,
-  AgentStepStatus,
-  MessageStatus,
-} from './agent-lifecycle-contracts';
+  RunActionKind,
+  RunActionStatus,
+  RunObservationSource,
+  RunStatus,
+  SessionMessageStatus,
+  SessionStatus,
+  RunStepKind,
+  RunStepStatus,
+} from './session-run-contracts';
 import type {
   ContextEffectiveUpdatedPayload,
   ContextPatchAppliedPayload,
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
-} from './agent-context-contracts';
+} from './run-context-contracts';
 import type {
   ApprovalScope,
   ApprovalStatus,
@@ -35,7 +35,7 @@ import type {
   RetryKind,
   RetryReason,
   RetryRequestedBy,
-} from './agent-recovery-contracts';
+} from './recovery-contracts';
 import type {
   ArtifactContentStorage,
   ArtifactContentType,
@@ -178,7 +178,7 @@ export interface RuntimeEvent<TPayload extends object = object> {
 
 export interface SessionCreatedPayload {
   title: string;
-  status: AgentSessionStatus;
+  status: SessionStatus;
 }
 
 export interface SessionUpdatedPayload {
@@ -186,7 +186,7 @@ export interface SessionUpdatedPayload {
 }
 
 export interface RunCreatedPayload {
-  status: AgentRunStatus;
+  status: RunStatus;
   mode: string;
   goal: string;
   triggerMessageId?: string;
@@ -199,42 +199,42 @@ export interface RunStartedPayload {
 }
 
 export interface RunStatusChangedPayload {
-  from: AgentRunStatus;
-  to: AgentRunStatus;
+  from: RunStatus;
+  to: RunStatus;
 }
 
 export interface StepCreatedPayload {
-  kind: AgentStepKind;
-  status: AgentStepStatus;
+  kind: RunStepKind;
+  status: RunStepStatus;
   title?: string;
 }
 
 export interface StepStartedPayload {
-  kind: AgentStepKind;
+  kind: RunStepKind;
 }
 
 export interface StepStatusChangedPayload {
-  from: AgentStepStatus;
-  to: AgentStepStatus;
+  from: RunStepStatus;
+  to: RunStepStatus;
 }
 
 export interface StepCompletedPayload {
-  kind: AgentStepKind;
+  kind: RunStepKind;
 }
 
 export interface StepFailedPayload {
-  kind: AgentStepKind;
+  kind: RunStepKind;
   error: RuntimeError;
 }
 
 export interface ActionRequestedPayload {
-  kind: AgentActionKind;
-  status: AgentActionStatus;
+  kind: RunActionKind;
+  status: RunActionStatus;
   inputPreview?: Record<string, JsonValue>;
 }
 
 export interface ObservationReceivedPayload {
-  source: AgentObservationSource;
+  source: RunObservationSource;
   kind: string;
   summary?: string;
 }
@@ -246,7 +246,7 @@ export interface MessageDeltaPayload {
 
 export interface MessageCompletedPayload {
   messageId: string;
-  status: MessageStatus;
+  status: SessionMessageStatus;
 }
 
 export interface ErrorRaisedPayload {

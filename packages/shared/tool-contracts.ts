@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import type {
-  AgentActionId,
-  AgentObservationId,
-  AgentStepId,
   IsoDateTime,
+  RunActionId,
   RunId,
+  RunObservationId,
+  RunStepId,
 } from './ids';
 import { JsonObjectSchema, JsonValueSchema, type JsonObject, type JsonValue } from './json';
-import { AgentActionKindSchema } from './agent-lifecycle-contracts';
+import { RunActionKindSchema } from './session-run-contracts';
 import { RuntimeErrorSchema, type RuntimeError } from './runtime-errors';
 import { IsoDateTimeSchema } from './runtime-validation';
 
@@ -216,8 +216,8 @@ export type ToolPolicyDecision = z.infer<typeof ToolPolicyDecisionSchema>;
 export interface ToolCall {
   toolCallId: string;
   runId: RunId | string;
-  stepId: AgentStepId | string;
-  actionId: AgentActionId | string;
+  stepId: RunStepId | string;
+  actionId: RunActionId | string;
   toolName: ToolName;
   input: JsonValue;
   inputPreview: ToolInputPreview;
@@ -274,7 +274,7 @@ export const ApprovalRequestSchema = z
     toolCallId: IdSchema,
     runId: IdSchema,
     stepId: IdSchema,
-    actionKind: AgentActionKindSchema,
+    actionKind: RunActionKindSchema,
     toolName: ToolNameSchema,
     capabilities: z.array(z.enum(TOOL_CAPABILITIES)).min(1),
     riskLevel: z.enum(TOOL_RISK_LEVELS),
@@ -337,10 +337,10 @@ export const ToolErrorSchema = RuntimeErrorSchema.extend({
 export type ToolError = z.infer<typeof ToolErrorSchema>;
 
 export interface ToolObservation {
-  observationId: AgentObservationId | string;
+  observationId: RunObservationId | string;
   toolCallId: string;
   runId: RunId | string;
-  stepId: AgentStepId | string;
+  stepId: RunStepId | string;
   status: ToolObservationStatus;
   summary: string;
   structuredContent?: JsonValue;

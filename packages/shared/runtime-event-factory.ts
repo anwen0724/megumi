@@ -7,7 +7,7 @@ import type {
   ContextPatchAppliedPayload,
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
-} from './agent-context-contracts';
+} from './run-context-contracts';
 import type {
   AssistantOutputCompletedPayload,
   AssistantOutputDeltaPayload,
@@ -60,7 +60,7 @@ export function createChatRuntimeEvent<TType extends RuntimeEventType>(
   };
 }
 
-export interface AgentRuntimeEventFactoryInput<TType extends RuntimeEventType> {
+export interface RunRuntimeEventFactoryInput<TType extends RuntimeEventType> {
   eventId: string;
   eventType: TType;
   runId: RunId | string;
@@ -79,7 +79,7 @@ export interface AgentRuntimeEventFactoryInput<TType extends RuntimeEventType> {
 }
 
 export function createRuntimeEvent<TType extends RuntimeEventType>(
-  input: AgentRuntimeEventFactoryInput<TType>,
+  input: RunRuntimeEventFactoryInput<TType>,
 ): RuntimeEvent<RuntimeEventPayloadByType[TType]> & { eventType: TType } {
   return {
     eventId: input.eventId,
@@ -183,7 +183,7 @@ export function createContextEffectiveUpdatedEvent(input: {
 }
 
 export function createRuntimeCheckpointCreatedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'checkpoint.created'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  input: Omit<RunRuntimeEventFactoryInput<'checkpoint.created'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
   payload: RuntimeEventPayloadByType['checkpoint.created'],
 ): TypedRuntimeEvent<'checkpoint.created'> {
   return createRuntimeEvent({
@@ -196,7 +196,7 @@ export function createRuntimeCheckpointCreatedEvent(
 }
 
 export function createRuntimeRunResumeRequestedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'run.resume.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  input: Omit<RunRuntimeEventFactoryInput<'run.resume.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
   payload: RuntimeEventPayloadByType['run.resume.requested'],
 ): TypedRuntimeEvent<'run.resume.requested'> {
   return createRuntimeEvent({
@@ -209,7 +209,7 @@ export function createRuntimeRunResumeRequestedEvent(
 }
 
 export function createRuntimeRunCancelRequestedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'run.cancel.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  input: Omit<RunRuntimeEventFactoryInput<'run.cancel.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
   payload: RuntimeEventPayloadByType['run.cancel.requested'],
 ): TypedRuntimeEvent<'run.cancel.requested'> {
   return createRuntimeEvent({
@@ -222,7 +222,7 @@ export function createRuntimeRunCancelRequestedEvent(
 }
 
 export function createRuntimeRunRetryRequestedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'run.retry.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  input: Omit<RunRuntimeEventFactoryInput<'run.retry.requested'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
   payload: RuntimeEventPayloadByType['run.retry.requested'],
 ): TypedRuntimeEvent<'run.retry.requested'> {
   return createRuntimeEvent({
@@ -235,7 +235,7 @@ export function createRuntimeRunRetryRequestedEvent(
 }
 
 export function createRuntimeArtifactCreatedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'artifact.created'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  input: Omit<RunRuntimeEventFactoryInput<'artifact.created'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
   payload: RuntimeEventPayloadByType['artifact.created'],
 ): TypedRuntimeEvent<'artifact.created'> {
   return createRuntimeEvent({
@@ -249,7 +249,7 @@ export function createRuntimeArtifactCreatedEvent(
 
 export function createRuntimeArtifactVersionCreatedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'artifact.version.created'>,
+    RunRuntimeEventFactoryInput<'artifact.version.created'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['artifact.version.created'],
@@ -265,7 +265,7 @@ export function createRuntimeArtifactVersionCreatedEvent(
 
 export function createRuntimeArtifactStatusChangedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'artifact.status.changed'>,
+    RunRuntimeEventFactoryInput<'artifact.status.changed'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['artifact.status.changed'],
@@ -280,7 +280,7 @@ export function createRuntimeArtifactStatusChangedEvent(
 }
 
 export function createRuntimeArtifactReferencedEvent(
-  input: Omit<AgentRuntimeEventFactoryInput<'artifact.referenced'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
+  input: Omit<RunRuntimeEventFactoryInput<'artifact.referenced'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
   payload: RuntimeEventPayloadByType['artifact.referenced'],
 ): TypedRuntimeEvent<'artifact.referenced'> {
   return createRuntimeEvent({
@@ -294,7 +294,7 @@ export function createRuntimeArtifactReferencedEvent(
 
 export function createRuntimeArtifactContentWriteFailedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'artifact.content.write.failed'>,
+    RunRuntimeEventFactoryInput<'artifact.content.write.failed'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['artifact.content.write.failed'],
@@ -310,7 +310,7 @@ export function createRuntimeArtifactContentWriteFailedEvent(
 
 export function createRuntimeMemoryCandidateProposedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.candidate.proposed'>,
+    RunRuntimeEventFactoryInput<'memory.candidate.proposed'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.candidate.proposed'],
@@ -326,7 +326,7 @@ export function createRuntimeMemoryCandidateProposedEvent(
 
 export function createRuntimeMemoryCandidateAcceptedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.candidate.accepted'>,
+    RunRuntimeEventFactoryInput<'memory.candidate.accepted'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.candidate.accepted'],
@@ -342,7 +342,7 @@ export function createRuntimeMemoryCandidateAcceptedEvent(
 
 export function createRuntimeMemoryCandidateRejectedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.candidate.rejected'>,
+    RunRuntimeEventFactoryInput<'memory.candidate.rejected'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.candidate.rejected'],
@@ -358,7 +358,7 @@ export function createRuntimeMemoryCandidateRejectedEvent(
 
 export function createRuntimeMemoryRecordCreatedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.record.created'>,
+    RunRuntimeEventFactoryInput<'memory.record.created'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.record.created'],
@@ -374,7 +374,7 @@ export function createRuntimeMemoryRecordCreatedEvent(
 
 export function createRuntimeMemoryRecordUpdatedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.record.updated'>,
+    RunRuntimeEventFactoryInput<'memory.record.updated'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.record.updated'],
@@ -390,7 +390,7 @@ export function createRuntimeMemoryRecordUpdatedEvent(
 
 export function createRuntimeMemoryRecordStatusChangedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.record.status.changed'>,
+    RunRuntimeEventFactoryInput<'memory.record.status.changed'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.record.status.changed'],
@@ -406,7 +406,7 @@ export function createRuntimeMemoryRecordStatusChangedEvent(
 
 export function createRuntimeMemoryRecallRequestedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.recall.requested'>,
+    RunRuntimeEventFactoryInput<'memory.recall.requested'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.recall.requested'],
@@ -422,7 +422,7 @@ export function createRuntimeMemoryRecallRequestedEvent(
 
 export function createRuntimeMemoryRecallCompletedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.recall.completed'>,
+    RunRuntimeEventFactoryInput<'memory.recall.completed'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.recall.completed'],
@@ -438,7 +438,7 @@ export function createRuntimeMemoryRecallCompletedEvent(
 
 export function createRuntimeMemoryRecallFailedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.recall.failed'>,
+    RunRuntimeEventFactoryInput<'memory.recall.failed'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.recall.failed'],
@@ -454,7 +454,7 @@ export function createRuntimeMemoryRecallFailedEvent(
 
 export function createRuntimeMemoryAccessRecordedEvent(
   input: Omit<
-    AgentRuntimeEventFactoryInput<'memory.access.recorded'>,
+    RunRuntimeEventFactoryInput<'memory.access.recorded'>,
     'eventType' | 'visibility' | 'persist' | 'payload'
   >,
   payload: RuntimeEventPayloadByType['memory.access.recorded'],

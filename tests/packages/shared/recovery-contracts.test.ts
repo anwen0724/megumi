@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  AgentCancelRequestSchema,
-  AgentCheckpointSchema,
-  AgentRecoverableRunSummarySchema,
-  AgentResumeRequestSchema,
-  AgentRetryRequestSchema,
+  CancelRequestSchema,
+  CheckpointSchema,
+  RecoverableRunSummarySchema,
+  ResumeRequestSchema,
+  RetryRequestSchema,
   CHECKPOINT_BOUNDARIES,
   CHECKPOINT_REASONS,
   CHECKPOINT_STATUSES,
@@ -18,11 +18,11 @@ import {
   RETRY_KINDS,
   RETRY_REASONS,
   RETRY_REQUESTED_BY,
-} from '@megumi/shared/agent-recovery-contracts';
+} from '@megumi/shared/recovery-contracts';
 
-describe('agent recovery contracts', () => {
+describe('recovery contracts', () => {
   it('parses a checkpoint record with side-effect refs', () => {
-    const checkpoint = AgentCheckpointSchema.parse({
+    const checkpoint = CheckpointSchema.parse({
       checkpointId: 'checkpoint_123',
       runId: 'run_123',
       stepId: 'step_123',
@@ -62,7 +62,7 @@ describe('agent recovery contracts', () => {
 
   it('rejects invalid checkpoint enum values', () => {
     expect(() =>
-      AgentCheckpointSchema.parse({
+      CheckpointSchema.parse({
         checkpointId: 'checkpoint_123',
         runId: 'run_123',
         reason: 'file_snapshot_created',
@@ -80,7 +80,7 @@ describe('agent recovery contracts', () => {
 
   it('parses resume, cancel, and retry requests', () => {
     expect(
-      AgentResumeRequestSchema.parse({
+      ResumeRequestSchema.parse({
         resumeRequestId: 'resume_request_123',
         runId: 'run_123',
         checkpointId: 'checkpoint_123',
@@ -93,7 +93,7 @@ describe('agent recovery contracts', () => {
     ).toBe('from_checkpoint');
 
     expect(
-      AgentCancelRequestSchema.parse({
+      CancelRequestSchema.parse({
         cancelRequestId: 'cancel_request_123',
         runId: 'run_123',
         requestedBy: 'user',
@@ -104,7 +104,7 @@ describe('agent recovery contracts', () => {
     ).toBe('run');
 
     expect(
-      AgentRetryRequestSchema.parse({
+      RetryRequestSchema.parse({
         retryRequestId: 'retry_request_123',
         runId: 'run_123',
         stepId: 'step_123',
@@ -119,7 +119,7 @@ describe('agent recovery contracts', () => {
   });
 
   it('rejects extra fields in recovery request records', () => {
-    expect(AgentResumeRequestSchema.safeParse({
+    expect(ResumeRequestSchema.safeParse({
       resumeRequestId: 'resume_request_123',
       runId: 'run_123',
       requestedBy: 'user',
@@ -129,7 +129,7 @@ describe('agent recovery contracts', () => {
       rawStack: 'secret stack',
     }).success).toBe(false);
 
-    expect(AgentCancelRequestSchema.safeParse({
+    expect(CancelRequestSchema.safeParse({
       cancelRequestId: 'cancel_request_123',
       runId: 'run_123',
       requestedBy: 'runtime',
@@ -139,7 +139,7 @@ describe('agent recovery contracts', () => {
       rawCause: 'secret cause',
     }).success).toBe(false);
 
-    expect(AgentRetryRequestSchema.safeParse({
+    expect(RetryRequestSchema.safeParse({
       retryRequestId: 'retry_request_123',
       runId: 'run_123',
       requestedBy: 'runtime',
@@ -151,7 +151,7 @@ describe('agent recovery contracts', () => {
   });
 
   it('parses recoverable run summary without changing RuntimeError model', () => {
-    const summary = AgentRecoverableRunSummarySchema.parse({
+    const summary = RecoverableRunSummarySchema.parse({
       runId: 'run_123',
       sessionId: 'session_123',
       status: 'waiting_for_approval',

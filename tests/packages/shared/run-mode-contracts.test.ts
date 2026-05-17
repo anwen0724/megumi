@@ -8,9 +8,9 @@ import {
   ImplementationPlanArtifactRecordSchema,
   RunSourcePlanRelationSchema,
   isActivePermissionMode,
-} from '@megumi/shared/agent-run-mode-contracts';
+} from '@megumi/shared/run-mode-contracts';
 
-describe('agent run mode contracts', () => {
+describe('run mode contracts', () => {
   it('defines the initial mode presets as structured run modes', () => {
     expect(RUN_MODE_PRESET_DEFAULTS.chat).toMatchObject({
       preset: 'chat',

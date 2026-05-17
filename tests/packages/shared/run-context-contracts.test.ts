@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AgentContextSchema,
   ContextPatchSchema,
-  ContextSourceRefSchema,
-  EffectiveContextBuildSchema,
+  RunContextBuildSchema,
+  RunContextSchema,
+  RunContextSourceSchema,
   WorkspaceBoundarySchema,
   CONTEXT_PATCH_OPERATIONS,
   CONTEXT_SOURCE_KINDS,
   CONTEXT_REDACTION_STATES,
-} from '@megumi/shared/agent-context-contracts';
+} from '@megumi/shared/run-context-contracts';
 
 const createdAt = '2026-05-15T00:00:00.000Z';
 
@@ -28,7 +28,7 @@ function workspaceBoundary() {
   };
 }
 
-describe('agent context contracts', () => {
+describe('run context contracts', () => {
   it('parses strict workspace boundary snapshots without secret values', () => {
     const parsed = WorkspaceBoundarySchema.parse(workspaceBoundary());
 
@@ -41,7 +41,7 @@ describe('agent context contracts', () => {
   });
 
   it('parses context source refs with attribution and redaction metadata', () => {
-    const source = ContextSourceRefSchema.parse({
+    const source = RunContextSourceSchema.parse({
       sourceId: 'source-1',
       sourceKind: 'workspace_file',
       sourceUri: 'workspace://workspace-1/packages/shared/index.ts',
@@ -62,8 +62,8 @@ describe('agent context contracts', () => {
     expect(source.range).toEqual({ startLine: 1, endLine: 20 });
   });
 
-  it('parses AgentContext as a restricted context package', () => {
-    const context = AgentContextSchema.parse({
+  it('parses RunContext as a restricted context package', () => {
+    const context = RunContextSchema.parse({
       contextId: 'context-1',
       runId: 'run-1',
       workspaceBoundary: workspaceBoundary(),
@@ -138,7 +138,7 @@ describe('agent context contracts', () => {
   });
 
   it('parses effective context build metadata without raw prompt snapshots by default', () => {
-    const build = EffectiveContextBuildSchema.parse({
+    const build = RunContextBuildSchema.parse({
       buildId: 'build-1',
       contextId: 'context-1',
       runId: 'run-1',

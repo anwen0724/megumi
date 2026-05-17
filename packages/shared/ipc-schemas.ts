@@ -6,30 +6,30 @@ import {
   RuntimeIpcRequestIdSchema,
 } from './ipc-contracts';
 import {
-  AgentRunSchema,
-  AgentSessionSchema,
-  MessageSchema,
-} from './agent-lifecycle-contracts';
+  RunSchema,
+  SessionMessageSchema,
+  SessionSchema,
+} from './session-run-contracts';
 import {
-  AgentContextSchema,
-  ContextSourceRefSchema,
-} from './agent-context-contracts';
+  RunContextSchema,
+  RunContextSourceSchema,
+} from './run-context-contracts';
 import {
   RunModeSchema,
   ImplementationPlanArtifactRecordSchema,
   ImplementationPlanArtifactStatusSchema,
-} from './agent-run-mode-contracts';
+} from './run-mode-contracts';
 import {
   ApprovalRecordSchema,
   ToolCallSchema,
   ToolDefinitionSchema,
 } from './tool-contracts';
 import {
-  AgentCancelRequestSchema,
-  AgentRecoverableRunSummarySchema,
-  AgentResumeRequestSchema,
-  AgentRetryRequestSchema,
-} from './agent-recovery-contracts';
+  CancelRequestSchema,
+  RecoverableRunSummarySchema,
+  ResumeRequestSchema,
+  RetryRequestSchema,
+} from './recovery-contracts';
 import {
   ArtifactContentTypeSchema,
   ArtifactRelationSchema,
@@ -233,13 +233,13 @@ export const AgentSessionCreatePayloadSchema = z
   })
   .strict();
 
-export const AgentSessionCreateDataSchema = z.object({ session: AgentSessionSchema }).strict();
+export const AgentSessionCreateDataSchema = z.object({ session: SessionSchema }).strict();
 
 export const AgentSessionListPayloadSchema = z.object({}).strict();
 
 export const AgentSessionListDataSchema = z
   .object({
-    sessions: z.array(AgentSessionSchema),
+    sessions: z.array(SessionSchema),
   })
   .strict();
 
@@ -257,8 +257,8 @@ export const AgentRunStartPayloadSchema = z
 
 export const AgentRunStartDataSchema = z
   .object({
-    run: AgentRunSchema,
-    message: MessageSchema.optional(),
+    run: RunSchema,
+    message: SessionMessageSchema.optional(),
   })
   .strict();
 
@@ -270,7 +270,7 @@ export const AgentContextBaselineGetPayloadSchema = z
 
 export const AgentContextBaselineGetDataSchema = z
   .object({
-    context: AgentContextSchema.optional(),
+    context: RunContextSchema.optional(),
   })
   .strict();
 
@@ -282,7 +282,7 @@ export const AgentContextSourcesListPayloadSchema = z
 
 export const AgentContextSourcesListDataSchema = z
   .object({
-    sources: z.array(ContextSourceRefSchema),
+    sources: z.array(RunContextSourceSchema),
   })
   .strict();
 
@@ -357,40 +357,40 @@ export const AgentRecoverableRunListPayloadSchema = z.object({}).strict();
 
 export const AgentRecoverableRunListDataSchema = z
   .object({
-    runs: z.array(AgentRecoverableRunSummarySchema),
+    runs: z.array(RecoverableRunSummarySchema),
   })
   .strict();
 
-export const AgentRunResumePayloadSchema = AgentResumeRequestSchema.omit({
+export const AgentRunResumePayloadSchema = ResumeRequestSchema.omit({
   resumeRequestId: true,
   createdAt: true,
 }).strict();
 
 export const AgentRunResumeDataSchema = z
   .object({
-    request: AgentResumeRequestSchema,
+    request: ResumeRequestSchema,
   })
   .strict();
 
-export const AgentRunCancelPayloadSchema = AgentCancelRequestSchema.omit({
+export const AgentRunCancelPayloadSchema = CancelRequestSchema.omit({
   cancelRequestId: true,
   createdAt: true,
 }).strict();
 
 export const AgentRunCancelDataSchema = z
   .object({
-    request: AgentCancelRequestSchema,
+    request: CancelRequestSchema,
   })
   .strict();
 
-export const AgentRunRetryPayloadSchema = AgentRetryRequestSchema.omit({
+export const AgentRunRetryPayloadSchema = RetryRequestSchema.omit({
   retryRequestId: true,
   createdAt: true,
 }).strict();
 
 export const AgentRunRetryDataSchema = z
   .object({
-    request: AgentRetryRequestSchema,
+    request: RetryRequestSchema,
   })
   .strict();
 

@@ -3,19 +3,19 @@ import { JsonObjectSchema } from './json';
 import { RuntimeContextSchema } from './runtime-context';
 import { RuntimeErrorSchema } from './runtime-errors';
 import {
-  AgentActionKindSchema,
-  AgentActionStatusSchema,
-  AgentObservationSourceSchema,
-  AgentRunStatusSchema,
-  AgentSessionStatusSchema,
-  AgentStepKindSchema,
-  AgentStepStatusSchema,
-  MessageStatusSchema,
-} from './agent-lifecycle-contracts';
+  RunActionKindSchema,
+  RunActionStatusSchema,
+  RunObservationSourceSchema,
+  RunStatusSchema,
+  RunStepKindSchema,
+  RunStepStatusSchema,
+  SessionMessageStatusSchema,
+  SessionStatusSchema,
+} from './session-run-contracts';
 import {
   CONTEXT_PATCH_OPERATIONS,
   CONTEXT_PATCH_REQUESTERS,
-} from './agent-context-contracts';
+} from './run-context-contracts';
 import {
   RUNTIME_EVENT_PERSIST_MODES,
   RUNTIME_EVENT_SCHEMA_VERSION,
@@ -46,7 +46,7 @@ import {
   RetryKindSchema,
   RetryReasonSchema,
   RetryRequestedBySchema,
-} from './agent-recovery-contracts';
+} from './recovery-contracts';
 import {
   ArtifactContentStorageSchema,
   ArtifactContentTypeSchema,
@@ -129,7 +129,7 @@ const RunScopedRuntimeEventBaseSchema = RuntimeEventBaseSchema.extend({
 const SessionCreatedPayloadSchema = z
   .object({
     title: z.string().min(1),
-    status: AgentSessionStatusSchema,
+    status: SessionStatusSchema,
   })
   .strict();
 
@@ -141,7 +141,7 @@ const SessionUpdatedPayloadSchema = z
 
 const RunCreatedPayloadSchema = z
   .object({
-    status: AgentRunStatusSchema,
+    status: RunStatusSchema,
     mode: z.string().min(1),
     goal: z.string().min(1),
     triggerMessageId: z.string().min(1).optional(),
@@ -158,48 +158,48 @@ const RunStartedPayloadSchema = z
 
 const RunStatusChangedPayloadSchema = z
   .object({
-    from: AgentRunStatusSchema,
-    to: AgentRunStatusSchema,
+    from: RunStatusSchema,
+    to: RunStatusSchema,
   })
   .strict();
 
 const StepCreatedPayloadSchema = z
   .object({
-    kind: AgentStepKindSchema,
-    status: AgentStepStatusSchema,
+    kind: RunStepKindSchema,
+    status: RunStepStatusSchema,
     title: z.string().min(1).optional(),
   })
   .strict();
 
-const StepStartedPayloadSchema = z.object({ kind: AgentStepKindSchema }).strict();
+const StepStartedPayloadSchema = z.object({ kind: RunStepKindSchema }).strict();
 
 const StepStatusChangedPayloadSchema = z
   .object({
-    from: AgentStepStatusSchema,
-    to: AgentStepStatusSchema,
+    from: RunStepStatusSchema,
+    to: RunStepStatusSchema,
   })
   .strict();
 
-const StepCompletedPayloadSchema = z.object({ kind: AgentStepKindSchema }).strict();
+const StepCompletedPayloadSchema = z.object({ kind: RunStepKindSchema }).strict();
 
 const StepFailedPayloadSchema = z
   .object({
-    kind: AgentStepKindSchema,
+    kind: RunStepKindSchema,
     error: RuntimeErrorSchema,
   })
   .strict();
 
 const ActionRequestedPayloadSchema = z
   .object({
-    kind: AgentActionKindSchema,
-    status: AgentActionStatusSchema,
+    kind: RunActionKindSchema,
+    status: RunActionStatusSchema,
     inputPreview: JsonObjectSchema.optional(),
   })
   .strict();
 
 const ObservationReceivedPayloadSchema = z
   .object({
-    source: AgentObservationSourceSchema,
+    source: RunObservationSourceSchema,
     kind: z.string().min(1),
     summary: z.string().optional(),
   })
@@ -250,7 +250,7 @@ const MessageDeltaPayloadSchema = z
 const MessageCompletedPayloadSchema = z
   .object({
     messageId: z.string().min(1),
-    status: MessageStatusSchema,
+    status: SessionMessageStatusSchema,
   })
   .strict();
 
