@@ -24,47 +24,35 @@ import {
   isBusinessIpcChannel,
 } from '@megumi/shared/ipc-contracts';
 import {
-  AgentRecoverableRunListRequestSchema,
-  AgentRunCancelRequestSchema,
-  AgentRunResumeRequestSchema,
-  AgentRunRetryRequestSchema,
-  AgentToolDefinitionsListRequestSchema,
-  AgentArtifactGetRequestSchema,
-  AgentArtifactGetResultSchema,
-  AgentArtifactStatusUpdatePayloadSchema,
-  AgentMemoryRecallPreviewRequestSchema,
-  AgentMemorySettingsGetRequestSchema,
-  AgentMemorySettingsGetResultSchema,
-  AgentMemoryCandidateAcceptPayloadSchema,
-  AgentMemoryCandidateListPayloadSchema,
-  AgentMemoryListDataSchema,
-  AgentMemoryRecallPreviewDataSchema,
-  AgentMemoryRecallPreviewPayloadSchema,
-  AgentMemorySettingsUpdatePayloadSchema,
-  AgentPlanByRunGetRequestSchema,
-  AgentContextBaselineGetRequestSchema,
-  AgentContextSourcesListRequestSchema,
-  AgentRunStartRequestSchema,
-  AgentSessionCreateRequestSchema,
-  AgentSessionListRequestSchema,
   ArtifactGetRequestSchema,
-  ChatCancelPayloadSchema,
-  ChatCancelRequestSchema,
-  ChatStartPayloadSchema,
-  ChatStartRequestSchema,
+  ArtifactGetResultSchema,
+  ArtifactStatusUpdatePayloadSchema,
+  MemoryCandidateAcceptPayloadSchema,
+  MemoryCandidateListPayloadSchema,
+  MemoryListDataSchema,
+  MemoryRecallPreviewDataSchema,
+  MemoryRecallPreviewPayloadSchema,
+  MemoryRecallPreviewRequestSchema,
   MemorySettingsGetRequestSchema,
+  MemorySettingsGetResultSchema,
+  MemorySettingsUpdatePayloadSchema,
   PlanByRunGetRequestSchema,
   ProviderApiKeyRequestSchema,
   ProviderListDataSchema,
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
-  RecoveryResumeRequestSchema,
+  RecoverableRunListRequestSchema,
+  RunCancelRequestSchema,
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
   RunEventsListRequestSchema,
+  RunResumeRequestSchema,
+  RunRetryRequestSchema,
   SessionCreateRequestSchema,
   SessionListRequestSchema,
+  SessionMessageCancelPayloadSchema,
   SessionMessageCancelRequestSchema,
+  SessionMessageSendPayloadSchema,
   SessionMessageSendRequestSchema,
   ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc-schemas';
@@ -196,8 +184,8 @@ describe('runtime ipc request and result schemas', () => {
     expect(isBusinessIpcChannel(IPC_CHANNELS.session.message.send)).toBe(true);
     expect(isBusinessIpcChannel(IPC_CHANNELS.session.message.cancel)).toBe(true);
     expect(isBusinessIpcChannel(IPC_CHANNELS.run.events.list)).toBe(true);
-    expect(isBusinessIpcChannel(IPC_CHANNELS.chat.start)).toBe(true);
-    expect(isBusinessIpcChannel(IPC_CHANNELS.chat.cancel)).toBe(true);
+    expect(isBusinessIpcChannel(IPC_CHANNELS.session.message.send)).toBe(true);
+    expect(isBusinessIpcChannel(IPC_CHANNELS.session.message.cancel)).toBe(true);
     expect(isBusinessIpcChannel(IPC_CHANNELS.window.minimize)).toBe(false);
     expect(isBusinessIpcChannel(IPC_CHANNELS.runtime.event)).toBe(false);
     expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.window.close).success).toBe(false);
@@ -228,7 +216,7 @@ describe('runtime ipc request and result schemas', () => {
         providerId: 'deepseek',
       },
       meta: {
-        channel: IPC_CHANNELS.chat.start,
+        channel: IPC_CHANNELS.session.message.send,
         createdAt: '2026-05-12T00:00:00.000Z',
         source: 'renderer',
       },
@@ -424,7 +412,7 @@ describe('provider and chat ipc schemas', () => {
   });
 
   it('validates chat start payloads without a duplicate request id in payload', () => {
-    const result = ChatStartRequestSchema.safeParse({
+    const result = SessionMessageSendRequestSchema.safeParse({
       requestId: 'ipc-chat-start-1',
       payload: {
         sessionId: 'session-1',
@@ -446,7 +434,7 @@ describe('provider and chat ipc schemas', () => {
         createdAt: '2026-05-12T00:00:00.000Z',
       },
       meta: {
-        channel: IPC_CHANNELS.chat.start,
+        channel: IPC_CHANNELS.session.message.send,
         createdAt: '2026-05-12T00:00:00.000Z',
         source: 'renderer',
       },
@@ -456,17 +444,17 @@ describe('provider and chat ipc schemas', () => {
   });
 
   it('uses a target request id for chat cancellation payloads', () => {
-    const payload = ChatCancelPayloadSchema.safeParse({
+    const payload = SessionMessageCancelPayloadSchema.safeParse({
       targetRequestId: 'ipc-chat-start-1',
     });
 
-    const request = ChatCancelRequestSchema.safeParse({
+    const request = SessionMessageCancelRequestSchema.safeParse({
       requestId: 'ipc-chat-cancel-1',
       payload: {
         targetRequestId: 'ipc-chat-start-1',
       },
       meta: {
-        channel: IPC_CHANNELS.chat.cancel,
+        channel: IPC_CHANNELS.session.message.cancel,
         createdAt: '2026-05-12T00:00:00.000Z',
         source: 'renderer',
       },
@@ -477,7 +465,7 @@ describe('provider and chat ipc schemas', () => {
   });
 
   it('rejects invalid chat messages', () => {
-    const result = ChatStartPayloadSchema.safeParse({
+    const result = SessionMessageSendPayloadSchema.safeParse({
       providerId: 'deepseek',
       modelId: 'deepseek-v4-flash',
       messages: [
@@ -495,83 +483,40 @@ describe('provider and chat ipc schemas', () => {
   });
 });
 
-describe('agent lifecycle ipc contracts', () => {
-  it('validates agent lifecycle runtime ipc requests', () => {
-    expect(AgentSessionCreateRequestSchema.parse({
+describe('session run ipc contracts', () => {
+  it('validates session runtime ipc requests', () => {
+    expect(SessionCreateRequestSchema.parse({
       requestId: 'ipc-agent-session-create-1',
       payload: {
         title: 'New session',
         createdAt: '2026-05-15T00:00:00.000Z',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.session.create,
+        channel: IPC_CHANNELS.session.create,
         source: 'renderer',
         createdAt: '2026-05-15T00:00:00.000Z',
       },
     }).payload.title).toBe('New session');
 
-    expect(AgentSessionListRequestSchema.parse({
+    expect(SessionListRequestSchema.parse({
       requestId: 'ipc-agent-session-list-1',
       payload: {},
       meta: {
-        channel: IPC_CHANNELS.agent.session.list,
+        channel: IPC_CHANNELS.session.list,
         source: 'renderer',
         createdAt: '2026-05-15T00:00:00.000Z',
       },
-    }).meta.channel).toBe('agent:session:list');
-
-    expect(AgentRunStartRequestSchema.parse({
-      requestId: 'ipc-agent-run-start-1',
-      payload: {
-        sessionId: 'session-1',
-        goal: 'Answer',
-        mode: 'chat',
-        createdAt: '2026-05-15T00:00:00.000Z',
-      },
-      meta: {
-        channel: IPC_CHANNELS.agent.run.start,
-        source: 'renderer',
-        createdAt: '2026-05-15T00:00:00.000Z',
-      },
-    }).payload.goal).toBe('Answer');
-  });
-
-  it('accepts mode snapshots and source plan ids in agent run start payloads', () => {
-    const parsed = AgentRunStartRequestSchema.parse({
-      requestId: 'request:run-mode',
-      payload: {
-        sessionId: 'session:1',
-        goal: 'Execute accepted plan',
-        mode: 'execute',
-        modeSnapshot: {
-          preset: 'execute',
-          taskIntent: 'work',
-          permissionMode: 'default',
-          outputExpectation: 'execution_result',
-          selectionSource: 'user_selected',
-        },
-        sourcePlanId: 'plan:accepted',
-        createdAt: '2026-05-15T00:00:00.000Z',
-      },
-      meta: {
-        channel: IPC_CHANNELS.agent.run.start,
-        createdAt: '2026-05-15T00:00:00.000Z',
-        source: 'renderer',
-      },
-    });
-
-    expect(parsed.payload.modeSnapshot?.permissionMode).toBe('default');
-    expect(parsed.payload.sourcePlanId).toBe('plan:accepted');
+    }).meta.channel).toBe('session:list');
   });
 
   it('registers plan-specific IPC channels in the runtime envelope', () => {
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.plan.byRunGet);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.plan.statusUpdate);
-    expect(AgentPlanByRunGetRequestSchema.parse({
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.plan.byRunGet);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.plan.statusUpdate);
+    expect(PlanByRunGetRequestSchema.parse({
       requestId: 'request:plan-get',
       payload: { runId: 'run:plan' },
       meta: {
-        channel: IPC_CHANNELS.agent.plan.byRunGet,
+        channel: IPC_CHANNELS.plan.byRunGet,
         createdAt: '2026-05-15T00:00:00.000Z',
         source: 'renderer',
       },
@@ -696,7 +641,7 @@ describe('agent context runtime IPC schemas', () => {
       },
     }).meta.channel).toBe(IPC_CHANNELS.tool.definitionsList);
 
-    expect(RecoveryResumeRequestSchema.parse({
+    expect(RunResumeRequestSchema.parse({
       requestId: 'ipc-recovery-resume-1',
       payload: {
         runId: 'run-1',
@@ -733,31 +678,31 @@ describe('agent context runtime IPC schemas', () => {
   });
 
   it('keeps context channel in request.meta.channel instead of top-level channel', () => {
-    const parsed = AgentContextBaselineGetRequestSchema.parse({
+    const parsed = RunContextBaselineGetRequestSchema.parse({
       requestId: 'ipc-context-1',
       payload: {
         runId: 'run-1',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.context.baselineGet,
+        channel: IPC_CHANNELS.runContext.baselineGet,
         createdAt: '2026-05-15T00:00:00.000Z',
         source: 'renderer',
       },
     });
 
-    expect(parsed.meta.channel).toBe(IPC_CHANNELS.agent.context.baselineGet);
+    expect(parsed.meta.channel).toBe(IPC_CHANNELS.runContext.baselineGet);
     expect('channel' in parsed).toBe(false);
   });
 
   it('rejects top-level channel on context requests', () => {
-    expect(() => AgentContextSourcesListRequestSchema.parse({
+    expect(() => RunContextSourcesListRequestSchema.parse({
       requestId: 'ipc-context-2',
-      channel: IPC_CHANNELS.agent.context.sourcesList,
+      channel: IPC_CHANNELS.runContext.sourcesList,
       payload: {
         runId: 'run-1',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.context.sourcesList,
+        channel: IPC_CHANNELS.runContext.sourcesList,
         createdAt: '2026-05-15T00:00:00.000Z',
         source: 'renderer',
       },
@@ -767,37 +712,37 @@ describe('agent context runtime IPC schemas', () => {
 
 describe('agent tool approval runtime IPC schemas', () => {
   it('parses agent tool IPC requests with channel in request meta only', () => {
-    const request = AgentToolDefinitionsListRequestSchema.parse({
+    const request = ToolDefinitionsListRequestSchema.parse({
       requestId: 'ipc-1',
       payload: { runId: 'run-1' },
       meta: {
-        channel: IPC_CHANNELS.agent.tool.definitionsList,
+        channel: IPC_CHANNELS.tool.definitionsList,
         createdAt: '2026-05-16T00:00:00.000Z',
         source: 'renderer',
       },
     });
 
-    expect(request.meta.channel).toBe(IPC_CHANNELS.agent.tool.definitionsList);
+    expect(request.meta.channel).toBe(IPC_CHANNELS.tool.definitionsList);
     expect('channel' in request).toBe(false);
   });
 });
 
 describe('agent recovery runtime IPC schemas', () => {
   it('parses agent recovery runtime ipc requests with meta.channel', () => {
-    const listRequest = AgentRecoverableRunListRequestSchema.parse({
+    const listRequest = RecoverableRunListRequestSchema.parse({
       requestId: 'request_123',
       payload: {},
       meta: {
-        channel: IPC_CHANNELS.agent.recovery.recoverableRunsList,
+        channel: IPC_CHANNELS.recovery.recoverableRunsList,
         createdAt: '2026-05-16T10:00:00.000Z',
         source: 'renderer',
       },
     });
 
-    expect(listRequest.meta.channel).toBe('agent:recovery:recoverable-runs:list');
+    expect(listRequest.meta.channel).toBe('recovery:recoverable-runs:list');
     expect(isBusinessIpcChannel(listRequest.meta.channel)).toBe(true);
 
-    const resumeRequest = AgentRunResumeRequestSchema.parse({
+    const resumeRequest = RunResumeRequestSchema.parse({
       requestId: 'request_124',
       payload: {
         runId: 'run_123',
@@ -807,13 +752,13 @@ describe('agent recovery runtime IPC schemas', () => {
         resumeMode: 'from_checkpoint',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.recovery.resume,
+        channel: IPC_CHANNELS.recovery.resume,
         createdAt: '2026-05-16T10:00:01.000Z',
         source: 'renderer',
       },
     });
 
-    const cancelRequest = AgentRunCancelRequestSchema.parse({
+    const cancelRequest = RunCancelRequestSchema.parse({
       requestId: 'request_125',
       payload: {
         runId: 'run_123',
@@ -822,13 +767,13 @@ describe('agent recovery runtime IPC schemas', () => {
         scope: 'run',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.recovery.cancel,
+        channel: IPC_CHANNELS.recovery.cancel,
         createdAt: '2026-05-16T10:00:02.000Z',
         source: 'renderer',
       },
     });
 
-    const retryRequest = AgentRunRetryRequestSchema.parse({
+    const retryRequest = RunRetryRequestSchema.parse({
       requestId: 'request_126',
       payload: {
         runId: 'run_123',
@@ -837,7 +782,7 @@ describe('agent recovery runtime IPC schemas', () => {
         reason: 'runtime_error',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.recovery.retry,
+        channel: IPC_CHANNELS.recovery.retry,
         createdAt: '2026-05-16T10:00:03.000Z',
         source: 'renderer',
       },
@@ -849,17 +794,17 @@ describe('agent recovery runtime IPC schemas', () => {
   });
 
   it('rejects extra fields in recovery IPC payloads', () => {
-    expect(AgentRecoverableRunListRequestSchema.safeParse({
+    expect(RecoverableRunListRequestSchema.safeParse({
       requestId: 'request_recovery_list',
       payload: { rawFullPrompt: 'secret prompt' },
       meta: {
-        channel: IPC_CHANNELS.agent.recovery.recoverableRunsList,
+        channel: IPC_CHANNELS.recovery.recoverableRunsList,
         createdAt: '2026-05-16T10:00:00.000Z',
         source: 'renderer',
       },
     }).success).toBe(false);
 
-    expect(AgentRunResumeRequestSchema.safeParse({
+    expect(RunResumeRequestSchema.safeParse({
       requestId: 'request_resume',
       payload: {
         runId: 'run_123',
@@ -869,13 +814,13 @@ describe('agent recovery runtime IPC schemas', () => {
         rawStack: 'secret stack',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.recovery.resume,
+        channel: IPC_CHANNELS.recovery.resume,
         createdAt: '2026-05-16T10:00:01.000Z',
         source: 'renderer',
       },
     }).success).toBe(false);
 
-    expect(AgentRunRetryRequestSchema.safeParse({
+    expect(RunRetryRequestSchema.safeParse({
       requestId: 'request_retry',
       payload: {
         runId: 'run_123',
@@ -885,7 +830,7 @@ describe('agent recovery runtime IPC schemas', () => {
         rawProviderBody: 'secret body',
       },
       meta: {
-        channel: IPC_CHANNELS.agent.recovery.retry,
+        channel: IPC_CHANNELS.recovery.retry,
         createdAt: '2026-05-16T10:00:02.000Z',
         source: 'renderer',
       },
@@ -895,33 +840,33 @@ describe('agent recovery runtime IPC schemas', () => {
 
 describe('agent artifact IPC contracts', () => {
   it('registers artifact IPC channels as business runtime IPC channels', () => {
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.listByRun);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.listBySession);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.get);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.versionGet);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.versionCreate);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.statusUpdate);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.artifacts.reference);
-    expect(isBusinessIpcChannel(IPC_CHANNELS.agent.artifacts.get)).toBe(true);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.artifacts.listByRun);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.artifacts.listBySession);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.artifacts.get);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.artifacts.versionGet);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.artifacts.versionCreate);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.artifacts.statusUpdate);
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.artifacts.reference);
+    expect(isBusinessIpcChannel(IPC_CHANNELS.artifacts.get)).toBe(true);
   });
 
   it('parses artifact IPC requests with channel only in request.meta.channel', () => {
-    const request = AgentArtifactGetRequestSchema.parse({
+    const request = ArtifactGetRequestSchema.parse({
       requestId: 'ipc:artifact:get',
       payload: { artifactId: 'artifact:1' },
       meta: {
-        channel: IPC_CHANNELS.agent.artifacts.get,
+        channel: IPC_CHANNELS.artifacts.get,
         createdAt: '2026-05-16T00:00:00.000Z',
         source: 'renderer',
       },
     });
 
-    expect(request.meta.channel).toBe(IPC_CHANNELS.agent.artifacts.get);
+    expect(request.meta.channel).toBe(IPC_CHANNELS.artifacts.get);
     expect(request).not.toHaveProperty('channel');
   });
 
   it('parses artifact result data using strict schemas', () => {
-    const result = AgentArtifactGetResultSchema.parse({
+    const result = ArtifactGetResultSchema.parse({
       ok: true,
       data: {
         artifact: {
@@ -959,7 +904,7 @@ describe('agent artifact IPC contracts', () => {
       },
       meta: {
         requestId: 'ipc:artifact:get',
-        channel: IPC_CHANNELS.agent.artifacts.get,
+        channel: IPC_CHANNELS.artifacts.get,
         handledAt: '2026-05-16T00:00:01.000Z',
       },
     });
@@ -971,7 +916,7 @@ describe('agent artifact IPC contracts', () => {
   });
 
   it('rejects unknown artifact IPC fields', () => {
-    expect(() => AgentArtifactStatusUpdatePayloadSchema.parse({
+    expect(() => ArtifactStatusUpdatePayloadSchema.parse({
       artifactId: 'artifact:1',
       status: 'active',
       updatedAt: '2026-05-16T00:00:00.000Z',
@@ -983,7 +928,7 @@ describe('agent artifact IPC contracts', () => {
 describe('agent memory ipc payload and data schemas', () => {
   it('parses strict memory payload schemas before channels are wired', () => {
     expect(
-      AgentMemorySettingsUpdatePayloadSchema.parse({
+      MemorySettingsUpdatePayloadSchema.parse({
         workspaceId: 'workspace:1',
         autoCaptureEnabled: false,
         defaultCandidateReviewMode: 'manual',
@@ -992,26 +937,26 @@ describe('agent memory ipc payload and data schemas', () => {
     ).toBe('manual');
 
     expect(
-      AgentMemoryCandidateListPayloadSchema.parse({
+      MemoryCandidateListPayloadSchema.parse({
         workspaceId: 'workspace:1',
         status: 'proposed',
       }).status,
     ).toBe('proposed');
 
     expect(() =>
-      AgentMemoryCandidateAcceptPayloadSchema.parse({
+      MemoryCandidateAcceptPayloadSchema.parse({
         candidateId: 'memory-candidate:1',
         reviewedAt: '2026-05-16T00:00:00.000Z',
-        channel: 'agent:memory:candidate:accept',
+        channel: 'memory:candidate:accept',
       }),
     ).toThrow();
   });
 
   it('parses memory list and recall preview data without raw source content', () => {
-    const memoryData = AgentMemoryListDataSchema.parse({
+    const memoryData = MemoryListDataSchema.parse({
       memories: [],
     });
-    const recallPayload = AgentMemoryRecallPreviewPayloadSchema.parse({
+    const recallPayload = MemoryRecallPreviewPayloadSchema.parse({
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       query: 'workflow',
@@ -1021,7 +966,7 @@ describe('agent memory ipc payload and data schemas', () => {
       budget: 500,
       createdAt: '2026-05-16T00:00:00.000Z',
     });
-    const recallData = AgentMemoryRecallPreviewDataSchema.parse({
+    const recallData = MemoryRecallPreviewDataSchema.parse({
       request: {
         recallRequestId: 'memory-recall:1',
         sessionId: recallPayload.sessionId,
@@ -1043,28 +988,28 @@ describe('agent memory ipc payload and data schemas', () => {
 
 describe('agent memory runtime ipc channels', () => {
   it('registers memory channels as business IPC channels', () => {
-    expect(IPC_CHANNELS.agent.memory.settingsGet).toBe('agent:memory:settings:get');
-    expect(IPC_CHANNELS.agent.memory.recallPreview).toBe('agent:memory:recall-preview');
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.agent.memory.memoryList);
-    expect(isBusinessIpcChannel('agent:memory:memory:list')).toBe(true);
+    expect(IPC_CHANNELS.memory.settingsGet).toBe('memory:settings:get');
+    expect(IPC_CHANNELS.memory.recallPreview).toBe('memory:recall-preview');
+    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.memory.memoryList);
+    expect(isBusinessIpcChannel('memory:memory:list')).toBe(true);
   });
 
   it('keeps channel in request meta and rejects top-level channel', () => {
-    const request = AgentMemorySettingsGetRequestSchema.parse({
+    const request = MemorySettingsGetRequestSchema.parse({
       requestId: 'request:memory:settings',
       payload: { workspaceId: 'workspace:1' },
       meta: {
-        channel: IPC_CHANNELS.agent.memory.settingsGet,
+        channel: IPC_CHANNELS.memory.settingsGet,
         createdAt: '2026-05-16T00:00:00.000Z',
         source: 'renderer',
       },
     });
 
-    expect(request.meta.channel).toBe(IPC_CHANNELS.agent.memory.settingsGet);
+    expect(request.meta.channel).toBe(IPC_CHANNELS.memory.settingsGet);
     expect(() =>
-      AgentMemoryRecallPreviewRequestSchema.parse({
+      MemoryRecallPreviewRequestSchema.parse({
         requestId: 'request:memory:recall',
-        channel: IPC_CHANNELS.agent.memory.recallPreview,
+        channel: IPC_CHANNELS.memory.recallPreview,
         payload: {
           sessionId: 'session:1',
           scopes: ['workspace'],
@@ -1072,7 +1017,7 @@ describe('agent memory runtime ipc channels', () => {
           createdAt: '2026-05-16T00:00:00.000Z',
         },
         meta: {
-          channel: IPC_CHANNELS.agent.memory.recallPreview,
+          channel: IPC_CHANNELS.memory.recallPreview,
           createdAt: '2026-05-16T00:00:00.000Z',
           source: 'renderer',
         },
@@ -1081,7 +1026,7 @@ describe('agent memory runtime ipc channels', () => {
   });
 
   it('parses memory results with strict runtime ipc metadata', () => {
-    const result = AgentMemorySettingsGetResultSchema.parse({
+    const result = MemorySettingsGetResultSchema.parse({
       ok: true,
       data: {
         settings: {
@@ -1093,9 +1038,9 @@ describe('agent memory runtime ipc channels', () => {
       },
       meta: {
         requestId: 'request:memory:settings',
-        channel: IPC_CHANNELS.agent.memory.settingsGet,
+        channel: IPC_CHANNELS.memory.settingsGet,
         handledAt: '2026-05-16T00:00:01.000Z',
-        operationName: 'agent.memory.settings.get',
+        operationName: 'memory.settings.get',
       },
     });
 

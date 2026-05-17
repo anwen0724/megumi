@@ -60,7 +60,7 @@ describe('Megumi Home source guards', () => {
   it('does not expose plaintext API keys through main-to-renderer send calls', () => {
     const mainSources = [
       'apps/desktop/src/main/ipc/handlers/provider.handler.ts',
-      'apps/desktop/src/main/ipc/handlers/chat.handler.ts',
+      'apps/desktop/src/main/ipc/handlers/session.handler.ts',
       'apps/desktop/src/main/services/provider-settings.service.ts',
       'apps/desktop/src/main/services/provider-runtime.service.ts',
     ]

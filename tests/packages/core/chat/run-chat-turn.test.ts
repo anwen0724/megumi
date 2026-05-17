@@ -27,7 +27,7 @@ const runtimeContext = {
   requestId: 'request-1',
   traceId: 'trace-chat-1',
   debugId: 'debug-chat-1',
-  operationName: 'chat.start',
+  operationName: 'session.message.send',
   source: 'main',
   createdAt: '2026-05-11T00:00:00.000Z',
 } as const;

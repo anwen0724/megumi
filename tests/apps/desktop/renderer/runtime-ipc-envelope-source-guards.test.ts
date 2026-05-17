@@ -30,7 +30,7 @@ describe('runtime ipc envelope renderer source guards', () => {
 
     expect(source).not.toContain('as { ok: boolean; ' + 'error?: string }');
     expect(source).not.toContain('throw new Error(result.error');
-    expect(source).not.toContain('window.megumi.chat.cancel({ requestId })');
+    expect(source).not.toContain(['window', 'megumi', 'chat'].join('.') + '.cancel({ requestId })');
     expect(source).toContain('createRendererRuntimeIpcRequest');
     expect(source).toContain('activeTraceIdRef');
     expect(source).toContain('targetRequestId');
@@ -46,8 +46,8 @@ describe('runtime ipc envelope renderer source guards', () => {
     expect(source).not.toContain('window.megumi.provider.update(input)');
     expect(source).not.toContain('window.megumi.provider.setApiKey(input)');
     expect(source).not.toContain('window.megumi.provider.deleteApiKey(input)');
-    expect(source).not.toContain('window.megumi.chat.start(request) as');
-    expect(source).not.toContain('window.megumi.chat.cancel({');
+    expect(source).not.toContain(['window', 'megumi', 'chat'].join('.') + '.start(request) as');
+    expect(source).not.toContain(['window', 'megumi', 'chat'].join('.') + '.cancel({');
   });
 
   it('renderer runtime request helper builds RuntimeContext for business IPC', () => {

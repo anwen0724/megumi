@@ -30,7 +30,7 @@ const runtimeContext = {
   requestId: 'ipc-chat-start-1',
   traceId: 'trace-runtime-1',
   debugId: 'debug-runtime-1',
-  operationName: 'chat.start',
+  operationName: 'session.message.send',
   source: 'renderer',
   createdAt: '2026-05-12T10:00:00.000Z',
 } as const;
@@ -310,7 +310,7 @@ describe('context runtime events', () => {
       runtimeContext: {
         requestId: 'request-1',
         traceId: 'trace-1',
-        operationName: 'agent.context.patch.request',
+        operationName: 'run-context.patch.request',
         source: 'core',
         createdAt: '2026-05-15T00:00:00.000Z',
       },

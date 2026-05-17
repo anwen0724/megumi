@@ -215,8 +215,8 @@ describe('preload api', () => {
 
     expect(source).not.toMatch(/\bchat:\s*\{/);
     expect(source).not.toMatch(/\bagent:\s*\{/);
-    expect(source).not.toContain('IPC_CHANNELS.chat');
-    expect(source).not.toContain('IPC_CHANNELS.agent');
+    expect(source).not.toContain(['IPC_CHANNELS', 'chat'].join('.'));
+    expect(source).not.toContain(['IPC_CHANNELS', 'agent'].join('.'));
   });
 
   it('keeps window controls as lightweight shell ipc', async () => {

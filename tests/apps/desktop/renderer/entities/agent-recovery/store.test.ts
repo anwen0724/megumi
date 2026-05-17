@@ -4,7 +4,7 @@ import {
   createAgentRecoveryStore,
   type AgentRecoveryApi,
 } from '@megumi/desktop/renderer/entities/agent-recovery/store';
-import type { AgentRecoverableRunSummary } from '@megumi/shared/agent-recovery-contracts';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 
 describe('agent recovery renderer store', () => {
   let api: AgentRecoveryApi;
@@ -19,7 +19,7 @@ describe('agent recovery renderer store', () => {
           reason: 'waiting_for_approval',
           latestCheckpointId: 'checkpoint_123',
           preview: 'Waiting for approval.',
-        } satisfies AgentRecoverableRunSummary],
+        } satisfies RecoverableRunSummary],
       })),
       resume: vi.fn(async (payload) => ({
         request: {

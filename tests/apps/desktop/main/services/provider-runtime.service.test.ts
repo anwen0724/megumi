@@ -273,7 +273,7 @@ describe('ProviderRuntimeService', () => {
         requestId: 'ipc-chat-start-1',
         traceId: 'trace-provider-1',
         debugId: 'debug-provider-1',
-        operationName: 'chat.start',
+        operationName: 'session.message.send',
         source: 'main',
         createdAt: '2026-05-12T00:00:00.000Z',
       },

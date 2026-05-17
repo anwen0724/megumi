@@ -46,7 +46,7 @@ describe('runtime common contracts', () => {
   it('validates operation names as lowercase dotted names', () => {
     expect(RuntimeOperationNameSchema.parse('provider.list')).toBe('provider.list');
     expect(RuntimeOperationNameSchema.parse('provider.set-api-key')).toBe('provider.set-api-key');
-    expect(RuntimeOperationNameSchema.parse('chat.start')).toBe('chat.start');
+    expect(RuntimeOperationNameSchema.parse('session.message.send')).toBe('session.message.send');
 
     expect(() => RuntimeOperationNameSchema.parse('provider')).toThrow();
     expect(() => RuntimeOperationNameSchema.parse('Provider.List')).toThrow();
@@ -67,7 +67,7 @@ describe('runtime common contracts', () => {
     const context = createRuntimeContext({
       requestId: 'ipc-chat-start-1',
       traceId: 'trace-chat-1',
-      operationName: 'chat.start',
+      operationName: 'session.message.send',
       source: 'main',
       createdAt: '2026-05-14T00:00:00.000Z',
     });

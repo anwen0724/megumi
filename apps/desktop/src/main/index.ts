@@ -19,21 +19,21 @@ import { createModelStepProviderService } from './services/model-step-provider.s
 import { MegumiHomeConfigService } from './services/megumi-home-config.service';
 import { ProviderRuntimeService } from './services/provider-runtime.service';
 import { createElectronSecretStoreService } from './services/secret-store.service';
-import { AgentRunModeService } from './services/agent-run-mode.service';
-import { createDefaultAgentContextService } from './services/agent-context.service';
-import { createDefaultAgentToolService } from './services/agent-tool.service';
-import { createAgentRecoveryService } from './services/agent-recovery.service';
+import { RunModeService } from './services/run-mode.service';
+import { createDefaultRunContextService } from './services/run-context.service';
+import { createDefaultToolService } from './services/tool.service';
+import { createRecoveryService } from './services/recovery.service';
 import { ArtifactContentStore } from './services/artifact-content-store.service';
-import { AgentArtifactService } from './services/agent-artifact.service';
-import { createAgentMemoryService } from './services/agent-memory.service';
+import { ArtifactService } from './services/artifact.service';
+import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
 import { getDefaultProviderService } from './ipc/handlers/provider.handler';
 
 loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
 const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
-const agentContextService = createDefaultAgentContextService(megumiHomePaths);
-const agentToolService = createDefaultAgentToolService(megumiHomePaths);
+const runContextService = createDefaultRunContextService(megumiHomePaths);
+const toolService = createDefaultToolService(megumiHomePaths);
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(database);
 const artifactRepository = new ArtifactRepository(database);
@@ -41,7 +41,7 @@ const memoryRepository = new MemoryRepository(database);
 const planArtifactCompatibility = new PlanArtifactCompatibilityService({
   repository: artifactRepository,
 });
-const agentRunModeService = new AgentRunModeService({
+const runModeService = new RunModeService({
   repository: new RunModeRepository(database),
   planArtifactCompatibility,
 });
@@ -63,18 +63,18 @@ const providerRuntimeService = new ProviderRuntimeService({
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const sessionRunService = new SessionRunService({
   repository: new SessionRunRepository(database),
-  runModeService: agentRunModeService,
-  contextService: agentContextService,
+  runModeService: runModeService,
+  contextService: runContextService,
   modelStepProvider: modelStepProviderService,
 });
 const artifactContentStore = new ArtifactContentStore({
   artifactRoot: path.join(megumiHomePaths.homePath, 'artifacts'),
 });
-const agentArtifactService = new AgentArtifactService({
+const artifactService = new ArtifactService({
   repository: artifactRepository,
   contentStore: artifactContentStore,
 });
-const agentMemoryService = createAgentMemoryService({
+const memoryService = createMemoryService({
   repository: memoryRepository,
   now: () => new Date().toISOString(),
   createId: (prefix) => `${prefix}:${crypto.randomUUID()}`,
@@ -85,7 +85,7 @@ const agentMemoryService = createAgentMemoryService({
     sessionId: event.sessionId,
   }),
 });
-const agentRecoveryService = createAgentRecoveryService({
+const recoveryService = createRecoveryService({
   repository: new RecoveryRepository(database),
   clock: () => new Date(),
   ids: {
@@ -105,13 +105,12 @@ registerAppLifecycle({
   registerAllHandlers: () => registerAllHandlers({
     logger: runtimeLogger,
     sessionRunService,
-    agentService: sessionRunService,
-    agentContextService,
-    agentPlanService: sessionRunService,
-    agentToolService,
-    agentRecoveryService,
-    agentArtifactService,
-    agentMemoryService,
+    runContextService,
+    planService: sessionRunService,
+    toolService,
+    recoveryService,
+    artifactService,
+    memoryService,
   }),
   createWindow: () => {
     createMainWindow({

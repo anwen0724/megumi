@@ -29,7 +29,7 @@ import type { ImplementationPlanArtifactRecord } from '@megumi/shared/run-mode-c
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { AgentRunModeService } from './agent-run-mode.service';
+import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface SessionRunServiceClock {
@@ -59,7 +59,7 @@ export interface SessionRunServiceOptions {
   repository: SessionRunRepository;
   contextService?: SessionRunContextService;
   runModeService?: Pick<
-    AgentRunModeService,
+    RunModeService,
     | 'createModeSnapshot'
     | 'linkAcceptedSourcePlan'
     | 'createPlanRecordForRun'
@@ -105,7 +105,7 @@ export class SessionRunService {
   private readonly repository: SessionRunRepository;
   private readonly contextService?: SessionRunContextService;
   private readonly runModeService?: Pick<
-    AgentRunModeService,
+    RunModeService,
     | 'createModeSnapshot'
     | 'linkAcceptedSourcePlan'
     | 'createPlanRecordForRun'
@@ -475,7 +475,7 @@ export class SessionRunService {
 
   private requireRunModeService(): NonNullable<SessionRunServiceOptions['runModeService']> {
     if (!this.runModeService) {
-      throw new Error('Agent run mode service is not configured.');
+      throw new Error('Run mode service is not configured.');
     }
 
     return this.runModeService;
@@ -495,7 +495,7 @@ function defaultHostBoundary(
       source: 'runtime',
       kind: 'message_emitted',
       receivedAt: clock.now(),
-      summary: 'Agent lifecycle run completed without tool execution.',
+      summary: 'Session run run completed without tool execution.',
     }),
   };
 }
@@ -603,7 +603,7 @@ export function createDefaultSessionRunService(
 
   return new SessionRunService({
     repository: new SessionRunRepository(database),
-    runModeService: new AgentRunModeService({ repository: runModeRepository }),
+    runModeService: new RunModeService({ repository: runModeRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
   });
 }

@@ -61,7 +61,7 @@ const forbiddenPatterns = [
 ];
 
 const allowedCurrentLifecycleTerms = new Map<string, RegExp[]>([
-  ['packages/shared/agent-lifecycle-contracts.ts', [
+  ['packages/shared/session-run-contracts.ts', [
     new RegExp(term('\\bMESSAGE', '_')),
   ]],
   ['packages/shared/artifact-contracts.ts', [
@@ -69,6 +69,18 @@ const allowedCurrentLifecycleTerms = new Map<string, RegExp[]>([
   ]],
   ['tests/packages/shared/artifact-contracts.test.ts', [
     new RegExp(term('\\bARTIFACT', '_')),
+  ]],
+  ['apps/desktop/src/main/ipc/handlers/artifact.handler.ts', [
+    new RegExp(term('\\bregister', 'Artifact', 'Handlers\\b')),
+  ]],
+  ['apps/desktop/src/main/ipc/register-handlers.ts', [
+    new RegExp(term('\\bregister', 'Artifact', 'Handlers\\b')),
+  ]],
+  ['tests/apps/desktop/main/ipc/handlers/artifact.handler.test.ts', [
+    new RegExp(term('\\bregister', 'Artifact', 'Handlers\\b')),
+  ]],
+  ['tests/apps/desktop/main/ipc/register-handlers.test.ts', [
+    new RegExp(term('\\bregister', 'Artifact', 'Handlers\\b')),
   ]],
 ]);
 

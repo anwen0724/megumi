@@ -1,0 +1,76 @@
+import { ipcMain } from 'electron';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/run-mode-contracts';
+import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
+import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+import type {
+  PlanByRunGetData,
+  PlanByRunGetPayload,
+  PlanStatusUpdateData,
+  PlanStatusUpdatePayload,
+} from '@megumi/shared/ipc-schemas';
+import {
+  PlanByRunGetRequestSchema,
+  PlanStatusUpdateRequestSchema,
+} from '@megumi/shared/ipc-schemas';
+import type { RunModeService } from '../../services/run-mode.service';
+import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+
+export type PlanHandlersService = Pick<
+  RunModeService,
+  'getPlanByRun' | 'updatePlanStatus'
+>;
+
+export interface RegisterPlanHandlersOptions {
+  logger?: RuntimeLogger;
+}
+
+export function registerPlanHandlers(
+  service: PlanHandlersService,
+  options: RegisterPlanHandlersOptions = {},
+): void {
+  ipcMain.handle(
+    IPC_CHANNELS.plan.byRunGet,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.plan.byRunGet,
+      requestSchema: PlanByRunGetRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<PlanByRunGetPayload, typeof IPC_CHANNELS.plan.byRunGet>,
+      ): PlanByRunGetData => ({
+        plan: service.getPlanByRun(request.payload.runId) as ImplementationPlanArtifactRecord | undefined,
+      }),
+      mapError: mapPlanIpcError,
+    }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.plan.statusUpdate,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.plan.statusUpdate,
+      requestSchema: PlanStatusUpdateRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<PlanStatusUpdatePayload, typeof IPC_CHANNELS.plan.statusUpdate>,
+      ): PlanStatusUpdateData => ({
+        plan: service.updatePlanStatus(request.payload),
+      }),
+      mapError: mapPlanIpcError,
+    }),
+  );
+
+
+
+
+}
+
+function mapPlanIpcError(): RuntimeIpcError {
+  return {
+    code: 'ipc_handler_failed',
+    message: 'Agent plan service failed.',
+    severity: 'error',
+    retryable: true,
+    source: 'main',
+  };
+}

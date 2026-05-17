@@ -5,27 +5,23 @@ const registerWindowHandlers = vi.fn();
 const registerProviderHandlers = vi.fn();
 const registerSessionHandlers = vi.fn();
 const registerRunHandlers = vi.fn();
-const registerChatHandlers = vi.fn();
-const registerAgentHandlers = vi.fn();
-const registerAgentContextHandlers = vi.fn();
-const registerAgentPlanHandlers = vi.fn();
-const registerAgentToolHandlers = vi.fn();
-const registerAgentRecoveryHandlers = vi.fn();
-const registerAgentArtifactHandlers = vi.fn();
-const registerAgentMemoryHandlers = vi.fn();
+const registerRunContextHandlers = vi.fn();
+const registerPlanHandlers = vi.fn();
+const registerToolHandlers = vi.fn();
+const registerRecoveryHandlers = vi.fn();
+const registerArtifactHandlers = vi.fn();
+const registerMemoryHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/session.handler', () => ({ registerSessionHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/run.handler', () => ({ registerRunHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/chat.handler', () => ({ registerChatHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/agent.handler', () => ({ registerAgentHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/agent-context.handler', () => ({ registerAgentContextHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/agent-plan.handler', () => ({ registerAgentPlanHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/agent-tool.handler', () => ({ registerAgentToolHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/agent-recovery.handler', () => ({ registerAgentRecoveryHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/agent-artifact.handler', () => ({ registerAgentArtifactHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/agent-memory.handler', () => ({ registerAgentMemoryHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/run-context.handler', () => ({ registerRunContextHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/plan.handler', () => ({ registerPlanHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/tool.handler', () => ({ registerToolHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/recovery.handler', () => ({ registerRecoveryHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/artifact.handler', () => ({ registerArtifactHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/memory.handler', () => ({ registerMemoryHandlers }));
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
 }));
@@ -36,17 +32,15 @@ describe('registerAllHandlers', () => {
     registerProviderHandlers.mockReset();
     registerSessionHandlers.mockReset();
     registerRunHandlers.mockReset();
-    registerChatHandlers.mockReset();
-    registerAgentHandlers.mockReset();
-    registerAgentContextHandlers.mockReset();
-    registerAgentPlanHandlers.mockReset();
-    registerAgentToolHandlers.mockReset();
-    registerAgentRecoveryHandlers.mockReset();
-    registerAgentArtifactHandlers.mockReset();
-    registerAgentMemoryHandlers.mockReset();
+    registerRunContextHandlers.mockReset();
+    registerPlanHandlers.mockReset();
+    registerToolHandlers.mockReset();
+    registerRecoveryHandlers.mockReset();
+    registerArtifactHandlers.mockReset();
+    registerMemoryHandlers.mockReset();
   });
 
-  it('registers only existing runtime handlers when no session run or agent service is provided', async () => {
+  it('registers only existing runtime handlers when no session run service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
 
     registerAllHandlers();
@@ -55,14 +49,12 @@ describe('registerAllHandlers', () => {
     expect(registerProviderHandlers).toHaveBeenCalledTimes(1);
     expect(registerSessionHandlers).not.toHaveBeenCalled();
     expect(registerRunHandlers).not.toHaveBeenCalled();
-    expect(registerChatHandlers).not.toHaveBeenCalled();
-    expect(registerAgentHandlers).not.toHaveBeenCalled();
-    expect(registerAgentContextHandlers).not.toHaveBeenCalled();
-    expect(registerAgentPlanHandlers).not.toHaveBeenCalled();
-    expect(registerAgentToolHandlers).not.toHaveBeenCalled();
-    expect(registerAgentRecoveryHandlers).not.toHaveBeenCalled();
-    expect(registerAgentArtifactHandlers).not.toHaveBeenCalled();
-    expect(registerAgentMemoryHandlers).not.toHaveBeenCalled();
+    expect(registerRunContextHandlers).not.toHaveBeenCalled();
+    expect(registerPlanHandlers).not.toHaveBeenCalled();
+    expect(registerToolHandlers).not.toHaveBeenCalled();
+    expect(registerRecoveryHandlers).not.toHaveBeenCalled();
+    expect(registerArtifactHandlers).not.toHaveBeenCalled();
+    expect(registerMemoryHandlers).not.toHaveBeenCalled();
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
@@ -86,76 +78,62 @@ describe('registerAllHandlers', () => {
     expect(registerProviderHandlers).toHaveBeenCalledWith(undefined, { logger });
     expect(registerSessionHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
     expect(registerRunHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
-    expect(registerChatHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
   });
 
-  it('registers agent lifecycle handlers when an agent service is provided', async () => {
+  it('registers run context handlers when a context service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
-    const agentService = {
-      createSession: vi.fn(),
-      listSessions: vi.fn(),
-      startRun: vi.fn(),
-    };
-
-    registerAllHandlers({ agentService });
-
-    expect(registerAgentHandlers).toHaveBeenCalledWith(agentService, { logger: undefined });
-  });
-
-  it('registers agent context handlers when a context service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
-    const agentContextService = {
+    const runContextService = {
       getBaselineContext: vi.fn(),
       listWorkspaceSourcesByRun: vi.fn(),
     };
 
-    registerAllHandlers({ agentContextService });
+    registerAllHandlers({ runContextService });
 
-    expect(registerAgentContextHandlers).toHaveBeenCalledWith(agentContextService, { logger: undefined });
+    expect(registerRunContextHandlers).toHaveBeenCalledWith(runContextService, { logger: undefined });
   });
 
-  it('registers agent plan handlers when a plan service is provided', async () => {
+  it('registers plan handlers when a plan service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
-    const agentPlanService = {
+    const planService = {
       getPlanByRun: vi.fn(),
       updatePlanStatus: vi.fn(),
     };
 
-    registerAllHandlers({ agentPlanService });
+    registerAllHandlers({ planService });
 
-    expect(registerAgentPlanHandlers).toHaveBeenCalledWith(agentPlanService, { logger: undefined });
+    expect(registerPlanHandlers).toHaveBeenCalledWith(planService, { logger: undefined });
   });
 
-  it('registers agent tool handlers when a tool service is provided', async () => {
+  it('registers tool handlers when a tool service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
-    const agentToolService = {
+    const toolService = {
       listDefinitions: vi.fn(),
       getToolCall: vi.fn(),
       resolveApproval: vi.fn(),
     };
 
-    registerAllHandlers({ agentToolService });
+    registerAllHandlers({ toolService });
 
-    expect(registerAgentToolHandlers).toHaveBeenCalledWith(agentToolService, { logger: undefined });
+    expect(registerToolHandlers).toHaveBeenCalledWith(toolService, { logger: undefined });
   });
 
-  it('registers agent recovery handlers when a recovery service is provided', async () => {
+  it('registers recovery handlers when a recovery service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
-    const agentRecoveryService = {
+    const recoveryService = {
       listRecoverableRuns: vi.fn(),
       resumeRun: vi.fn(),
       cancelRun: vi.fn(),
       retryRun: vi.fn(),
     };
 
-    registerAllHandlers({ agentRecoveryService });
+    registerAllHandlers({ recoveryService });
 
-    expect(registerAgentRecoveryHandlers).toHaveBeenCalledWith(agentRecoveryService, { logger: undefined });
+    expect(registerRecoveryHandlers).toHaveBeenCalledWith(recoveryService, { logger: undefined });
   });
 
-  it('registers agent artifact handlers when an artifact service is provided', async () => {
+  it('registers artifact handlers when an artifact service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
-    const agentArtifactService = {
+    const artifactService = {
       listByRun: vi.fn(),
       listBySession: vi.fn(),
       get: vi.fn(),
@@ -165,14 +143,14 @@ describe('registerAllHandlers', () => {
       reference: vi.fn(),
     };
 
-    registerAllHandlers({ agentArtifactService });
+    registerAllHandlers({ artifactService });
 
-    expect(registerAgentArtifactHandlers).toHaveBeenCalledWith(agentArtifactService, { logger: undefined });
+    expect(registerArtifactHandlers).toHaveBeenCalledWith(artifactService, { logger: undefined });
   });
 
-  it('registers agent memory handlers when a memory service is provided', async () => {
+  it('registers memory handlers when a memory service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
-    const agentMemoryService = {
+    const memoryService = {
       getSettings: vi.fn(),
       updateSettings: vi.fn(),
       listCandidates: vi.fn(),
@@ -191,11 +169,11 @@ describe('registerAllHandlers', () => {
       recallPreview: vi.fn(),
     };
 
-    registerAllHandlers({ agentMemoryService });
+    registerAllHandlers({ memoryService });
 
-    expect(registerAgentMemoryHandlers).toHaveBeenCalledWith({
+    expect(registerMemoryHandlers).toHaveBeenCalledWith({
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
-      agentMemoryService,
+      memoryService,
       logger: undefined,
     });
   });

@@ -72,7 +72,7 @@ const forbiddenTerms = [
 ];
 
 const allowedCurrentLifecycleTerms = new Map<string, string[]>([
-  ['packages/shared/agent-lifecycle-contracts.ts', [
+  ['packages/shared/session-run-contracts.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
   ['packages/shared/session-run-contracts.ts', [

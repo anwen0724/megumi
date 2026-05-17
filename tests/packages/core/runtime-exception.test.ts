@@ -18,7 +18,7 @@ describe('runtime exception foundation', () => {
     source: 'core',
     debugId: 'debug-core-1',
     details: {
-      operationName: 'chat.start',
+      operationName: 'session.message.send',
       reason: 'missing runtime context',
     },
   } as const;

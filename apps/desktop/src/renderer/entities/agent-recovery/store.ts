@@ -1,20 +1,20 @@
 import { createStore } from 'zustand/vanilla';
-import type { AgentRecoverableRunSummary } from '@megumi/shared/agent-recovery-contracts';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 import type {
-  AgentRecoverableRunListData,
-  AgentRunCancelData,
-  AgentRunCancelPayload,
-  AgentRunResumeData,
-  AgentRunResumePayload,
-  AgentRunRetryData,
-  AgentRunRetryPayload,
+  RecoverableRunListData,
+  RunCancelData,
+  RunCancelPayload,
+  RunResumeData,
+  RunResumePayload,
+  RunRetryData,
+  RunRetryPayload,
 } from '@megumi/shared/ipc-schemas';
 
 export interface AgentRecoveryApi {
-  listRecoverableRuns(): Promise<AgentRecoverableRunListData>;
-  resume(payload: AgentRunResumePayload): Promise<AgentRunResumeData>;
-  cancel(payload: AgentRunCancelPayload): Promise<AgentRunCancelData>;
-  retry(payload: AgentRunRetryPayload): Promise<AgentRunRetryData>;
+  listRecoverableRuns(): Promise<RecoverableRunListData>;
+  resume(payload: RunResumePayload): Promise<RunResumeData>;
+  cancel(payload: RunCancelPayload): Promise<RunCancelData>;
+  retry(payload: RunRetryPayload): Promise<RunRetryData>;
 }
 
 export type AgentRecoveryStoreStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -22,12 +22,12 @@ export type AgentRecoveryStoreStatus = 'idle' | 'loading' | 'ready' | 'error';
 export interface AgentRecoveryStoreState {
   status: AgentRecoveryStoreStatus;
   errorMessage?: string;
-  recoverableRuns: AgentRecoverableRunSummary[];
+  recoverableRuns: RecoverableRunSummary[];
   lastRequest?: { kind: 'resume' | 'cancel' | 'retry'; runId: string };
   loadRecoverableRuns(): Promise<void>;
-  resumeRun(payload: AgentRunResumePayload): Promise<void>;
-  cancelRun(payload: AgentRunCancelPayload): Promise<void>;
-  retryRun(payload: AgentRunRetryPayload): Promise<void>;
+  resumeRun(payload: RunResumePayload): Promise<void>;
+  cancelRun(payload: RunCancelPayload): Promise<void>;
+  retryRun(payload: RunRetryPayload): Promise<void>;
 }
 
 export function createAgentRecoveryStore(api: AgentRecoveryApi) {

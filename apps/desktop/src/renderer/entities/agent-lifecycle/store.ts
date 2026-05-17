@@ -1,21 +1,21 @@
 import { create } from 'zustand';
-import type { AgentRun, AgentSession } from '@megumi/shared/agent-lifecycle-contracts';
+import type { Run, Session } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 interface AgentLifecycleState {
-  sessions: AgentSession[];
-  runs: Record<string, AgentRun>;
+  sessions: Session[];
+  runs: Record<string, Run>;
   eventsByRun: Record<string, RuntimeEvent[]>;
   activeRunId: string | null;
   lastError: string | null;
-  setSessions: (sessions: AgentSession[]) => void;
-  upsertRun: (run: AgentRun) => void;
+  setSessions: (sessions: Session[]) => void;
+  upsertRun: (run: Run) => void;
   setActiveRun: (runId: string | null) => void;
   applyRuntimeEvent: (event: RuntimeEvent) => void;
   clearLifecycle: () => void;
 }
 
-function statusFromRunEvent(event: RuntimeEvent): AgentRun['status'] | undefined {
+function statusFromRunEvent(event: RuntimeEvent): Run['status'] | undefined {
   if (event.eventType === 'run.started') {
     return 'running';
   }
@@ -33,7 +33,7 @@ function statusFromRunEvent(event: RuntimeEvent): AgentRun['status'] | undefined
   }
 
   if (event.eventType === 'run.status.changed') {
-    const payload = event.payload as { to?: AgentRun['status'] };
+    const payload = event.payload as { to?: Run['status'] };
     return payload.to;
   }
 

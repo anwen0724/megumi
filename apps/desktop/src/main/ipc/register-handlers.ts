@@ -3,42 +3,39 @@ import { registerWindowHandlers } from './handlers/window.handler';
 import { registerProviderHandlers } from './handlers/provider.handler';
 import { registerSessionHandlers, type SessionHandlersService } from './handlers/session.handler';
 import { registerRunHandlers, type RunHandlersService } from './handlers/run.handler';
-import { registerChatHandlers, type ChatHandlersService } from './handlers/chat.handler';
-import { registerAgentHandlers, type AgentHandlersService } from './handlers/agent.handler';
 import {
-  registerAgentContextHandlers,
-  type AgentContextHandlersService,
-} from './handlers/agent-context.handler';
+  registerRunContextHandlers,
+  type RunContextHandlersService,
+} from './handlers/run-context.handler';
 import {
-  registerAgentPlanHandlers,
-  type AgentPlanHandlersService,
-} from './handlers/agent-plan.handler';
+  registerPlanHandlers,
+  type PlanHandlersService,
+} from './handlers/plan.handler';
 import {
-  registerAgentToolHandlers,
-  type AgentToolHandlersService,
-} from './handlers/agent-tool.handler';
-import { registerAgentRecoveryHandlers } from './handlers/agent-recovery.handler';
+  registerToolHandlers,
+  type ToolHandlersService,
+} from './handlers/tool.handler';
+import { registerRecoveryHandlers } from './handlers/recovery.handler';
 import {
-  registerAgentArtifactHandlers,
-  type AgentArtifactHandlersService,
-} from './handlers/agent-artifact.handler';
+  registerArtifactHandlers,
+  type ArtifactHandlersService,
+} from './handlers/artifact.handler';
 import {
-  registerAgentMemoryHandlers,
-  type AgentMemoryHandlersService,
-} from './handlers/agent-memory.handler';
-import type { AgentRecoveryService } from '../services/agent-recovery.service';
+  registerMemoryHandlers,
+  type MemoryHandlersService,
+} from './handlers/memory.handler';
+import type { RecoveryService } from '../services/recovery.service';
 import type { RuntimeLogger } from '../services/runtime-logger.service';
 
 export interface RegisterAllHandlersOptions {
   logger?: RuntimeLogger;
-  sessionRunService?: SessionHandlersService & RunHandlersService & ChatHandlersService;
-  agentService?: AgentHandlersService;
-  agentContextService?: AgentContextHandlersService;
-  agentPlanService?: AgentPlanHandlersService;
-  agentToolService?: AgentToolHandlersService;
-  agentRecoveryService?: AgentRecoveryService;
-  agentArtifactService?: AgentArtifactHandlersService;
-  agentMemoryService?: AgentMemoryHandlersService;
+  sessionRunService?: SessionHandlersService & RunHandlersService;
+  runContextService?: RunContextHandlersService;
+  planService?: PlanHandlersService;
+  toolService?: ToolHandlersService;
+  recoveryService?: RecoveryService;
+  artifactService?: ArtifactHandlersService;
+  memoryService?: MemoryHandlersService;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -48,37 +45,32 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
   if (options.sessionRunService) {
     registerSessionHandlers(options.sessionRunService, { logger: options.logger });
     registerRunHandlers(options.sessionRunService, { logger: options.logger });
-    registerChatHandlers(options.sessionRunService, { logger: options.logger });
   }
 
-  if (options.agentService) {
-    registerAgentHandlers(options.agentService, { logger: options.logger });
+  if (options.runContextService) {
+    registerRunContextHandlers(options.runContextService, { logger: options.logger });
   }
 
-  if (options.agentContextService) {
-    registerAgentContextHandlers(options.agentContextService, { logger: options.logger });
+  if (options.planService) {
+    registerPlanHandlers(options.planService, { logger: options.logger });
   }
 
-  if (options.agentPlanService) {
-    registerAgentPlanHandlers(options.agentPlanService, { logger: options.logger });
+  if (options.toolService) {
+    registerToolHandlers(options.toolService, { logger: options.logger });
   }
 
-  if (options.agentToolService) {
-    registerAgentToolHandlers(options.agentToolService, { logger: options.logger });
+  if (options.recoveryService) {
+    registerRecoveryHandlers(options.recoveryService, { logger: options.logger });
   }
 
-  if (options.agentRecoveryService) {
-    registerAgentRecoveryHandlers(options.agentRecoveryService, { logger: options.logger });
+  if (options.artifactService) {
+    registerArtifactHandlers(options.artifactService, { logger: options.logger });
   }
 
-  if (options.agentArtifactService) {
-    registerAgentArtifactHandlers(options.agentArtifactService, { logger: options.logger });
-  }
-
-  if (options.agentMemoryService) {
-    registerAgentMemoryHandlers({
+  if (options.memoryService) {
+    registerMemoryHandlers({
       ipcMain,
-      agentMemoryService: options.agentMemoryService,
+      memoryService: options.memoryService,
       logger: options.logger,
     });
   }

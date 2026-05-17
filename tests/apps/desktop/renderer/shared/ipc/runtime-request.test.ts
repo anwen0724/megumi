@@ -117,12 +117,11 @@ describe('createRendererRuntimeIpcRequest', () => {
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.recovery.resume)).toBe('recovery.resume');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.get)).toBe('artifacts.get');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.memory.settingsGet)).toBe('memory.settings.get');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.listByRun)).toBe('agent.artifacts.list-by-run');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.listBySession)).toBe('agent.artifacts.list-by-session');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.get)).toBe('agent.artifacts.get');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.versionGet)).toBe('agent.artifacts.version.get');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.versionCreate)).toBe('agent.artifacts.version.create');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.statusUpdate)).toBe('agent.artifacts.status.update');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.reference)).toBe('agent.artifacts.reference');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.listByRun)).toBe('artifacts.list-by-run');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.listBySession)).toBe('artifacts.list-by-session');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.versionGet)).toBe('artifacts.version.get');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.versionCreate)).toBe('artifacts.version.create');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.statusUpdate)).toBe('artifacts.status.update');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.reference)).toBe('artifacts.reference');
   });
 });
