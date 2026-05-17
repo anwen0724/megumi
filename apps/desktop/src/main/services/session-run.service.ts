@@ -244,12 +244,6 @@ export class SessionRunService {
       throw new Error('Session message send requires a user message.');
     }
 
-    const modeSnapshot = this.runModeService?.createModeSnapshot({
-      runId,
-      mode,
-      createdAt,
-    });
-
     const userMessage = this.repository.saveMessage({
       messageId: this.ids.messageId(),
       sessionId: session.sessionId,
@@ -260,17 +254,27 @@ export class SessionRunService {
       createdAt: lastUserMessage.createdAt,
       completedAt: lastUserMessage.createdAt,
     });
-    const run = this.repository.saveRun({
+    const initialRun = this.repository.saveRun({
       runId,
       sessionId: session.sessionId,
       triggerMessageId: userMessage.messageId,
       mode,
-      ...(modeSnapshot ? { modeSnapshotRef: modeSnapshot.modeSnapshotId } : {}),
       goal: userMessage.content,
       status: 'running',
       createdAt,
       startedAt: createdAt,
     });
+    const modeSnapshot = this.runModeService?.createModeSnapshot({
+      runId,
+      mode,
+      createdAt,
+    });
+    const run = modeSnapshot
+      ? this.repository.saveRun({
+          ...initialRun,
+          modeSnapshotRef: modeSnapshot.modeSnapshotId,
+        })
+      : initialRun;
     const step = this.repository.saveStep({
       stepId,
       runId,

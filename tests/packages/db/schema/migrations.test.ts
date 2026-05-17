@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 
 let db: Database.Database | null = null;
@@ -120,6 +121,197 @@ describe('provider settings migrations', () => {
       'run_mode_snapshots',
       'run_source_plans',
     ]);
+  });
+
+  it('upgrades existing session run tables with current repository columns', () => {
+    const database = createTestDb();
+    database.exec(`
+      CREATE TABLE sessions (
+        session_id TEXT PRIMARY KEY,
+        workspace_id TEXT,
+        title TEXT NOT NULL,
+        title_source TEXT NOT NULL,
+        status TEXT NOT NULL,
+        agent_mode TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE session_messages (
+        message_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+
+      CREATE TABLE runs (
+        run_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        trigger_message_id TEXT,
+        retry_of_run_id TEXT,
+        status TEXT NOT NULL,
+        run_kind TEXT NOT NULL,
+        provider_id TEXT,
+        model_id TEXT,
+        error_json TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE run_steps (
+        step_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT
+      );
+
+      CREATE TABLE runtime_events (
+        event_id TEXT PRIMARY KEY,
+        session_id TEXT,
+        run_id TEXT,
+        step_id TEXT,
+        event_type TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        source TEXT NOT NULL,
+        visibility TEXT NOT NULL,
+        persist TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        event_json TEXT NOT NULL
+      );
+    `);
+
+    migrateDatabase(database);
+    const repository = new SessionRunRepository(database);
+    const sessionColumns = database.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>;
+    const runColumns = database.prepare('PRAGMA table_info(runs)').all() as Array<{ name: string }>;
+
+    expect(sessionColumns.map((column) => column.name)).toEqual([
+      'session_id',
+      'title',
+      'workspace_id',
+      'workspace_path',
+      'status',
+      'created_at',
+      'updated_at',
+      'archived_at',
+      'summary',
+      'metadata_json',
+    ]);
+    expect(runColumns.map((column) => column.name)).toEqual([
+      'run_id',
+      'session_id',
+      'trigger_message_id',
+      'agent_definition_id',
+      'agent_config_snapshot_ref',
+      'mode',
+      'mode_snapshot_ref',
+      'goal',
+      'status',
+      'created_at',
+      'started_at',
+      'completed_at',
+      'cancelled_at',
+      'error_json',
+      'source_plan_id',
+      'policy_snapshot_ref',
+      'metadata_json',
+    ]);
+
+    const session = repository.saveSession({
+      sessionId: 'session-existing-db',
+      title: 'Existing DB session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/all/work/study/megumi',
+      status: 'active',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      updatedAt: '2026-05-18T00:00:00.000Z',
+    });
+    repository.saveMessage({
+      messageId: 'message-existing-db',
+      sessionId: 'session-existing-db',
+      runId: 'run-existing-db',
+      role: 'user',
+      content: 'Hello',
+      status: 'completed',
+      createdAt: '2026-05-18T00:00:01.000Z',
+      completedAt: '2026-05-18T00:00:01.000Z',
+      metadata: { source: 'migration-test' },
+    });
+    const run = repository.saveRun({
+      runId: 'run-existing-db',
+      sessionId: 'session-existing-db',
+      triggerMessageId: 'message-existing-db',
+      mode: 'plan',
+      modeSnapshotRef: 'mode-snapshot:existing-db',
+      goal: 'Hello',
+      status: 'running',
+      createdAt: '2026-05-18T00:00:02.000Z',
+      sourcePlanId: 'plan:existing-db',
+      policySnapshotRef: 'policy:existing-db',
+    });
+    repository.saveStep({
+      stepId: 'step-existing-db',
+      runId: 'run-existing-db',
+      parentStepId: 'step-parent-existing-db',
+      kind: 'model',
+      status: 'running',
+      title: 'Model response',
+      startedAt: '2026-05-18T00:00:03.000Z',
+      metadata: { source: 'migration-test' },
+    });
+    repository.appendRuntimeEvent({
+      eventId: 'event-existing-db',
+      schemaVersion: 1,
+      eventType: 'run.started',
+      sessionId: 'session-existing-db',
+      runId: 'run-existing-db',
+      stepId: 'step-existing-db',
+      actionId: 'action-existing-db',
+      observationId: 'observation-existing-db',
+      messageId: 'message-existing-db',
+      sequence: 1,
+      createdAt: '2026-05-18T00:00:04.000Z',
+      source: 'core',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        runKind: 'agent',
+      },
+    });
+
+    expect(session).toMatchObject({
+      sessionId: 'session-existing-db',
+      workspacePath: 'C:/all/work/study/megumi',
+    });
+    expect(run).toMatchObject({
+      modeSnapshotRef: 'mode-snapshot:existing-db',
+      sourcePlanId: 'plan:existing-db',
+      policySnapshotRef: 'policy:existing-db',
+    });
+    expect(repository.listMessagesBySession('session-existing-db')[0]).toMatchObject({
+      runId: 'run-existing-db',
+      metadata: { source: 'migration-test' },
+    });
+    expect(repository.listStepsByRun('run-existing-db')[0]).toMatchObject({
+      parentStepId: 'step-parent-existing-db',
+      title: 'Model response',
+      metadata: { source: 'migration-test' },
+    });
+    expect(repository.listRuntimeEventsByRun('run-existing-db')[0]).toMatchObject({
+      actionId: 'action-existing-db',
+      observationId: 'observation-existing-db',
+      messageId: 'message-existing-db',
+    });
   });
 
   it('indexes run mode and source plan lookup paths', () => {

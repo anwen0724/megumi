@@ -3,11 +3,13 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import {
   SessionRunService,
   type SessionRunContextService,
   type SessionRunServiceOptions,
 } from '@megumi/desktop/main/services/session-run.service';
+import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
@@ -583,6 +585,80 @@ describe('SessionRunService', () => {
         modeSnapshotRef: 'mode-snapshot:1',
       }),
     ]);
+  });
+
+  it('saves session message run mode snapshots with the real run mode repository', async () => {
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const requests: ModelStepRuntimeRequest[] = [];
+    const sessionRepository = new SessionRunRepository(db);
+    const service = new SessionRunService({
+      repository: sessionRepository,
+      runModeService: new RunModeService({
+        repository: new RunModeRepository(db),
+        ids: {
+          modeSnapshotId: () => 'mode-snapshot:real-repo',
+          planArtifactId: () => 'plan:real-repo',
+        },
+      }),
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+        },
+        cancelModelStep: () => true,
+      },
+      clock: { now: () => '2026-05-17T00:00:00.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: () => 'step-1',
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `message-${index}`;
+          };
+        })(),
+      },
+    });
+
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Write a plan',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        context: {
+          composerMode: 'plan',
+        },
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the stream so the provider request is observed.
+    }
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        modeSnapshotRef: 'mode-snapshot:real-repo',
+        modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+      }),
+    ]);
+    expect(sessionRepository.getRun('run-1')).toMatchObject({
+      modeSnapshotRef: 'mode-snapshot:real-repo',
+    });
   });
 
   it('adds request metadata to session message runtime events', async () => {

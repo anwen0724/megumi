@@ -177,11 +177,19 @@ export class SessionRunRepository {
         @cancelled_at, @error_json, @source_plan_id, @policy_snapshot_ref, @metadata_json
       )
       ON CONFLICT(run_id) DO UPDATE SET
+        trigger_message_id = excluded.trigger_message_id,
+        agent_definition_id = excluded.agent_definition_id,
+        agent_config_snapshot_ref = excluded.agent_config_snapshot_ref,
+        mode = excluded.mode,
+        mode_snapshot_ref = excluded.mode_snapshot_ref,
+        goal = excluded.goal,
         status = excluded.status,
         started_at = excluded.started_at,
         completed_at = excluded.completed_at,
         cancelled_at = excluded.cancelled_at,
         error_json = excluded.error_json,
+        source_plan_id = excluded.source_plan_id,
+        policy_snapshot_ref = excluded.policy_snapshot_ref,
         metadata_json = excluded.metadata_json
     `).run(toRunRow(run));
 
