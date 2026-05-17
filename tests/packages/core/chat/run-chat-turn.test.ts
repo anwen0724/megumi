@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import { runChatTurn } from '@megumi/core/chat/run-chat-turn';
-import type { AiPort } from '@megumi/core/ports/ai-port';
+import type { AiChatPort } from '@megumi/core/ports/ai-port';
 import {
   createAssistantCompletedEvent,
   createAssistantDeltaEvent,
@@ -55,7 +55,7 @@ describe('runChatTurn', () => {
   const clock = { now: () => '2026-05-12T10:00:00.000Z' };
 
   it('emits run lifecycle events, delegates to the AI port, and assigns sequences', async () => {
-    const aiPort: AiPort = {
+    const aiPort: AiChatPort = {
       async *streamChat(input) {
         expect(input.request).toBe(request);
         expect(input.runId).toBe('run-1');
@@ -116,7 +116,7 @@ describe('runChatTurn', () => {
     controller.abort();
 
     let called = false;
-    const aiPort: AiPort = {
+    const aiPort: AiChatPort = {
       async *streamChat() {
         called = true;
       },
@@ -146,7 +146,7 @@ describe('runChatTurn', () => {
   });
 
   it('emits run.failed when the provider throws', async () => {
-    const aiPort: AiPort = {
+    const aiPort: AiChatPort = {
       async *streamChat() {
         throw new Error('network exploded');
       },
@@ -174,7 +174,7 @@ describe('runChatTurn', () => {
   });
 
   it('propagates runtime context to all lifecycle and provider events', async () => {
-    const aiPort: AiPort = {
+    const aiPort: AiChatPort = {
       async *streamChat(input) {
         yield createAssistantDeltaEvent({
           eventId: input.eventIdFactory(),
@@ -203,7 +203,7 @@ describe('runChatTurn', () => {
   });
 
   it('normalizes thrown provider errors into display-safe failed events with debug id', async () => {
-    const aiPort: AiPort = {
+    const aiPort: AiChatPort = {
       async *streamChat() {
         throw new Error('network exploded with sk-raw-secret');
       },

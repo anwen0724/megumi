@@ -6,7 +6,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { createRunFailedEvent } from '@megumi/core/chat/events';
 import { runChatTurn } from '@megumi/core/chat/run-chat-turn';
 import { normalizeRuntimeError } from '@megumi/core/runtime-exception';
-import type { AiPort } from '@megumi/core/ports/ai-port';
+import type { AiChatPort } from '@megumi/core/ports/ai-port';
 import type { ChatRuntimeClock } from '@megumi/core/chat/types';
 import type {
   AiProviderAdapter,
@@ -60,7 +60,7 @@ export class AiChatService {
         runtimeContext: request.runtimeContext,
       });
       const adapter = this.options.registry.getAdapter(config.providerId);
-      const aiPort: AiPort = {
+      const aiPort: AiChatPort = {
         streamChat: (input) => adapter.streamChat({
           request: input.request,
           runId: input.runId,

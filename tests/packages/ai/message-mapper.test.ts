@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
-import { mapToOpenAICompatibleMessages } from '@megumi/ai/prompt/message-mapper';
+import {
+  mapModelStepToOpenAICompatibleMessages,
+  mapToOpenAICompatibleMessages,
+} from '@megumi/ai/prompt/message-mapper';
 import { buildSystemPrompt } from '@megumi/ai/prompt/system-prompt';
 import { AI_PROVIDER_DEFAULTS } from '@megumi/ai/models';
 
@@ -86,6 +89,37 @@ describe('OpenAI-compatible message mapper', () => {
       {
         role: 'system',
         content: 'Answer concisely.',
+      },
+    ]);
+  });
+
+  it('maps session messages for model step requests', () => {
+    expect(mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      messages: [
+        {
+          messageId: 'message-1',
+          sessionId: 'session-1',
+          role: 'user',
+          content: 'Hello',
+          status: 'completed',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      createdAt: '2026-05-17T00:00:00.000Z',
+    })).toEqual([
+      {
+        role: 'system',
+        content: expect.stringContaining('You are Megumi'),
+      },
+      {
+        role: 'user',
+        content: 'Hello',
       },
     ]);
   });

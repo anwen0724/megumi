@@ -1,6 +1,6 @@
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { RunId } from '@megumi/shared/ids';
-import type { AiPort } from '../ports/ai-port';
+import type { AiChatPort } from '../ports/ai-port';
 
 export interface ChatRuntimeClock {
   now(): string;
@@ -8,7 +8,7 @@ export interface ChatRuntimeClock {
 
 export interface RunChatTurnInput {
   request: ChatRuntimeRequest;
-  aiPort: AiPort;
+  aiPort: AiChatPort;
   signal?: AbortSignal;
   runIdFactory?: () => RunId | string;
   eventIdFactory?: () => string;

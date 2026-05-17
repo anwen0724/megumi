@@ -75,6 +75,9 @@ describe('AiChatService', () => {
     const registry: AiChatProviderRegistryPort = {
       getAdapter: () => ({
         providerId: 'deepseek',
+        async *streamModelStep() {
+          throw new Error('Unexpected streamModelStep call.');
+        },
         async *streamChat(input) {
           expect(input.config).toBe(config);
           expect(input.request).toBe(requestWithRuntimeContext);
@@ -248,6 +251,9 @@ describe('AiChatService', () => {
     const registry: AiChatProviderRegistryPort = {
       getAdapter: () => ({
         providerId: 'deepseek',
+        async *streamModelStep() {
+          throw new Error('Unexpected streamModelStep call.');
+        },
         async *streamChat(input): AsyncIterable<RuntimeEvent> {
           capturedSignal = input.signal;
           yield createAssistantDeltaEvent({

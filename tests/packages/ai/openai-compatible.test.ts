@@ -145,6 +145,58 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
+  it('streams model step requests as the primary provider path', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"lo"}}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+    let sequence = 0;
+
+    const events = await collect(adapter.streamModelStep({
+      request: {
+        requestId: 'request-1',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [
+          {
+            messageId: 'message-1',
+            sessionId: 'session-1',
+            role: 'user',
+            content: 'Hello',
+            status: 'completed',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      runId: 'run-1',
+      stepId: 'step-1',
+      config,
+      nextSequence: () => {
+        sequence += 1;
+        return sequence;
+      },
+      eventIdFactory: () => `event-${sequence + 1}`,
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'assistant.output.delta',
+      'assistant.output.delta',
+      'assistant.output.completed',
+    ]);
+    expect(events.every((event) => event.stepId === 'step-1')).toBe(true);
+  });
+
   it('maps auth failures to typed failed events', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response('bad key', { status: 401 }));
     const adapter = createOpenAICompatibleAdapter({

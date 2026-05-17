@@ -5,6 +5,7 @@ export * from './model-contracts';
 export * from './chat-contracts';
 export * from './agent-contracts';
 export * from './session-run-contracts';
+export * from './model-step-contracts';
 export { RUN_STATUSES, type RunStatus } from './session-run-contracts';
 export * from './run-context-contracts';
 export * from './run-mode-contracts';

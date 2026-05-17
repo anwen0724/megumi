@@ -3,6 +3,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { ModelId } from '@megumi/shared/model-contracts';
 import type { ProviderId, ProviderKind } from '@megumi/shared/provider-contracts';
 import type { RunId } from '@megumi/shared/ids';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 
 export interface ProviderRuntimeConfig {
   providerId: ProviderId;
@@ -21,8 +22,19 @@ export interface AiChatAdapterRequest {
   eventIdFactory: () => string;
 }
 
+export interface AiModelStepAdapterRequest {
+  request: ModelStepRuntimeRequest;
+  runId: RunId | string;
+  stepId: string;
+  config: ProviderRuntimeConfig;
+  signal?: AbortSignal;
+  nextSequence: () => number;
+  eventIdFactory: () => string;
+}
+
 export interface AiProviderAdapter {
   readonly providerId: ProviderId;
+  streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent>;
   streamChat(input: AiChatAdapterRequest): AsyncIterable<RuntimeEvent>;
 }
 

@@ -1,10 +1,12 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import {
   createModelMessageObservation,
   createModelStepInputPreview,
   isModelMessageAction,
   isModelStep,
+  runModelStep,
 } from '@megumi/core/run-runtime/model-step';
 
 describe('run model step foundation', () => {
@@ -45,6 +47,75 @@ describe('run model step foundation', () => {
       receivedAt: '2026-05-17T00:00:00.000Z',
       summary: 'Model step emitted a message.',
     });
+  });
+
+  it('streams provider events through a model step without buffering assistant deltas', async () => {
+    const events: RuntimeEvent[] = [];
+
+    for await (const event of runModelStep({
+      request: {
+        requestId: 'request-1',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [
+          {
+            messageId: 'message-1',
+            sessionId: 'session-1',
+            role: 'user',
+            content: 'Hello',
+            status: 'completed',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      aiPort: {
+        async *streamModelStep(input) {
+          expect(input.request.runId).toBe('run-1');
+          expect(input.request.stepId).toBe('step-1');
+          yield {
+            eventId: input.eventIdFactory(),
+            schemaVersion: 1,
+            eventType: 'assistant.output.delta',
+            sessionId: input.request.sessionId,
+            runId: input.request.runId,
+            stepId: input.request.stepId,
+            sequence: input.nextSequence(),
+            createdAt: '2026-05-17T00:00:01.000Z',
+            source: 'provider',
+            visibility: 'user',
+            persist: 'transient',
+            payload: { delta: 'Hel' },
+          };
+          yield {
+            eventId: input.eventIdFactory(),
+            schemaVersion: 1,
+            eventType: 'assistant.output.completed',
+            sessionId: input.request.sessionId,
+            runId: input.request.runId,
+            stepId: input.request.stepId,
+            sequence: input.nextSequence(),
+            createdAt: '2026-05-17T00:00:02.000Z',
+            source: 'provider',
+            visibility: 'user',
+            persist: 'required',
+            payload: { content: 'Hello' },
+          };
+        },
+      },
+      eventIdFactory: () => `event-${events.length + 1}`,
+    })) {
+      events.push(event);
+    }
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'assistant.output.delta',
+      'assistant.output.completed',
+    ]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2]);
   });
 });
 
