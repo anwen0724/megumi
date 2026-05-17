@@ -1,6 +1,6 @@
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 
-export type ComposerMode = 'chat' | 'agent' | 'plan';
+export type ComposerMode = 'chat' | 'plan' | 'execute' | 'review';
 export type ComposerModel =
   | 'deepseek-v4-flash'
   | 'deepseek-v4-pro'
@@ -24,8 +24,9 @@ interface ComposerModelOption extends ComposerOption<ComposerModel> {
 
 export const COMPOSER_MODE_OPTIONS: ComposerOption<ComposerMode>[] = [
   { value: 'chat', label: 'Chat' },
-  { value: 'agent', label: 'Agent' },
   { value: 'plan', label: 'Plan' },
+  { value: 'execute', label: 'Execute' },
+  { value: 'review', label: 'Review' },
 ];
 
 export const COMPOSER_MODEL_OPTIONS: ComposerModelOption[] = [

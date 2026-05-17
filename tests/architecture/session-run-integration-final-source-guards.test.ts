@@ -85,6 +85,8 @@ describe('09 session run integration final source guards', () => {
       'apps/desktop/src/main/services/agent-artifact.service.ts',
       'apps/desktop/src/main/services/agent-memory.service.ts',
       'apps/desktop/src/main/services/ai-chat.service.ts',
+      'apps/desktop/src/renderer/entities/agent-lifecycle/store.ts',
+      'apps/desktop/src/renderer/entities/agent-recovery/store.ts',
     ])).toEqual([]);
   });
 
@@ -103,7 +105,7 @@ describe('09 session run integration final source guards', () => {
         return false;
       }
 
-      return /window\.megumi\.chat|window\.megumi\.agent|IPC_CHANNELS\.chat|IPC_CHANNELS\.agent|useRuntimeChat|chat:start|chat\.start|agent_(sessions|runs|steps|actions|observations|context|run_mode|checkpoints|resume|cancel|retry)|apps\/desktop\/src\/main\/(services|ipc\/handlers)\/agent-|agent[.:](session|run|context|plan|tool|approval|recovery|artifact|artifacts|memory)/.test(text);
+      return /window\.megumi\.chat|window\.megumi\.agent|IPC_CHANNELS\.chat|IPC_CHANNELS\.agent|useRuntimeChat|chat:start|chat\.start|agent_(sessions|runs|steps|actions|observations|context|run_mode|checkpoints|resume|cancel|retry)|apps\/desktop\/src\/main\/(services|ipc\/handlers)\/agent-|agent-(lifecycle|context|run-mode|recovery)|agent[.:](session|run|context|plan|tool|approval|recovery|artifact|artifacts|memory)/.test(text);
     });
 
     expect(offenders).toEqual([]);

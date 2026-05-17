@@ -5,6 +5,7 @@ import {
   createRunCompletedEvent,
   createRunStatusChangedEvent,
   createStepCompletedEvent,
+  createStepFailedEvent,
   createStepStatusChangedEvent,
 } from '@megumi/core/run-runtime/events';
 import { createDatabase } from '@megumi/db/connection';
@@ -237,10 +238,17 @@ export class SessionRunService {
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
     const lastUserMessage = findLastUserChatMessage(input.payload.messages);
+    const mode = input.payload.context?.composerMode ?? 'chat';
 
     if (!lastUserMessage) {
       throw new Error('Session message send requires a user message.');
     }
+
+    const modeSnapshot = this.runModeService?.createModeSnapshot({
+      runId,
+      mode,
+      createdAt,
+    });
 
     const userMessage = this.repository.saveMessage({
       messageId: this.ids.messageId(),
@@ -256,7 +264,8 @@ export class SessionRunService {
       runId,
       sessionId: session.sessionId,
       triggerMessageId: userMessage.messageId,
-      mode: input.payload.context?.composerMode ?? 'chat',
+      mode,
+      ...(modeSnapshot ? { modeSnapshotRef: modeSnapshot.modeSnapshotId } : {}),
       goal: userMessage.content,
       status: 'running',
       createdAt,
@@ -284,6 +293,10 @@ export class SessionRunService {
       modelId: input.payload.modelId,
       messages: toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage),
       ...(context ? { context } : {}),
+      ...(modeSnapshot ? {
+        modeSnapshot: modeSnapshot.mode,
+        modeSnapshotRef: modeSnapshot.modeSnapshotId,
+      } : {}),
       runtimeContext: input.runtimeContext,
       createdAt,
     };
@@ -394,18 +407,53 @@ export class SessionRunService {
 
     const completedAt = this.clock.now();
     if (terminalEvent?.eventType === 'run.failed') {
-      this.repository.saveStep({
+      const error = getRunFailedError(terminalEvent.payload) ?? createFallbackRuntimeError('Run failed.');
+      const failedStep = this.repository.saveStep({
         ...input.step,
         status: 'failed',
         completedAt,
-        error: getRunFailedError(terminalEvent.payload),
+        error,
       });
       this.repository.saveRun({
         ...input.run,
         status: 'failed',
         completedAt,
-        error: getRunFailedError(terminalEvent.payload),
+        error,
       });
+      for (const event of [
+        createStepStatusChangedEvent({
+          eventId: this.ids.eventId(),
+          sessionId: input.request.sessionId,
+          runId: input.request.runId,
+          stepId: input.request.stepId,
+          sequence: lastSequence += 1,
+          createdAt: completedAt,
+          from: 'running',
+          to: 'failed',
+        }),
+        createStepFailedEvent({
+          eventId: this.ids.eventId(),
+          sessionId: input.request.sessionId,
+          runId: input.request.runId,
+          sequence: lastSequence += 1,
+          createdAt: completedAt,
+          step: failedStep,
+          error,
+        }),
+        createRunStatusChangedEvent({
+          eventId: this.ids.eventId(),
+          sessionId: input.request.sessionId,
+          runId: input.request.runId,
+          sequence: lastSequence += 1,
+          createdAt: completedAt,
+          from: 'running',
+          to: 'failed',
+        }),
+      ]) {
+        const eventWithRequest = withRequestMetadata(event, input.request);
+        this.repository.appendRuntimeEvent(eventWithRequest);
+        yield eventWithRequest;
+      }
       return;
     }
 
@@ -420,6 +468,31 @@ export class SessionRunService {
         status: 'cancelled',
         cancelledAt: completedAt,
       });
+      for (const event of [
+        createStepStatusChangedEvent({
+          eventId: this.ids.eventId(),
+          sessionId: input.request.sessionId,
+          runId: input.request.runId,
+          stepId: input.request.stepId,
+          sequence: lastSequence += 1,
+          createdAt: completedAt,
+          from: 'running',
+          to: 'cancelled',
+        }),
+        createRunStatusChangedEvent({
+          eventId: this.ids.eventId(),
+          sessionId: input.request.sessionId,
+          runId: input.request.runId,
+          sequence: lastSequence += 1,
+          createdAt: completedAt,
+          from: 'running',
+          to: 'cancelled',
+        }),
+      ]) {
+        const eventWithRequest = withRequestMetadata(event, input.request);
+        this.repository.appendRuntimeEvent(eventWithRequest);
+        yield eventWithRequest;
+      }
       return;
     }
 
@@ -584,6 +657,16 @@ function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | und
   }
 
   return isRuntimeError(payload.error) ? payload.error : undefined;
+}
+
+function createFallbackRuntimeError(message: string): RuntimeError {
+  return {
+    code: 'runtime_unknown',
+    message,
+    severity: 'error',
+    retryable: false,
+    source: 'core',
+  };
 }
 
 function isRuntimeError(value: unknown): value is RuntimeError {

@@ -53,7 +53,14 @@ function toPanelApprovalRequest(request: RuntimeApprovalRequest) {
 export function TasksPanelTab() {
   const activeRunId = useRunStore((state) => state.activeRunId);
   const runs = useRunStore((state) => state.runs);
+  const stepsByRun = useRunStore((state) => state.stepsByRun);
   const activeRun = activeRunId ? runs[activeRunId] : null;
+  const activeSteps = useMemo(() => {
+    if (!activeRunId) return [];
+
+    return Object.values(stepsByRun[activeRunId] ?? {})
+      .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
+  }, [activeRunId, stepsByRun]);
   const toolCallsById = useToolCallStore((state) => state.toolCallsById);
   const approvalRequestsById = useRuntimeApprovalStore((state) => state.approvalRequestsById);
   const pendingToolCalls = useChatStore((state) => state.pendingToolCalls);
@@ -76,6 +83,7 @@ export function TasksPanelTab() {
   }, [activeRunId, approvalRequestsById]);
   const hasTasks =
     Boolean(activeRun) ||
+    activeSteps.length > 0 ||
     pendingToolCalls.length > 0 ||
     runtimeToolCalls.length > 0 ||
     runtimeApprovals.length > 0 ||
@@ -106,6 +114,25 @@ export function TasksPanelTab() {
             </div>
             <p className="mt-1 text-xs text-[var(--color-text-muted)]">{activeRun.runId}</p>
           </article>
+          {activeSteps.map((step) => (
+            <article
+              key={step.stepId}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-[var(--color-text)]">
+                    {step.title ?? step.stepId}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">{step.kind ?? 'step'}</p>
+                </div>
+                <span className="text-xs text-[var(--color-text-muted)]">{step.status}</span>
+              </div>
+              {step.errorMessage ? (
+                <p className="mt-2 text-xs text-[var(--color-danger)]">{step.errorMessage}</p>
+              ) : null}
+            </article>
+          ))}
         </section>
       ) : null}
 

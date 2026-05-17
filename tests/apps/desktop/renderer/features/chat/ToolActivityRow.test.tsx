@@ -9,7 +9,7 @@ const activity: CompletedToolActivity = {
   name: 'read_workspace',
   args: {
     query: 'Inspect the workspace',
-    mode: 'agent',
+    mode: 'execute',
     model: 'deepseek-v4-pro',
   },
   result: 'Prepared workspace context for "Inspect the workspace".',

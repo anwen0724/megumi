@@ -234,7 +234,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Summarize runtime chat',
-        mode: 'agent',
+        mode: 'execute',
         model: 'deepseek-v4-pro',
       });
     });

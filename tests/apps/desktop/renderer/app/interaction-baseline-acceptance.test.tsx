@@ -278,7 +278,7 @@ describe('interaction baseline acceptance', () => {
     const textarea = screen.getByLabelText('Message Megumi');
     const sendButton = screen.getByRole('button', { name: 'Send message' });
 
-    fireEvent.change(modeSelect, { target: { value: 'agent' } });
+    fireEvent.change(modeSelect, { target: { value: 'execute' } });
     fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
     fireEvent.change(textarea, { target: { value: 'Finish the interaction baseline' } });
     fireEvent.click(sendButton);
@@ -299,7 +299,7 @@ describe('interaction baseline acceptance', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-pro',
         context: expect.objectContaining({
-          composerMode: 'agent',
+          composerMode: 'execute',
           workspaceId: 'project-1',
         }),
         messages: expect.arrayContaining([

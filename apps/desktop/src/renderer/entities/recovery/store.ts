@@ -10,17 +10,17 @@ import type {
   RunRetryPayload,
 } from '@megumi/shared/ipc-schemas';
 
-export interface AgentRecoveryApi {
+export interface RecoveryApi {
   listRecoverableRuns(): Promise<RecoverableRunListData>;
   resume(payload: RunResumePayload): Promise<RunResumeData>;
   cancel(payload: RunCancelPayload): Promise<RunCancelData>;
   retry(payload: RunRetryPayload): Promise<RunRetryData>;
 }
 
-export type AgentRecoveryStoreStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type RecoveryStoreStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-export interface AgentRecoveryStoreState {
-  status: AgentRecoveryStoreStatus;
+export interface RecoveryStoreState {
+  status: RecoveryStoreStatus;
   errorMessage?: string;
   recoverableRuns: RecoverableRunSummary[];
   lastRequest?: { kind: 'resume' | 'cancel' | 'retry'; runId: string };
@@ -30,8 +30,8 @@ export interface AgentRecoveryStoreState {
   retryRun(payload: RunRetryPayload): Promise<void>;
 }
 
-export function createAgentRecoveryStore(api: AgentRecoveryApi) {
-  return createStore<AgentRecoveryStoreState>((set) => ({
+export function createRecoveryStore(api: RecoveryApi) {
+  return createStore<RecoveryStoreState>((set) => ({
     status: 'idle',
     recoverableRuns: [],
     loadRecoverableRuns: async () => {

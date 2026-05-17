@@ -9,10 +9,11 @@ import {
 
 describe('composer options', () => {
   it('lists supported composer modes', () => {
-    expect(COMPOSER_MODE_OPTIONS.map((option) => option.value)).toEqual(['chat', 'agent', 'plan']);
+    expect(COMPOSER_MODE_OPTIONS.map((option) => option.value)).toEqual(['chat', 'plan', 'execute', 'review']);
     expect(getComposerModeLabel('chat')).toBe('Chat');
-    expect(getComposerModeLabel('agent')).toBe('Agent');
     expect(getComposerModeLabel('plan')).toBe('Plan');
+    expect(getComposerModeLabel('execute')).toBe('Execute');
+    expect(getComposerModeLabel('review')).toBe('Review');
   });
 
   it('lists model options with provider ownership', () => {

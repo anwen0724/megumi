@@ -152,7 +152,7 @@ describe('useChatStore', () => {
       name: 'read_workspace',
       args: {
         query: 'Plan the next UI step',
-        mode: 'agent',
+        mode: 'execute',
         model: 'deepseek-v4-pro',
       },
       result: 'Prepared workspace context for "Plan the next UI step".',
@@ -166,7 +166,7 @@ describe('useChatStore', () => {
         name: 'read_workspace',
         args: {
           query: 'Plan the next UI step',
-          mode: 'agent',
+          mode: 'execute',
           model: 'deepseek-v4-pro',
         },
         result: 'Prepared workspace context for "Plan the next UI step".',

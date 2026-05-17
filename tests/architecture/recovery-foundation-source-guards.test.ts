@@ -9,7 +9,7 @@ const recoveryProductionFiles = [
   'packages/core/run-runtime/recovery.ts',
   'apps/desktop/src/main/services/recovery.service.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
-  'apps/desktop/src/renderer/entities/agent-recovery/store.ts',
+  'apps/desktop/src/renderer/entities/recovery/store.ts',
 ];
 
 function read(relativePath: string): string {

@@ -52,6 +52,7 @@ describe('TasksPanelTab', () => {
         },
       },
       eventsByRun: {},
+      stepsByRun: {},
       lastError: null,
     });
 
@@ -62,6 +63,42 @@ describe('TasksPanelTab', () => {
     expect(screen.getByText('running')).toBeInTheDocument();
     expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
+  });
+
+  it('renders active run step state as session task detail', () => {
+    useRunStore.setState({
+      activeRunId: 'run-1',
+      runs: {
+        'run-1': {
+          runId: 'run-1',
+          sessionId: 'session-1',
+          status: 'failed',
+          updatedAt: '2026-05-10T00:00:02.000Z',
+        },
+      },
+      eventsByRun: {},
+      stepsByRun: {
+        'run-1': {
+          'step-1': {
+            stepId: 'step-1',
+            runId: 'run-1',
+            kind: 'model',
+            title: 'Model response',
+            status: 'failed',
+            updatedAt: '2026-05-10T00:00:02.000Z',
+            errorMessage: 'Provider failed.',
+          },
+        },
+      },
+      lastError: 'Provider failed.',
+    });
+
+    render(<TasksPanelTab />);
+
+    expect(screen.getByText('Model response')).toBeInTheDocument();
+    expect(screen.getByText('model')).toBeInTheDocument();
+    expect(screen.getAllByText('failed')).toHaveLength(2);
+    expect(screen.getByText('Provider failed.')).toBeInTheDocument();
   });
 
   it('renders pending tool calls', () => {
@@ -120,6 +157,7 @@ describe('TasksPanelTab', () => {
         },
       },
       eventsByRun: {},
+      stepsByRun: {},
       lastError: null,
     });
     useToolCallStore.getState().upsertToolCall({

@@ -488,7 +488,9 @@ export function createRunStartedEvent(input: {
     payload: {
       providerId: input.request.providerId,
       modelId: String(input.request.modelId),
-      runKind: input.request.context?.composerMode === 'agent' ? 'agent' : 'chat',
+      runKind: input.request.context?.composerMode && input.request.context.composerMode !== 'chat'
+        ? 'agent'
+        : 'chat',
     },
   });
 }

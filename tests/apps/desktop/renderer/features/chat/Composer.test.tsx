@@ -19,14 +19,14 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<Composer onSubmit={onSubmit} />);
 
-    await userEvent.selectOptions(screen.getByLabelText('Composer mode'), 'agent');
+    await userEvent.selectOptions(screen.getByLabelText('Composer mode'), 'execute');
     await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-pro');
     await userEvent.type(screen.getByLabelText('Message Megumi'), '  hello Megumi  ');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: 'hello Megumi',
-      mode: 'agent',
+      mode: 'execute',
       model: 'deepseek-v4-pro',
     });
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('');

@@ -113,7 +113,7 @@ export const ProviderDeleteApiKeyPayloadSchema = z
 export const ProviderEmptyDataSchema = z.object({}).strict();
 
 export const SessionMessageIpcRoleSchema = z.enum(['system', 'user', 'assistant', 'tool']);
-export const ComposerModeSchema = z.enum(['chat', 'agent', 'plan']);
+export const ComposerModeSchema = z.enum(['chat', 'plan', 'execute', 'review']);
 
 export const SessionMessageIpcSchema = z
   .object({

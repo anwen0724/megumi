@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createAgentRecoveryStore,
-  type AgentRecoveryApi,
-} from '@megumi/desktop/renderer/entities/agent-recovery/store';
+  createRecoveryStore,
+  type RecoveryApi,
+} from '@megumi/desktop/renderer/entities/recovery/store';
 import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 
-describe('agent recovery renderer store', () => {
-  let api: AgentRecoveryApi;
+describe('recovery renderer store', () => {
+  let api: RecoveryApi;
 
   beforeEach(() => {
     api = {
@@ -46,7 +46,7 @@ describe('agent recovery renderer store', () => {
   });
 
   it('loads recoverable runs', async () => {
-    const store = createAgentRecoveryStore(api);
+    const store = createRecoveryStore(api);
 
     await store.getState().loadRecoverableRuns();
 
@@ -55,7 +55,7 @@ describe('agent recovery renderer store', () => {
   });
 
   it('sends resume cancel and retry requests', async () => {
-    const store = createAgentRecoveryStore(api);
+    const store = createRecoveryStore(api);
 
     await store.getState().resumeRun({
       runId: 'run_123',

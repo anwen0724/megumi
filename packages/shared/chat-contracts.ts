@@ -7,7 +7,7 @@ export const CHAT_ROLES = ['system', 'user', 'assistant', 'tool'] as const;
 
 export type ChatRole = (typeof CHAT_ROLES)[number];
 
-export type ComposerMode = 'chat' | 'agent' | 'plan';
+export type ComposerMode = 'chat' | 'plan' | 'execute' | 'review';
 
 export interface ChatMessage {
   id: MessageId | string;

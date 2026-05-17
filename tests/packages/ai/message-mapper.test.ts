@@ -7,6 +7,7 @@ import {
 } from '@megumi/ai/prompt/message-mapper';
 import { buildSystemPrompt } from '@megumi/ai/prompt/system-prompt';
 import { AI_PROVIDER_DEFAULTS } from '@megumi/ai/models';
+import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 
 const request: ChatRuntimeRequest = {
   requestId: 'request-1',
@@ -17,7 +18,7 @@ const request: ChatRuntimeRequest = {
     workspaceLabel: 'Megumi Workspace',
     workspacePath: 'C:/all/work/study/megumi',
     sessionTitle: 'Provider runtime',
-    composerMode: 'agent',
+    composerMode: 'plan',
   },
   messages: [
     {
@@ -43,7 +44,7 @@ describe('system prompt', () => {
         'Current workspace: Megumi Workspace',
         'Workspace path: C:/all/work/study/megumi',
         'Current session: Provider runtime',
-        'Composer mode: agent',
+        'Composer mode: plan',
         'Use the provided context only as lightweight orientation. Do not claim to have inspected files unless tool results are provided.',
       ].join('\n'),
     );
@@ -122,6 +123,38 @@ describe('OpenAI-compatible message mapper', () => {
         content: 'Hello',
       },
     ]);
+  });
+
+  it('adds run mode runtime instructions to model step system prompts', () => {
+    const messages = mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      messages: [
+        {
+          messageId: 'message-1',
+          sessionId: 'session-1',
+          role: 'user',
+          content: 'Write the implementation plan',
+          status: 'completed',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+      modeSnapshotRef: 'mode-snapshot:1',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    expect(messages[0]).toEqual({
+      role: 'system',
+      content: expect.stringContaining('Run mode: plan'),
+    });
+    expect(messages[0]?.content).toContain('Permission mode: plan');
+    expect(messages[0]?.content).toContain('Output expectation: implementation_plan_artifact');
+    expect(messages[0]?.content).toContain('Do not modify files or run side-effecting commands.');
   });
 
   it('exposes phase 1 provider defaults', () => {

@@ -235,7 +235,7 @@ describe('right workspace panel session run sync', () => {
     const textarea = screen.getByLabelText('Message Megumi');
     const sendButton = screen.getByRole('button', { name: 'Send message' });
 
-    fireEvent.change(modeSelect, { target: { value: 'agent' } });
+    fireEvent.change(modeSelect, { target: { value: 'execute' } });
     fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
     fireEvent.change(textarea, { target: { value: 'Start with the shell' } });
     fireEvent.click(sendButton);

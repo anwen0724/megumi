@@ -6,6 +6,7 @@ import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import {
   SessionRunService,
   type SessionRunContextService,
+  type SessionRunServiceOptions,
 } from '@megumi/desktop/main/services/session-run.service';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
@@ -196,6 +197,7 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
 
 function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
   contextService?: SessionRunContextService;
+  runModeService?: SessionRunServiceOptions['runModeService'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -204,6 +206,7 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
   return new SessionRunService({
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
+    ...(options?.runModeService ? { runModeService: options.runModeService } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         options?.onRequest?.(request);
@@ -483,7 +486,7 @@ describe('SessionRunService', () => {
           workspaceId: 'workspace-1',
           workspacePath: 'C:/all/work/study/megumi',
           sessionTitle: 'Workspace session',
-          composerMode: 'agent',
+          composerMode: 'execute',
         },
         createdAt: '2026-05-17T00:00:00.000Z',
       },
@@ -511,6 +514,73 @@ describe('SessionRunService', () => {
             rootPath: 'C:/all/work/study/megumi',
           }),
         }),
+      }),
+    ]);
+  });
+
+  it('creates run mode snapshots and passes them to model step requests for session messages', async () => {
+    const records: unknown[] = [];
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([], {
+      runModeService: {
+        createModeSnapshot: (input) => {
+          records.push(input);
+          return {
+            modeSnapshotId: 'mode-snapshot:1',
+            runId: input.runId,
+            modeLabel: input.mode,
+            mode: input.modeSnapshot ?? RUN_MODE_PRESET_DEFAULTS.plan,
+            createdAt: input.createdAt,
+          };
+        },
+        linkAcceptedSourcePlan: (input) => input,
+        createPlanRecordForRun: () => undefined,
+        getPlanByRun: () => undefined,
+        updatePlanStatus: () => {
+          throw new Error('not implemented');
+        },
+      },
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Write a plan',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        context: {
+          composerMode: 'plan',
+        },
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the stream so the provider request is observed.
+    }
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        runId: 'run-1',
+        mode: 'plan',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      }),
+    ]);
+    expect(requests).toEqual([
+      expect.objectContaining({
+        modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+        modeSnapshotRef: 'mode-snapshot:1',
       }),
     ]);
   });
@@ -627,7 +697,17 @@ describe('SessionRunService', () => {
       streamed.push(event);
     }
 
-    expect(streamed.map((event) => event.eventType)).toEqual(['run.failed']);
-    expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toEqual(['run.failed']);
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+    expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toEqual([
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
   });
 });

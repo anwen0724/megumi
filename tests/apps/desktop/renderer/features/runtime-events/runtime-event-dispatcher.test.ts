@@ -184,4 +184,37 @@ describe('useRunStore', () => {
       updatedAt: '2026-05-17T00:00:02.000Z',
     });
   });
+
+  it('tracks run step state from step status runtime events', () => {
+    const store = useRunStore.getState();
+
+    store.applyRuntimeEvent(runtimeEvent('step.created', 1, {
+      kind: 'model',
+      status: 'running',
+      title: 'Model response',
+    }, { stepId: 'step-1' }));
+    store.applyRuntimeEvent(runtimeEvent('step.status.changed', 2, {
+      from: 'running',
+      to: 'failed',
+    }, { stepId: 'step-1' }));
+    store.applyRuntimeEvent(runtimeEvent('step.failed', 3, {
+      kind: 'model',
+      error: {
+        code: 'provider_failed',
+        message: 'Provider failed.',
+        severity: 'error',
+        retryable: false,
+        source: 'provider',
+      },
+    }, { stepId: 'step-1' }));
+
+    expect(useRunStore.getState().stepsByRun['run-1']?.['step-1']).toMatchObject({
+      stepId: 'step-1',
+      runId: 'run-1',
+      kind: 'model',
+      title: 'Model response',
+      status: 'failed',
+      errorMessage: 'Provider failed.',
+    });
+  });
 });
