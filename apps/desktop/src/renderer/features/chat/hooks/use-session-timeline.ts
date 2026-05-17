@@ -94,6 +94,7 @@ function createSessionMessageSendPayload(
   const projectState = useProjectStore.getState();
   const providerId = getProviderIdForModel(payload.model);
   const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
+  const activeProject = projectState.projects.find((project) => project.id === projectState.currentProjectId);
   const messages = [...useChatStore.getState().messages, userMessage].map(toRuntimeMessage);
 
   return {
@@ -103,7 +104,8 @@ function createSessionMessageSendPayload(
     messages,
     context: {
       workspaceId: projectState.currentProjectId ?? undefined,
-      workspaceLabel: activeSession?.title ?? undefined,
+      workspaceLabel: activeProject?.name ?? activeSession?.title ?? undefined,
+      workspacePath: activeProject?.repoPath ?? undefined,
       sessionTitle: activeSession?.title ?? undefined,
       composerMode: payload.mode,
     },

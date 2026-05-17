@@ -215,6 +215,49 @@ describe('ModelStepProviderService', () => {
     expect(JSON.stringify(events)).not.toContain('cause');
   });
 
+  it('keeps failure event sequence monotonic when an adapter throws after streaming starts', async () => {
+    const resolver: ModelStepRuntimeResolverPort = {
+      resolveProviderRuntimeConfig: async () => config,
+    };
+    const registry: ModelStepProviderRegistryPort = {
+      getAdapter: () => ({
+        providerId: 'deepseek',
+        async *streamModelStep(input) {
+          yield {
+            eventId: input.eventIdFactory(),
+            schemaVersion: 1,
+            eventType: 'assistant.output.delta',
+            sessionId: 'session-1',
+            runId: 'run-1',
+            stepId: 'step-1',
+            requestId: 'request-1',
+            context: runtimeContext,
+            sequence: input.nextSequence(),
+            createdAt: '2026-05-17T00:00:02.000Z',
+            source: 'provider',
+            visibility: 'user',
+            persist: 'transient',
+            payload: { delta: 'Hello' },
+          } satisfies RuntimeEvent;
+
+          throw new Error('unexpected provider stream failure');
+        },
+        async *streamChat() {
+          throw new Error('Unexpected streamChat call.');
+        },
+      }),
+    };
+    const service = new ModelStepProviderService({ resolver, registry });
+
+    const events = await collect(service.streamModelStep(request));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'assistant.output.delta',
+      'run.failed',
+    ]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2]);
+  });
+
   it('cancels active model step requests by request id', async () => {
     let capturedSignal: AbortSignal | undefined;
     const resolver: ModelStepRuntimeResolverPort = {

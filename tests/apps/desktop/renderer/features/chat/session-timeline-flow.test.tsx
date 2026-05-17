@@ -114,6 +114,18 @@ describe('useSessionTimeline', () => {
 
   it('starts backend chat with an ipc request envelope, creates a session, and applies stream events', async () => {
     const { session } = installMegumiMock();
+    useProjectStore.setState({
+      currentProjectId: 'project-1',
+      projects: [{
+        id: 'project-1',
+        name: 'Megumi',
+        description: 'Megumi workspace',
+        repoPath: 'C:/all/work/study/megumi',
+        type: 'existing_feature',
+        createdAt: '2026-05-12T00:00:00.000Z',
+        context: {},
+      }],
+    });
     const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
@@ -130,6 +142,8 @@ describe('useSessionTimeline', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
         context: expect.objectContaining({
+          workspaceId: 'project-1',
+          workspacePath: 'C:/all/work/study/megumi',
           composerMode: 'chat',
           sessionTitle: 'Hello Megumi',
         }),

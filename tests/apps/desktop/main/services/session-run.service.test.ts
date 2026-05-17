@@ -3,7 +3,11 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { SessionRunService } from '@megumi/desktop/main/services/session-run.service';
+import {
+  SessionRunService,
+  type SessionRunContextService,
+} from '@megumi/desktop/main/services/session-run.service';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
 import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
@@ -190,14 +194,19 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
   });
 }
 
-function createServiceWithModelStepStream(events: RuntimeEvent[]) {
+function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
+  contextService?: SessionRunContextService;
+  onRequest?: (request: ModelStepRuntimeRequest) => void;
+}) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
   return new SessionRunService({
     repository,
+    ...(options?.contextService ? { contextService: options.contextService } : {}),
     modelStepProvider: {
-      streamModelStep: async function* () {
+      streamModelStep: async function* (request) {
+        options?.onRequest?.(request);
         yield* events;
       },
       cancelModelStep: () => true,
@@ -401,6 +410,109 @@ describe('SessionRunService', () => {
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
       expect.objectContaining({ role: 'assistant', content: 'Hello', runId: 'run-1' }),
     ]));
+  });
+
+  it('passes workspace baseline context to model step requests for session messages', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const baselineInputs: unknown[] = [];
+    const service = createServiceWithModelStepStream([], {
+      contextService: {
+        createBaselineContext: (input) => {
+          baselineInputs.push(input);
+          return {
+            contextId: `context:${input.runId}`,
+            runId: input.runId,
+            workspaceBoundary: {
+              workspaceId: input.workspaceId,
+              rootPath: input.workspacePath,
+              symlinkPolicy: 'deny_outside_workspace',
+              outsideWorkspacePolicy: 'deny',
+              secretPolicySummary: 'No secrets.',
+              createdAt: '2026-05-17T00:00:00.000Z',
+            },
+            goal: input.goal,
+            constraints: [],
+            inlineContents: [],
+            resourceRefs: [],
+            conversationRefs: [],
+            messageSummaries: [],
+            workspaceSources: [],
+            toolObservationRefs: [],
+            memoryRecallRefs: [],
+            policySummary: {
+              workspaceAccess: 'workspace-read',
+              restrictedResources: [],
+              approvalSummary: 'No approval.',
+              sandboxSummary: 'Read-only.',
+            },
+            modelCapabilitySummary: input.modelCapabilitySummary,
+            budget: {
+              modelContextWindow: input.modelCapabilitySummary.modelContextWindow,
+              reservedOutputTokens: input.modelCapabilitySummary.reservedOutputTokens,
+              availableInputTokens: input.modelCapabilitySummary.availableInputTokens,
+              budgetPolicy: 'balanced',
+              packingStrategy: 'priority_then_recent',
+              truncationRecords: [],
+            },
+            buildMetadata: {
+              buildReason: 'run_baseline',
+              builtAt: '2026-05-17T00:00:00.000Z',
+              selectionRecordIds: [],
+              redactionRecordIds: [],
+              truncationRecordIds: [],
+            },
+            createdAt: '2026-05-17T00:00:00.000Z',
+          } satisfies RunContext;
+        },
+      },
+      onRequest: (request) => requests.push(request),
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Use workspace context',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/all/work/study/megumi',
+          sessionTitle: 'Workspace session',
+          composerMode: 'agent',
+        },
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the stream so the provider request is observed.
+    }
+
+    expect(baselineInputs).toEqual([
+      expect.objectContaining({
+        runId: 'run-1',
+        goal: 'Use workspace context',
+        workspaceId: 'workspace-1',
+        workspacePath: 'C:/all/work/study/megumi',
+      }),
+    ]);
+    expect(requests).toEqual([
+      expect.objectContaining({
+        context: expect.objectContaining({
+          runId: 'run-1',
+          goal: 'Use workspace context',
+          workspaceBoundary: expect.objectContaining({
+            workspaceId: 'workspace-1',
+            rootPath: 'C:/all/work/study/megumi',
+          }),
+        }),
+      }),
+    ]);
   });
 
   it('adds request metadata to session message runtime events', async () => {

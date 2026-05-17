@@ -270,6 +270,11 @@ export class SessionRunService {
       title: 'Model response',
       startedAt: createdAt,
     });
+    const context = this.createInitialContextForSessionMessage({
+      runId,
+      goal: userMessage.content,
+      session,
+    });
     const request: ModelStepRuntimeRequest = {
       requestId: input.requestId,
       sessionId: session.sessionId,
@@ -278,6 +283,7 @@ export class SessionRunService {
       providerId: input.payload.providerId,
       modelId: input.payload.modelId,
       messages: toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage),
+      ...(context ? { context } : {}),
       runtimeContext: input.runtimeContext,
       createdAt,
     };
@@ -309,6 +315,24 @@ export class SessionRunService {
     return this.contextService.createBaselineContext({
       runId: input.runId,
       goal: input.payload.goal,
+      workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
+      workspacePath: input.session.workspacePath,
+      modelCapabilitySummary: DEFAULT_MODEL_CAPABILITY_SUMMARY,
+    });
+  }
+
+  private createInitialContextForSessionMessage(input: {
+    runId: string;
+    goal: string;
+    session: Session;
+  }): RunContext | undefined {
+    if (!this.contextService || !input.session.workspacePath) {
+      return undefined;
+    }
+
+    return this.contextService.createBaselineContext({
+      runId: input.runId,
+      goal: input.goal,
       workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
       workspacePath: input.session.workspacePath,
       modelCapabilitySummary: DEFAULT_MODEL_CAPABILITY_SUMMARY,

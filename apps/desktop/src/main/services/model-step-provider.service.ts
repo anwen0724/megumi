@@ -37,6 +37,11 @@ export class ModelStepProviderService {
 
   async *streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent> {
     const controller = new AbortController();
+    let sequence = 0;
+    const nextSequence = () => {
+      sequence += 1;
+      return sequence;
+    };
     this.activeRequests.set(request.requestId, controller);
 
     try {
@@ -46,7 +51,6 @@ export class ModelStepProviderService {
         runtimeContext: request.runtimeContext,
       });
       const adapter = this.options.registry.getAdapter(config.providerId);
-      let sequence = 0;
 
       for await (const event of adapter.streamModelStep({
         request,
@@ -54,10 +58,7 @@ export class ModelStepProviderService {
         stepId: request.stepId,
         config,
         signal: controller.signal,
-        nextSequence: () => {
-          sequence += 1;
-          return sequence;
-        },
+        nextSequence,
         eventIdFactory: () => `event:${crypto.randomUUID()}`,
       })) {
         yield event;
@@ -67,7 +68,7 @@ export class ModelStepProviderService {
         eventId: `event:${crypto.randomUUID()}`,
         request: toChatRuntimeRequest(request),
         runId: request.runId,
-        sequence: 1,
+        sequence: nextSequence(),
         createdAt: new Date().toISOString(),
         error: toRuntimeError(error, request),
       });
