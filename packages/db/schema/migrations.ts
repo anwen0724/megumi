@@ -646,6 +646,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
   ensureCurrentSchemaColumns(database);
   rebuildIncompatibleSessionRunTables(database);
+  dropLegacySessionRunTables(database);
 
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_session_messages_session_id
@@ -858,6 +859,47 @@ const CURRENT_SCHEMA_COLUMNS: Record<string, Record<string, string>> = {
     event_json: "TEXT NOT NULL DEFAULT '{}'",
   },
 };
+
+function dropLegacySessionRunTables(database: MegumiDatabase): void {
+  const previousForeignKeys = database.pragma('foreign_keys', { simple: true }) as number;
+  database.pragma('foreign_keys = OFF');
+  try {
+    database.exec(`
+    DROP TABLE IF EXISTS agent_actions;
+    DROP TABLE IF EXISTS agent_cancel_requests;
+    DROP TABLE IF EXISTS agent_checkpoints;
+    DROP TABLE IF EXISTS agent_context_baselines;
+    DROP TABLE IF EXISTS agent_observations;
+    DROP TABLE IF EXISTS agent_resume_requests;
+    DROP TABLE IF EXISTS agent_retry_requests;
+    DROP TABLE IF EXISTS agent_run_mode_snapshots;
+    DROP TABLE IF EXISTS agent_run_source_plans;
+    DROP TABLE IF EXISTS agent_runs;
+    DROP TABLE IF EXISTS agent_sessions;
+    DROP TABLE IF EXISTS agent_steps;
+    DROP TABLE IF EXISTS context_patches;
+    DROP TABLE IF EXISTS context_source_refs;
+    DROP TABLE IF EXISTS effective_context_builds;
+    DROP TABLE IF EXISTS messages;
+
+    DROP INDEX IF EXISTS idx_agent_actions_step_id;
+    DROP INDEX IF EXISTS idx_agent_cancel_requests_run_created;
+    DROP INDEX IF EXISTS idx_agent_checkpoints_approval_request;
+    DROP INDEX IF EXISTS idx_agent_checkpoints_run_sequence;
+    DROP INDEX IF EXISTS idx_agent_checkpoints_run_status;
+    DROP INDEX IF EXISTS idx_agent_context_baselines_run_id;
+    DROP INDEX IF EXISTS idx_agent_observations_run_id;
+    DROP INDEX IF EXISTS idx_agent_resume_requests_run_created;
+    DROP INDEX IF EXISTS idx_agent_retry_requests_run_created;
+    DROP INDEX IF EXISTS idx_agent_run_mode_snapshots_run_id;
+    DROP INDEX IF EXISTS idx_agent_run_source_plans_source_plan_id;
+    DROP INDEX IF EXISTS idx_agent_runs_session_id;
+    DROP INDEX IF EXISTS idx_agent_steps_run_id;
+    `);
+  } finally {
+    database.pragma(`foreign_keys = ${previousForeignKeys ? 'ON' : 'OFF'}`);
+  }
+}
 
 function rebuildIncompatibleSessionRunTables(database: MegumiDatabase): void {
   const previousForeignKeys = database.pragma('foreign_keys', { simple: true }) as number;

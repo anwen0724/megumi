@@ -336,6 +336,84 @@ describe('provider settings migrations', () => {
     ]);
   });
 
+  it('drops exact legacy session run tables and indexes', () => {
+    const database = createTestDb();
+    database.exec(`
+      CREATE TABLE agent_sessions (id TEXT);
+      CREATE TABLE messages (id TEXT);
+      CREATE TABLE agent_runs (id TEXT);
+      CREATE TABLE agent_steps (id TEXT);
+      CREATE TABLE agent_actions (id TEXT);
+      CREATE TABLE agent_observations (id TEXT);
+      CREATE TABLE agent_context_baselines (id TEXT);
+      CREATE TABLE context_source_refs (id TEXT);
+      CREATE TABLE context_patches (id TEXT);
+      CREATE TABLE effective_context_builds (id TEXT);
+      CREATE TABLE agent_run_mode_snapshots (id TEXT);
+      CREATE TABLE agent_run_source_plans (id TEXT);
+      CREATE TABLE agent_checkpoints (id TEXT);
+      CREATE TABLE agent_resume_requests (id TEXT);
+      CREATE TABLE agent_cancel_requests (id TEXT);
+      CREATE TABLE agent_retry_requests (id TEXT);
+
+      CREATE INDEX idx_agent_actions_step_id ON agent_actions(id);
+      CREATE INDEX idx_agent_cancel_requests_run_created ON agent_cancel_requests(id);
+      CREATE INDEX idx_agent_checkpoints_approval_request ON agent_checkpoints(id);
+      CREATE INDEX idx_agent_checkpoints_run_sequence ON agent_checkpoints(id);
+      CREATE INDEX idx_agent_checkpoints_run_status ON agent_checkpoints(id);
+      CREATE INDEX idx_agent_context_baselines_run_id ON agent_context_baselines(id);
+      CREATE INDEX idx_agent_observations_run_id ON agent_observations(id);
+      CREATE INDEX idx_agent_resume_requests_run_created ON agent_resume_requests(id);
+      CREATE INDEX idx_agent_retry_requests_run_created ON agent_retry_requests(id);
+      CREATE INDEX idx_agent_run_mode_snapshots_run_id ON agent_run_mode_snapshots(id);
+      CREATE INDEX idx_agent_run_source_plans_source_plan_id ON agent_run_source_plans(id);
+      CREATE INDEX idx_agent_runs_session_id ON agent_runs(id);
+      CREATE INDEX idx_agent_steps_run_id ON agent_steps(id);
+    `);
+
+    migrateDatabase(database);
+
+    const legacyObjects = database.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type IN ('table', 'index')
+      AND name IN (
+        'agent_sessions',
+        'messages',
+        'agent_runs',
+        'agent_steps',
+        'agent_actions',
+        'agent_observations',
+        'agent_context_baselines',
+        'context_source_refs',
+        'context_patches',
+        'effective_context_builds',
+        'agent_run_mode_snapshots',
+        'agent_run_source_plans',
+        'agent_checkpoints',
+        'agent_resume_requests',
+        'agent_cancel_requests',
+        'agent_retry_requests',
+        'idx_agent_actions_step_id',
+        'idx_agent_cancel_requests_run_created',
+        'idx_agent_checkpoints_approval_request',
+        'idx_agent_checkpoints_run_sequence',
+        'idx_agent_checkpoints_run_status',
+        'idx_agent_context_baselines_run_id',
+        'idx_agent_observations_run_id',
+        'idx_agent_resume_requests_run_created',
+        'idx_agent_retry_requests_run_created',
+        'idx_agent_run_mode_snapshots_run_id',
+        'idx_agent_run_source_plans_source_plan_id',
+        'idx_agent_runs_session_id',
+        'idx_agent_steps_run_id'
+      )
+      ORDER BY name
+    `).all() as Array<{ name: string }>;
+
+    expect(legacyObjects).toEqual([]);
+  });
+
   it('creates recovery persistence tables', () => {
     const database = createTestDb();
     migrateDatabase(database);

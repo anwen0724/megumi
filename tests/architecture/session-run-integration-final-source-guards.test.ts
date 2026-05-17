@@ -104,6 +104,12 @@ describe('09 session run integration final source guards', () => {
       if (path === 'tests/architecture/session-run-integration-final-source-guards.test.ts') {
         return false;
       }
+      if (
+        path === 'packages/db/schema/migrations.ts'
+        || path === 'tests/packages/db/schema/migrations.test.ts'
+      ) {
+        return false;
+      }
 
       return /window\.megumi\.chat|window\.megumi\.agent|IPC_CHANNELS\.chat|IPC_CHANNELS\.agent|useRuntimeChat|chat:start|chat\.start|agent_(sessions|runs|steps|actions|observations|context|run_mode|checkpoints|resume|cancel|retry)|apps\/desktop\/src\/main\/(services|ipc\/handlers)\/agent-|agent-(lifecycle|context|run-mode|recovery)|agent[.:](session|run|context|plan|tool|approval|recovery|artifact|artifacts|memory)/.test(text);
     });
