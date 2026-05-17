@@ -24,7 +24,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
-    CREATE TABLE IF NOT EXISTS agent_sessions (
+    CREATE TABLE IF NOT EXISTS sessions (
       session_id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       workspace_id TEXT,
@@ -37,7 +37,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       metadata_json TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS messages (
+    CREATE TABLE IF NOT EXISTS session_messages (
       message_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
       run_id TEXT,
@@ -47,10 +47,10 @@ export function migrateDatabase(database: MegumiDatabase): void {
       created_at TEXT NOT NULL,
       completed_at TEXT,
       metadata_json TEXT,
-      FOREIGN KEY(session_id) REFERENCES agent_sessions(session_id) ON DELETE CASCADE
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS agent_runs (
+    CREATE TABLE IF NOT EXISTS runs (
       run_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
       trigger_message_id TEXT,
@@ -68,11 +68,11 @@ export function migrateDatabase(database: MegumiDatabase): void {
       source_plan_id TEXT,
       policy_snapshot_ref TEXT,
       metadata_json TEXT,
-      FOREIGN KEY(session_id) REFERENCES agent_sessions(session_id) ON DELETE CASCADE,
-      FOREIGN KEY(trigger_message_id) REFERENCES messages(message_id) ON DELETE SET NULL
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(trigger_message_id) REFERENCES session_messages(message_id) ON DELETE SET NULL
     );
 
-    CREATE TABLE IF NOT EXISTS agent_steps (
+    CREATE TABLE IF NOT EXISTS run_steps (
       step_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       parent_step_id TEXT,
@@ -83,11 +83,11 @@ export function migrateDatabase(database: MegumiDatabase): void {
       completed_at TEXT,
       error_json TEXT,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(parent_step_id) REFERENCES agent_steps(step_id) ON DELETE SET NULL
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(parent_step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL
     );
 
-    CREATE TABLE IF NOT EXISTS agent_actions (
+    CREATE TABLE IF NOT EXISTS run_actions (
       action_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
@@ -98,11 +98,11 @@ export function migrateDatabase(database: MegumiDatabase): void {
       input_preview_json TEXT,
       error_json TEXT,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS agent_observations (
+    CREATE TABLE IF NOT EXISTS run_observations (
       observation_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       step_id TEXT,
@@ -114,9 +114,9 @@ export function migrateDatabase(database: MegumiDatabase): void {
       data_ref TEXT,
       error_json TEXT,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE SET NULL,
-      FOREIGN KEY(action_id) REFERENCES agent_actions(action_id) ON DELETE SET NULL
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL,
+      FOREIGN KEY(action_id) REFERENCES run_actions(action_id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS runtime_events (
@@ -135,17 +135,17 @@ export function migrateDatabase(database: MegumiDatabase): void {
       persist TEXT NOT NULL,
       payload_json TEXT NOT NULL,
       event_json TEXT NOT NULL,
-      FOREIGN KEY(session_id) REFERENCES agent_sessions(session_id) ON DELETE SET NULL,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE SET NULL,
-      FOREIGN KEY(action_id) REFERENCES agent_actions(action_id) ON DELETE SET NULL,
-      FOREIGN KEY(observation_id) REFERENCES agent_observations(observation_id) ON DELETE SET NULL,
-      FOREIGN KEY(message_id) REFERENCES messages(message_id) ON DELETE SET NULL
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE SET NULL,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL,
+      FOREIGN KEY(action_id) REFERENCES run_actions(action_id) ON DELETE SET NULL,
+      FOREIGN KEY(observation_id) REFERENCES run_observations(observation_id) ON DELETE SET NULL,
+      FOREIGN KEY(message_id) REFERENCES session_messages(message_id) ON DELETE SET NULL
     );
   `);
 
   database.exec(`
-    CREATE TABLE IF NOT EXISTS agent_context_baselines (
+    CREATE TABLE IF NOT EXISTS run_context_baselines (
       context_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       step_id TEXT,
@@ -153,10 +153,10 @@ export function migrateDatabase(database: MegumiDatabase): void {
       context_json TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS context_source_refs (
+    CREATE TABLE IF NOT EXISTS run_context_source_refs (
       source_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       source_kind TEXT NOT NULL,
@@ -172,10 +172,10 @@ export function migrateDatabase(database: MegumiDatabase): void {
       redaction_state TEXT NOT NULL,
       selection_reason TEXT NOT NULL,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS context_patches (
+    CREATE TABLE IF NOT EXISTS run_context_patches (
       patch_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       step_id TEXT,
@@ -190,10 +190,10 @@ export function migrateDatabase(database: MegumiDatabase): void {
       status TEXT NOT NULL,
       rejection_reason TEXT,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS effective_context_builds (
+    CREATE TABLE IF NOT EXISTS run_context_builds (
       build_id TEXT PRIMARY KEY,
       context_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
@@ -205,13 +205,13 @@ export function migrateDatabase(database: MegumiDatabase): void {
       built_at TEXT NOT NULL,
       snapshot_policy TEXT NOT NULL,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(context_id) REFERENCES agent_context_baselines(context_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(context_id) REFERENCES run_context_baselines(context_id) ON DELETE CASCADE
     );
   `);
 
   database.exec(`
-    CREATE TABLE IF NOT EXISTS agent_run_mode_snapshots (
+    CREATE TABLE IF NOT EXISTS run_mode_snapshots (
       mode_snapshot_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL UNIQUE,
       mode_label TEXT NOT NULL,
@@ -220,7 +220,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       selection_source TEXT,
       created_at TEXT NOT NULL,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS implementation_plan_artifacts (
@@ -235,16 +235,16 @@ export function migrateDatabase(database: MegumiDatabase): void {
       superseded_at TEXT,
       superseded_by_plan_id TEXT,
       metadata_json TEXT,
-      FOREIGN KEY(producing_run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(producing_run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(superseded_by_plan_id) REFERENCES implementation_plan_artifacts(plan_artifact_id) ON DELETE SET NULL
     );
 
-    CREATE TABLE IF NOT EXISTS agent_run_source_plans (
+    CREATE TABLE IF NOT EXISTS run_source_plans (
       run_id TEXT PRIMARY KEY,
       source_plan_id TEXT NOT NULL,
       linked_at TEXT NOT NULL,
       metadata_json TEXT,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(source_plan_id) REFERENCES implementation_plan_artifacts(plan_artifact_id) ON DELETE RESTRICT
     );
   `);
@@ -267,9 +267,9 @@ export function migrateDatabase(database: MegumiDatabase): void {
       error_json TEXT,
       metadata_json TEXT,
       tool_call_json TEXT NOT NULL,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE,
-      FOREIGN KEY(action_id) REFERENCES agent_actions(action_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE,
+      FOREIGN KEY(action_id) REFERENCES run_actions(action_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS tool_policy_decisions (
@@ -285,7 +285,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       metadata_json TEXT,
       decision_json TEXT NOT NULL,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS approval_requests (
@@ -302,8 +302,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       resolved_at TEXT,
       request_json TEXT NOT NULL,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS approval_records (
@@ -319,8 +319,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       record_json TEXT NOT NULL,
       FOREIGN KEY(approval_request_id) REFERENCES approval_requests(approval_request_id) ON DELETE CASCADE,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS tool_observations (
@@ -336,13 +336,13 @@ export function migrateDatabase(database: MegumiDatabase): void {
       created_at TEXT NOT NULL,
       observation_json TEXT NOT NULL,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
-      FOREIGN KEY(run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(step_id) REFERENCES agent_steps(step_id) ON DELETE CASCADE
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
   `);
 
   database.exec(`
-    CREATE TABLE IF NOT EXISTS agent_checkpoints (
+    CREATE TABLE IF NOT EXISTS checkpoints (
       checkpoint_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       step_id TEXT,
@@ -369,16 +369,16 @@ export function migrateDatabase(database: MegumiDatabase): void {
       checkpoint_json TEXT NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_run_sequence
-      ON agent_checkpoints(run_id, sequence);
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_run_sequence
+      ON checkpoints(run_id, sequence);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_run_status
-      ON agent_checkpoints(run_id, status);
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_run_status
+      ON checkpoints(run_id, status);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_approval_request
-      ON agent_checkpoints(approval_request_id);
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_approval_request
+      ON checkpoints(approval_request_id);
 
-    CREATE TABLE IF NOT EXISTS agent_resume_requests (
+    CREATE TABLE IF NOT EXISTS resume_requests (
       resume_request_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       checkpoint_id TEXT,
@@ -390,10 +390,10 @@ export function migrateDatabase(database: MegumiDatabase): void {
       request_json TEXT NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_agent_resume_requests_run_created
-      ON agent_resume_requests(run_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_resume_requests_run_created
+      ON resume_requests(run_id, created_at);
 
-    CREATE TABLE IF NOT EXISTS agent_cancel_requests (
+    CREATE TABLE IF NOT EXISTS cancel_requests (
       cancel_request_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       step_id TEXT,
@@ -406,10 +406,10 @@ export function migrateDatabase(database: MegumiDatabase): void {
       request_json TEXT NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_agent_cancel_requests_run_created
-      ON agent_cancel_requests(run_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_cancel_requests_run_created
+      ON cancel_requests(run_id, created_at);
 
-    CREATE TABLE IF NOT EXISTS agent_retry_requests (
+    CREATE TABLE IF NOT EXISTS retry_requests (
       retry_request_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       step_id TEXT,
@@ -423,8 +423,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       request_json TEXT NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_agent_retry_requests_run_created
-      ON agent_retry_requests(run_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_retry_requests_run_created
+      ON retry_requests(run_id, created_at);
 
     CREATE TABLE IF NOT EXISTS checkpoint_restore_records (
       restore_record_id TEXT PRIMARY KEY,
@@ -458,9 +458,9 @@ export function migrateDatabase(database: MegumiDatabase): void {
       deleted_at TEXT,
       metadata_json TEXT,
       artifact_json TEXT NOT NULL,
-      FOREIGN KEY(session_id) REFERENCES agent_sessions(session_id) ON DELETE SET NULL,
-      FOREIGN KEY(producing_run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(producing_step_id) REFERENCES agent_steps(step_id) ON DELETE SET NULL
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE SET NULL,
+      FOREIGN KEY(producing_run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(producing_step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS artifact_versions (
@@ -485,8 +485,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       version_json TEXT NOT NULL,
       UNIQUE(artifact_id, version_number),
       FOREIGN KEY(artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
-      FOREIGN KEY(created_by_run_id) REFERENCES agent_runs(run_id) ON DELETE CASCADE,
-      FOREIGN KEY(created_by_step_id) REFERENCES agent_steps(step_id) ON DELETE SET NULL
+      FOREIGN KEY(created_by_run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(created_by_step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS artifact_source_refs (
@@ -518,7 +518,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(from_version_id) REFERENCES artifact_versions(artifact_version_id) ON DELETE SET NULL,
       FOREIGN KEY(to_artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
       FOREIGN KEY(to_version_id) REFERENCES artifact_versions(artifact_version_id) ON DELETE SET NULL,
-      FOREIGN KEY(created_by_run_id) REFERENCES agent_runs(run_id) ON DELETE SET NULL
+      FOREIGN KEY(created_by_run_id) REFERENCES runs(run_id) ON DELETE SET NULL
     );
   `);
 
@@ -645,45 +645,45 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_messages_session_id
-    ON messages(session_id);
+    CREATE INDEX IF NOT EXISTS idx_session_messages_session_id
+    ON session_messages(session_id);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_runs_session_id
-    ON agent_runs(session_id);
+    CREATE INDEX IF NOT EXISTS idx_runs_session_id
+    ON runs(session_id);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_steps_run_id
-    ON agent_steps(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_steps_run_id
+    ON run_steps(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_actions_step_id
-    ON agent_actions(step_id);
+    CREATE INDEX IF NOT EXISTS idx_run_actions_step_id
+    ON run_actions(step_id);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_observations_run_id
-    ON agent_observations(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_observations_run_id
+    ON run_observations(run_id);
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_events_run_sequence
     ON runtime_events(run_id, sequence)
     WHERE run_id IS NOT NULL;
 
-    CREATE INDEX IF NOT EXISTS idx_agent_context_baselines_run_id
-    ON agent_context_baselines(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_context_baselines_run_id
+    ON run_context_baselines(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_context_source_refs_run_id
-    ON context_source_refs(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_context_source_refs_run_id
+    ON run_context_source_refs(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_context_patches_run_id
-    ON context_patches(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_context_patches_run_id
+    ON run_context_patches(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_effective_context_builds_run_id
-    ON effective_context_builds(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_context_builds_run_id
+    ON run_context_builds(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_run_mode_snapshots_run_id
-    ON agent_run_mode_snapshots(run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_mode_snapshots_run_id
+    ON run_mode_snapshots(run_id);
 
     CREATE INDEX IF NOT EXISTS idx_implementation_plan_artifacts_producing_run_id
     ON implementation_plan_artifacts(producing_run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_agent_run_source_plans_source_plan_id
-    ON agent_run_source_plans(source_plan_id);
+    CREATE INDEX IF NOT EXISTS idx_run_source_plans_source_plan_id
+    ON run_source_plans(source_plan_id);
 
     CREATE INDEX IF NOT EXISTS idx_tool_calls_run_id
     ON tool_calls(run_id);

@@ -1,4 +1,4 @@
-import { AgentRunModeRepository } from '@megumi/db/repos/agent-run-mode.repo';
+import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import {
   RUN_MODE_PRESET_DEFAULTS,
   type ImplementationPlanArtifactRecord,
@@ -6,7 +6,7 @@ import {
   type RunMode,
   type RunModeSnapshot,
   type RunSourcePlanRelation,
-} from '@megumi/shared/agent-run-mode-contracts';
+} from '@megumi/shared/run-mode-contracts';
 
 export interface AgentRunModeServiceIds {
   modeSnapshotId(): string;
@@ -19,7 +19,7 @@ export interface PlanArtifactCompatibility {
 
 export interface AgentRunModeServiceOptions {
   repository: Pick<
-    AgentRunModeRepository,
+    RunModeRepository,
     | 'saveModeSnapshot'
     | 'saveImplementationPlan'
     | 'getImplementationPlan'

@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
-import { AgentContextRepository } from '@megumi/db/repos/agent-context.repo';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { RunContextRepository } from '@megumi/db/repos/run-context.repo';
 import { AgentContextService } from '@megumi/desktop/main/services/agent-context.service';
 
 let db: Database.Database | null = null;
@@ -14,8 +14,8 @@ let db: Database.Database | null = null;
 function createService(rootPath: string) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const lifecycle = new AgentLifecycleRepository(db);
-  const context = new AgentContextRepository(db);
+  const lifecycle = new SessionRunRepository(db);
+  const context = new RunContextRepository(db);
   lifecycle.saveSession({
     sessionId: 'session-1',
     title: 'Context',

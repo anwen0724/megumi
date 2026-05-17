@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
-import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
-import { AgentRecoveryRepository } from '@megumi/db/repos/agent-recovery.repo';
-import { AgentRunModeRepository } from '@megumi/db/repos/agent-run-mode.repo';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
+import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
@@ -36,11 +36,11 @@ const planArtifactCompatibility = new PlanArtifactCompatibilityService({
   repository: artifactRepository,
 });
 const agentRunModeService = new AgentRunModeService({
-  repository: new AgentRunModeRepository(database),
+  repository: new RunModeRepository(database),
   planArtifactCompatibility,
 });
 const agentService = new AgentLifecycleService({
-  repository: new AgentLifecycleRepository(database),
+  repository: new SessionRunRepository(database),
   runModeService: agentRunModeService,
   contextService: agentContextService,
 });
@@ -63,7 +63,7 @@ const agentMemoryService = createAgentMemoryService({
   }),
 });
 const agentRecoveryService = createAgentRecoveryService({
-  repository: new AgentRecoveryRepository(database),
+  repository: new RecoveryRepository(database),
   clock: () => new Date(),
   ids: {
     resumeRequestId: () => `resume-request:${crypto.randomUUID()}`,

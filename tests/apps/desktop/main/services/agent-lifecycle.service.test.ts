@@ -2,18 +2,18 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { AgentLifecycleService } from '@megumi/desktop/main/services/agent-lifecycle.service';
-import type { AgentContext } from '@megumi/shared/agent-context-contracts';
-import type { AgentAction } from '@megumi/shared/agent-lifecycle-contracts';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/agent-run-mode-contracts';
+import type { RunContext } from '@megumi/shared/run-context-contracts';
+import type { RunAction } from '@megumi/shared/session-run-contracts';
+import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 
 let db: Database.Database | null = null;
 
 function createService() {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new AgentLifecycleRepository(db);
+  const repository = new SessionRunRepository(db);
   return new AgentLifecycleService({
     repository,
     clock: { now: () => '2026-05-15T00:00:00.000Z' },
@@ -32,7 +32,7 @@ function createService() {
 function createServiceWithContextRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new AgentLifecycleRepository(db);
+  const repository = new SessionRunRepository(db);
   return new AgentLifecycleService({
     repository,
     contextService: {
@@ -81,7 +81,7 @@ function createServiceWithContextRecorder(records: unknown[]) {
             truncationRecordIds: [],
           },
           createdAt: '2026-05-15T00:00:00.000Z',
-        } satisfies AgentContext;
+        } satisfies RunContext;
       },
     },
     clock: { now: () => '2026-05-15T00:00:00.000Z' },
@@ -100,7 +100,7 @@ function createServiceWithContextRecorder(records: unknown[]) {
 function createServiceWithRunModeRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new AgentLifecycleRepository(db);
+  const repository = new SessionRunRepository(db);
   return new AgentLifecycleService({
     repository,
     runModeService: {
@@ -143,7 +143,7 @@ function createServiceWithRunModeRecorder(records: unknown[]) {
 function createServiceWithFailingHostBoundary(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new AgentLifecycleRepository(db);
+  const repository = new SessionRunRepository(db);
   return new AgentLifecycleService({
     repository,
     runModeService: {
@@ -171,7 +171,7 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
       },
     },
     hostBoundary: {
-      handleAction: (_action: AgentAction) => {
+      handleAction: (_action: RunAction) => {
         throw new Error('plan failed');
       },
     },

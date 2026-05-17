@@ -2,22 +2,22 @@ import { describe, expect, it } from 'vitest';
 
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { AgentRecoveryRepository } from '@megumi/db/repos/agent-recovery.repo';
+import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
 import type {
-  AgentCancelRequest,
-  AgentCheckpoint,
-  AgentResumeRequest,
-  AgentRetryRequest,
+  CancelRequest,
+  Checkpoint,
+  ResumeRequest,
+  RetryRequest,
   CheckpointRestoreRecord,
-} from '@megumi/shared/agent-recovery-contracts';
+} from '@megumi/shared/recovery-contracts';
 
-function createRepository(): AgentRecoveryRepository {
+function createRepository(): RecoveryRepository {
   const database = createDatabase(':memory:');
   migrateDatabase(database);
-  return new AgentRecoveryRepository(database);
+  return new RecoveryRepository(database);
 }
 
-function checkpoint(overrides: Partial<AgentCheckpoint> = {}): AgentCheckpoint {
+function checkpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
   return {
     checkpointId: overrides.checkpointId ?? 'checkpoint_123',
     runId: overrides.runId ?? 'run_123',
@@ -45,7 +45,7 @@ function checkpoint(overrides: Partial<AgentCheckpoint> = {}): AgentCheckpoint {
   };
 }
 
-describe('AgentRecoveryRepository', () => {
+describe('RecoveryRepository', () => {
   it('saves and lists checkpoints by run order', () => {
     const repository = createRepository();
 
@@ -72,7 +72,7 @@ describe('AgentRecoveryRepository', () => {
   it('persists control requests and restore records', () => {
     const repository = createRepository();
 
-    const resumeRequest: AgentResumeRequest = {
+    const resumeRequest: ResumeRequest = {
       resumeRequestId: 'resume_request_123',
       runId: 'run_123',
       checkpointId: 'checkpoint_123',
@@ -82,7 +82,7 @@ describe('AgentRecoveryRepository', () => {
       createdAt: '2026-05-16T10:00:00.000Z',
     };
 
-    const cancelRequest: AgentCancelRequest = {
+    const cancelRequest: CancelRequest = {
       cancelRequestId: 'cancel_request_123',
       runId: 'run_123',
       requestedBy: 'user',
@@ -91,7 +91,7 @@ describe('AgentRecoveryRepository', () => {
       createdAt: '2026-05-16T10:00:01.000Z',
     };
 
-    const retryRequest: AgentRetryRequest = {
+    const retryRequest: RetryRequest = {
       retryRequestId: 'retry_request_123',
       runId: 'run_123',
       checkpointId: 'checkpoint_123',

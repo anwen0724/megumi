@@ -1,15 +1,15 @@
-import type { AgentRecoveryRepository } from '@megumi/db';
+import type { RecoveryRepository } from '@megumi/db';
 import type {
-  AgentCancelRequest,
-  AgentRecoverableRunSummary,
-  AgentResumeRequest,
-  AgentRetryRequest,
-} from '@megumi/shared/agent-recovery-contracts';
+  CancelRequest,
+  RecoverableRunSummary,
+  ResumeRequest,
+  RetryRequest,
+} from '@megumi/shared/recovery-contracts';
 import {
-  AgentCancelRequestSchema,
-  AgentResumeRequestSchema,
-  AgentRetryRequestSchema,
-} from '@megumi/shared/agent-recovery-contracts';
+  CancelRequestSchema,
+  ResumeRequestSchema,
+  RetryRequestSchema,
+} from '@megumi/shared/recovery-contracts';
 
 export interface AgentRecoveryIds {
   resumeRequestId(): string;
@@ -18,24 +18,24 @@ export interface AgentRecoveryIds {
 }
 
 export interface CreateAgentRecoveryServiceOptions {
-  repository: AgentRecoveryRepository;
+  repository: RecoveryRepository;
   clock: () => Date;
   ids: AgentRecoveryIds;
-  listRecoverableRuns: () => AgentRecoverableRunSummary[];
+  listRecoverableRuns: () => RecoverableRunSummary[];
 }
 
 export interface AgentRecoveryService {
-  listRecoverableRuns(): AgentRecoverableRunSummary[];
-  resumeRun(payload: Omit<AgentResumeRequest, 'resumeRequestId' | 'createdAt'>): AgentResumeRequest;
-  cancelRun(payload: Omit<AgentCancelRequest, 'cancelRequestId' | 'createdAt'>): AgentCancelRequest;
-  retryRun(payload: Omit<AgentRetryRequest, 'retryRequestId' | 'createdAt'>): AgentRetryRequest;
+  listRecoverableRuns(): RecoverableRunSummary[];
+  resumeRun(payload: Omit<ResumeRequest, 'resumeRequestId' | 'createdAt'>): ResumeRequest;
+  cancelRun(payload: Omit<CancelRequest, 'cancelRequestId' | 'createdAt'>): CancelRequest;
+  retryRun(payload: Omit<RetryRequest, 'retryRequestId' | 'createdAt'>): RetryRequest;
 }
 
 export function createAgentRecoveryService(options: CreateAgentRecoveryServiceOptions): AgentRecoveryService {
   return {
     listRecoverableRuns: () => options.listRecoverableRuns(),
     resumeRun: (payload) => {
-      const request = AgentResumeRequestSchema.parse({
+      const request = ResumeRequestSchema.parse({
         ...payload,
         resumeRequestId: options.ids.resumeRequestId(),
         createdAt: options.clock().toISOString(),
@@ -43,7 +43,7 @@ export function createAgentRecoveryService(options: CreateAgentRecoveryServiceOp
       return options.repository.saveResumeRequest(request);
     },
     cancelRun: (payload) => {
-      const request = AgentCancelRequestSchema.parse({
+      const request = CancelRequestSchema.parse({
         ...payload,
         cancelRequestId: options.ids.cancelRequestId(),
         createdAt: options.clock().toISOString(),
@@ -51,7 +51,7 @@ export function createAgentRecoveryService(options: CreateAgentRecoveryServiceOp
       return options.repository.saveCancelRequest(request);
     },
     retryRun: (payload) => {
-      const request = AgentRetryRequestSchema.parse({
+      const request = RetryRequestSchema.parse({
         ...payload,
         retryRequestId: options.ids.retryRequestId(),
         createdAt: options.clock().toISOString(),

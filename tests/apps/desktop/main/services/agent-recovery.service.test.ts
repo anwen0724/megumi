@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAgentRecoveryService } from '@megumi/desktop/main/services/agent-recovery.service';
-import type { AgentRecoveryRepository } from '@megumi/db/repos/agent-recovery.repo';
+import type { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
 import type {
-  AgentCancelRequest,
-  AgentCheckpoint,
-  AgentRecoverableRunSummary,
-  AgentResumeRequest,
-  AgentRetryRequest,
+  CancelRequest,
+  Checkpoint,
+  RecoverableRunSummary,
+  ResumeRequest,
+  RetryRequest,
   CheckpointRestoreRecord,
-} from '@megumi/shared/agent-recovery-contracts';
+} from '@megumi/shared/recovery-contracts';
 
-function createRepository(): AgentRecoveryRepository {
-  const checkpoints: AgentCheckpoint[] = [];
-  const resumeRequests: AgentResumeRequest[] = [];
-  const cancelRequests: AgentCancelRequest[] = [];
-  const retryRequests: AgentRetryRequest[] = [];
+function createRepository(): RecoveryRepository {
+  const checkpoints: Checkpoint[] = [];
+  const resumeRequests: ResumeRequest[] = [];
+  const cancelRequests: CancelRequest[] = [];
+  const retryRequests: RetryRequest[] = [];
   const restoreRecords: CheckpointRestoreRecord[] = [];
 
   return {
-    saveCheckpoint: (checkpoint: AgentCheckpoint) => {
+    saveCheckpoint: (checkpoint: Checkpoint) => {
       checkpoints.push(checkpoint);
       return checkpoint;
     },
@@ -27,17 +27,17 @@ function createRepository(): AgentRecoveryRepository {
     listCheckpointsByRun: (runId: string) => checkpoints.filter((checkpoint) => checkpoint.runId === runId),
     getLatestCheckpointByRun: (runId: string) => checkpoints.filter((checkpoint) => checkpoint.runId === runId).at(-1),
     markCheckpointStatus: () => undefined,
-    saveResumeRequest: (request: AgentResumeRequest) => {
+    saveResumeRequest: (request: ResumeRequest) => {
       resumeRequests.push(request);
       return request;
     },
     listResumeRequestsByRun: () => resumeRequests,
-    saveCancelRequest: (request: AgentCancelRequest) => {
+    saveCancelRequest: (request: CancelRequest) => {
       cancelRequests.push(request);
       return request;
     },
     listCancelRequestsByRun: () => cancelRequests,
-    saveRetryRequest: (request: AgentRetryRequest) => {
+    saveRetryRequest: (request: RetryRequest) => {
       retryRequests.push(request);
       return request;
     },
@@ -47,7 +47,7 @@ function createRepository(): AgentRecoveryRepository {
       return record;
     },
     listRestoreRecordsByRun: () => restoreRecords,
-  } as unknown as AgentRecoveryRepository;
+  } as unknown as RecoveryRepository;
 }
 
 describe('AgentRecoveryService', () => {
@@ -66,7 +66,7 @@ describe('AgentRecoveryService', () => {
         status: 'waiting_for_approval',
         reason: 'waiting_for_approval',
         latestCheckpointId: 'checkpoint_123',
-      } satisfies AgentRecoverableRunSummary],
+      } satisfies RecoverableRunSummary],
     });
 
     expect(service.listRecoverableRuns()).toHaveLength(1);

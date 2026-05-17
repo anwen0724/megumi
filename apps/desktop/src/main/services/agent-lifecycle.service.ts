@@ -2,20 +2,20 @@ import path from 'node:path';
 import { runAgentTurn } from '@megumi/core/agent-runtime/run-agent-turn';
 import type { AgentHostBoundaryPort, AgentRuntimeIdFactory } from '@megumi/core/agent-runtime/types';
 import { createDatabase } from '@megumi/db/connection';
-import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
-import { AgentRunModeRepository } from '@megumi/db/repos/agent-run-mode.repo';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type {
-  AgentContext,
+  RunContext,
   ModelCapabilitySummary,
-} from '@megumi/shared/agent-context-contracts';
-import type { AgentRun, AgentSession } from '@megumi/shared/agent-lifecycle-contracts';
+} from '@megumi/shared/run-context-contracts';
+import type { Run, Session } from '@megumi/shared/session-run-contracts';
 import type {
   AgentRunStartPayload,
   AgentPlanStatusUpdatePayload,
   AgentSessionCreatePayload,
 } from '@megumi/shared/ipc-schemas';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/agent-run-mode-contracts';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/run-mode-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { AgentRunModeService } from './agent-run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
@@ -35,11 +35,11 @@ export interface AgentRunContextService {
     workspaceId: string;
     workspacePath: string;
     modelCapabilitySummary: ModelCapabilitySummary;
-  }): AgentContext;
+  }): RunContext;
 }
 
 export interface AgentLifecycleServiceOptions {
-  repository: AgentLifecycleRepository;
+  repository: SessionRunRepository;
   contextService?: AgentRunContextService;
   runModeService?: Pick<
     AgentRunModeService,
@@ -84,7 +84,7 @@ function createDefaultIds(): AgentLifecycleServiceIds {
 }
 
 export class AgentLifecycleService {
-  private readonly repository: AgentLifecycleRepository;
+  private readonly repository: SessionRunRepository;
   private readonly contextService?: AgentRunContextService;
   private readonly runModeService?: Pick<
     AgentRunModeService,
@@ -107,7 +107,7 @@ export class AgentLifecycleService {
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
   }
 
-  createSession(payload: AgentSessionCreatePayload): AgentSession {
+  createSession(payload: AgentSessionCreatePayload): Session {
     return this.repository.saveSession({
       sessionId: this.ids.sessionId(),
       title: payload.title,
@@ -119,11 +119,11 @@ export class AgentLifecycleService {
     });
   }
 
-  listSessions(): AgentSession[] {
+  listSessions(): Session[] {
     return this.repository.listSessions();
   }
 
-  async startRun(payload: AgentRunStartPayload): Promise<{ run: AgentRun; events: RuntimeEvent[] }> {
+  async startRun(payload: AgentRunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }> {
     const session = this.repository.getSession(payload.sessionId);
     const runId = this.ids.runId();
     const modeSnapshot = this.runModeService?.createModeSnapshot({
@@ -206,8 +206,8 @@ export class AgentLifecycleService {
   private createInitialContextForRun(input: {
     runId: string;
     payload: AgentRunStartPayload;
-    session: AgentSession | undefined;
-  }): AgentContext | undefined {
+    session: Session | undefined;
+  }): RunContext | undefined {
     if (!this.contextService || !input.session?.workspacePath) {
       return undefined;
     }
@@ -262,10 +262,10 @@ export function createDefaultAgentLifecycleService(
 ): AgentLifecycleService {
   const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
   migrateDatabase(database);
-  const runModeRepository = new AgentRunModeRepository(database);
+  const runModeRepository = new RunModeRepository(database);
 
   return new AgentLifecycleService({
-    repository: new AgentLifecycleRepository(database),
+    repository: new SessionRunRepository(database),
     runModeService: new AgentRunModeService({ repository: runModeRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
   });

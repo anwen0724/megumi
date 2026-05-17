@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/agent-run-mode-contracts';
+import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 import { AgentRunModeService } from '@megumi/desktop/main/services/agent-run-mode.service';
 
 function createRepo() {

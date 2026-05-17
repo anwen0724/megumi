@@ -2,11 +2,11 @@ import { readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
 import type {
-  AgentContext,
-  ContextSourceRef,
+  RunContext,
+  RunContextSource,
   ModelCapabilitySummary,
-} from '@megumi/shared/agent-context-contracts';
-import { AgentContextRepository } from '@megumi/db/repos/agent-context.repo';
+} from '@megumi/shared/run-context-contracts';
+import { RunContextRepository } from '@megumi/db/repos/run-context.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { MegumiHomePaths } from './megumi-home.service';
 
@@ -15,7 +15,7 @@ export interface AgentContextServiceClock {
 }
 
 export interface AgentContextServiceOptions {
-  contextRepository: AgentContextRepository;
+  contextRepository: RunContextRepository;
   clock?: AgentContextServiceClock;
 }
 
@@ -41,7 +41,7 @@ const DEFAULT_DENIED_GLOBS = ['**/node_modules/**', '**/.git/**', '**/dist/**', 
 const BLOCKED_FILE_NAMES = new Set(['.env', '.env.local', '.env.production']);
 
 export class AgentContextService {
-  private readonly contextRepository: AgentContextRepository;
+  private readonly contextRepository: RunContextRepository;
   private readonly clock: AgentContextServiceClock;
 
   constructor(options: AgentContextServiceOptions) {
@@ -49,9 +49,9 @@ export class AgentContextService {
     this.clock = options.clock ?? defaultClock;
   }
 
-  createBaselineContext(input: CreateBaselineContextInput): AgentContext {
+  createBaselineContext(input: CreateBaselineContextInput): RunContext {
     const now = this.clock.now();
-    const context: AgentContext = {
+    const context: RunContext = {
       contextId: `context:${input.runId}`,
       runId: input.runId,
       workspaceBoundary: {
@@ -104,11 +104,11 @@ export class AgentContextService {
     return this.contextRepository.saveBaseline(context);
   }
 
-  getBaselineContext(runId: string): AgentContext | undefined {
+  getBaselineContext(runId: string): RunContext | undefined {
     return this.contextRepository.getBaseline(`context:${runId}`);
   }
 
-  listWorkspaceSourcesByRun(runId: string): ContextSourceRef[] {
+  listWorkspaceSourcesByRun(runId: string): RunContextSource[] {
     const baseline = this.getBaselineContext(runId);
     if (!baseline) {
       return [];
@@ -121,13 +121,13 @@ export class AgentContextService {
     });
   }
 
-  listWorkspaceSources(input: ListWorkspaceSourcesInput): ContextSourceRef[] {
+  listWorkspaceSources(input: ListWorkspaceSourcesInput): RunContextSource[] {
     const root = path.resolve(input.workspacePath);
     const entries = readdirSync(root, { withFileTypes: true });
     const loadedAt = this.clock.now();
     const sources = entries
       .filter((entry) => entry.isFile())
-      .map((entry): ContextSourceRef & { runId: string } => {
+      .map((entry): RunContextSource & { runId: string } => {
         const relativePath = entry.name;
         const fullPath = path.join(root, relativePath);
         const stat = statSync(fullPath);
@@ -167,6 +167,6 @@ export function createDefaultAgentContextService(homePaths: MegumiHomePaths): Ag
   migrateDatabase(database);
 
   return new AgentContextService({
-    contextRepository: new AgentContextRepository(database),
+    contextRepository: new RunContextRepository(database),
   });
 }

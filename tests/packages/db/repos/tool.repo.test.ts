@@ -2,7 +2,7 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { AgentToolRepository } from '@megumi/db/repos/agent-tool.repo';
+import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import type {
   ApprovalRequest,
   ToolCall,
@@ -12,11 +12,11 @@ import type {
 
 let db: Database.Database | null = null;
 
-function createRepo(): AgentToolRepository {
+function createRepo(): ToolRepository {
   db = new Database(':memory:');
   migrateDatabase(db);
   seedLifecycle(db);
-  return new AgentToolRepository(db);
+  return new ToolRepository(db);
 }
 
 afterEach(() => {
@@ -24,7 +24,7 @@ afterEach(() => {
   db = null;
 });
 
-describe('AgentToolRepository', () => {
+describe('ToolRepository', () => {
   it('saves and reads tool call, policy decision, approval request, and observation summaries', () => {
     const repo = createRepo();
     const toolCall: ToolCall = {
@@ -94,19 +94,19 @@ describe('AgentToolRepository', () => {
 
 function seedLifecycle(database: Database.Database): void {
   database.prepare(`
-    INSERT INTO agent_sessions (session_id, title, status, created_at, updated_at)
+    INSERT INTO sessions (session_id, title, status, created_at, updated_at)
     VALUES ('session-1', 'Tool session', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
   `).run();
   database.prepare(`
-    INSERT INTO agent_runs (run_id, session_id, mode, goal, status, created_at)
+    INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
     VALUES ('run-1', 'session-1', 'execute', 'Use tool', 'running', '2026-05-16T00:00:00.000Z')
   `).run();
   database.prepare(`
-    INSERT INTO agent_steps (step_id, run_id, kind, status)
+    INSERT INTO run_steps (step_id, run_id, kind, status)
     VALUES ('step-1', 'run-1', 'tool', 'running')
   `).run();
   database.prepare(`
-    INSERT INTO agent_actions (action_id, run_id, step_id, kind, status, requested_at)
+    INSERT INTO run_actions (action_id, run_id, step_id, kind, status, requested_at)
     VALUES ('action-1', 'run-1', 'step-1', 'call_tool', 'requested', '2026-05-16T00:00:00.000Z')
   `).run();
 }

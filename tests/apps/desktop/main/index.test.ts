@@ -27,13 +27,13 @@ const mocks = vi.hoisted(() => {
     registerRuntimeProcessErrorHandlers: vi.fn(),
     registerAppLifecycle: vi.fn(),
     createMainWindow: vi.fn(),
-    AgentLifecycleRepository: vi.fn(function AgentLifecycleRepository(
+    SessionRunRepository: vi.fn(function SessionRunRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
       this.database = database;
     }),
-    AgentRunModeRepository: vi.fn(function AgentRunModeRepository(
+    RunModeRepository: vi.fn(function RunModeRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
@@ -76,7 +76,7 @@ const mocks = vi.hoisted(() => {
     })),
     createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
     migrateDatabase: vi.fn(),
-    AgentRecoveryRepository: vi.fn(function AgentRecoveryRepository(
+    RecoveryRepository: vi.fn(function RecoveryRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
@@ -196,16 +196,16 @@ vi.mock('@megumi/db/schema/migrations', () => ({
   migrateDatabase: mocks.migrateDatabase,
 }));
 
-vi.mock('@megumi/db/repos/agent-recovery.repo', () => ({
-  AgentRecoveryRepository: mocks.AgentRecoveryRepository,
+vi.mock('@megumi/db/repos/recovery.repo', () => ({
+  RecoveryRepository: mocks.RecoveryRepository,
 }));
 
-vi.mock('@megumi/db/repos/agent-lifecycle.repo', () => ({
-  AgentLifecycleRepository: mocks.AgentLifecycleRepository,
+vi.mock('@megumi/db/repos/session-run.repo', () => ({
+  SessionRunRepository: mocks.SessionRunRepository,
 }));
 
-vi.mock('@megumi/db/repos/agent-run-mode.repo', () => ({
-  AgentRunModeRepository: mocks.AgentRunModeRepository,
+vi.mock('@megumi/db/repos/run-mode.repo', () => ({
+  RunModeRepository: mocks.RunModeRepository,
 }));
 
 vi.mock('@megumi/desktop/main/services/agent-run-mode.service', () => ({
@@ -245,15 +245,15 @@ describe('main runtime logger composition', () => {
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
-    mocks.AgentLifecycleRepository.mockClear();
-    mocks.AgentRunModeRepository.mockClear();
+    mocks.SessionRunRepository.mockClear();
+    mocks.RunModeRepository.mockClear();
     mocks.AgentRunModeService.mockClear();
     mocks.AgentLifecycleService.mockClear();
     mocks.createDefaultAgentContextService.mockClear();
     mocks.createDefaultAgentToolService.mockClear();
     mocks.createDatabase.mockClear();
     mocks.migrateDatabase.mockClear();
-    mocks.AgentRecoveryRepository.mockClear();
+    mocks.RecoveryRepository.mockClear();
     mocks.ArtifactRepository.mockClear();
     mocks.MemoryRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
@@ -294,9 +294,9 @@ describe('main runtime logger composition', () => {
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
     );
     expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.AgentLifecycleRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.AgentRunModeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.AgentRecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.SessionRunRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.RunModeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.RecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.MemoryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactContentStore).toHaveBeenCalledWith({

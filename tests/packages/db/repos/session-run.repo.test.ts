@@ -2,15 +2,15 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 let db: Database.Database | null = null;
 
-function createRepo(): AgentLifecycleRepository {
+function createRepo(): SessionRunRepository {
   db = new Database(':memory:');
   migrateDatabase(db);
-  return new AgentLifecycleRepository(db);
+  return new SessionRunRepository(db);
 }
 
 afterEach(() => {
@@ -18,7 +18,7 @@ afterEach(() => {
   db = null;
 });
 
-describe('AgentLifecycleRepository', () => {
+describe('SessionRunRepository', () => {
   it('saves and reads session, message, run, step, action, and observation facts', () => {
     const repo = createRepo();
 

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact-contracts';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');
   migrateDatabase(database);
-  const lifecycle = new AgentLifecycleRepository(database);
+  const lifecycle = new SessionRunRepository(database);
   lifecycle.saveSession({
     sessionId: 'session:1',
     title: 'Session',

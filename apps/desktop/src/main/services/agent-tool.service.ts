@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
-import { AgentToolRepository } from '@megumi/db/repos/agent-tool.repo';
+import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type {
   ApprovalRecord,
@@ -16,7 +16,7 @@ import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface AgentToolServiceOptions {
   registry: ToolRegistry;
-  repository: AgentToolRepository;
+  repository: ToolRepository;
   now?: () => string;
   idFactory?: {
     approvalRecordId(): string;
@@ -74,7 +74,7 @@ export function createDefaultAgentToolService(homePaths: MegumiHomePaths): Agent
   migrateDatabase(database);
 
   return new AgentToolService({
-    repository: new AgentToolRepository(database),
+    repository: new ToolRepository(database),
     registry: createStaticToolRegistry([]),
   });
 }

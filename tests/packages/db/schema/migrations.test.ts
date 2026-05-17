@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
@@ -57,7 +58,7 @@ describe('provider settings migrations', () => {
     expect(table).toEqual({ name: 'provider_settings' });
   });
 
-  it('creates agent lifecycle tables and indexes', () => {
+  it('creates session run tables and indexes', () => {
     const database = createTestDb();
 
     migrateDatabase(database);
@@ -67,14 +68,14 @@ describe('provider settings migrations', () => {
       .all() as Array<{ name: string }>;
 
     expect(rows.map((row) => row.name)).toEqual(expect.arrayContaining([
-      'agent_actions',
-      'agent_observations',
-      'agent_runs',
-      'agent_sessions',
-      'agent_steps',
+      'run_actions',
+      'run_observations',
+      'runs',
+      'sessions',
+      'run_steps',
       'approval_records',
       'approval_requests',
-      'messages',
+      'session_messages',
       'runtime_events',
       'tool_calls',
       'tool_observations',
@@ -86,12 +87,12 @@ describe('provider settings migrations', () => {
       .all() as Array<{ name: string }>;
 
     expect(indexes.map((row) => row.name)).toEqual(expect.arrayContaining([
-      'idx_agent_actions_step_id',
-      'idx_agent_observations_run_id',
-      'idx_agent_runs_session_id',
-      'idx_agent_steps_run_id',
+      'idx_run_actions_step_id',
+      'idx_run_observations_run_id',
+      'idx_runs_session_id',
+      'idx_run_steps_run_id',
       'idx_approval_requests_tool_call_id',
-      'idx_messages_session_id',
+      'idx_session_messages_session_id',
       'idx_runtime_events_run_sequence',
       'idx_tool_calls_run_id',
       'idx_tool_calls_status',
@@ -107,17 +108,17 @@ describe('provider settings migrations', () => {
       SELECT name FROM sqlite_master
       WHERE type = 'table'
       AND name IN (
-        'agent_run_mode_snapshots',
+        'run_mode_snapshots',
         'implementation_plan_artifacts',
-        'agent_run_source_plans'
+        'run_source_plans'
       )
       ORDER BY name
     `).all() as Array<{ name: string }>;
 
     expect(tables.map((row) => row.name)).toEqual([
-      'agent_run_mode_snapshots',
-      'agent_run_source_plans',
       'implementation_plan_artifacts',
+      'run_mode_snapshots',
+      'run_source_plans',
     ]);
   });
 
@@ -129,21 +130,21 @@ describe('provider settings migrations', () => {
       SELECT name FROM sqlite_master
       WHERE type = 'index'
       AND name IN (
-        'idx_agent_run_mode_snapshots_run_id',
+        'idx_run_mode_snapshots_run_id',
         'idx_implementation_plan_artifacts_producing_run_id',
-        'idx_agent_run_source_plans_source_plan_id'
+        'idx_run_source_plans_source_plan_id'
       )
       ORDER BY name
     `).all() as Array<{ name: string }>;
 
     expect(indexes.map((row) => row.name)).toEqual([
-      'idx_agent_run_mode_snapshots_run_id',
-      'idx_agent_run_source_plans_source_plan_id',
       'idx_implementation_plan_artifacts_producing_run_id',
+      'idx_run_mode_snapshots_run_id',
+      'idx_run_source_plans_source_plan_id',
     ]);
   });
 
-  it('creates agent recovery persistence tables', () => {
+  it('creates recovery persistence tables', () => {
     const database = createTestDb();
     migrateDatabase(database);
 
@@ -153,10 +154,10 @@ describe('provider settings migrations', () => {
 
     expect(tables.map((row) => row.name)).toEqual(
       expect.arrayContaining([
-        'agent_checkpoints',
-        'agent_resume_requests',
-        'agent_cancel_requests',
-        'agent_retry_requests',
+        'checkpoints',
+        'resume_requests',
+        'cancel_requests',
+        'retry_requests',
         'checkpoint_restore_records',
         'artifacts',
         'artifact_versions',
@@ -166,7 +167,7 @@ describe('provider settings migrations', () => {
     );
 
     const checkpointColumns = database
-      .prepare('PRAGMA table_info(agent_checkpoints)')
+      .prepare('PRAGMA table_info(checkpoints)')
       .all() as Array<{ name: string }>;
 
     expect(checkpointColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
@@ -208,5 +209,12 @@ describe('provider settings migrations', () => {
       'idx_artifact_relations_from_artifact_id',
       'idx_artifact_relations_to_artifact_id',
     ]));
+  });
+
+  it('does not create active agent-prefixed session run tables or indexes', () => {
+    const source = readFileSync('packages/db/schema/migrations.ts', 'utf8');
+
+    expect(source).not.toMatch(/CREATE TABLE IF NOT EXISTS agent_(sessions|runs|steps|actions|observations|context_baselines|run_mode_snapshots|run_source_plans|checkpoints|resume_requests|cancel_requests|retry_requests)/);
+    expect(source).not.toMatch(/CREATE INDEX IF NOT EXISTS idx_agent_(runs|steps|actions|observations|context|run_mode|run_source|checkpoints|resume|cancel|retry)/);
   });
 });

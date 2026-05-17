@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { AgentLifecycleRepository } from '@megumi/db/repos/agent-lifecycle.repo';
-import { AgentRunModeRepository } from '@megumi/db/repos/agent-run-mode.repo';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/agent-run-mode-contracts';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
+import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');
@@ -12,7 +12,7 @@ function createTestDatabase() {
 }
 
 function seedRun(database: ReturnType<typeof createTestDatabase>, runId = 'run:1') {
-  const lifecycle = new AgentLifecycleRepository(database);
+  const lifecycle = new SessionRunRepository(database);
   lifecycle.saveSession({
     sessionId: 'session:1',
     title: 'Session',
@@ -30,11 +30,11 @@ function seedRun(database: ReturnType<typeof createTestDatabase>, runId = 'run:1
   });
 }
 
-describe('AgentRunModeRepository', () => {
+describe('RunModeRepository', () => {
   it('saves and loads a mode snapshot by run id', () => {
     const database = createTestDatabase();
     seedRun(database);
-    const repo = new AgentRunModeRepository(database);
+    const repo = new RunModeRepository(database);
 
     repo.saveModeSnapshot({
       modeSnapshotId: 'mode-snapshot:1',
@@ -58,7 +58,7 @@ describe('AgentRunModeRepository', () => {
   it('saves plan-specific artifact status without content storage', () => {
     const database = createTestDatabase();
     seedRun(database);
-    const repo = new AgentRunModeRepository(database);
+    const repo = new RunModeRepository(database);
 
     repo.saveImplementationPlan({
       planArtifactId: 'plan:1',
@@ -80,7 +80,7 @@ describe('AgentRunModeRepository', () => {
   it('updates plan status and preserves accepted timestamp', () => {
     const database = createTestDatabase();
     seedRun(database);
-    const repo = new AgentRunModeRepository(database);
+    const repo = new RunModeRepository(database);
 
     repo.saveImplementationPlan({
       planArtifactId: 'plan:1',
@@ -105,7 +105,7 @@ describe('AgentRunModeRepository', () => {
     const database = createTestDatabase();
     seedRun(database, 'run:plan');
     seedRun(database, 'run:execute');
-    const repo = new AgentRunModeRepository(database);
+    const repo = new RunModeRepository(database);
 
     repo.saveImplementationPlan({
       planArtifactId: 'plan:1',
