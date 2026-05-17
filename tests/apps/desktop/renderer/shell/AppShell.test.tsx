@@ -4,7 +4,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
 import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
-import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
@@ -34,9 +34,11 @@ function installMegumiMock() {
         setApiKey: vi.fn().mockResolvedValue({ ok: true }),
         deleteApiKey: vi.fn().mockResolvedValue({ ok: true }),
       },
-      chat: {
-        start: vi.fn().mockResolvedValue({ ok: true }),
-        cancel: vi.fn().mockResolvedValue({ ok: true, cancelled: true }),
+      session: {
+        message: {
+          send: vi.fn().mockResolvedValue({ ok: true }),
+          cancel: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true }, meta: {} }),
+        },
       },
       runtime: {
         onEvent: vi.fn(() => () => undefined),
@@ -89,7 +91,7 @@ describe('AppShell', () => {
       loading: false,
     });
 
-    useAgentStore.setState({
+    useSessionStore.setState({
       sessions: [
         {
           id: 'session-1',
@@ -151,7 +153,7 @@ describe('AppShell', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
-    const state = useAgentStore.getState();
+    const state = useSessionStore.getState();
     expect(state.sessions[0].title).toBe('New session');
     expect(state.sessions[0].projectId).toBe('project-1');
     expect(state.activeSessionId).toBe(state.sessions[0].id);
@@ -169,7 +171,7 @@ describe('AppShell', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
-    const state = useAgentStore.getState();
+    const state = useSessionStore.getState();
     expect(state.sessions[0].projectId).toBe('local-workspace');
     expect(state.activeSessionId).toBe(state.sessions[0].id);
   });
@@ -179,7 +181,7 @@ describe('AppShell', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Review notes/ }));
 
-    expect(useAgentStore.getState().activeSessionId).toBe('session-2');
+    expect(useSessionStore.getState().activeSessionId).toBe('session-2');
   });
 
   it('collapses and expands the left sidebar while keeping new-session access in the rail', async () => {
@@ -189,7 +191,7 @@ describe('AppShell', () => {
     expect(screen.queryByText('Planning the UI')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
-    expect(useAgentStore.getState().sessions[0].title).toBe('New session');
+    expect(useSessionStore.getState().sessions[0].title).toBe('New session');
 
     await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
     expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
@@ -255,7 +257,7 @@ describe('AppShell', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
-    const createdSession = useAgentStore.getState().sessions[0];
+    const createdSession = useSessionStore.getState().sessions[0];
     expect(createdSession.title).toBe('New session');
     expect(screen.queryByText('Saved in planning session')).not.toBeInTheDocument();
 

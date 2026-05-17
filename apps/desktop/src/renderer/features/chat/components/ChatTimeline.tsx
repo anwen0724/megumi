@@ -6,7 +6,7 @@ import { ToolCallStatusCard } from '../../../entities/tool-call';
 import { Composer, type ComposerStatus, type ComposerSubmitPayload } from './Composer';
 import { TimelineMessage } from './TimelineMessage';
 import { ToolActivityRow } from './ToolActivityRow';
-import { useRuntimeChat } from '../hooks/use-runtime-chat';
+import { useSessionTimeline } from '../hooks/use-session-timeline';
 
 type TimelineItem =
   | {
@@ -35,7 +35,7 @@ export function ChatTimeline() {
   const pendingToolCalls = useChatStore((state) => state.pendingToolCalls);
   const completedToolActivities = useChatStore((state) => state.completedToolActivities);
   const agentStatus = useChatStore((state) => state.agentStatus);
-  const { runRuntimeChat } = useRuntimeChat();
+  const { sendSessionMessage } = useSessionTimeline();
 
   const hasFailedTool = pendingToolCalls.some((toolCall) => toolCall.status === 'failed');
   const composerStatus: ComposerStatus = hasFailedTool ? 'error' : agentStatus;
@@ -64,7 +64,7 @@ export function ChatTimeline() {
   ].sort((left, right) => toTimeValue(left.timestamp) - toTimeValue(right.timestamp));
 
   function handleSubmit(payload: ComposerSubmitPayload) {
-    void runRuntimeChat(payload);
+    void sendSessionMessage(payload);
   }
 
   function toggleActivity(activityId: string) {

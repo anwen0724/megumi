@@ -91,10 +91,6 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'memory.access-logs.list';
     case IPC_CHANNELS.memory.recallPreview:
       return 'memory.recall-preview';
-    case IPC_CHANNELS.chat.start:
-      return 'chat.start';
-    case IPC_CHANNELS.chat.cancel:
-      return 'chat.cancel';
     case IPC_CHANNELS.agent.session.create:
       return 'agent.session.create';
     case IPC_CHANNELS.agent.session.list:
@@ -171,9 +167,7 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'agent.memory.access-logs.list';
     case IPC_CHANNELS.agent.memory.recallPreview:
       return 'agent.memory.recall-preview';
-    default: {
-      const exhaustive: never = channel;
-      return exhaustive;
-    }
+    default:
+      return channel.replaceAll(':', '.');
   }
 }

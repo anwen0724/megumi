@@ -30,17 +30,19 @@ function createMessage(overrides: Partial<TimelineMessageData> = {}): TimelineMe
 }
 
 function installMegumiMock() {
-  const chat = {
-    start: vi.fn().mockResolvedValue({ ok: true, requestId: 'request-1' }),
-    cancel: vi.fn(),
+  const session = {
+    message: {
+      send: vi.fn().mockResolvedValue({ ok: true, requestId: 'request-1' }),
+      cancel: vi.fn(),
+    },
   };
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
       session: {
         message: {
-          send: chat.start,
-          cancel: chat.cancel,
+          send: session.message.send,
+          cancel: session.message.cancel,
         },
       },
       runtime: {
@@ -49,7 +51,7 @@ function installMegumiMock() {
       provider: { list: vi.fn(), update: vi.fn(), setApiKey: vi.fn(), deleteApiKey: vi.fn() },
     },
   });
-  return chat;
+  return session;
 }
 
 describe('ChatTimeline', () => {
@@ -81,7 +83,7 @@ describe('ChatTimeline', () => {
   });
 
   it('submits a message through the runtime chat flow', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
@@ -90,18 +92,18 @@ describe('ChatTimeline', () => {
     await waitFor(() => {
       expect(screen.getByText('Start with the shell')).toBeInTheDocument();
     });
-    expect(chat.start).toHaveBeenCalled();
+    expect(session.message.send).toHaveBeenCalled();
   });
 
   it('renders persisted runtime error messages and does not retry from an empty draft', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'please fail this run' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     await waitFor(() => {
-      expect(chat.start).toHaveBeenCalledTimes(1);
+      expect(session.message.send).toHaveBeenCalledTimes(1);
     });
 
     useChatStore.setState({
@@ -124,9 +126,9 @@ describe('ChatTimeline', () => {
 
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
-    expect(chat.start).toHaveBeenCalledTimes(1);
+    expect(session.message.send).toHaveBeenCalledTimes(1);
 
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'deepseek-v4-flash' } });
-    expect(chat.start).toHaveBeenCalledTimes(1);
+    expect(session.message.send).toHaveBeenCalledTimes(1);
   });
 });

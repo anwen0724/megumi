@@ -2,21 +2,16 @@ import { useCallback, useEffect, useRef } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { ChatMessage } from '@megumi/shared/chat-contracts';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
-import type {
-  AssistantOutputCompletedPayload,
-  AssistantOutputDeltaPayload,
-  RunCancelledPayload,
-  RunFailedPayload,
-  RuntimeEvent,
-} from '@megumi/shared/runtime-events';
-import { useAgentStore } from '../../../entities/agent/store';
+import type { RunCancelledPayload, RunFailedPayload, RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useArtifactStore } from '../../../entities/artifact';
-import { createSessionTitleFromPrompt } from '../../../entities/agent/session-title';
 import { useChatStore } from '../../../entities/chat/store';
 import type { TimelineMessageData } from '../../../entities/chat/types';
 import { useProjectStore } from '../../../entities/project/store';
+import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
+import { useSessionStore } from '../../../entities/session/store';
 import { useWorkspaceStateStore } from '../../../entities/workspace-state';
 import { createRuntimeChatRunId } from '../../../entities/workspace-state/store';
+import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
@@ -46,17 +41,17 @@ function createLocalMessage(
 }
 
 function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null {
-  const agentState = useAgentStore.getState();
+  const sessionState = useSessionStore.getState();
 
-  if (agentState.activeSessionId) {
-    return agentState.activeSessionId;
+  if (sessionState.activeSessionId) {
+    return sessionState.activeSessionId;
   }
 
   const projectState = useProjectStore.getState();
-  const session = agentState.createLocalSession({
+  const session = sessionState.createLocalSession({
     projectId: projectState.currentProjectId ?? LOCAL_WORKSPACE_ID,
     title: createSessionTitleFromPrompt(payload.message),
-    agentType: agentState.activeAgentType,
+    agentType: sessionState.activeAgentType,
   });
 
   return session.id;
@@ -67,20 +62,20 @@ function renameEmptyManualSessionFromPrompt(payload: ComposerSubmitPayload, exis
     return;
   }
 
-  const agentState = useAgentStore.getState();
-  const activeSessionId = agentState.activeSessionId;
+  const sessionState = useSessionStore.getState();
+  const activeSessionId = sessionState.activeSessionId;
 
   if (!activeSessionId) {
     return;
   }
 
-  const activeSession = agentState.sessions.find((session) => session.id === activeSessionId);
+  const activeSession = sessionState.sessions.find((session) => session.id === activeSessionId);
 
   if (!activeSession || activeSession.title !== 'New session') {
     return;
   }
 
-  agentState.updateSession(activeSessionId, {
+  sessionState.updateSession(activeSessionId, {
     title: createSessionTitleFromPrompt(payload.message),
   });
 }
@@ -98,14 +93,14 @@ function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
   userMessage: TimelineMessageData,
 ): SessionMessageSendPayload {
-  const agentState = useAgentStore.getState();
+  const sessionState = useSessionStore.getState();
   const projectState = useProjectStore.getState();
   const providerId = getProviderIdForModel(payload.model);
-  const activeSession = agentState.sessions.find((session) => session.id === agentState.activeSessionId);
+  const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
   const messages = [...useChatStore.getState().messages, userMessage].map(toRuntimeMessage);
 
   return {
-    sessionId: agentState.activeSessionId ?? undefined,
+    sessionId: sessionState.activeSessionId ?? undefined,
     providerId,
     modelId: payload.model,
     messages,
@@ -130,7 +125,7 @@ function bridgeRuntimeChatArtifact(payload: ComposerSubmitPayload) {
 }
 
 function isRunSessionStillActive(sessionId: string | null): boolean {
-  return useAgentStore.getState().activeSessionId === sessionId;
+  return useSessionStore.getState().activeSessionId === sessionId;
 }
 
 function shouldProcessRuntimeEvent(
@@ -153,95 +148,42 @@ function shouldProcessRuntimeEvent(
   return true;
 }
 
-function applyRuntimeEvent(
-  event: RuntimeEvent,
-  activeRequestId: string | null,
-  runSessionId: string | null,
-  activePayload: ComposerSubmitPayload | null,
-  processedSequences: Map<string, number>,
-  completedContents: Map<string, string>,
-) {
-  if (!shouldProcessRuntimeEvent(event, activeRequestId, runSessionId, processedSequences)) {
-    return;
-  }
-
-  const runId = event.runId;
-  if (!runId) {
-    return;
-  }
-
-  const chatState = useChatStore.getState();
-
-  if (event.eventType === 'run.started') {
-    chatState.setAgentStatus('running');
-    return;
-  }
-
-  if (event.eventType === 'assistant.output.delta') {
-    chatState.appendStreamToken((event.payload as AssistantOutputDeltaPayload).delta);
-    return;
-  }
-
-  if (event.eventType === 'assistant.output.completed') {
-    completedContents.set(runId, (event.payload as AssistantOutputCompletedPayload).content);
+function applyWorkspaceRuntimeBridge(event: RuntimeEvent, activePayload: ComposerSubmitPayload | null) {
+  if (!activePayload || !event.runId) {
     return;
   }
 
   if (event.eventType === 'run.completed') {
-    const state = useChatStore.getState();
-    const completedContent = completedContents.get(runId)?.trim();
-    const assistantContent = completedContent || state.streamingText.trim() || 'Done.';
-    completedContents.delete(runId);
-    state.commitStream(createLocalMessage('assistant', assistantContent, state.messages.length + 1));
-    if (activePayload) {
-      useWorkspaceStateStore.getState().completeRuntimeChat({
-        ...activePayload,
-        now: event.createdAt,
-      });
-      bridgeRuntimeChatArtifact(activePayload);
-    }
+    useWorkspaceStateStore.getState().completeRuntimeChat({
+      ...activePayload,
+      now: event.createdAt,
+    });
+    bridgeRuntimeChatArtifact(activePayload);
     return;
   }
 
   if (event.eventType === 'run.failed') {
     const payload = event.payload as RunFailedPayload;
-    const state = useChatStore.getState();
-    const errorMessage = createLocalMessage('assistant', payload.error.message, state.messages.length + 1);
-    state.addMessage(errorMessage);
-    state.clearStream();
-    state.setAgentStatus('error');
-    state.setLastError(payload.error.message);
-    completedContents.delete(runId);
-    if (activePayload) {
-      useWorkspaceStateStore.getState().failRuntimeChat({
-        ...activePayload,
-        error: payload.error.message,
-        now: event.createdAt,
-      });
-    }
+    useWorkspaceStateStore.getState().failRuntimeChat({
+      ...activePayload,
+      error: payload.error.message,
+      now: event.createdAt,
+    });
     return;
   }
 
   if (event.eventType === 'run.cancelled') {
     const payload = event.payload as RunCancelledPayload;
-    const reason = payload.reason ?? payload.error?.message ?? 'Chat request was cancelled.';
-    const state = useChatStore.getState();
-    const cancellationMessage = createLocalMessage('assistant', reason, state.messages.length + 1);
-    state.addMessage(cancellationMessage);
-    state.clearStream();
-    state.setLastError(reason);
-    completedContents.delete(runId);
-    if (activePayload) {
-      useWorkspaceStateStore.getState().failRuntimeChat({
-        ...activePayload,
-        error: reason,
-        now: event.createdAt,
-      });
-    }
+    const reason = payload.reason ?? payload.error?.message ?? 'Session message was cancelled.';
+    useWorkspaceStateStore.getState().failRuntimeChat({
+      ...activePayload,
+      error: reason,
+      now: event.createdAt,
+    });
   }
 }
 
-function failChatStart(payload: ComposerSubmitPayload, message: string) {
+function failSessionMessageSend(payload: ComposerSubmitPayload, message: string) {
   const current = useChatStore.getState();
   current.addMessage(createLocalMessage('assistant', message, current.messages.length + 1));
   current.clearStream();
@@ -253,13 +195,12 @@ function failChatStart(payload: ComposerSubmitPayload, message: string) {
   });
 }
 
-export function useRuntimeChat() {
+export function useSessionTimeline() {
   const activeRequestIdRef = useRef<string | null>(null);
   const activeTraceIdRef = useRef<string | null>(null);
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
   const processedSequencesRef = useRef<Map<string, number>>(new Map());
-  const completedContentsRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!window.megumi?.runtime?.onEvent) {
@@ -267,18 +208,19 @@ export function useRuntimeChat() {
     }
 
     return window.megumi.runtime.onEvent((event: RuntimeEvent) => {
-      applyRuntimeEvent(
+      if (shouldProcessRuntimeEvent(
         event,
         activeRequestIdRef.current,
         runSessionIdRef.current,
-        lastPayloadRef.current,
         processedSequencesRef.current,
-        completedContentsRef.current,
-      );
+      )) {
+        dispatchRuntimeEvent(event);
+        applyWorkspaceRuntimeBridge(event, lastPayloadRef.current);
+      }
     });
   }, []);
 
-  const runRuntimeChat = useCallback(async (payload: ComposerSubmitPayload) => {
+  const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload) => {
     lastPayloadRef.current = payload;
     const runSessionId = ensureActiveLocalSession(payload);
     runSessionIdRef.current = runSessionId;
@@ -296,7 +238,6 @@ export function useRuntimeChat() {
     activeRequestIdRef.current = request.requestId;
     activeTraceIdRef.current = request.context?.traceId ?? null;
     processedSequencesRef.current.clear();
-    completedContentsRef.current.clear();
 
     state.addMessage(userMessage);
     state.setAgentStatus('sending');
@@ -308,22 +249,22 @@ export function useRuntimeChat() {
     const result = await window.megumi.session.message.send(request);
 
     if (!result.ok) {
-      failChatStart(payload, result.error.message);
+      failSessionMessageSend(payload, result.error.message);
     }
   }, []);
 
-  const retryLastRuntimeChat = useCallback(async (override?: Pick<ComposerSubmitPayload, 'mode' | 'model'>) => {
+  const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'mode' | 'model'>) => {
     if (!lastPayloadRef.current) {
       return;
     }
 
-    await runRuntimeChat({
+    await sendSessionMessage({
       ...lastPayloadRef.current,
       ...override,
     });
-  }, [runRuntimeChat]);
+  }, [sendSessionMessage]);
 
-  const cancelRuntimeChat = useCallback(async () => {
+  const cancelSessionMessage = useCallback(async () => {
     const requestId = activeRequestIdRef.current;
 
     if (!requestId) {
@@ -340,8 +281,8 @@ export function useRuntimeChat() {
   }, []);
 
   return {
-    runRuntimeChat,
-    retryLastRuntimeChat,
-    cancelRuntimeChat,
+    sendSessionMessage,
+    retryLastSessionMessage,
+    cancelSessionMessage,
   };
 }

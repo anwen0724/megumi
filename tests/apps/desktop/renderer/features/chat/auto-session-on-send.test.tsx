@@ -2,9 +2,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { LocalAgentSession } from '@megumi/shared/agent-contracts';
 import type { Project } from '@megumi/desktop/renderer/entities/project/types';
-import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
+import type { LocalRendererSession } from '@megumi/desktop/renderer/entities/session/session-factory';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
@@ -27,7 +27,7 @@ function resetStores() {
     loading: false,
   });
 
-  useAgentStore.setState({
+  useSessionStore.setState({
     sessions: [],
     activeSessionId: null,
     activeAgentType: 'free',
@@ -60,25 +60,27 @@ function submitPrompt(prompt: string) {
 }
 
 function installMegumiMock() {
-  const chat = {
-    start: vi.fn().mockImplementation((request) => Promise.resolve({
-      ok: true,
-      data: { requestId: request.requestId },
-      meta: {
-        requestId: request.requestId,
-        channel: IPC_CHANNELS.session.message.send,
-        handledAt: '2026-05-10T12:00:00.100Z',
-      },
-    })),
-    cancel: vi.fn().mockResolvedValue({
-      ok: true,
-      data: { cancelled: true },
-      meta: {
-        requestId: 'ipc-session-message-cancel-1',
-        channel: IPC_CHANNELS.session.message.cancel,
-        handledAt: '2026-05-10T12:00:00.100Z',
-      },
-    }),
+  const session = {
+    message: {
+      send: vi.fn().mockImplementation((request) => Promise.resolve({
+        ok: true,
+        data: { requestId: request.requestId },
+        meta: {
+          requestId: request.requestId,
+          channel: IPC_CHANNELS.session.message.send,
+          handledAt: '2026-05-10T12:00:00.100Z',
+        },
+      })),
+      cancel: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { cancelled: true },
+        meta: {
+          requestId: 'ipc-session-message-cancel-1',
+          channel: IPC_CHANNELS.session.message.cancel,
+          handledAt: '2026-05-10T12:00:00.100Z',
+        },
+      }),
+    },
   };
 
   Object.defineProperty(window, 'megumi', {
@@ -86,8 +88,8 @@ function installMegumiMock() {
     value: {
       session: {
         message: {
-          send: chat.start,
-          cancel: chat.cancel,
+          send: session.message.send,
+          cancel: session.message.cancel,
         },
       },
       runtime: {
@@ -102,7 +104,7 @@ function installMegumiMock() {
     },
   });
 
-  return chat;
+  return session;
 }
 
 describe('auto session on first send', () => {
@@ -123,7 +125,7 @@ describe('auto session on first send', () => {
 
     submitPrompt('  first line\nsecond line  ');
 
-    const state = useAgentStore.getState();
+    const state = useSessionStore.getState();
     expect(state.sessions).toHaveLength(1);
     expect(state.activeSessionId).toBe(state.sessions[0].id);
     expect(state.sessions[0]).toMatchObject({
@@ -146,7 +148,7 @@ describe('auto session on first send', () => {
 
     submitPrompt('Start without a project');
 
-    const state = useAgentStore.getState();
+    const state = useSessionStore.getState();
     expect(state.sessions).toHaveLength(1);
     expect(state.sessions[0].projectId).toBe('local-workspace');
     expect(state.sessions[0].title).toBe('Start without a project');
@@ -154,7 +156,7 @@ describe('auto session on first send', () => {
   });
 
   it('does not create a duplicate session when one is already active', () => {
-    const existingSession: LocalAgentSession = {
+    const existingSession: LocalRendererSession = {
       id: 'session-existing',
       projectId: 'project-1',
       agentType: 'reviewer',
@@ -163,7 +165,7 @@ describe('auto session on first send', () => {
       updatedAt: '2026-05-10T00:00:00.000Z',
     };
 
-    useAgentStore.setState({
+    useSessionStore.setState({
       sessions: [existingSession],
       activeSessionId: existingSession.id,
       activeAgentType: 'reviewer',
@@ -173,13 +175,13 @@ describe('auto session on first send', () => {
 
     submitPrompt('Continue in the active session');
 
-    const state = useAgentStore.getState();
+    const state = useSessionStore.getState();
     expect(state.sessions).toEqual([existingSession]);
     expect(state.activeSessionId).toBe(existingSession.id);
   });
 
   it('renames a manually-created empty New session from its first message', () => {
-    useAgentStore.setState({
+    useSessionStore.setState({
       sessions: [
         {
           id: 'session-new',
@@ -198,11 +200,11 @@ describe('auto session on first send', () => {
 
     submitPrompt('Rename this session from prompt');
 
-    expect(useAgentStore.getState().sessions[0].title).toBe('Rename this session from...');
+    expect(useSessionStore.getState().sessions[0].title).toBe('Rename this session from...');
   });
 
   it('does not rename an existing titled session on send', () => {
-    useAgentStore.setState({
+    useSessionStore.setState({
       sessions: [
         {
           id: 'session-existing',
@@ -221,6 +223,6 @@ describe('auto session on first send', () => {
 
     submitPrompt('This should not rename the session');
 
-    expect(useAgentStore.getState().sessions[0].title).toBe('Planning the UI');
+    expect(useSessionStore.getState().sessions[0].title).toBe('Planning the UI');
   });
 });

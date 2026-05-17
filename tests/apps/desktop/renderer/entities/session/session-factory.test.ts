@@ -1,10 +1,10 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createLocalAgentSession } from '@megumi/desktop/renderer/entities/agent/session-factory';
+import { createLocalSession } from '@megumi/desktop/renderer/entities/session/session-factory';
 
-describe('createLocalAgentSession', () => {
+describe('createLocalSession', () => {
   it('creates a local free-agent session with a stable title and timestamps', () => {
-    const session = createLocalAgentSession({
+    const session = createLocalSession({
       id: 'session-1',
       projectId: 'local-workspace',
       now: '2026-05-09T12:00:00.000Z',
@@ -21,7 +21,7 @@ describe('createLocalAgentSession', () => {
   });
 
   it('uses explicit title and agent type when provided', () => {
-    const session = createLocalAgentSession({
+    const session = createLocalSession({
       id: 'session-2',
       projectId: 'project-1',
       title: 'Planning the UI',
@@ -35,7 +35,7 @@ describe('createLocalAgentSession', () => {
   });
 
   it('trims empty titles back to the default title', () => {
-    const session = createLocalAgentSession({
+    const session = createLocalSession({
       id: 'session-3',
       projectId: 'local-workspace',
       title: '   ',

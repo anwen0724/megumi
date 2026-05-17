@@ -38,25 +38,27 @@ function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' 
 function installMegumiMock() {
   runtimeEventCallback = null;
   sequence = 1;
-  const chat = {
-    start: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
-      ok: true,
-      data: { requestId: request.requestId },
-      meta: {
-        requestId: request.requestId,
-        channel: IPC_CHANNELS.session.message.send,
-        handledAt: '2026-05-10T12:00:00.100Z',
-      },
-    })),
-    cancel: vi.fn().mockResolvedValue({
-      ok: true,
-      data: { cancelled: true },
-      meta: {
-        requestId: 'ipc-session-message-cancel-1',
-        channel: IPC_CHANNELS.session.message.cancel,
-        handledAt: '2026-05-10T12:00:00.100Z',
-      },
-    }),
+  const session = {
+    message: {
+      send: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
+        ok: true,
+        data: { requestId: request.requestId },
+        meta: {
+          requestId: request.requestId,
+          channel: IPC_CHANNELS.session.message.send,
+          handledAt: '2026-05-10T12:00:00.100Z',
+        },
+      })),
+      cancel: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { cancelled: true },
+        meta: {
+          requestId: 'ipc-session-message-cancel-1',
+          channel: IPC_CHANNELS.session.message.cancel,
+          handledAt: '2026-05-10T12:00:00.100Z',
+        },
+      }),
+    },
   };
 
   Object.defineProperty(window, 'megumi', {
@@ -78,8 +80,8 @@ function installMegumiMock() {
       },
       session: {
         message: {
-          send: chat.start,
-          cancel: chat.cancel,
+          send: session.message.send,
+          cancel: session.message.cancel,
         },
       },
       runtime: {
@@ -93,14 +95,14 @@ function installMegumiMock() {
     },
   });
 
-  return chat;
+  return session;
 }
 
-function latestRequest(chat: ReturnType<typeof installMegumiMock>): SessionMessageSendRequest {
-  const request = chat.start.mock.calls.at(-1)?.[0] as SessionMessageSendRequest | undefined;
+function latestSessionMessageSendRequest(session: ReturnType<typeof installMegumiMock>): SessionMessageSendRequest {
+  const request = session.message.send.mock.calls.at(-1)?.[0] as SessionMessageSendRequest | undefined;
 
   if (!request) {
-    throw new Error('Expected chat.start to have been called.');
+    throw new Error('Expected session.message.send to have been called.');
   }
 
   return request;
@@ -213,7 +215,7 @@ describe('right workspace panel runtime chat sync', () => {
   });
 
   it('shows task, artifact, and memory state from runtime chat stream events', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     renderChatWithRightPanel();
 
     const modeSelect = screen.getByLabelText('Composer mode');
@@ -225,8 +227,8 @@ describe('right workspace panel runtime chat sync', () => {
     fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
     fireEvent.change(textarea, { target: { value: 'Start with the shell' } });
     fireEvent.click(sendButton);
-    await waitFor(() => expect(chat.start).toHaveBeenCalledTimes(1));
-    const request = latestRequest(chat);
+    await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
+    const request = latestSessionMessageSendRequest(session);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
 
@@ -234,7 +236,7 @@ describe('right workspace panel runtime chat sync', () => {
     expect(screen.getByText('Runtime chat request')).toBeInTheDocument();
     expect(screen.getByText('Streaming provider response for "Start with the shell".')).toBeInTheDocument();
 
-    expect(request.requestId).toBe(chat.start.mock.calls[0][0].requestId);
+    expect(request.requestId).toBe(session.message.send.mock.calls[0][0].requestId);
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the shell.');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
@@ -249,7 +251,7 @@ describe('right workspace panel runtime chat sync', () => {
   });
 
   it('does not reset the center timeline when switching right panel tabs', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     renderChatWithRightPanel();
 
     const textarea = screen.getByLabelText('Message Megumi');
@@ -257,9 +259,9 @@ describe('right workspace panel runtime chat sync', () => {
 
     fireEvent.change(textarea, { target: { value: 'Keep my timeline' } });
     fireEvent.click(sendButton);
-    await waitFor(() => expect(chat.start).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
 
-    emitRuntimeSuccess(latestRequest(chat), 'Runtime response from deepseek-v4-flash for timeline persistence.');
+    emitRuntimeSuccess(latestSessionMessageSendRequest(session), 'Runtime response from deepseek-v4-flash for timeline persistence.');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
@@ -271,7 +273,7 @@ describe('right workspace panel runtime chat sync', () => {
   });
 
   it('shows failed runtime chat state in Tasks tab', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     renderChatWithRightPanel();
 
     const textarea = screen.getByLabelText('Message Megumi');
@@ -279,9 +281,9 @@ describe('right workspace panel runtime chat sync', () => {
 
     fireEvent.change(textarea, { target: { value: 'please fail this run' } });
     fireEvent.click(sendButton);
-    await waitFor(() => expect(chat.start).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
 
-    emitRuntimeFailure(latestRequest(chat), 'Runtime chat failed for "please fail this run".');
+    emitRuntimeFailure(latestSessionMessageSendRequest(session), 'Runtime chat failed for "please fail this run".');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
 

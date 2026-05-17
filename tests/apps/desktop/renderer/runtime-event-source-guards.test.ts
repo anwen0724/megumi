@@ -12,7 +12,7 @@ function read(path: string) {
 
 describe('renderer runtime event source guards', () => {
   it('does not subscribe to chat-specific stream events in active renderer code', () => {
-    const source = read('apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts');
+    const source = read('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts');
 
     expect(source).not.toContain(legacySubscriptionName);
     expect(source).not.toContain(legacyEventTypeName);
@@ -21,7 +21,7 @@ describe('renderer runtime event source guards', () => {
   });
 
   it('does not route runtime chat state from natural-language status text', () => {
-    const source = read('apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts');
+    const source = read('apps/desktop/src/renderer/features/runtime-events/runtime-event-dispatcher.ts');
 
     expect(source).not.toContain("event.type === 'completed'");
     expect(source).toContain("event.eventType === 'run.completed'");

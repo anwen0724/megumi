@@ -25,8 +25,8 @@ describe('runtime ipc envelope renderer source guards', () => {
     expect(source).toContain('getRuntimeIpcErrorMessage');
   });
 
-  it('runtime chat hook does not cast old ok/error results', () => {
-    const source = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts');
+  it('session timeline hook does not cast old ok/error results', () => {
+    const source = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts');
 
     expect(source).not.toContain('as { ok: boolean; ' + 'error?: string }');
     expect(source).not.toContain('throw new Error(result.error');
@@ -39,7 +39,7 @@ describe('runtime ipc envelope renderer source guards', () => {
   it('renderer runtime ipc consumers do not call provider or chat preload APIs with raw payloads', () => {
     const source = readFiles([
       'apps/desktop/src/renderer/entities/provider/store.ts',
-      'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts',
+      'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
     ]);
 
     expect(source).not.toContain('window.megumi.provider.list()');

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { AgentType, LocalAgentSession } from '@megumi/shared/agent-contracts';
-import { createLocalAgentSession } from './session-factory';
+import type { AgentType } from '@megumi/shared/agent-contracts';
+import { createLocalSession, type LocalRendererSession } from './session-factory';
 
 interface CreateLocalSessionInput {
   projectId: string;
@@ -8,19 +8,19 @@ interface CreateLocalSessionInput {
   agentType?: AgentType;
 }
 
-interface AgentState {
-  sessions: LocalAgentSession[];
+interface SessionState {
+  sessions: LocalRendererSession[];
   activeSessionId: string | null;
   activeAgentType: AgentType;
-  setSessions: (sessions: LocalAgentSession[]) => void;
-  addSession: (session: LocalAgentSession) => void;
-  createLocalSession: (input: CreateLocalSessionInput) => LocalAgentSession;
+  setSessions: (sessions: LocalRendererSession[]) => void;
+  addSession: (session: LocalRendererSession) => void;
+  createLocalSession: (input: CreateLocalSessionInput) => LocalRendererSession;
   setActiveSession: (id: string | null) => void;
   setActiveAgentType: (type: AgentType) => void;
-  updateSession: (id: string, data: Partial<LocalAgentSession>) => void;
+  updateSession: (id: string, data: Partial<LocalRendererSession>) => void;
 }
 
-export const useAgentStore = create<AgentState>((set, get) => ({
+export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   activeAgentType: 'free',
@@ -29,7 +29,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     sessions: [session, ...state.sessions],
   })),
   createLocalSession: (input) => {
-    const session = createLocalAgentSession({
+    const session = createLocalSession({
       ...input,
       agentType: input.agentType ?? get().activeAgentType,
     });

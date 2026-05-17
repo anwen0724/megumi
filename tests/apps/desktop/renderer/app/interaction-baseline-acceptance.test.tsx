@@ -5,7 +5,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
-import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useWorkspaceStateStore } from '@megumi/desktop/renderer/entities/workspace-state';
@@ -53,25 +53,27 @@ function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' 
 function installMegumiMock() {
   runtimeEventCallback = null;
   sequence = 1;
-  const chat = {
-    start: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
-      ok: true,
-      data: { requestId: request.requestId },
-      meta: {
-        requestId: request.requestId,
-        channel: IPC_CHANNELS.session.message.send,
-        handledAt: '2026-05-10T12:00:00.100Z',
-      },
-    })),
-    cancel: vi.fn().mockResolvedValue({
-      ok: true,
-      data: { cancelled: true },
-      meta: {
-        requestId: 'ipc-session-message-cancel-1',
-        channel: IPC_CHANNELS.session.message.cancel,
-        handledAt: '2026-05-10T12:00:00.100Z',
-      },
-    }),
+  const session = {
+    message: {
+      send: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
+        ok: true,
+        data: { requestId: request.requestId },
+        meta: {
+          requestId: request.requestId,
+          channel: IPC_CHANNELS.session.message.send,
+          handledAt: '2026-05-10T12:00:00.100Z',
+        },
+      })),
+      cancel: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { cancelled: true },
+        meta: {
+          requestId: 'ipc-session-message-cancel-1',
+          channel: IPC_CHANNELS.session.message.cancel,
+          handledAt: '2026-05-10T12:00:00.100Z',
+        },
+      }),
+    },
   };
 
   Object.defineProperty(window, 'megumi', {
@@ -93,8 +95,8 @@ function installMegumiMock() {
       },
       session: {
         message: {
-          send: chat.start,
-          cancel: chat.cancel,
+          send: session.message.send,
+          cancel: session.message.cancel,
         },
       },
       runtime: {
@@ -108,14 +110,14 @@ function installMegumiMock() {
     },
   });
 
-  return chat;
+  return session;
 }
 
-function latestRequest(chat: ReturnType<typeof installMegumiMock>): SessionMessageSendRequest {
-  const request = chat.start.mock.calls.at(-1)?.[0] as SessionMessageSendRequest | undefined;
+function latestSessionMessageSendRequest(session: ReturnType<typeof installMegumiMock>): SessionMessageSendRequest {
+  const request = session.message.send.mock.calls.at(-1)?.[0] as SessionMessageSendRequest | undefined;
 
   if (!request) {
-    throw new Error('Expected chat.start to have been called.');
+    throw new Error('Expected session.message.send to have been called.');
   }
 
   return request;
@@ -205,7 +207,7 @@ function resetStores() {
     loading: false,
   });
 
-  useAgentStore.setState({
+  useSessionStore.setState({
     sessions: [],
     activeSessionId: null,
     activeAgentType: 'free',
@@ -254,7 +256,7 @@ describe('interaction baseline acceptance', () => {
   });
 
   it('supports the complete runtime chat flow from shell chrome to right panel state', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     renderAppShell();
 
     expect(screen.getByTestId('window-titlebar')).toBeInTheDocument();
@@ -271,10 +273,10 @@ describe('interaction baseline acceptance', () => {
     fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
     fireEvent.change(textarea, { target: { value: 'Finish the interaction baseline' } });
     fireEvent.click(sendButton);
-    await waitFor(() => expect(chat.start).toHaveBeenCalledTimes(1));
-    const request = latestRequest(chat);
+    await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
+    const request = latestSessionMessageSendRequest(session);
 
-    const agentState = useAgentStore.getState();
+    const agentState = useSessionStore.getState();
     expect(agentState.sessions).toHaveLength(1);
     expect(agentState.activeSessionId).toBe(agentState.sessions[0].id);
     expect(agentState.sessions[0]).toMatchObject({
@@ -330,7 +332,7 @@ describe('interaction baseline acceptance', () => {
   });
 
   it('keeps right panel collapse and tab switching from clearing chat state', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     renderAppShell();
 
     const textarea = screen.getByLabelText('Message Megumi');
@@ -338,10 +340,10 @@ describe('interaction baseline acceptance', () => {
 
     fireEvent.change(textarea, { target: { value: 'Keep the conversation visible' } });
     fireEvent.click(sendButton);
-    await waitFor(() => expect(chat.start).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
 
     emitRuntimeSuccess(
-      latestRequest(chat),
+      latestSessionMessageSendRequest(session),
       'Runtime response from deepseek-v4-flash for the visible conversation.',
     );
 
@@ -356,7 +358,7 @@ describe('interaction baseline acceptance', () => {
   });
 
   it('surfaces runtime failure as a timeline message without retrying on model switch', async () => {
-    const chat = installMegumiMock();
+    const session = installMegumiMock();
     renderAppShell();
 
     const textarea = screen.getByLabelText('Message Megumi');
@@ -364,16 +366,16 @@ describe('interaction baseline acceptance', () => {
 
     fireEvent.change(textarea, { target: { value: 'please fail this run' } });
     fireEvent.click(sendButton);
-    await waitFor(() => expect(chat.start).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
 
-    emitRuntimeFailure(latestRequest(chat), 'Runtime chat failed for "please fail this run".');
+    emitRuntimeFailure(latestSessionMessageSendRequest(session), 'Runtime chat failed for "please fail this run".');
 
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
     expect(screen.getAllByText('Runtime chat failed for "please fail this run".').length).toBeGreaterThanOrEqual(1);
 
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'deepseek-v4-flash' } });
-    expect(chat.start).toHaveBeenCalledTimes(1);
+    expect(session.message.send).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
 

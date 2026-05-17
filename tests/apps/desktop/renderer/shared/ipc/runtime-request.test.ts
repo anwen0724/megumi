@@ -41,9 +41,9 @@ describe('createRendererRuntimeIpcRequest', () => {
     });
   });
 
-  it('accepts explicit request id and trace id for chat runtime correlation', () => {
+  it('accepts explicit request id and trace id for session message correlation', () => {
     const request = createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.chat.start,
+      IPC_CHANNELS.session.message.send,
       {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
@@ -58,18 +58,18 @@ describe('createRendererRuntimeIpcRequest', () => {
         ],
       },
       {
-        requestId: 'ipc-chat-start-1',
-        traceId: 'trace-chat-run-1',
+        requestId: 'ipc-session-message-send-1',
+        traceId: 'trace-session-message-run-1',
         createdAt: '2026-05-12T00:00:00.000Z',
       },
     );
 
-    expect(request.requestId).toBe('ipc-chat-start-1');
-    expect(request.meta.channel).toBe(IPC_CHANNELS.chat.start);
+    expect(request.requestId).toBe('ipc-session-message-send-1');
+    expect(request.meta.channel).toBe(IPC_CHANNELS.session.message.send);
     expect(request.context).toEqual({
-      requestId: 'ipc-chat-start-1',
-      traceId: 'trace-chat-run-1',
-      operationName: 'chat.start',
+      requestId: 'ipc-session-message-send-1',
+      traceId: 'trace-session-message-run-1',
+      operationName: 'session.message.send',
       source: 'renderer',
       createdAt: '2026-05-12T00:00:00.000Z',
     });
@@ -77,23 +77,23 @@ describe('createRendererRuntimeIpcRequest', () => {
 
   it('allows debug id only when caller explicitly provides it', () => {
     const request = createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.chat.cancel,
+      IPC_CHANNELS.session.message.cancel,
       {
-        targetRequestId: 'ipc-chat-start-1',
+        targetRequestId: 'ipc-session-message-send-1',
       },
       {
-        requestId: 'ipc-chat-cancel-1',
-        traceId: 'trace-chat-run-1',
+        requestId: 'ipc-session-message-cancel-1',
+        traceId: 'trace-session-message-run-1',
         debugId: 'debug-renderer-cancel-1',
         createdAt: '2026-05-12T00:00:00.000Z',
       },
     );
 
     expect(request.context).toEqual({
-      requestId: 'ipc-chat-cancel-1',
-      traceId: 'trace-chat-run-1',
+      requestId: 'ipc-session-message-cancel-1',
+      traceId: 'trace-session-message-run-1',
       debugId: 'debug-renderer-cancel-1',
-      operationName: 'chat.cancel',
+      operationName: 'session.message.cancel',
       source: 'renderer',
       createdAt: '2026-05-12T00:00:00.000Z',
     });
@@ -117,8 +117,6 @@ describe('createRendererRuntimeIpcRequest', () => {
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.recovery.resume)).toBe('recovery.resume');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.get)).toBe('artifacts.get');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.memory.settingsGet)).toBe('memory.settings.get');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.chat.start)).toBe('chat.start');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.chat.cancel)).toBe('chat.cancel');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.listByRun)).toBe('agent.artifacts.list-by-run');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.listBySession)).toBe('agent.artifacts.list-by-session');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.agent.artifacts.get)).toBe('agent.artifacts.get');

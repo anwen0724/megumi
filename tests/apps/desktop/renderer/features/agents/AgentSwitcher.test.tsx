@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AgentSwitcher from '@megumi/desktop/renderer/features/agents/components/AgentSwitcher';
-import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 
 describe('AgentSwitcher', () => {
   beforeEach(() => {
-    useAgentStore.setState({ activeAgentType: 'analyst' });
+    useSessionStore.setState({ activeAgentType: 'analyst' });
   });
 
   it('should render current agent name', () => {
@@ -25,6 +25,6 @@ describe('AgentSwitcher', () => {
     render(<AgentSwitcher />);
     await userEvent.click(screen.getByText('Analyst'));
     await userEvent.click(screen.getByText('Developer'));
-    expect(useAgentStore.getState().activeAgentType).toBe('developer');
+    expect(useSessionStore.getState().activeAgentType).toBe('developer');
   });
 });

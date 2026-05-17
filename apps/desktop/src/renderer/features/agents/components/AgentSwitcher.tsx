@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useAgentStore } from '../../../entities/agent/store';
+import { useSessionStore } from '../../../entities/session/store';
 import { AGENT_DESCRIPTIONS, AGENT_LABELS, AGENT_TYPES, type AgentType } from '@megumi/shared/agent-contracts';
 
 const AGENT_COLORS: Record<AgentType, string> = {
@@ -11,8 +11,8 @@ const AGENT_COLORS: Record<AgentType, string> = {
 };
 
 export default function AgentSwitcher() {
-  const activeAgentType = useAgentStore((s) => s.activeAgentType);
-  const setActiveAgentType = useAgentStore((s) => s.setActiveAgentType);
+  const activeAgentType = useSessionStore((s) => s.activeAgentType);
+  const setActiveAgentType = useSessionStore((s) => s.setActiveAgentType);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

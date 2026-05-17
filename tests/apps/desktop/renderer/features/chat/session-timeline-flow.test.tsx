@@ -3,11 +3,12 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { useAgentStore } from '@megumi/desktop/renderer/entities/agent/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
-import { useRuntimeChat } from '@megumi/desktop/renderer/features/chat/hooks/use-runtime-chat';
+import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useSessionTimeline } from '@megumi/desktop/renderer/features/chat/hooks/use-session-timeline';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let sequence = 1;
@@ -30,31 +31,33 @@ function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' 
 }
 
 function installMegumiMock() {
-  const chat = {
-    start: vi.fn().mockImplementation((request) => Promise.resolve({
-      ok: true,
-      data: {
-        requestId: request.requestId,
-      },
-      meta: {
-        requestId: request.requestId,
-        channel: IPC_CHANNELS.session.message.send,
-        traceId: request.context.traceId,
-        operationName: request.context.operationName,
-        handledAt: '2026-05-12T00:00:00.100Z',
-      },
-    })),
-    cancel: vi.fn().mockResolvedValue({
-      ok: true,
-      data: {
-        cancelled: true,
-      },
-      meta: {
-        requestId: 'ipc-session-message-cancel-1',
-        channel: IPC_CHANNELS.session.message.cancel,
-        handledAt: '2026-05-12T00:00:00.100Z',
-      },
-    }),
+  const session = {
+    message: {
+      send: vi.fn().mockImplementation((request) => Promise.resolve({
+        ok: true,
+        data: {
+          requestId: request.requestId,
+        },
+        meta: {
+          requestId: request.requestId,
+          channel: IPC_CHANNELS.session.message.send,
+          traceId: request.context.traceId,
+          operationName: request.context.operationName,
+          handledAt: '2026-05-12T00:00:00.100Z',
+        },
+      })),
+      cancel: vi.fn().mockResolvedValue({
+        ok: true,
+        data: {
+          cancelled: true,
+        },
+        meta: {
+          requestId: 'ipc-session-message-cancel-1',
+          channel: IPC_CHANNELS.session.message.cancel,
+          handledAt: '2026-05-12T00:00:00.100Z',
+        },
+      }),
+    },
   };
   const runtime = {
     onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
@@ -68,12 +71,7 @@ function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
-      session: {
-        message: {
-          send: chat.start,
-          cancel: chat.cancel,
-        },
-      },
+      session,
       provider: {
         list: vi.fn(),
         update: vi.fn(),
@@ -84,10 +82,10 @@ function installMegumiMock() {
     },
   });
 
-  return { chat, runtime };
+  return { session, runtime };
 }
 
-describe('useRuntimeChat', () => {
+describe('useSessionTimeline', () => {
   beforeEach(() => {
     runtimeEventCallback = null;
     sequence = 1;
@@ -101,7 +99,7 @@ describe('useRuntimeChat', () => {
       lastError: null,
       sessionSnapshots: {},
     });
-    useAgentStore.setState({
+    useSessionStore.setState({
       sessions: [],
       activeSessionId: null,
       activeAgentType: 'free',
@@ -111,21 +109,22 @@ describe('useRuntimeChat', () => {
       projects: [],
     });
     useArtifactStore.getState().clearArtifacts();
+    useRunStore.getState().resetRuns();
   });
 
   it('starts backend chat with an ipc request envelope, creates a session, and applies stream events', async () => {
-    const { chat } = installMegumiMock();
-    const { result } = renderHook(() => useRuntimeChat());
+    const { session } = installMegumiMock();
+    const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
-      await result.current.runRuntimeChat({
+      await result.current.sendSessionMessage({
         message: 'Hello Megumi',
         mode: 'chat',
         model: 'deepseek-v4-flash',
       });
     });
 
-    expect(chat.start).toHaveBeenCalledWith(expect.objectContaining({
+    expect(session.message.send).toHaveBeenCalledWith(expect.objectContaining({
       requestId: expect.stringMatching(/^ipc-session-message-/),
       payload: expect.objectContaining({
         providerId: 'deepseek',
@@ -152,8 +151,8 @@ describe('useRuntimeChat', () => {
         source: 'renderer',
       }),
     }));
-    const requestId = chat.start.mock.calls[0][0].requestId;
-    expect(useAgentStore.getState().sessions[0].title).toBe('Hello Megumi');
+    const requestId = session.message.send.mock.calls[0][0].requestId;
+    expect(useSessionStore.getState().sessions[0].title).toBe('Hello Megumi');
     expect(useChatStore.getState().messages[0]).toMatchObject({
       role: 'user',
       content: 'Hello Megumi',
@@ -215,18 +214,18 @@ describe('useRuntimeChat', () => {
   });
 
   it('bridges completed runtime chat output into artifact state', async () => {
-    const { chat } = installMegumiMock();
-    const { result } = renderHook(() => useRuntimeChat());
+    const { session } = installMegumiMock();
+    const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
-      await result.current.runRuntimeChat({
+      await result.current.sendSessionMessage({
         message: 'Summarize runtime chat',
         mode: 'agent',
         model: 'deepseek-v4-pro',
       });
     });
 
-    const requestId = chat.start.mock.calls[0][0].requestId;
+    const requestId = session.message.send.mock.calls[0][0].requestId;
 
     act(() => {
       emitRuntimeEvent({
@@ -258,9 +257,9 @@ describe('useRuntimeChat', () => {
     ]);
   });
 
-  it('turns chat start failure envelopes into assistant messages', async () => {
-    const { chat } = installMegumiMock();
-    chat.start.mockResolvedValueOnce({
+  it('turns session message send failure envelopes into assistant messages', async () => {
+    const { session } = installMegumiMock();
+    session.message.send.mockResolvedValueOnce({
       ok: false,
       error: {
         code: 'provider_missing_api_key',
@@ -279,10 +278,10 @@ describe('useRuntimeChat', () => {
         handledAt: '2026-05-12T00:00:00.100Z',
       },
     });
-    const { result } = renderHook(() => useRuntimeChat());
+    const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
-      await result.current.runRuntimeChat({
+      await result.current.sendSessionMessage({
         message: 'Use OpenAI',
         mode: 'chat',
         model: 'gpt-4.1',
@@ -300,18 +299,18 @@ describe('useRuntimeChat', () => {
   });
 
   it('commits completed assistant output when no deltas arrived', async () => {
-    const { chat } = installMegumiMock();
-    const { result } = renderHook(() => useRuntimeChat());
+    const { session } = installMegumiMock();
+    const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
-      await result.current.runRuntimeChat({
+      await result.current.sendSessionMessage({
         message: 'Return final only',
         mode: 'chat',
         model: 'deepseek-v4-flash',
       });
     });
 
-    const requestId = chat.start.mock.calls[0][0].requestId;
+    const requestId = session.message.send.mock.calls[0][0].requestId;
 
     act(() => {
       emitRuntimeEvent({
@@ -352,11 +351,11 @@ describe('useRuntimeChat', () => {
   });
 
   it('persists failed runtime stream events as assistant messages', async () => {
-    const { chat } = installMegumiMock();
-    const { result } = renderHook(() => useRuntimeChat());
+    const { session } = installMegumiMock();
+    const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
-      await result.current.runRuntimeChat({
+      await result.current.sendSessionMessage({
         message: 'Use unsupported provider',
         mode: 'chat',
         model: 'claude-opus-4-7',
@@ -364,7 +363,7 @@ describe('useRuntimeChat', () => {
     });
 
     act(() => {
-      const requestId = chat.start.mock.calls[0][0].requestId;
+      const requestId = session.message.send.mock.calls[0][0].requestId;
       emitRuntimeEvent({
         eventType: 'run.failed',
         requestId,
@@ -389,11 +388,11 @@ describe('useRuntimeChat', () => {
   });
 
   it('retries the failed message with the current model override', async () => {
-    const { chat } = installMegumiMock();
-    const { result } = renderHook(() => useRuntimeChat());
+    const { session } = installMegumiMock();
+    const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
-      await result.current.runRuntimeChat({
+      await result.current.sendSessionMessage({
         message: 'Try Claude first',
         mode: 'chat',
         model: 'claude-opus-4-7',
@@ -401,14 +400,14 @@ describe('useRuntimeChat', () => {
     });
 
     await act(async () => {
-      await result.current.retryLastRuntimeChat({
+      await result.current.retryLastSessionMessage({
         mode: 'chat',
         model: 'deepseek-v4-flash',
       });
     });
 
-    expect(chat.start).toHaveBeenCalledTimes(2);
-    expect(chat.start.mock.calls[1][0]).toMatchObject({
+    expect(session.message.send).toHaveBeenCalledTimes(2);
+    expect(session.message.send.mock.calls[1][0]).toMatchObject({
       payload: expect.objectContaining({
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
@@ -422,26 +421,26 @@ describe('useRuntimeChat', () => {
     });
   });
 
-  it('cancels chat using a runtime ipc cancel request envelope', async () => {
-    const { chat } = installMegumiMock();
-    const { result } = renderHook(() => useRuntimeChat());
+  it('cancels session messages using a runtime ipc cancel request envelope', async () => {
+    const { session } = installMegumiMock();
+    const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
-      await result.current.runRuntimeChat({
+      await result.current.sendSessionMessage({
         message: 'Cancel me',
         mode: 'chat',
         model: 'deepseek-v4-flash',
       });
     });
 
-    const startRequestId = chat.start.mock.calls[0][0].requestId;
-    const startTraceId = chat.start.mock.calls[0][0].context.traceId;
+    const startRequestId = session.message.send.mock.calls[0][0].requestId;
+    const startTraceId = session.message.send.mock.calls[0][0].context.traceId;
 
     await act(async () => {
-      await result.current.cancelRuntimeChat();
+      await result.current.cancelSessionMessage();
     });
 
-    expect(chat.cancel).toHaveBeenCalledWith(expect.objectContaining({
+    expect(session.message.cancel).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         targetRequestId: startRequestId,
       },

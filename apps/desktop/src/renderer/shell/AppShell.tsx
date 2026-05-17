@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AGENT_LABELS } from '@megumi/shared/agent-contracts';
-import { useAgentStore } from '../entities/agent/store';
+import { useSessionStore } from '../entities/session/store';
 import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
 import { ChatTimeline } from '../features/chat';
@@ -17,10 +17,10 @@ export function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const projects = useProjectStore((state) => state.projects);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
-  const sessions = useAgentStore((state) => state.sessions);
-  const activeSessionId = useAgentStore((state) => state.activeSessionId);
-  const createLocalSession = useAgentStore((state) => state.createLocalSession);
-  const setActiveSession = useAgentStore((state) => state.setActiveSession);
+  const sessions = useSessionStore((state) => state.sessions);
+  const activeSessionId = useSessionStore((state) => state.activeSessionId);
+  const createLocalSession = useSessionStore((state) => state.createLocalSession);
+  const setActiveSession = useSessionStore((state) => state.setActiveSession);
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
 

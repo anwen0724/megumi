@@ -1,5 +1,5 @@
-// @vitest-environment node
-import fs from 'fs';
+﻿// @vitest-environment node
+import fs, { existsSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
@@ -13,12 +13,12 @@ function projectFileExists(relativePath: string): boolean {
   return fs.existsSync(path.join(root, relativePath));
 }
 
-describe('runtime chat source guards', () => {
+describe('session timeline source guards', () => {
   it('ChatTimeline uses runtime chat instead of mock agent flow', () => {
     const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
     const oldHook = 'use' + 'MockAgentFlow';
 
-    expect(source).toContain('useRuntimeChat');
+    expect(source).toContain('useSessionTimeline');
     expect(source).not.toContain(oldHook);
     expect(source).not.toContain('run' + 'MockAgentFlow');
     expect(source).not.toContain('retryLast' + 'MockAgentFlow');
@@ -52,5 +52,18 @@ describe('runtime chat source guards', () => {
     for (const file of oldMockFiles) {
       expect(projectFileExists(file), file).toBe(false);
     }
+  });
+
+  it('routes renderer session timeline through primary session message APIs', () => {
+    const hookSource = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts');
+
+    expect(hookSource).toContain('useSessionTimeline');
+    expect(hookSource).toContain('IPC_CHANNELS.session.message.send');
+    expect(hookSource).toContain('window.megumi.session.message.send');
+    expect(hookSource).toContain('beginRuntimeChat');
+    expect(hookSource).not.toContain('IPC_CHANNELS.chat.start');
+    expect(hookSource).not.toContain('window.megumi.chat');
+    expect(hookSource).not.toContain('useRuntimeChat');
+    expect(existsSync(path.join(root, 'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts'))).toBe(false);
   });
 });

@@ -1,6 +1,15 @@
-import type { AgentType, LocalAgentSession } from '@megumi/shared/agent-contracts';
+import type { AgentType } from '@megumi/shared/agent-contracts';
 
-interface CreateLocalAgentSessionInput {
+export interface LocalRendererSession {
+  id: string;
+  projectId: string;
+  agentType: AgentType;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CreateLocalSessionInput {
   id?: string;
   projectId: string;
   title?: string;
@@ -16,13 +25,13 @@ function createSessionId(): string {
   return `local-session-${Date.now().toString(36)}`;
 }
 
-export function createLocalAgentSession({
+export function createLocalSession({
   id = createSessionId(),
   projectId,
   title = 'New session',
   agentType = 'free',
   now = new Date().toISOString(),
-}: CreateLocalAgentSessionInput): LocalAgentSession {
+}: CreateLocalSessionInput): LocalRendererSession {
   const normalizedTitle = title.trim() || 'New session';
 
   return {

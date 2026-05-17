@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -44,7 +44,7 @@ describe('interaction baseline source guards', () => {
   it('keeps chat feature independent from workspace-panel feature', () => {
     const chatFiles = [
       'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
-      'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts',
+      'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
       'apps/desktop/src/renderer/features/chat/index.ts',
     ];
 
@@ -75,7 +75,7 @@ describe('interaction baseline source guards', () => {
       'apps/desktop/src/renderer/shell/WindowTitleBar.tsx',
       'apps/desktop/src/renderer/shared/ipc/client.ts',
       'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
-      'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts',
+      'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
     ];
 
     for (const file of rendererEntryFiles) {

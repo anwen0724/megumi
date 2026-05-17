@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createSessionTitleFromPrompt } from '@megumi/desktop/renderer/entities/agent';
+import { createSessionTitleFromPrompt } from '@megumi/desktop/renderer/entities/session/session-title';
 
 describe('createSessionTitleFromPrompt', () => {
   it('uses the trimmed first prompt as the session title', () => {

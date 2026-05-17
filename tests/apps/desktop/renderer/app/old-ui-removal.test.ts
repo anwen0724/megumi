@@ -49,8 +49,9 @@ describe('old visual UI removal', () => {
     }
   });
 
-  it('keeps the runtime chat hook and removes old stream hooks', () => {
-    expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts'))).toBe(true);
+  it('keeps the session timeline hook and removes old stream hooks', () => {
+    expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts'))).toBe(true);
+    expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts'))).toBe(false);
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/hooks/use-ai-stream.ts'))).toBe(false);
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/hooks/use-agent-stream.ts'))).toBe(false);
   });
