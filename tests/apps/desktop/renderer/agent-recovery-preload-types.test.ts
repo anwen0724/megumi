@@ -12,10 +12,29 @@ import type {
   AgentRunResumePayload,
   AgentRunRetryData,
   AgentRunRetryPayload,
+  RecoverableRunListData,
+  RecoverableRunListPayload,
+  RunResumeData,
+  RunResumePayload,
 } from '@megumi/shared/ipc-schemas';
 
 describe('agent recovery preload types', () => {
-  it('exposes recovery controls under window.megumi.agent', () => {
+  it('exposes primary recovery controls under window.megumi', () => {
+    expectTypeOf<MegumiAPI['recovery']['listRecoverableRuns']>().returns.resolves.toEqualTypeOf<
+      RuntimeIpcResult<RecoverableRunListData, typeof IPC_CHANNELS.recovery.recoverableRunsList>
+    >();
+    expectTypeOf<Parameters<MegumiAPI['recovery']['listRecoverableRuns']>[0]>().toEqualTypeOf<
+      RuntimeIpcRequest<RecoverableRunListPayload, typeof IPC_CHANNELS.recovery.recoverableRunsList>
+    >();
+    expectTypeOf<MegumiAPI['recovery']['resume']>().returns.resolves.toEqualTypeOf<
+      RuntimeIpcResult<RunResumeData, typeof IPC_CHANNELS.recovery.resume>
+    >();
+    expectTypeOf<Parameters<MegumiAPI['recovery']['resume']>[0]>().toEqualTypeOf<
+      RuntimeIpcRequest<RunResumePayload, typeof IPC_CHANNELS.recovery.resume>
+    >();
+  });
+
+  it('keeps deprecated agent recovery controls as migration bridge', () => {
     expectTypeOf<MegumiAPI['agent']['recovery']['listRecoverableRuns']>().returns.resolves.toEqualTypeOf<
       RuntimeIpcResult<AgentRecoverableRunListData, typeof IPC_CHANNELS.agent.recovery.recoverableRunsList>
     >();

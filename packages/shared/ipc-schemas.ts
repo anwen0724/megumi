@@ -51,6 +51,7 @@ import {
   MemorySettingsSchema,
   MemorySourceRefSchema,
 } from './memory-contracts';
+import { RuntimeEventSchema } from './runtime-event-schemas';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
 
@@ -634,6 +635,290 @@ export const AgentMemoryRecallPreviewDataSchema = z
   })
   .strict();
 
+export const SessionMessageSendPayloadSchema = ChatStartPayloadSchema;
+export const SessionMessageSendDataSchema = ChatStartDataSchema;
+export const SessionMessageCancelPayloadSchema = ChatCancelPayloadSchema;
+export const SessionMessageCancelDataSchema = ChatCancelDataSchema;
+export const SessionCreatePayloadSchema = AgentSessionCreatePayloadSchema;
+export const SessionCreateDataSchema = AgentSessionCreateDataSchema;
+export const SessionListPayloadSchema = AgentSessionListPayloadSchema;
+export const SessionListDataSchema = AgentSessionListDataSchema;
+export const RunStartPayloadSchema = AgentRunStartPayloadSchema;
+export const RunStartDataSchema = AgentRunStartDataSchema;
+export const RunEventsListPayloadSchema = z
+  .object({
+    runId: z.string().min(1),
+  })
+  .strict();
+export const RunEventsListDataSchema = z
+  .object({
+    events: z.array(RuntimeEventSchema),
+  })
+  .strict();
+export const RunContextBaselineGetPayloadSchema = AgentContextBaselineGetPayloadSchema;
+export const RunContextBaselineGetDataSchema = AgentContextBaselineGetDataSchema;
+export const RunContextSourcesListPayloadSchema = AgentContextSourcesListPayloadSchema;
+export const RunContextSourcesListDataSchema = AgentContextSourcesListDataSchema;
+export const PlanByRunGetPayloadSchema = AgentPlanByRunGetPayloadSchema;
+export const PlanByRunGetDataSchema = AgentPlanByRunGetDataSchema;
+export const PlanStatusUpdatePayloadSchema = AgentPlanStatusUpdatePayloadSchema;
+export const PlanStatusUpdateDataSchema = AgentPlanStatusUpdateDataSchema;
+export const ToolDefinitionsListPayloadSchema = AgentToolDefinitionsListPayloadSchema;
+export const ToolDefinitionsListDataSchema = AgentToolDefinitionsListDataSchema;
+export const ToolCallGetPayloadSchema = AgentToolCallGetPayloadSchema;
+export const ToolCallGetDataSchema = AgentToolCallGetDataSchema;
+export const ApprovalResolvePayloadSchema = AgentApprovalResolvePayloadSchema;
+export const ApprovalResolveDataSchema = AgentApprovalResolveDataSchema;
+export const RecoverableRunListPayloadSchema = AgentRecoverableRunListPayloadSchema;
+export const RecoverableRunListDataSchema = AgentRecoverableRunListDataSchema;
+export const RunResumePayloadSchema = AgentRunResumePayloadSchema;
+export const RunResumeDataSchema = AgentRunResumeDataSchema;
+export const RunCancelPayloadSchema = AgentRunCancelPayloadSchema;
+export const RunCancelDataSchema = AgentRunCancelDataSchema;
+export const RunRetryPayloadSchema = AgentRunRetryPayloadSchema;
+export const RunRetryDataSchema = AgentRunRetryDataSchema;
+export const ArtifactListByRunPayloadSchema = AgentArtifactListByRunPayloadSchema;
+export const ArtifactListBySessionPayloadSchema = AgentArtifactListBySessionPayloadSchema;
+export const ArtifactGetPayloadSchema = AgentArtifactGetPayloadSchema;
+export const ArtifactVersionGetPayloadSchema = AgentArtifactVersionGetPayloadSchema;
+export const ArtifactVersionCreatePayloadSchema = AgentArtifactVersionCreatePayloadSchema;
+export const ArtifactStatusUpdatePayloadSchema = AgentArtifactStatusUpdatePayloadSchema;
+export const ArtifactReferencePayloadSchema = AgentArtifactReferencePayloadSchema;
+export const ArtifactListDataSchema = AgentArtifactListDataSchema;
+export const ArtifactGetDataSchema = AgentArtifactGetDataSchema;
+export const ArtifactVersionGetDataSchema = AgentArtifactVersionGetDataSchema;
+export const ArtifactVersionCreateDataSchema = AgentArtifactVersionCreateDataSchema;
+export const ArtifactStatusUpdateDataSchema = AgentArtifactStatusUpdateDataSchema;
+export const ArtifactReferenceDataSchema = AgentArtifactReferenceDataSchema;
+export const MemorySettingsGetPayloadSchema = AgentMemorySettingsGetPayloadSchema;
+export const MemorySettingsUpdatePayloadSchema = AgentMemorySettingsUpdatePayloadSchema;
+export const MemorySettingsDataSchema = AgentMemorySettingsDataSchema;
+export const MemoryCandidateListPayloadSchema = AgentMemoryCandidateListPayloadSchema;
+export const MemoryCandidateAcceptPayloadSchema = AgentMemoryCandidateAcceptPayloadSchema;
+export const MemoryCandidateRejectPayloadSchema = AgentMemoryCandidateRejectPayloadSchema;
+export const MemoryCandidateArchivePayloadSchema = AgentMemoryCandidateArchivePayloadSchema;
+export const MemoryCandidateEditAndAcceptPayloadSchema = AgentMemoryCandidateEditAndAcceptPayloadSchema;
+export const MemoryCandidateListDataSchema = AgentMemoryCandidateListDataSchema;
+export const MemoryCandidateDataSchema = AgentMemoryCandidateDataSchema;
+export const MemoryCandidateAcceptDataSchema = AgentMemoryCandidateAcceptDataSchema;
+export const MemoryListPayloadSchema = AgentMemoryListPayloadSchema;
+export const MemoryGetPayloadSchema = AgentMemoryGetPayloadSchema;
+export const MemoryUpdatePayloadSchema = AgentMemoryUpdatePayloadSchema;
+export const MemoryStatusPayloadSchema = AgentMemoryStatusPayloadSchema;
+export const MemorySourceRefsListPayloadSchema = AgentMemorySourceRefsListPayloadSchema;
+export const MemoryAccessLogsListPayloadSchema = AgentMemoryAccessLogsListPayloadSchema;
+export const MemoryRecallPreviewPayloadSchema = AgentMemoryRecallPreviewPayloadSchema;
+export const MemoryListDataSchema = AgentMemoryListDataSchema;
+export const MemoryGetDataSchema = AgentMemoryGetDataSchema;
+export const MemoryDataSchema = AgentMemoryDataSchema;
+export const MemorySourceRefsListDataSchema = AgentMemorySourceRefsListDataSchema;
+export const MemoryAccessLogsListDataSchema = AgentMemoryAccessLogsListDataSchema;
+export const MemoryRecallPreviewDataSchema = AgentMemoryRecallPreviewDataSchema;
+
+export const SessionCreateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.create,
+  SessionCreatePayloadSchema,
+);
+
+export const SessionListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.list,
+  SessionListPayloadSchema,
+);
+
+export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.message.send,
+  SessionMessageSendPayloadSchema,
+);
+
+export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.message.cancel,
+  SessionMessageCancelPayloadSchema,
+);
+
+export const RunEventsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.run.events.list,
+  RunEventsListPayloadSchema,
+);
+
+export const RunContextBaselineGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.runContext.baselineGet,
+  RunContextBaselineGetPayloadSchema,
+);
+
+export const RunContextSourcesListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.runContext.sourcesList,
+  RunContextSourcesListPayloadSchema,
+);
+
+export const PlanByRunGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.plan.byRunGet,
+  PlanByRunGetPayloadSchema,
+);
+
+export const PlanStatusUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.plan.statusUpdate,
+  PlanStatusUpdatePayloadSchema,
+);
+
+export const ToolDefinitionsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.tool.definitionsList,
+  ToolDefinitionsListPayloadSchema,
+);
+
+export const ToolCallGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.tool.callGet,
+  ToolCallGetPayloadSchema,
+);
+
+export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.approval.resolve,
+  ApprovalResolvePayloadSchema,
+);
+
+export const RecoveryRecoverableRunListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.recovery.recoverableRunsList,
+  RecoverableRunListPayloadSchema,
+);
+
+export const RecoveryResumeRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.recovery.resume,
+  RunResumePayloadSchema,
+);
+
+export const RecoveryCancelRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.recovery.cancel,
+  RunCancelPayloadSchema,
+);
+
+export const RecoveryRetryRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.recovery.retry,
+  RunRetryPayloadSchema,
+);
+export const RecoverableRunListRequestSchema = RecoveryRecoverableRunListRequestSchema;
+export const RunResumeRequestSchema = RecoveryResumeRequestSchema;
+export const RunCancelRequestSchema = RecoveryCancelRequestSchema;
+export const RunRetryRequestSchema = RecoveryRetryRequestSchema;
+
+export const ArtifactListByRunRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.artifacts.listByRun,
+  ArtifactListByRunPayloadSchema,
+);
+
+export const ArtifactListBySessionRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.artifacts.listBySession,
+  ArtifactListBySessionPayloadSchema,
+);
+
+export const ArtifactGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.artifacts.get,
+  ArtifactGetPayloadSchema,
+);
+
+export const ArtifactVersionGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.artifacts.versionGet,
+  ArtifactVersionGetPayloadSchema,
+);
+
+export const ArtifactVersionCreateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.artifacts.versionCreate,
+  ArtifactVersionCreatePayloadSchema,
+);
+
+export const ArtifactStatusUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.artifacts.statusUpdate,
+  ArtifactStatusUpdatePayloadSchema,
+);
+
+export const ArtifactReferenceRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.artifacts.reference,
+  ArtifactReferencePayloadSchema,
+);
+
+export const MemorySettingsGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.settingsGet,
+  MemorySettingsGetPayloadSchema,
+);
+
+export const MemorySettingsUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.settingsUpdate,
+  MemorySettingsUpdatePayloadSchema,
+);
+
+export const MemoryCandidateListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.candidateList,
+  MemoryCandidateListPayloadSchema,
+);
+
+export const MemoryCandidateAcceptRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.candidateAccept,
+  MemoryCandidateAcceptPayloadSchema,
+);
+
+export const MemoryCandidateRejectRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.candidateReject,
+  MemoryCandidateRejectPayloadSchema,
+);
+
+export const MemoryCandidateArchiveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.candidateArchive,
+  MemoryCandidateArchivePayloadSchema,
+);
+
+export const MemoryCandidateEditAndAcceptRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.candidateEditAndAccept,
+  MemoryCandidateEditAndAcceptPayloadSchema,
+);
+
+export const MemoryListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.memoryList,
+  MemoryListPayloadSchema,
+);
+
+export const MemoryGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.memoryGet,
+  MemoryGetPayloadSchema,
+);
+
+export const MemoryUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.memoryUpdate,
+  MemoryUpdatePayloadSchema,
+);
+
+export const MemoryArchiveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.memoryArchive,
+  MemoryStatusPayloadSchema,
+);
+
+export const MemoryDeleteRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.memoryDelete,
+  MemoryStatusPayloadSchema,
+);
+
+export const MemoryDisableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.memoryDisable,
+  MemoryStatusPayloadSchema,
+);
+
+export const MemoryEnableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.memoryEnable,
+  MemoryStatusPayloadSchema,
+);
+
+export const MemorySourceRefsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.sourceRefsList,
+  MemorySourceRefsListPayloadSchema,
+);
+
+export const MemoryAccessLogsListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.accessLogsList,
+  MemoryAccessLogsListPayloadSchema,
+);
+
+export const MemoryRecallPreviewRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.memory.recallPreview,
+  MemoryRecallPreviewPayloadSchema,
+);
+
 export const AgentSessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.agent.session.create,
   AgentSessionCreatePayloadSchema,
@@ -824,6 +1109,210 @@ export const AgentMemoryRecallPreviewRequestSchema = createRuntimeIpcRequestSche
   AgentMemoryRecallPreviewPayloadSchema,
 );
 
+export const SessionCreateResultSchema = createRuntimeIpcResultSchema(
+  SessionCreateDataSchema,
+  IPC_CHANNELS.session.create,
+);
+
+export const SessionListResultSchema = createRuntimeIpcResultSchema(
+  SessionListDataSchema,
+  IPC_CHANNELS.session.list,
+);
+
+export const SessionMessageSendResultSchema = createRuntimeIpcResultSchema(
+  SessionMessageSendDataSchema,
+  IPC_CHANNELS.session.message.send,
+);
+
+export const SessionMessageCancelResultSchema = createRuntimeIpcResultSchema(
+  SessionMessageCancelDataSchema,
+  IPC_CHANNELS.session.message.cancel,
+);
+
+export const RunEventsListResultSchema = createRuntimeIpcResultSchema(
+  RunEventsListDataSchema,
+  IPC_CHANNELS.run.events.list,
+);
+
+export const RunContextBaselineGetResultSchema = createRuntimeIpcResultSchema(
+  RunContextBaselineGetDataSchema,
+  IPC_CHANNELS.runContext.baselineGet,
+);
+
+export const RunContextSourcesListResultSchema = createRuntimeIpcResultSchema(
+  RunContextSourcesListDataSchema,
+  IPC_CHANNELS.runContext.sourcesList,
+);
+
+export const PlanByRunGetResultSchema = createRuntimeIpcResultSchema(
+  PlanByRunGetDataSchema,
+  IPC_CHANNELS.plan.byRunGet,
+);
+
+export const PlanStatusUpdateResultSchema = createRuntimeIpcResultSchema(
+  PlanStatusUpdateDataSchema,
+  IPC_CHANNELS.plan.statusUpdate,
+);
+
+export const ToolDefinitionsListResultSchema = createRuntimeIpcResultSchema(
+  ToolDefinitionsListDataSchema,
+  IPC_CHANNELS.tool.definitionsList,
+);
+
+export const ToolCallGetResultSchema = createRuntimeIpcResultSchema(
+  ToolCallGetDataSchema,
+  IPC_CHANNELS.tool.callGet,
+);
+
+export const ApprovalResolveResultSchema = createRuntimeIpcResultSchema(
+  ApprovalResolveDataSchema,
+  IPC_CHANNELS.approval.resolve,
+);
+
+export const RecoveryRecoverableRunListResultSchema = createRuntimeIpcResultSchema(
+  RecoverableRunListDataSchema,
+  IPC_CHANNELS.recovery.recoverableRunsList,
+);
+
+export const RecoveryResumeResultSchema = createRuntimeIpcResultSchema(
+  RunResumeDataSchema,
+  IPC_CHANNELS.recovery.resume,
+);
+
+export const RecoveryCancelResultSchema = createRuntimeIpcResultSchema(
+  RunCancelDataSchema,
+  IPC_CHANNELS.recovery.cancel,
+);
+
+export const RecoveryRetryResultSchema = createRuntimeIpcResultSchema(
+  RunRetryDataSchema,
+  IPC_CHANNELS.recovery.retry,
+);
+export const RecoverableRunListResultSchema = RecoveryRecoverableRunListResultSchema;
+export const RunResumeResultSchema = RecoveryResumeResultSchema;
+export const RunCancelResultSchema = RecoveryCancelResultSchema;
+export const RunRetryResultSchema = RecoveryRetryResultSchema;
+
+export const ArtifactListByRunResultSchema = createRuntimeIpcResultSchema(
+  ArtifactListDataSchema,
+  IPC_CHANNELS.artifacts.listByRun,
+);
+
+export const ArtifactListBySessionResultSchema = createRuntimeIpcResultSchema(
+  ArtifactListDataSchema,
+  IPC_CHANNELS.artifacts.listBySession,
+);
+
+export const ArtifactGetResultSchema = createRuntimeIpcResultSchema(
+  ArtifactGetDataSchema,
+  IPC_CHANNELS.artifacts.get,
+);
+
+export const ArtifactVersionGetResultSchema = createRuntimeIpcResultSchema(
+  ArtifactVersionGetDataSchema,
+  IPC_CHANNELS.artifacts.versionGet,
+);
+
+export const ArtifactVersionCreateResultSchema = createRuntimeIpcResultSchema(
+  ArtifactVersionCreateDataSchema,
+  IPC_CHANNELS.artifacts.versionCreate,
+);
+
+export const ArtifactStatusUpdateResultSchema = createRuntimeIpcResultSchema(
+  ArtifactStatusUpdateDataSchema,
+  IPC_CHANNELS.artifacts.statusUpdate,
+);
+
+export const ArtifactReferenceResultSchema = createRuntimeIpcResultSchema(
+  ArtifactReferenceDataSchema,
+  IPC_CHANNELS.artifacts.reference,
+);
+
+export const MemorySettingsGetResultSchema = createRuntimeIpcResultSchema(
+  MemorySettingsDataSchema,
+  IPC_CHANNELS.memory.settingsGet,
+);
+
+export const MemorySettingsUpdateResultSchema = createRuntimeIpcResultSchema(
+  MemorySettingsDataSchema,
+  IPC_CHANNELS.memory.settingsUpdate,
+);
+
+export const MemoryCandidateListResultSchema = createRuntimeIpcResultSchema(
+  MemoryCandidateListDataSchema,
+  IPC_CHANNELS.memory.candidateList,
+);
+
+export const MemoryCandidateAcceptResultSchema = createRuntimeIpcResultSchema(
+  MemoryCandidateAcceptDataSchema,
+  IPC_CHANNELS.memory.candidateAccept,
+);
+
+export const MemoryCandidateRejectResultSchema = createRuntimeIpcResultSchema(
+  MemoryCandidateDataSchema,
+  IPC_CHANNELS.memory.candidateReject,
+);
+
+export const MemoryCandidateArchiveResultSchema = createRuntimeIpcResultSchema(
+  MemoryCandidateDataSchema,
+  IPC_CHANNELS.memory.candidateArchive,
+);
+
+export const MemoryCandidateEditAndAcceptResultSchema = createRuntimeIpcResultSchema(
+  MemoryCandidateAcceptDataSchema,
+  IPC_CHANNELS.memory.candidateEditAndAccept,
+);
+
+export const MemoryListResultSchema = createRuntimeIpcResultSchema(
+  MemoryListDataSchema,
+  IPC_CHANNELS.memory.memoryList,
+);
+
+export const MemoryGetResultSchema = createRuntimeIpcResultSchema(
+  MemoryGetDataSchema,
+  IPC_CHANNELS.memory.memoryGet,
+);
+
+export const MemoryUpdateResultSchema = createRuntimeIpcResultSchema(
+  MemoryDataSchema,
+  IPC_CHANNELS.memory.memoryUpdate,
+);
+
+export const MemoryArchiveResultSchema = createRuntimeIpcResultSchema(
+  MemoryDataSchema,
+  IPC_CHANNELS.memory.memoryArchive,
+);
+
+export const MemoryDeleteResultSchema = createRuntimeIpcResultSchema(
+  MemoryDataSchema,
+  IPC_CHANNELS.memory.memoryDelete,
+);
+
+export const MemoryDisableResultSchema = createRuntimeIpcResultSchema(
+  MemoryDataSchema,
+  IPC_CHANNELS.memory.memoryDisable,
+);
+
+export const MemoryEnableResultSchema = createRuntimeIpcResultSchema(
+  MemoryDataSchema,
+  IPC_CHANNELS.memory.memoryEnable,
+);
+
+export const MemorySourceRefsListResultSchema = createRuntimeIpcResultSchema(
+  MemorySourceRefsListDataSchema,
+  IPC_CHANNELS.memory.sourceRefsList,
+);
+
+export const MemoryAccessLogsListResultSchema = createRuntimeIpcResultSchema(
+  MemoryAccessLogsListDataSchema,
+  IPC_CHANNELS.memory.accessLogsList,
+);
+
+export const MemoryRecallPreviewResultSchema = createRuntimeIpcResultSchema(
+  MemoryRecallPreviewDataSchema,
+  IPC_CHANNELS.memory.recallPreview,
+);
+
 export const AgentSessionCreateResultSchema = createRuntimeIpcResultSchema(
   AgentSessionCreateDataSchema,
   IPC_CHANNELS.agent.session.create,
@@ -1006,6 +1495,77 @@ export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
 export type ProviderApiKeyPayload = z.infer<typeof ProviderApiKeyPayloadSchema>;
 export type ProviderDeleteApiKeyPayload = z.infer<typeof ProviderDeleteApiKeyPayloadSchema>;
 export type ProviderEmptyData = z.infer<typeof ProviderEmptyDataSchema>;
+export type SessionMessageSendPayload = z.infer<typeof SessionMessageSendPayloadSchema>;
+export type SessionMessageSendData = z.infer<typeof SessionMessageSendDataSchema>;
+export type SessionMessageCancelPayload = z.infer<typeof SessionMessageCancelPayloadSchema>;
+export type SessionMessageCancelData = z.infer<typeof SessionMessageCancelDataSchema>;
+export type SessionCreatePayload = z.infer<typeof SessionCreatePayloadSchema>;
+export type SessionCreateData = z.infer<typeof SessionCreateDataSchema>;
+export type SessionListPayload = z.infer<typeof SessionListPayloadSchema>;
+export type SessionListData = z.infer<typeof SessionListDataSchema>;
+export type RunStartPayload = z.infer<typeof RunStartPayloadSchema>;
+export type RunStartData = z.infer<typeof RunStartDataSchema>;
+export type RunEventsListPayload = z.infer<typeof RunEventsListPayloadSchema>;
+export type RunEventsListData = z.infer<typeof RunEventsListDataSchema>;
+export type RunContextBaselineGetPayload = z.infer<typeof RunContextBaselineGetPayloadSchema>;
+export type RunContextBaselineGetData = z.infer<typeof RunContextBaselineGetDataSchema>;
+export type RunContextSourcesListPayload = z.infer<typeof RunContextSourcesListPayloadSchema>;
+export type RunContextSourcesListData = z.infer<typeof RunContextSourcesListDataSchema>;
+export type PlanByRunGetPayload = z.infer<typeof PlanByRunGetPayloadSchema>;
+export type PlanByRunGetData = z.infer<typeof PlanByRunGetDataSchema>;
+export type PlanStatusUpdatePayload = z.infer<typeof PlanStatusUpdatePayloadSchema>;
+export type PlanStatusUpdateData = z.infer<typeof PlanStatusUpdateDataSchema>;
+export type ToolDefinitionsListPayload = z.infer<typeof ToolDefinitionsListPayloadSchema>;
+export type ToolDefinitionsListData = z.infer<typeof ToolDefinitionsListDataSchema>;
+export type ToolCallGetPayload = z.infer<typeof ToolCallGetPayloadSchema>;
+export type ToolCallGetData = z.infer<typeof ToolCallGetDataSchema>;
+export type ApprovalResolvePayload = z.infer<typeof ApprovalResolvePayloadSchema>;
+export type ApprovalResolveData = z.infer<typeof ApprovalResolveDataSchema>;
+export type RecoverableRunListPayload = z.infer<typeof RecoverableRunListPayloadSchema>;
+export type RecoverableRunListData = z.infer<typeof RecoverableRunListDataSchema>;
+export type RunResumePayload = z.infer<typeof RunResumePayloadSchema>;
+export type RunResumeData = z.infer<typeof RunResumeDataSchema>;
+export type RunCancelPayload = z.infer<typeof RunCancelPayloadSchema>;
+export type RunCancelData = z.infer<typeof RunCancelDataSchema>;
+export type RunRetryPayload = z.infer<typeof RunRetryPayloadSchema>;
+export type RunRetryData = z.infer<typeof RunRetryDataSchema>;
+export type ArtifactListByRunPayload = z.infer<typeof ArtifactListByRunPayloadSchema>;
+export type ArtifactListBySessionPayload = z.infer<typeof ArtifactListBySessionPayloadSchema>;
+export type ArtifactGetPayload = z.infer<typeof ArtifactGetPayloadSchema>;
+export type ArtifactVersionGetPayload = z.infer<typeof ArtifactVersionGetPayloadSchema>;
+export type ArtifactVersionCreatePayload = z.infer<typeof ArtifactVersionCreatePayloadSchema>;
+export type ArtifactStatusUpdatePayload = z.infer<typeof ArtifactStatusUpdatePayloadSchema>;
+export type ArtifactReferencePayload = z.infer<typeof ArtifactReferencePayloadSchema>;
+export type ArtifactListData = z.infer<typeof ArtifactListDataSchema>;
+export type ArtifactGetData = z.infer<typeof ArtifactGetDataSchema>;
+export type ArtifactVersionGetData = z.infer<typeof ArtifactVersionGetDataSchema>;
+export type ArtifactVersionCreateData = z.infer<typeof ArtifactVersionCreateDataSchema>;
+export type ArtifactStatusUpdateData = z.infer<typeof ArtifactStatusUpdateDataSchema>;
+export type ArtifactReferenceData = z.infer<typeof ArtifactReferenceDataSchema>;
+export type MemorySettingsGetPayload = z.infer<typeof MemorySettingsGetPayloadSchema>;
+export type MemorySettingsUpdatePayload = z.infer<typeof MemorySettingsUpdatePayloadSchema>;
+export type MemorySettingsData = z.infer<typeof MemorySettingsDataSchema>;
+export type MemoryCandidateListPayload = z.infer<typeof MemoryCandidateListPayloadSchema>;
+export type MemoryCandidateAcceptPayload = z.infer<typeof MemoryCandidateAcceptPayloadSchema>;
+export type MemoryCandidateRejectPayload = z.infer<typeof MemoryCandidateRejectPayloadSchema>;
+export type MemoryCandidateArchivePayload = z.infer<typeof MemoryCandidateArchivePayloadSchema>;
+export type MemoryCandidateEditAndAcceptPayload = z.infer<typeof MemoryCandidateEditAndAcceptPayloadSchema>;
+export type MemoryCandidateListData = z.infer<typeof MemoryCandidateListDataSchema>;
+export type MemoryCandidateData = z.infer<typeof MemoryCandidateDataSchema>;
+export type MemoryCandidateAcceptData = z.infer<typeof MemoryCandidateAcceptDataSchema>;
+export type MemoryListPayload = z.infer<typeof MemoryListPayloadSchema>;
+export type MemoryGetPayload = z.infer<typeof MemoryGetPayloadSchema>;
+export type MemoryUpdatePayload = z.infer<typeof MemoryUpdatePayloadSchema>;
+export type MemoryStatusPayload = z.infer<typeof MemoryStatusPayloadSchema>;
+export type MemorySourceRefsListPayload = z.infer<typeof MemorySourceRefsListPayloadSchema>;
+export type MemoryAccessLogsListPayload = z.infer<typeof MemoryAccessLogsListPayloadSchema>;
+export type MemoryRecallPreviewPayload = z.infer<typeof MemoryRecallPreviewPayloadSchema>;
+export type MemoryListData = z.infer<typeof MemoryListDataSchema>;
+export type MemoryGetData = z.infer<typeof MemoryGetDataSchema>;
+export type MemoryData = z.infer<typeof MemoryDataSchema>;
+export type MemorySourceRefsListData = z.infer<typeof MemorySourceRefsListDataSchema>;
+export type MemoryAccessLogsListData = z.infer<typeof MemoryAccessLogsListDataSchema>;
+export type MemoryRecallPreviewData = z.infer<typeof MemoryRecallPreviewDataSchema>;
 export type ChatStartPayload = z.infer<typeof ChatStartPayloadSchema>;
 export type ChatStartData = z.infer<typeof ChatStartDataSchema>;
 export type ChatCancelPayload = z.infer<typeof ChatCancelPayloadSchema>;

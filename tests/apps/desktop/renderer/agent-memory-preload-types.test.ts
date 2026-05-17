@@ -12,10 +12,21 @@ import type {
   AgentMemoryRecallPreviewPayload,
   AgentMemorySettingsData,
   AgentMemorySettingsGetPayload,
+  MemorySettingsData,
+  MemorySettingsGetPayload,
 } from '@megumi/shared/ipc-schemas';
 
 describe('agent memory preload types', () => {
-  it('exposes memory API under window.megumi.agent.memory', () => {
+  it('exposes primary memory API under window.megumi.memory', () => {
+    expectTypeOf<MegumiAPI['memory']['settingsGet']>().returns.resolves.toEqualTypeOf<
+      RuntimeIpcResult<MemorySettingsData, typeof IPC_CHANNELS.memory.settingsGet>
+    >();
+    expectTypeOf<Parameters<MegumiAPI['memory']['settingsGet']>[0]>().toEqualTypeOf<
+      RuntimeIpcRequest<MemorySettingsGetPayload, typeof IPC_CHANNELS.memory.settingsGet>
+    >();
+  });
+
+  it('keeps deprecated agent memory API as migration bridge', () => {
     expectTypeOf<MegumiAPI['agent']['memory']['settingsGet']>().returns.resolves.toEqualTypeOf<
       RuntimeIpcResult<AgentMemorySettingsData, typeof IPC_CHANNELS.agent.memory.settingsGet>
     >();

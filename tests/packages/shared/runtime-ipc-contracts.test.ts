@@ -47,14 +47,26 @@ import {
   AgentRunStartRequestSchema,
   AgentSessionCreateRequestSchema,
   AgentSessionListRequestSchema,
+  ArtifactGetRequestSchema,
   ChatCancelPayloadSchema,
   ChatCancelRequestSchema,
   ChatStartPayloadSchema,
   ChatStartRequestSchema,
+  MemorySettingsGetRequestSchema,
+  PlanByRunGetRequestSchema,
   ProviderApiKeyRequestSchema,
   ProviderListDataSchema,
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
+  RecoveryResumeRequestSchema,
+  RunContextBaselineGetRequestSchema,
+  RunContextSourcesListRequestSchema,
+  RunEventsListRequestSchema,
+  SessionCreateRequestSchema,
+  SessionListRequestSchema,
+  SessionMessageCancelRequestSchema,
+  SessionMessageSendRequestSchema,
+  ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc-schemas';
 
 describe('json value schemas', () => {
@@ -179,8 +191,11 @@ describe('runtime ipc request and result schemas', () => {
     }).strict(),
   );
 
-  it('treats provider and chat request channels as business IPC', () => {
+  it('treats provider and primary session run request channels as business IPC', () => {
     expect(isBusinessIpcChannel(IPC_CHANNELS.provider.list)).toBe(true);
+    expect(isBusinessIpcChannel(IPC_CHANNELS.session.message.send)).toBe(true);
+    expect(isBusinessIpcChannel(IPC_CHANNELS.session.message.cancel)).toBe(true);
+    expect(isBusinessIpcChannel(IPC_CHANNELS.run.events.list)).toBe(true);
     expect(isBusinessIpcChannel(IPC_CHANNELS.chat.start)).toBe(true);
     expect(isBusinessIpcChannel(IPC_CHANNELS.chat.cancel)).toBe(true);
     expect(isBusinessIpcChannel(IPC_CHANNELS.window.minimize)).toBe(false);
@@ -565,6 +580,158 @@ describe('agent lifecycle ipc contracts', () => {
 });
 
 describe('agent context runtime IPC schemas', () => {
+  it('keeps channel in request.meta.channel for session message send', () => {
+    const parsed = SessionMessageSendRequestSchema.parse({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-1',
+          role: 'user',
+          content: 'Hello Megumi',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        context: {
+          workspacePath: 'C:/all/work/study/megumi',
+          composerMode: 'chat',
+        },
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.message.send,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(parsed.meta.channel).toBe(IPC_CHANNELS.session.message.send);
+    expect('channel' in parsed).toBe(false);
+  });
+
+  it('parses primary session run ipc request schemas', () => {
+    expect(SessionCreateRequestSchema.parse({
+      requestId: 'ipc-session-create-1',
+      payload: {
+        title: 'New session',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.create,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.session.create);
+
+    expect(SessionListRequestSchema.parse({
+      requestId: 'ipc-session-list-1',
+      payload: {},
+      meta: {
+        channel: IPC_CHANNELS.session.list,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.session.list);
+
+    expect(SessionMessageCancelRequestSchema.parse({
+      requestId: 'ipc-session-message-cancel-1',
+      payload: { targetRequestId: 'ipc-session-message-send-1' },
+      meta: {
+        channel: IPC_CHANNELS.session.message.cancel,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.targetRequestId).toBe('ipc-session-message-send-1');
+
+    expect(RunEventsListRequestSchema.parse({
+      requestId: 'ipc-run-events-list-1',
+      payload: { runId: 'run-1' },
+      meta: {
+        channel: IPC_CHANNELS.run.events.list,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.run.events.list);
+  });
+
+  it('parses primary run context, plan, tool, recovery, artifact, and memory request schemas', () => {
+    expect(RunContextBaselineGetRequestSchema.parse({
+      requestId: 'ipc-run-context-baseline-get-1',
+      payload: { runId: 'run-1' },
+      meta: {
+        channel: IPC_CHANNELS.runContext.baselineGet,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.runContext.baselineGet);
+
+    expect(RunContextSourcesListRequestSchema.parse({
+      requestId: 'ipc-run-context-sources-list-1',
+      payload: { runId: 'run-1' },
+      meta: {
+        channel: IPC_CHANNELS.runContext.sourcesList,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.runContext.sourcesList);
+
+    expect(PlanByRunGetRequestSchema.parse({
+      requestId: 'ipc-plan-by-run-get-1',
+      payload: { runId: 'run-1' },
+      meta: {
+        channel: IPC_CHANNELS.plan.byRunGet,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.runId).toBe('run-1');
+
+    expect(ToolDefinitionsListRequestSchema.parse({
+      requestId: 'ipc-tool-definitions-list-1',
+      payload: { runId: 'run-1' },
+      meta: {
+        channel: IPC_CHANNELS.tool.definitionsList,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.tool.definitionsList);
+
+    expect(RecoveryResumeRequestSchema.parse({
+      requestId: 'ipc-recovery-resume-1',
+      payload: {
+        runId: 'run-1',
+        requestedBy: 'user',
+        reason: 'manual_resume',
+        resumeMode: 'from_checkpoint',
+      },
+      meta: {
+        channel: IPC_CHANNELS.recovery.resume,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.resumeMode).toBe('from_checkpoint');
+
+    expect(ArtifactGetRequestSchema.parse({
+      requestId: 'ipc-artifact-get-1',
+      payload: { artifactId: 'artifact-1' },
+      meta: {
+        channel: IPC_CHANNELS.artifacts.get,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.artifactId).toBe('artifact-1');
+
+    expect(MemorySettingsGetRequestSchema.parse({
+      requestId: 'ipc-memory-settings-get-1',
+      payload: { workspaceId: 'workspace-1' },
+      meta: {
+        channel: IPC_CHANNELS.memory.settingsGet,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.workspaceId).toBe('workspace-1');
+  });
+
   it('keeps context channel in request.meta.channel instead of top-level channel', () => {
     const parsed = AgentContextBaselineGetRequestSchema.parse({
       requestId: 'ipc-context-1',

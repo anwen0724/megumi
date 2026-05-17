@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatStartPayload } from '@megumi/shared/ipc-schemas';
+import type { ChatStartPayload, SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 const { invoke, on, removeListener } = vi.hoisted(() => ({
@@ -141,33 +141,42 @@ describe('preload api', () => {
     });
   });
 
-  it('exposes chat start, cancel, and runtime event subscription', async () => {
+  it('exposes primary session message methods, deprecated chat aliases, and runtime event subscription', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { api } = await import('@megumi/desktop/preload/api');
-    const startPayload: ChatStartPayload = {
+    const startPayload: SessionMessageSendPayload = {
       providerId: 'deepseek',
       modelId: 'deepseek-v4-flash',
       createdAt: '2026-05-12T00:00:00.000Z',
       messages: [],
     };
-    const startRequest = createRequest(IPC_CHANNELS.chat.start, startPayload);
-    const cancelRequest = createRequest(IPC_CHANNELS.chat.cancel, {
+    const startRequest = createRequest(IPC_CHANNELS.session.message.send, startPayload);
+    const cancelRequest = createRequest(IPC_CHANNELS.session.message.cancel, {
       targetRequestId: 'ipc-preload-request-1',
     }, 'ipc-preload-cancel-1');
+    const deprecatedStartPayload: ChatStartPayload = startPayload;
+    const deprecatedStartRequest = createRequest(IPC_CHANNELS.chat.start, deprecatedStartPayload);
+    const deprecatedCancelRequest = createRequest(IPC_CHANNELS.chat.cancel, {
+      targetRequestId: 'ipc-preload-request-1',
+    }, 'ipc-preload-deprecated-cancel-1');
     const callback = vi.fn();
 
     invoke.mockResolvedValue({
       ok: true,
       data: {},
-      meta: { requestId: 'ipc-preload-request-1', channel: 'chat:start', handledAt: 'now' },
+      meta: { requestId: 'ipc-preload-request-1', channel: 'session:message:send', handledAt: 'now' },
     });
 
-    await api.chat.start(startRequest);
-    await api.chat.cancel(cancelRequest);
+    await api.session.message.send(startRequest);
+    await api.session.message.cancel(cancelRequest);
+    await api.chat.start(deprecatedStartRequest);
+    await api.chat.cancel(deprecatedCancelRequest);
     const unsubscribe = api.runtime.onEvent(callback);
 
-    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.chat.start, startRequest);
-    expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.chat.cancel, cancelRequest);
+    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.session.message.send, startRequest);
+    expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.session.message.cancel, cancelRequest);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.chat.start, deprecatedStartRequest);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.chat.cancel, deprecatedCancelRequest);
     expect(on).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, expect.any(Function));
 
     const listener = on.mock.calls[0][1];

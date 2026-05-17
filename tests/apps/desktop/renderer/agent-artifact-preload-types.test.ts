@@ -5,8 +5,17 @@ import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 
 describe('agent artifact preload API shape', () => {
-  it('supports artifact runtime ipc methods', async () => {
-    const api: Pick<MegumiAPI, 'agent'> = {
+  it('supports primary artifact runtime ipc methods and deprecated agent aliases', async () => {
+    const api: Pick<MegumiAPI, 'artifacts' | 'agent'> = {
+      artifacts: {
+        listByRun: vi.fn(),
+        listBySession: vi.fn(),
+        get: vi.fn(),
+        getVersion: vi.fn(),
+        createVersion: vi.fn(),
+        updateStatus: vi.fn(),
+        reference: vi.fn(),
+      },
       agent: {
         session: { create: vi.fn(), list: vi.fn() },
         run: { start: vi.fn() },
@@ -54,6 +63,9 @@ describe('agent artifact preload API shape', () => {
     await api.agent.artifacts.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.artifacts.get, {
       artifactId: 'artifact:1',
     }));
+    await api.artifacts.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.artifacts.get, {
+      artifactId: 'artifact:1',
+    }));
 
     await api.agent.artifacts.reference(createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.artifacts.reference, {
       artifactId: 'artifact:1',
@@ -65,6 +77,11 @@ describe('agent artifact preload API shape', () => {
     expect(api.agent.artifacts.get).toHaveBeenCalledWith(expect.objectContaining({
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.agent.artifacts.get,
+      }),
+    }));
+    expect(api.artifacts.get).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.artifacts.get,
       }),
     }));
   });

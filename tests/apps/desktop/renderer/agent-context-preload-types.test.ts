@@ -5,8 +5,12 @@ import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 
 describe('agent context preload API shape', () => {
-  it('supports typed context methods on window.megumi.agent.context', async () => {
-    const api: Pick<MegumiAPI, 'agent'> = {
+  it('supports typed primary run context methods and deprecated agent aliases', async () => {
+    const api: Pick<MegumiAPI, 'runContext' | 'agent'> = {
+      runContext: {
+        baselineGet: vi.fn(),
+        sourcesList: vi.fn(),
+      },
       agent: {
         session: {
           create: vi.fn(),
@@ -70,9 +74,21 @@ describe('agent context preload API shape', () => {
     const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.agent.context.baselineGet, {
       runId: 'run-1',
     });
+    const primaryRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.runContext.baselineGet, {
+      runId: 'run-1',
+    });
 
+    await api.runContext.baselineGet(primaryRequest);
     await api.agent.context.baselineGet(request);
 
+    expect(api.runContext.baselineGet).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.runContext.baselineGet,
+      }),
+      payload: {
+        runId: 'run-1',
+      },
+    }));
     expect(api.agent.context.baselineGet).toHaveBeenCalledWith(expect.objectContaining({
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.agent.context.baselineGet,

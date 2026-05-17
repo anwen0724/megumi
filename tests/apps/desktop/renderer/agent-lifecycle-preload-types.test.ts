@@ -5,8 +5,16 @@ import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 
 describe('agent lifecycle preload API shape', () => {
-  it('supports typed agent session and run methods on window.megumi', async () => {
-    const api: Pick<MegumiAPI, 'agent'> = {
+  it('supports typed primary session methods and deprecated agent aliases on window.megumi', async () => {
+    const api: Pick<MegumiAPI, 'session' | 'agent'> = {
+      session: {
+        create: vi.fn(),
+        list: vi.fn(),
+        message: {
+          send: vi.fn(),
+          cancel: vi.fn(),
+        },
+      },
       agent: {
         session: {
           create: vi.fn(),
@@ -71,9 +79,38 @@ describe('agent lifecycle preload API shape', () => {
       title: 'Agent lifecycle',
       createdAt: '2026-05-15T00:00:00.000Z',
     });
+    const primaryRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.create, {
+      title: 'Session lifecycle',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+    const sendRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.send, {
+      providerId: 'deepseek' as const,
+      modelId: 'deepseek-v4-flash',
+      messages: [
+        {
+          id: 'message-1',
+          role: 'user' as const,
+          content: 'Hello',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
 
+    await api.session.create(primaryRequest);
+    await api.session.message.send(sendRequest);
     await api.agent.session.create(request);
 
+    expect(api.session.create).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.session.create,
+      }),
+    }));
+    expect(api.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.session.message.send,
+      }),
+    }));
     expect(api.agent.session.create).toHaveBeenCalledWith(expect.objectContaining({
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.agent.session.create,
