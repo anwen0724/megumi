@@ -27,6 +27,7 @@ import { ArtifactContentStore } from './services/artifact-content-store.service'
 import { ArtifactService } from './services/artifact.service';
 import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
+import { createWorkspaceFilesService } from './services/workspace-files.service';
 import { getDefaultProviderService } from './ipc/handlers/provider.handler';
 
 loadEnvFile();
@@ -34,6 +35,7 @@ const megumiHomePaths = initializeElectronMegumiHomeSync();
 const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
 const runContextService = createDefaultRunContextService(megumiHomePaths);
 const toolService = createDefaultToolService(megumiHomePaths);
+const workspaceFilesService = createWorkspaceFilesService();
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(database);
 const artifactRepository = new ArtifactRepository(database);
@@ -111,6 +113,7 @@ registerAppLifecycle({
     recoveryService,
     artifactService,
     memoryService,
+    workspaceFilesService,
   }),
   createWindow: () => {
     createMainWindow({

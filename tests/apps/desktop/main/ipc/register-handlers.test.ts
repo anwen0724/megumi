@@ -11,6 +11,7 @@ const registerToolHandlers = vi.fn();
 const registerRecoveryHandlers = vi.fn();
 const registerArtifactHandlers = vi.fn();
 const registerMemoryHandlers = vi.fn();
+const registerWorkspaceFilesHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
@@ -22,6 +23,7 @@ vi.mock('@megumi/desktop/main/ipc/handlers/tool.handler', () => ({ registerToolH
 vi.mock('@megumi/desktop/main/ipc/handlers/recovery.handler', () => ({ registerRecoveryHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/artifact.handler', () => ({ registerArtifactHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/memory.handler', () => ({ registerMemoryHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/workspace-files.handler', () => ({ registerWorkspaceFilesHandlers }));
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
 }));
@@ -38,6 +40,7 @@ describe('registerAllHandlers', () => {
     registerRecoveryHandlers.mockReset();
     registerArtifactHandlers.mockReset();
     registerMemoryHandlers.mockReset();
+    registerWorkspaceFilesHandlers.mockReset();
   });
 
   it('registers only existing runtime handlers when no session run service is provided', async () => {
@@ -55,6 +58,7 @@ describe('registerAllHandlers', () => {
     expect(registerRecoveryHandlers).not.toHaveBeenCalled();
     expect(registerArtifactHandlers).not.toHaveBeenCalled();
     expect(registerMemoryHandlers).not.toHaveBeenCalled();
+    expect(registerWorkspaceFilesHandlers).not.toHaveBeenCalled();
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
@@ -176,5 +180,19 @@ describe('registerAllHandlers', () => {
       memoryService,
       logger: undefined,
     });
+  });
+
+  it('registers workspace files handlers when a workspace files service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const workspaceFilesService = {
+      listDirectory: vi.fn(),
+    };
+
+    registerAllHandlers({ workspaceFilesService });
+
+    expect(registerWorkspaceFilesHandlers).toHaveBeenCalledWith(
+      workspaceFilesService,
+      { logger: undefined },
+    );
   });
 });
