@@ -110,6 +110,8 @@ export function LeftSidebar({
                       type="button"
                       onClick={() => onSelectSession?.(session.id)}
                       aria-current={session.active ? 'page' : undefined}
+                      aria-label={`Open session ${session.title}, updated ${session.meta}`}
+                      title={`${session.title} · ${session.meta}`}
                       className={cx(
                         'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pl-6 pr-3 text-left text-sm transition',
                         session.active

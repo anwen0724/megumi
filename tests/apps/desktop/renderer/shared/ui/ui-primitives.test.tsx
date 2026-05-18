@@ -64,6 +64,41 @@ describe('shared UI primitives', () => {
     expect(onValueChange).toHaveBeenCalledWith('tasks');
   });
 
+  it('supports keyboard navigation between enabled tabs', async () => {
+    const onValueChange = vi.fn();
+
+    render(
+      <Tabs
+        ariaLabel="Workspace tabs"
+        value="files"
+        onValueChange={onValueChange}
+        tabs={[
+          { id: 'files', label: 'Files' },
+          { id: 'context', label: 'Context' },
+          { id: 'artifacts', label: 'Artifacts', disabled: true },
+          { id: 'memory', label: 'Memory' },
+        ]}
+      />,
+    );
+
+    const filesTab = screen.getByRole('tab', { name: 'Files' });
+    const contextTab = screen.getByRole('tab', { name: 'Context' });
+    const memoryTab = screen.getByRole('tab', { name: 'Memory' });
+
+    filesTab.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onValueChange).toHaveBeenLastCalledWith('context');
+    expect(contextTab).toHaveFocus();
+
+    await userEvent.keyboard('{End}');
+    expect(onValueChange).toHaveBeenLastCalledWith('memory');
+    expect(memoryTab).toHaveFocus();
+
+    await userEvent.keyboard('{Home}');
+    expect(onValueChange).toHaveBeenLastCalledWith('files');
+    expect(filesTab).toHaveFocus();
+  });
+
   it('associates a text field with its label', async () => {
     render(<TextField label="Message" placeholder="Ask Megumi" />);
 

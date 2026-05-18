@@ -163,6 +163,29 @@ describe('LeftSidebar', () => {
     expect(onSelectSession).toHaveBeenCalledWith('session-2');
   });
 
+  it('gives session rows explicit accessible names and title text', () => {
+    render(
+      <LeftSidebar
+        collapsed={false}
+        workspaceName="megumi"
+        sessions={sessions}
+        onToggleCollapsed={() => undefined}
+        onCreateSession={() => undefined}
+      />,
+    );
+
+    const activeSession = screen.getByRole('button', {
+      name: 'Open session Planning the UI, updated 12h',
+    });
+    const inactiveSession = screen.getByRole('button', {
+      name: 'Open session Review notes, updated 2d',
+    });
+
+    expect(activeSession).toHaveAttribute('title', 'Planning the UI · 12h');
+    expect(inactiveSession).toHaveAttribute('title', 'Review notes · 2d');
+    expect(activeSession).toHaveAttribute('aria-current', 'page');
+  });
+
   it('supports compact show more when the workspace has many sessions', async () => {
     const manySessions = Array.from({ length: 7 }, (_, index) => ({
       id: `session-${index + 1}`,
