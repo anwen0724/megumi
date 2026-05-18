@@ -3,6 +3,7 @@ import { runTurn } from '@megumi/core/run-runtime/run-turn';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/run-runtime/types';
 import {
   createRunCompletedEvent,
+  createRunStartedEvent,
   createRunStatusChangedEvent,
   createStepCompletedEvent,
   createStepFailedEvent,
@@ -390,9 +391,19 @@ export class SessionRunService {
     let lastSequence = 0;
     let terminalEvent: RuntimeEvent | undefined;
 
+    const startedEvent = withRequestMetadata(createRunStartedEvent({
+      eventId: this.ids.eventId(),
+      sessionId: input.request.sessionId,
+      runId: input.request.runId,
+      sequence: lastSequence += 1,
+      createdAt: input.request.createdAt,
+    }), input.request);
+    this.repository.appendRuntimeEvent(startedEvent);
+    yield startedEvent;
+
     for await (const event of this.requireModelStepProvider().streamModelStep(input.request)) {
-      const eventWithRequest = withRequestMetadata(event, input.request);
-      lastSequence = Math.max(lastSequence, eventWithRequest.sequence);
+      const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
+      lastSequence = eventWithRequest.sequence;
       this.repository.appendRuntimeEvent(eventWithRequest);
       if (eventWithRequest.eventType === 'assistant.output.delta') {
         assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
@@ -687,6 +698,17 @@ function withRequestMetadata(event: RuntimeEvent, request: ModelStepRuntimeReque
     ...event,
     requestId: event.requestId ?? request.requestId,
     ...(event.context ? { context: event.context } : request.runtimeContext ? { context: request.runtimeContext } : {}),
+  };
+}
+
+function withSequenceAfter(event: RuntimeEvent, lastSequence: number): RuntimeEvent {
+  if (event.sequence > lastSequence) {
+    return event;
+  }
+
+  return {
+    ...event,
+    sequence: lastSequence + 1,
   };
 }
 

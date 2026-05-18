@@ -5,7 +5,11 @@ import type { CompletedToolActivity } from '../../../entities/chat/store';
 import { useChatStore } from '../../../entities/chat/store';
 import { useRunStore } from '../../../entities/run/store';
 import { ToolCallStatusCard } from '../../../entities/tool-call';
-import { createProcessingDisclosureModel } from '../processing-disclosure';
+import {
+  createProcessingDisclosureModel,
+  formatProcessingDuration,
+  type ProcessingDisclosureModel,
+} from '../processing-disclosure';
 import { Composer, type ComposerStatus, type ComposerSubmitPayload } from './Composer';
 import { ProcessingDisclosure } from './ProcessingDisclosure';
 import { TimelineMessage } from './TimelineMessage';
@@ -60,11 +64,11 @@ export function ChatTimeline() {
   const activeRunId = useRunStore((state) => state.activeRunId);
   const activeRun = useRunStore((state) => (activeRunId ? state.runs[activeRunId] : undefined));
   const activeRunEvents = useRunStore((state) => (activeRunId ? state.eventsByRun[activeRunId] ?? EMPTY_EVENTS : EMPTY_EVENTS));
-  const runIsActive = Boolean(activeRun && !['completed', 'failed', 'cancelled'].includes(activeRun.status));
+  const runIsActive = agentStatus === 'sending' || Boolean(activeRun && !['completed', 'failed', 'cancelled'].includes(activeRun.status));
   const processingNow = useProcessingNow(runIsActive);
   const { sendSessionMessage } = useSessionTimeline();
 
-  const processingDisclosure = useMemo(() => {
+  const eventProcessingDisclosure = useMemo(() => {
     if (!activeRun) {
       return null;
     }
@@ -75,18 +79,6 @@ export function ChatTimeline() {
       now: processingNow,
     });
   }, [activeRun, activeRunEvents, processingNow]);
-
-  const hasFailedTool = pendingToolCalls.some((toolCall) => toolCall.status === 'failed');
-  const composerStatus: ComposerStatus = hasFailedTool ? 'error' : agentStatus;
-  const hasTimelineContent =
-    messages.length > 0 ||
-    isStreaming ||
-    pendingToolCalls.length > 0 ||
-    completedToolActivities.length > 0 ||
-    Boolean(processingDisclosure) ||
-    agentStatus === 'sending' ||
-    agentStatus === 'running' ||
-    agentStatus === 'error';
 
   const timelineItems: TimelineItem[] = [
     ...messages.map((message) => ({
@@ -106,6 +98,37 @@ export function ChatTimeline() {
   const latestUserMessageItemId = [...timelineItems]
     .reverse()
     .find((item) => item.kind === 'message' && item.message.role === 'user')?.id;
+
+  const latestUserMessageItem = [...timelineItems]
+    .reverse()
+    .find((item) => item.kind === 'message' && item.message.role === 'user');
+
+  const pendingProcessingDisclosure: ProcessingDisclosureModel | null =
+    agentStatus === 'sending' && latestUserMessageItem?.kind === 'message'
+      ? {
+          runId: `pending-${latestUserMessageItem.id}`,
+          status: 'running',
+          statusLabel: '正在处理',
+          durationLabel: formatProcessingDuration(latestUserMessageItem.message.timestamp, processingNow),
+          live: true,
+          startedAt: latestUserMessageItem.message.timestamp,
+          currentAction: '正在连接模型...',
+          completedEntries: [],
+        }
+      : null;
+
+  const processingDisclosure = eventProcessingDisclosure ?? pendingProcessingDisclosure;
+  const hasFailedTool = pendingToolCalls.some((toolCall) => toolCall.status === 'failed');
+  const composerStatus: ComposerStatus = hasFailedTool ? 'error' : agentStatus;
+  const hasTimelineContent =
+    messages.length > 0 ||
+    isStreaming ||
+    pendingToolCalls.length > 0 ||
+    completedToolActivities.length > 0 ||
+    Boolean(processingDisclosure) ||
+    agentStatus === 'sending' ||
+    agentStatus === 'running' ||
+    agentStatus === 'error';
 
   function handleSubmit(payload: ComposerSubmitPayload) {
     void sendSessionMessage(payload);
@@ -163,17 +186,6 @@ export function ChatTimeline() {
                 ) : null}
               </Fragment>
             ))}
-
-            {agentStatus === 'sending' ? (
-              <TimelineMessage
-                streaming
-                message={{
-                  role: 'assistant',
-                  content: 'Megumi is connecting to the provider...',
-                  timestamp: new Date().toISOString(),
-                }}
-              />
-            ) : null}
 
             {pendingToolCalls.length > 0 ? (
               <section aria-label="Active tool calls" className="space-y-2">

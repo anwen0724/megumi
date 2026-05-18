@@ -409,7 +409,23 @@ describe('SessionRunService', () => {
     }
 
     expect(result.data).toEqual({ requestId: 'ipc-session-message-send-1' });
-    expect(streamed.map((event) => event.eventType)).toContain('assistant.output.delta');
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'assistant.output.delta',
+      'assistant.output.completed',
+      'step.status.changed',
+      'step.completed',
+      'run.status.changed',
+      'run.completed',
+    ]);
+    expect(streamed[0]).toMatchObject({
+      eventType: 'run.started',
+      requestId: 'ipc-session-message-send-1',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 1,
+    });
+    expect(streamed.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toContain('assistant.output.completed');
     expect(service.listMessagesBySession('session-1')).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
@@ -774,12 +790,15 @@ describe('SessionRunService', () => {
     }
 
     expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
       'run.failed',
       'step.status.changed',
       'step.failed',
       'run.status.changed',
     ]);
+    expect(streamed.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toEqual([
+      'run.started',
       'run.failed',
       'step.status.changed',
       'step.failed',

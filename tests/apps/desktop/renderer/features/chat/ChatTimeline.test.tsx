@@ -1,5 +1,5 @@
 ﻿// @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
@@ -7,6 +7,9 @@ import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
+
+let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
+let runtimeSequence = 1;
 
 function resetChatStore() {
   useChatStore.setState({
@@ -54,6 +57,18 @@ function runtimeEvent(
   } as RuntimeEvent;
 }
 
+function emitRuntimeEvent(
+  eventType: RuntimeEvent['eventType'],
+  requestId: string,
+  payload: RuntimeEvent['payload'] = {},
+  overrides: Partial<RuntimeEvent> = {},
+) {
+  runtimeEventCallback?.(runtimeEvent(eventType, runtimeSequence++, payload, {
+    requestId,
+    ...overrides,
+  }));
+}
+
 function installMegumiMock() {
   const session = {
     message: {
@@ -71,7 +86,12 @@ function installMegumiMock() {
         },
       },
       runtime: {
-        onEvent: vi.fn(() => () => undefined),
+        onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
+          runtimeEventCallback = callback;
+          return () => {
+            runtimeEventCallback = null;
+          };
+        }),
       },
       provider: { list: vi.fn(), update: vi.fn(), setApiKey: vi.fn(), deleteApiKey: vi.fn() },
     },
@@ -81,6 +101,8 @@ function installMegumiMock() {
 
 describe('ChatTimeline', () => {
   beforeEach(() => {
+    runtimeEventCallback = null;
+    runtimeSequence = 1;
     resetChatStore();
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date('2026-05-10T12:00:42.000Z'));
@@ -89,6 +111,7 @@ describe('ChatTimeline', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    runtimeEventCallback = null;
   });
 
   it('renders the empty warm workspace state with full composer controls', () => {
@@ -121,6 +144,62 @@ describe('ChatTimeline', () => {
       expect(screen.getByText('Start with the shell')).toBeInTheDocument();
     });
     expect(session.message.send).toHaveBeenCalled();
+  });
+
+  it('shows processing disclosure while a sent message is waiting for runtime events', async () => {
+    installMegumiMock();
+    render(<ChatTimeline />);
+
+    fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Collapse processing disclosure/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    });
+
+    expect(screen.getByText('正在处理')).toBeInTheDocument();
+    expect(screen.getByText('当前动作')).toBeInTheDocument();
+    expect(screen.getByText('正在连接模型...')).toBeInTheDocument();
+    expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
+  });
+
+  it('keeps processing disclosure around the final response on the real runtime event path', async () => {
+    const session = installMegumiMock();
+    render(<ChatTimeline />);
+
+    fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Explain Verilog' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => {
+      expect(session.message.send).toHaveBeenCalledTimes(1);
+    });
+
+    const requestId = session.message.send.mock.calls[0][0].requestId;
+
+    act(() => {
+      emitRuntimeEvent('run.started', requestId, { runKind: 'chat' });
+      emitRuntimeEvent('assistant.output.delta', requestId, { delta: 'Verilog is ' });
+      emitRuntimeEvent('assistant.output.delta', requestId, { delta: 'an HDL.' });
+      emitRuntimeEvent('assistant.output.completed', requestId, { content: 'Verilog is an HDL.' });
+      emitRuntimeEvent('step.completed', requestId, { kind: 'model', title: '生成回复' }, { stepId: 'step-1' });
+      emitRuntimeEvent('run.completed', requestId);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Verilog is an HDL.')).toBeInTheDocument();
+    });
+
+    const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
+    expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('已处理'));
+    expect(timelineText.indexOf('已处理')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
+    expect(screen.getByRole('button', { name: /Expand processing disclosure/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
   });
 
   it('renders persisted runtime error messages and does not retry from an empty draft', async () => {
