@@ -56,7 +56,7 @@ describe('processing disclosure projection', () => {
       now: new Date('2026-05-18T12:00:42.000Z'),
     });
 
-    expect(model).toMatchObject({
+    expect(model!).toMatchObject({
       runId: 'run-1',
       status: 'running',
       statusLabel: '正在处理',
@@ -64,7 +64,7 @@ describe('processing disclosure projection', () => {
       currentAction: '正在生成回复...',
       live: true,
     });
-    expect(model.completedEntries.map((entry) => entry.label)).toEqual([
+    expect(model!.completedEntries.map((entry) => entry.label)).toEqual([
       '已更新有效上下文',
       '已完成步骤：读取当前上下文',
     ]);
@@ -92,18 +92,18 @@ describe('processing disclosure projection', () => {
       now: new Date('2026-05-18T12:00:30.000Z'),
     });
 
-    expect(model).toMatchObject({
+    expect(model!).toMatchObject({
       status: 'completed',
       statusLabel: '已处理',
       live: false,
       currentAction: undefined,
     });
-    expect(model.completedEntries.map((entry) => entry.label)).toEqual([
+    expect(model!.completedEntries.map((entry) => entry.label)).toEqual([
       '已完成工具：workspace.read',
       '已创建产物：UI 调整说明',
       '运行已完成',
     ]);
-    expect(JSON.stringify(model)).not.toMatch(/下一步|next step|思考过程|chain-of-thought/i);
+    expect(JSON.stringify(model!)).not.toMatch(/下一步|next step|思考过程|chain-of-thought/i);
   });
 
   it('creates failed and cancelled models from terminal events', () => {
@@ -132,17 +132,17 @@ describe('processing disclosure projection', () => {
       now: new Date('2026-05-18T12:00:30.000Z'),
     });
 
-    expect(failed).toMatchObject({
+    expect(failed!).toMatchObject({
       status: 'failed',
       statusLabel: '处理失败',
       currentAction: undefined,
     });
-    expect(failed.completedEntries.at(-1)?.label).toBe('处理失败：Provider failed.');
-    expect(cancelled).toMatchObject({
+    expect(failed!.completedEntries.at(-1)?.label).toBe('处理失败：Provider failed.');
+    expect(cancelled!).toMatchObject({
       status: 'cancelled',
       statusLabel: '已取消',
       currentAction: undefined,
     });
-    expect(cancelled.completedEntries.at(-1)?.label).toBe('已取消：User stopped the run.');
+    expect(cancelled!.completedEntries.at(-1)?.label).toBe('已取消：User stopped the run.');
   });
 });
