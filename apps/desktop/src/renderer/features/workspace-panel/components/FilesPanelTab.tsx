@@ -19,16 +19,15 @@ interface FileRowProps {
 function FileRow({ entry, workspaceRoot }: FileRowProps) {
   const expanded = useWorkspaceFilesStore((state) => state.expandedDirectoryPaths.includes(entry.relativePath));
   const selectedPath = useWorkspaceFilesStore((state) => state.selectedPath);
-  const entriesByDirectory = useWorkspaceFilesStore((state) => state.entriesByDirectory);
-  const loadingDirectories = useWorkspaceFilesStore((state) => state.loadingDirectories);
+  const loadedChildEntries = useWorkspaceFilesStore((state) => state.entriesByDirectory[entry.relativePath]);
+  const loading = useWorkspaceFilesStore((state) => state.loadingDirectories.includes(entry.relativePath));
   const toggleDirectory = useWorkspaceFilesStore((state) => state.toggleDirectory);
   const loadDirectory = useWorkspaceFilesStore((state) => state.loadDirectory);
   const setSelectedPath = useWorkspaceFilesStore((state) => state.setSelectedPath);
 
   const selected = selectedPath === entry.relativePath;
-  const childEntries = entriesByDirectory[entry.relativePath] ?? EMPTY_ENTRIES;
-  const childrenLoaded = Object.prototype.hasOwnProperty.call(entriesByDirectory, entry.relativePath);
-  const loading = loadingDirectories.includes(entry.relativePath);
+  const childEntries = loadedChildEntries ?? EMPTY_ENTRIES;
+  const childrenLoaded = loadedChildEntries !== undefined;
 
   async function handleClick() {
     setSelectedPath(entry.relativePath);
@@ -49,6 +48,7 @@ function FileRow({ entry, workspaceRoot }: FileRowProps) {
       <button
         type="button"
         onClick={() => void handleClick()}
+        aria-expanded={entry.kind === 'directory' ? expanded : undefined}
         className={cx(
           'flex min-h-8 w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-sm',
           'text-[var(--color-text-muted)] hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-text)]',

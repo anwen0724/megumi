@@ -129,8 +129,13 @@ describe('FilesPanelTab', () => {
 
     render(<FilesPanelTab />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'apps' }));
+    const appsRow = await screen.findByRole('button', { name: 'apps' });
+    expect(appsRow).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'README.md' })).not.toHaveAttribute('aria-expanded');
 
+    await userEvent.click(appsRow);
+
+    expect(appsRow).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByText('desktop')).toBeInTheDocument();
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     expect(list).toHaveBeenNthCalledWith(2, expect.objectContaining({

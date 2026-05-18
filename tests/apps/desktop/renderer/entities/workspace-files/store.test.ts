@@ -3,6 +3,54 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 
+function createDeferred<T>() {
+  let resolve: (value: T) => void;
+  let reject: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return {
+    promise,
+    resolve: resolve!,
+    reject: reject!,
+  };
+}
+
+function createWorkspaceFilesResult({
+  workspaceRoot,
+  directoryPath,
+  entryName,
+}: {
+  workspaceRoot: string;
+  directoryPath: string;
+  entryName: string;
+}) {
+  return {
+    ok: true,
+    data: {
+      workspaceRoot,
+      directoryPath,
+      entries: [
+        {
+          name: entryName,
+          relativePath: entryName,
+          kind: 'directory',
+          depth: 0,
+          hidden: false,
+          ignored: false,
+        },
+      ],
+    },
+    meta: {
+      requestId: 'ipc-workspace-files-list-1',
+      channel: IPC_CHANNELS.workspace.files.list,
+      handledAt: '2026-05-18T00:00:00.100Z',
+    },
+  } as const;
+}
+
 function installWorkspaceFilesMock() {
   const files = {
     list: vi.fn(async () => ({
@@ -82,6 +130,122 @@ describe('useWorkspaceFilesStore', () => {
       expect.objectContaining({ name: 'README.md', relativePath: 'README.md', kind: 'file' }),
     ]);
     expect(useWorkspaceFilesStore.getState().loadingDirectories).not.toContain('');
+  });
+
+  it('clears previous workspace file state before loading a new workspace root', async () => {
+    const newWorkspaceLoad = createDeferred<ReturnType<typeof createWorkspaceFilesResult>>();
+    const files = {
+      list: vi
+        .fn()
+        .mockResolvedValueOnce(createWorkspaceFilesResult({
+          workspaceRoot: 'C:/work/project-a',
+          directoryPath: '',
+          entryName: 'project-a-apps',
+        }))
+        .mockReturnValueOnce(newWorkspaceLoad.promise),
+    };
+    Object.defineProperty(window, 'megumi', {
+      configurable: true,
+      value: {
+        workspace: {
+          files,
+        },
+      },
+    });
+
+    await useWorkspaceFilesStore.getState().loadDirectory({
+      workspaceRoot: 'C:/work/project-a',
+      directoryPath: '',
+    });
+    useWorkspaceFilesStore.getState().toggleDirectory('project-a-apps');
+    useWorkspaceFilesStore.getState().setSelectedPath('project-a-apps');
+    useWorkspaceFilesStore.setState({
+      error: 'Previous workspace error',
+      loadingDirectories: ['project-a-apps'],
+    });
+
+    const loadProjectB = useWorkspaceFilesStore.getState().loadDirectory({
+      workspaceRoot: 'C:/work/project-b',
+      directoryPath: '',
+    });
+
+    expect(useWorkspaceFilesStore.getState()).toMatchObject({
+      workspaceRoot: 'C:/work/project-b',
+      entriesByDirectory: {},
+      expandedDirectoryPaths: [],
+      selectedPath: null,
+      loadingDirectories: [''],
+      error: null,
+    });
+
+    newWorkspaceLoad.resolve(createWorkspaceFilesResult({
+      workspaceRoot: 'C:/work/project-b',
+      directoryPath: '',
+      entryName: 'project-b-apps',
+    }));
+    await loadProjectB;
+
+    expect(useWorkspaceFilesStore.getState().entriesByDirectory['']).toEqual([
+      expect.objectContaining({ name: 'project-b-apps' }),
+    ]);
+  });
+
+  it('ignores stale workspace file responses after the active workspace changes', async () => {
+    const projectALoad = createDeferred<ReturnType<typeof createWorkspaceFilesResult>>();
+    const projectBLoad = createDeferred<ReturnType<typeof createWorkspaceFilesResult>>();
+    const files = {
+      list: vi
+        .fn()
+        .mockReturnValueOnce(projectALoad.promise)
+        .mockReturnValueOnce(projectBLoad.promise),
+    };
+    Object.defineProperty(window, 'megumi', {
+      configurable: true,
+      value: {
+        workspace: {
+          files,
+        },
+      },
+    });
+
+    const loadProjectA = useWorkspaceFilesStore.getState().loadDirectory({
+      workspaceRoot: 'C:/work/project-a',
+      directoryPath: '',
+    });
+    const loadProjectB = useWorkspaceFilesStore.getState().loadDirectory({
+      workspaceRoot: 'C:/work/project-b',
+      directoryPath: '',
+    });
+
+    projectALoad.resolve(createWorkspaceFilesResult({
+      workspaceRoot: 'C:/work/project-a',
+      directoryPath: '',
+      entryName: 'project-a-apps',
+    }));
+    await loadProjectA;
+
+    expect(useWorkspaceFilesStore.getState()).toMatchObject({
+      workspaceRoot: 'C:/work/project-b',
+      entriesByDirectory: {},
+      loadingDirectories: [''],
+      error: null,
+    });
+
+    projectBLoad.resolve(createWorkspaceFilesResult({
+      workspaceRoot: 'C:/work/project-b',
+      directoryPath: '',
+      entryName: 'project-b-apps',
+    }));
+    await loadProjectB;
+
+    expect(useWorkspaceFilesStore.getState()).toMatchObject({
+      workspaceRoot: 'C:/work/project-b',
+      loadingDirectories: [],
+      error: null,
+    });
+    expect(useWorkspaceFilesStore.getState().entriesByDirectory['']).toEqual([
+      expect.objectContaining({ name: 'project-b-apps' }),
+    ]);
   });
 
   it('tracks expanded directories and selected paths', () => {

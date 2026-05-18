@@ -10,6 +10,7 @@ import {
 } from '../../shared/ipc';
 
 export interface WorkspaceFilesStoreState {
+  workspaceRoot: string | null;
   entriesByDirectory: Record<string, WorkspaceDirectoryEntry[]>;
   expandedDirectoryPaths: string[];
   selectedPath: string | null;
@@ -22,6 +23,7 @@ export interface WorkspaceFilesStoreState {
 }
 
 const initialState = {
+  workspaceRoot: null,
   entriesByDirectory: {},
   expandedDirectoryPaths: [],
   selectedPath: null,
@@ -29,20 +31,37 @@ const initialState = {
   error: null,
 } satisfies Pick<
   WorkspaceFilesStoreState,
-  'entriesByDirectory' | 'expandedDirectoryPaths' | 'selectedPath' | 'loadingDirectories' | 'error'
+  | 'workspaceRoot'
+  | 'entriesByDirectory'
+  | 'expandedDirectoryPaths'
+  | 'selectedPath'
+  | 'loadingDirectories'
+  | 'error'
 >;
 
-export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set) => ({
+export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get) => ({
   ...initialState,
   loadDirectory: async (payload) => {
+    const workspaceRoot = payload.workspaceRoot;
     const directoryPath = payload.directoryPath;
 
-    set((state) => ({
-      loadingDirectories: state.loadingDirectories.includes(directoryPath)
-        ? state.loadingDirectories
-        : [...state.loadingDirectories, directoryPath],
-      error: null,
-    }));
+    set((state) => {
+      if (state.workspaceRoot !== workspaceRoot) {
+        return {
+          ...initialState,
+          workspaceRoot,
+          loadingDirectories: [directoryPath],
+          error: null,
+        };
+      }
+
+      return {
+        loadingDirectories: state.loadingDirectories.includes(directoryPath)
+          ? state.loadingDirectories
+          : [...state.loadingDirectories, directoryPath],
+        error: null,
+      };
+    });
 
     try {
       const result = await window.megumi.workspace.files.list(
@@ -51,6 +70,10 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set) => 
           payload satisfies WorkspaceFilesListPayload,
         ),
       );
+
+      if (get().workspaceRoot !== workspaceRoot) {
+        return;
+      }
 
       if (!result.ok) {
         set((state) => ({
@@ -69,6 +92,10 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set) => 
         error: null,
       }));
     } catch (error) {
+      if (get().workspaceRoot !== workspaceRoot) {
+        return;
+      }
+
       set((state) => ({
         loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
         error: error instanceof Error ? error.message : 'Megumi could not list workspace files.',
