@@ -9,17 +9,18 @@ describe('ThemeToggle', () => {
     useThemeStore.setState({ theme: 'megumi-warm' });
   });
 
-  it('shows the current theme label', () => {
+  it('renders as an icon-only button with an accessible next-theme label', () => {
     render(
       <ThemeProvider>
         <ThemeToggle />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText('Megumi Warm')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Neutral Light theme' })).toBeInTheDocument();
+    expect(screen.queryByText('Megumi Warm')).not.toBeInTheDocument();
   });
 
-  it('switches to the next theme when clicked', async () => {
+  it('switches to the next theme when clicked without rendering theme text', async () => {
     render(
       <ThemeProvider>
         <ThemeToggle />
@@ -29,6 +30,7 @@ describe('ThemeToggle', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Switch to Neutral Light theme' }));
 
     expect(useThemeStore.getState().theme).toBe('neutral-light');
-    expect(screen.getByText('Neutral Light')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Megumi Warm theme' })).toBeInTheDocument();
+    expect(screen.queryByText('Neutral Light')).not.toBeInTheDocument();
   });
 });
