@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { CompletedToolActivity } from '../../../entities/chat/store';
 import { useChatStore } from '../../../entities/chat/store';
+import { useRunStore } from '../../../entities/run/store';
 import { ToolCallStatusCard } from '../../../entities/tool-call';
+import { createProcessingDisclosureModel } from '../processing-disclosure';
 import { Composer, type ComposerStatus, type ComposerSubmitPayload } from './Composer';
+import { ProcessingDisclosure } from './ProcessingDisclosure';
 import { TimelineMessage } from './TimelineMessage';
 import { ToolActivityRow } from './ToolActivityRow';
 import { useSessionTimeline } from '../hooks/use-session-timeline';
+
+const EMPTY_EVENTS: RuntimeEvent[] = [];
 
 type TimelineItem =
   | {
@@ -27,6 +33,22 @@ function toTimeValue(timestamp: string): number {
   return Number.isNaN(value) ? 0 : value;
 }
 
+function useProcessingNow(active: boolean): Date {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!active) {
+      setNow(new Date());
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [active]);
+
+  return now;
+}
+
 export function ChatTimeline() {
   const [expandedActivityIds, setExpandedActivityIds] = useState<Set<string>>(() => new Set());
   const messages = useChatStore((state) => state.messages);
@@ -35,7 +57,24 @@ export function ChatTimeline() {
   const pendingToolCalls = useChatStore((state) => state.pendingToolCalls);
   const completedToolActivities = useChatStore((state) => state.completedToolActivities);
   const agentStatus = useChatStore((state) => state.agentStatus);
+  const activeRunId = useRunStore((state) => state.activeRunId);
+  const activeRun = useRunStore((state) => (activeRunId ? state.runs[activeRunId] : undefined));
+  const activeRunEvents = useRunStore((state) => (activeRunId ? state.eventsByRun[activeRunId] ?? EMPTY_EVENTS : EMPTY_EVENTS));
+  const runIsActive = Boolean(activeRun && !['completed', 'failed', 'cancelled'].includes(activeRun.status));
+  const processingNow = useProcessingNow(runIsActive);
   const { sendSessionMessage } = useSessionTimeline();
+
+  const processingDisclosure = useMemo(() => {
+    if (!activeRun) {
+      return null;
+    }
+
+    return createProcessingDisclosureModel({
+      run: activeRun,
+      events: activeRunEvents,
+      now: processingNow,
+    });
+  }, [activeRun, activeRunEvents, processingNow]);
 
   const hasFailedTool = pendingToolCalls.some((toolCall) => toolCall.status === 'failed');
   const composerStatus: ComposerStatus = hasFailedTool ? 'error' : agentStatus;
@@ -44,6 +83,7 @@ export function ChatTimeline() {
     isStreaming ||
     pendingToolCalls.length > 0 ||
     completedToolActivities.length > 0 ||
+    Boolean(processingDisclosure) ||
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
     agentStatus === 'error';
@@ -62,6 +102,10 @@ export function ChatTimeline() {
       activity,
     })),
   ].sort((left, right) => toTimeValue(left.timestamp) - toTimeValue(right.timestamp));
+
+  const latestUserMessageItemId = [...timelineItems]
+    .reverse()
+    .find((item) => item.kind === 'message' && item.message.role === 'user')?.id;
 
   function handleSubmit(payload: ComposerSubmitPayload) {
     void sendSessionMessage(payload);
@@ -98,20 +142,27 @@ export function ChatTimeline() {
           </div>
         ) : (
           <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-4xl flex-col gap-4">
-            {timelineItems.map((item) => {
-              if (item.kind === 'message') {
-                return <TimelineMessage key={item.id} message={item.message} />;
-              }
+            {processingDisclosure && !latestUserMessageItemId ? (
+              <ProcessingDisclosure model={processingDisclosure} />
+            ) : null}
 
-              return (
-                <ToolActivityRow
-                  key={item.id}
-                  activity={item.activity}
-                  expanded={expandedActivityIds.has(item.activity.id)}
-                  onToggle={() => toggleActivity(item.activity.id)}
-                />
-              );
-            })}
+            {timelineItems.map((item) => (
+              <Fragment key={item.id}>
+                {item.kind === 'message' ? (
+                  <TimelineMessage message={item.message} />
+                ) : (
+                  <ToolActivityRow
+                    activity={item.activity}
+                    expanded={expandedActivityIds.has(item.activity.id)}
+                    onToggle={() => toggleActivity(item.activity.id)}
+                  />
+                )}
+
+                {processingDisclosure && item.id === latestUserMessageItemId ? (
+                  <ProcessingDisclosure model={processingDisclosure} />
+                ) : null}
+              </Fragment>
+            ))}
 
             {agentStatus === 'sending' ? (
               <TimelineMessage
@@ -145,7 +196,6 @@ export function ChatTimeline() {
                 }}
               />
             ) : null}
-
           </div>
         )}
       </div>

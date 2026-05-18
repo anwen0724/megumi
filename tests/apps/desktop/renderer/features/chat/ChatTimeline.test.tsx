@@ -1,8 +1,11 @@
 ﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
 
 function resetChatStore() {
@@ -27,6 +30,28 @@ function createMessage(overrides: Partial<TimelineMessageData> = {}): TimelineMe
     timestamp: '2026-05-10T00:00:00.000Z',
     ...overrides,
   };
+}
+
+function runtimeEvent(
+  eventType: RuntimeEvent['eventType'],
+  sequence: number,
+  payload: RuntimeEvent['payload'] = {},
+  overrides: Partial<RuntimeEvent> = {},
+): RuntimeEvent {
+  return {
+    eventId: `event-${sequence}`,
+    schemaVersion: 1,
+    eventType,
+    runId: 'run-1',
+    sessionId: 'session-1',
+    sequence,
+    createdAt: `2026-05-10T12:00:${sequence.toString().padStart(2, '0')}.000Z`,
+    source: 'core',
+    visibility: 'user',
+    persist: 'required',
+    payload,
+    ...overrides,
+  } as RuntimeEvent;
 }
 
 function installMegumiMock() {
@@ -57,6 +82,9 @@ function installMegumiMock() {
 describe('ChatTimeline', () => {
   beforeEach(() => {
     resetChatStore();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-05-10T12:00:42.000Z'));
+    useRunStore.getState().resetRuns();
   });
 
   afterEach(() => {
@@ -130,5 +158,79 @@ describe('ChatTimeline', () => {
 
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'deepseek-v4-flash' } });
     expect(session.message.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders active processing disclosure after the latest user message without showing guessed future work', () => {
+    useChatStore.getState().setMessages([
+      createMessage({
+        id: 'message-user',
+        role: 'user',
+        content: '请检查当前 UI',
+        stepNum: 1,
+        timestamp: '2026-05-10T12:00:00.000Z',
+      }),
+    ]);
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('context.effective.updated', 2, { sourceCount: 2 }));
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: '处理中' }));
+    useChatStore.setState({
+      agentStatus: 'running',
+      streamingText: '处理中',
+      isStreaming: true,
+    });
+
+    render(<ChatTimeline />);
+
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
+    expect(timeline).toHaveTextContent('请检查当前 UI');
+    expect(timeline).toHaveTextContent('正在处理');
+    expect(timeline).toHaveTextContent('41s');
+    expect(timeline).toHaveTextContent('当前动作');
+    expect(timeline).toHaveTextContent('正在生成回复...');
+    expect(timeline).toHaveTextContent('已更新有效上下文');
+    expect(timeline).toHaveTextContent('处理中');
+    expect(timeline).not.toHaveTextContent(/下一步|思考过程|chain-of-thought/i);
+  });
+
+  it('renders completed processing disclosure collapsed before final assistant response', async () => {
+    useChatStore.getState().setMessages([
+      createMessage({
+        id: 'message-user',
+        role: 'user',
+        content: '总结 UI 调整',
+        stepNum: 1,
+        timestamp: '2026-05-10T12:00:00.000Z',
+      }),
+      createMessage({
+        id: 'message-assistant',
+        role: 'assistant',
+        content: '已完成 UI 调整总结。',
+        stepNum: 2,
+        timestamp: '2026-05-10T12:01:43.000Z',
+      }),
+    ]);
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('step.completed', 2, {
+      kind: 'model',
+      title: '生成 UI 总结',
+    }, { stepId: 'step-1' }));
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.completed', 3, {}, {
+      createdAt: '2026-05-10T12:01:42.000Z',
+    }));
+
+    render(<ChatTimeline />);
+
+    const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
+    expect(timelineText.indexOf('总结 UI 调整')).toBeLessThan(timelineText.indexOf('已处理'));
+    expect(timelineText.indexOf('已处理')).toBeLessThan(timelineText.indexOf('已完成 UI 调整总结。'));
+    expect(screen.getByRole('button', { name: /Expand processing disclosure/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByText('已完成步骤：生成 UI 总结')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Expand processing disclosure/ }));
+
+    expect(screen.getByText('已完成步骤：生成 UI 总结')).toBeInTheDocument();
   });
 });
