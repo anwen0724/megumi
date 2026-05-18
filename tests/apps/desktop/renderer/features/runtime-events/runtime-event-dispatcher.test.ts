@@ -136,6 +136,31 @@ describe('runtime event dispatcher', () => {
     });
     expect(useChatStore.getState().agentStatus).toBe('idle');
   });
+
+  it('stores non-output runtime events for renderer processing disclosure without changing chat messages', () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    dispatchRuntimeEvent(runtimeEvent('context.effective.updated', 2, { sourceCount: 2 }));
+    dispatchRuntimeEvent(runtimeEvent('tool.call.completed', 3, {
+      toolCallId: 'tool-call-1',
+      toolName: 'workspace.read',
+      resultPreview: { files: 2 },
+      durationMs: 800,
+    }));
+    dispatchRuntimeEvent(runtimeEvent('artifact.created', 4, {
+      artifactId: 'artifact-1',
+      kind: 'report',
+      title: 'UI report',
+      status: 'draft',
+    }));
+
+    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventType)).toEqual([
+      'run.started',
+      'context.effective.updated',
+      'tool.call.completed',
+      'artifact.created',
+    ]);
+    expect(useChatStore.getState().messages).toEqual([]);
+  });
 });
 
 describe('useRunStore', () => {
