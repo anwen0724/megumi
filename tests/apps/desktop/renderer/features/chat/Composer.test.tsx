@@ -4,6 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 
+function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
+  Object.defineProperty(textarea, 'scrollHeight', {
+    configurable: true,
+    value: scrollHeight,
+  });
+}
+
 describe('Composer', () => {
   it('renders mode, model, context, attachment, and disabled send controls', () => {
     render(<Composer onSubmit={() => undefined} />);
@@ -51,12 +58,14 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<Composer onSubmit={onSubmit} />);
     const input = screen.getByLabelText('Message Megumi');
+    setTextareaScrollHeight(input, 96);
 
     await userEvent.click(input);
     await userEvent.keyboard('first line{Shift>}{Enter}{/Shift}second line{Alt>}{Enter}{/Alt}third line');
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(input).toHaveValue('first line\nsecond line\nthird line');
+    expect(input).toHaveStyle({ height: '96px' });
   });
 
   it('does not submit while an IME composition is confirming text', () => {
@@ -95,16 +104,53 @@ describe('Composer', () => {
 
     const toolbar = screen.getByTestId('composer-toolbar');
     const leftControls = toolbar.firstElementChild;
-    const rightControls = toolbar.lastElementChild;
+    const rightControls = screen.getByTestId('composer-actions');
 
     expect(screen.getByRole('button', { name: 'Choose context' })).toHaveTextContent('Context');
     expect(screen.getByTestId('composer-input-panel')).toHaveClass('border-b');
     expect(toolbar).toHaveClass('justify-between');
+    expect(toolbar).toHaveClass('flex-nowrap');
     expect(leftControls).toHaveTextContent('Context');
-    expect(rightControls?.children).toHaveLength(3);
-    expect(rightControls?.children[0]).toContainElement(screen.getByLabelText('Composer mode'));
-    expect(rightControls?.children[1]).toContainElement(screen.getByLabelText('Model'));
-    expect(rightControls?.children[2]).toBe(screen.getByRole('button', { name: 'Send message' }));
+    expect(rightControls).toHaveClass('shrink-0');
+    expect(rightControls.children).toHaveLength(3);
+    expect(rightControls.children[0]).toContainElement(screen.getByLabelText('Composer mode'));
+    expect(rightControls.children[1]).toContainElement(screen.getByLabelText('Model'));
+    expect(rightControls.children[2]).toBe(screen.getByRole('button', { name: 'Send message' }));
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('shrink-0');
+  });
+
+  it('auto grows the textarea for multiline drafts while preserving a maximum height', async () => {
+    render(<Composer onSubmit={() => undefined} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    expect(input).toHaveStyle({ height: '56px', overflowY: 'hidden' });
+
+    setTextareaScrollHeight(input, 112);
+    await userEvent.type(input, 'first line{Shift>}{Enter}{/Shift}second line');
+
+    expect(input).toHaveStyle({ height: '112px', overflowY: 'hidden' });
+
+    setTextareaScrollHeight(input, 220);
+    await userEvent.type(input, '{Shift>}{Enter}{/Shift}third line{Shift>}{Enter}{/Shift}fourth line');
+
+    expect(input).toHaveStyle({ height: '160px', overflowY: 'auto' });
+  });
+
+  it('restores the compact textarea height after sending clears the draft', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    setTextareaScrollHeight(input, 120);
+    await userEvent.type(input, 'first line{Shift>}{Enter}{/Shift}second line');
+    expect(input).toHaveStyle({ height: '120px' });
+
+    setTextareaScrollHeight(input, 56);
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue('');
+    expect(input).toHaveStyle({ height: '56px', overflowY: 'hidden' });
   });
 
   it('shows sending status, allows drafting the next message, and shows Stop instead of Send', async () => {
@@ -137,17 +183,30 @@ describe('Composer', () => {
     await userEvent.keyboard('{Enter}');
     await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
 
-    const toolbar = screen.getByTestId('composer-toolbar');
-    const rightControls = toolbar.lastElementChild;
+    const rightControls = screen.getByTestId('composer-actions');
 
     expect(screen.getByText('Megumi is working')).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-pro');
     expect(rightControls).toHaveTextContent('Chat');
     expect(rightControls).toHaveTextContent('DeepSeek V4 Pro');
-    expect(rightControls?.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
+    expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
+    expect(screen.getByRole('button', { name: 'Stop current run' })).toHaveClass('shrink-0');
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('auto grows multiline follow-up drafts while a run is active', async () => {
+    const onStop = vi.fn();
+    render(<Composer status="running" onSubmit={() => undefined} onStop={onStop} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    setTextareaScrollHeight(input, 132);
+    await userEvent.type(input, 'follow-up line one{Shift>}{Enter}{/Shift}follow-up line two');
+
+    expect(input).toHaveValue('follow-up line one\nfollow-up line two');
+    expect(input).toHaveStyle({ height: '132px', overflowY: 'hidden' });
+    expect(screen.getByRole('button', { name: 'Stop current run' })).toBeEnabled();
   });
 
   it('does not render an enabled Stop button without a stop handler', () => {

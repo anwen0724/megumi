@@ -1,5 +1,5 @@
 ﻿// @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
@@ -122,6 +122,27 @@ describe('ChatTimeline', () => {
     expect(screen.getByLabelText('Message Megumi')).toBeInTheDocument();
     expect(screen.getByLabelText('Composer mode')).toHaveValue('chat');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
+  });
+
+  it('keeps timeline layout independent from the bottom composer overlay', () => {
+    render(<ChatTimeline />);
+
+    const root = screen.getByTestId('chat-timeline-root');
+    const scrollArea = screen.getByTestId('chat-timeline-scroll');
+    const composerOverlay = screen.getByTestId('chat-composer-overlay');
+
+    expect(root).toHaveClass('relative');
+    expect(root).toHaveClass('overflow-hidden');
+    expect(root).toHaveClass('min-w-[42rem]');
+    expect(scrollArea).toHaveClass('absolute');
+    expect(scrollArea).toHaveClass('inset-0');
+    expect(scrollArea).toHaveClass('overflow-y-auto');
+    expect(scrollArea).toHaveClass('pb-72');
+    expect(composerOverlay).toHaveClass('absolute');
+    expect(composerOverlay).toHaveClass('inset-x-0');
+    expect(composerOverlay).toHaveClass('bottom-0');
+    expect(within(scrollArea).getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 
   it('renders existing messages from chat state', () => {

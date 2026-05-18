@@ -42,4 +42,27 @@ describe('composer source guard', () => {
 
     expect(readTabLabels(rightPanel)).not.toContain('Run');
   });
+
+  it('keeps composer toolbar controls on one line', () => {
+    const composer = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
+
+    expect(composer).toMatch(/data-testid="composer-toolbar" className="[^"]*\bflex-nowrap\b/);
+    expect(composer).not.toMatch(/data-testid="composer-toolbar" className="[^"]*\bflex-wrap\b/);
+    expect(composer).not.toMatch(/data-testid="composer-toolbar"[\s\S]*?\bflex-wrap\b[\s\S]*?aria-label="Send message"/);
+    expect(composer).toMatch(/data-testid="composer-actions"[\s\S]*className="[^"]*\bshrink-0\b/);
+    expect(composer).toMatch(/aria-label="Send message"[\s\S]*className="[^"]*\bshrink-0\b/);
+    expect(composer).toMatch(/aria-label="Stop current run"[\s\S]*className="[^"]*\bshrink-0\b/);
+  });
+
+  it('keeps the composer anchored as a bottom overlay with reserved timeline space', () => {
+    const timeline = readSource('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
+
+    expect(timeline).toMatch(/data-testid="chat-timeline-root"[\s\S]*?className="[^"]*\brelative\b[^"]*\boverflow-hidden\b/);
+    expect(timeline).toMatch(/data-testid="chat-timeline-root"[\s\S]*?className="[^"]*\bmin-w-\[42rem\]/);
+    expect(timeline).toMatch(/data-testid="chat-timeline-scroll"[\s\S]*?className="[^"]*\babsolute\b[^"]*\binset-0\b/);
+    expect(timeline).toMatch(/data-testid="chat-timeline-scroll"[\s\S]*?className="[^"]*\bpb-72\b/);
+    expect(timeline).toMatch(/data-testid="chat-composer-overlay" className="[^"]*\babsolute\b[^"]*\bbottom-0\b/);
+    expect(appShell).toMatch(/data-testid="workbench-content" className="[^"]*\bmin-w-\[62rem\]/);
+  });
 });

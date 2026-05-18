@@ -82,9 +82,9 @@ export function AppShell() {
         onSelectSession={handleSelectSession}
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">
         <WindowTitleBar title={titlebarTitle} />
-        <div className="flex min-h-0 flex-1">
+        <div data-testid="workbench-content" className="flex min-h-0 min-w-[62rem] flex-1 overflow-hidden">
           <ChatTimeline />
           <RightWorkspacePanel
             collapsed={rightPanelCollapsed}

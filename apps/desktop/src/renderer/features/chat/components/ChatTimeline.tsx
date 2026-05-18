@@ -153,8 +153,14 @@ export function ChatTimeline() {
   }
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-[var(--color-app-bg)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+    <main
+      data-testid="chat-timeline-root"
+      className="relative min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)]"
+    >
+      <div
+        data-testid="chat-timeline-scroll"
+        className="absolute inset-0 overflow-y-auto px-6 pb-72 pt-6"
+      >
         {!hasTimelineContent ? (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-md text-center">
@@ -216,14 +222,16 @@ export function ChatTimeline() {
         )}
       </div>
 
-      <Composer
-        status={composerStatus}
-        onSubmit={handleSubmit}
-        onStop={handleStop}
-        onAttachFiles={() => undefined}
-        onChooseContext={() => undefined}
-        onShowApproval={() => undefined}
-      />
+      <div data-testid="chat-composer-overlay" className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+        <Composer
+          status={composerStatus}
+          onSubmit={handleSubmit}
+          onStop={handleStop}
+          onAttachFiles={() => undefined}
+          onChooseContext={() => undefined}
+          onShowApproval={() => undefined}
+        />
+      </div>
     </main>
   );
 }

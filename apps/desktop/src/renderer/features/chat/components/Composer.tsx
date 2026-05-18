@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useId, useState } from 'react';
+import { FormEvent, KeyboardEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import {
   AtSign,
   Bot,
@@ -61,6 +61,9 @@ const statusConfig = {
   },
 } as const;
 
+const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
+const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
+
 export function Composer({
   status = 'idle',
   initialValue = '',
@@ -72,6 +75,7 @@ export function Composer({
 }: ComposerProps) {
   const modeId = useId();
   const modelId = useId();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(initialValue);
   const [mode, setMode] = useState<ComposerMode>('chat');
   const [model, setModel] = useState<ComposerModel>('deepseek-v4-flash');
@@ -84,6 +88,24 @@ export function Composer({
   const placeholder = showStop ? 'Draft a follow-up while Megumi works...' : 'Ask Megumi anything...';
   const activeStatus = statusConfig[status];
   const StatusIcon = activeStatus?.icon;
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = `${COMPOSER_TEXTAREA_COMPACT_HEIGHT}px`;
+
+    const scrollHeight = textarea.scrollHeight;
+    const nextHeight = value
+      ? Math.max(COMPOSER_TEXTAREA_COMPACT_HEIGHT, Math.min(scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT))
+      : COMPOSER_TEXTAREA_COMPACT_HEIGHT;
+
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, [value]);
 
   function submitDraft() {
     if (!canSend) return;
@@ -129,13 +151,14 @@ export function Composer({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl px-6 pb-6">
+    <form onSubmit={handleSubmit} className="pointer-events-auto mx-auto w-full min-w-[38rem] max-w-3xl px-6 pb-6">
       <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)]">
         <div data-testid="composer-input-panel" className="border-b border-[var(--color-border)] px-3 py-2">
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi
           </label>
           <textarea
+            ref={textareaRef}
             id="megumi-composer"
             value={value}
             disabled={inputLocked}
@@ -143,16 +166,23 @@ export function Composer({
             onKeyDown={handleComposerKeyDown}
             placeholder={placeholder}
             rows={2}
-            className="min-h-14 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="max-h-40 min-h-14 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70"
           />
         </div>
 
-        <div data-testid="composer-toolbar" className="flex flex-wrap items-center justify-between gap-2 px-2 py-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <IconButton label="Attach files" variant="ghost" size="sm" onClick={onAttachFiles}>
+        <div data-testid="composer-toolbar" className="flex flex-nowrap items-center justify-between gap-2 px-2 py-2">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <IconButton label="Attach files" variant="ghost" size="sm" className="shrink-0" onClick={onAttachFiles}>
               <Paperclip size={16} aria-hidden="true" />
             </IconButton>
-            <Button type="button" variant="ghost" size="sm" onClick={onChooseContext} aria-label="Choose context">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
+              onClick={onChooseContext}
+              aria-label="Choose context"
+            >
               <AtSign size={15} aria-hidden="true" />
               Context
             </Button>
@@ -165,8 +195,8 @@ export function Composer({
             ) : null}
           </div>
 
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-            <div className="flex h-8 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
+          <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">
+            <div className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
               <label htmlFor={modeId} className="sr-only">
                 Composer mode
               </label>
@@ -187,7 +217,7 @@ export function Composer({
               </select>
             </div>
 
-            <div className="flex h-8 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
+            <div className="flex h-8 max-w-44 min-w-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
               <label htmlFor={modelId} className="sr-only">
                 Model
               </label>
@@ -198,7 +228,7 @@ export function Composer({
                 value={model}
                 disabled={inputLocked}
                 onChange={(event) => setModel(event.target.value as ComposerModel)}
-                className="bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
+                className="max-w-36 truncate bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
               >
                 {COMPOSER_MODEL_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -209,7 +239,7 @@ export function Composer({
             </div>
 
             {status === 'waiting-approval' ? (
-              <Button type="button" variant="secondary" size="sm" onClick={onShowApproval}>
+              <Button type="button" variant="secondary" size="sm" className="shrink-0" onClick={onShowApproval}>
                 Review approval
               </Button>
             ) : null}
@@ -221,12 +251,20 @@ export function Composer({
                 onClick={onStop}
                 disabled={!canStop}
                 aria-label="Stop current run"
+                className="shrink-0"
               >
                 <Square size={13} aria-hidden="true" />
                 Stop
               </Button>
             ) : (
-              <Button type="submit" variant="primary" size="sm" disabled={!canSend} aria-label="Send message">
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                aria-label="Send message"
+                className="shrink-0"
+                disabled={!canSend}
+              >
                 <SendHorizontal size={15} aria-hidden="true" />
                 Send
               </Button>

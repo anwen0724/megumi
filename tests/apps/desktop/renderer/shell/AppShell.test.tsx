@@ -149,8 +149,11 @@ describe('AppShell', () => {
   it('renders the refined workspace shell with session title and compact sidebar sessions', () => {
     renderShell();
     const titlebar = screen.getByTestId('window-titlebar');
+    const workbenchContent = screen.getByTestId('workbench-content');
 
     expect(titlebar).toBeInTheDocument();
+    expect(workbenchContent).toHaveClass('min-w-[62rem]');
+    expect(workbenchContent).toHaveClass('overflow-hidden');
     expect(within(titlebar).getByText('Planning the UI')).toBeInTheDocument();
     expect(within(titlebar).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
