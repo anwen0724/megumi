@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { AGENT_LABELS } from '@megumi/shared/agent-contracts';
 import { useSessionStore } from '../entities/session/store';
 import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
@@ -8,6 +7,7 @@ import { LeftSidebar, type SidebarSessionItem } from './LeftSidebar';
 import { RightWorkspacePanel } from './RightWorkspacePanel';
 import { SettingsModal } from './SettingsModal';
 import { WindowTitleBar } from './WindowTitleBar';
+import { formatSessionUpdatedAt, getWorkspaceBasename } from './shell-display';
 
 const LOCAL_WORKSPACE_ID = 'local-workspace';
 
@@ -23,13 +23,19 @@ export function AppShell() {
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
+  const workspaceBasename = getWorkspaceBasename({
+    workspaceName: currentProject?.name,
+    workspacePath: currentProject?.repoPath,
+  });
+  const titlebarTitle = activeSession?.title ?? 'New session';
 
   const sidebarSessions = useMemo<SidebarSessionItem[]>(
     () =>
       sessions.map((session) => ({
         id: session.id,
         title: session.title,
-        meta: AGENT_LABELS[session.agentType],
+        meta: formatSessionUpdatedAt(session.updatedAt),
         active: session.id === activeSessionId,
       })),
     [activeSessionId, sessions],
@@ -69,8 +75,7 @@ export function AppShell() {
     <div className="flex h-screen min-h-0 bg-[var(--color-app-bg)] text-[var(--color-text)]">
       <LeftSidebar
         collapsed={sidebarCollapsed}
-        workspaceName={currentProject?.name ?? 'Megumi'}
-        workspacePath={currentProject?.repoPath ?? 'No workspace selected'}
+        workspaceName={workspaceBasename}
         sessions={sidebarSessions}
         onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
         onCreateSession={handleCreateSession}
@@ -78,10 +83,7 @@ export function AppShell() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <WindowTitleBar
-          workspaceName={currentProject?.name ?? 'Megumi'}
-          workspacePath={currentProject?.repoPath ?? 'Warm agent workspace'}
-        />
+        <WindowTitleBar title={titlebarTitle} />
         <div className="flex min-h-0 flex-1">
           <ChatTimeline />
           <RightWorkspacePanel

@@ -146,13 +146,17 @@ describe('AppShell', () => {
     vi.useRealTimers();
   });
 
-  it('renders the warm agent workspace shell with sidebar session actions', () => {
+  it('renders the refined workspace shell with session title and compact sidebar sessions', () => {
     renderShell();
+    const titlebar = screen.getByTestId('window-titlebar');
 
-    expect(screen.getByTestId('window-titlebar')).toBeInTheDocument();
+    expect(titlebar).toBeInTheDocument();
+    expect(within(titlebar).getByText('Planning the UI')).toBeInTheDocument();
+    expect(within(titlebar).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
-    expect(screen.getByText('Planning the UI')).toBeInTheDocument();
-    expect(screen.getByText('Review notes')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'megumi sessions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
+    expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
     expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Context' })).toBeVisible();
   });
@@ -178,6 +182,8 @@ describe('AppShell', () => {
 
     renderShell();
 
+    expect(screen.getByRole('button', { name: 'Local sessions' })).toBeInTheDocument();
+
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
     const state = useSessionStore.getState();
@@ -197,7 +203,7 @@ describe('AppShell', () => {
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
-    expect(screen.queryByText('Planning the UI')).not.toBeInTheDocument();
+    expect(screen.queryByText('Review notes')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
     expect(useSessionStore.getState().sessions[0].title).toBe('New session');

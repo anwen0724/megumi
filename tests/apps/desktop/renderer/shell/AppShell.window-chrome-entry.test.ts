@@ -16,12 +16,14 @@ describe('AppShell custom window chrome entry', () => {
 
     expect(source).toContain("from './WindowTitleBar'");
     expect(source).toContain('<WindowTitleBar');
+    expect(source).toContain('title={titlebarTitle}');
   });
 
-  it('does not render the old inline top header', () => {
+  it('does not render the old inline top header or put workspace path into the titlebar', () => {
     const source = readAppShellSource();
 
     expect(source).not.toContain('<header className="flex h-12');
     expect(source).not.toContain("import { ThemeToggle } from '../shared/theme'");
+    expect(source).not.toContain('workspacePath=');
   });
 });
