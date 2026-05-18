@@ -51,6 +51,10 @@ import {
   MemorySettingsSchema,
   MemorySourceRefSchema,
 } from './memory-contracts';
+import {
+  WorkspaceFilesListDataSchema,
+  WorkspaceFilesListPayloadSchema,
+} from './workspace-file-contracts';
 import { RuntimeEventSchema } from './runtime-event-schemas';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
@@ -1030,6 +1034,16 @@ export const MemoryRecallPreviewResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.memory.recallPreview,
 );
 
+export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.files.list,
+  WorkspaceFilesListPayloadSchema,
+);
+
+export const WorkspaceFilesListResultSchema = createRuntimeIpcResultSchema(
+  WorkspaceFilesListDataSchema,
+  IPC_CHANNELS.workspace.files.list,
+);
+
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;
 export type ProviderListData = z.infer<typeof ProviderListDataSchema>;
 export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
@@ -1107,3 +1121,5 @@ export type MemoryData = z.infer<typeof MemoryDataSchema>;
 export type MemorySourceRefsListData = z.infer<typeof MemorySourceRefsListDataSchema>;
 export type MemoryAccessLogsListData = z.infer<typeof MemoryAccessLogsListDataSchema>;
 export type MemoryRecallPreviewData = z.infer<typeof MemoryRecallPreviewDataSchema>;
+export type WorkspaceFilesListPayload = z.infer<typeof WorkspaceFilesListPayloadSchema>;
+export type WorkspaceFilesListData = z.infer<typeof WorkspaceFilesListDataSchema>;
