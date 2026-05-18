@@ -33,14 +33,17 @@ describe('RightWorkspacePanel responsive ownership', () => {
     const source = readRightPanelSource();
 
     expect(source).not.toContain('shadow-[var(--shadow-soft)]');
-    expect(source).not.toContain('bg-[var(--color-surface)]">');
-    expect(source).not.toContain('bg-[var(--color-surface)] py-3');
+    expect(source).not.toContain('bg-[var(--color-app-bg)]');
+    expect(source).not.toContain('Panel className="m-3 flex min-h-0 flex-1 flex-col overflow-hidden"');
   });
 
-  it('uses app-bg for the outer container and keeps the inner workspace card', () => {
+  it('uses an integrated workspace surface instead of an inner workspace card', () => {
     const source = readRightPanelSource();
 
-    expect(source).toContain('bg-[var(--color-app-bg)]');
-    expect(source).toContain('Panel className="m-3 flex min-h-0 flex-1 flex-col overflow-hidden"');
+    expect(source).toContain('data-testid="right-workspace-panel"');
+    expect(source).toContain('data-testid="right-workspace-panel-header"');
+    expect(source).toContain('data-testid="right-workspace-panel-content"');
+    expect(source).toContain('bg-[var(--color-surface)]');
+    expect(source).not.toMatch(/<Panel(?:\s|>)/);
   });
 });
