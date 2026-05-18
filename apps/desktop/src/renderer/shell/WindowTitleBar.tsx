@@ -4,12 +4,11 @@ import { IconButton, cx } from '../shared/ui';
 import { windowControls } from '../shared/ipc/client';
 
 interface WindowTitleBarProps {
-  workspaceName: string;
-  workspacePath: string;
+  title: string;
   className?: string;
 }
 
-export function WindowTitleBar({ workspaceName, workspacePath, className }: WindowTitleBarProps) {
+export function WindowTitleBar({ title, className }: WindowTitleBarProps) {
   return (
     <header
       data-testid="window-titlebar"
@@ -19,8 +18,7 @@ export function WindowTitleBar({ workspaceName, workspacePath, className }: Wind
       )}
     >
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-[var(--color-text)]">{workspaceName}</p>
-        <p className="truncate text-xs text-[var(--color-text-muted)]">{workspacePath}</p>
+        <p className="truncate text-sm font-semibold text-[var(--color-text)]">{title}</p>
       </div>
 
       <div data-testid="window-titlebar-controls" className="app-no-drag flex items-center gap-2">

@@ -22,7 +22,7 @@ vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
 function renderTitleBar() {
   return render(
     <ThemeProvider>
-      <WindowTitleBar workspaceName="Megumi" workspacePath="Warm agent workspace" />
+      <WindowTitleBar title="Planning the UI" />
     </ThemeProvider>,
   );
 }
@@ -34,11 +34,12 @@ describe('WindowTitleBar', () => {
     close.mockReset();
   });
 
-  it('renders workspace identity and window controls', () => {
+  it('renders only the current session title and window controls', () => {
     renderTitleBar();
 
-    expect(screen.getByText('Megumi')).toBeInTheDocument();
-    expect(screen.getByText('Warm agent workspace')).toBeInTheDocument();
+    expect(screen.getByText('Planning the UI')).toBeInTheDocument();
+    expect(screen.queryByText('Warm agent workspace')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Neutral Light theme' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Minimize window' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Maximize or restore window' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close window' })).toBeInTheDocument();
