@@ -5,17 +5,16 @@ import userEvent from '@testing-library/user-event';
 import { LeftSidebar } from '@megumi/desktop/renderer/shell/LeftSidebar';
 
 const sessions = [
-  { id: 'session-1', title: 'Planning the UI', meta: 'Free', active: true },
-  { id: 'session-2', title: 'Review notes', meta: 'Reviewer', active: false },
+  { id: 'session-1', title: 'Planning the UI', meta: '12h', active: true },
+  { id: 'session-2', title: 'Review notes', meta: '2d', active: false },
 ];
 
 describe('LeftSidebar', () => {
-  it('renders workspace, primary actions, and sessions when expanded', () => {
+  it('renders the simplified workspace navigation when expanded', () => {
     render(
       <LeftSidebar
         collapsed={false}
-        workspaceName="Megumi"
-        workspacePath="C:/all/work/study/megumi"
+        workspaceName="megumi"
         sessions={sessions}
         onToggleCollapsed={() => undefined}
         onCreateSession={() => undefined}
@@ -23,11 +22,14 @@ describe('LeftSidebar', () => {
     );
 
     expect(screen.getByText('Megumi')).toBeInTheDocument();
-    expect(screen.getByText('C:/all/work/study/megumi')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
-    expect(screen.getByText('Planning the UI')).toBeInTheDocument();
-    expect(screen.getByText('Assistant activity')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Task plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'megumi sessions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Planning the UI/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('12h')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
+    expect(screen.queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
   });
 
   it('calls onCreateSession from the expanded new session button', async () => {
@@ -36,8 +38,7 @@ describe('LeftSidebar', () => {
     render(
       <LeftSidebar
         collapsed={false}
-        workspaceName="Megumi"
-        workspacePath="C:/all/work/study/megumi"
+        workspaceName="megumi"
         sessions={sessions}
         onToggleCollapsed={() => undefined}
         onCreateSession={onCreateSession}
@@ -49,34 +50,28 @@ describe('LeftSidebar', () => {
     expect(onCreateSession).toHaveBeenCalledTimes(1);
   });
 
-  it('renders an actionable empty state when there are no sessions', async () => {
-    const onCreateSession = vi.fn();
-
+  it('renders a lightweight empty state when there are no sessions', () => {
     render(
       <LeftSidebar
         collapsed={false}
-        workspaceName="Megumi"
-        workspacePath="No workspace selected"
+        workspaceName="Local sessions"
         sessions={[]}
         onToggleCollapsed={() => undefined}
-        onCreateSession={onCreateSession}
+        onCreateSession={() => undefined}
       />,
     );
 
     expect(screen.getByText('No sessions yet')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Start a session' }));
-
-    expect(onCreateSession).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Start a session' })).not.toBeInTheDocument();
   });
 
-  it('renders a compact rail with a new-session action when collapsed', async () => {
+  it('renders a compact rail with session creation and task plan access when collapsed', async () => {
     const onCreateSession = vi.fn();
 
     render(
       <LeftSidebar
         collapsed
-        workspaceName="Megumi"
-        workspacePath="C:/all/work/study/megumi"
+        workspaceName="megumi"
         sessions={sessions}
         onToggleCollapsed={() => undefined}
         onCreateSession={onCreateSession}
@@ -85,6 +80,7 @@ describe('LeftSidebar', () => {
 
     expect(screen.getByRole('navigation', { name: 'Primary workspace navigation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Task plan' })).toBeInTheDocument();
     expect(screen.queryByText('Planning the UI')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
@@ -98,8 +94,7 @@ describe('LeftSidebar', () => {
     render(
       <LeftSidebar
         collapsed={false}
-        workspaceName="Megumi"
-        workspacePath="C:/all/work/study/megumi"
+        workspaceName="megumi"
         sessions={sessions}
         onToggleCollapsed={onToggleCollapsed}
         onCreateSession={() => undefined}
@@ -117,8 +112,7 @@ describe('LeftSidebar', () => {
     render(
       <LeftSidebar
         collapsed={false}
-        workspaceName="Megumi"
-        workspacePath="C:/all/work/study/megumi"
+        workspaceName="megumi"
         sessions={sessions}
         onToggleCollapsed={() => undefined}
         onCreateSession={() => undefined}
@@ -137,8 +131,7 @@ describe('LeftSidebar', () => {
     render(
       <LeftSidebar
         collapsed
-        workspaceName="Megumi"
-        workspacePath="C:/all/work/study/megumi"
+        workspaceName="megumi"
         sessions={sessions}
         onToggleCollapsed={() => undefined}
         onCreateSession={() => undefined}
@@ -157,8 +150,7 @@ describe('LeftSidebar', () => {
     render(
       <LeftSidebar
         collapsed={false}
-        workspaceName="Megumi"
-        workspacePath="C:/all/work/study/megumi"
+        workspaceName="megumi"
         sessions={sessions}
         onToggleCollapsed={() => undefined}
         onCreateSession={() => undefined}
@@ -169,5 +161,53 @@ describe('LeftSidebar', () => {
     await userEvent.click(screen.getByRole('button', { name: /Review notes/ }));
 
     expect(onSelectSession).toHaveBeenCalledWith('session-2');
+  });
+
+  it('supports compact show more when the workspace has many sessions', async () => {
+    const manySessions = Array.from({ length: 7 }, (_, index) => ({
+      id: `session-${index + 1}`,
+      title: `Session ${index + 1}`,
+      meta: `${index + 1}h`,
+      active: index === 0,
+    }));
+
+    render(
+      <LeftSidebar
+        collapsed={false}
+        workspaceName="megumi"
+        sessions={manySessions}
+        onToggleCollapsed={() => undefined}
+        onCreateSession={() => undefined}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Session 7/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show more sessions' }));
+
+    expect(screen.getByRole('button', { name: /Session 7/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show fewer sessions' })).toBeInTheDocument();
+  });
+
+  it('toggles the workspace session group without rendering a visible arrow glyph', async () => {
+    render(
+      <LeftSidebar
+        collapsed={false}
+        workspaceName="megumi"
+        sessions={sessions}
+        onToggleCollapsed={() => undefined}
+        onCreateSession={() => undefined}
+      />,
+    );
+
+    const workspaceToggle = screen.getByRole('button', { name: 'megumi sessions' });
+    expect(workspaceToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(workspaceToggle).not.toHaveTextContent('▾');
+    expect(workspaceToggle).not.toHaveTextContent('>');
+
+    await userEvent.click(workspaceToggle);
+
+    expect(workspaceToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /Planning the UI/ })).not.toBeInTheDocument();
   });
 });
