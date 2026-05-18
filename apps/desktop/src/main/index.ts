@@ -28,6 +28,7 @@ import { ArtifactService } from './services/artifact.service';
 import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
 import { createWorkspaceFilesService } from './services/workspace-files.service';
+import { createWorkspaceRootAuthorizer } from './services/workspace-root-authorization.service';
 import { getDefaultProviderService } from './ipc/handlers/provider.handler';
 
 loadEnvFile();
@@ -35,10 +36,6 @@ const megumiHomePaths = initializeElectronMegumiHomeSync();
 const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
 const runContextService = createDefaultRunContextService(megumiHomePaths);
 const toolService = createDefaultToolService(megumiHomePaths);
-// Temporary host-owned boundary until selected workspace registry is introduced.
-const workspaceFilesService = createWorkspaceFilesService({
-  allowedWorkspaceRoots: [process.cwd()],
-});
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(database);
 const artifactRepository = new ArtifactRepository(database);
@@ -71,6 +68,12 @@ const sessionRunService = new SessionRunService({
   runModeService: runModeService,
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
+});
+const workspaceFilesService = createWorkspaceFilesService({
+  isWorkspaceRootAllowed: createWorkspaceRootAuthorizer({
+    staticRoots: [process.cwd()],
+    sessionSource: sessionRunService,
+  }),
 });
 const artifactContentStore = new ArtifactContentStore({
   artifactRoot: path.join(megumiHomePaths.homePath, 'artifacts'),

@@ -417,8 +417,12 @@ describe('main runtime logger composition', () => {
       listRecoverableRuns: expect.any(Function),
     }));
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith({
-      allowedWorkspaceRoots: [process.cwd()],
+      isWorkspaceRootAllowed: expect.any(Function),
     });
+    const [[workspaceFilesOptions]] = mocks.createWorkspaceFilesService.mock.calls as unknown as Array<[{
+      isWorkspaceRootAllowed(root: string): boolean;
+    }]>;
+    expect(workspaceFilesOptions.isWorkspaceRootAllowed(process.cwd())).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       sessionRunService,
