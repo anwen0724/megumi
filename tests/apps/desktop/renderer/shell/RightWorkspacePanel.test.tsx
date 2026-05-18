@@ -92,4 +92,19 @@ describe('RightWorkspacePanel', () => {
 
     expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the workspace panel as an integrated workbench surface instead of a floating card', async () => {
+    render(<RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />);
+
+    const panel = screen.getByTestId('right-workspace-panel');
+    const header = screen.getByTestId('right-workspace-panel-header');
+    const content = screen.getByTestId('right-workspace-panel-content');
+
+    expect(panel).toHaveClass('bg-[var(--color-surface)]');
+    expect(panel).not.toHaveClass('bg-[var(--color-app-bg)]');
+    expect(header).toHaveClass('border-b');
+    expect(content).toHaveClass('overflow-y-auto');
+    expect(panel.querySelector('[data-testid="right-workspace-panel-card"]')).toBeNull();
+    expect(await screen.findByText('No files found')).toBeInTheDocument();
+  });
 });
