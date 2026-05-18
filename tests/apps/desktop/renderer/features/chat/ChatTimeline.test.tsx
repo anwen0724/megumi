@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
@@ -311,5 +312,42 @@ describe('ChatTimeline', () => {
     await userEvent.click(screen.getByRole('button', { name: /Expand processing disclosure/ }));
 
     expect(screen.getByText('已完成步骤：生成 UI 总结')).toBeInTheDocument();
+  });
+
+  it('wires the running composer Stop button to the active session message cancel request', async () => {
+    const session = installMegumiMock();
+    render(<ChatTimeline />);
+
+    fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Cancel this run' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => {
+      expect(session.message.send).toHaveBeenCalledTimes(1);
+    });
+
+    useChatStore.setState({ agentStatus: 'running' });
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), 'draft for later');
+    fireEvent.keyDown(screen.getByLabelText('Message Megumi'), { key: 'Enter' });
+    await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
+
+    const startRequestId = session.message.send.mock.calls[0][0].requestId;
+    const startTraceId = session.message.send.mock.calls[0][0].context.traceId;
+
+    expect(session.message.send).toHaveBeenCalledTimes(1);
+    expect(session.message.cancel).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        targetRequestId: startRequestId,
+      },
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.session.message.cancel,
+        source: 'renderer',
+      }),
+      context: expect.objectContaining({
+        traceId: startTraceId,
+        operationName: 'session.message.cancel',
+        source: 'renderer',
+      }),
+    }));
   });
 });

@@ -66,7 +66,7 @@ export function ChatTimeline() {
   const activeRunEvents = useRunStore((state) => (activeRunId ? state.eventsByRun[activeRunId] ?? EMPTY_EVENTS : EMPTY_EVENTS));
   const runIsActive = agentStatus === 'sending' || Boolean(activeRun && !['completed', 'failed', 'cancelled'].includes(activeRun.status));
   const processingNow = useProcessingNow(runIsActive);
-  const { sendSessionMessage } = useSessionTimeline();
+  const { sendSessionMessage, cancelSessionMessage } = useSessionTimeline();
 
   const eventProcessingDisclosure = useMemo(() => {
     if (!activeRun) {
@@ -132,6 +132,10 @@ export function ChatTimeline() {
 
   function handleSubmit(payload: ComposerSubmitPayload) {
     void sendSessionMessage(payload);
+  }
+
+  function handleStop() {
+    void cancelSessionMessage();
   }
 
   function toggleActivity(activityId: string) {
@@ -215,6 +219,7 @@ export function ChatTimeline() {
       <Composer
         status={composerStatus}
         onSubmit={handleSubmit}
+        onStop={handleStop}
         onAttachFiles={() => undefined}
         onChooseContext={() => undefined}
         onShowApproval={() => undefined}
