@@ -3,16 +3,17 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import {
   ArtifactsPanelTab,
   ContextPanelTab,
+  FilesPanelTab,
   MemoryPanelTab,
-  TasksPanelTab,
 } from '../features/workspace-panel';
+import { useProjectStore } from '../entities/project/store';
 import { IconButton, Panel, PanelHeader, PanelTitle, Tabs, type TabItem } from '../shared/ui';
 
-type WorkspaceTab = 'context' | 'tasks' | 'artifacts' | 'memory';
+type WorkspaceTab = 'files' | 'context' | 'artifacts' | 'memory';
 
 const tabs: TabItem<WorkspaceTab>[] = [
+  { id: 'files', label: 'Files' },
   { id: 'context', label: 'Context' },
-  { id: 'tasks', label: 'Tasks' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'memory', label: 'Memory' },
 ];
@@ -23,7 +24,11 @@ interface RightWorkspacePanelProps {
 }
 
 export function RightWorkspacePanel({ collapsed, onToggleCollapsed }: RightWorkspacePanelProps) {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('context');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('files');
+  const currentProject = useProjectStore((state) =>
+    state.projects.find((project) => project.id === state.currentProjectId) ?? null
+  );
+  const workspacePath = currentProject?.repoPath ?? 'No workspace selected';
 
   if (collapsed) {
     return (
@@ -41,7 +46,9 @@ export function RightWorkspacePanel({ collapsed, onToggleCollapsed }: RightWorks
         <PanelHeader>
           <div className="min-w-0">
             <PanelTitle>Workspace</PanelTitle>
-            <p className="text-xs text-[var(--color-text-muted)]">Context and task state</p>
+            <p className="truncate text-xs text-[var(--color-text-muted)]" title={workspacePath}>
+              {workspacePath}
+            </p>
           </div>
           <IconButton label="Collapse workspace panel" onClick={onToggleCollapsed} size="sm" variant="ghost">
             <PanelRightClose size={16} aria-hidden="true" />
@@ -53,8 +60,8 @@ export function RightWorkspacePanel({ collapsed, onToggleCollapsed }: RightWorks
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {activeTab === 'files' ? <FilesPanelTab /> : null}
           {activeTab === 'context' ? <ContextPanelTab /> : null}
-          {activeTab === 'tasks' ? <TasksPanelTab /> : null}
           {activeTab === 'artifacts' ? <ArtifactsPanelTab /> : null}
           {activeTab === 'memory' ? <MemoryPanelTab /> : null}
         </div>

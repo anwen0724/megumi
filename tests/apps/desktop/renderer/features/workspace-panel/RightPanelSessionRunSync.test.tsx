@@ -8,7 +8,9 @@ import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
+import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
 import { RightWorkspacePanel } from '@megumi/desktop/renderer/shell/RightWorkspacePanel';
 
@@ -92,6 +94,23 @@ function installMegumiMock() {
             runtimeEventCallback = null;
           };
         }),
+      },
+      workspace: {
+        files: {
+          list: vi.fn().mockImplementation((request: { payload: { workspaceRoot: string; directoryPath: string } }) => Promise.resolve({
+            ok: true,
+            data: {
+              workspaceRoot: request.payload.workspaceRoot,
+              directoryPath: request.payload.directoryPath,
+              entries: [],
+            },
+            meta: {
+              requestId: 'ipc-workspace-files-list-1',
+              channel: IPC_CHANNELS.workspace.files.list,
+              handledAt: '2026-05-10T12:00:00.100Z',
+            },
+          })),
+        },
       },
     },
   });
@@ -182,6 +201,11 @@ function emitRuntimeFailure(request: SessionMessageSendRequest, message: string)
 }
 
 function resetStores() {
+  useProjectStore.setState({
+    projects: [],
+    currentProjectId: null,
+    loading: false,
+  });
   useChatStore.setState({
     messages: [],
     streamingText: '',
@@ -193,6 +217,7 @@ function resetStores() {
     lastError: null,
   });
   useRunStore.getState().resetRuns();
+  useWorkspaceFilesStore.getState().reset();
   useArtifactStore.getState().clearArtifacts();
   useMemoryStore.setState({
     settings: undefined,
@@ -226,7 +251,7 @@ describe('right workspace panel session run sync', () => {
     runtimeEventCallback = null;
   });
 
-  it('shows session run state from runtime stream events without mock workspace rows', async () => {
+  it('shows session run state from runtime stream events in the timeline without mock workspace rows', async () => {
     const session = installMegumiMock();
     renderChatWithRightPanel();
 
@@ -243,15 +268,16 @@ describe('right workspace panel session run sync', () => {
     const request = latestSessionMessageSendRequest(session);
     emitRuntimeStarted(request);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
-
-    expect(screen.getByText('Session tasks')).toBeInTheDocument();
-    expect(screen.getByText('Running session message')).toBeInTheDocument();
+    expect(screen.getByText('正在处理')).toBeInTheDocument();
+    expect(screen.getByText('正在启动运行...')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
     expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
 
     expect(request.requestId).toBe(session.message.send.mock.calls[0][0].requestId);
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the shell.');
+    expect(screen.getByText('Runtime response from deepseek-v4-pro for the shell.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
 
@@ -277,16 +303,16 @@ describe('right workspace panel session run sync', () => {
     emitRuntimeStarted(latestSessionMessageSendRequest(session));
     emitRuntimeSuccess(latestSessionMessageSendRequest(session), 'Runtime response from deepseek-v4-flash for timeline persistence.');
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
     expect(screen.getByText('Keep my timeline')).toBeInTheDocument();
     expect(screen.getByText('Runtime response from deepseek-v4-flash for timeline persistence.')).toBeInTheDocument();
   });
 
-  it('shows failed runtime chat state in Tasks tab', async () => {
+  it('shows failed runtime chat state in the timeline without a Tasks tab', async () => {
     const session = installMegumiMock();
     renderChatWithRightPanel();
 
@@ -299,10 +325,10 @@ describe('right workspace panel session run sync', () => {
 
     emitRuntimeFailure(latestSessionMessageSendRequest(session), 'Runtime chat failed for "please fail this run".');
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
+    expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
-    expect(screen.getByText('Failed session message')).toBeInTheDocument();
-    expect(screen.getByText('failed')).toBeInTheDocument();
+    expect(screen.getByText('处理失败')).toBeInTheDocument();
     expect(screen.getAllByText('Runtime chat failed for "please fail this run".').length).toBeGreaterThanOrEqual(1);
   });
 });
