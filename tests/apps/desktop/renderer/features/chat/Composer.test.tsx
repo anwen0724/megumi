@@ -125,6 +125,13 @@ describe('Composer', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
+  it('does not render an enabled Stop button without a stop handler', () => {
+    render(<Composer status="running" onSubmit={() => undefined} />);
+
+    expect(screen.getByRole('button', { name: 'Stop current run' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
+  });
+
   it('shows waiting approval status and calls the approval callback', async () => {
     const onShowApproval = vi.fn();
 

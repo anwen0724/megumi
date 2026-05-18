@@ -79,7 +79,8 @@ export function Composer({
   const inputLocked = status === 'waiting-approval';
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canSend = trimmedValue.length > 0 && !sendLocked;
-  const canStop = status === 'sending' || status === 'running';
+  const showStop = status === 'sending' || status === 'running';
+  const canStop = showStop && Boolean(onStop);
   const activeStatus = statusConfig[status];
   const StatusIcon = activeStatus?.icon;
 
@@ -209,8 +210,15 @@ export function Composer({
                 Review approval
               </Button>
             ) : null}
-            {canStop ? (
-              <Button type="button" variant="primary" size="sm" onClick={onStop} aria-label="Stop current run">
+            {showStop ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={onStop}
+                disabled={!canStop}
+                aria-label="Stop current run"
+              >
                 <Square size={13} aria-hidden="true" />
                 Stop
               </Button>
