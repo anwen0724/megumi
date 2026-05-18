@@ -74,6 +74,70 @@ describe('WorkspaceFilesService', () => {
     })).rejects.toThrow();
   });
 
+  it('rejects workspace roots outside the configured allow-list', async () => {
+    const service = createWorkspaceFilesService({
+      allowedWorkspaceRoots: ['C:/all/work/study/megumi'],
+      fileSystem: {
+        async readdir() {
+          return [];
+        },
+        async stat() {
+          return { size: 0, mtime: new Date('2026-05-18T00:00:00.000Z') };
+        },
+      },
+    });
+
+    await expect(service.listDirectory({
+      workspaceRoot: 'C:/',
+      directoryPath: '',
+    })).rejects.toThrow();
+  });
+
+  it.each([
+    ['Windows drive path', 'C:/outside'],
+    ['Windows backslash drive path', 'C:\\outside'],
+    ['leading slash path', '/outside'],
+  ])('rejects absolute directoryPath inputs before normalization: %s', async (_label, directoryPath) => {
+    const service = createWorkspaceFilesService({
+      fileSystem: {
+        async readdir() {
+          return [];
+        },
+        async stat() {
+          return { size: 0, mtime: new Date('2026-05-18T00:00:00.000Z') };
+        },
+      },
+    });
+
+    await expect(service.listDirectory({
+      workspaceRoot: 'C:/all/work/study/megumi',
+      directoryPath,
+    })).rejects.toThrow();
+  });
+
+  it('returns canonical relative directory and entry paths', async () => {
+    const service = createWorkspaceFilesService({
+      fileSystem: {
+        async readdir() {
+          return [
+            { name: 'main.ts', isDirectory: () => false, isFile: () => true },
+          ];
+        },
+        async stat() {
+          return { size: 128, mtime: new Date('2026-05-18T00:00:00.000Z') };
+        },
+      },
+    });
+
+    const result = await service.listDirectory({
+      workspaceRoot: 'C:/all/work/study/megumi',
+      directoryPath: 'apps\\desktop\\src\\',
+    });
+
+    expect(result.directoryPath).toBe('apps/desktop/src');
+    expect(result.entries[0]?.relativePath).toBe('apps/desktop/src/main.ts');
+  });
+
   it('keeps the ignored name list explicit', () => {
     expect(DEFAULT_WORKSPACE_FILE_IGNORE_NAMES).toEqual(expect.arrayContaining([
       '.git',

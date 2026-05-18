@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { PathSandboxViolationError } from '@megumi/security/sandbox-policy';
 import type { z } from 'zod';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
@@ -39,7 +40,17 @@ export function registerWorkspaceFilesHandlers(
   );
 }
 
-function mapWorkspaceFilesIpcError(): RuntimeIpcError {
+function mapWorkspaceFilesIpcError(error: unknown): RuntimeIpcError {
+  if (!(error instanceof PathSandboxViolationError)) {
+    return {
+      code: 'ipc_handler_failed',
+      message: 'Megumi could not list workspace files right now.',
+      severity: 'error',
+      retryable: true,
+      source: 'main',
+    };
+  }
+
   return {
     code: 'workspace_path_denied',
     message: 'Megumi could not list that workspace directory.',

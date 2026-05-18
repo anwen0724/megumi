@@ -1,6 +1,9 @@
 import fs from 'fs-extra';
 import path from 'node:path';
-import { resolveSafePath } from '@megumi/security/sandbox-policy';
+import {
+  PathSandboxViolationError,
+  resolveSafePath,
+} from '@megumi/security/sandbox-policy';
 import type {
   WorkspaceDirectoryEntry,
   WorkspaceFilesListData,
@@ -36,6 +39,8 @@ export interface WorkspaceFilesService {
 export interface CreateWorkspaceFilesServiceOptions {
   fileSystem?: WorkspaceFilesFileSystem;
   ignoredNames?: readonly string[];
+  allowedWorkspaceRoots?: readonly string[];
+  isWorkspaceRootAllowed?: (root: string) => boolean;
 }
 
 export function createWorkspaceFilesService(
@@ -43,11 +48,21 @@ export function createWorkspaceFilesService(
 ): WorkspaceFilesService {
   const fileSystem = options.fileSystem ?? fs;
   const ignoredNames = new Set(options.ignoredNames ?? DEFAULT_WORKSPACE_FILE_IGNORE_NAMES);
+  const allowedWorkspaceRootKeys = options.allowedWorkspaceRoots
+    ? new Set(options.allowedWorkspaceRoots.map(toWorkspaceRootKey))
+    : undefined;
 
   return {
     async listDirectory(input) {
+      const workspaceRoot = normalizeWorkspaceRoot(input.workspaceRoot);
+      assertWorkspaceRootAllowed({
+        workspaceRoot,
+        allowedWorkspaceRootKeys,
+        isWorkspaceRootAllowed: options.isWorkspaceRootAllowed,
+      });
+
       const directoryPath = normalizeDirectoryPath(input.directoryPath);
-      const resolvedDirectory = resolveSafePath(input.workspaceRoot, directoryPath);
+      const resolvedDirectory = resolveSafePath(workspaceRoot, directoryPath);
       const entries = await fileSystem.readdir(resolvedDirectory, { withFileTypes: true });
       const listedEntries: WorkspaceDirectoryEntry[] = [];
 
@@ -86,7 +101,17 @@ export function createWorkspaceFilesService(
 }
 
 function normalizeDirectoryPath(directoryPath: string): string {
-  return directoryPath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  if (isAbsoluteOrDriveQualifiedPath(directoryPath)) {
+    throw new PathSandboxViolationError('', directoryPath);
+  }
+
+  const normalized = path.posix.normalize(directoryPath.replace(/\\/g, '/'));
+
+  if (normalized === '.') {
+    return '';
+  }
+
+  return normalized.replace(/\/+$/, '');
 }
 
 function toRelativePath(parentPath: string, name: string): string {
@@ -103,4 +128,42 @@ function compareEntries(left: WorkspaceDirectoryEntry, right: WorkspaceDirectory
   }
 
   return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+}
+
+function normalizeWorkspaceRoot(workspaceRoot: string): string {
+  return path.resolve(workspaceRoot);
+}
+
+function toWorkspaceRootKey(workspaceRoot: string): string {
+  const normalized = normalizeWorkspaceRoot(workspaceRoot);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function assertWorkspaceRootAllowed(input: {
+  workspaceRoot: string;
+  allowedWorkspaceRootKeys?: ReadonlySet<string>;
+  isWorkspaceRootAllowed?: (root: string) => boolean;
+}): void {
+  if (!input.allowedWorkspaceRootKeys && !input.isWorkspaceRootAllowed) {
+    return;
+  }
+
+  if (
+    input.allowedWorkspaceRootKeys &&
+    !input.allowedWorkspaceRootKeys.has(toWorkspaceRootKey(input.workspaceRoot))
+  ) {
+    throw new PathSandboxViolationError(input.workspaceRoot, '');
+  }
+
+  if (input.isWorkspaceRootAllowed && !input.isWorkspaceRootAllowed(input.workspaceRoot)) {
+    throw new PathSandboxViolationError(input.workspaceRoot, '');
+  }
+}
+
+function isAbsoluteOrDriveQualifiedPath(directoryPath: string): boolean {
+  return (
+    path.posix.isAbsolute(directoryPath) ||
+    path.win32.isAbsolute(directoryPath) ||
+    /^[a-zA-Z]:/.test(directoryPath)
+  );
 }

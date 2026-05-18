@@ -35,7 +35,10 @@ const megumiHomePaths = initializeElectronMegumiHomeSync();
 const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
 const runContextService = createDefaultRunContextService(megumiHomePaths);
 const toolService = createDefaultToolService(megumiHomePaths);
-const workspaceFilesService = createWorkspaceFilesService();
+// Temporary host-owned boundary until selected workspace registry is introduced.
+const workspaceFilesService = createWorkspaceFilesService({
+  allowedWorkspaceRoots: [process.cwd()],
+});
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(database);
 const artifactRepository = new ArtifactRepository(database);
