@@ -5,6 +5,7 @@ import { RuntimeException } from '@megumi/core/runtime-exception';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { createRuntimeIpcRequestSchema } from '@megumi/shared/ipc-contracts';
 import { createRuntimeIpcHandler } from '@megumi/desktop/main/ipc/runtime-ipc-handler';
+import { runtimeOperationNameFromChannel } from '@megumi/desktop/main/ipc/runtime-operation-name';
 
 describe('createRuntimeIpcHandler', () => {
   const payloadSchema = z.object({ providerId: z.literal('deepseek') }).strict();
@@ -43,6 +44,12 @@ describe('createRuntimeIpcHandler', () => {
       error: vi.fn(),
     };
   }
+
+  it('maps workspace files list channel to a stable runtime operation name', () => {
+    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.workspace.files.list)).toBe(
+      'workspace.files.list',
+    );
+  });
 
   it('returns a runtime ipc success envelope and preserves existing handler shape', async () => {
     const handler = createRuntimeIpcHandler({
