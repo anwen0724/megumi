@@ -27,6 +27,8 @@ import { ArtifactContentStore } from './services/artifact-content-store.service'
 import { ArtifactService } from './services/artifact.service';
 import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
+import { createWorkspaceFilesService } from './services/workspace-files.service';
+import { createWorkspaceRootAuthorizer } from './services/workspace-root-authorization.service';
 import { getDefaultProviderService } from './ipc/handlers/provider.handler';
 
 loadEnvFile();
@@ -66,6 +68,12 @@ const sessionRunService = new SessionRunService({
   runModeService: runModeService,
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
+});
+const workspaceFilesService = createWorkspaceFilesService({
+  isWorkspaceRootAllowed: createWorkspaceRootAuthorizer({
+    staticRoots: [process.cwd()],
+    sessionSource: sessionRunService,
+  }),
 });
 const artifactContentStore = new ArtifactContentStore({
   artifactRoot: path.join(megumiHomePaths.homePath, 'artifacts'),
@@ -111,6 +119,7 @@ registerAppLifecycle({
     recoveryService,
     artifactService,
     memoryService,
+    workspaceFilesService,
   }),
   createWindow: () => {
     createMainWindow({

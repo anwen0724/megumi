@@ -55,6 +55,8 @@ import {
   SessionMessageSendPayloadSchema,
   SessionMessageSendRequestSchema,
   ToolDefinitionsListRequestSchema,
+  WorkspaceFilesListRequestSchema,
+  WorkspaceFilesListResultSchema,
 } from '@megumi/shared/ipc-schemas';
 
 describe('json value schemas', () => {
@@ -257,6 +259,46 @@ describe('runtime ipc request and result schemas', () => {
 
     expect(success.success).toBe(true);
     expect(failure.success).toBe(true);
+  });
+
+  it('accepts workspace files list runtime ipc request and result', () => {
+    const request = WorkspaceFilesListRequestSchema.parse({
+      requestId: 'ipc-workspace-files-list-1',
+      payload: {
+        workspaceRoot: 'C:/all/work/study/megumi',
+        directoryPath: '',
+      },
+      meta: {
+        channel: IPC_CHANNELS.workspace.files.list,
+        createdAt: '2026-05-18T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(request.meta.channel).toBe(IPC_CHANNELS.workspace.files.list);
+
+    const result = WorkspaceFilesListResultSchema.parse({
+      ok: true,
+      data: {
+        workspaceRoot: 'C:/all/work/study/megumi',
+        directoryPath: '',
+        entries: [{
+          name: 'apps',
+          relativePath: 'apps',
+          kind: 'directory',
+          depth: 0,
+          hidden: false,
+          ignored: false,
+        }],
+      },
+      meta: {
+        requestId: 'ipc-workspace-files-list-1',
+        channel: IPC_CHANNELS.workspace.files.list,
+        handledAt: '2026-05-18T00:00:01.000Z',
+      },
+    });
+
+    expect(result.ok).toBe(true);
   });
 });
 

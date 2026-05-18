@@ -21,12 +21,14 @@ describe('ipc channel contracts', () => {
     expect(IPC_CHANNELS.recovery.resume).toBe('recovery:resume');
     expect(IPC_CHANNELS.artifacts.get).toBe('artifacts:get');
     expect(IPC_CHANNELS.memory.settingsGet).toBe('memory:settings:get');
+    expect(IPC_CHANNELS.workspace.files.list).toBe('workspace:files:list');
     expect(IPC_CHANNELS.runtime.event).toBe('runtime:event');
   });
 
   it('checks known IPC channel strings', () => {
     expect(isIpcChannel('provider:list')).toBe(true);
     expect(isIpcChannel('session:message:send')).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.workspace.files.list)).toBe(true);
     expect(isIpcChannel('runtime:event')).toBe(true);
     expect(isIpcChannel(['chat', 'start'].join(':'))).toBe(false);
     expect(isIpcChannel(['agent', 'run', 'start'].join(':'))).toBe(false);

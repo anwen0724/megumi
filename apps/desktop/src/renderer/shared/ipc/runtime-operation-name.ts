@@ -91,6 +91,8 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'memory.access-logs.list';
     case IPC_CHANNELS.memory.recallPreview:
       return 'memory.recall-preview';
+    case IPC_CHANNELS.workspace.files.list:
+      return 'workspace.files.list';
     default:
       return (channel as string).replaceAll(':', '.');
   }

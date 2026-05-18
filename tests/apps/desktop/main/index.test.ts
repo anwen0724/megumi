@@ -176,6 +176,9 @@ const mocks = vi.hoisted(() => {
       cancelRun: vi.fn(),
       retryRun: vi.fn(),
     })),
+    createWorkspaceFilesService: vi.fn(() => ({
+      listDirectory: vi.fn(),
+    })),
   };
 });
 
@@ -237,6 +240,10 @@ vi.mock('@megumi/desktop/main/services/tool.service', () => ({
 
 vi.mock('@megumi/desktop/main/services/recovery.service', () => ({
   createRecoveryService: mocks.createRecoveryService,
+}));
+
+vi.mock('@megumi/desktop/main/services/workspace-files.service', () => ({
+  createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
 
 vi.mock('@megumi/db/connection', () => ({
@@ -317,6 +324,7 @@ describe('main runtime logger composition', () => {
     mocks.createMemoryService.mockClear();
     mocks.PlanArtifactCompatibilityService.mockClear();
     mocks.createRecoveryService.mockClear();
+    mocks.createWorkspaceFilesService.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
@@ -334,6 +342,7 @@ describe('main runtime logger composition', () => {
     const recoveryService = mocks.createRecoveryService.mock.results[0]?.value;
     const artifactService = mocks.ArtifactService.mock.results[0]?.value;
     const memoryService = mocks.createMemoryService.mock.results[0]?.value;
+    const workspaceFilesService = mocks.createWorkspaceFilesService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -407,6 +416,13 @@ describe('main runtime logger composition', () => {
       }),
       listRecoverableRuns: expect.any(Function),
     }));
+    expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith({
+      isWorkspaceRootAllowed: expect.any(Function),
+    });
+    const [[workspaceFilesOptions]] = mocks.createWorkspaceFilesService.mock.calls as unknown as Array<[{
+      isWorkspaceRootAllowed(root: string): boolean;
+    }]>;
+    expect(workspaceFilesOptions.isWorkspaceRootAllowed(process.cwd())).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       sessionRunService,
@@ -416,6 +432,7 @@ describe('main runtime logger composition', () => {
       recoveryService,
       artifactService,
       memoryService,
+      workspaceFilesService,
     });
 
     processLogger.error('runtime_review_probe', {

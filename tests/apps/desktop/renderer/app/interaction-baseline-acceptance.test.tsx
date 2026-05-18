@@ -11,6 +11,7 @@ import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
 import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
 
@@ -108,6 +109,23 @@ function installMegumiMock() {
             runtimeEventCallback = null;
           };
         }),
+      },
+      workspace: {
+        files: {
+          list: vi.fn().mockImplementation((request: { payload: { workspaceRoot: string; directoryPath: string } }) => Promise.resolve({
+            ok: true,
+            data: {
+              workspaceRoot: request.payload.workspaceRoot,
+              directoryPath: request.payload.directoryPath,
+              entries: [],
+            },
+            meta: {
+              requestId: 'ipc-workspace-files-list-1',
+              channel: IPC_CHANNELS.workspace.files.list,
+              handledAt: '2026-05-10T12:00:00.100Z',
+            },
+          })),
+        },
       },
     },
   });
@@ -227,6 +245,7 @@ function resetStores() {
   });
 
   useRunStore.getState().resetRuns();
+  useWorkspaceFilesStore.getState().reset();
   useArtifactStore.getState().clearArtifacts();
   useMemoryStore.setState({
     settings: undefined,
@@ -320,10 +339,15 @@ describe('interaction baseline acceptance', () => {
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the interaction baseline.');
     expect(screen.getByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
+    expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('C:/all/work/study/megumi')).toHaveAttribute('title', 'C:/all/work/study/megumi');
+    expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
+    expect(await screen.findByText('No files found')).toBeInTheDocument();
 
-    expect(screen.getByText('Session tasks')).toBeInTheDocument();
-    expect(screen.getByText('Completed session message')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
+
+    expect(screen.getAllByText('Megumi').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
     expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
 
@@ -353,9 +377,10 @@ describe('interaction baseline acceptance', () => {
       'Runtime response from deepseek-v4-flash for the visible conversation.',
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
     fireEvent.click(screen.getByRole('button', { name: 'Collapse workspace panel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
 
@@ -383,10 +408,9 @@ describe('interaction baseline acceptance', () => {
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'deepseek-v4-flash' } });
     expect(session.message.send).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }));
+    expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
-    expect(screen.getByText('Failed session message')).toBeInTheDocument();
-    expect(screen.getByText('failed')).toBeInTheDocument();
     expect(
       screen.getAllByText(
         'Runtime chat failed for "please fail this run".',

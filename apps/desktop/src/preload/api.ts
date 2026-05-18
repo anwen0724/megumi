@@ -83,6 +83,8 @@ import type {
   ToolCallGetPayload,
   ToolDefinitionsListData,
   ToolDefinitionsListPayload,
+  WorkspaceFilesListData,
+  WorkspaceFilesListPayload,
 } from '@megumi/shared/ipc-schemas';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
@@ -341,6 +343,14 @@ export const api = {
       request: BusinessRequest<MemoryRecallPreviewPayload, typeof IPC_CHANNELS.memory.recallPreview>,
     ): Promise<RuntimeIpcResult<MemoryRecallPreviewData, typeof IPC_CHANNELS.memory.recallPreview>> =>
       invokeRuntimeIpc(IPC_CHANNELS.memory.recallPreview, request),
+  },
+  workspace: {
+    files: {
+      list: (
+        request: BusinessRequest<WorkspaceFilesListPayload, typeof IPC_CHANNELS.workspace.files.list>,
+      ): Promise<RuntimeIpcResult<WorkspaceFilesListData, typeof IPC_CHANNELS.workspace.files.list>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.workspace.files.list, request),
+    },
   },
   runtime: {
     onEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {

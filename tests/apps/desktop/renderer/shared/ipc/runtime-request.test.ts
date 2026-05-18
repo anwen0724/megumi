@@ -123,5 +123,6 @@ describe('createRendererRuntimeIpcRequest', () => {
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.versionCreate)).toBe('artifacts.version.create');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.statusUpdate)).toBe('artifacts.status.update');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.reference)).toBe('artifacts.reference');
+    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.workspace.files.list)).toBe('workspace.files.list');
   });
 });
