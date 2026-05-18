@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 
 describe('Composer', () => {
@@ -15,7 +15,7 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
   });
 
-  it('submits trimmed text with selected mode and model then clears the input', async () => {
+  it('submits trimmed text with selected mode and model then clears the input from the Send button', async () => {
     const onSubmit = vi.fn();
     render(<Composer onSubmit={onSubmit} />);
 
@@ -30,6 +30,45 @@ describe('Composer', () => {
       model: 'deepseek-v4-pro',
     });
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('');
+  });
+
+  it('submits with Enter and clears the input', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), 'Send from keyboard');
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      message: 'Send from keyboard',
+      mode: 'chat',
+      model: 'deepseek-v4-flash',
+    });
+    expect(screen.getByLabelText('Message Megumi')).toHaveValue('');
+  });
+
+  it('keeps Shift+Enter and Alt+Enter as newline shortcuts without submitting', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    await userEvent.click(input);
+    await userEvent.keyboard('first line{Shift>}{Enter}{/Shift}second line{Alt>}{Enter}{/Alt}third line');
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input).toHaveValue('first line\nsecond line\nthird line');
+  });
+
+  it('does not submit while an IME composition is confirming text', () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    fireEvent.change(input, { target: { value: 'nihao' } });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input).toHaveValue('nihao');
   });
 
   it('calls context and attachment callbacks', async () => {
@@ -51,28 +90,39 @@ describe('Composer', () => {
     expect(onAttachFiles).toHaveBeenCalledTimes(1);
   });
 
-  it('shows sending status, allows drafting the next message, and locks submit', async () => {
-    render(<Composer status="sending" onSubmit={() => undefined} initialValue="Continue this plan" />);
+  it('shows sending status, allows drafting the next message, and shows Stop instead of Send', async () => {
+    const onSubmit = vi.fn();
+    const onStop = vi.fn();
+    render(<Composer status="sending" onSubmit={onSubmit} onStop={onStop} initialValue="Continue this plan" />);
 
     expect(screen.getByText('Sending')).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('Continue this plan');
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), ' after this run');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
 
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('Continue this plan after this run');
-    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
-  it('shows running status, allows model changes for the next message, and disables send', async () => {
-    render(<Composer status="running" onSubmit={() => undefined} />);
+  it('shows running status, allows model changes for the next message, and uses Stop for the active run', async () => {
+    const onSubmit = vi.fn();
+    const onStop = vi.fn();
+    render(<Composer status="running" onSubmit={onSubmit} onStop={onStop} />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'continue');
     await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-pro');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
 
     expect(screen.getByText('Megumi is working')).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-pro');
-    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it('shows waiting approval status and calls the approval callback', async () => {

@@ -1,4 +1,4 @@
-import { FormEvent, useId, useState } from 'react';
+import { FormEvent, KeyboardEvent, useId, useState } from 'react';
 import {
   AtSign,
   Bot,
@@ -8,6 +8,7 @@ import {
   Paperclip,
   SendHorizontal,
   Sparkles,
+  Square,
   TriangleAlert,
 } from 'lucide-react';
 import { Badge, Button, IconButton, cx } from '../../../shared/ui';
@@ -30,6 +31,7 @@ interface ComposerProps {
   status?: ComposerStatus;
   initialValue?: string;
   onSubmit: (payload: ComposerSubmitPayload) => void;
+  onStop?: () => void;
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
   onShowApproval?: () => void;
@@ -63,6 +65,7 @@ export function Composer({
   status = 'idle',
   initialValue = '',
   onSubmit,
+  onStop,
   onChooseContext,
   onAttachFiles,
   onShowApproval,
@@ -76,11 +79,11 @@ export function Composer({
   const inputLocked = status === 'waiting-approval';
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canSend = trimmedValue.length > 0 && !sendLocked;
+  const canStop = status === 'sending' || status === 'running';
   const activeStatus = statusConfig[status];
   const StatusIcon = activeStatus?.icon;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function submitDraft() {
     if (!canSend) return;
 
     onSubmit({
@@ -89,6 +92,38 @@ export function Composer({
       model,
     });
     setValue('');
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitDraft();
+  }
+
+  function insertNewlineAtCursor(textarea: HTMLTextAreaElement) {
+    const selectionStart = textarea.selectionStart;
+    const selectionEnd = textarea.selectionEnd;
+    setValue(`${value.slice(0, selectionStart)}\n${value.slice(selectionEnd)}`);
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    const isComposing = event.nativeEvent.isComposing || (event as unknown as { isComposing?: boolean }).isComposing;
+
+    if (isComposing || event.shiftKey) {
+      return;
+    }
+
+    if (event.altKey) {
+      event.preventDefault();
+      insertNewlineAtCursor(event.currentTarget);
+      return;
+    }
+
+    event.preventDefault();
+    submitDraft();
   }
 
   return (
@@ -102,6 +137,7 @@ export function Composer({
           value={value}
           disabled={inputLocked}
           onChange={(event) => setValue(event.target.value)}
+          onKeyDown={handleComposerKeyDown}
           placeholder="Ask Megumi anything..."
           rows={3}
           className="min-h-20 w-full resize-none border-0 bg-transparent text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70"
@@ -173,10 +209,17 @@ export function Composer({
                 Review approval
               </Button>
             ) : null}
-            <Button type="submit" variant="primary" size="sm" disabled={!canSend} aria-label="Send message">
-              <SendHorizontal size={15} aria-hidden="true" />
-              Send
-            </Button>
+            {canStop ? (
+              <Button type="button" variant="primary" size="sm" onClick={onStop} aria-label="Stop current run">
+                <Square size={13} aria-hidden="true" />
+                Stop
+              </Button>
+            ) : (
+              <Button type="submit" variant="primary" size="sm" disabled={!canSend} aria-label="Send message">
+                <SendHorizontal size={15} aria-hidden="true" />
+                Send
+              </Button>
+            )}
           </div>
         </div>
       </div>
