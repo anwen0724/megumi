@@ -90,6 +90,23 @@ describe('Composer', () => {
     expect(onAttachFiles).toHaveBeenCalledTimes(1);
   });
 
+  it('renders a compact toolbar with context on the left and mode, model, and Send on the right', () => {
+    render(<Composer onSubmit={() => undefined} />);
+
+    const toolbar = screen.getByTestId('composer-toolbar');
+    const leftControls = toolbar.firstElementChild;
+    const rightControls = toolbar.lastElementChild;
+
+    expect(screen.getByRole('button', { name: 'Choose context' })).toHaveTextContent('Context');
+    expect(screen.getByTestId('composer-input-panel')).toHaveClass('border-b');
+    expect(toolbar).toHaveClass('justify-between');
+    expect(leftControls).toHaveTextContent('Context');
+    expect(rightControls?.children).toHaveLength(3);
+    expect(rightControls?.children[0]).toContainElement(screen.getByLabelText('Composer mode'));
+    expect(rightControls?.children[1]).toContainElement(screen.getByLabelText('Model'));
+    expect(rightControls?.children[2]).toBe(screen.getByRole('button', { name: 'Send message' }));
+  });
+
   it('shows sending status, allows drafting the next message, and shows Stop instead of Send', async () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
@@ -108,19 +125,27 @@ describe('Composer', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
-  it('shows running status, allows model changes for the next message, and uses Stop for the active run', async () => {
+  it('shows running status, keeps the compact draft placeholder, and uses Stop for the active run', async () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
     render(<Composer status="running" onSubmit={onSubmit} onStop={onStop} />);
+
+    expect(screen.getByPlaceholderText('Draft a follow-up while Megumi works...')).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'continue');
     await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-pro');
     await userEvent.keyboard('{Enter}');
     await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
 
+    const toolbar = screen.getByTestId('composer-toolbar');
+    const rightControls = toolbar.lastElementChild;
+
     expect(screen.getByText('Megumi is working')).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-pro');
+    expect(rightControls).toHaveTextContent('Chat');
+    expect(rightControls).toHaveTextContent('DeepSeek V4 Pro');
+    expect(rightControls?.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onStop).toHaveBeenCalledTimes(1);
   });

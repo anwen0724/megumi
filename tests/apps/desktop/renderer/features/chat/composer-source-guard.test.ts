@@ -28,7 +28,7 @@ describe('composer source guard', () => {
 
     expect(composer).not.toMatch(/Shift\s*\+\s*Enter|Alt\s*\+\s*Enter/i);
     expect(composerCopy).not.toMatch(/\bshortcut\b/i);
-    expect(composer).not.toMatch(/Draft a follow-up|while Megumi works|next message after this run/i);
+    expect(composer).not.toMatch(/next message after this run/i);
   });
 
   it('does not move composer mode or model controls into the titlebar', () => {

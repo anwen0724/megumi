@@ -81,6 +81,7 @@ export function Composer({
   const canSend = trimmedValue.length > 0 && !sendLocked;
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
+  const placeholder = showStop ? 'Draft a follow-up while Megumi works...' : 'Ask Megumi anything...';
   const activeStatus = statusConfig[status];
   const StatusIcon = activeStatus?.icon;
 
@@ -129,35 +130,46 @@ export function Composer({
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto w-full max-w-3xl px-6 pb-6">
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-3 shadow-[var(--shadow-soft)]">
-        <label htmlFor="megumi-composer" className="sr-only">
-          Message Megumi
-        </label>
-        <textarea
-          id="megumi-composer"
-          value={value}
-          disabled={inputLocked}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={handleComposerKeyDown}
-          placeholder="Ask Megumi anything..."
-          rows={3}
-          className="min-h-20 w-full resize-none border-0 bg-transparent text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70"
-        />
+      <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)]">
+        <div data-testid="composer-input-panel" className="border-b border-[var(--color-border)] px-3 py-2">
+          <label htmlFor="megumi-composer" className="sr-only">
+            Message Megumi
+          </label>
+          <textarea
+            id="megumi-composer"
+            value={value}
+            disabled={inputLocked}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
+            placeholder={placeholder}
+            rows={2}
+            className="min-h-14 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70"
+          />
+        </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div data-testid="composer-toolbar" className="flex flex-wrap items-center justify-between gap-2 px-2 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <IconButton label="Attach files" variant="ghost" size="sm" onClick={onAttachFiles}>
               <Paperclip size={16} aria-hidden="true" />
             </IconButton>
-            <Button type="button" variant="ghost" size="sm" onClick={onChooseContext}>
+            <Button type="button" variant="ghost" size="sm" onClick={onChooseContext} aria-label="Choose context">
               <AtSign size={15} aria-hidden="true" />
-              Choose context
+              Context
             </Button>
 
-            <label htmlFor={modeId} className="sr-only">
-              Composer mode
-            </label>
+            {activeStatus && StatusIcon ? (
+              <Badge variant={activeStatus.variant} className={cx(status === 'sending' ? 'animate-pulse' : undefined)}>
+                <StatusIcon size={12} aria-hidden="true" />
+                {activeStatus.label}
+              </Badge>
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <div className="flex h-8 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
+              <label htmlFor={modeId} className="sr-only">
+                Composer mode
+              </label>
               <Bot size={14} aria-hidden="true" />
               <select
                 id={modeId}
@@ -175,10 +187,10 @@ export function Composer({
               </select>
             </div>
 
-            <label htmlFor={modelId} className="sr-only">
-              Model
-            </label>
             <div className="flex h-8 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
+              <label htmlFor={modelId} className="sr-only">
+                Model
+              </label>
               <Brain size={14} aria-hidden="true" />
               <select
                 id={modelId}
@@ -196,15 +208,6 @@ export function Composer({
               </select>
             </div>
 
-            {activeStatus && StatusIcon ? (
-              <Badge variant={activeStatus.variant} className={cx(status === 'sending' ? 'animate-pulse' : undefined)}>
-                <StatusIcon size={12} aria-hidden="true" />
-                {activeStatus.label}
-              </Badge>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-2">
             {status === 'waiting-approval' ? (
               <Button type="button" variant="secondary" size="sm" onClick={onShowApproval}>
                 Review approval
