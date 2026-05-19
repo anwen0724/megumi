@@ -3,6 +3,7 @@ import type { ProjectRecord } from '@megumi/shared/project-contracts';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import { projectFromRecord, type Project } from './types';
+import { useSessionStore } from '../../entities/session/store';
 
 interface ProjectState {
   projects: Project[];
@@ -110,12 +111,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return false;
     }
 
-    set((state) => ({
-      projects: state.projects.filter((project) => project.id !== projectId),
-      currentProjectId: state.currentProjectId === projectId ? null : state.currentProjectId,
-      loading: false,
-      error: null,
-    }));
+    set((state) => {
+      const isCurrentProject = state.currentProjectId === projectId;
+
+      if (isCurrentProject) {
+        const sessionState = useSessionStore.getState();
+        sessionState.setActiveSession(null);
+        sessionState.setSessions(
+          sessionState.sessions.filter((session) => session.projectId !== projectId),
+        );
+      }
+
+      return {
+        projects: state.projects.filter((project) => project.id !== projectId),
+        currentProjectId: isCurrentProject ? null : state.currentProjectId,
+        loading: false,
+        error: null,
+      };
+    });
     return result.data.removed;
   },
 }));

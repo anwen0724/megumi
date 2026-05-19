@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import type { Project } from '@megumi/desktop/renderer/entities/project/types';
 
 const projectRecord = {
@@ -106,16 +107,24 @@ describe('useProjectStore', () => {
     expect(useProjectStore.getState().currentProjectId).toBe(projectRecord.projectId);
   });
 
-  it('removes projects and clears current project if active', async () => {
+  it('removes projects and clears current project and session state if active', async () => {
     useProjectStore.setState({
       projects: [useProjectStore.getState().mapProjectRecord(projectRecord)],
       currentProjectId: projectRecord.projectId,
+    });
+
+    // Create a session tied to the project and make it active
+    const session = useSessionStore.getState().createLocalSession({
+      projectId: projectRecord.projectId,
+      title: 'Test session',
     });
 
     await useProjectStore.getState().removeProject(projectRecord.projectId);
 
     expect(useProjectStore.getState().projects).toEqual([]);
     expect(useProjectStore.getState().currentProjectId).toBeNull();
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(useSessionStore.getState().sessions.find((s) => s.id === session.id)).toBeUndefined();
   });
 
   it('stores display-safe errors from failed project IPC', async () => {
