@@ -26,10 +26,31 @@ vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
   },
 }));
 
+const DEFAULT_PROJECT_RECORD = {
+  projectId: 'project-1',
+  name: 'Megumi',
+  repoPath: 'C:/all/work/study/megumi',
+  repoPathKey: 'c:/all/work/study/megumi',
+  status: 'available' as const,
+  createdAt: '2026-05-10T00:00:00.000Z',
+  lastOpenedAt: '2026-05-19T00:00:00.000Z',
+};
+
 function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
+      project: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: { projects: [DEFAULT_PROJECT_RECORD] } }),
+        useExisting: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true } }),
+        open: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            project: DEFAULT_PROJECT_RECORD,
+          },
+        }),
+        remove: vi.fn().mockResolvedValue({ ok: true, data: { projectId: 'project-1', removed: true } }),
+      },
       provider: {
         list: vi.fn().mockResolvedValue({ ok: true, providers: [] }),
         update: vi.fn().mockResolvedValue({ ok: true }),
@@ -161,11 +182,17 @@ describe('AppShell', () => {
     expect(within(titlebar).getByText('Planning the UI')).toBeInTheDocument();
     expect(within(titlebar).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'megumi sessions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Megumi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
-    expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Context' })).toBeVisible();
+  });
+
+  it('calls loadProjects on mount', () => {
+    renderShell();
+
+    expect(window.megumi.project.list).toHaveBeenCalled();
   });
 
   it('creates and selects a local session from the sidebar', async () => {
@@ -188,8 +215,6 @@ describe('AppShell', () => {
     });
 
     renderShell();
-
-    expect(screen.getByRole('button', { name: 'Local sessions' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
@@ -259,7 +284,7 @@ describe('AppShell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
     expect(screen.queryByText('Message from the first session')).not.toBeInTheDocument();
-    expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
     expect(useChatStore.getState().sessionSnapshots['session-1'].messages[0].content).toBe(
       'Message from the first session',
     );

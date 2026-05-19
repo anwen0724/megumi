@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSessionStore } from '../entities/session/store';
 import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
@@ -26,9 +26,17 @@ export function AppShell() {
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   const titlebarTitle = activeSession?.title ?? 'New session';
 
+  useEffect(() => {
+    void useProjectStore.getState().loadProjects();
+  }, []);
+
   const sidebarProjects = useMemo<SidebarProjectItem[]>(
-    () =>
-      projects.map((project) => ({
+    () => {
+      const sorted = [...projects].sort(
+        (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+      );
+      const limited = sorted.slice(0, 8);
+      return limited.map((project) => ({
         id: project.id,
         name: project.name,
         repoPath: project.repoPath,
@@ -41,7 +49,8 @@ export function AppShell() {
             meta: formatSessionUpdatedAt(session.updatedAt),
             active: session.id === activeSessionId,
           })),
-      })),
+      }));
+    },
     [projects, sessions, activeSessionId],
   );
 
@@ -80,6 +89,7 @@ export function AppShell() {
       <LeftSidebar
         collapsed={sidebarCollapsed}
         projects={sidebarProjects}
+        allProjects={projects}
         onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
         onCreateSession={handleCreateSession}
         onSelectSession={handleSelectSession}
@@ -87,9 +97,15 @@ export function AppShell() {
           void useProjectStore.getState().useExistingProject();
         }}
         onManageProjects={() => {
-          // TODO: wire up project manager modal in Plan 03 Task 2
+          // LeftSidebar manages the modal open state internally
         }}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenProject={(projectId) => {
+          void useProjectStore.getState().openProject(projectId);
+        }}
+        onRemoveProject={(projectId) => {
+          void useProjectStore.getState().removeProject(projectId);
+        }}
       />
       <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">
         <WindowTitleBar title={titlebarTitle} />
