@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ClipboardList, MessageSquarePlus, PanelLeftOpen, Settings } from 'lucide-react';
+import { ChevronLeft, ClipboardList, FolderOpen, MessageSquarePlus, PanelLeftOpen, Settings } from 'lucide-react';
 import { Button, IconButton, cx } from '../shared/ui';
 
 const VISIBLE_SESSION_COUNT = 5;
@@ -11,30 +11,58 @@ export interface SidebarSessionItem {
   active: boolean;
 }
 
+export interface SidebarProjectItem {
+  id: string;
+  name: string;
+  repoPath: string;
+  status: 'available' | 'missing';
+  sessions: SidebarSessionItem[];
+}
+
 interface LeftSidebarProps {
   collapsed: boolean;
-  workspaceName: string;
-  sessions: SidebarSessionItem[];
-  loading?: boolean;
+  projects: SidebarProjectItem[];
   onToggleCollapsed: () => void;
   onCreateSession: () => void;
   onSelectSession?: (id: string) => void;
+  onUseExistingProject: () => void;
+  onManageProjects: () => void;
   onOpenSettings?: () => void;
 }
 
 export function LeftSidebar({
   collapsed,
-  workspaceName,
-  sessions,
-  loading = false,
+  projects,
   onToggleCollapsed,
   onCreateSession,
   onSelectSession,
+  onUseExistingProject,
+  onManageProjects: _onManageProjects,
   onOpenSettings,
 }: LeftSidebarProps) {
-  const [showAllSessions, setShowAllSessions] = useState(false);
-  const [workspaceSessionsOpen, setWorkspaceSessionsOpen] = useState(true);
-  const workspaceSessionsLabel = workspaceName === 'Local sessions' ? 'Local sessions' : `${workspaceName} sessions`;
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
+    () => new Set(projects.map((p) => p.id)),
+  );
+  const [showAllByProject, setShowAllByProject] = useState<Record<string, boolean>>({});
+
+  const toggleProject = (projectId: string) => {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  };
+
+  const toggleShowAll = (projectId: string) => {
+    setShowAllByProject((prev) => ({
+      ...prev,
+      [projectId]: !prev[projectId],
+    }));
+  };
 
   if (collapsed) {
     return (
@@ -59,9 +87,6 @@ export function LeftSidebar({
     );
   }
 
-  const visibleSessions = showAllSessions ? sessions : sessions.slice(0, VISIBLE_SESSION_COUNT);
-  const canToggleSessionCount = sessions.length > VISIBLE_SESSION_COUNT;
-
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-muted)]">
       <div className="flex items-center justify-between px-4 py-3">
@@ -85,58 +110,86 @@ export function LeftSidebar({
           Task plan
         </button>
 
-        <section aria-label="Workspace sessions">
-          <button
-            type="button"
-            onClick={() => setWorkspaceSessionsOpen((value) => !value)}
-            aria-expanded={workspaceSessionsOpen}
-            className="mb-1 flex w-full items-center rounded-md px-3 py-1.5 text-left text-xs font-semibold text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-            aria-label={workspaceSessionsLabel}
-          >
-            <span className="truncate">{workspaceName}</span>
-          </button>
+        <section aria-label="Projects">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-xs font-semibold text-[var(--color-text-muted)]">项目</span>
+            <IconButton
+              label="Project actions"
+              onClick={onUseExistingProject}
+              size="sm"
+              variant="ghost"
+            >
+              <FolderOpen size={14} aria-hidden="true" />
+            </IconButton>
+          </div>
 
-          {workspaceSessionsOpen ? (
-            <>
-              {loading ? (
-                <p className="px-6 py-2 text-sm text-[var(--color-text-muted)]">Loading sessions</p>
-              ) : sessions.length === 0 ? (
-                <p className="px-6 py-2 text-sm text-[var(--color-text-muted)]">No sessions yet</p>
-              ) : (
-                <div className="space-y-0.5">
-                  {visibleSessions.map((session) => (
-                    <button
-                      key={session.id}
-                      type="button"
-                      onClick={() => onSelectSession?.(session.id)}
-                      aria-current={session.active ? 'page' : undefined}
-                      aria-label={`Open session ${session.title}, updated ${session.meta}`}
-                      title={`${session.title} · ${session.meta}`}
-                      className={cx(
-                        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pl-6 pr-3 text-left text-sm transition',
-                        session.active
-                          ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                          : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]',
+          {projects.length === 0 ? (
+            <p className="py-2 pl-3 pr-3 text-sm text-[var(--color-text-muted)]">No projects</p>
+          ) : (
+            projects.map((project) => {
+              const isExpanded = expandedProjects.has(project.id);
+              const showAll = showAllByProject[project.id] ?? false;
+              const visibleSessions = showAll
+                ? project.sessions
+                : project.sessions.slice(0, VISIBLE_SESSION_COUNT);
+              const canToggle = project.sessions.length > VISIBLE_SESSION_COUNT;
+
+              return (
+                <div key={project.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggleProject(project.id)}
+                    aria-expanded={isExpanded}
+                    className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-sm font-medium text-[var(--color-text)] transition hover:bg-[var(--color-surface)]"
+                  >
+                    {project.name}
+                  </button>
+
+                  {isExpanded ? (
+                    <>
+                      {project.sessions.length === 0 ? (
+                        <p className="py-2 pl-8 pr-3 text-sm text-[var(--color-text-muted)]">
+                          No sessions yet
+                        </p>
+                      ) : (
+                        <div className="space-y-0.5">
+                          {visibleSessions.map((session) => (
+                            <button
+                              key={session.id}
+                              type="button"
+                              onClick={() => onSelectSession?.(session.id)}
+                              aria-current={session.active ? 'page' : undefined}
+                              aria-label={`Open session ${session.title}, updated ${session.meta}`}
+                              title={`${session.title} · ${session.meta}`}
+                              className={cx(
+                                'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pl-8 pr-3 text-left text-sm transition',
+                                session.active
+                                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]',
+                              )}
+                            >
+                              <span className="truncate font-medium">{session.title}</span>
+                              <span className="text-xs text-[var(--color-text-muted)]">{session.meta}</span>
+                            </button>
+                          ))}
+                        </div>
                       )}
-                    >
-                      <span className="truncate font-medium">{session.title}</span>
-                      <span className="text-xs text-[var(--color-text-muted)]">{session.meta}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
 
-              {canToggleSessionCount ? (
-                <button
-                  type="button"
-                  onClick={() => setShowAllSessions((value) => !value)}
-                  className="mt-1 rounded-md px-6 py-1.5 text-left text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-                >
-                  {showAllSessions ? 'Show fewer sessions' : 'Show more sessions'}
-                </button>
-              ) : null}
-            </>
-          ) : null}
+                      {canToggle ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleShowAll(project.id)}
+                          className="mt-1 rounded-md px-8 py-1.5 text-left text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+                        >
+                          {showAll ? 'Show fewer sessions' : 'Show more sessions'}
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
         </section>
       </nav>
 

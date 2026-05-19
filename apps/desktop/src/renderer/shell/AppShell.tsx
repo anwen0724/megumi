@@ -3,11 +3,11 @@ import { useSessionStore } from '../entities/session/store';
 import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
 import { ChatTimeline } from '../features/chat';
-import { LeftSidebar, type SidebarSessionItem } from './LeftSidebar';
+import { LeftSidebar, type SidebarProjectItem } from './LeftSidebar';
 import { RightWorkspacePanel } from './RightWorkspacePanel';
 import { SettingsModal } from './SettingsModal';
 import { WindowTitleBar } from './WindowTitleBar';
-import { formatSessionUpdatedAt, getWorkspaceBasename } from './shell-display';
+import { formatSessionUpdatedAt } from './shell-display';
 
 const LOCAL_WORKSPACE_ID = 'local-workspace';
 
@@ -24,21 +24,25 @@ export function AppShell() {
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
-  const workspaceBasename = getWorkspaceBasename({
-    workspaceName: currentProject?.name,
-    workspacePath: currentProject?.repoPath,
-  });
   const titlebarTitle = activeSession?.title ?? 'New session';
 
-  const sidebarSessions = useMemo<SidebarSessionItem[]>(
+  const sidebarProjects = useMemo<SidebarProjectItem[]>(
     () =>
-      sessions.map((session) => ({
-        id: session.id,
-        title: session.title,
-        meta: formatSessionUpdatedAt(session.updatedAt),
-        active: session.id === activeSessionId,
+      projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        repoPath: project.repoPath,
+        status: project.status,
+        sessions: sessions
+          .filter((session) => session.projectId === project.id)
+          .map((session) => ({
+            id: session.id,
+            title: session.title,
+            meta: formatSessionUpdatedAt(session.updatedAt),
+            active: session.id === activeSessionId,
+          })),
       })),
-    [activeSessionId, sessions],
+    [projects, sessions, activeSessionId],
   );
 
   function saveActiveChatSnapshot() {
@@ -75,11 +79,16 @@ export function AppShell() {
     <div className="flex h-screen min-h-0 bg-[var(--color-app-bg)] text-[var(--color-text)]">
       <LeftSidebar
         collapsed={sidebarCollapsed}
-        workspaceName={workspaceBasename}
-        sessions={sidebarSessions}
+        projects={sidebarProjects}
         onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
         onCreateSession={handleCreateSession}
         onSelectSession={handleSelectSession}
+        onUseExistingProject={() => {
+          void useProjectStore.getState().useExistingProject();
+        }}
+        onManageProjects={() => {
+          // TODO: wire up project manager modal in Plan 03 Task 2
+        }}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">
