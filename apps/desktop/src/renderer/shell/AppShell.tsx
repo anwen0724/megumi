@@ -9,8 +9,6 @@ import { SettingsModal } from './SettingsModal';
 import { WindowTitleBar } from './WindowTitleBar';
 import { formatSessionUpdatedAt, getWorkspaceBasename } from './shell-display';
 
-const LOCAL_WORKSPACE_ID = 'local-workspace';
-
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -52,8 +50,13 @@ export function AppShell() {
   function handleCreateSession() {
     saveActiveChatSnapshot();
 
+    if (!currentProject) {
+      void useProjectStore.getState().useExistingProject();
+      return;
+    }
+
     const session = createLocalSession({
-      projectId: currentProject?.id ?? LOCAL_WORKSPACE_ID,
+      projectId: currentProject.id,
       title: 'New session',
       agentType: 'free',
     });
@@ -67,6 +70,13 @@ export function AppShell() {
     }
 
     saveActiveChatSnapshot();
+
+    const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId);
+
+    if (session && session.projectId !== currentProjectId) {
+      void useProjectStore.getState().openProject(session.projectId);
+    }
+
     setActiveSession(sessionId);
     useChatStore.getState().loadSessionSnapshot(sessionId);
   }

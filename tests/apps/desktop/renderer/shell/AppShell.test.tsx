@@ -176,22 +176,25 @@ describe('AppShell', () => {
     expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
   });
 
-  it('creates a local session without a selected project', async () => {
+  it('uses existing project flow instead of creating a local session when no project is selected', async () => {
     useProjectStore.setState({
       projects: [],
       currentProjectId: null,
       loading: false,
     });
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: null,
+      activeAgentType: 'free',
+    });
+    const useExistingProject = vi.spyOn(useProjectStore.getState(), 'useExistingProject');
 
     renderShell();
 
-    expect(screen.getByRole('button', { name: 'Local sessions' })).toBeInTheDocument();
-
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
-    const state = useSessionStore.getState();
-    expect(state.sessions[0].projectId).toBe('local-workspace');
-    expect(state.activeSessionId).toBe(state.sessions[0].id);
+    expect(useExistingProject).toHaveBeenCalled();
+    expect(useSessionStore.getState().sessions).toHaveLength(0);
   });
 
   it('selects an existing session from the sidebar', async () => {
@@ -200,6 +203,56 @@ describe('AppShell', () => {
     await userEvent.click(screen.getByRole('button', { name: /Review notes/ }));
 
     expect(useSessionStore.getState().activeSessionId).toBe('session-2');
+  });
+
+  it('switches current project when selecting a session from another project', async () => {
+    const now = '2026-05-10T12:00:00.000Z';
+    const projectB = {
+      id: 'project-b',
+      name: 'other',
+      description: 'Another project',
+      repoPath: null,
+      type: 'existing_feature' as const,
+      createdAt: now,
+      context: {},
+    };
+    const sessionB = {
+      id: 'session-b',
+      projectId: 'project-b',
+      agentType: 'free' as const,
+      title: 'Other session',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const openProject = vi.spyOn(useProjectStore.getState(), 'openProject').mockResolvedValue(projectB);
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Megumi',
+          description: 'Warm agent desktop companion',
+          repoPath: 'C:/all/work/study/megumi',
+          type: 'existing_feature',
+          createdAt: now,
+          context: {},
+        },
+        projectB,
+      ],
+      currentProjectId: 'project-1',
+      loading: false,
+    });
+    useSessionStore.setState({
+      sessions: [sessionB],
+      activeSessionId: null,
+      activeAgentType: 'free',
+    });
+
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: /Open session/ }));
+
+    expect(useSessionStore.getState().activeSessionId).toBe(sessionB.id);
+    expect(openProject).toHaveBeenCalledWith(sessionB.projectId);
   });
 
   it('collapses and expands the left sidebar while keeping new-session access in the rail', async () => {

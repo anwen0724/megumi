@@ -10,9 +10,11 @@ interface ProjectState {
   addProject: (project: Project) => void;
   updateProject: (id: string, data: Partial<Project>) => void;
   removeProject: (id: string) => void;
+  openProject: (projectId: string) => Promise<Project | null>;
+  useExistingProject: () => Promise<Project>;
 }
 
-export const useProjectStore = create<ProjectState>((set) => ({
+export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
   currentProjectId: null,
   loading: false,
@@ -26,4 +28,16 @@ export const useProjectStore = create<ProjectState>((set) => ({
     projects: s.projects.filter((p) => p.id !== id),
     currentProjectId: s.currentProjectId === id ? null : s.currentProjectId,
   })),
+  openProject: async (projectId) => {
+    const project = get().projects.find((p) => p.id === projectId) ?? null;
+
+    if (project) {
+      set({ currentProjectId: project.id });
+    }
+
+    return project;
+  },
+  useExistingProject: async () => {
+    return get().projects[0];
+  },
 }));
