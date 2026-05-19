@@ -13,7 +13,7 @@ const projectRecord = {
   lastOpenedAt: '2026-05-19T00:00:01.000Z',
 };
 
-function ok<T extends object>(data: T, channel: string) {
+function ok<T extends object, C extends string>(data: T, channel: C) {
   return {
     ok: true as const,
     data,
@@ -25,7 +25,7 @@ function ok<T extends object>(data: T, channel: string) {
   };
 }
 
-function fail(channel: string) {
+function fail<C extends string>(channel: C) {
   return {
     ok: false as const,
     error: {

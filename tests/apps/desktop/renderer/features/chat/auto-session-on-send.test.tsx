@@ -18,6 +18,10 @@ const project: Project = {
   type: 'existing_feature',
   createdAt: '2026-05-10T00:00:00.000Z',
   context: {},
+  projectId: 'project-1',
+  repoPathKey: 'c:/all/work/study/megumi',
+  lastOpenedAt: '2026-05-19T00:00:00.000Z',
+  status: 'available' as const,
 };
 
 function resetStores() {
