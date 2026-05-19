@@ -24,6 +24,27 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      project_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      repo_path TEXT NOT NULL,
+      repo_path_key TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_opened_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_repo_path_key
+      ON projects(repo_path_key);
+
+    CREATE INDEX IF NOT EXISTS idx_projects_status
+      ON projects(status);
+
+    CREATE INDEX IF NOT EXISTS idx_projects_last_opened_at
+      ON projects(last_opened_at DESC);
+  `);
+
+  database.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
       session_id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

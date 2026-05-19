@@ -211,6 +211,39 @@ describe('provider settings migrations', () => {
     ]));
   });
 
+  it('creates projects table and indexes', () => {
+    const database = createTestDb();
+
+    migrateDatabase(database);
+
+    const columns = database
+      .prepare('PRAGMA table_info(projects)')
+      .all() as Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }>;
+
+    expect(columns.map((column) => column.name)).toEqual([
+      'project_id',
+      'name',
+      'repo_path',
+      'repo_path_key',
+      'status',
+      'created_at',
+      'last_opened_at',
+    ]);
+    expect(columns.find((column) => column.name === 'project_id')?.pk).toBe(1);
+    expect(columns.find((column) => column.name === 'repo_path')?.notnull).toBe(1);
+    expect(columns.find((column) => column.name === 'repo_path_key')?.notnull).toBe(1);
+
+    const indexes = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name ASC")
+      .all() as Array<{ name: string }>;
+
+    expect(indexes.map((row) => row.name)).toEqual(expect.arrayContaining([
+      'idx_projects_last_opened_at',
+      'idx_projects_status',
+      'idx_projects_repo_path_key',
+    ]));
+  });
+
   it('does not create active agent-prefixed session run tables or indexes', () => {
     const source = readFileSync('packages/db/schema/migrations.ts', 'utf8');
 
