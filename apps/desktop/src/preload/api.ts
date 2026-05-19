@@ -9,6 +9,16 @@ import type {
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type {
+  ProjectListData,
+  ProjectListPayload,
+  ProjectOpenData,
+  ProjectOpenPayload,
+  ProjectRemoveData,
+  ProjectRemovePayload,
+  ProjectUseExistingData,
+  ProjectUseExistingPayload,
+} from '@megumi/shared/project-contracts';
+import type {
   ArtifactGetData,
   ArtifactGetPayload,
   ArtifactListByRunPayload,
@@ -238,6 +248,24 @@ export const api = {
       request: BusinessRequest<RunRetryPayload, typeof IPC_CHANNELS.recovery.retry>,
     ): Promise<RuntimeIpcResult<RunRetryData, typeof IPC_CHANNELS.recovery.retry>> =>
       invokeRuntimeIpc(IPC_CHANNELS.recovery.retry, request),
+  },
+  project: {
+    list: (
+      request: BusinessRequest<ProjectListPayload, typeof IPC_CHANNELS.project.list>,
+    ): Promise<RuntimeIpcResult<ProjectListData, typeof IPC_CHANNELS.project.list>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.project.list, request),
+    useExisting: (
+      request: BusinessRequest<ProjectUseExistingPayload, typeof IPC_CHANNELS.project.useExisting>,
+    ): Promise<RuntimeIpcResult<ProjectUseExistingData, typeof IPC_CHANNELS.project.useExisting>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.project.useExisting, request),
+    open: (
+      request: BusinessRequest<ProjectOpenPayload, typeof IPC_CHANNELS.project.open>,
+    ): Promise<RuntimeIpcResult<ProjectOpenData, typeof IPC_CHANNELS.project.open>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.project.open, request),
+    remove: (
+      request: BusinessRequest<ProjectRemovePayload, typeof IPC_CHANNELS.project.remove>,
+    ): Promise<RuntimeIpcResult<ProjectRemoveData, typeof IPC_CHANNELS.project.remove>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.project.remove, request),
   },
   artifacts: {
     listByRun: (

@@ -219,6 +219,23 @@ describe('preload api', () => {
     expect(source).not.toContain(['IPC_CHANNELS', 'agent'].join('.'));
   });
 
+  it('invokes project runtime IPC channels through preload API', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { api } = await import('@megumi/desktop/preload/api');
+
+    invoke.mockResolvedValue({
+      ok: true,
+      data: { projects: [] },
+      meta: { requestId: 'ipc-preload-project-list-1', channel: IPC_CHANNELS.project.list, handledAt: 'now' },
+    });
+
+    const listRequest = createRequest(IPC_CHANNELS.project.list, {});
+
+    await api.project.list(listRequest);
+
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.list, listRequest);
+  });
+
   it('keeps window controls as lightweight shell ipc', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { api } = await import('@megumi/desktop/preload/api');
