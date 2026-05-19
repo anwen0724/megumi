@@ -1,45 +1,129 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import type { Project } from '@megumi/desktop/renderer/entities/project/types';
 
-const mockProject: Project = {
-  id: 'p1', name: 'Test', description: 'desc', repoPath: null,
-  type: 'new_project', createdAt: '2026-01-01', context: {},
+const projectRecord = {
+  projectId: 'project:abc123',
+  name: 'megumi',
+  repoPath: 'C:/all/work/study/megumi',
+  repoPathKey: 'c:/all/work/study/megumi',
+  status: 'available' as const,
+  createdAt: '2026-05-19T00:00:00.000Z',
+  lastOpenedAt: '2026-05-19T00:00:01.000Z',
 };
 
+function ok<T extends object>(data: T, channel: string) {
+  return {
+    ok: true as const,
+    data,
+    meta: {
+      requestId: 'ipc-project-test',
+      channel,
+      handledAt: '2026-05-19T00:00:01.000Z',
+    },
+  };
+}
+
+function fail(channel: string) {
+  return {
+    ok: false as const,
+    error: {
+      code: 'ipc_handler_failed' as const,
+      message: 'Project service failed.',
+      severity: 'error' as const,
+      retryable: true,
+      source: 'main' as const,
+    },
+    meta: {
+      requestId: 'ipc-project-test',
+      channel,
+      handledAt: '2026-05-19T00:00:01.000Z',
+    },
+  };
+}
+
+beforeEach(() => {
+  useProjectStore.setState(useProjectStore.getState().getInitialState());
+  window.megumi = {
+    project: {
+      list: vi.fn(async () => ok({ projects: [projectRecord] }, IPC_CHANNELS.project.list)),
+      useExisting: vi.fn(async () => ok({ cancelled: false, project: projectRecord }, IPC_CHANNELS.project.useExisting)),
+      open: vi.fn(async () => ok({ project: projectRecord }, IPC_CHANNELS.project.open)),
+      remove: vi.fn(async () => ok({ projectId: projectRecord.projectId, removed: true }, IPC_CHANNELS.project.remove)),
+    },
+  } as unknown as typeof window.megumi;
+});
+
 describe('useProjectStore', () => {
-  beforeEach(() => {
-    useProjectStore.setState({ projects: [], currentProjectId: null, loading: false });
+  it('loads projects from main and maps shared records to renderer projects', async () => {
+    await useProjectStore.getState().loadProjects();
+
+    expect(window.megumi.project.list).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({ channel: IPC_CHANNELS.project.list }),
+    }));
+    expect(useProjectStore.getState().projects).toEqual<Project[]>([
+      {
+        id: projectRecord.projectId,
+        projectId: projectRecord.projectId,
+        name: 'megumi',
+        repoPath: projectRecord.repoPath,
+        repoPathKey: projectRecord.repoPathKey,
+        status: 'available',
+        createdAt: projectRecord.createdAt,
+        lastOpenedAt: projectRecord.lastOpenedAt,
+      },
+    ]);
   });
 
-  it('should set projects', () => {
-    useProjectStore.getState().setProjects([mockProject]);
-    expect(useProjectStore.getState().projects).toHaveLength(1);
+  it('uses an existing project and makes it current', async () => {
+    const result = await useProjectStore.getState().useExistingProject();
+
+    expect(result?.id).toBe(projectRecord.projectId);
+    expect(useProjectStore.getState().currentProjectId).toBe(projectRecord.projectId);
   });
 
-  it('should set current project', () => {
-    useProjectStore.getState().setCurrentProject('p1');
-    expect(useProjectStore.getState().currentProjectId).toBe('p1');
-  });
+  it('keeps state unchanged when directory selection is cancelled', async () => {
+    vi.mocked(window.megumi.project.useExisting).mockResolvedValueOnce(
+      ok({ cancelled: true }, IPC_CHANNELS.project.useExisting),
+    );
 
-  it('should add project to beginning', () => {
-    const p2 = { ...mockProject, id: 'p2', name: 'Second' };
-    useProjectStore.getState().addProject(mockProject);
-    useProjectStore.getState().addProject(p2);
-    expect(useProjectStore.getState().projects[0].id).toBe('p2');
-  });
-
-  it('should update project', () => {
-    useProjectStore.getState().addProject(mockProject);
-    useProjectStore.getState().updateProject('p1', { name: 'Updated' });
-    expect(useProjectStore.getState().projects[0].name).toBe('Updated');
-  });
-
-  it('should remove project and clear currentProjectId if active', () => {
-    useProjectStore.getState().addProject(mockProject);
-    useProjectStore.getState().setCurrentProject('p1');
-    useProjectStore.getState().removeProject('p1');
-    expect(useProjectStore.getState().projects).toHaveLength(0);
+    await expect(useProjectStore.getState().useExistingProject()).resolves.toBeNull();
+    expect(useProjectStore.getState().projects).toEqual([]);
     expect(useProjectStore.getState().currentProjectId).toBeNull();
+  });
+
+  it('opens an existing project and makes it current', async () => {
+    useProjectStore.setState({
+      projects: [useProjectStore.getState().mapProjectRecord(projectRecord)],
+    });
+
+    await useProjectStore.getState().openProject(projectRecord.projectId);
+
+    expect(window.megumi.project.open).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { projectId: projectRecord.projectId },
+    }));
+    expect(useProjectStore.getState().currentProjectId).toBe(projectRecord.projectId);
+  });
+
+  it('removes projects and clears current project if active', async () => {
+    useProjectStore.setState({
+      projects: [useProjectStore.getState().mapProjectRecord(projectRecord)],
+      currentProjectId: projectRecord.projectId,
+    });
+
+    await useProjectStore.getState().removeProject(projectRecord.projectId);
+
+    expect(useProjectStore.getState().projects).toEqual([]);
+    expect(useProjectStore.getState().currentProjectId).toBeNull();
+  });
+
+  it('stores display-safe errors from failed project IPC', async () => {
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce(fail(IPC_CHANNELS.project.list));
+
+    await useProjectStore.getState().loadProjects();
+
+    expect(useProjectStore.getState().error).toBe('Project service failed.');
+    expect(useProjectStore.getState().loading).toBe(false);
   });
 });

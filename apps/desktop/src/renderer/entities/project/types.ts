@@ -1,9 +1,13 @@
-export interface Project {
+import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project-contracts';
+
+export interface Project extends ProjectRecord {
   id: string;
-  name: string;
-  description: string;
-  repoPath: string | null;
-  type: 'new_project' | 'existing_feature';
-  createdAt: string;
-  context: Record<string, unknown>;
+  status: ProjectStatus;
+}
+
+export function projectFromRecord(record: ProjectRecord): Project {
+  return {
+    ...record,
+    id: record.projectId,
+  };
 }
