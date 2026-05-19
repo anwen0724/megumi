@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';

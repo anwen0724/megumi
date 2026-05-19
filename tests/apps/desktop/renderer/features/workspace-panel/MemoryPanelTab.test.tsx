@@ -78,4 +78,37 @@ describe('MemoryPanelTab', () => {
     expect(screen.getByText('The user wants clean session run panels.')).toBeInTheDocument();
     expect(screen.getByText('workspace / project_fact')).toBeInTheDocument();
   });
+
+  it('renders memory settings and proposed candidates from the memory store', () => {
+    useMemoryStore.setState({
+      settings: {
+        workspaceId: 'workspace-1',
+        autoCaptureEnabled: true,
+        defaultCandidateReviewMode: 'manual',
+        updatedAt: '2026-05-16T00:00:00.000Z',
+      },
+      candidates: [
+        {
+          candidateId: 'memory-candidate-1',
+          workspaceId: 'workspace-1',
+          scope: 'workspace',
+          kind: 'workflow',
+          content: 'safe content',
+          summary: 'spec first workflow',
+          sourceRefs: [],
+          confidence: 0.8,
+          riskLevel: 'low',
+          status: 'proposed',
+          proposedBy: 'agent',
+          createdAt: '2026-05-16T00:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<MemoryPanelTab />);
+
+    expect(screen.getByText('auto capture on')).toBeInTheDocument();
+    expect(screen.getByText('spec first workflow')).toBeInTheDocument();
+    expect(screen.getByText('workspace / workflow')).toBeInTheDocument();
+  });
 });

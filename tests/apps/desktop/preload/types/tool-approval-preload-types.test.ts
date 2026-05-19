@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expectTypeOf, it } from 'vitest';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 import type { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
