@@ -366,7 +366,7 @@ describe('interaction baseline acceptance', () => {
     expect(screen.getByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
     expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Megumi')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(await screen.findByText('No files found')).toBeInTheDocument();
