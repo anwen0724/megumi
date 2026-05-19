@@ -102,6 +102,28 @@ function installMegumiMock() {
           cancel: session.message.cancel,
         },
       },
+      project: {
+        list: vi.fn().mockResolvedValue({
+          ok: true,
+          data: { projects: [] },
+          meta: {
+            requestId: 'ipc-project-list-1',
+            channel: IPC_CHANNELS.project.list,
+            handledAt: '2026-05-10T12:00:00.100Z',
+          },
+        }),
+        useExisting: vi.fn().mockResolvedValue({
+          ok: true,
+          data: { cancelled: true },
+          meta: {
+            requestId: 'ipc-project-use-existing-1',
+            channel: IPC_CHANNELS.project.useExisting,
+            handledAt: '2026-05-10T12:00:00.100Z',
+          },
+        }),
+        open: vi.fn(),
+        remove: vi.fn(),
+      },
       runtime: {
         onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
           runtimeEventCallback = callback;
@@ -344,7 +366,7 @@ describe('interaction baseline acceptance', () => {
     expect(screen.getByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
     expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('C:/all/work/study/megumi')).toHaveAttribute('title', 'C:/all/work/study/megumi');
+    expect(screen.getByText('Megumi')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(await screen.findByText('No files found')).toBeInTheDocument();
