@@ -32,6 +32,10 @@ function upsertProject(projects: Project[], project: Project): Project[] {
   return [project, ...rest].sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt));
 }
 
+function sortProjectsByLastOpened(projects: Project[]): Project[] {
+  return [...projects].sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt));
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   ...initialState,
   getInitialState: () => initialState,
@@ -49,8 +53,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return;
     }
 
+    const projects = sortProjectsByLastOpened(result.data.projects.map(projectFromRecord));
+    const currentProjectStillExists = projects.some((project) => project.id === get().currentProjectId);
+
     set({
-      projects: result.data.projects.map(projectFromRecord),
+      projects,
+      currentProjectId: currentProjectStillExists
+        ? get().currentProjectId
+        : projects[0]?.id ?? null,
       loading: false,
       error: null,
     });

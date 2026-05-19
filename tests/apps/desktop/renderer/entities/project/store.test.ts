@@ -77,6 +77,24 @@ describe('useProjectStore', () => {
     ]);
   });
 
+  it('restores the most recently opened project when loading projects with no current project', async () => {
+    const olderProjectRecord = {
+      ...projectRecord,
+      projectId: 'project:older',
+      name: 'older',
+      repoPath: 'C:/all/work/study/older',
+      repoPathKey: 'c:/all/work/study/older',
+      lastOpenedAt: '2026-05-18T00:00:00.000Z',
+    };
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce(
+      ok({ projects: [olderProjectRecord, projectRecord] }, IPC_CHANNELS.project.list),
+    );
+
+    await useProjectStore.getState().loadProjects();
+
+    expect(useProjectStore.getState().currentProjectId).toBe(projectRecord.projectId);
+  });
+
   it('uses an existing project and makes it current', async () => {
     const result = await useProjectStore.getState().useExistingProject();
 

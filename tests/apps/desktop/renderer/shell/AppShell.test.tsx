@@ -210,6 +210,15 @@ describe('AppShell', () => {
       currentProjectId: null,
       loading: false,
     });
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce({
+      ok: true,
+      data: { projects: [] },
+      meta: {
+        requestId: 'ipc-project-list-empty-test',
+        channel: 'project:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
+    });
     const useExistingProject = vi
       .spyOn(useProjectStore.getState(), 'useExistingProject')
       .mockResolvedValue(null);
