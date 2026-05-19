@@ -132,7 +132,7 @@ describe('auto session on first send', () => {
     });
   });
 
-  it('uses local-workspace when no project is selected', () => {
+  it('does not create a runtime session when no project is selected', () => {
     useProjectStore.setState({
       projects: [],
       currentProjectId: null,
@@ -143,11 +143,28 @@ describe('auto session on first send', () => {
 
     submitPrompt('Start without a project');
 
-    const state = useSessionStore.getState();
-    expect(state.sessions).toHaveLength(1);
-    expect(state.sessions[0].projectId).toBe('local-workspace');
-    expect(state.sessions[0].title).toBe('Start without a project');
-    expect(state.activeSessionId).toBe(state.sessions[0].id);
+    expect(useSessionStore.getState().sessions).toHaveLength(0);
+    expect(window.megumi.session.message.send).not.toHaveBeenCalled();
+  });
+
+  it('creates a project-bound session on first message when current project has no active session', () => {
+    render(<ChatTimeline />);
+
+    submitPrompt('了解这个项目');
+
+    const session = useSessionStore.getState().sessions[0];
+    expect(session.projectId).toBe('project-1');
+    expect(session.title).toBe('了解这个项目');
+    expect(window.megumi.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        sessionId: session.id,
+        context: expect.objectContaining({
+          workspaceId: 'project-1',
+          workspaceLabel: 'Megumi',
+          workspacePath: 'C:/all/work/study/megumi',
+        }),
+      }),
+    }));
   });
 
   it('does not create a duplicate session when one is already active', () => {

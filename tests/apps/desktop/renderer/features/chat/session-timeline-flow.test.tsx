@@ -105,8 +105,16 @@ describe('useSessionTimeline', () => {
       activeAgentType: 'free',
     });
     useProjectStore.setState({
-      currentProjectId: null,
-      projects: [],
+      currentProjectId: 'project-1',
+      projects: [{
+        id: 'project-1',
+        name: 'Megumi',
+        description: 'Warm agent desktop companion',
+        repoPath: 'C:/all/work/study/megumi',
+        type: 'existing_feature',
+        createdAt: '2026-05-12T00:00:00.000Z',
+        context: {},
+      }],
     });
     useArtifactStore.getState().clearArtifacts();
     useRunStore.getState().resetRuns();

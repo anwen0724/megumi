@@ -13,8 +13,6 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
 
-const LOCAL_WORKSPACE_ID = 'local-workspace';
-
 function createId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -45,8 +43,13 @@ function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null
   }
 
   const projectState = useProjectStore.getState();
+
+  if (!projectState.currentProjectId) {
+    return null;
+  }
+
   const session = sessionState.createLocalSession({
-    projectId: projectState.currentProjectId ?? LOCAL_WORKSPACE_ID,
+    projectId: projectState.currentProjectId,
     title: createSessionTitleFromPrompt(payload.message),
     agentType: sessionState.activeAgentType,
   });
@@ -103,8 +106,8 @@ function createSessionMessageSendPayload(
     modelId: payload.model,
     messages,
     context: {
-      workspaceId: projectState.currentProjectId ?? undefined,
-      workspaceLabel: activeProject?.name ?? activeSession?.title ?? undefined,
+      workspaceId: activeProject?.id,
+      workspaceLabel: activeProject?.name,
       workspacePath: activeProject?.repoPath ?? undefined,
       sessionTitle: activeSession?.title ?? undefined,
       composerMode: payload.mode,
@@ -172,6 +175,12 @@ export function useSessionTimeline() {
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload) => {
     lastPayloadRef.current = payload;
     const runSessionId = ensureActiveLocalSession(payload);
+
+    if (!runSessionId) {
+      failSessionMessageSend('Select a project before sending a message.');
+      return;
+    }
+
     runSessionIdRef.current = runSessionId;
 
     const state = useChatStore.getState();
