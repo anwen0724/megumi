@@ -13,7 +13,7 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
 
-const NO_PROJECT_ID = '00000000-0000-0000-0000-000000000000';
+export const NIL_UUID_SENTINEL = '00000000-0000-0000-0000-000000000000';
 
 function createId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -46,7 +46,7 @@ function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null
 
   const projectState = useProjectStore.getState();
   const session = sessionState.createLocalSession({
-    projectId: projectState.currentProjectId ?? NO_PROJECT_ID,
+    projectId: projectState.currentProjectId ?? NIL_UUID_SENTINEL,
     title: createSessionTitleFromPrompt(payload.message),
     agentType: sessionState.activeAgentType,
   });

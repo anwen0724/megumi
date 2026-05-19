@@ -9,6 +9,7 @@ import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
+import { NIL_UUID_SENTINEL } from '@megumi/desktop/renderer/features/chat/hooks/use-session-timeline';
 
 const project: Project = {
   id: 'project-1',
@@ -149,7 +150,7 @@ describe('auto session on first send', () => {
 
     const state = useSessionStore.getState();
     expect(state.sessions).toHaveLength(1);
-    expect(state.sessions[0].projectId).toBe('local-workspace');
+    expect(state.sessions[0].projectId).toBe(NIL_UUID_SENTINEL);
     expect(state.sessions[0].title).toBe('Start without a project');
     expect(state.activeSessionId).toBe(state.sessions[0].id);
   });
