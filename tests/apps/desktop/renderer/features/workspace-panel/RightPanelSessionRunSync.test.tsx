@@ -202,8 +202,17 @@ function emitRuntimeFailure(request: SessionMessageSendRequest, message: string)
 
 function resetStores() {
   useProjectStore.setState({
-    projects: [],
-    currentProjectId: null,
+    projects: [{
+      id: 'project-1',
+      projectId: 'project-1',
+      name: 'Megumi',
+      repoPath: 'C:/all/work/study/megumi',
+      repoPathKey: 'c:/all/work/study/megumi',
+      status: 'available' as const,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      lastOpenedAt: '2026-05-19T00:00:00.000Z',
+    }],
+    currentProjectId: 'project-1',
     loading: false,
   });
   useChatStore.setState({

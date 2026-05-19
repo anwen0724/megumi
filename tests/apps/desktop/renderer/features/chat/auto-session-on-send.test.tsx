@@ -9,16 +9,12 @@ import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
-import { NIL_UUID_SENTINEL } from '@megumi/desktop/renderer/features/chat/hooks/use-session-timeline';
 
 const project: Project = {
   id: 'project-1',
   name: 'Megumi',
-  description: 'Warm agent desktop companion',
   repoPath: 'C:/all/work/study/megumi',
-  type: 'existing_feature',
   createdAt: '2026-05-10T00:00:00.000Z',
-  context: {},
   projectId: 'project-1',
   repoPathKey: 'c:/all/work/study/megumi',
   lastOpenedAt: '2026-05-19T00:00:00.000Z',
@@ -137,7 +133,7 @@ describe('auto session on first send', () => {
     });
   });
 
-  it('uses local-workspace when no project is selected', () => {
+  it('does not create or send a runtime session when no project is selected', () => {
     useProjectStore.setState({
       projects: [],
       currentProjectId: null,
@@ -149,10 +145,10 @@ describe('auto session on first send', () => {
     submitPrompt('Start without a project');
 
     const state = useSessionStore.getState();
-    expect(state.sessions).toHaveLength(1);
-    expect(state.sessions[0].projectId).toBe(NIL_UUID_SENTINEL);
-    expect(state.sessions[0].title).toBe('Start without a project');
-    expect(state.activeSessionId).toBe(state.sessions[0].id);
+    expect(state.sessions).toHaveLength(0);
+    expect(state.activeSessionId).toBeNull();
+    expect(window.megumi.session.message.send).not.toHaveBeenCalled();
+    expect(useChatStore.getState().lastError).toBe('Select a project before sending a message.');
   });
 
   it('does not create a duplicate session when one is already active', () => {

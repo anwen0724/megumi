@@ -124,7 +124,7 @@ describe('useProjectStore', () => {
     expect(useProjectStore.getState().projects).toEqual([]);
     expect(useProjectStore.getState().currentProjectId).toBeNull();
     expect(useSessionStore.getState().activeSessionId).toBeNull();
-    expect(useSessionStore.getState().sessions.find((s) => s.id === session.id)).toBeUndefined();
+    expect(useSessionStore.getState().sessions.find((s) => s.id === session.id)).toEqual(session);
   });
 
   it('stores display-safe errors from failed project IPC', async () => {

@@ -104,6 +104,24 @@ function installMegumiMock() {
   return session;
 }
 
+function selectMegumiProject() {
+  useProjectStore.setState({
+    projects: [{
+      id: 'project-1',
+      projectId: 'project-1',
+      name: 'Megumi',
+      repoPath: 'C:/all/work/study/megumi',
+      repoPathKey: 'c:/all/work/study/megumi',
+      status: 'available' as const,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      lastOpenedAt: '2026-05-19T00:00:00.000Z',
+    }],
+    currentProjectId: 'project-1',
+    loading: false,
+    error: null,
+  });
+}
+
 describe('ChatTimeline', () => {
   beforeEach(() => {
     runtimeEventCallback = null;
@@ -168,6 +186,7 @@ describe('ChatTimeline', () => {
 
   it('submits a message through the runtime chat flow', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
@@ -181,6 +200,7 @@ describe('ChatTimeline', () => {
 
   it('shows processing disclosure while a sent message is waiting for runtime events', async () => {
     installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
@@ -201,6 +221,7 @@ describe('ChatTimeline', () => {
 
   it('keeps processing disclosure around the final response on the real runtime event path', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Explain Verilog' } });
@@ -237,6 +258,7 @@ describe('ChatTimeline', () => {
 
   it('renders persisted runtime error messages and does not retry from an empty draft', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'please fail this run' } });
@@ -348,6 +370,7 @@ describe('ChatTimeline', () => {
 
   it('wires the running composer Stop button to the active session message cancel request', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Cancel this run' } });

@@ -41,11 +41,8 @@ describe('RightWorkspacePanel', () => {
         {
           id: 'project-1',
           name: 'Megumi',
-          description: 'Warm agent desktop companion',
           repoPath: 'C:/all/work/study/megumi',
-          type: 'existing_feature',
           createdAt: '2026-05-09T00:00:00.000Z',
-          context: {},
           projectId: 'project-1',
           repoPathKey: 'c:/all/work/study/megumi',
           lastOpenedAt: '2026-05-19T00:00:00.000Z',

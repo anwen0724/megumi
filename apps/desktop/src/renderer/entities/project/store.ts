@@ -117,9 +117,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (isCurrentProject) {
         const sessionState = useSessionStore.getState();
         sessionState.setActiveSession(null);
-        sessionState.setSessions(
-          sessionState.sessions.filter((session) => session.projectId !== projectId),
-        );
       }
 
       return {

@@ -13,8 +13,6 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
 
-export const NIL_UUID_SENTINEL = '00000000-0000-0000-0000-000000000000';
-
 function createId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -45,8 +43,12 @@ function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null
   }
 
   const projectState = useProjectStore.getState();
+  if (!projectState.currentProjectId) {
+    return null;
+  }
+
   const session = sessionState.createLocalSession({
-    projectId: projectState.currentProjectId ?? NIL_UUID_SENTINEL,
+    projectId: projectState.currentProjectId,
     title: createSessionTitleFromPrompt(payload.message),
     agentType: sessionState.activeAgentType,
   });
@@ -104,7 +106,7 @@ function createSessionMessageSendPayload(
     messages,
     context: {
       workspaceId: projectState.currentProjectId ?? undefined,
-      workspaceLabel: activeProject?.name ?? activeSession?.title ?? undefined,
+      workspaceLabel: activeProject?.name ?? undefined,
       workspacePath: activeProject?.repoPath ?? undefined,
       sessionTitle: activeSession?.title ?? undefined,
       composerMode: payload.mode,
@@ -173,6 +175,11 @@ export function useSessionTimeline() {
     lastPayloadRef.current = payload;
     const runSessionId = ensureActiveLocalSession(payload);
     runSessionIdRef.current = runSessionId;
+
+    if (!runSessionId) {
+      failSessionMessageSend('Select a project before sending a message.');
+      return;
+    }
 
     const state = useChatStore.getState();
     renameEmptyManualSessionFromPrompt(payload, state.messages.length);

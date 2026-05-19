@@ -2,14 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSessionStore } from '../entities/session/store';
 import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
+import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import { ChatTimeline } from '../features/chat';
 import { LeftSidebar, type SidebarProjectItem } from './LeftSidebar';
 import { RightWorkspacePanel } from './RightWorkspacePanel';
 import { SettingsModal } from './SettingsModal';
 import { WindowTitleBar } from './WindowTitleBar';
 import { formatSessionUpdatedAt } from './shell-display';
-
-const LOCAL_WORKSPACE_ID = 'local-workspace';
 
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -65,8 +64,13 @@ export function AppShell() {
   function handleCreateSession() {
     saveActiveChatSnapshot();
 
+    if (!currentProject) {
+      void useProjectStore.getState().useExistingProject();
+      return;
+    }
+
     const session = createLocalSession({
-      projectId: currentProject?.id ?? LOCAL_WORKSPACE_ID,
+      projectId: currentProject.id,
       title: 'New session',
       agentType: 'free',
     });
@@ -79,7 +83,15 @@ export function AppShell() {
       return;
     }
 
+    const selectedSession = sessions.find((session) => session.id === sessionId);
+    if (!selectedSession) {
+      return;
+    }
+
     saveActiveChatSnapshot();
+    if (selectedSession.projectId !== currentProjectId) {
+      void useProjectStore.getState().openProject(selectedSession.projectId);
+    }
     setActiveSession(sessionId);
     useChatStore.getState().loadSessionSnapshot(sessionId);
   }
@@ -104,7 +116,15 @@ export function AppShell() {
           void useProjectStore.getState().openProject(projectId);
         }}
         onRemoveProject={(projectId) => {
-          void useProjectStore.getState().removeProject(projectId);
+          void (async () => {
+            const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
+            const removed = await useProjectStore.getState().removeProject(projectId);
+
+            if (removed && wasCurrent) {
+              setActiveSession(null);
+              useWorkspaceFilesStore.getState().reset();
+            }
+          })();
         }}
       />
       <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">

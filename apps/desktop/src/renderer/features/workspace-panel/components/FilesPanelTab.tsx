@@ -107,7 +107,7 @@ export function FilesPanelTab() {
   }
 
   if (project.status === 'missing') {
-    return <p className="text-sm text-[var(--color-text-muted)]">Workspace path unavailable</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">Workspace folder is missing</p>;
   }
 
   if (loading && rootEntries.length === 0) {
