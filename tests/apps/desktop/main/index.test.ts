@@ -125,6 +125,12 @@ const mocks = vi.hoisted(() => {
     ) {
       this.database = database;
     }),
+    ProjectRepository: vi.fn(function ProjectRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
     ArtifactContentStore: vi.fn(function ArtifactContentStore(
       this: { options?: unknown },
       options: unknown,
@@ -176,9 +182,17 @@ const mocks = vi.hoisted(() => {
       cancelRun: vi.fn(),
       retryRun: vi.fn(),
     })),
+    createProjectService: vi.fn(() => ({
+      listProjects: vi.fn(),
+      useExistingProject: vi.fn(),
+      openProject: vi.fn(),
+      removeProject: vi.fn(),
+      listAuthorizedWorkspaceRoots: vi.fn(() => ['C:/all/work/study/megumi']),
+    })),
     createWorkspaceFilesService: vi.fn(() => ({
       listDirectory: vi.fn(),
     })),
+    showOpenDialog: vi.fn(),
   };
 });
 
@@ -294,6 +308,20 @@ vi.mock('@megumi/desktop/main/services/plan-artifact-compatibility.service', () 
   PlanArtifactCompatibilityService: mocks.PlanArtifactCompatibilityService,
 }));
 
+vi.mock('@megumi/desktop/main/services/project.service', () => ({
+  createProjectService: mocks.createProjectService,
+}));
+
+vi.mock('@megumi/db/repos/project.repo', () => ({
+  ProjectRepository: mocks.ProjectRepository,
+}));
+
+vi.mock('electron', () => ({
+  dialog: {
+    showOpenDialog: mocks.showOpenDialog,
+  },
+}));
+
 describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -325,6 +353,9 @@ describe('main runtime logger composition', () => {
     mocks.PlanArtifactCompatibilityService.mockClear();
     mocks.createRecoveryService.mockClear();
     mocks.createWorkspaceFilesService.mockClear();
+    mocks.ProjectRepository.mockClear();
+    mocks.createProjectService.mockClear();
+    mocks.showOpenDialog.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
@@ -343,6 +374,7 @@ describe('main runtime logger composition', () => {
     const artifactService = mocks.ArtifactService.mock.results[0]?.value;
     const memoryService = mocks.createMemoryService.mock.results[0]?.value;
     const workspaceFilesService = mocks.createWorkspaceFilesService.mock.results[0]?.value;
+    const projectService = mocks.createProjectService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -364,6 +396,7 @@ describe('main runtime logger composition', () => {
     expect(mocks.RecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.MemoryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.ProjectRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactContentStore).toHaveBeenCalledWith({
       artifactRoot: join(mocks.homePath, 'artifacts'),
     });
@@ -416,6 +449,13 @@ describe('main runtime logger composition', () => {
       }),
       listRecoverableRuns: expect.any(Function),
     }));
+    expect(mocks.createProjectService).toHaveBeenCalledWith(expect.objectContaining({
+      repository: expect.any(Object),
+      chooseDirectory: expect.any(Function),
+      fileSystem: expect.objectContaining({
+        stat: expect.any(Function),
+      }),
+    }));
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith({
       isWorkspaceRootAllowed: expect.any(Function),
     });
@@ -423,6 +463,7 @@ describe('main runtime logger composition', () => {
       isWorkspaceRootAllowed(root: string): boolean;
     }]>;
     expect(workspaceFilesOptions.isWorkspaceRootAllowed(process.cwd())).toBe(true);
+    expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       sessionRunService,
@@ -432,6 +473,7 @@ describe('main runtime logger composition', () => {
       recoveryService,
       artifactService,
       memoryService,
+      projectService,
       workspaceFilesService,
     });
 

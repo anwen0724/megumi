@@ -5,9 +5,14 @@ export interface WorkspaceRootSessionSource {
   listSessions(): Session[];
 }
 
+export interface WorkspaceRootProjectSource {
+  listAuthorizedWorkspaceRoots(): string[];
+}
+
 export interface CreateWorkspaceRootAuthorizerOptions {
   staticRoots?: readonly string[];
   sessionSource?: WorkspaceRootSessionSource;
+  projectSource?: WorkspaceRootProjectSource;
 }
 
 export function createWorkspaceRootAuthorizer(
@@ -22,8 +27,16 @@ export function createWorkspaceRootAuthorizer(
       return true;
     }
 
-    return (options.sessionSource?.listSessions() ?? []).some((session) =>
+    const hasSessionRoot = (options.sessionSource?.listSessions() ?? []).some((session) =>
       session.workspacePath ? toWorkspaceRootKey(session.workspacePath) === requestedRootKey : false
+    );
+
+    if (hasSessionRoot) {
+      return true;
+    }
+
+    return (options.projectSource?.listAuthorizedWorkspaceRoots() ?? []).some(
+      (projectRoot) => toWorkspaceRootKey(projectRoot) === requestedRootKey,
     );
   };
 }

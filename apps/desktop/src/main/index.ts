@@ -27,6 +27,10 @@ import { ArtifactContentStore } from './services/artifact-content-store.service'
 import { ArtifactService } from './services/artifact.service';
 import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
+import fs from 'fs-extra';
+import { dialog } from 'electron';
+import { ProjectRepository } from '@megumi/db/repos/project.repo';
+import { createProjectService } from './services/project.service';
 import { createWorkspaceFilesService } from './services/workspace-files.service';
 import { createWorkspaceRootAuthorizer } from './services/workspace-root-authorization.service';
 import { getDefaultProviderService } from './ipc/handlers/provider.handler';
@@ -38,6 +42,13 @@ const runContextService = createDefaultRunContextService(megumiHomePaths);
 const toolService = createDefaultToolService(megumiHomePaths);
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(database);
+const projectService = createProjectService({
+  repository: new ProjectRepository(database),
+  chooseDirectory: () => dialog.showOpenDialog({
+    properties: ['openDirectory'],
+  }),
+  fileSystem: fs,
+});
 const artifactRepository = new ArtifactRepository(database);
 const memoryRepository = new MemoryRepository(database);
 const planArtifactCompatibility = new PlanArtifactCompatibilityService({
@@ -73,6 +84,7 @@ const workspaceFilesService = createWorkspaceFilesService({
   isWorkspaceRootAllowed: createWorkspaceRootAuthorizer({
     staticRoots: [process.cwd()],
     sessionSource: sessionRunService,
+    projectSource: projectService,
   }),
 });
 const artifactContentStore = new ArtifactContentStore({
@@ -119,6 +131,7 @@ registerAppLifecycle({
     recoveryService,
     artifactService,
     memoryService,
+    projectService,
     workspaceFilesService,
   }),
   createWindow: () => {
