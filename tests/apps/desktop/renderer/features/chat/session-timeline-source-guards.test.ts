@@ -66,4 +66,11 @@ describe('session timeline source guards', () => {
     expect(hookSource).not.toContain(['useRuntime', 'Chat'].join(''));
     expect(existsSync(path.join(root, 'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts'))).toBe(false);
   });
+
+  it('does not use local-workspace as a runtime send binding', () => {
+    const source = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts');
+
+    expect(source).not.toContain("const LOCAL_WORKSPACE_ID = 'local-workspace'");
+    expect(source).not.toContain('projectState.currentProjectId ?? LOCAL_WORKSPACE_ID');
+  });
 });
