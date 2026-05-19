@@ -200,13 +200,32 @@ describe('LeftSidebar', () => {
     expect(onSelectSession).not.toHaveBeenCalled();
   });
 
-  it('calls onUseExistingProject from project actions button', async () => {
+  it('shows project menu with use/manage/create actions', async () => {
     const onUseExistingProject = vi.fn();
+    const onManageProjects = vi.fn();
 
-    render(<LeftSidebar {...defaultProps} onUseExistingProject={onUseExistingProject} />);
+    render(
+      <LeftSidebar
+        {...defaultProps}
+        onUseExistingProject={onUseExistingProject}
+        onManageProjects={onManageProjects}
+      />,
+    );
 
+    // Open project menu
     await userEvent.click(screen.getByRole('button', { name: 'Project actions' }));
 
+    expect(screen.getByRole('menuitem', { name: '使用已有项目' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '新建项目' })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: '管理项目' })).toBeInTheDocument();
+
+    // Click use existing project
+    await userEvent.click(screen.getByRole('menuitem', { name: '使用已有项目' }));
     expect(onUseExistingProject).toHaveBeenCalledTimes(1);
+
+    // Click manage projects
+    await userEvent.click(screen.getByRole('button', { name: 'Project actions' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: '管理项目' }));
+    expect(onManageProjects).toHaveBeenCalledTimes(1);
   });
 });

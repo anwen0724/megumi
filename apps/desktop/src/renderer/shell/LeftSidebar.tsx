@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ClipboardList, FolderOpen, MessageSquarePlus, PanelLeftOpen, Settings } from 'lucide-react';
 import { Button, IconButton, cx } from '../shared/ui';
+import { ProjectManagerModal } from './ProjectManagerModal';
+import type { Project } from '../entities/project/types';
 
 const VISIBLE_SESSION_COUNT = 5;
 
@@ -22,28 +24,37 @@ export interface SidebarProjectItem {
 interface LeftSidebarProps {
   collapsed: boolean;
   projects: SidebarProjectItem[];
+  allProjects?: Project[];
   onToggleCollapsed: () => void;
   onCreateSession: () => void;
   onSelectSession?: (id: string) => void;
   onUseExistingProject: () => void;
   onManageProjects: () => void;
   onOpenSettings?: () => void;
+  onOpenProject?: (projectId: string) => void;
+  onRemoveProject?: (projectId: string) => void;
 }
 
 export function LeftSidebar({
   collapsed,
   projects,
+  allProjects = [],
   onToggleCollapsed,
   onCreateSession,
   onSelectSession,
   onUseExistingProject,
-  onManageProjects: _onManageProjects,
+  onManageProjects,
   onOpenSettings,
+  onOpenProject,
+  onRemoveProject,
 }: LeftSidebarProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
     () => new Set(projects.map((p) => p.id)),
   );
   const [showAllByProject, setShowAllByProject] = useState<Record<string, boolean>>({});
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [manageModalOpen, setManageModalOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects((prev) => {
@@ -63,6 +74,25 @@ export function LeftSidebar({
       [projectId]: !prev[projectId],
     }));
   };
+
+  const closeMenu = useCallback(() => {
+    setProjectMenuOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!projectMenuOpen) {
+      return undefined;
+    }
+
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        closeMenu();
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [projectMenuOpen, closeMenu]);
 
   if (collapsed) {
     return (
@@ -113,14 +143,56 @@ export function LeftSidebar({
         <section aria-label="Projects">
           <div className="mb-1 flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--color-text-muted)]">项目</span>
-            <IconButton
-              label="Project actions"
-              onClick={onUseExistingProject}
-              size="sm"
-              variant="ghost"
-            >
-              <FolderOpen size={14} aria-hidden="true" />
-            </IconButton>
+            <div ref={menuRef} className="relative">
+              <IconButton
+                label="Project actions"
+                onClick={() => setProjectMenuOpen((prev) => !prev)}
+                size="sm"
+                variant="ghost"
+              >
+                <FolderOpen size={14} aria-hidden="true" />
+              </IconButton>
+
+              {projectMenuOpen ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 z-40 mt-1 w-44 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)]"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center px-3 py-2 text-left text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface)]"
+                    onClick={() => {
+                      onUseExistingProject();
+                      closeMenu();
+                    }}
+                  >
+                    使用已有项目
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled
+                    aria-disabled="true"
+                    className="flex w-full items-center px-3 py-2 text-left text-sm text-[var(--color-text-muted)] transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    新建项目
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center px-3 py-2 text-left text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface)]"
+                    onClick={() => {
+                      onManageProjects();
+                      setManageModalOpen(true);
+                      closeMenu();
+                    }}
+                  >
+                    管理项目
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {projects.length === 0 ? (
@@ -203,6 +275,14 @@ export function LeftSidebar({
           Settings
         </button>
       </div>
+
+      <ProjectManagerModal
+        open={manageModalOpen}
+        projects={allProjects}
+        onClose={() => setManageModalOpen(false)}
+        onOpenProject={(projectId) => onOpenProject?.(projectId)}
+        onRemoveProject={(projectId) => onRemoveProject?.(projectId)}
+      />
     </aside>
   );
 }
