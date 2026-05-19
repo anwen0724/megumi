@@ -90,6 +90,9 @@ const allowedCurrentLifecycleTerms = new Map<string, string[]>([
   ['tests/packages/shared/artifact-contracts.test.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
+  ['packages/shared/project-contracts.ts', [
+    joinForbidden('PROJECT', '_'),
+  ]],
 ]);
 
 function shouldIgnore(filePath: string): boolean {

@@ -44,6 +44,12 @@ export const IPC_CHANNELS = {
     cancel: 'recovery:cancel',
     retry: 'recovery:retry',
   },
+  project: {
+    list: 'project:list',
+    useExisting: 'project:use-existing',
+    open: 'project:open',
+    remove: 'project:remove',
+  },
   artifacts: {
     listByRun: 'artifacts:list-by-run',
     listBySession: 'artifacts:list-by-session',
@@ -113,6 +119,10 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.recovery.resume,
   IPC_CHANNELS.recovery.cancel,
   IPC_CHANNELS.recovery.retry,
+  IPC_CHANNELS.project.list,
+  IPC_CHANNELS.project.useExisting,
+  IPC_CHANNELS.project.open,
+  IPC_CHANNELS.project.remove,
   IPC_CHANNELS.artifacts.listByRun,
   IPC_CHANNELS.artifacts.listBySession,
   IPC_CHANNELS.artifacts.get,

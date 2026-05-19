@@ -45,6 +45,13 @@ describe('createRuntimeIpcHandler', () => {
     };
   }
 
+  it('maps project channels to stable runtime operation names', () => {
+    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.list)).toBe('project.list');
+    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.useExisting)).toBe('project.use-existing');
+    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.open)).toBe('project.open');
+    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.remove)).toBe('project.remove');
+  });
+
   it('maps workspace files list channel to a stable runtime operation name', () => {
     expect(runtimeOperationNameFromChannel(IPC_CHANNELS.workspace.files.list)).toBe(
       'workspace.files.list',

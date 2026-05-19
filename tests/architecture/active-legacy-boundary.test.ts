@@ -82,6 +82,9 @@ const allowedCurrentLifecycleTerms = new Map<string, RegExp[]>([
   ['tests/apps/desktop/main/ipc/register-handlers.test.ts', [
     new RegExp(term('\\bregister', 'Artifact', 'Handlers\\b')),
   ]],
+  ['packages/shared/project-contracts.ts', [
+    new RegExp(term('\\bPROJECT', '_')),
+  ]],
 ]);
 
 function walkFiles(directory: string): string[] {

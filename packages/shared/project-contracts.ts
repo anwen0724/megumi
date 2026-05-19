@@ -1,0 +1,55 @@
+import { z } from 'zod';
+import { IsoDateTimeSchema } from './runtime-validation';
+
+export const PROJECT_STATUSES = ['available', 'missing'] as const;
+export const ProjectStatusSchema = z.enum(PROJECT_STATUSES);
+export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
+
+export const ProjectRecordSchema = z
+  .object({
+    projectId: z.string().min(1),
+    name: z.string().min(1),
+    repoPath: z.string().min(1),
+    repoPathKey: z.string().min(1),
+    status: ProjectStatusSchema,
+    createdAt: IsoDateTimeSchema,
+    lastOpenedAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const ProjectListPayloadSchema = z.object({}).strict();
+export const ProjectListDataSchema = z
+  .object({
+    projects: z.array(ProjectRecordSchema),
+  })
+  .strict();
+
+export const ProjectUseExistingPayloadSchema = z.object({}).strict();
+export const ProjectUseExistingDataSchema = z
+  .discriminatedUnion('cancelled', [
+    z.object({ cancelled: z.literal(true) }).strict(),
+    z.object({ cancelled: z.literal(false), project: ProjectRecordSchema }).strict(),
+  ]);
+
+export const ProjectOpenPayloadSchema = z
+  .object({
+    projectId: z.string().min(1),
+  })
+  .strict();
+export const ProjectOpenDataSchema = z
+  .object({
+    project: ProjectRecordSchema,
+  })
+  .strict();
+
+export const ProjectRemovePayloadSchema = z
+  .object({
+    projectId: z.string().min(1),
+  })
+  .strict();
+export const ProjectRemoveDataSchema = z
+  .object({
+    projectId: z.string().min(1),
+    removed: z.boolean(),
+  })
+  .strict();

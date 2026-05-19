@@ -52,12 +52,25 @@ import {
   MemorySourceRefSchema,
 } from './memory-contracts';
 import {
+  ProjectListDataSchema,
+  ProjectListPayloadSchema,
+  ProjectOpenDataSchema,
+  ProjectOpenPayloadSchema,
+  ProjectRecordSchema,
+  ProjectRemoveDataSchema,
+  ProjectRemovePayloadSchema,
+  ProjectUseExistingDataSchema,
+  ProjectUseExistingPayloadSchema,
+} from './project-contracts';
+import {
   WorkspaceFilesListDataSchema,
   WorkspaceFilesListPayloadSchema,
 } from './workspace-file-contracts';
 import { RuntimeEventSchema } from './runtime-event-schemas';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
+
+export { ProjectRecordSchema } from './project-contracts';
 
 const PROVIDER_ID_VALUES = [...PROVIDER_IDS] as [ProviderId, ...ProviderId[]];
 
@@ -1034,9 +1047,49 @@ export const MemoryRecallPreviewResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.memory.recallPreview,
 );
 
+export const ProjectListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.project.list,
+  ProjectListPayloadSchema,
+);
+
+export const ProjectUseExistingRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.project.useExisting,
+  ProjectUseExistingPayloadSchema,
+);
+
+export const ProjectOpenRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.project.open,
+  ProjectOpenPayloadSchema,
+);
+
+export const ProjectRemoveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.project.remove,
+  ProjectRemovePayloadSchema,
+);
+
 export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.workspace.files.list,
   WorkspaceFilesListPayloadSchema,
+);
+
+export const ProjectListResultSchema = createRuntimeIpcResultSchema(
+  ProjectListDataSchema,
+  IPC_CHANNELS.project.list,
+);
+
+export const ProjectUseExistingResultSchema = createRuntimeIpcResultSchema(
+  ProjectUseExistingDataSchema,
+  IPC_CHANNELS.project.useExisting,
+);
+
+export const ProjectOpenResultSchema = createRuntimeIpcResultSchema(
+  ProjectOpenDataSchema,
+  IPC_CHANNELS.project.open,
+);
+
+export const ProjectRemoveResultSchema = createRuntimeIpcResultSchema(
+  ProjectRemoveDataSchema,
+  IPC_CHANNELS.project.remove,
 );
 
 export const WorkspaceFilesListResultSchema = createRuntimeIpcResultSchema(
@@ -1121,5 +1174,14 @@ export type MemoryData = z.infer<typeof MemoryDataSchema>;
 export type MemorySourceRefsListData = z.infer<typeof MemorySourceRefsListDataSchema>;
 export type MemoryAccessLogsListData = z.infer<typeof MemoryAccessLogsListDataSchema>;
 export type MemoryRecallPreviewData = z.infer<typeof MemoryRecallPreviewDataSchema>;
+export type ProjectRecord = z.infer<typeof ProjectRecordSchema>;
+export type ProjectListPayload = z.infer<typeof ProjectListPayloadSchema>;
+export type ProjectListData = z.infer<typeof ProjectListDataSchema>;
+export type ProjectUseExistingPayload = z.infer<typeof ProjectUseExistingPayloadSchema>;
+export type ProjectUseExistingData = z.infer<typeof ProjectUseExistingDataSchema>;
+export type ProjectOpenPayload = z.infer<typeof ProjectOpenPayloadSchema>;
+export type ProjectOpenData = z.infer<typeof ProjectOpenDataSchema>;
+export type ProjectRemovePayload = z.infer<typeof ProjectRemovePayloadSchema>;
+export type ProjectRemoveData = z.infer<typeof ProjectRemoveDataSchema>;
 export type WorkspaceFilesListPayload = z.infer<typeof WorkspaceFilesListPayloadSchema>;
 export type WorkspaceFilesListData = z.infer<typeof WorkspaceFilesListDataSchema>;

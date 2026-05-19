@@ -24,6 +24,15 @@ import {
   isBusinessIpcChannel,
 } from '@megumi/shared/ipc-contracts';
 import {
+  ProjectListRequestSchema,
+  ProjectListResultSchema,
+  ProjectOpenRequestSchema,
+  ProjectRecordSchema,
+  ProjectRemoveRequestSchema,
+  ProjectUseExistingRequestSchema,
+  ProjectUseExistingResultSchema,
+} from '@megumi/shared/ipc-schemas';
+import {
   ArtifactGetRequestSchema,
   ArtifactGetResultSchema,
   ArtifactStatusUpdatePayloadSchema,
@@ -259,6 +268,80 @@ describe('runtime ipc request and result schemas', () => {
 
     expect(success.success).toBe(true);
     expect(failure.success).toBe(true);
+  });
+
+  it('accepts project runtime ipc requests and results', () => {
+    const project = ProjectRecordSchema.parse({
+      projectId: 'project:abc123',
+      name: 'megumi',
+      repoPath: 'C:/all/work/study/megumi',
+      repoPathKey: 'c:/all/work/study/megumi',
+      status: 'available',
+      createdAt: '2026-05-19T00:00:00.000Z',
+      lastOpenedAt: '2026-05-19T00:00:01.000Z',
+    });
+
+    expect(ProjectListRequestSchema.parse({
+      requestId: 'ipc-project-list-1',
+      payload: {},
+      meta: {
+        channel: IPC_CHANNELS.project.list,
+        createdAt: '2026-05-19T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.project.list);
+
+    expect(ProjectUseExistingRequestSchema.parse({
+      requestId: 'ipc-project-use-existing-1',
+      payload: {},
+      meta: {
+        channel: IPC_CHANNELS.project.useExisting,
+        createdAt: '2026-05-19T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload).toEqual({});
+
+    expect(ProjectOpenRequestSchema.parse({
+      requestId: 'ipc-project-open-1',
+      payload: { projectId: project.projectId },
+      meta: {
+        channel: IPC_CHANNELS.project.open,
+        createdAt: '2026-05-19T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.projectId).toBe(project.projectId);
+
+    expect(ProjectRemoveRequestSchema.parse({
+      requestId: 'ipc-project-remove-1',
+      payload: { projectId: project.projectId },
+      meta: {
+        channel: IPC_CHANNELS.project.remove,
+        createdAt: '2026-05-19T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.projectId).toBe(project.projectId);
+
+    expect(ProjectListResultSchema.parse({
+      ok: true,
+      data: { projects: [project] },
+      meta: {
+        requestId: 'ipc-project-list-1',
+        channel: IPC_CHANNELS.project.list,
+        handledAt: '2026-05-19T00:00:01.000Z',
+      },
+    }).ok).toBe(true);
+
+    const cancelled = ProjectUseExistingResultSchema.parse({
+      ok: true,
+      data: { cancelled: true },
+      meta: {
+        requestId: 'ipc-project-use-existing-1',
+        channel: IPC_CHANNELS.project.useExisting,
+        handledAt: '2026-05-19T00:00:01.000Z',
+      },
+    });
+
+    expect(cancelled.ok).toBe(true);
   });
 
   it('accepts workspace files list runtime ipc request and result', () => {

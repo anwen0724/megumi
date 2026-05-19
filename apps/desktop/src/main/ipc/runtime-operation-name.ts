@@ -91,6 +91,14 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'memory.access-logs.list';
     case IPC_CHANNELS.memory.recallPreview:
       return 'memory.recall-preview';
+    case IPC_CHANNELS.project.list:
+      return 'project.list';
+    case IPC_CHANNELS.project.useExisting:
+      return 'project.use-existing';
+    case IPC_CHANNELS.project.open:
+      return 'project.open';
+    case IPC_CHANNELS.project.remove:
+      return 'project.remove';
     case IPC_CHANNELS.workspace.files.list:
       return 'workspace.files.list';
     default: {

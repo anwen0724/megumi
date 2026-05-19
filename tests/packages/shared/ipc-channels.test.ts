@@ -21,6 +21,10 @@ describe('ipc channel contracts', () => {
     expect(IPC_CHANNELS.recovery.resume).toBe('recovery:resume');
     expect(IPC_CHANNELS.artifacts.get).toBe('artifacts:get');
     expect(IPC_CHANNELS.memory.settingsGet).toBe('memory:settings:get');
+    expect(IPC_CHANNELS.project.list).toBe('project:list');
+    expect(IPC_CHANNELS.project.useExisting).toBe('project:use-existing');
+    expect(IPC_CHANNELS.project.open).toBe('project:open');
+    expect(IPC_CHANNELS.project.remove).toBe('project:remove');
     expect(IPC_CHANNELS.workspace.files.list).toBe('workspace:files:list');
     expect(IPC_CHANNELS.runtime.event).toBe('runtime:event');
   });
@@ -28,6 +32,10 @@ describe('ipc channel contracts', () => {
   it('checks known IPC channel strings', () => {
     expect(isIpcChannel('provider:list')).toBe(true);
     expect(isIpcChannel('session:message:send')).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.project.list)).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.project.useExisting)).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.project.open)).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.project.remove)).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.workspace.files.list)).toBe(true);
     expect(isIpcChannel('runtime:event')).toBe(true);
     expect(isIpcChannel(['chat', 'start'].join(':'))).toBe(false);
