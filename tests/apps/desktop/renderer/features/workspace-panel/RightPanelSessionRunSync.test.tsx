@@ -202,8 +202,16 @@ function emitRuntimeFailure(request: SessionMessageSendRequest, message: string)
 
 function resetStores() {
   useProjectStore.setState({
-    projects: [],
-    currentProjectId: null,
+    projects: [{
+      id: 'project-1',
+      name: 'Megumi',
+      description: 'Warm agent desktop companion',
+      repoPath: 'C:/all/work/study/megumi',
+      type: 'existing_feature',
+      createdAt: '2026-05-10T00:00:00.000Z',
+      context: {},
+    }],
+    currentProjectId: 'project-1',
     loading: false,
   });
   useChatStore.setState({

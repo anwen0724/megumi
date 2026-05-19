@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
@@ -105,6 +107,24 @@ describe('ChatTimeline', () => {
     runtimeEventCallback = null;
     runtimeSequence = 1;
     resetChatStore();
+    useProjectStore.setState({
+      projects: [{
+        id: 'project-1',
+        name: 'Megumi',
+        description: 'Warm agent desktop companion',
+        repoPath: 'C:/all/work/study/megumi',
+        type: 'existing_feature',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        context: {},
+      }],
+      currentProjectId: 'project-1',
+      loading: false,
+    });
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: null,
+      activeAgentType: 'free',
+    });
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date('2026-05-10T12:00:42.000Z'));
     useRunStore.getState().resetRuns();
