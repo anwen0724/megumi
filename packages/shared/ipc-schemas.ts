@@ -1174,7 +1174,5 @@ export type MemoryData = z.infer<typeof MemoryDataSchema>;
 export type MemorySourceRefsListData = z.infer<typeof MemorySourceRefsListDataSchema>;
 export type MemoryAccessLogsListData = z.infer<typeof MemoryAccessLogsListDataSchema>;
 export type MemoryRecallPreviewData = z.infer<typeof MemoryRecallPreviewDataSchema>;
-export type ProjectListPayload = z.infer<typeof ProjectListPayloadSchema>;
-export type ProjectUseExistingPayload = z.infer<typeof ProjectUseExistingPayloadSchema>;
 export type WorkspaceFilesListPayload = z.infer<typeof WorkspaceFilesListPayloadSchema>;
 export type WorkspaceFilesListData = z.infer<typeof WorkspaceFilesListDataSchema>;

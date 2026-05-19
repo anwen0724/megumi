@@ -55,9 +55,11 @@ export const ProjectRemoveDataSchema = z
   .strict();
 
 export type ProjectRecord = z.infer<typeof ProjectRecordSchema>;
-export type ProjectListData = z.output<typeof ProjectListDataSchema>;
-export type ProjectUseExistingData = z.output<typeof ProjectUseExistingDataSchema>;
+export type ProjectListPayload = z.infer<typeof ProjectListPayloadSchema>;
+export type ProjectListData = z.infer<typeof ProjectListDataSchema>;
+export type ProjectUseExistingPayload = z.infer<typeof ProjectUseExistingPayloadSchema>;
+export type ProjectUseExistingData = z.infer<typeof ProjectUseExistingDataSchema>;
 export type ProjectOpenPayload = z.infer<typeof ProjectOpenPayloadSchema>;
-export type ProjectOpenData = z.output<typeof ProjectOpenDataSchema>;
+export type ProjectOpenData = z.infer<typeof ProjectOpenDataSchema>;
 export type ProjectRemovePayload = z.infer<typeof ProjectRemovePayloadSchema>;
-export type ProjectRemoveData = z.output<typeof ProjectRemoveDataSchema>;
+export type ProjectRemoveData = z.infer<typeof ProjectRemoveDataSchema>;

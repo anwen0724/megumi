@@ -12,7 +12,7 @@ import type {
   ProjectRemovePayload,
   ProjectUseExistingData,
   ProjectUseExistingPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/project-contracts';
 import {
   ProjectListRequestSchema,
   ProjectOpenRequestSchema,
