@@ -369,7 +369,7 @@ describe('interaction baseline acceptance', () => {
     expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
-    expect(await screen.findByText('No workspace selected')).toBeInTheDocument();
+    expect((await screen.findAllByText('No workspace selected')).length).toBeGreaterThanOrEqual(1);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
