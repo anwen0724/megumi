@@ -384,6 +384,52 @@ describe('run model tool loop', () => {
     });
   });
 
+  it('yields but ignores malformed tool use events before tool handling', async () => {
+    let handleToolUsesCallCount = 0;
+
+    const malformedToolUseEvent: RuntimeEvent = {
+      eventId: 'malformed-event-1',
+      schemaVersion: 1,
+      eventType: 'tool.use.created',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-05-17T00:00:01.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolUseId: 'call-read',
+      },
+    };
+
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      aiPort: {
+        async *streamModelStep() {
+          yield malformedToolUseEvent;
+        },
+      },
+      toolUseHandler: {
+        async handleToolUses() {
+          handleToolUsesCallCount += 1;
+          return {
+            toolResults: [createToolResult()],
+          };
+        },
+      },
+      ids: {
+        nextEventId: () => 'malformed-loop-event',
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+    }));
+
+    expect(events).toEqual([malformedToolUseEvent]);
+    expect(handleToolUsesCallCount).toBe(0);
+  });
+
   it('emits run failed instead of throwing when model step limit is exhausted', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
@@ -432,6 +478,7 @@ describe('run model tool loop', () => {
     ]);
     expect(events.at(-1)).toMatchObject({
       eventType: 'run.failed',
+      sessionId: 'session-1',
       sequence: 4,
       payload: {
         error: {

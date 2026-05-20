@@ -1,5 +1,6 @@
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime-events';
+import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
 import {
   createRunFailedEvent,
   createToolResultCreatedEvent,
@@ -134,6 +135,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     eventId: input.ids.nextEventId(),
     request: {
       requestId: request.requestId,
+      sessionId: request.sessionId,
       providerId: request.providerId,
       modelId: request.modelId,
       messages: [],
@@ -177,7 +179,11 @@ function createToolUseFromEvent(event: TypedRuntimeEvent<'tool.use.created'>): T
 }
 
 function isToolUseCreatedEvent(event: RuntimeEvent): event is TypedRuntimeEvent<'tool.use.created'> {
-  return event.eventType === 'tool.use.created';
+  if (event.eventType !== 'tool.use.created') {
+    return false;
+  }
+
+  return RuntimeEventSchema.safeParse(event).success;
 }
 
 function createToolResultSummary(toolResult: ToolResult): string {
