@@ -37,6 +37,7 @@ export {
   type TaskIntent,
 } from './run-mode-contracts';
 export * from './permission-mode-contracts';
+export * from './permission-settings-contracts';
 export * from './recovery-contracts';
 export * from './artifact-contracts';
 export * from './memory-contracts';
