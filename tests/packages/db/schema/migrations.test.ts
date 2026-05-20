@@ -249,6 +249,17 @@ describe('provider settings migrations', () => {
       'metadata_json',
       'result_json',
     ]);
+    for (const requiredColumn of [
+      'tool_use_id',
+      'run_id',
+      'kind',
+      'redaction_state',
+      'created_at',
+      'result_json',
+    ]) {
+      expect(columnByName(toolResultColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    expect(columnByName(toolResultColumns, 'tool_call_id')?.notnull).toBe(0);
 
     const permissionDecisionColumns = tableColumns(database, 'permission_decisions');
     expect(permissionDecisionColumns.map((column) => column.name)).toEqual([
@@ -288,14 +299,67 @@ describe('provider settings migrations', () => {
       expect(columnByName(permissionDecisionColumns, requiredColumn)?.notnull).toBe(1);
     }
 
-    expect(tableColumns(database, 'approval_requests').map((column) => column.name)).toEqual(expect.arrayContaining([
+    const approvalRequestColumns = tableColumns(database, 'approval_requests');
+    expect(approvalRequestColumns.map((column) => column.name)).toEqual([
+      'approval_request_id',
       'tool_use_id',
+      'tool_call_id',
       'permission_decision_id',
-    ]));
-
-    expect(tableColumns(database, 'approval_records').map((column) => column.name)).toEqual(expect.arrayContaining([
+      'run_id',
+      'step_id',
+      'tool_name',
+      'status',
+      'requested_scope',
+      'risk_level',
+      'created_at',
+      'expires_at',
+      'resolved_at',
+      'request_json',
+    ]);
+    for (const requiredColumn of [
       'tool_use_id',
-    ]));
+      'tool_call_id',
+      'run_id',
+      'step_id',
+      'tool_name',
+      'status',
+      'requested_scope',
+      'risk_level',
+      'created_at',
+      'request_json',
+    ]) {
+      expect(columnByName(approvalRequestColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    expect(columnByName(approvalRequestColumns, 'permission_decision_id')?.notnull).toBe(0);
+
+    const approvalRecordColumns = tableColumns(database, 'approval_records');
+    expect(approvalRecordColumns.map((column) => column.name)).toEqual([
+      'approval_record_id',
+      'approval_request_id',
+      'tool_use_id',
+      'tool_call_id',
+      'run_id',
+      'step_id',
+      'decision',
+      'scope',
+      'decided_by',
+      'decided_at',
+      'record_json',
+    ]);
+    for (const requiredColumn of [
+      'approval_request_id',
+      'tool_use_id',
+      'tool_call_id',
+      'run_id',
+      'step_id',
+      'decision',
+      'scope',
+      'decided_by',
+      'decided_at',
+      'record_json',
+    ]) {
+      expect(columnByName(approvalRecordColumns, requiredColumn)?.notnull).toBe(1);
+    }
 
     expect(foreignKeys(database, 'tool_uses')).toEqual(expect.arrayContaining([
       expect.objectContaining({ from: 'model_step_id', table: 'model_steps', on_delete: 'CASCADE' }),
@@ -304,6 +368,29 @@ describe('provider settings migrations', () => {
     expect(foreignKeys(database, 'model_steps')).toEqual(expect.arrayContaining([
       expect.objectContaining({ from: 'run_id', table: 'runs', on_delete: 'CASCADE' }),
       expect.objectContaining({ from: 'step_id', table: 'run_steps', on_delete: 'SET NULL' }),
+    ]));
+    expect(foreignKeys(database, 'tool_calls')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'tool_use_id', table: 'tool_uses', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'action_id', table: 'run_actions', on_delete: 'SET NULL' }),
+    ]));
+    expect(foreignKeys(database, 'tool_results')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'tool_use_id', table: 'tool_uses', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'tool_call_id', table: 'tool_calls', on_delete: 'SET NULL' }),
+    ]));
+    expect(foreignKeys(database, 'permission_decisions')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'tool_use_id', table: 'tool_uses', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'tool_call_id', table: 'tool_calls', on_delete: 'SET NULL' }),
+    ]));
+    expect(foreignKeys(database, 'approval_requests')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'tool_use_id', table: 'tool_uses', on_delete: 'CASCADE' }),
+      expect.objectContaining({
+        from: 'permission_decision_id',
+        table: 'permission_decisions',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'approval_records')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'tool_use_id', table: 'tool_uses', on_delete: 'CASCADE' }),
     ]));
   });
 
