@@ -16,7 +16,10 @@ describe('agent action permission tools v1 source guards', () => {
     expect(source).toContain("['default', 'accept_edits', 'plan', 'auto']");
     expect(source).not.toContain('TaskIntent');
     expect(source).not.toContain('OutputExpectation');
+    expect(source).not.toContain('bypassPermissions');
     expect(source).not.toContain('bypass_permissions');
+    expect(source).not.toContain('dontAsk');
+    expect(source).not.toContain("'read_only'");
     expect(source).not.toContain("'chat'");
     expect(source).not.toContain("'execute'");
     expect(source).not.toContain("'review'");
@@ -28,6 +31,8 @@ describe('agent action permission tools v1 source guards', () => {
     expect(source).toContain('toolUseId: ToolUseId | string');
     expect(source).toContain('actionId?: RunActionId | string');
     expect(source).not.toContain('actionKind: RunActionKindSchema');
+    expect(source).not.toContain('bypassPermissions');
+    expect(source).not.toContain('dontAsk');
     expect(source).not.toContain("'workspace_write'");
     expect(source).not.toContain("'workspace_read'");
   });
