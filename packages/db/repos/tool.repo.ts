@@ -31,7 +31,14 @@ export class ToolRepository {
         @error_json, @metadata_json, @tool_use_json
       )
       ON CONFLICT(tool_use_id) DO UPDATE SET
+        run_id = excluded.run_id,
+        model_step_id = excluded.model_step_id,
+        provider_tool_use_id = excluded.provider_tool_use_id,
+        tool_name = excluded.tool_name,
+        input_json = excluded.input_json,
+        input_preview_json = excluded.input_preview_json,
         status = excluded.status,
+        created_at = excluded.created_at,
         completed_at = excluded.completed_at,
         error_json = excluded.error_json,
         metadata_json = excluded.metadata_json,
@@ -87,6 +94,7 @@ export class ToolRepository {
         side_effect = excluded.side_effect,
         result_preview = excluded.result_preview,
         status = excluded.status,
+        requested_at = excluded.requested_at,
         started_at = excluded.started_at,
         completed_at = excluded.completed_at,
         error_json = excluded.error_json,
@@ -141,6 +149,7 @@ export class ToolRepository {
       ON CONFLICT(permission_decision_id) DO UPDATE SET
         tool_use_id = excluded.tool_use_id,
         tool_call_id = excluded.tool_call_id,
+        run_id = excluded.run_id,
         decision = excluded.decision,
         source = excluded.source,
         mode = excluded.mode,
@@ -153,6 +162,7 @@ export class ToolRepository {
         effective_risk_level = excluded.effective_risk_level,
         required_approval_json = excluded.required_approval_json,
         required_sandbox_json = excluded.required_sandbox_json,
+        evaluated_at = excluded.evaluated_at,
         metadata_json = excluded.metadata_json,
         decision_json = excluded.decision_json
     `).run({
@@ -231,6 +241,9 @@ export class ToolRepository {
     if (!request) {
       throw new Error(`Cannot save approval record without approval request: ${record.approvalRequestId}`);
     }
+    if (record.toolCallId !== request.toolCallId) {
+      throw new Error(`Approval record toolCallId ${record.toolCallId} does not match approval request toolCallId ${request.toolCallId}`);
+    }
 
     this.database.prepare(`
       INSERT INTO approval_records (
@@ -270,6 +283,7 @@ export class ToolRepository {
       ON CONFLICT(tool_result_id) DO UPDATE SET
         tool_use_id = excluded.tool_use_id,
         tool_call_id = excluded.tool_call_id,
+        run_id = excluded.run_id,
         kind = excluded.kind,
         text_content = excluded.text_content,
         structured_content_json = excluded.structured_content_json,
@@ -277,6 +291,7 @@ export class ToolRepository {
         redaction_state = excluded.redaction_state,
         error_json = excluded.error_json,
         denial_reason = excluded.denial_reason,
+        created_at = excluded.created_at,
         metadata_json = excluded.metadata_json,
         result_json = excluded.result_json
     `).run({
