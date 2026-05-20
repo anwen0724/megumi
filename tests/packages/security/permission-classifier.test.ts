@@ -81,7 +81,6 @@ describe('rule-based permission classifier', () => {
       'network',
       'git_mutation',
       'dependency_install',
-      'infrastructure_or_deploy',
       'secret_or_env',
       'unknown',
     ] as const) {
@@ -101,6 +100,15 @@ describe('rule-based permission classifier', () => {
       capability: 'command_run',
       sideEffect: 'execute_command',
       commandLabel: 'destructive',
+      projectPath: { insideProject: true, protected: false, sensitive: false },
+    }).decision).toBe('deny');
+
+    expect(classifier.classify({
+      permissionMode: 'auto',
+      toolName: 'run_command',
+      capability: 'command_run',
+      sideEffect: 'execute_command',
+      commandLabel: 'infrastructure_or_deploy',
       projectPath: { insideProject: true, protected: false, sensitive: false },
     }).decision).toBe('deny');
   });

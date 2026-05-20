@@ -83,11 +83,11 @@ export function createRuleBasedPermissionClassifier(): PermissionClassifier {
         };
       }
 
-      if (input.commandLabel === 'destructive') {
+      if (input.commandLabel === 'destructive' || input.commandLabel === 'infrastructure_or_deploy') {
         return {
           decision: 'deny',
           classifierLabel: input.commandLabel,
-          reason: 'Auto denies destructive command.',
+          reason: `Auto denies high-risk ${input.commandLabel} command.`,
           confidence: 0.95,
         };
       }
