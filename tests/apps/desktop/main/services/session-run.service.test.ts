@@ -515,6 +515,7 @@ describe('SessionRunService', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const toolResult = createToolResult();
     db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
     const service = new SessionRunService({
@@ -529,7 +530,10 @@ describe('SessionRunService', () => {
             return;
           }
 
-          yield assistantOutputCompletedEvent(1);
+          yield {
+            ...assistantOutputCompletedEvent(1),
+            stepId: request.stepId,
+          };
         },
         cancelModelStep: () => true,
       },
@@ -598,6 +602,13 @@ describe('SessionRunService', () => {
       modelStepId: expect.stringMatching(/^model-step:/),
     });
     expect(requests[1]?.modelStepId).not.toBe(requests[1]?.stepId);
+    expect(repository.listStepsByRun('run-1')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        stepId: 'step-2',
+        kind: 'model',
+        status: 'succeeded',
+      }),
+    ]));
     expect(requests[1]?.toolResults).toEqual([
       expect.objectContaining({ toolResultId: 'tool-result-1' }),
     ]);

@@ -403,6 +403,7 @@ export class SessionRunService {
     let sawAssistantOutputCompleted = false;
     let lastSequence = 0;
     let terminalEvent: RuntimeEvent | undefined;
+    let currentModelStep = input.step;
 
     const startedEvent = withRequestMetadata(createRunStartedEvent({
       eventId: this.ids.eventId(),
@@ -424,7 +425,18 @@ export class SessionRunService {
           toolUseHandler: this.toolUseHandler,
           ids: {
             nextEventId: this.ids.eventId,
-            nextStepId: this.ids.stepId,
+            nextStepId: () => {
+              const step = this.repository.saveStep({
+                stepId: this.ids.stepId(),
+                runId: input.request.runId,
+                kind: 'model',
+                status: 'running',
+                title: 'Model response',
+                startedAt: this.clock.now(),
+              });
+              currentModelStep = step;
+              return step.stepId;
+            },
             nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
           },
         })
@@ -454,7 +466,7 @@ export class SessionRunService {
     if (terminalEvent?.eventType === 'run.failed') {
       const error = getRunFailedError(terminalEvent.payload) ?? createFallbackRuntimeError('Run failed.');
       const failedStep = this.repository.saveStep({
-        ...input.step,
+        ...currentModelStep,
         status: 'failed',
         completedAt,
         error,
@@ -470,7 +482,7 @@ export class SessionRunService {
           eventId: this.ids.eventId(),
           sessionId: input.request.sessionId,
           runId: input.request.runId,
-          stepId: input.request.stepId,
+          stepId: failedStep.stepId,
           sequence: lastSequence += 1,
           createdAt: completedAt,
           from: 'running',
@@ -503,8 +515,8 @@ export class SessionRunService {
     }
 
     if (terminalEvent?.eventType === 'run.cancelled') {
-      this.repository.saveStep({
-        ...input.step,
+      const cancelledStep = this.repository.saveStep({
+        ...currentModelStep,
         status: 'cancelled',
         completedAt,
       });
@@ -518,7 +530,7 @@ export class SessionRunService {
           eventId: this.ids.eventId(),
           sessionId: input.request.sessionId,
           runId: input.request.runId,
-          stepId: input.request.stepId,
+          stepId: cancelledStep.stepId,
           sequence: lastSequence += 1,
           createdAt: completedAt,
           from: 'running',
@@ -559,7 +571,7 @@ export class SessionRunService {
       },
     });
     const completedStep = this.repository.saveStep({
-      ...input.step,
+      ...currentModelStep,
       status: 'succeeded',
       completedAt,
     });
@@ -574,7 +586,7 @@ export class SessionRunService {
         eventId: this.ids.eventId(),
         sessionId: input.request.sessionId,
         runId: input.request.runId,
-        stepId: input.request.stepId,
+        stepId: completedStep.stepId,
         sequence: lastSequence += 1,
         createdAt: completedAt,
         from: 'running',
