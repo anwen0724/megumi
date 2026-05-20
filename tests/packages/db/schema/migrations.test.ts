@@ -20,6 +20,22 @@ function tableColumns(
     .all() as Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }>;
 }
 
+function columnByName(
+  columns: Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }>,
+  name: string,
+): { name: string; notnull: 0 | 1; pk: 0 | 1 } | undefined {
+  return columns.find((column) => column.name === name);
+}
+
+function foreignKeys(
+  database: Database.Database,
+  tableName: string,
+): Array<{ from: string; table: string; on_delete: string }> {
+  return database
+    .prepare(`PRAGMA foreign_key_list(${tableName})`)
+    .all() as Array<{ from: string; table: string; on_delete: string }>;
+}
+
 afterEach(() => {
   db?.close();
   db = null;
@@ -123,7 +139,33 @@ describe('provider settings migrations', () => {
 
     migrateDatabase(database);
 
-    expect(tableColumns(database, 'tool_uses').map((column) => column.name)).toEqual([
+    const modelStepColumns = tableColumns(database, 'model_steps');
+    expect(modelStepColumns.map((column) => column.name)).toEqual([
+      'model_step_id',
+      'run_id',
+      'step_id',
+      'provider_id',
+      'model_id',
+      'status',
+      'started_at',
+      'completed_at',
+      'error_json',
+      'metadata_json',
+      'model_step_json',
+    ]);
+    for (const requiredColumn of [
+      'run_id',
+      'provider_id',
+      'model_id',
+      'status',
+      'started_at',
+      'model_step_json',
+    ]) {
+      expect(columnByName(modelStepColumns, requiredColumn)?.notnull).toBe(1);
+    }
+
+    const toolUseColumns = tableColumns(database, 'tool_uses');
+    expect(toolUseColumns.map((column) => column.name)).toEqual([
       'tool_use_id',
       'run_id',
       'model_step_id',
@@ -138,34 +180,78 @@ describe('provider settings migrations', () => {
       'metadata_json',
       'tool_use_json',
     ]);
+    for (const requiredColumn of [
+      'run_id',
+      'model_step_id',
+      'provider_tool_use_id',
+      'tool_name',
+      'input_json',
+      'input_preview_json',
+      'status',
+      'created_at',
+      'tool_use_json',
+    ]) {
+      expect(columnByName(toolUseColumns, requiredColumn)?.notnull).toBe(1);
+    }
 
     const toolCallColumns = tableColumns(database, 'tool_calls');
-    expect(toolCallColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
+    expect(toolCallColumns.map((column) => column.name)).toEqual([
       'tool_call_id',
       'tool_use_id',
       'run_id',
       'step_id',
       'action_id',
       'tool_name',
+      'input_preview_json',
+      'capabilities_json',
+      'risk_level',
+      'side_effect',
       'result_preview',
+      'status',
+      'requested_at',
+      'started_at',
+      'completed_at',
+      'error_json',
+      'metadata_json',
       'tool_call_json',
-    ]));
-    expect(toolCallColumns.find((column) => column.name === 'tool_use_id')?.notnull).toBe(1);
-    expect(toolCallColumns.find((column) => column.name === 'action_id')?.notnull).toBe(0);
+    ]);
+    for (const requiredColumn of [
+      'tool_use_id',
+      'run_id',
+      'step_id',
+      'tool_name',
+      'input_preview_json',
+      'capabilities_json',
+      'risk_level',
+      'side_effect',
+      'status',
+      'requested_at',
+      'tool_call_json',
+    ]) {
+      expect(columnByName(toolCallColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    expect(columnByName(toolCallColumns, 'action_id')?.notnull).toBe(0);
 
-    expect(tableColumns(database, 'tool_results').map((column) => column.name)).toEqual([
+    const toolResultColumns = tableColumns(database, 'tool_results');
+    expect(toolResultColumns.map((column) => column.name)).toEqual([
       'tool_result_id',
       'tool_use_id',
       'tool_call_id',
       'run_id',
       'kind',
       'text_content',
+      'structured_content_json',
+      'content_refs_json',
       'redaction_state',
+      'error_json',
+      'denial_reason',
       'created_at',
+      'metadata_json',
       'result_json',
     ]);
 
-    expect(tableColumns(database, 'permission_decisions').map((column) => column.name)).toEqual([
+    const permissionDecisionColumns = tableColumns(database, 'permission_decisions');
+    expect(permissionDecisionColumns.map((column) => column.name)).toEqual([
       'permission_decision_id',
       'tool_use_id',
       'tool_call_id',
@@ -173,11 +259,34 @@ describe('provider settings migrations', () => {
       'decision',
       'source',
       'mode',
+      'reason',
       'classifier_label',
       'capability',
       'side_effect',
+      'matched_rule_json',
+      'target',
+      'effective_risk_level',
+      'required_approval_json',
+      'required_sandbox_json',
+      'evaluated_at',
+      'metadata_json',
       'decision_json',
     ]);
+    for (const requiredColumn of [
+      'tool_use_id',
+      'run_id',
+      'decision',
+      'source',
+      'mode',
+      'reason',
+      'capability',
+      'side_effect',
+      'effective_risk_level',
+      'evaluated_at',
+      'decision_json',
+    ]) {
+      expect(columnByName(permissionDecisionColumns, requiredColumn)?.notnull).toBe(1);
+    }
 
     expect(tableColumns(database, 'approval_requests').map((column) => column.name)).toEqual(expect.arrayContaining([
       'tool_use_id',
@@ -186,6 +295,15 @@ describe('provider settings migrations', () => {
 
     expect(tableColumns(database, 'approval_records').map((column) => column.name)).toEqual(expect.arrayContaining([
       'tool_use_id',
+    ]));
+
+    expect(foreignKeys(database, 'tool_uses')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'model_step_id', table: 'model_steps', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'run_id', table: 'runs', on_delete: 'CASCADE' }),
+    ]));
+    expect(foreignKeys(database, 'model_steps')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'run_id', table: 'runs', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'step_id', table: 'run_steps', on_delete: 'SET NULL' }),
     ]));
   });
 
