@@ -8,7 +8,35 @@ export * from './session-run-contracts';
 export * from './model-step-contracts';
 export { RUN_STATUSES, type RunStatus } from './session-run-contracts';
 export * from './run-context-contracts';
-export * from './run-mode-contracts';
+export {
+  ActivePermissionModeSchema,
+  ImplementationPlanArtifactRecordSchema,
+  ImplementationPlanArtifactStatusSchema,
+  InitialRunModePresetSchema,
+  OUTPUT_EXPECTATIONS,
+  OutputExpectationSchema,
+  PERMISSION_MODES,
+  RUN_MODE_PRESETS,
+  RUN_MODE_PRESET_DEFAULTS,
+  RUN_MODE_SELECTION_SOURCES,
+  RunModeSchema,
+  RunModeSelectionSourceSchema,
+  RunModeSnapshotSchema,
+  RunSourcePlanRelationSchema,
+  TASK_INTENTS,
+  TaskIntentSchema,
+  isActivePermissionMode,
+  type ActivePermissionMode,
+  type ImplementationPlanArtifactRecord,
+  type ImplementationPlanArtifactStatus,
+  type InitialRunModePreset,
+  type OutputExpectation,
+  type RunMode,
+  type RunModeSelectionSource,
+  type RunModeSnapshot,
+  type RunSourcePlanRelation,
+  type TaskIntent,
+} from './run-mode-contracts';
 export * from './permission-mode-contracts';
 export * from './recovery-contracts';
 export * from './artifact-contracts';

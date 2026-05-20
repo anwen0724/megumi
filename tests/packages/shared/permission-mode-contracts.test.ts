@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PermissionModeSnapshotSchema as BarrelPermissionModeSnapshotSchema,
+  PermissionModeSchema as BarrelPermissionModeSchema,
+  ACTIVE_PERMISSION_MODES as BARREL_ACTIVE_PERMISSION_MODES,
+} from '@megumi/shared';
+import {
   ACTIVE_PERMISSION_MODES,
   PermissionModeSchema,
   PermissionModeSnapshotSchema,
@@ -30,6 +35,39 @@ describe('permission-mode-contracts', () => {
     expect(snapshot.permissionMode).toBe('plan');
     expect(snapshot).not.toHaveProperty('taskIntent');
     expect(snapshot).not.toHaveProperty('outputExpectation');
+  });
+
+  it('rejects old TaskIntent and OutputExpectation keys in permission mode snapshots', () => {
+    const baseSnapshot = {
+      permissionMode: 'plan',
+      source: 'user',
+      createdAt: '2026-05-20T00:00:00.000Z',
+    };
+
+    expect(() =>
+      PermissionModeSnapshotSchema.parse({
+        ...baseSnapshot,
+        taskIntent: 'plan',
+      }),
+    ).toThrow();
+    expect(() =>
+      PermissionModeSnapshotSchema.parse({
+        ...baseSnapshot,
+        outputExpectation: 'implementation_plan_artifact',
+      }),
+    ).toThrow();
+  });
+
+  it('keeps the public shared barrel pointed at target permission mode exports', () => {
+    expect(BARREL_ACTIVE_PERMISSION_MODES).toEqual(['default', 'accept_edits', 'plan', 'auto']);
+    expect(BarrelPermissionModeSchema.options).toEqual(['default', 'accept_edits', 'plan', 'auto']);
+    expect(
+      BarrelPermissionModeSnapshotSchema.parse({
+        permissionMode: 'accept_edits',
+        source: 'project',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      }).permissionMode,
+    ).toBe('accept_edits');
   });
 
   it('narrows permission mode values', () => {
