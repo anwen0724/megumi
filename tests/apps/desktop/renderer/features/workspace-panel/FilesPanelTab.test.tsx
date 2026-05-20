@@ -74,11 +74,12 @@ function selectMegumiProject() {
       {
         id: 'project-1',
         name: 'Megumi',
-        description: 'Warm agent desktop companion',
         repoPath: 'C:/all/work/study/megumi',
-        type: 'existing_feature',
         createdAt: '2026-05-18T00:00:00.000Z',
-        context: {},
+        projectId: 'project-1',
+        repoPathKey: 'c:/all/work/study/megumi',
+        lastOpenedAt: '2026-05-19T00:00:00.000Z',
+        status: 'available' as const,
       },
     ],
     currentProjectId: 'project-1',
@@ -95,6 +96,31 @@ describe('FilesPanelTab', () => {
     });
     useWorkspaceFilesStore.getState().reset();
     vi.restoreAllMocks();
+  });
+
+  it('shows unavailable state when project path is missing from disk', () => {
+    const list = installWorkspaceFilesMock();
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Megumi',
+          repoPath: 'C:/all/work/study/megumi',
+          createdAt: '2026-05-18T00:00:00.000Z',
+          projectId: 'project-1',
+          repoPathKey: 'c:/all/work/study/megumi',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'missing' as const,
+        },
+      ],
+      currentProjectId: 'project-1',
+      loading: false,
+    });
+
+    render(<FilesPanelTab />);
+
+    expect(screen.getByText('Workspace folder is missing')).toBeInTheDocument();
+    expect(list).not.toHaveBeenCalled();
   });
 
   it('renders an empty state when no workspace is selected', () => {

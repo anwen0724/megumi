@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
-import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
@@ -82,6 +81,9 @@ function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
+      project: {
+        useExisting: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true } }),
+      },
       session: {
         message: {
           send: session.message.send,
@@ -102,28 +104,34 @@ function installMegumiMock() {
   return session;
 }
 
+function selectMegumiProject() {
+  useProjectStore.setState({
+    projects: [{
+      id: 'project-1',
+      projectId: 'project-1',
+      name: 'Megumi',
+      repoPath: 'C:/all/work/study/megumi',
+      repoPathKey: 'c:/all/work/study/megumi',
+      status: 'available' as const,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      lastOpenedAt: '2026-05-19T00:00:00.000Z',
+    }],
+    currentProjectId: 'project-1',
+    loading: false,
+    error: null,
+  });
+}
+
 describe('ChatTimeline', () => {
   beforeEach(() => {
     runtimeEventCallback = null;
     runtimeSequence = 1;
     resetChatStore();
     useProjectStore.setState({
-      projects: [{
-        id: 'project-1',
-        name: 'Megumi',
-        description: 'Warm agent desktop companion',
-        repoPath: 'C:/all/work/study/megumi',
-        type: 'existing_feature',
-        createdAt: '2026-05-10T12:00:00.000Z',
-        context: {},
-      }],
-      currentProjectId: 'project-1',
+      projects: [],
+      currentProjectId: null,
       loading: false,
-    });
-    useSessionStore.setState({
-      sessions: [],
-      activeSessionId: null,
-      activeAgentType: 'free',
+      error: null,
     });
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date('2026-05-10T12:00:42.000Z'));
@@ -135,10 +143,11 @@ describe('ChatTimeline', () => {
     runtimeEventCallback = null;
   });
 
-  it('renders the empty warm workspace state with full composer controls', () => {
+  it('renders the open workspace welcome state when no project is selected, with composer controls available', () => {
     render(<ChatTimeline />);
-    expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
-    expect(screen.getByText('Megumi is ready to help with this workspace.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
+    expect(screen.getByText('Open a workspace to get started.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace' })).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toBeInTheDocument();
     expect(screen.getByLabelText('Composer mode')).toHaveValue('chat');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
@@ -161,7 +170,7 @@ describe('ChatTimeline', () => {
     expect(composerOverlay).toHaveClass('absolute');
     expect(composerOverlay).toHaveClass('inset-x-0');
     expect(composerOverlay).toHaveClass('bottom-0');
-    expect(within(scrollArea).getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(within(scrollArea).getByText('Welcome to Megumi')).toBeInTheDocument();
     expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 
@@ -177,6 +186,7 @@ describe('ChatTimeline', () => {
 
   it('submits a message through the runtime chat flow', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
@@ -190,6 +200,7 @@ describe('ChatTimeline', () => {
 
   it('shows processing disclosure while a sent message is waiting for runtime events', async () => {
     installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
@@ -210,6 +221,7 @@ describe('ChatTimeline', () => {
 
   it('keeps processing disclosure around the final response on the real runtime event path', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Explain Verilog' } });
@@ -246,6 +258,7 @@ describe('ChatTimeline', () => {
 
   it('renders persisted runtime error messages and does not retry from an empty draft', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'please fail this run' } });
@@ -357,6 +370,7 @@ describe('ChatTimeline', () => {
 
   it('wires the running composer Stop button to the active session message cancel request', async () => {
     const session = installMegumiMock();
+    selectMegumiProject();
     render(<ChatTimeline />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Cancel this run' } });
@@ -390,5 +404,44 @@ describe('ChatTimeline', () => {
         source: 'renderer',
       }),
     }));
+  });
+
+  it('calls useExistingProject when the Open workspace button is clicked', async () => {
+    installMegumiMock();
+    render(<ChatTimeline />);
+
+    const openButton = screen.getByRole('button', { name: 'Open workspace' });
+    expect(openButton).toBeInTheDocument();
+
+    await userEvent.click(openButton);
+
+    expect(window.megumi.project.useExisting).toHaveBeenCalled();
+  });
+
+  it('shows the welcome empty state and project repoPath when a project is selected but no messages exist', () => {
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'Test Project',
+          repoPath: '/home/user/test',
+          repoPathKey: '/home/user/test',
+          status: 'available' as const,
+          createdAt: '2026-05-01T00:00:00.000Z',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          projectId: 'p1',
+        },
+      ],
+      currentProjectId: 'p1',
+      loading: false,
+      error: null,
+    });
+
+    render(<ChatTimeline />);
+
+    expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
+    expect(screen.getByText('Megumi is ready to help with this workspace.')).toBeInTheDocument();
+    expect(screen.getByText('/home/user/test')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open workspace' })).not.toBeInTheDocument();
   });
 });

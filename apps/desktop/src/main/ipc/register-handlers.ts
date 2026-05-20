@@ -25,6 +25,10 @@ import {
   type MemoryHandlersService,
 } from './handlers/memory.handler';
 import {
+  registerProjectHandlers,
+  type ProjectHandlersService,
+} from './handlers/project.handler';
+import {
   registerWorkspaceFilesHandlers,
   type WorkspaceFilesHandlersService,
 } from './handlers/workspace-files.handler';
@@ -40,6 +44,7 @@ export interface RegisterAllHandlersOptions {
   recoveryService?: RecoveryService;
   artifactService?: ArtifactHandlersService;
   memoryService?: MemoryHandlersService;
+  projectService?: ProjectHandlersService;
   workspaceFilesService?: WorkspaceFilesHandlersService;
 }
 
@@ -78,6 +83,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
       memoryService: options.memoryService,
       logger: options.logger,
     });
+  }
+
+  if (options.projectService) {
+    registerProjectHandlers(options.projectService, { logger: options.logger });
   }
 
   if (options.workspaceFilesService) {

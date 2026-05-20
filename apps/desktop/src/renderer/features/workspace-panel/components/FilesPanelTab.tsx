@@ -95,15 +95,19 @@ export function FilesPanelTab() {
   const loadDirectory = useWorkspaceFilesStore((state) => state.loadDirectory);
 
   useEffect(() => {
-    if (!project?.repoPath) {
+    if (!project?.repoPath || project.status === 'missing') {
       return;
     }
 
     void loadDirectory({ workspaceRoot: project.repoPath, directoryPath: '' });
-  }, [loadDirectory, project?.repoPath]);
+  }, [loadDirectory, project?.repoPath, project?.status]);
 
-  if (!project?.repoPath) {
+  if (!project) {
     return <p className="text-sm text-[var(--color-text-muted)]">No workspace selected</p>;
+  }
+
+  if (project.status === 'missing') {
+    return <p className="text-sm text-[var(--color-text-muted)]">Workspace folder is missing</p>;
   }
 
   if (loading && rootEntries.length === 0) {

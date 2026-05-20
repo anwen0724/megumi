@@ -26,14 +26,11 @@ export function ContextPanelTab() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{currentProject.name}</h3>
-              <Badge variant="accent">{currentProject.type}</Badge>
+              <Badge variant="accent">{currentProject.status}</Badge>
             </div>
             <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">
               {currentProject.repoPath ?? 'No repository path'}
             </p>
-            {currentProject.description ? (
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">{currentProject.description}</p>
-            ) : null}
           </div>
         </div>
       </Panel>

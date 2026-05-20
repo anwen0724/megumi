@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { CompletedToolActivity } from '../../../entities/chat/store';
 import { useChatStore } from '../../../entities/chat/store';
+import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { ToolCallStatusCard } from '../../../entities/tool-call';
 import {
@@ -61,10 +62,13 @@ export function ChatTimeline() {
   const pendingToolCalls = useChatStore((state) => state.pendingToolCalls);
   const completedToolActivities = useChatStore((state) => state.completedToolActivities);
   const agentStatus = useChatStore((state) => state.agentStatus);
+  const currentProjectId = useProjectStore((state) => state.currentProjectId);
+  const projects = useProjectStore((state) => state.projects);
   const activeRunId = useRunStore((state) => state.activeRunId);
   const activeRun = useRunStore((state) => (activeRunId ? state.runs[activeRunId] : undefined));
   const activeRunEvents = useRunStore((state) => (activeRunId ? state.eventsByRun[activeRunId] ?? EMPTY_EVENTS : EMPTY_EVENTS));
   const runIsActive = agentStatus === 'sending' || Boolean(activeRun && !['completed', 'failed', 'cancelled'].includes(activeRun.status));
+  const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
   const processingNow = useProcessingNow(runIsActive);
   const { sendSessionMessage, cancelSessionMessage } = useSessionTimeline();
 
@@ -161,19 +165,7 @@ export function ChatTimeline() {
         data-testid="chat-timeline-scroll"
         className="absolute inset-0 overflow-y-auto px-6 pb-72 pt-6"
       >
-        {!hasTimelineContent ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="max-w-md text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-accent)]">
-                <Sparkles size={24} aria-hidden="true" />
-              </div>
-              <h1 className="text-xl font-semibold text-[var(--color-text)]">Today, where should we start?</h1>
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                Megumi is ready to help with this workspace.
-              </p>
-            </div>
-          </div>
-        ) : (
+        {hasTimelineContent ? (
           <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-4xl flex-col gap-4">
             {processingDisclosure && !latestUserMessageItemId ? (
               <ProcessingDisclosure model={processingDisclosure} />
@@ -218,6 +210,38 @@ export function ChatTimeline() {
                 }}
               />
             ) : null}
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="max-w-md text-center">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-accent)]">
+                <Sparkles size={24} aria-hidden="true" />
+              </div>
+              <h1 className="text-xl font-semibold text-[var(--color-text)]">Welcome to Megumi</h1>
+              {currentProjectId === null ? (
+                <>
+                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                    Open a workspace to get started.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void useProjectStore.getState().useExistingProject();
+                    }}
+                    className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                  >
+                    Open workspace
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                    Megumi is ready to help with this workspace.
+                  </p>
+                  <p className="mt-3 text-sm text-[var(--color-text-muted)]">{currentProject?.repoPath}</p>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

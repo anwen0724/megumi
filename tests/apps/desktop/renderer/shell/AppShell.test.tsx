@@ -1,6 +1,6 @@
 ﻿// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
 import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
@@ -26,10 +26,31 @@ vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
   },
 }));
 
+const DEFAULT_PROJECT_RECORD = {
+  projectId: 'project-1',
+  name: 'Megumi',
+  repoPath: 'C:/all/work/study/megumi',
+  repoPathKey: 'c:/all/work/study/megumi',
+  status: 'available' as const,
+  createdAt: '2026-05-10T00:00:00.000Z',
+  lastOpenedAt: '2026-05-19T00:00:00.000Z',
+};
+
 function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
+      project: {
+        list: vi.fn().mockResolvedValue({ ok: true, data: { projects: [DEFAULT_PROJECT_RECORD] } }),
+        useExisting: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true } }),
+        open: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            project: DEFAULT_PROJECT_RECORD,
+          },
+        }),
+        remove: vi.fn().mockResolvedValue({ ok: true, data: { projectId: 'project-1', removed: true } }),
+      },
       provider: {
         list: vi.fn().mockResolvedValue({ ok: true, providers: [] }),
         update: vi.fn().mockResolvedValue({ ok: true }),
@@ -82,11 +103,12 @@ describe('AppShell', () => {
         {
           id: 'project-1',
           name: 'Megumi',
-          description: 'Warm agent desktop companion',
           repoPath: 'C:/all/work/study/megumi',
-          type: 'existing_feature',
           createdAt: '2026-05-10T00:00:00.000Z',
-          context: {},
+          projectId: 'project-1',
+          repoPathKey: 'c:/all/work/study/megumi',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'available' as const,
         },
       ],
       currentProjectId: 'project-1',
@@ -157,11 +179,17 @@ describe('AppShell', () => {
     expect(within(titlebar).getByText('Planning the UI')).toBeInTheDocument();
     expect(within(titlebar).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'megumi sessions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Megumi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
-    expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Context' })).toBeVisible();
+  });
+
+  it('calls loadProjects on mount', () => {
+    renderShell();
+
+    expect(window.megumi.project.list).toHaveBeenCalled();
   });
 
   it('creates and selects a local session from the sidebar', async () => {
@@ -176,25 +204,33 @@ describe('AppShell', () => {
     expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
   });
 
-  it('uses existing project flow instead of creating a local session when no project is selected', async () => {
+  it('uses existing project flow instead of creating a session when no project is selected', async () => {
     useProjectStore.setState({
       projects: [],
       currentProjectId: null,
       loading: false,
     });
-    useSessionStore.setState({
-      sessions: [],
-      activeSessionId: null,
-      activeAgentType: 'free',
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce({
+      ok: true,
+      data: { projects: [] },
+      meta: {
+        requestId: 'ipc-project-list-empty-test',
+        channel: 'project:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
     });
-    const useExistingProject = vi.spyOn(useProjectStore.getState(), 'useExistingProject');
+    const useExistingProject = vi
+      .spyOn(useProjectStore.getState(), 'useExistingProject')
+      .mockResolvedValue(null);
 
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
+    const state = useSessionStore.getState();
     expect(useExistingProject).toHaveBeenCalled();
-    expect(useSessionStore.getState().sessions).toHaveLength(0);
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe('session-1');
   });
 
   it('selects an existing session from the sidebar', async () => {
@@ -205,54 +241,61 @@ describe('AppShell', () => {
     expect(useSessionStore.getState().activeSessionId).toBe('session-2');
   });
 
-  it('switches current project when selecting a session from another project', async () => {
-    const now = '2026-05-10T12:00:00.000Z';
+  it('opens the owning project when selecting a session from another project', async () => {
     const projectB = {
-      id: 'project-b',
-      name: 'other',
-      description: 'Another project',
-      repoPath: null,
-      type: 'existing_feature' as const,
-      createdAt: now,
-      context: {},
+      id: 'project-2',
+      name: 'Other',
+      repoPath: 'C:/all/work/study/other',
+      createdAt: '2026-05-10T00:00:00.000Z',
+      projectId: 'project-2',
+      repoPathKey: 'c:/all/work/study/other',
+      lastOpenedAt: '2026-05-20T00:00:00.000Z',
+      status: 'available' as const,
     };
-    const sessionB = {
-      id: 'session-b',
-      projectId: 'project-b',
-      agentType: 'free' as const,
-      title: 'Other session',
-      createdAt: now,
-      updatedAt: now,
-    };
-    const openProject = vi.spyOn(useProjectStore.getState(), 'openProject').mockResolvedValue(projectB);
     useProjectStore.setState({
-      projects: [
-        {
-          id: 'project-1',
-          name: 'Megumi',
-          description: 'Warm agent desktop companion',
-          repoPath: 'C:/all/work/study/megumi',
-          type: 'existing_feature',
-          createdAt: now,
-          context: {},
-        },
-        projectB,
-      ],
+      projects: [...useProjectStore.getState().projects, projectB],
       currentProjectId: 'project-1',
-      loading: false,
+    });
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        projects: [DEFAULT_PROJECT_RECORD, {
+          projectId: projectB.projectId,
+          name: projectB.name,
+          repoPath: projectB.repoPath,
+          repoPathKey: projectB.repoPathKey,
+          status: projectB.status,
+          createdAt: projectB.createdAt,
+          lastOpenedAt: projectB.lastOpenedAt,
+        }],
+      },
+      meta: {
+        requestId: 'ipc-project-list-test',
+        channel: 'project:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
     });
     useSessionStore.setState({
-      sessions: [sessionB],
-      activeSessionId: null,
-      activeAgentType: 'free',
+      sessions: [
+        ...useSessionStore.getState().sessions,
+        {
+          id: 'session-3',
+          projectId: 'project-2',
+          agentType: 'free',
+          title: 'Other project session',
+          createdAt: '2026-05-10T00:20:00.000Z',
+          updatedAt: '2026-05-10T00:20:00.000Z',
+        },
+      ],
     });
+    const openProject = vi.spyOn(useProjectStore.getState(), 'openProject').mockResolvedValue(projectB);
 
     renderShell();
 
-    await userEvent.click(screen.getByRole('button', { name: /Open session/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Other project session/ }));
 
-    expect(useSessionStore.getState().activeSessionId).toBe(sessionB.id);
-    expect(openProject).toHaveBeenCalledWith(sessionB.projectId);
+    await waitFor(() => expect(useSessionStore.getState().activeSessionId).toBe('session-3'));
+    expect(openProject).toHaveBeenCalledWith('project-2');
   });
 
   it('collapses and expands the left sidebar while keeping new-session access in the rail', async () => {
@@ -308,7 +351,7 @@ describe('AppShell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
     expect(screen.queryByText('Message from the first session')).not.toBeInTheDocument();
-    expect(screen.getByText('Today, where should we start?')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
     expect(useChatStore.getState().sessionSnapshots['session-1'].messages[0].content).toBe(
       'Message from the first session',
     );

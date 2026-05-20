@@ -13,11 +13,12 @@ import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
 const project: Project = {
   id: 'project-1',
   name: 'Megumi',
-  description: 'Warm agent desktop companion',
   repoPath: 'C:/all/work/study/megumi',
-  type: 'existing_feature',
   createdAt: '2026-05-10T00:00:00.000Z',
-  context: {},
+  projectId: 'project-1',
+  repoPathKey: 'c:/all/work/study/megumi',
+  lastOpenedAt: '2026-05-19T00:00:00.000Z',
+  status: 'available' as const,
 };
 
 function resetStores() {
@@ -132,7 +133,7 @@ describe('auto session on first send', () => {
     });
   });
 
-  it('does not create a runtime session when no project is selected', () => {
+  it('does not create or send a runtime session when no project is selected', () => {
     useProjectStore.setState({
       projects: [],
       currentProjectId: null,
@@ -143,28 +144,11 @@ describe('auto session on first send', () => {
 
     submitPrompt('Start without a project');
 
-    expect(useSessionStore.getState().sessions).toHaveLength(0);
+    const state = useSessionStore.getState();
+    expect(state.sessions).toHaveLength(0);
+    expect(state.activeSessionId).toBeNull();
     expect(window.megumi.session.message.send).not.toHaveBeenCalled();
-  });
-
-  it('creates a project-bound session on first message when current project has no active session', () => {
-    render(<ChatTimeline />);
-
-    submitPrompt('了解这个项目');
-
-    const session = useSessionStore.getState().sessions[0];
-    expect(session.projectId).toBe('project-1');
-    expect(session.title).toBe('了解这个项目');
-    expect(window.megumi.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({
-        sessionId: session.id,
-        context: expect.objectContaining({
-          workspaceId: 'project-1',
-          workspaceLabel: 'Megumi',
-          workspacePath: 'C:/all/work/study/megumi',
-        }),
-      }),
-    }));
+    expect(useChatStore.getState().lastError).toBe('Select a project before sending a message.');
   });
 
   it('does not create a duplicate session when one is already active', () => {

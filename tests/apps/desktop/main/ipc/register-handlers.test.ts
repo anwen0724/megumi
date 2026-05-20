@@ -11,6 +11,7 @@ const registerToolHandlers = vi.fn();
 const registerRecoveryHandlers = vi.fn();
 const registerArtifactHandlers = vi.fn();
 const registerMemoryHandlers = vi.fn();
+const registerProjectHandlers = vi.fn();
 const registerWorkspaceFilesHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
@@ -23,6 +24,7 @@ vi.mock('@megumi/desktop/main/ipc/handlers/tool.handler', () => ({ registerToolH
 vi.mock('@megumi/desktop/main/ipc/handlers/recovery.handler', () => ({ registerRecoveryHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/artifact.handler', () => ({ registerArtifactHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/memory.handler', () => ({ registerMemoryHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/project.handler', () => ({ registerProjectHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/workspace-files.handler', () => ({ registerWorkspaceFilesHandlers }));
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
@@ -40,6 +42,7 @@ describe('registerAllHandlers', () => {
     registerRecoveryHandlers.mockReset();
     registerArtifactHandlers.mockReset();
     registerMemoryHandlers.mockReset();
+    registerProjectHandlers.mockReset();
     registerWorkspaceFilesHandlers.mockReset();
   });
 
@@ -178,6 +181,23 @@ describe('registerAllHandlers', () => {
     expect(registerMemoryHandlers).toHaveBeenCalledWith({
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
       memoryService,
+      logger: undefined,
+    });
+  });
+
+  it('registers project handlers when a project service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const projectService = {
+      listProjects: vi.fn(),
+      useExistingProject: vi.fn(),
+      openProject: vi.fn(),
+      removeProject: vi.fn(),
+      listAuthorizedWorkspaceRoots: vi.fn(),
+    };
+
+    registerAllHandlers({ projectService });
+
+    expect(registerProjectHandlers).toHaveBeenCalledWith(projectService, {
       logger: undefined,
     });
   });

@@ -37,4 +37,16 @@ describe('workspace root authorization', () => {
     expect(isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(isWorkspaceRootAllowed('C:/Users/anwen')).toBe(false);
   });
+
+  it('allows roots that Megumi has recorded as available projects', () => {
+    const listAuthorizedWorkspaceRoots = vi.fn(() => ['C:/work/project-a']);
+    const isWorkspaceRootAllowed = createWorkspaceRootAuthorizer({
+      projectSource: { listAuthorizedWorkspaceRoots },
+      sessionSource: { listSessions: () => [] },
+    });
+
+    expect(isWorkspaceRootAllowed('C:/work/project-a')).toBe(true);
+    expect(isWorkspaceRootAllowed('C:/work/project-b')).toBe(false);
+    expect(listAuthorizedWorkspaceRoots).toHaveBeenCalled();
+  });
 });

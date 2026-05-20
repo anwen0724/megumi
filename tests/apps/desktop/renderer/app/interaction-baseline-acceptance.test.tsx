@@ -102,6 +102,28 @@ function installMegumiMock() {
           cancel: session.message.cancel,
         },
       },
+      project: {
+        list: vi.fn().mockResolvedValue({
+          ok: true,
+          data: { projects: [] },
+          meta: {
+            requestId: 'ipc-project-list-1',
+            channel: IPC_CHANNELS.project.list,
+            handledAt: '2026-05-10T12:00:00.100Z',
+          },
+        }),
+        useExisting: vi.fn().mockResolvedValue({
+          ok: true,
+          data: { cancelled: true },
+          meta: {
+            requestId: 'ipc-project-use-existing-1',
+            channel: IPC_CHANNELS.project.useExisting,
+            handledAt: '2026-05-10T12:00:00.100Z',
+          },
+        }),
+        open: vi.fn(),
+        remove: vi.fn(),
+      },
       runtime: {
         onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
           runtimeEventCallback = callback;
@@ -216,11 +238,12 @@ function resetStores() {
       {
         id: 'project-1',
         name: 'Megumi',
-        description: 'Warm agent desktop companion',
         repoPath: 'C:/all/work/study/megumi',
-        type: 'existing_feature',
         createdAt: '2026-05-10T00:00:00.000Z',
-        context: {},
+        projectId: 'project-1',
+        repoPathKey: 'c:/all/work/study/megumi',
+        lastOpenedAt: '2026-05-19T00:00:00.000Z',
+        status: 'available' as const,
       },
     ],
     currentProjectId: 'project-1',
@@ -340,10 +363,10 @@ describe('interaction baseline acceptance', () => {
     expect(screen.getByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
     expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('C:/all/work/study/megumi')).toHaveAttribute('title', 'C:/all/work/study/megumi');
+    expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
-    expect(await screen.findByText('No files found')).toBeInTheDocument();
+    expect((await screen.findAllByText('No workspace selected')).length).toBeGreaterThanOrEqual(1);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 

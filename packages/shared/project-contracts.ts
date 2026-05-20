@@ -53,3 +53,13 @@ export const ProjectRemoveDataSchema = z
     removed: z.boolean(),
   })
   .strict();
+
+export type ProjectRecord = z.infer<typeof ProjectRecordSchema>;
+export type ProjectListPayload = z.infer<typeof ProjectListPayloadSchema>;
+export type ProjectListData = z.infer<typeof ProjectListDataSchema>;
+export type ProjectUseExistingPayload = z.infer<typeof ProjectUseExistingPayloadSchema>;
+export type ProjectUseExistingData = z.infer<typeof ProjectUseExistingDataSchema>;
+export type ProjectOpenPayload = z.infer<typeof ProjectOpenPayloadSchema>;
+export type ProjectOpenData = z.infer<typeof ProjectOpenDataSchema>;
+export type ProjectRemovePayload = z.infer<typeof ProjectRemovePayloadSchema>;
+export type ProjectRemoveData = z.infer<typeof ProjectRemoveDataSchema>;

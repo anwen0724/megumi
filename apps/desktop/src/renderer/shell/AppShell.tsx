@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSessionStore } from '../entities/session/store';
 import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
+import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import { ChatTimeline } from '../features/chat';
-import { LeftSidebar, type SidebarSessionItem } from './LeftSidebar';
+import { LeftSidebar, type SidebarProjectItem } from './LeftSidebar';
 import { RightWorkspacePanel } from './RightWorkspacePanel';
 import { SettingsModal } from './SettingsModal';
 import { WindowTitleBar } from './WindowTitleBar';
-import { formatSessionUpdatedAt, getWorkspaceBasename } from './shell-display';
+import { formatSessionUpdatedAt } from './shell-display';
 
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -22,21 +23,34 @@ export function AppShell() {
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
-  const workspaceBasename = getWorkspaceBasename({
-    workspaceName: currentProject?.name,
-    workspacePath: currentProject?.repoPath,
-  });
   const titlebarTitle = activeSession?.title ?? 'New session';
 
-  const sidebarSessions = useMemo<SidebarSessionItem[]>(
-    () =>
-      sessions.map((session) => ({
-        id: session.id,
-        title: session.title,
-        meta: formatSessionUpdatedAt(session.updatedAt),
-        active: session.id === activeSessionId,
-      })),
-    [activeSessionId, sessions],
+  useEffect(() => {
+    void useProjectStore.getState().loadProjects();
+  }, []);
+
+  const sidebarProjects = useMemo<SidebarProjectItem[]>(
+    () => {
+      const sorted = [...projects].sort(
+        (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+      );
+      const limited = sorted.slice(0, 8);
+      return limited.map((project) => ({
+        id: project.id,
+        name: project.name,
+        repoPath: project.repoPath,
+        status: project.status,
+        sessions: sessions
+          .filter((session) => session.projectId === project.id)
+          .map((session) => ({
+            id: session.id,
+            title: session.title,
+            meta: formatSessionUpdatedAt(session.updatedAt),
+            active: session.id === activeSessionId,
+          })),
+      }));
+    },
+    [projects, sessions, activeSessionId],
   );
 
   function saveActiveChatSnapshot() {
@@ -69,14 +83,15 @@ export function AppShell() {
       return;
     }
 
-    saveActiveChatSnapshot();
-
-    const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId);
-
-    if (session && session.projectId !== currentProjectId) {
-      void useProjectStore.getState().openProject(session.projectId);
+    const selectedSession = sessions.find((session) => session.id === sessionId);
+    if (!selectedSession) {
+      return;
     }
 
+    saveActiveChatSnapshot();
+    if (selectedSession.projectId !== currentProjectId) {
+      void useProjectStore.getState().openProject(selectedSession.projectId);
+    }
     setActiveSession(sessionId);
     useChatStore.getState().loadSessionSnapshot(sessionId);
   }
@@ -85,12 +100,32 @@ export function AppShell() {
     <div className="flex h-screen min-h-0 bg-[var(--color-app-bg)] text-[var(--color-text)]">
       <LeftSidebar
         collapsed={sidebarCollapsed}
-        workspaceName={workspaceBasename}
-        sessions={sidebarSessions}
+        projects={sidebarProjects}
+        allProjects={projects}
         onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
         onCreateSession={handleCreateSession}
         onSelectSession={handleSelectSession}
+        onUseExistingProject={() => {
+          void useProjectStore.getState().useExistingProject();
+        }}
+        onManageProjects={() => {
+          // LeftSidebar manages the modal open state internally
+        }}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenProject={(projectId) => {
+          void useProjectStore.getState().openProject(projectId);
+        }}
+        onRemoveProject={(projectId) => {
+          void (async () => {
+            const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
+            const removed = await useProjectStore.getState().removeProject(projectId);
+
+            if (removed && wasCurrent) {
+              setActiveSession(null);
+              useWorkspaceFilesStore.getState().reset();
+            }
+          })();
+        }}
       />
       <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">
         <WindowTitleBar title={titlebarTitle} />

@@ -43,7 +43,6 @@ function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null
   }
 
   const projectState = useProjectStore.getState();
-
   if (!projectState.currentProjectId) {
     return null;
   }
@@ -106,8 +105,8 @@ function createSessionMessageSendPayload(
     modelId: payload.model,
     messages,
     context: {
-      workspaceId: activeProject?.id,
-      workspaceLabel: activeProject?.name,
+      workspaceId: projectState.currentProjectId ?? undefined,
+      workspaceLabel: activeProject?.name ?? undefined,
       workspacePath: activeProject?.repoPath ?? undefined,
       sessionTitle: activeSession?.title ?? undefined,
       composerMode: payload.mode,
@@ -175,13 +174,12 @@ export function useSessionTimeline() {
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload) => {
     lastPayloadRef.current = payload;
     const runSessionId = ensureActiveLocalSession(payload);
+    runSessionIdRef.current = runSessionId;
 
     if (!runSessionId) {
       failSessionMessageSend('Select a project before sending a message.');
       return;
     }
-
-    runSessionIdRef.current = runSessionId;
 
     const state = useChatStore.getState();
     renameEmptyManualSessionFromPrompt(payload, state.messages.length);

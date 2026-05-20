@@ -204,12 +204,13 @@ function resetStores() {
   useProjectStore.setState({
     projects: [{
       id: 'project-1',
+      projectId: 'project-1',
       name: 'Megumi',
-      description: 'Warm agent desktop companion',
       repoPath: 'C:/all/work/study/megumi',
-      type: 'existing_feature',
+      repoPathKey: 'c:/all/work/study/megumi',
+      status: 'available' as const,
       createdAt: '2026-05-10T00:00:00.000Z',
-      context: {},
+      lastOpenedAt: '2026-05-19T00:00:00.000Z',
     }],
     currentProjectId: 'project-1',
     loading: false,

@@ -1,9 +1,25 @@
+import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project-contracts';
+
 export interface Project {
   id: string;
+  projectId: string;
   name: string;
-  description: string;
-  repoPath: string | null;
-  type: 'new_project' | 'existing_feature';
+  repoPath: string;
+  repoPathKey: string;
+  status: ProjectStatus;
   createdAt: string;
-  context: Record<string, unknown>;
+  lastOpenedAt: string;
+}
+
+export function projectFromRecord(record: ProjectRecord): Project {
+  return {
+    id: record.projectId,
+    projectId: record.projectId,
+    name: record.name,
+    repoPath: record.repoPath,
+    repoPathKey: record.repoPathKey,
+    status: record.status,
+    createdAt: record.createdAt,
+    lastOpenedAt: record.lastOpenedAt,
+  };
 }
