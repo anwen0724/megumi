@@ -101,6 +101,30 @@ export function createRuntimeEvent<TType extends RuntimeEventType>(
   };
 }
 
+export function createModelStepStartedEvent(
+  input: RunRuntimeEventFactoryInput<'model.step.started'>,
+): TypedRuntimeEvent<'model.step.started'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolUseCreatedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.use.created'>,
+): TypedRuntimeEvent<'tool.use.created'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolResultCreatedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.result.created'>,
+): TypedRuntimeEvent<'tool.result.created'> {
+  return createRuntimeEvent(input);
+}
+
+export function createRunWaitingForApprovalEvent(
+  input: RunRuntimeEventFactoryInput<'run.waiting_for_approval'>,
+): TypedRuntimeEvent<'run.waiting_for_approval'> {
+  return createRuntimeEvent(input);
+}
+
 export function createContextPatchRequestedEvent(input: {
   eventId: string;
   runId: string;

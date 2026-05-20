@@ -62,6 +62,7 @@ export const RUNTIME_EVENT_TYPES = [
   'run.completed',
   'run.failed',
   'run.cancelled',
+  'run.waiting_for_approval',
   'step.created',
   'step.started',
   'step.status.changed',
@@ -78,6 +79,12 @@ export const RUNTIME_EVENT_TYPES = [
   'error.raised',
   'assistant.output.delta',
   'assistant.output.completed',
+  'model.step.started',
+  'model.output.delta',
+  'model.tool_use.detected',
+  'model.step.completed',
+  'tool.use.created',
+  'tool.result.created',
   'tool.call.requested',
   'tool.call.validated',
   'tool.call.policy_decided',
@@ -269,6 +276,44 @@ export interface AssistantOutputCompletedPayload {
   usage?: ChatTokenUsagePayload;
 }
 
+export interface ModelStepStartedPayload {
+  modelStepId: string;
+  providerId: string;
+  modelId: string;
+}
+
+export interface ModelOutputDeltaPayload {
+  modelStepId: string;
+  delta: string;
+}
+
+export interface ModelToolUseDetectedPayload {
+  modelStepId: string;
+  toolUseId: string;
+  providerToolUseId: string;
+  toolName: string;
+}
+
+export interface ModelStepCompletedPayload {
+  modelStepId: string;
+  finishReason?: string;
+}
+
+export interface ToolUseCreatedPayload {
+  toolUseId: string;
+  modelStepId: string;
+  providerToolUseId: string;
+  toolName: string;
+}
+
+export interface ToolResultCreatedPayload {
+  toolResultId: string;
+  toolUseId: string;
+  toolCallId?: string;
+  kind: 'success' | 'tool_error' | 'policy_denied' | 'user_rejected' | 'redacted';
+  summary: string;
+}
+
 export interface RunCompletedPayload {
   usage?: ChatTokenUsagePayload;
 }
@@ -280,6 +325,13 @@ export interface RunFailedPayload {
 export interface RunCancelledPayload {
   reason?: string;
   error?: RuntimeError;
+}
+
+export interface RunWaitingForApprovalPayload {
+  approvalRequestId: string;
+  toolUseId: string;
+  toolCallId: string;
+  reason: string;
 }
 
 export interface CheckpointCreatedPayload {
@@ -547,6 +599,7 @@ export type RuntimeEventPayloadByType = {
   'run.completed': RunCompletedPayload;
   'run.failed': RunFailedPayload;
   'run.cancelled': RunCancelledPayload;
+  'run.waiting_for_approval': RunWaitingForApprovalPayload;
   'step.created': StepCreatedPayload;
   'step.started': StepStartedPayload;
   'step.status.changed': StepStatusChangedPayload;
@@ -563,6 +616,12 @@ export type RuntimeEventPayloadByType = {
   'error.raised': ErrorRaisedPayload;
   'assistant.output.delta': AssistantOutputDeltaPayload;
   'assistant.output.completed': AssistantOutputCompletedPayload;
+  'model.step.started': ModelStepStartedPayload;
+  'model.output.delta': ModelOutputDeltaPayload;
+  'model.tool_use.detected': ModelToolUseDetectedPayload;
+  'model.step.completed': ModelStepCompletedPayload;
+  'tool.use.created': ToolUseCreatedPayload;
+  'tool.result.created': ToolResultCreatedPayload;
   'tool.call.requested': ToolCallRequestedPayload;
   'tool.call.validated': ToolCallValidatedPayload;
   'tool.call.policy_decided': ToolCallPolicyDecidedPayload;

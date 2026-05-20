@@ -722,3 +722,83 @@ describe('memory runtime events', () => {
     expect(JSON.stringify(failed)).not.toContain('recoverable');
   });
 });
+
+describe('05 tool-use runtime events', () => {
+  it('accepts model step and tool-use events', () => {
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-model-step-started',
+      schemaVersion: 1,
+      eventType: 'model.step.started',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-05-20T00:00:00.000Z',
+      source: 'core',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        providerId: 'openai-compatible',
+        modelId: 'gpt-5.2',
+      },
+    }).eventType).toBe('model.step.started');
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-tool-use-created',
+      schemaVersion: 1,
+      eventType: 'tool.use.created',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 2,
+      createdAt: '2026-05-20T00:00:01.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolUseId: 'tool-use-1',
+        modelStepId: 'model-step-1',
+        providerToolUseId: 'call-provider-1',
+        toolName: 'read_file',
+      },
+    }).payload).toMatchObject({ toolUseId: 'tool-use-1' });
+  });
+
+  it('accepts tool result and run waiting events', () => {
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-tool-result-created',
+      schemaVersion: 1,
+      eventType: 'tool.result.created',
+      runId: 'run-1',
+      sequence: 3,
+      createdAt: '2026-05-20T00:00:02.000Z',
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolResultId: 'tool-result-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        kind: 'success',
+        summary: 'Read file.',
+      },
+    }).payload).toMatchObject({ kind: 'success' });
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-run-waiting',
+      schemaVersion: 1,
+      eventType: 'run.waiting_for_approval',
+      runId: 'run-1',
+      sequence: 4,
+      createdAt: '2026-05-20T00:00:03.000Z',
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        approvalRequestId: 'approval-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        reason: 'write_file requires approval.',
+      },
+    }).eventType).toBe('run.waiting_for_approval');
+  });
+});
