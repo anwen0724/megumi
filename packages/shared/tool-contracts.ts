@@ -1,13 +1,18 @@
 import { z } from 'zod';
 import type {
   IsoDateTime,
+  ModelStepId,
+  PermissionDecisionId,
   RunActionId,
   RunId,
   RunObservationId,
   RunStepId,
+  ToolCallId,
+  ToolResultId,
+  ToolUseId,
 } from './ids';
 import { JsonObjectSchema, JsonValueSchema, type JsonObject, type JsonValue } from './json';
-import { RunActionKindSchema } from './session-run-contracts';
+import { PermissionModeSchema, type PermissionMode } from './permission-mode-contracts';
 import { RuntimeErrorSchema, type RuntimeError } from './runtime-errors';
 import { IsoDateTimeSchema } from './runtime-validation';
 
@@ -22,8 +27,8 @@ export const ToolNameSchemaForUse = ToolNameSchema;
 export type ToolName = z.infer<typeof ToolNameSchema>;
 
 export const TOOL_CAPABILITIES = [
-  'workspace_read',
-  'workspace_write',
+  'project_read',
+  'project_write',
   'command_run',
   'network_access',
   'browser_access',
@@ -40,7 +45,7 @@ export type ToolRiskLevel = (typeof TOOL_RISK_LEVELS)[number];
 export const TOOL_SIDE_EFFECTS = [
   'none',
   'read_external',
-  'write_workspace',
+  'project_file_operation',
   'execute_command',
   'access_network',
   'access_secret',
@@ -51,6 +56,19 @@ export type ToolSideEffect = (typeof TOOL_SIDE_EFFECTS)[number];
 
 export const TOOL_AVAILABILITY_STATUSES = ['available', 'disabled', 'unavailable'] as const;
 export type ToolAvailabilityStatus = (typeof TOOL_AVAILABILITY_STATUSES)[number];
+
+export const TOOL_USE_STATUSES = [
+  'created',
+  'validated',
+  'waiting_for_approval',
+  'approved',
+  'denied',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+] as const;
+export type ToolUseStatus = (typeof TOOL_USE_STATUSES)[number];
 
 export const TOOL_CALL_STATUSES = [
   'requested',
@@ -67,16 +85,40 @@ export type ToolCallStatus = (typeof TOOL_CALL_STATUSES)[number];
 export const TOOL_OBSERVATION_STATUSES = ['succeeded', 'failed', 'denied'] as const;
 export type ToolObservationStatus = (typeof TOOL_OBSERVATION_STATUSES)[number];
 
-export const TOOL_POLICY_DECISIONS = [
-  'allow',
-  'ask',
-  'deny',
-  'require_sandbox',
-  'require_stronger_approval',
+export const TOOL_RESULT_KINDS = [
+  'success',
+  'tool_error',
+  'policy_denied',
+  'user_rejected',
+  'redacted',
 ] as const;
+export type ToolResultKind = (typeof TOOL_RESULT_KINDS)[number];
+
+export const TOOL_POLICY_DECISIONS = ['allow', 'ask', 'deny'] as const;
 export type ToolPolicyDecisionValue = (typeof TOOL_POLICY_DECISIONS)[number];
 
-export const APPROVAL_SCOPES = ['once', 'run', 'session', 'workspace', 'global'] as const;
+export const PERMISSION_DECISION_SOURCES = [
+  'permission_mode',
+  'rule',
+  'classifier',
+  'user',
+  'system',
+] as const;
+export type PermissionDecisionSource = (typeof PERMISSION_DECISION_SOURCES)[number];
+
+export const PERMISSION_RULE_SCOPES = ['system', 'project', 'local', 'run'] as const;
+export type PermissionRuleScope = (typeof PERMISSION_RULE_SCOPES)[number];
+
+export const COMMAND_CLASSIFIER_LABELS = [
+  'read_only',
+  'project_write',
+  'network_access',
+  'destructive',
+  'unknown',
+] as const;
+export type CommandClassifierLabel = (typeof COMMAND_CLASSIFIER_LABELS)[number];
+
+export const APPROVAL_SCOPES = ['once', 'run', 'project', 'local'] as const;
 export type ApprovalScope = (typeof APPROVAL_SCOPES)[number];
 
 export const APPROVAL_STATUSES = ['pending', 'approved', 'denied', 'expired', 'cancelled'] as const;
@@ -84,8 +126,8 @@ export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
 export const SANDBOX_LEVELS = [
   'none',
-  'read_only_workspace',
-  'workspace_write',
+  'read_only_project',
+  'project_write',
   'restricted_command',
   'network_restricted',
   'host_restricted',
@@ -176,6 +218,38 @@ export const ToolInputPreviewSchema = z
   .strict();
 export type ToolInputPreview = z.infer<typeof ToolInputPreviewSchema>;
 
+export interface ToolUse {
+  toolUseId: ToolUseId | string;
+  runId: RunId | string;
+  modelStepId: ModelStepId | string;
+  providerToolUseId?: string;
+  toolName: ToolName;
+  input: JsonValue;
+  inputPreview: ToolInputPreview;
+  status: ToolUseStatus;
+  createdAt: IsoDateTime;
+  completedAt?: IsoDateTime;
+  error?: RuntimeError;
+  metadata?: JsonObject;
+}
+
+export const ToolUseSchema = z
+  .object({
+    toolUseId: IdSchema,
+    runId: IdSchema,
+    modelStepId: IdSchema,
+    providerToolUseId: IdSchema.optional(),
+    toolName: ToolNameSchema,
+    input: JsonValueSchema,
+    inputPreview: ToolInputPreviewSchema,
+    status: z.enum(TOOL_USE_STATUSES),
+    createdAt: IsoDateTimeSchema,
+    completedAt: IsoDateTimeSchema.optional(),
+    error: RuntimeErrorSchema.optional(),
+    metadata: JsonObjectSchema.optional(),
+  })
+  .strict() satisfies z.ZodType<ToolUse>;
+
 export const SandboxRequirementSchema = z
   .object({
     level: z.enum(SANDBOX_LEVELS),
@@ -200,37 +274,84 @@ export const ApprovalRequirementSchema = z
   .strict();
 export type ApprovalRequirement = z.infer<typeof ApprovalRequirementSchema>;
 
-export const ToolPolicyDecisionSchema = z
+export const PermissionMatchedRuleSchema = z
   .object({
+    scope: z.enum(PERMISSION_RULE_SCOPES),
+    pattern: z.string().min(1),
     decision: z.enum(TOOL_POLICY_DECISIONS),
+    reason: z.string().min(1).optional(),
+    metadata: JsonObjectSchema.optional(),
+  })
+  .strict();
+export type PermissionMatchedRule = z.infer<typeof PermissionMatchedRuleSchema>;
+
+export interface PermissionDecision {
+  permissionDecisionId: PermissionDecisionId | string;
+  toolUseId: ToolUseId | string;
+  toolCallId?: ToolCallId | string;
+  runId: RunId | string;
+  decision: ToolPolicyDecisionValue;
+  source: PermissionDecisionSource;
+  reason: string;
+  mode: PermissionMode;
+  matchedRule?: PermissionMatchedRule;
+  classifierLabel?: CommandClassifierLabel;
+  target?: string;
+  capability: ToolCapability;
+  sideEffect: ToolSideEffect;
+  effectiveRiskLevel: ToolRiskLevel;
+  requiredApproval?: ApprovalRequirement;
+  requiredSandbox?: SandboxRequirement;
+  evaluatedAt: IsoDateTime;
+  metadata?: JsonObject;
+}
+
+export const PermissionDecisionSchema = z
+  .object({
+    permissionDecisionId: IdSchema,
+    toolUseId: IdSchema,
+    toolCallId: IdSchema.optional(),
+    runId: IdSchema,
+    decision: z.enum(TOOL_POLICY_DECISIONS),
+    source: z.enum(PERMISSION_DECISION_SOURCES),
     reason: z.string().min(1),
+    mode: PermissionModeSchema,
+    matchedRule: PermissionMatchedRuleSchema.optional(),
+    classifierLabel: z.enum(COMMAND_CLASSIFIER_LABELS).optional(),
+    target: z.string().min(1).optional(),
+    capability: z.enum(TOOL_CAPABILITIES),
+    sideEffect: z.enum(TOOL_SIDE_EFFECTS),
     effectiveRiskLevel: z.enum(TOOL_RISK_LEVELS),
     requiredApproval: ApprovalRequirementSchema.optional(),
     requiredSandbox: SandboxRequirementSchema.optional(),
     evaluatedAt: IsoDateTimeSchema,
     metadata: JsonObjectSchema.optional(),
   })
-  .strict();
-export type ToolPolicyDecision = z.infer<typeof ToolPolicyDecisionSchema>;
+  .strict() satisfies z.ZodType<PermissionDecision>;
+
+export const ToolPolicyDecisionSchema = PermissionDecisionSchema;
+export type ToolPolicyDecision = PermissionDecision;
 
 export interface ToolCall {
-  toolCallId: string;
+  toolCallId: ToolCallId | string;
+  toolUseId: ToolUseId | string;
   runId: RunId | string;
   stepId: RunStepId | string;
-  actionId: RunActionId | string;
+  actionId?: RunActionId | string;
   toolName: ToolName;
   input: JsonValue;
   inputPreview: ToolInputPreview;
   capabilities: ToolCapability[];
   riskLevel: ToolRiskLevel;
   sideEffect: ToolSideEffect;
-  policyDecision?: ToolPolicyDecision;
+  policyDecision?: PermissionDecision;
   approvalRequestId?: string;
   sandboxRequirement?: SandboxRequirement;
   status: ToolCallStatus;
   requestedAt: IsoDateTime;
   startedAt?: IsoDateTime;
   completedAt?: IsoDateTime;
+  resultPreview?: string;
   error?: RuntimeError;
   metadata?: JsonObject;
 }
@@ -238,22 +359,24 @@ export interface ToolCall {
 export const ToolCallSchema = z
   .object({
     toolCallId: IdSchema,
+    toolUseId: IdSchema,
     runId: IdSchema,
     stepId: IdSchema,
-    actionId: IdSchema,
+    actionId: IdSchema.optional(),
     toolName: ToolNameSchema,
     input: JsonValueSchema,
     inputPreview: ToolInputPreviewSchema,
     capabilities: z.array(z.enum(TOOL_CAPABILITIES)).min(1),
     riskLevel: z.enum(TOOL_RISK_LEVELS),
     sideEffect: z.enum(TOOL_SIDE_EFFECTS),
-    policyDecision: ToolPolicyDecisionSchema.optional(),
+    policyDecision: PermissionDecisionSchema.optional(),
     approvalRequestId: IdSchema.optional(),
     sandboxRequirement: SandboxRequirementSchema.optional(),
     status: z.enum(TOOL_CALL_STATUSES),
     requestedAt: IsoDateTimeSchema,
     startedAt: IsoDateTimeSchema.optional(),
     completedAt: IsoDateTimeSchema.optional(),
+    resultPreview: z.string().optional(),
     error: RuntimeErrorSchema.optional(),
     metadata: JsonObjectSchema.optional(),
   })
@@ -271,10 +394,11 @@ export type ApprovalPreview = z.infer<typeof ApprovalPreviewSchema>;
 export const ApprovalRequestSchema = z
   .object({
     approvalRequestId: IdSchema,
+    toolUseId: IdSchema,
     toolCallId: IdSchema,
+    permissionDecisionId: IdSchema.optional(),
     runId: IdSchema,
     stepId: IdSchema,
-    actionKind: RunActionKindSchema,
     toolName: ToolNameSchema,
     capabilities: z.array(z.enum(TOOL_CAPABILITIES)).min(1),
     riskLevel: z.enum(TOOL_RISK_LEVELS),
@@ -319,17 +443,39 @@ export const ToolContentRefSchema = z
   .strict();
 export type ToolContentRef = z.infer<typeof ToolContentRefSchema>;
 
+export interface ToolResult {
+  toolResultId: ToolResultId | string;
+  toolUseId: ToolUseId | string;
+  toolCallId?: ToolCallId | string;
+  runId: RunId | string;
+  kind: ToolResultKind;
+  structuredContent?: JsonValue;
+  textContent?: string;
+  contentRefs?: ToolContentRef[];
+  error?: RuntimeError;
+  denialReason?: string;
+  redactionState: ToolRedactionState;
+  createdAt: IsoDateTime;
+  metadata?: JsonObject;
+}
+
 export const ToolResultSchema = z
   .object({
-    toolCallId: IdSchema,
-    kind: z.literal('success'),
+    toolResultId: IdSchema,
+    toolUseId: IdSchema,
+    toolCallId: IdSchema.optional(),
+    runId: IdSchema,
+    kind: z.enum(TOOL_RESULT_KINDS),
     structuredContent: JsonValueSchema.optional(),
     textContent: z.string().optional(),
     contentRefs: z.array(ToolContentRefSchema).optional(),
+    error: RuntimeErrorSchema.optional(),
+    denialReason: z.string().min(1).optional(),
+    redactionState: z.enum(TOOL_REDACTION_STATES),
+    createdAt: IsoDateTimeSchema,
     metadata: JsonObjectSchema.optional(),
   })
-  .strict();
-export type ToolResult = z.infer<typeof ToolResultSchema>;
+  .strict() satisfies z.ZodType<ToolResult>;
 
 export const ToolErrorSchema = RuntimeErrorSchema.extend({
   detailsPreview: JsonObjectSchema.optional(),
