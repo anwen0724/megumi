@@ -226,6 +226,43 @@ describe('OpenAI-compatible message mapper', () => {
     });
   });
 
+  it('serializes non-text tool result fallback content with result metadata', () => {
+    const toolResult: ToolResult = {
+      toolResultId: 'tool-result-1',
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      kind: 'policy_denied',
+      structuredContent: {
+        path: 'C:/all/work/study/megumi/.env',
+      },
+      denialReason: 'Reading secrets is not allowed.',
+      redactionState: 'blocked',
+      createdAt: '2026-05-17T00:00:01.000Z',
+    };
+
+    const messages = messageMapper.mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      messages: [],
+      toolResults: [toolResult],
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+    const toolMessage = messages.find((message) => message.role === 'tool');
+
+    expect(toolMessage?.tool_call_id).toBe('tool-use-1');
+    expect(JSON.parse(toolMessage?.content ?? '')).toEqual({
+      kind: 'policy_denied',
+      structuredContent: {
+        path: 'C:/all/work/study/megumi/.env',
+      },
+      denialReason: 'Reading secrets is not allowed.',
+    });
+  });
+
   it('uses permission mode snapshots without legacy task intent or output expectation prompt lines', () => {
     const messages = messageMapper.mapModelStepToOpenAICompatibleMessages({
       requestId: 'request-1',

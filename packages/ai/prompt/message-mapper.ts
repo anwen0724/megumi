@@ -117,19 +117,12 @@ function stringifyToolResultContent(toolResult: ToolResult): string {
     return toolResult.textContent;
   }
 
-  if (toolResult.structuredContent !== undefined) {
-    return JSON.stringify(toolResult.structuredContent);
-  }
-
-  if (toolResult.denialReason) {
-    return toolResult.denialReason;
-  }
-
-  if (toolResult.error) {
-    return toolResult.error.message;
-  }
-
-  return '';
+  return JSON.stringify({
+    kind: toolResult.kind,
+    ...(toolResult.structuredContent !== undefined ? { structuredContent: toolResult.structuredContent } : {}),
+    ...(toolResult.denialReason ? { denialReason: toolResult.denialReason } : {}),
+    ...(toolResult.error ? { error: toolResult.error } : {}),
+  });
 }
 
 function toChatRuntimeContext(context: RunContext | undefined): ChatRuntimeRequest['context'] | undefined {
