@@ -6,6 +6,7 @@ export * from './run-runtime/context';
 export * from './run-runtime/events';
 export * from './run-runtime/memory';
 export * from './run-runtime/model-step';
+export * from './run-runtime/tool-loop';
 export * from './run-runtime/recovery';
 export * from './run-runtime/run-mode';
 export * from './run-runtime/run-turn';
