@@ -46,7 +46,6 @@ describe('ToolRepository', () => {
     const decision: PermissionDecision = {
       permissionDecisionId: 'permission-decision-1',
       toolUseId: 'tool-use-1',
-      toolCallId: 'tool-call-1',
       runId: 'run-1',
       decision: 'allow',
       source: 'permission_mode',
@@ -109,8 +108,8 @@ describe('ToolRepository', () => {
     };
 
     repo.saveToolUse(toolUse);
-    repo.saveToolCall(toolCall);
     repo.savePermissionDecision(decision);
+    repo.saveToolCall(toolCall);
     repo.saveApprovalRequest(approval);
     repo.saveToolResult(result);
 
