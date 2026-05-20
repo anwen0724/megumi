@@ -251,6 +251,12 @@ export class ToolRepository {
     if (record.toolCallId !== request.toolCallId) {
       throw new Error(`Approval record toolCallId ${record.toolCallId} does not match approval request toolCallId ${request.toolCallId}`);
     }
+    if (record.runId !== request.runId) {
+      throw new Error(`Approval record runId ${record.runId} does not match approval request runId ${request.runId}`);
+    }
+    if (record.stepId !== request.stepId) {
+      throw new Error(`Approval record stepId ${record.stepId} does not match approval request stepId ${request.stepId}`);
+    }
 
     this.database.prepare(`
       INSERT INTO approval_records (

@@ -474,6 +474,16 @@ describe('ToolRepository', () => {
       approvalRecordId: 'approval-record-mismatch',
       toolCallId: 'tool-call-other',
     })).toThrow('Approval record toolCallId tool-call-other does not match approval request toolCallId tool-call-approval');
+    expect(() => repo.saveApprovalRecord({
+      ...record,
+      approvalRecordId: 'approval-record-run-mismatch',
+      runId: 'run-other',
+    })).toThrow('Approval record runId run-other does not match approval request runId run-1');
+    expect(() => repo.saveApprovalRecord({
+      ...record,
+      approvalRecordId: 'approval-record-step-mismatch',
+      stepId: 'step-other',
+    })).toThrow('Approval record stepId step-other does not match approval request stepId step-1');
   });
 });
 
