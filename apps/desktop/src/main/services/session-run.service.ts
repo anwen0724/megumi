@@ -401,9 +401,11 @@ export class SessionRunService {
   }): AsyncIterable<RuntimeEvent> {
     let assistantContent = '';
     let sawAssistantOutputCompleted = false;
+    let sawFinalModelStepCompleted = false;
     let lastSequence = 0;
     let terminalEvent: RuntimeEvent | undefined;
     let currentModelStep = input.step;
+    const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
 
     const startedEvent = withRequestMetadata(createRunStartedEvent({
       eventId: this.ids.eventId(),
@@ -435,6 +437,7 @@ export class SessionRunService {
                 startedAt: this.clock.now(),
               });
               currentModelStep = step;
+              modelStepsById.set(step.stepId, step);
               return step.stepId;
             },
             nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
@@ -446,7 +449,7 @@ export class SessionRunService {
       const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
       lastSequence = eventWithRequest.sequence;
       this.repository.appendRuntimeEvent(eventWithRequest);
-      if (eventWithRequest.eventType === 'assistant.output.delta') {
+      if (eventWithRequest.eventType === 'assistant.output.delta' || eventWithRequest.eventType === 'model.output.delta') {
         assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
       }
       if (eventWithRequest.eventType === 'assistant.output.completed') {
@@ -454,6 +457,19 @@ export class SessionRunService {
         const content = getAssistantCompletedContent(eventWithRequest.payload);
         if (content) {
           assistantContent = content;
+        }
+      }
+      if (eventWithRequest.eventType === 'model.step.completed') {
+        const completedStep = this.markModelStepSucceeded(
+          modelStepsById,
+          eventWithRequest.stepId ?? currentModelStep.stepId,
+          eventWithRequest.createdAt,
+        );
+        if (completedStep && completedStep.stepId === currentModelStep.stepId) {
+          currentModelStep = completedStep;
+        }
+        if (!isToolCallModelStepCompletion(eventWithRequest.payload)) {
+          sawFinalModelStepCompleted = true;
         }
       }
       if (eventWithRequest.eventType === 'run.failed' || eventWithRequest.eventType === 'run.cancelled') {
@@ -553,7 +569,7 @@ export class SessionRunService {
       return;
     }
 
-    if (!sawAssistantOutputCompleted || assistantContent.length === 0) {
+    if (!(sawAssistantOutputCompleted || sawFinalModelStepCompleted) || assistantContent.length === 0) {
       return;
     }
 
@@ -638,6 +654,26 @@ export class SessionRunService {
 
     return this.runModeService;
   }
+
+  private markModelStepSucceeded(
+    modelStepsById: Map<string, RunStep>,
+    stepId: string,
+    completedAt: string,
+  ): RunStep | undefined {
+    const step = modelStepsById.get(stepId);
+
+    if (!step || step.status !== 'running') {
+      return step;
+    }
+
+    const completedStep = this.repository.saveStep({
+      ...step,
+      status: 'succeeded',
+      completedAt,
+    });
+    modelStepsById.set(stepId, completedStep);
+    return completedStep;
+  }
 }
 
 function defaultHostBoundary(
@@ -710,6 +746,14 @@ function getAssistantDeltaContent(payload: RuntimeEvent['payload']): string {
   }
 
   return typeof payload.delta === 'string' ? payload.delta : '';
+}
+
+function isToolCallModelStepCompletion(payload: RuntimeEvent['payload']): boolean {
+  if (!isObjectRecord(payload)) {
+    return false;
+  }
+
+  return payload.finishReason === 'tool_calls';
 }
 
 function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | undefined {

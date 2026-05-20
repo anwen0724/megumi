@@ -3,7 +3,7 @@ import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
-import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ToolDefinition, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import type {
   OpenAICompatibleChatCompletionRequestBody,
   OpenAICompatibleMessage,
@@ -42,9 +42,7 @@ export function mapModelStepToOpenAICompatibleMessages(request: ModelStepRuntime
     messages.push(mapSessionMessage(message));
   }
 
-  for (const toolResult of request.toolResults ?? []) {
-    messages.push(mapToolResult(toolResult));
-  }
+  messages.push(...mapPreviousToolInteractions(request.toolUses ?? [], request.toolResults ?? []));
 
   return messages;
 }
@@ -109,6 +107,65 @@ function mapToolResult(toolResult: ToolResult): OpenAICompatibleMessage {
     role: 'tool',
     tool_call_id: String(toolResult.toolUseId),
     content: stringifyToolResultContent(toolResult),
+  };
+}
+
+function mapPreviousToolInteractions(toolUses: ToolUse[], toolResults: ToolResult[]): OpenAICompatibleMessage[] {
+  if (toolResults.length === 0) {
+    return [];
+  }
+
+  const toolUseById = new Map(toolUses.map((toolUse) => [String(toolUse.toolUseId), toolUse]));
+  const messages: OpenAICompatibleMessage[] = [];
+  let currentModelStepId: string | undefined;
+  let currentToolCalls: ToolUse[] = [];
+  let currentToolResults: ToolResult[] = [];
+
+  const flush = () => {
+    if (currentToolCalls.length > 0) {
+      messages.push({
+        role: 'assistant',
+        content: '',
+        tool_calls: currentToolCalls.map(mapToolUseToOpenAICompatibleToolCall),
+      });
+    }
+
+    for (const toolResult of currentToolResults) {
+      messages.push(mapToolResult(toolResult));
+    }
+
+    currentModelStepId = undefined;
+    currentToolCalls = [];
+    currentToolResults = [];
+  };
+
+  for (const toolResult of toolResults) {
+    const toolUse = toolUseById.get(String(toolResult.toolUseId));
+    const modelStepId = toolUse ? String(toolUse.modelStepId) : undefined;
+
+    if (currentToolResults.length > 0 && modelStepId !== currentModelStepId) {
+      flush();
+    }
+
+    currentModelStepId = modelStepId;
+    if (toolUse) {
+      currentToolCalls.push(toolUse);
+    }
+    currentToolResults.push(toolResult);
+  }
+
+  flush();
+  return messages;
+}
+
+function mapToolUseToOpenAICompatibleToolCall(toolUse: ToolUse) {
+  return {
+    id: String(toolUse.toolUseId),
+    type: 'function' as const,
+    function: {
+      name: toolUse.toolName,
+      arguments: JSON.stringify(toolUse.input ?? {}),
+    },
   };
 }
 

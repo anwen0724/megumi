@@ -281,6 +281,31 @@ function modelStepCompletedEvent(sequence: number): RuntimeEvent {
   };
 }
 
+function modelOutputDeltaEvent(input: {
+  sequence: number;
+  delta: string;
+  stepId?: string;
+  modelStepId?: string;
+}): RuntimeEvent {
+  return {
+    eventId: `event-model-output-delta-${input.sequence}`,
+    schemaVersion: 1,
+    eventType: 'model.output.delta',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: input.stepId ?? 'step-1',
+    sequence: input.sequence,
+    createdAt: '2026-05-17T00:00:01.000Z',
+    source: 'provider',
+    visibility: 'user',
+    persist: 'transient',
+    payload: {
+      modelStepId: input.modelStepId ?? 'model-step-1',
+      delta: input.delta,
+    },
+  };
+}
+
 function assistantOutputCompletedEvent(sequence: number): RuntimeEvent {
   return {
     eventId: `event-assistant-completed-${sequence}`,
@@ -604,6 +629,11 @@ describe('SessionRunService', () => {
     expect(requests[1]?.modelStepId).not.toBe(requests[1]?.stepId);
     expect(repository.listStepsByRun('run-1')).toEqual(expect.arrayContaining([
       expect.objectContaining({
+        stepId: 'step-1',
+        kind: 'model',
+        status: 'succeeded',
+      }),
+      expect.objectContaining({
         stepId: 'step-2',
         kind: 'model',
         status: 'succeeded',
@@ -630,6 +660,81 @@ describe('SessionRunService', () => {
       content: 'Final answer after tool result.',
       runId: 'run-1',
     });
+  });
+
+  it('completes session message runs from real adapter model output deltas and model step completion', async () => {
+    const service = createServiceWithModelStepStream([
+      {
+        eventId: 'event-model-step-started',
+        schemaVersion: 1,
+        eventType: 'model.step.started',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 1,
+        createdAt: '2026-05-17T00:00:01.000Z',
+        source: 'provider',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          modelStepId: 'model-step-1',
+          providerId: 'openai',
+          modelId: 'gpt-5.5',
+        },
+      },
+      modelOutputDeltaEvent({ sequence: 2, delta: 'Hello ' }),
+      modelOutputDeltaEvent({ sequence: 3, delta: 'Megumi.' }),
+      {
+        ...modelStepCompletedEvent(4),
+        payload: {
+          modelStepId: 'model-step-1',
+          finishReason: 'stop',
+        },
+      },
+    ]);
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-5.5',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'model.step.started',
+      'model.output.delta',
+      'model.output.delta',
+      'model.step.completed',
+      'step.status.changed',
+      'step.completed',
+      'run.status.changed',
+      'run.completed',
+    ]);
+    expect(service.listMessagesBySession('session-1')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Hello Megumi.',
+        runId: 'run-1',
+      }),
+    ]));
   });
 
   it('keeps session message runs open when the tool loop stops for pending approval', async () => {

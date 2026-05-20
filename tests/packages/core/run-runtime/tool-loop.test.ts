@@ -247,6 +247,13 @@ describe('run model tool loop', () => {
     expect(requests[1]).toMatchObject({
       stepId: 'step-2',
       modelStepId: 'model-step-2',
+      toolUses: [
+        expect.objectContaining({
+          toolUseId: 'call-read',
+          providerToolUseId: 'call-read',
+          toolName: 'read_file',
+        }),
+      ],
       toolResults: [expect.objectContaining({ toolResultId: 'tool-result-1' })],
     });
     expect(events.map((event) => event.eventType)).toEqual([

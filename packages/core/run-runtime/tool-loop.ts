@@ -47,6 +47,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
   const maxModelSteps = input.maxModelSteps ?? 8;
   let request = input.request;
   let sequenceOffset = 0;
+  let accumulatedToolUses = [...(request.toolUses ?? [])];
   let accumulatedToolResults = [...(request.toolResults ?? [])];
 
   for (let modelStepCount = 0; modelStepCount < maxModelSteps; modelStepCount += 1) {
@@ -77,6 +78,8 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     if (toolUses.length === 0) {
       return;
     }
+
+    accumulatedToolUses = [...accumulatedToolUses, ...toolUses];
 
     const outcome = await input.toolUseHandler.handleToolUses({
       request,
@@ -126,6 +129,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       ...request,
       stepId: input.ids.nextStepId(),
       modelStepId: input.ids.nextModelStepId(),
+      toolUses: accumulatedToolUses,
       toolResults: accumulatedToolResults,
       createdAt: new Date().toISOString(),
     };

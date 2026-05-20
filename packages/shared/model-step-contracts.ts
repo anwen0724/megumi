@@ -5,7 +5,7 @@ import type { ModelId } from './model-contracts';
 import type { PermissionModeSnapshot } from './permission-mode-contracts';
 import type { ProviderId } from './provider-contracts';
 import type { RuntimeContext } from './runtime-context';
-import type { ToolDefinition, ToolResult } from './tool-contracts';
+import type { ToolDefinition, ToolResult, ToolUse } from './tool-contracts';
 
 export interface ModelStepRuntimeRequest {
   requestId: string;
@@ -18,6 +18,7 @@ export interface ModelStepRuntimeRequest {
   messages: SessionMessage[];
   context?: RunContext;
   toolDefinitions?: ToolDefinition[];
+  toolUses?: ToolUse[];
   toolResults?: ToolResult[];
   modeSnapshot?: PermissionModeSnapshot;
   modeSnapshotRef?: string;

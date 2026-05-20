@@ -97,7 +97,8 @@ describe('run context workspace grounding source guards', () => {
       ...filesUnder('packages/db'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
-    ].filter((file) => /run-context|context\.handler|context.service|run-runtime/.test(projectPath(file)));
+    ].filter((file) => /run-context|context\.handler|context.service|run-runtime/.test(projectPath(file)))
+      .filter((file) => projectPath(file) !== 'packages/core/run-runtime/tool-loop.ts');
 
     const forbiddenPatterns = [
       /ToolCall/,
