@@ -21,6 +21,7 @@ import {
   createRuntimeArtifactCreatedEvent,
   createRuntimeArtifactVersionCreatedEvent,
   createContextPatchRequestedEvent,
+  createRunWaitingForApprovalEvent,
   createRunStartedEvent,
   createRuntimeEvent,
 } from '@megumi/shared/runtime-event-factory';
@@ -763,6 +764,87 @@ describe('05 tool-use runtime events', () => {
     }).payload).toMatchObject({ toolUseId: 'tool-use-1' });
   });
 
+  it('accepts model output, detected tool-use, and completed model step events', () => {
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-model-output-delta',
+      schemaVersion: 1,
+      eventType: 'model.output.delta',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-05-20T00:00:00.000Z',
+      source: 'provider',
+      visibility: 'user',
+      persist: 'transient',
+      payload: {
+        modelStepId: 'model-step-1',
+        delta: 'Reading project files',
+      },
+    }).eventType).toBe('model.output.delta');
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-model-tool-use-detected',
+      schemaVersion: 1,
+      eventType: 'model.tool_use.detected',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 2,
+      createdAt: '2026-05-20T00:00:01.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-1',
+        providerToolUseId: 'call-provider-1',
+        toolName: 'read_file',
+      },
+    }).payload).toMatchObject({
+      toolUseId: 'tool-use-1',
+      providerToolUseId: 'call-provider-1',
+    });
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-model-step-completed',
+      schemaVersion: 1,
+      eventType: 'model.step.completed',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 3,
+      createdAt: '2026-05-20T00:00:02.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        finishReason: 'tool_use',
+      },
+    }).payload).toEqual({
+      modelStepId: 'model-step-1',
+      finishReason: 'tool_use',
+    });
+  });
+
+  it('rejects extra payload fields on model step completed events', () => {
+    expect(() => RuntimeEventSchema.parse({
+      eventId: 'event-model-step-completed-extra',
+      schemaVersion: 1,
+      eventType: 'model.step.completed',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 4,
+      createdAt: '2026-05-20T00:00:03.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        finishReason: 'stop',
+        rawProviderBody: { secret: 'sk-test' },
+      },
+    })).toThrow();
+  });
+
   it('accepts tool result and run waiting events', () => {
     expect(RuntimeEventSchema.parse({
       eventId: 'event-tool-result-created',
@@ -800,5 +882,28 @@ describe('05 tool-use runtime events', () => {
         reason: 'write_file requires approval.',
       },
     }).eventType).toBe('run.waiting_for_approval');
+  });
+
+  it('creates run waiting-for-approval events through the factory and schema', () => {
+    const event = createRunWaitingForApprovalEvent({
+      eventId: 'event-run-waiting-factory',
+      eventType: 'run.waiting_for_approval',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-approval-1',
+      sequence: 5,
+      createdAt: '2026-05-20T00:00:04.000Z',
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        approvalRequestId: 'approval-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        reason: 'write_file requires approval.',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(event)).toEqual(event);
   });
 });
