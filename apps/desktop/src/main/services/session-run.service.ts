@@ -18,6 +18,11 @@ import type {
   ModelCapabilitySummary,
 } from '@megumi/shared/run-context-contracts';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
+import {
+  isPermissionMode,
+  type PermissionModeSelectionSource,
+  type PermissionModeSnapshot,
+} from '@megumi/shared/permission-mode-contracts';
 import type {
   RunStartPayload,
   PlanStatusUpdatePayload,
@@ -27,7 +32,7 @@ import type {
   SessionMessageSendPayload,
 } from '@megumi/shared/ipc-schemas';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/run-mode-contracts';
+import type { ImplementationPlanArtifactRecord, RunMode, RunModeSnapshot } from '@megumi/shared/run-mode-contracts';
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -299,7 +304,7 @@ export class SessionRunService {
       messages: toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage),
       ...(context ? { context } : {}),
       ...(modeSnapshot ? {
-        modeSnapshot: modeSnapshot.mode,
+        modeSnapshot: toPermissionModeSnapshot(modeSnapshot, createdAt),
         modeSnapshotRef: modeSnapshot.modeSnapshotId,
       } : {}),
       runtimeContext: input.runtimeContext,
@@ -714,6 +719,27 @@ function withSequenceAfter(event: RuntimeEvent, lastSequence: number): RuntimeEv
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function toPermissionModeSnapshot(
+  value: RunModeSnapshot | RunMode,
+  requestCreatedAt: string,
+): PermissionModeSnapshot {
+  const mode = 'mode' in value ? value.mode : value;
+
+  return {
+    permissionMode: isPermissionMode(mode.permissionMode) ? mode.permissionMode : 'default',
+    source: toPermissionModeSelectionSource(mode.selectionSource),
+    createdAt: 'createdAt' in value ? value.createdAt : requestCreatedAt,
+  };
+}
+
+function toPermissionModeSelectionSource(source: RunMode['selectionSource']): PermissionModeSelectionSource {
+  if (source === 'user_selected' || source === 'user_confirmation') {
+    return 'user';
+  }
+
+  return 'system';
 }
 
 function toSessionMessageRole(

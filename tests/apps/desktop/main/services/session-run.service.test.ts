@@ -597,7 +597,11 @@ describe('SessionRunService', () => {
     ]);
     expect(requests).toEqual([
       expect.objectContaining({
-        modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+        modeSnapshot: {
+          permissionMode: 'plan',
+          source: 'system',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
         modeSnapshotRef: 'mode-snapshot:1',
       }),
     ]);
@@ -669,7 +673,11 @@ describe('SessionRunService', () => {
     expect(requests).toEqual([
       expect.objectContaining({
         modeSnapshotRef: 'mode-snapshot:real-repo',
-        modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+        modeSnapshot: {
+          permissionMode: 'plan',
+          source: 'system',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
       }),
     ]);
     expect(sessionRepository.getRun('run-1')).toMatchObject({
