@@ -21,9 +21,12 @@ import {
   createRuntimeArtifactCreatedEvent,
   createRuntimeArtifactVersionCreatedEvent,
   createContextPatchRequestedEvent,
+  createModelStepStartedEvent,
   createRunWaitingForApprovalEvent,
   createRunStartedEvent,
   createRuntimeEvent,
+  createToolResultCreatedEvent,
+  createToolUseCreatedEvent,
 } from '@megumi/shared/runtime-event-factory';
 import { RUNTIME_EVENT_TYPES, type RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -905,5 +908,70 @@ describe('05 tool-use runtime events', () => {
     });
 
     expect(RuntimeEventSchema.parse(event)).toEqual(event);
+  });
+
+  it('creates model step, tool-use, and tool-result events through factories and schemas', () => {
+    const modelStepStarted = createModelStepStartedEvent({
+      eventId: 'event-model-step-started-factory',
+      eventType: 'model.step.started',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-model-1',
+      sequence: 6,
+      createdAt: '2026-05-20T00:00:05.000Z',
+      source: 'core',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        providerId: 'openai-compatible',
+        modelId: 'gpt-5.2',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(modelStepStarted)).toEqual(modelStepStarted);
+
+    const toolUseCreated = createToolUseCreatedEvent({
+      eventId: 'event-tool-use-created-factory',
+      eventType: 'tool.use.created',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-model-1',
+      sequence: 7,
+      createdAt: '2026-05-20T00:00:06.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolUseId: 'tool-use-1',
+        modelStepId: 'model-step-1',
+        providerToolUseId: 'call-provider-1',
+        toolName: 'read_file',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(toolUseCreated)).toEqual(toolUseCreated);
+
+    const toolResultCreated = createToolResultCreatedEvent({
+      eventId: 'event-tool-result-created-factory',
+      eventType: 'tool.result.created',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-tool-1',
+      sequence: 8,
+      createdAt: '2026-05-20T00:00:07.000Z',
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolResultId: 'tool-result-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        kind: 'success',
+        summary: 'Read file.',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(toolResultCreated)).toEqual(toolResultCreated);
   });
 });
