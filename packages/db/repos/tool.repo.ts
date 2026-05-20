@@ -195,6 +195,35 @@ export class ToolRepository {
   }
 
   saveApprovalRequest(request: ApprovalRequest): ApprovalRequest {
+    const toolCall = this.getToolCall(request.toolCallId);
+    if (!toolCall) {
+      throw new Error(`Cannot save approval request without tool call: ${request.toolCallId}`);
+    }
+    if (request.toolUseId !== toolCall.toolUseId) {
+      throw new Error(`Approval request toolUseId ${request.toolUseId} does not match tool call toolUseId ${toolCall.toolUseId}`);
+    }
+    if (request.runId !== toolCall.runId) {
+      throw new Error(`Approval request runId ${request.runId} does not match tool call runId ${toolCall.runId}`);
+    }
+    if (request.stepId !== toolCall.stepId) {
+      throw new Error(`Approval request stepId ${request.stepId} does not match tool call stepId ${toolCall.stepId}`);
+    }
+    if (request.permissionDecisionId) {
+      const permissionDecision = this.getPermissionDecision(request.permissionDecisionId);
+      if (!permissionDecision) {
+        throw new Error(`Cannot save approval request without permission decision: ${request.permissionDecisionId}`);
+      }
+      if (permissionDecision.toolUseId !== request.toolUseId) {
+        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to toolUseId ${permissionDecision.toolUseId}, not ${request.toolUseId}`);
+      }
+      if (permissionDecision.runId !== request.runId) {
+        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to runId ${permissionDecision.runId}, not ${request.runId}`);
+      }
+      if (permissionDecision.toolCallId && permissionDecision.toolCallId !== request.toolCallId) {
+        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to toolCallId ${permissionDecision.toolCallId}, not ${request.toolCallId}`);
+      }
+    }
+
     this.database.prepare(`
       INSERT INTO approval_requests (
         approval_request_id, tool_use_id, tool_call_id, permission_decision_id,
@@ -236,6 +265,11 @@ export class ToolRepository {
       request_json: stringifyJson(request),
     });
     return request;
+  }
+
+  private getPermissionDecision(permissionDecisionId: string): PermissionDecision | undefined {
+    const row = this.database.prepare('SELECT decision_json FROM permission_decisions WHERE permission_decision_id = ?').get(permissionDecisionId) as PermissionDecisionRow | undefined;
+    return row ? JSON.parse(row.decision_json) as PermissionDecision : undefined;
   }
 
   getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined {

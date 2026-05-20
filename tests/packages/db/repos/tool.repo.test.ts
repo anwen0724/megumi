@@ -485,6 +485,61 @@ describe('ToolRepository', () => {
       stepId: 'step-other',
     })).toThrow('Approval record stepId step-other does not match approval request stepId step-1');
   });
+
+  it('rejects approval requests that do not match the referenced lifecycle facts', () => {
+    const repo = createRepo();
+    seedSecondRunStep(currentDb());
+    const toolUse = createToolUse({ toolUseId: 'tool-use-approval-request' });
+    const otherToolUse = createToolUse({
+      toolUseId: 'tool-use-approval-request-other',
+      modelStepId: 'model-step-2',
+    });
+    const decision = createPermissionDecision({
+      permissionDecisionId: 'permission-approval-request',
+      toolUseId: 'tool-use-approval-request',
+    });
+    const otherDecision = createPermissionDecision({
+      permissionDecisionId: 'permission-approval-request-other',
+      toolUseId: 'tool-use-approval-request-other',
+    });
+    const toolCall = createToolCall({
+      toolCallId: 'tool-call-approval-request',
+      toolUseId: 'tool-use-approval-request',
+    });
+    const approval = createApprovalRequest({
+      approvalRequestId: 'approval-request-lifecycle',
+      toolUseId: 'tool-use-approval-request',
+      toolCallId: 'tool-call-approval-request',
+      permissionDecisionId: 'permission-approval-request',
+    });
+
+    repo.saveToolUse(toolUse);
+    repo.saveToolUse(otherToolUse);
+    repo.savePermissionDecision(decision);
+    repo.savePermissionDecision(otherDecision);
+    repo.saveToolCall(toolCall);
+
+    expect(() => repo.saveApprovalRequest({
+      ...approval,
+      approvalRequestId: 'approval-request-tool-use-mismatch',
+      toolUseId: 'tool-use-approval-request-other',
+    })).toThrow('Approval request toolUseId tool-use-approval-request-other does not match tool call toolUseId tool-use-approval-request');
+    expect(() => repo.saveApprovalRequest({
+      ...approval,
+      approvalRequestId: 'approval-request-run-mismatch',
+      runId: 'run-2',
+    })).toThrow('Approval request runId run-2 does not match tool call runId run-1');
+    expect(() => repo.saveApprovalRequest({
+      ...approval,
+      approvalRequestId: 'approval-request-step-mismatch',
+      stepId: 'step-2',
+    })).toThrow('Approval request stepId step-2 does not match tool call stepId step-1');
+    expect(() => repo.saveApprovalRequest({
+      ...approval,
+      approvalRequestId: 'approval-request-decision-tool-use-mismatch',
+      permissionDecisionId: 'permission-approval-request-other',
+    })).toThrow('Approval request permissionDecisionId permission-approval-request-other belongs to toolUseId tool-use-approval-request-other, not tool-use-approval-request');
+  });
 });
 
 function currentDb(): Database.Database {
@@ -652,5 +707,16 @@ function seedRunAction(database: Database.Database): void {
   database.prepare(`
     INSERT INTO run_actions (action_id, run_id, step_id, kind, status, requested_at)
     VALUES ('action-1', 'run-1', 'step-1', 'tool_call', 'requested', '2026-05-20T00:00:14.000Z')
+  `).run();
+}
+
+function seedSecondRunStep(database: Database.Database): void {
+  database.prepare(`
+    INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
+    VALUES ('run-2', 'session-1', 'default', 'Use another tool', 'running', '2026-05-20T00:00:00.000Z')
+  `).run();
+  database.prepare(`
+    INSERT INTO run_steps (step_id, run_id, kind, status)
+    VALUES ('step-2', 'run-2', 'model', 'running')
   `).run();
 }
