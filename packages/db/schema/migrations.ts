@@ -1,5 +1,64 @@
 import type { MegumiDatabase } from '../connection';
 
+type TableColumnInfo = {
+  name: string;
+  notnull: 0 | 1;
+};
+
+function tableExists(database: MegumiDatabase, tableName: string): boolean {
+  return Boolean(
+    database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(tableName),
+  );
+}
+
+function tableColumns(database: MegumiDatabase, tableName: string): TableColumnInfo[] {
+  return database
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all() as TableColumnInfo[];
+}
+
+function archiveTableIfNeeded(
+  database: MegumiDatabase,
+  sourceTableName: string,
+  legacyTableName: string,
+): void {
+  if (!tableExists(database, sourceTableName) || tableExists(database, legacyTableName)) {
+    return;
+  }
+
+  database.exec(`ALTER TABLE ${sourceTableName} RENAME TO ${legacyTableName};`);
+}
+
+function archiveLegacyToolPersistenceTables(database: MegumiDatabase): void {
+  if (!tableExists(database, 'tool_calls')) {
+    return;
+  }
+
+  const toolCallColumns = tableColumns(database, 'tool_calls');
+  const hasToolUseId = toolCallColumns.some((column) => column.name === 'tool_use_id');
+  const actionIdColumn = toolCallColumns.find((column) => column.name === 'action_id');
+  const hasRequiredActionId = actionIdColumn?.notnull === 1;
+
+  if (hasToolUseId && !hasRequiredActionId) {
+    return;
+  }
+
+  database.exec(`
+    DROP INDEX IF EXISTS idx_tool_calls_run_id;
+    DROP INDEX IF EXISTS idx_tool_calls_status;
+    DROP INDEX IF EXISTS idx_approval_requests_tool_call_id;
+    DROP INDEX IF EXISTS idx_tool_observations_tool_call_id;
+  `);
+
+  archiveTableIfNeeded(database, 'tool_calls', 'tool_calls_legacy_05');
+  archiveTableIfNeeded(database, 'tool_policy_decisions', 'tool_policy_decisions_legacy_05');
+  archiveTableIfNeeded(database, 'approval_requests', 'approval_requests_legacy_05');
+  archiveTableIfNeeded(database, 'approval_records', 'approval_records_legacy_05');
+  archiveTableIfNeeded(database, 'tool_observations', 'tool_observations_legacy_05');
+}
+
 export function migrateDatabase(database: MegumiDatabase): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS provider_settings (
@@ -269,6 +328,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(source_plan_id) REFERENCES implementation_plan_artifacts(plan_artifact_id) ON DELETE RESTRICT
     );
   `);
+
+  archiveLegacyToolPersistenceTables(database);
 
   database.exec(`
     CREATE TABLE IF NOT EXISTS model_steps (

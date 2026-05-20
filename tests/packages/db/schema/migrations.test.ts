@@ -36,6 +36,220 @@ function foreignKeys(
     .all() as Array<{ from: string; table: string; on_delete: string }>;
 }
 
+function tableExists(database: Database.Database, tableName: string): boolean {
+  return Boolean(
+    database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(tableName),
+  );
+}
+
+function seedLegacyToolPersistenceSchema(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE tool_calls (
+      tool_call_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      input_preview_json TEXT NOT NULL,
+      capabilities_json TEXT NOT NULL,
+      risk_level TEXT NOT NULL,
+      side_effect TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      started_at TEXT,
+      completed_at TEXT,
+      error_json TEXT,
+      metadata_json TEXT,
+      tool_call_json TEXT NOT NULL
+    );
+
+    CREATE TABLE tool_policy_decisions (
+      policy_decision_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      decided_at TEXT NOT NULL,
+      decision_json TEXT NOT NULL
+    );
+
+    CREATE TABLE approval_requests (
+      approval_request_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_scope TEXT NOT NULL,
+      risk_level TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT,
+      resolved_at TEXT,
+      request_json TEXT NOT NULL
+    );
+
+    CREATE TABLE approval_records (
+      approval_record_id TEXT PRIMARY KEY,
+      approval_request_id TEXT NOT NULL,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      decided_by TEXT NOT NULL,
+      decided_at TEXT NOT NULL,
+      record_json TEXT NOT NULL
+    );
+
+    CREATE TABLE tool_observations (
+      observation_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      text_preview TEXT,
+      content_refs_json TEXT,
+      error_json TEXT,
+      created_at TEXT NOT NULL,
+      observation_json TEXT NOT NULL
+    );
+
+    CREATE INDEX idx_tool_calls_run_id
+    ON tool_calls(run_id);
+
+    CREATE INDEX idx_tool_calls_status
+    ON tool_calls(status);
+
+    CREATE INDEX idx_approval_requests_tool_call_id
+    ON approval_requests(tool_call_id);
+
+    CREATE INDEX idx_tool_observations_tool_call_id
+    ON tool_observations(tool_call_id);
+
+    INSERT INTO tool_calls (
+      tool_call_id,
+      run_id,
+      step_id,
+      action_id,
+      tool_name,
+      input_preview_json,
+      capabilities_json,
+      risk_level,
+      side_effect,
+      status,
+      requested_at,
+      tool_call_json
+    )
+    VALUES (
+      'tool-call:legacy',
+      'run:legacy',
+      'step:legacy',
+      'action:legacy',
+      'read_file',
+      '{}',
+      '[]',
+      'low',
+      'none',
+      'completed',
+      '2026-05-20T00:00:00.000Z',
+      '{}'
+    );
+
+    INSERT INTO tool_policy_decisions (
+      policy_decision_id,
+      tool_call_id,
+      run_id,
+      decision,
+      reason,
+      decided_at,
+      decision_json
+    )
+    VALUES (
+      'policy:legacy',
+      'tool-call:legacy',
+      'run:legacy',
+      'allow',
+      'legacy decision',
+      '2026-05-20T00:00:01.000Z',
+      '{}'
+    );
+
+    INSERT INTO approval_requests (
+      approval_request_id,
+      tool_call_id,
+      run_id,
+      step_id,
+      tool_name,
+      status,
+      requested_scope,
+      risk_level,
+      created_at,
+      request_json
+    )
+    VALUES (
+      'approval-request:legacy',
+      'tool-call:legacy',
+      'run:legacy',
+      'step:legacy',
+      'read_file',
+      'approved',
+      'once',
+      'low',
+      '2026-05-20T00:00:02.000Z',
+      '{}'
+    );
+
+    INSERT INTO approval_records (
+      approval_record_id,
+      approval_request_id,
+      tool_call_id,
+      run_id,
+      step_id,
+      decision,
+      scope,
+      decided_by,
+      decided_at,
+      record_json
+    )
+    VALUES (
+      'approval-record:legacy',
+      'approval-request:legacy',
+      'tool-call:legacy',
+      'run:legacy',
+      'step:legacy',
+      'approved',
+      'once',
+      'user',
+      '2026-05-20T00:00:03.000Z',
+      '{}'
+    );
+
+    INSERT INTO tool_observations (
+      observation_id,
+      tool_call_id,
+      run_id,
+      step_id,
+      status,
+      summary,
+      created_at,
+      observation_json
+    )
+    VALUES (
+      'tool-observation:legacy',
+      'tool-call:legacy',
+      'run:legacy',
+      'step:legacy',
+      'completed',
+      'legacy observation',
+      '2026-05-20T00:00:04.000Z',
+      '{}'
+    );
+  `);
+}
+
 afterEach(() => {
   db?.close();
   db = null;
@@ -392,6 +606,69 @@ describe('provider settings migrations', () => {
     expect(foreignKeys(database, 'approval_records')).toEqual(expect.arrayContaining([
       expect.objectContaining({ from: 'tool_use_id', table: 'tool_uses', on_delete: 'CASCADE' }),
     ]));
+  });
+
+  it('archives incompatible legacy tool persistence tables before creating target schema', () => {
+    const database = createTestDb();
+    seedLegacyToolPersistenceSchema(database);
+
+    migrateDatabase(database);
+    migrateDatabase(database);
+
+    const toolCallColumns = tableColumns(database, 'tool_calls');
+    expect(toolCallColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      'tool_use_id',
+      'action_id',
+      'result_preview',
+    ]));
+    expect(columnByName(toolCallColumns, 'tool_use_id')?.notnull).toBe(1);
+    expect(columnByName(toolCallColumns, 'action_id')?.notnull).toBe(0);
+
+    expect(tableExists(database, 'tool_calls_legacy_05')).toBe(true);
+    expect(tableExists(database, 'tool_policy_decisions_legacy_05')).toBe(true);
+    expect(tableExists(database, 'approval_requests_legacy_05')).toBe(true);
+    expect(tableExists(database, 'approval_records_legacy_05')).toBe(true);
+    expect(tableExists(database, 'tool_observations_legacy_05')).toBe(true);
+
+    const legacyToolCall = database
+      .prepare('SELECT tool_call_id, action_id FROM tool_calls_legacy_05')
+      .get() as { tool_call_id: string; action_id: string };
+    expect(legacyToolCall).toEqual({
+      tool_call_id: 'tool-call:legacy',
+      action_id: 'action:legacy',
+    });
+
+    const approvalRequestColumns = tableColumns(database, 'approval_requests');
+    expect(approvalRequestColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      'tool_use_id',
+      'permission_decision_id',
+    ]));
+    const approvalRecordColumns = tableColumns(database, 'approval_records');
+    expect(approvalRecordColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      'tool_use_id',
+    ]));
+
+    const indexes = database
+      .prepare(`
+        SELECT name, tbl_name
+        FROM sqlite_master
+        WHERE type = 'index'
+        AND name IN (
+          'idx_tool_calls_run_id',
+          'idx_tool_calls_status',
+          'idx_approval_requests_tool_call_id',
+          'idx_tool_observations_tool_call_id'
+        )
+        ORDER BY name ASC
+      `)
+      .all() as Array<{ name: string; tbl_name: string }>;
+
+    expect(indexes).toEqual([
+      { name: 'idx_approval_requests_tool_call_id', tbl_name: 'approval_requests' },
+      { name: 'idx_tool_calls_run_id', tbl_name: 'tool_calls' },
+      { name: 'idx_tool_calls_status', tbl_name: 'tool_calls' },
+      { name: 'idx_tool_observations_tool_call_id', tbl_name: 'tool_observations' },
+    ]);
   });
 
   it('creates run mode and implementation plan tables', () => {
