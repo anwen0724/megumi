@@ -15,7 +15,6 @@ export {
   InitialRunModePresetSchema,
   OUTPUT_EXPECTATIONS,
   OutputExpectationSchema,
-  PERMISSION_MODES,
   RUN_MODE_PRESETS,
   RUN_MODE_PRESET_DEFAULTS,
   RUN_MODE_SELECTION_SOURCES,

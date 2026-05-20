@@ -4,6 +4,7 @@ import {
   PermissionModeSchema as BarrelPermissionModeSchema,
   ACTIVE_PERMISSION_MODES as BARREL_ACTIVE_PERMISSION_MODES,
 } from '@megumi/shared';
+import * as Shared from '@megumi/shared';
 import {
   ACTIVE_PERMISSION_MODES,
   PermissionModeSchema,
@@ -59,6 +60,7 @@ describe('permission-mode-contracts', () => {
   });
 
   it('keeps the public shared barrel pointed at target permission mode exports', () => {
+    expect('PERMISSION_MODES' in Shared).toBe(false);
     expect(BARREL_ACTIVE_PERMISSION_MODES).toEqual(['default', 'accept_edits', 'plan', 'auto']);
     expect(BarrelPermissionModeSchema.options).toEqual(['default', 'accept_edits', 'plan', 'auto']);
     expect(
