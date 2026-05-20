@@ -75,12 +75,15 @@ describe('tool-contracts', () => {
     expect(COMMAND_CLASSIFIER_LABELS).toEqual([
       'read_only',
       'verification',
-      'project_write',
+      'search_or_list',
       'project_file_operation',
       'dependency_install',
-      'network',
+      'git_read',
       'git_mutation',
+      'network',
       'destructive',
+      'infrastructure_or_deploy',
+      'secret_or_env',
       'unknown',
     ]);
     expect(TOOL_RESULT_KINDS).toEqual(['success', 'tool_error', 'policy_denied', 'user_rejected', 'redacted']);
@@ -242,6 +245,40 @@ describe('tool-contracts', () => {
     });
 
     expect(decision.mode).toBe('default');
+  });
+
+  it('persists all Plan 3 command classifier labels in permission decisions', () => {
+    for (const classifierLabel of [
+      'read_only',
+      'verification',
+      'search_or_list',
+      'project_file_operation',
+      'dependency_install',
+      'git_read',
+      'git_mutation',
+      'network',
+      'destructive',
+      'infrastructure_or_deploy',
+      'secret_or_env',
+      'unknown',
+    ] as const) {
+      expect(PermissionDecisionSchema.parse({
+        permissionDecisionId: `permission-decision-${classifierLabel}`,
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        runId: 'run-1',
+        decision: 'allow',
+        source: 'classifier',
+        reason: `Classifier accepted ${classifierLabel}.`,
+        mode: 'auto',
+        classifierLabel,
+        target: 'src/index.ts',
+        capability: 'command_run',
+        sideEffect: 'execute_command',
+        effectiveRiskLevel: 'low',
+        evaluatedAt: '2026-05-20T00:00:02.000Z',
+      }).classifierLabel).toBe(classifierLabel);
+    }
   });
 
   it('parses ToolResult success, policy deny, and user rejection', () => {

@@ -39,6 +39,19 @@ describe('rule-based permission classifier', () => {
 
     expect(classifier.classify({
       permissionMode: 'auto',
+      toolName: 'write_file',
+      capability: 'project_write',
+      sideEffect: 'project_file_operation',
+      commandLabel: undefined,
+    })).toMatchObject({
+      decision: 'ask',
+      classifierLabel: 'project_file_operation',
+      confidence: expect.any(Number),
+      reason: expect.any(String),
+    });
+
+    expect(classifier.classify({
+      permissionMode: 'auto',
       toolName: 'run_command',
       capability: 'command_run',
       sideEffect: 'execute_command',

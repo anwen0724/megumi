@@ -66,6 +66,15 @@ export function createRuleBasedPermissionClassifier(): PermissionClassifier {
       }
 
       if (input.capability === 'project_write' && input.sideEffect === 'project_file_operation') {
+        if (!input.projectPath?.insideProject || input.projectPath.protected || input.projectPath.sensitive) {
+          return {
+            decision: 'ask',
+            classifierLabel: 'project_file_operation',
+            reason: 'Auto requires confirmed ordinary project path before allowing file edits.',
+            confidence: 0.7,
+          };
+        }
+
         return {
           decision: 'allow',
           classifierLabel: 'project_file_operation',

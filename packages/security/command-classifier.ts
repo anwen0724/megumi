@@ -52,6 +52,14 @@ export function classifyCommand(command: string): CommandClassification {
     return classify('dependency_install', normalizedCommand, 'Command changes dependencies or downloads packages.');
   }
 
+  if (hasShellControlOrRedirection(normalizedCommand)) {
+    return classify(
+      'project_file_operation',
+      normalizedCommand,
+      'Command uses shell redirection or control operators, which may mutate files or alter execution flow.',
+    );
+  }
+
   if (isVerificationCommand(normalizedCommand)) {
     return classify('verification', normalizedCommand, 'Command verifies project behavior without intended mutation.');
   }
@@ -85,6 +93,10 @@ function classify(
 
 function normalizeCommand(command: string): string {
   return command.trim().replace(/\s+/g, ' ');
+}
+
+function hasShellControlOrRedirection(command: string): boolean {
+  return /(?:>>?|<|\|\||\||&&|;)/.test(command);
 }
 
 function isReadOnlyCommand(command: string): boolean {

@@ -111,12 +111,15 @@ export type PermissionRuleScope = (typeof PERMISSION_RULE_SCOPES)[number];
 export const COMMAND_CLASSIFIER_LABELS = [
   'read_only',
   'verification',
-  'project_write',
+  'search_or_list',
   'project_file_operation',
   'dependency_install',
-  'network',
+  'git_read',
   'git_mutation',
+  'network',
   'destructive',
+  'infrastructure_or_deploy',
+  'secret_or_env',
   'unknown',
 ] as const;
 export type CommandClassifierLabel = (typeof COMMAND_CLASSIFIER_LABELS)[number];

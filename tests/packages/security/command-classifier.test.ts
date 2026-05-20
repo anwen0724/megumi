@@ -17,4 +17,18 @@ describe('classifyCommand', () => {
     expect(classifyCommand('rm -rf dist').label).toBe('destructive');
     expect(classifyCommand('unknown-tool --flag').label).toBe('unknown');
   });
+
+  it('does not auto-allow commands with shell redirection or control operators', () => {
+    for (const command of [
+      'cat package.json > out.txt',
+      'rg TODO > hits.txt',
+      'npm test > test.log',
+      'npm test && rm -rf dist',
+      'rg TODO | tee hits.txt',
+    ]) {
+      expect(classifyCommand(command).label).not.toBe('read_only');
+      expect(classifyCommand(command).label).not.toBe('search_or_list');
+      expect(classifyCommand(command).label).not.toBe('verification');
+    }
+  });
 });
