@@ -209,7 +209,14 @@ export class ToolRepository {
         tool_use_id = excluded.tool_use_id,
         tool_call_id = excluded.tool_call_id,
         permission_decision_id = excluded.permission_decision_id,
+        run_id = excluded.run_id,
+        step_id = excluded.step_id,
+        tool_name = excluded.tool_name,
         status = excluded.status,
+        requested_scope = excluded.requested_scope,
+        risk_level = excluded.risk_level,
+        created_at = excluded.created_at,
+        expires_at = excluded.expires_at,
         resolved_at = excluded.resolved_at,
         request_json = excluded.request_json
     `).run({

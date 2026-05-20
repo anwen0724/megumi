@@ -253,6 +253,56 @@ describe('ToolRepository', () => {
       'tool-call-earlier',
     ]);
 
+    const approval = createApprovalRequest({
+      approvalRequestId: 'approval-upsert',
+      toolUseId: 'tool-use-upsert',
+      toolCallId: 'tool-call-upsert',
+      permissionDecisionId: 'permission-upsert',
+      createdAt: '2026-05-20T00:00:21.000Z',
+    });
+    const updatedApproval = createApprovalRequest({
+      approvalRequestId: 'approval-upsert',
+      toolUseId: 'tool-use-upsert',
+      toolCallId: 'tool-call-upsert',
+      permissionDecisionId: 'permission-upsert',
+      toolName: 'list_files',
+      requestedScope: 'run',
+      riskLevel: 'medium',
+      status: 'approved',
+      createdAt: '2026-05-20T00:00:22.000Z',
+      expiresAt: '2026-05-20T00:05:22.000Z',
+      resolvedAt: '2026-05-20T00:00:23.000Z',
+    });
+    repo.saveApprovalRequest(approval);
+    repo.saveApprovalRequest(updatedApproval);
+
+    const approvalRow = currentDb().prepare(`
+      SELECT run_id, step_id, tool_name, requested_scope, risk_level, status, created_at, expires_at, resolved_at
+      FROM approval_requests
+      WHERE approval_request_id = 'approval-upsert'
+    `).get() as {
+      run_id: string;
+      step_id: string;
+      tool_name: string;
+      requested_scope: string;
+      risk_level: string;
+      status: string;
+      created_at: string;
+      expires_at: string;
+      resolved_at: string;
+    };
+    expect(approvalRow).toEqual({
+      run_id: 'run-1',
+      step_id: 'step-1',
+      tool_name: 'list_files',
+      requested_scope: 'run',
+      risk_level: 'medium',
+      status: 'approved',
+      created_at: '2026-05-20T00:00:22.000Z',
+      expires_at: '2026-05-20T00:05:22.000Z',
+      resolved_at: '2026-05-20T00:00:23.000Z',
+    });
+
     const result = createToolResult({
       toolResultId: 'tool-result-upsert',
       toolUseId: 'tool-use-upsert',
