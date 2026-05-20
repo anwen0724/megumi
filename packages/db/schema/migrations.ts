@@ -271,16 +271,45 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS model_steps (
+      model_step_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      model_step_json TEXT NOT NULL,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS tool_uses (
+      tool_use_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      model_step_id TEXT,
+      provider_tool_use_id TEXT,
+      tool_name TEXT NOT NULL,
+      input_json TEXT NOT NULL,
+      input_preview_json TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      error_json TEXT,
+      metadata_json TEXT,
+      tool_use_json TEXT NOT NULL,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(model_step_id) REFERENCES model_steps(model_step_id) ON DELETE SET NULL
+    );
+
     CREATE TABLE IF NOT EXISTS tool_calls (
       tool_call_id TEXT PRIMARY KEY,
+      tool_use_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
-      action_id TEXT NOT NULL,
+      action_id TEXT,
       tool_name TEXT NOT NULL,
       input_preview_json TEXT NOT NULL,
-      capabilities_json TEXT NOT NULL,
-      risk_level TEXT NOT NULL,
-      side_effect TEXT NOT NULL,
+      result_preview TEXT,
       status TEXT NOT NULL,
       requested_at TEXT NOT NULL,
       started_at TEXT,
@@ -288,30 +317,49 @@ export function migrateDatabase(database: MegumiDatabase): void {
       error_json TEXT,
       metadata_json TEXT,
       tool_call_json TEXT NOT NULL,
+      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE,
-      FOREIGN KEY(action_id) REFERENCES run_actions(action_id) ON DELETE CASCADE
+      FOREIGN KEY(action_id) REFERENCES run_actions(action_id) ON DELETE SET NULL
     );
 
-    CREATE TABLE IF NOT EXISTS tool_policy_decisions (
-      policy_decision_id TEXT PRIMARY KEY,
-      tool_call_id TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS tool_results (
+      tool_result_id TEXT PRIMARY KEY,
+      tool_use_id TEXT NOT NULL,
+      tool_call_id TEXT,
+      run_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      text_content TEXT,
+      redaction_state TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      result_json TEXT NOT NULL,
+      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE SET NULL,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS permission_decisions (
+      permission_decision_id TEXT PRIMARY KEY,
+      tool_use_id TEXT NOT NULL,
+      tool_call_id TEXT,
       run_id TEXT NOT NULL,
       decision TEXT NOT NULL,
-      effective_risk_level TEXT NOT NULL,
-      reason TEXT NOT NULL,
-      required_approval_json TEXT,
-      required_sandbox_json TEXT,
-      evaluated_at TEXT NOT NULL,
-      metadata_json TEXT,
+      source TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      classifier_label TEXT,
+      capability TEXT,
+      side_effect TEXT,
       decision_json TEXT NOT NULL,
-      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE SET NULL,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS approval_requests (
       approval_request_id TEXT PRIMARY KEY,
+      tool_use_id TEXT NOT NULL,
       tool_call_id TEXT NOT NULL,
+      permission_decision_id TEXT,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
       tool_name TEXT NOT NULL,
@@ -322,7 +370,9 @@ export function migrateDatabase(database: MegumiDatabase): void {
       expires_at TEXT,
       resolved_at TEXT,
       request_json TEXT NOT NULL,
+      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(permission_decision_id) REFERENCES permission_decisions(permission_decision_id) ON DELETE SET NULL,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
@@ -330,6 +380,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE TABLE IF NOT EXISTS approval_records (
       approval_record_id TEXT PRIMARY KEY,
       approval_request_id TEXT NOT NULL,
+      tool_use_id TEXT NOT NULL,
       tool_call_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
@@ -339,6 +390,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       decided_at TEXT NOT NULL,
       record_json TEXT NOT NULL,
       FOREIGN KEY(approval_request_id) REFERENCES approval_requests(approval_request_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
@@ -707,11 +759,29 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_run_source_plans_source_plan_id
     ON run_source_plans(source_plan_id);
 
+    CREATE INDEX IF NOT EXISTS idx_model_steps_run_id
+    ON model_steps(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_uses_run_id
+    ON tool_uses(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_uses_model_step_id
+    ON tool_uses(model_step_id);
+
     CREATE INDEX IF NOT EXISTS idx_tool_calls_run_id
     ON tool_calls(run_id);
 
     CREATE INDEX IF NOT EXISTS idx_tool_calls_status
     ON tool_calls(status);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_use_id
+    ON tool_calls(tool_use_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_results_tool_use_id
+    ON tool_results(tool_use_id);
+
+    CREATE INDEX IF NOT EXISTS idx_permission_decisions_tool_use_id
+    ON permission_decisions(tool_use_id);
 
     CREATE INDEX IF NOT EXISTS idx_approval_requests_tool_call_id
     ON approval_requests(tool_call_id);

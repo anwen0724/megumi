@@ -11,6 +11,15 @@ function createTestDb(): Database.Database {
   return db;
 }
 
+function tableColumns(
+  database: Database.Database,
+  tableName: string,
+): Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }> {
+  return database
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all() as Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }>;
+}
+
 afterEach(() => {
   db?.close();
   db = null;
@@ -75,11 +84,14 @@ describe('provider settings migrations', () => {
       'run_steps',
       'approval_records',
       'approval_requests',
+      'model_steps',
       'session_messages',
       'runtime_events',
       'tool_calls',
       'tool_observations',
-      'tool_policy_decisions',
+      'tool_results',
+      'tool_uses',
+      'permission_decisions',
     ]));
 
     const indexes = database
@@ -92,11 +104,88 @@ describe('provider settings migrations', () => {
       'idx_runs_session_id',
       'idx_run_steps_run_id',
       'idx_approval_requests_tool_call_id',
+      'idx_model_steps_run_id',
       'idx_session_messages_session_id',
       'idx_runtime_events_run_sequence',
       'idx_tool_calls_run_id',
       'idx_tool_calls_status',
+      'idx_tool_calls_tool_use_id',
       'idx_tool_observations_tool_call_id',
+      'idx_tool_results_tool_use_id',
+      'idx_tool_uses_model_step_id',
+      'idx_tool_uses_run_id',
+      'idx_permission_decisions_tool_use_id',
+    ]));
+  });
+
+  it('creates Plan 1 tool use schema columns', () => {
+    const database = createTestDb();
+
+    migrateDatabase(database);
+
+    expect(tableColumns(database, 'tool_uses').map((column) => column.name)).toEqual([
+      'tool_use_id',
+      'run_id',
+      'model_step_id',
+      'provider_tool_use_id',
+      'tool_name',
+      'input_json',
+      'input_preview_json',
+      'status',
+      'created_at',
+      'completed_at',
+      'error_json',
+      'metadata_json',
+      'tool_use_json',
+    ]);
+
+    const toolCallColumns = tableColumns(database, 'tool_calls');
+    expect(toolCallColumns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      'tool_call_id',
+      'tool_use_id',
+      'run_id',
+      'step_id',
+      'action_id',
+      'tool_name',
+      'result_preview',
+      'tool_call_json',
+    ]));
+    expect(toolCallColumns.find((column) => column.name === 'tool_use_id')?.notnull).toBe(1);
+    expect(toolCallColumns.find((column) => column.name === 'action_id')?.notnull).toBe(0);
+
+    expect(tableColumns(database, 'tool_results').map((column) => column.name)).toEqual([
+      'tool_result_id',
+      'tool_use_id',
+      'tool_call_id',
+      'run_id',
+      'kind',
+      'text_content',
+      'redaction_state',
+      'created_at',
+      'result_json',
+    ]);
+
+    expect(tableColumns(database, 'permission_decisions').map((column) => column.name)).toEqual([
+      'permission_decision_id',
+      'tool_use_id',
+      'tool_call_id',
+      'run_id',
+      'decision',
+      'source',
+      'mode',
+      'classifier_label',
+      'capability',
+      'side_effect',
+      'decision_json',
+    ]);
+
+    expect(tableColumns(database, 'approval_requests').map((column) => column.name)).toEqual(expect.arrayContaining([
+      'tool_use_id',
+      'permission_decision_id',
+    ]));
+
+    expect(tableColumns(database, 'approval_records').map((column) => column.name)).toEqual(expect.arrayContaining([
+      'tool_use_id',
     ]));
   });
 
