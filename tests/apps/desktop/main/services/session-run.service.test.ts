@@ -14,6 +14,7 @@ import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contract
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
 import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
+import type { ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 let db: Database.Database | null = null;
@@ -200,6 +201,7 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
 function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
   contextService?: SessionRunContextService;
   runModeService?: SessionRunServiceOptions['runModeService'];
+  toolUseHandler?: SessionRunServiceOptions['toolUseHandler'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -209,6 +211,7 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
     ...(options?.runModeService ? { runModeService: options.runModeService } : {}),
+    ...(options?.toolUseHandler ? { toolUseHandler: options.toolUseHandler } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         options?.onRequest?.(request);
@@ -233,6 +236,81 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
       })(),
     },
   });
+}
+
+function toolUseCreatedEvent(sequence: number): RuntimeEvent {
+  return {
+    eventId: `event-tool-use-${sequence}`,
+    schemaVersion: 1,
+    eventType: 'tool.use.created',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    sequence,
+    createdAt: '2026-05-17T00:00:01.000Z',
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      toolUseId: 'tool-use-1',
+      modelStepId: 'model-step-1',
+      providerToolUseId: 'provider-tool-use-1',
+      toolName: 'read_file',
+      input: { path: 'package.json' },
+    },
+  };
+}
+
+function modelStepCompletedEvent(sequence: number): RuntimeEvent {
+  return {
+    eventId: `event-model-step-completed-${sequence}`,
+    schemaVersion: 1,
+    eventType: 'model.step.completed',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    sequence,
+    createdAt: '2026-05-17T00:00:02.000Z',
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      modelStepId: 'model-step-1',
+      finishReason: 'tool_calls',
+    },
+  };
+}
+
+function assistantOutputCompletedEvent(sequence: number): RuntimeEvent {
+  return {
+    eventId: `event-assistant-completed-${sequence}`,
+    schemaVersion: 1,
+    eventType: 'assistant.output.completed',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    sequence,
+    createdAt: '2026-05-17T00:00:03.000Z',
+    source: 'provider',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      content: 'Final answer after tool result.',
+    },
+  };
+}
+
+function createToolResult(): ToolResult {
+  return {
+    toolResultId: 'tool-result-1',
+    toolUseId: 'tool-use-1',
+    runId: 'run-1',
+    kind: 'success',
+    structuredContent: { text: 'package contents' },
+    textContent: 'package contents',
+    redactionState: 'none',
+    createdAt: '2026-05-17T00:00:02.500Z',
+  };
 }
 
 afterEach(() => {
@@ -431,6 +509,111 @@ describe('SessionRunService', () => {
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
       expect.objectContaining({ role: 'assistant', content: 'Hello', runId: 'run-1' }),
     ]));
+  });
+
+  it('continues session message runs through tool results before completing with final assistant output', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const toolResult = createToolResult();
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const service = new SessionRunService({
+      repository,
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+
+          if (requests.length === 1) {
+            yield toolUseCreatedEvent(1);
+            yield modelStepCompletedEvent(2);
+            return;
+          }
+
+          yield assistantOutputCompletedEvent(1);
+        },
+        cancelModelStep: () => true,
+      },
+      toolUseHandler: {
+        async handleToolUses() {
+          return {
+            toolResults: [toolResult],
+          };
+        },
+      },
+      clock: { now: () => '2026-05-17T00:00:04.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `step-${index}`;
+          };
+        })(),
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `service-event-${index}`;
+          };
+        })(),
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `message-${index}`;
+          };
+        })(),
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.toolResults).toEqual([
+      expect.objectContaining({ toolResultId: 'tool-result-1' }),
+    ]);
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'tool.use.created',
+      'model.step.completed',
+      'tool.result.created',
+      'assistant.output.completed',
+      'step.status.changed',
+      'step.completed',
+      'run.status.changed',
+      'run.completed',
+    ]);
+    expect(streamed.at(-1)?.eventType).toBe('run.completed');
+    expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toContain('tool.result.created');
+    expect(service.listMessagesBySession('session-1').at(-1)).toMatchObject({
+      role: 'assistant',
+      content: 'Final answer after tool result.',
+      runId: 'run-1',
+    });
   });
 
   it('passes workspace baseline context to model step requests for session messages', async () => {

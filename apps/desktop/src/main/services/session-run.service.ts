@@ -2,6 +2,10 @@ import path from 'node:path';
 import { runTurn } from '@megumi/core/run-runtime/run-turn';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/run-runtime/types';
 import {
+  runModelToolLoop,
+  type ToolUseHandlerPort,
+} from '@megumi/core/run-runtime/tool-loop';
+import {
   createRunCompletedEvent,
   createRunStartedEvent,
   createRunStatusChangedEvent,
@@ -74,6 +78,7 @@ export interface SessionRunServiceOptions {
     | 'updatePlanStatus'
   >;
   modelStepProvider?: SessionRunModelStepProvider;
+  toolUseHandler?: ToolUseHandlerPort;
   hostBoundary?: RunHostBoundaryPort;
   clock?: SessionRunServiceClock;
   ids?: Partial<SessionRunServiceIds>;
@@ -120,6 +125,7 @@ export class SessionRunService {
     | 'updatePlanStatus'
   >;
   private readonly modelStepProvider?: SessionRunModelStepProvider;
+  private readonly toolUseHandler?: ToolUseHandlerPort;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
@@ -129,6 +135,7 @@ export class SessionRunService {
     this.contextService = options.contextService;
     this.runModeService = options.runModeService;
     this.modelStepProvider = options.modelStepProvider;
+    this.toolUseHandler = options.toolUseHandler;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
@@ -406,7 +413,23 @@ export class SessionRunService {
     this.repository.appendRuntimeEvent(startedEvent);
     yield startedEvent;
 
-    for await (const event of this.requireModelStepProvider().streamModelStep(input.request)) {
+    const modelStepProvider = this.requireModelStepProvider();
+    const modelEvents = this.toolUseHandler
+      ? runModelToolLoop({
+          request: input.request,
+          aiPort: {
+            streamModelStep: ({ request }) => modelStepProvider.streamModelStep(request),
+          },
+          toolUseHandler: this.toolUseHandler,
+          ids: {
+            nextEventId: this.ids.eventId,
+            nextStepId: this.ids.stepId,
+            nextModelStepId: this.ids.stepId,
+          },
+        })
+      : modelStepProvider.streamModelStep(input.request);
+
+    for await (const event of modelEvents) {
       const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
       lastSequence = eventWithRequest.sequence;
       this.repository.appendRuntimeEvent(eventWithRequest);
