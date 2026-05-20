@@ -190,11 +190,136 @@ describe('OpenAI-compatible adapter', () => {
     }));
 
     expect(events.map((event) => event.eventType)).toEqual([
-      'assistant.output.delta',
-      'assistant.output.delta',
-      'assistant.output.completed',
+      'model.step.started',
+      'model.output.delta',
+      'model.output.delta',
+      'model.step.completed',
     ]);
     expect(events.every((event) => event.stepId === 'step-1')).toBe(true);
+    expect(events[1]).toMatchObject({
+      eventType: 'model.output.delta',
+      payload: {
+        modelStepId: 'step-1',
+        delta: 'Hel',
+      },
+    });
+    expect(events[3]).toMatchObject({
+      eventType: 'model.step.completed',
+      payload: {
+        modelStepId: 'step-1',
+      },
+    });
+  });
+
+  it('streams model step tool calls as tool use created events', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-read","type":"function","function":{"name":"read_file","arguments":"{\\"path\\":"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+    let sequence = 0;
+
+    const events = await collect(adapter.streamModelStep({
+      request: {
+        requestId: 'request-1',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        modelStepId: 'model-step-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [
+          {
+            messageId: 'message-1',
+            sessionId: 'session-1',
+            role: 'user',
+            content: 'Read package.json',
+            status: 'completed',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+        toolDefinitions: [
+          {
+            name: 'read_file',
+            description: 'Read a project file.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+              },
+              required: ['path'],
+              additionalProperties: false,
+            },
+            capabilities: ['project_read'],
+            riskLevel: 'low',
+            sideEffect: 'none',
+            availability: { status: 'available' },
+          },
+        ],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      runId: 'run-1',
+      stepId: 'step-1',
+      config,
+      nextSequence: () => {
+        sequence += 1;
+        return sequence;
+      },
+      eventIdFactory: () => `event-${sequence + 1}`,
+    }));
+
+    const [, init] = fetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toEqual(expect.objectContaining({
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'read_file',
+            description: 'Read a project file.',
+            parameters: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+              },
+              required: ['path'],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: 'auto',
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'model.step.started',
+      'tool.use.created',
+      'model.step.completed',
+    ]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events[1]).toMatchObject({
+      eventType: 'tool.use.created',
+      stepId: 'step-1',
+      payload: {
+        toolUseId: 'call-read',
+        modelStepId: 'model-step-1',
+        providerToolUseId: 'call-read',
+        toolName: 'read_file',
+        input: { path: 'package.json' },
+      },
+    });
+    expect(events[2]).toMatchObject({
+      eventType: 'model.step.completed',
+      payload: {
+        modelStepId: 'model-step-1',
+        finishReason: 'tool_calls',
+      },
+    });
   });
 
   it('maps auth failures to typed failed events', async () => {

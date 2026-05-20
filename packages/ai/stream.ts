@@ -4,7 +4,17 @@ export interface OpenAICompatibleStreamChunk {
   choices?: Array<{
     delta?: {
       content?: string;
+      tool_calls?: Array<{
+        index?: number;
+        id?: string;
+        type?: string;
+        function?: {
+          name?: string;
+          arguments?: string;
+        };
+      }>;
     };
+    finish_reason?: string | null;
   }>;
   usage?: {
     prompt_tokens?: number;
@@ -17,6 +27,18 @@ export type OpenAICompatibleStreamResult =
   | {
       type: 'delta';
       delta: string;
+    }
+  | {
+      type: 'tool_call_delta';
+      index: number;
+      id?: string;
+      toolType?: string;
+      name?: string;
+      argumentsDelta?: string;
+    }
+  | {
+      type: 'finish';
+      finishReason: string;
     }
   | {
       type: 'usage';
@@ -71,12 +93,31 @@ function* parseSsePart(part: string): Iterable<OpenAICompatibleStreamResult> {
     }
 
     const chunk = JSON.parse(data) as OpenAICompatibleStreamChunk;
-    const delta = chunk.choices?.[0]?.delta?.content;
+    const choice = chunk.choices?.[0];
+    const delta = choice?.delta?.content;
 
-    if (delta) {
+    if (delta !== undefined) {
       yield {
         type: 'delta',
         delta,
+      };
+    }
+
+    for (const toolCall of choice?.delta?.tool_calls ?? []) {
+      yield {
+        type: 'tool_call_delta',
+        index: toolCall.index ?? 0,
+        ...(toolCall.id ? { id: toolCall.id } : {}),
+        ...(toolCall.type ? { toolType: toolCall.type } : {}),
+        ...(toolCall.function?.name ? { name: toolCall.function.name } : {}),
+        ...(toolCall.function?.arguments !== undefined ? { argumentsDelta: toolCall.function.arguments } : {}),
+      };
+    }
+
+    if (choice?.finish_reason) {
+      yield {
+        type: 'finish',
+        finishReason: choice.finish_reason,
       };
     }
 

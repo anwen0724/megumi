@@ -5,12 +5,14 @@ import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import {
   createAssistantCompletedEvent,
   createAssistantDeltaEvent,
+  createModelStepStartedEvent,
   createRuntimeEvent,
   createRunCancelledEvent,
   createRunFailedEvent,
+  createToolUseCreatedEvent,
 } from '@megumi/shared/runtime-event-factory';
 import {
-  mapModelStepToOpenAICompatibleMessages,
+  mapModelStepToOpenAICompatibleRequest,
   mapToOpenAICompatibleMessages,
 } from '../prompt/message-mapper';
 import { parseOpenAICompatibleSseStream } from '../stream';
@@ -35,14 +37,7 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
             authorization: `Bearer ${input.config.apiKey}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify({
-            model: input.request.modelId || input.config.defaultModelId,
-            messages: mapModelStepToOpenAICompatibleMessages(input.request),
-            stream: true,
-            stream_options: {
-              include_usage: true,
-            },
-          }),
+          body: JSON.stringify(mapModelStepToOpenAICompatibleRequest(input.request)),
           signal: input.signal,
         });
 
@@ -53,19 +48,34 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
 
         let usage: ChatTokenUsage | undefined;
         let content = '';
+        let finishReason: string | undefined;
+        const toolCalls = new Map<number, OpenAICompatibleToolCallAccumulator>();
+
+        yield createModelStepStarted(input, clock.now());
 
         for await (const item of parseOpenAICompatibleSseStream(response.body)) {
           if (item.type === 'delta') {
             content += item.delta;
-            yield createModelStepAssistantDeltaEvent(input, item.delta, clock.now());
-          } else {
+            yield createModelOutputDelta(input, item.delta, clock.now());
+          } else if (item.type === 'tool_call_delta') {
+            appendToolCallDelta(toolCalls, item);
+          } else if (item.type === 'finish') {
+            finishReason = item.finishReason;
+          } else if (item.type === 'usage') {
             usage = item.usage;
           }
         }
 
-        yield createModelStepAssistantCompletedEvent(input, {
+        for (const toolCall of [...toolCalls.entries()].sort(([left], [right]) => left - right).map(([, value]) => value)) {
+          if (isCompleteToolCall(toolCall)) {
+            yield createModelStepToolUseCreated(input, toolCall, clock.now());
+          }
+        }
+
+        yield createModelStepCompleted(input, {
           content,
-          ...(usage ? { usage } : {}),
+          finishReason,
+          usage,
         }, clock.now());
       } catch (error) {
         if (isAbortError(error) || input.signal?.aborted) {
@@ -121,7 +131,7 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
               delta: item.delta,
               createdAt: clock.now(),
             });
-          } else {
+          } else if (item.type === 'usage') {
             usage = item.usage;
           }
         }
@@ -197,36 +207,48 @@ function failedEvent(
   });
 }
 
-function createModelStepAssistantDeltaEvent(
-  input: AiModelStepAdapterRequest,
-  delta: string,
-  createdAt: string,
-): RuntimeEvent {
-  return createRuntimeEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'assistant.output.delta',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'user',
-    persist: 'transient',
-    payload: { delta },
+interface OpenAICompatibleToolCallDelta {
+  index: number;
+  id?: string;
+  toolType?: string;
+  name?: string;
+  argumentsDelta?: string;
+}
+
+interface OpenAICompatibleToolCallAccumulator {
+  id?: string;
+  toolType?: string;
+  name?: string;
+  argumentsText: string;
+}
+
+function appendToolCallDelta(
+  toolCalls: Map<number, OpenAICompatibleToolCallAccumulator>,
+  delta: OpenAICompatibleToolCallDelta,
+): void {
+  const current = toolCalls.get(delta.index) ?? { argumentsText: '' };
+
+  toolCalls.set(delta.index, {
+    id: delta.id ?? current.id,
+    toolType: delta.toolType ?? current.toolType,
+    name: delta.name ?? current.name,
+    argumentsText: current.argumentsText + (delta.argumentsDelta ?? ''),
   });
 }
 
-function createModelStepAssistantCompletedEvent(
+function isCompleteToolCall(
+  toolCall: OpenAICompatibleToolCallAccumulator,
+): toolCall is OpenAICompatibleToolCallAccumulator & { id: string; name: string } {
+  return Boolean(toolCall.id && toolCall.name);
+}
+
+function createModelStepStarted(
   input: AiModelStepAdapterRequest,
-  payload: { content: string; usage?: ChatTokenUsage },
   createdAt: string,
 ): RuntimeEvent {
-  return createRuntimeEvent({
+  return createModelStepStartedEvent({
     eventId: input.eventIdFactory(),
-    eventType: 'assistant.output.completed',
+    eventType: 'model.step.started',
     runId: input.runId,
     sessionId: input.request.sessionId,
     stepId: input.stepId,
@@ -237,8 +259,111 @@ function createModelStepAssistantCompletedEvent(
     source: 'provider',
     visibility: 'system',
     persist: 'required',
-    payload,
+    payload: {
+      modelStepId: modelStepIdFor(input),
+      providerId: input.config.providerId,
+      modelId: String(input.request.modelId || input.config.defaultModelId),
+    },
   });
+}
+
+function createModelOutputDelta(
+  input: AiModelStepAdapterRequest,
+  delta: string,
+  createdAt: string,
+): RuntimeEvent {
+  return createRuntimeEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'model.output.delta',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'user',
+    persist: 'transient',
+    payload: {
+      modelStepId: modelStepIdFor(input),
+      delta,
+    },
+  });
+}
+
+function createModelStepToolUseCreated(
+  input: AiModelStepAdapterRequest,
+  toolCall: OpenAICompatibleToolCallAccumulator & { id: string; name: string },
+  createdAt: string,
+): RuntimeEvent {
+  return createToolUseCreatedEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'tool.use.created',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      toolUseId: toolCall.id,
+      modelStepId: modelStepIdFor(input),
+      providerToolUseId: toolCall.id,
+      toolName: toolCall.name,
+      input: parseToolArguments(toolCall.argumentsText),
+    } as never,
+  });
+}
+
+function createModelStepCompleted(
+  input: AiModelStepAdapterRequest,
+  payload: { content: string; finishReason?: string; usage?: ChatTokenUsage },
+  createdAt: string,
+): RuntimeEvent {
+  return createRuntimeEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'model.step.completed',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      modelStepId: modelStepIdFor(input),
+      ...(payload.finishReason ? { finishReason: payload.finishReason } : {}),
+    },
+  });
+}
+
+function modelStepIdFor(input: AiModelStepAdapterRequest): string {
+  return String(input.request.modelStepId ?? input.stepId);
+}
+
+function parseToolArguments(argumentsText: string): object {
+  if (!argumentsText.trim()) {
+    return {};
+  }
+
+  try {
+    const value = JSON.parse(argumentsText);
+    return isRecord(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function toChatRuntimeRequest(request: ModelStepRuntimeRequest): ChatRuntimeRequest {
