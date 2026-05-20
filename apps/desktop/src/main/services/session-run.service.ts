@@ -425,7 +425,7 @@ export class SessionRunService {
           ids: {
             nextEventId: this.ids.eventId,
             nextStepId: this.ids.stepId,
-            nextModelStepId: this.ids.stepId,
+            nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
           },
         })
       : modelStepProvider.streamModelStep(input.request);

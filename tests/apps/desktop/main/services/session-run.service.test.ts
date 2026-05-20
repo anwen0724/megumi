@@ -593,6 +593,11 @@ describe('SessionRunService', () => {
     }
 
     expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      stepId: 'step-2',
+      modelStepId: expect.stringMatching(/^model-step:/),
+    });
+    expect(requests[1]?.modelStepId).not.toBe(requests[1]?.stepId);
     expect(requests[1]?.toolResults).toEqual([
       expect.objectContaining({ toolResultId: 'tool-result-1' }),
     ]);
