@@ -8,6 +8,7 @@ import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
+  ToolObservation,
   ToolResult,
   ToolUse,
 } from '@megumi/shared/tool-contracts';
@@ -251,6 +252,59 @@ describe('ToolRepository', () => {
     expect(repo.listToolCallsByRun('run-1').map((call) => call.toolCallId)).toEqual([
       'tool-call-upsert',
       'tool-call-earlier',
+    ]);
+
+    const observation = createToolObservation({
+      observationId: 'observation-upsert',
+      toolCallId: 'tool-call-upsert',
+      createdAt: '2026-05-20T00:00:30.000Z',
+    });
+    const earlierObservation = createToolObservation({
+      observationId: 'observation-earlier',
+      toolCallId: 'tool-call-upsert',
+      summary: 'Earlier observation.',
+      createdAt: '2026-05-20T00:00:25.000Z',
+    });
+    const updatedObservation = createToolObservation({
+      observationId: 'observation-upsert',
+      toolCallId: 'tool-call-upsert',
+      status: 'failed',
+      summary: 'Updated observation.',
+      textPreview: 'updated preview',
+      createdAt: '2026-05-20T00:00:24.000Z',
+    });
+    repo.saveToolObservation(observation);
+    repo.saveToolObservation(earlierObservation);
+    repo.saveToolObservation(updatedObservation);
+
+    const observationRow = currentDb().prepare(`
+      SELECT tool_call_id, run_id, step_id, status, summary, text_preview, created_at
+      FROM tool_observations
+      WHERE observation_id = 'observation-upsert'
+    `).get() as {
+      tool_call_id: string;
+      run_id: string;
+      step_id: string;
+      status: string;
+      summary: string;
+      text_preview: string;
+      created_at: string;
+    };
+    expect(observationRow).toEqual({
+      tool_call_id: 'tool-call-upsert',
+      run_id: 'run-1',
+      step_id: 'step-1',
+      status: 'failed',
+      summary: 'Updated observation.',
+      text_preview: 'updated preview',
+      created_at: '2026-05-20T00:00:24.000Z',
+    });
+    expect(repo.listToolObservationsByToolCall('tool-call-upsert').map((item) => ({
+      observationId: item.observationId,
+      createdAt: item.createdAt,
+    }))).toEqual([
+      { observationId: 'observation-upsert', createdAt: '2026-05-20T00:00:24.000Z' },
+      { observationId: 'observation-earlier', createdAt: '2026-05-20T00:00:25.000Z' },
     ]);
 
     const approval = createApprovalRequest({
@@ -523,6 +577,20 @@ function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
     textContent: 'export {}',
     redactionState: 'none',
     createdAt: '2026-05-20T00:00:04.000Z',
+    ...overrides,
+  };
+}
+
+function createToolObservation(overrides: Partial<ToolObservation> = {}): ToolObservation {
+  return {
+    observationId: 'observation-1',
+    toolCallId: 'tool-call-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    status: 'succeeded',
+    summary: 'Read file.',
+    textPreview: 'export {}',
+    createdAt: '2026-05-20T00:00:05.000Z',
     ...overrides,
   };
 }

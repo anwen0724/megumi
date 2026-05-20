@@ -335,11 +335,15 @@ export class ToolRepository {
         @text_preview, @content_refs_json, @error_json, @created_at, @observation_json
       )
       ON CONFLICT(observation_id) DO UPDATE SET
+        tool_call_id = excluded.tool_call_id,
+        run_id = excluded.run_id,
+        step_id = excluded.step_id,
         status = excluded.status,
         summary = excluded.summary,
         text_preview = excluded.text_preview,
         content_refs_json = excluded.content_refs_json,
         error_json = excluded.error_json,
+        created_at = excluded.created_at,
         observation_json = excluded.observation_json
     `).run({
       observation_id: observation.observationId,
