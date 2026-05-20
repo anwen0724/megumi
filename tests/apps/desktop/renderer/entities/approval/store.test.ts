@@ -4,12 +4,12 @@ import type { ApprovalRequest } from '@megumi/shared/tool-contracts';
 
 const approval: ApprovalRequest = {
   approvalRequestId: 'approval-1',
+  toolUseId: 'tool-use-1',
   toolCallId: 'tool-call-1',
   runId: 'run-1',
   stepId: 'step-1',
-  actionKind: 'call_tool',
-  toolName: 'workspace_write_file',
-  capabilities: ['workspace_write'],
+  toolName: 'write_file',
+  capabilities: ['project_write'],
   riskLevel: 'medium',
   title: 'Approve write',
   summary: 'Write file.',

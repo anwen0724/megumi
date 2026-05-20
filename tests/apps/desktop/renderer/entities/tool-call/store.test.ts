@@ -4,17 +4,18 @@ import type { ToolCall } from '@megumi/shared/tool-contracts';
 
 const toolCall: ToolCall = {
   toolCallId: 'tool-call-1',
+  toolUseId: 'tool-use-1',
   runId: 'run-1',
   stepId: 'step-1',
   actionId: 'action-1',
-  toolName: 'workspace_read_file',
+  toolName: 'read_file',
   input: { path: 'src/index.ts' },
   inputPreview: {
     summary: 'Read src/index.ts',
     targets: [{ kind: 'file', label: 'src/index.ts', sensitivity: 'normal' }],
     redactionState: 'none',
   },
-  capabilities: ['workspace_read'],
+  capabilities: ['project_read'],
   riskLevel: 'low',
   sideEffect: 'none',
   status: 'requested',
