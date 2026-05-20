@@ -5,9 +5,10 @@ import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import type {
   ApprovalRequest,
+  PermissionDecision,
   ToolCall,
-  ToolObservation,
-  ToolPolicyDecision,
+  ToolResult,
+  ToolUse,
 } from '@megumi/shared/tool-contracts';
 
 let db: Database.Database | null = null;
@@ -25,70 +26,106 @@ afterEach(() => {
 });
 
 describe('ToolRepository', () => {
-  it('saves and reads tool call, policy decision, approval request, and observation summaries', () => {
+  it('saves and reads tool use execution facts', () => {
     const repo = createRepo();
-    const toolCall: ToolCall = {
-      toolCallId: 'tool-call-1',
+    const toolUse: ToolUse = {
+      toolUseId: 'tool-use-1',
       runId: 'run-1',
-      stepId: 'step-1',
-      actionId: 'action-1',
-      toolName: 'workspace_read_file',
+      modelStepId: 'model-step-1',
+      providerToolUseId: 'provider-tool-use-1',
+      toolName: 'read_file',
       input: { path: 'src/index.ts' },
       inputPreview: {
         summary: 'Read src/index.ts',
         targets: [{ kind: 'file', label: 'src/index.ts', sensitivity: 'normal' }],
         redactionState: 'none',
       },
-      capabilities: ['workspace_read'],
+      status: 'created',
+      createdAt: '2026-05-20T00:00:00.000Z',
+    };
+    const decision: PermissionDecision = {
+      permissionDecisionId: 'permission-decision-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      decision: 'allow',
+      source: 'permission_mode',
+      reason: 'Read-only project file access is allowed by default mode.',
+      mode: 'default',
+      classifierLabel: 'read_only',
+      target: 'src/index.ts',
+      capability: 'project_read',
+      sideEffect: 'none',
+      effectiveRiskLevel: 'low',
+      requiredSandbox: { level: 'read_only_project', networkPolicy: 'deny' },
+      evaluatedAt: '2026-05-20T00:00:01.000Z',
+    };
+    const toolCall: ToolCall = {
+      toolCallId: 'tool-call-1',
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'read_file',
+      input: { path: 'src/index.ts' },
+      inputPreview: {
+        summary: 'Read src/index.ts',
+        targets: [{ kind: 'file', label: 'src/index.ts', sensitivity: 'normal' }],
+        redactionState: 'none',
+      },
+      capabilities: ['project_read'],
       riskLevel: 'low',
       sideEffect: 'none',
+      policyDecision: decision,
       status: 'requested',
-      requestedAt: '2026-05-16T00:00:00.000Z',
-    };
-    const decision: ToolPolicyDecision = {
-      decision: 'allow',
-      reason: 'Read-only workspace tool.',
-      effectiveRiskLevel: 'low',
-      requiredSandbox: { level: 'read_only_workspace', networkPolicy: 'deny' },
-      evaluatedAt: '2026-05-16T00:00:01.000Z',
+      requestedAt: '2026-05-20T00:00:02.000Z',
     };
     const approval: ApprovalRequest = {
       approvalRequestId: 'approval-1',
+      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      permissionDecisionId: 'permission-decision-1',
       runId: 'run-1',
       stepId: 'step-1',
-      actionKind: 'call_tool',
-      toolName: 'workspace_read_file',
-      capabilities: ['workspace_read'],
+      toolName: 'read_file',
+      capabilities: ['project_read'],
       riskLevel: 'low',
       title: 'Approve read',
       summary: 'Read src/index.ts',
       preview: { action: 'Read file', targets: [{ kind: 'file', label: 'src/index.ts' }] },
       requestedScope: 'once',
       status: 'pending',
-      createdAt: '2026-05-16T00:00:02.000Z',
+      createdAt: '2026-05-20T00:00:03.000Z',
     };
-    const observation: ToolObservation = {
-      observationId: 'observation-1',
+    const result: ToolResult = {
+      toolResultId: 'tool-result-1',
+      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
       runId: 'run-1',
-      stepId: 'step-1',
-      status: 'succeeded',
-      summary: 'Read file.',
-      textPreview: 'export {}',
-      createdAt: '2026-05-16T00:00:03.000Z',
+      kind: 'success',
+      structuredContent: { content: 'export {}' },
+      textContent: 'export {}',
+      redactionState: 'none',
+      createdAt: '2026-05-20T00:00:04.000Z',
     };
 
+    repo.saveToolUse(toolUse);
     repo.saveToolCall(toolCall);
-    repo.savePolicyDecision('policy-1', 'run-1', 'tool-call-1', decision);
+    repo.savePermissionDecision(decision);
     repo.saveApprovalRequest(approval);
-    repo.saveToolObservation(observation);
+    repo.saveToolResult(result);
 
-    expect(repo.getToolCall('tool-call-1')).toMatchObject({ toolName: 'workspace_read_file' });
-    expect(repo.listToolCallsByRun('run-1')).toHaveLength(1);
-    expect(repo.listPolicyDecisionsByToolCall('tool-call-1')[0].decision).toBe('allow');
-    expect(repo.getApprovalRequest('approval-1')?.status).toBe('pending');
-    expect(repo.listToolObservationsByToolCall('tool-call-1')[0].summary).toBe('Read file.');
+    expect(repo.getToolUse('tool-use-1')).toMatchObject({ toolName: 'read_file', status: 'created' });
+    expect(repo.listToolUsesByRun('run-1')).toEqual([toolUse]);
+    expect(repo.getToolCall('tool-call-1')).toMatchObject({
+      toolUseId: 'tool-use-1',
+      toolName: 'read_file',
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+    });
+    expect(repo.listPermissionDecisionsByToolUse('tool-use-1')).toEqual([decision]);
+    expect(repo.getApprovalRequest('approval-1')?.toolUseId).toBe('tool-use-1');
+    expect(repo.listToolResultsByToolUse('tool-use-1')).toEqual([result]);
   });
 });
 
@@ -99,14 +136,24 @@ function seedLifecycle(database: Database.Database): void {
   `).run();
   database.prepare(`
     INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
-    VALUES ('run-1', 'session-1', 'execute', 'Use tool', 'running', '2026-05-16T00:00:00.000Z')
+    VALUES ('run-1', 'session-1', 'default', 'Use tool', 'running', '2026-05-20T00:00:00.000Z')
   `).run();
   database.prepare(`
     INSERT INTO run_steps (step_id, run_id, kind, status)
-    VALUES ('step-1', 'run-1', 'tool', 'running')
+    VALUES ('step-1', 'run-1', 'model', 'running')
   `).run();
   database.prepare(`
-    INSERT INTO run_actions (action_id, run_id, step_id, kind, status, requested_at)
-    VALUES ('action-1', 'run-1', 'step-1', 'call_tool', 'requested', '2026-05-16T00:00:00.000Z')
+    INSERT INTO model_steps (
+      model_step_id, run_id, step_id, provider_id, model_id, status, started_at, model_step_json
+    ) VALUES (
+      'model-step-1',
+      'run-1',
+      'step-1',
+      'openai-compatible',
+      'gpt-5',
+      'streaming',
+      '2026-05-20T00:00:00.000Z',
+      '{"modelStepId":"model-step-1","runId":"run-1","stepId":"step-1","providerId":"openai-compatible","modelId":"gpt-5","status":"streaming","startedAt":"2026-05-20T00:00:00.000Z"}'
+    )
   `).run();
 }
