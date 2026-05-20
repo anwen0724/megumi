@@ -9,6 +9,7 @@ export * from './model-step-contracts';
 export { RUN_STATUSES, type RunStatus } from './session-run-contracts';
 export * from './run-context-contracts';
 export * from './run-mode-contracts';
+export * from './permission-mode-contracts';
 export * from './recovery-contracts';
 export * from './artifact-contracts';
 export * from './memory-contracts';
