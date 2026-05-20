@@ -1,10 +1,5 @@
-import type {
-  SandboxRequirement,
-  ToolCall,
-  ToolDefinition,
-  ToolPolicyDecision,
-  ToolRiskLevel,
-} from '@megumi/shared/tool-contracts';
+import type { SandboxRequirement, ToolCall, ToolDefinition, ToolPolicyDecision, ToolRiskLevel } from '@megumi/shared/tool-contracts';
+import { isPermissionMode, type PermissionMode } from '@megumi/shared/permission-mode-contracts';
 
 export interface EvaluateToolPolicyInput {
   definition: ToolDefinition;
@@ -23,28 +18,29 @@ export function evaluateToolPolicy(input: EvaluateToolPolicyInput): ToolPolicyDe
   const touchesSecret = input.toolCall.inputPreview.targets.some((target) => target.sensitivity === 'secret');
 
   if (touchesProtectedPath || touchesSecret || input.definition.capabilities.includes('secret_read')) {
-    return {
+    return createPolicyDecision(input, {
       decision: 'deny',
+      source: 'system_default',
       reason: 'Tool call targets protected or secret content.',
       effectiveRiskLevel: 'critical',
       requiredSandbox: createSandboxRequirement(input, 'host_restricted'),
-      evaluatedAt: input.evaluatedAt,
-    };
+    });
   }
 
   if (input.permissionMode === 'plan' && hasSideEffect(input.definition)) {
-    return {
+    return createPolicyDecision(input, {
       decision: 'deny',
+      source: 'permission_mode',
       reason: 'plan permissionMode blocks side-effecting tool calls.',
       effectiveRiskLevel: escalateRisk(input.definition.riskLevel, 'high'),
       requiredSandbox: createSandboxRequirement(input, sandboxLevelForDefinition(input.definition)),
-      evaluatedAt: input.evaluatedAt,
-    };
+    });
   }
 
   if (requiresApproval(input.definition)) {
-    return {
+    return createPolicyDecision(input, {
       decision: 'ask',
+      source: 'system_default',
       reason: 'Tool call requires user approval.',
       effectiveRiskLevel: input.definition.riskLevel,
       requiredApproval: {
@@ -52,17 +48,16 @@ export function evaluateToolPolicy(input: EvaluateToolPolicyInput): ToolPolicyDe
         reason: 'User approval is required for this tool capability.',
       },
       requiredSandbox: createSandboxRequirement(input, sandboxLevelForDefinition(input.definition)),
-      evaluatedAt: input.evaluatedAt,
-    };
+    });
   }
 
-  return {
+  return createPolicyDecision(input, {
     decision: 'allow',
+    source: 'system_default',
     reason: 'Read-only low-risk tool call is allowed.',
     effectiveRiskLevel: input.definition.riskLevel,
     requiredSandbox: createSandboxRequirement(input, sandboxLevelForDefinition(input.definition)),
-    evaluatedAt: input.evaluatedAt,
-  };
+  });
 }
 
 function hasSideEffect(definition: ToolDefinition): boolean {
@@ -74,7 +69,7 @@ function requiresApproval(definition: ToolDefinition): boolean {
     || definition.riskLevel === 'high'
     || definition.riskLevel === 'critical'
     || hasSideEffect(definition)
-    || definition.capabilities.some((capability) => capability !== 'workspace_read');
+    || definition.capabilities.some((capability) => capability !== 'project_read');
 }
 
 function sandboxLevelForDefinition(definition: ToolDefinition): SandboxRequirement['level'] {
@@ -84,13 +79,35 @@ function sandboxLevelForDefinition(definition: ToolDefinition): SandboxRequireme
   if (definition.capabilities.includes('network_access') || definition.capabilities.includes('browser_access')) {
     return 'network_restricted';
   }
-  if (definition.capabilities.includes('workspace_write')) {
-    return 'workspace_write';
+  if (definition.capabilities.includes('project_write')) {
+    return 'project_write';
   }
-  if (definition.capabilities.includes('workspace_read')) {
-    return 'read_only_workspace';
+  if (definition.capabilities.includes('project_read')) {
+    return 'read_only_project';
   }
   return 'host_restricted';
+}
+
+function createPolicyDecision(
+  input: EvaluateToolPolicyInput,
+  decision: Pick<ToolPolicyDecision, 'decision' | 'source' | 'reason' | 'effectiveRiskLevel'>
+    & Partial<Pick<ToolPolicyDecision, 'requiredApproval' | 'requiredSandbox'>>,
+): ToolPolicyDecision {
+  return {
+    permissionDecisionId: `${input.toolCall.toolCallId}:policy`,
+    toolUseId: input.toolCall.toolUseId,
+    toolCallId: input.toolCall.toolCallId,
+    runId: input.toolCall.runId,
+    mode: normalizePermissionMode(input.permissionMode),
+    capability: input.definition.capabilities[0],
+    sideEffect: input.definition.sideEffect,
+    evaluatedAt: input.evaluatedAt,
+    ...decision,
+  };
+}
+
+function normalizePermissionMode(mode: string): PermissionMode {
+  return isPermissionMode(mode) ? mode : 'default';
 }
 
 function createSandboxRequirement(
