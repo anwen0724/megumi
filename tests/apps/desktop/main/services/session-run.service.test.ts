@@ -14,7 +14,7 @@ import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contract
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
 import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
-import type { ToolResult } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 let db: Database.Database | null = null;
@@ -616,6 +616,140 @@ describe('SessionRunService', () => {
     });
   });
 
+  it('keeps session message runs open when the tool loop stops for pending approval', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const service = new SessionRunService({
+      repository,
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+          yield toolUseCreatedEvent(1);
+          yield modelStepCompletedEvent(2);
+        },
+        cancelModelStep: () => true,
+      },
+      toolUseHandler: {
+        async handleToolUses(input) {
+          const toolUse = input.toolUses[0];
+          if (!toolUse) {
+            throw new Error('Expected one tool use.');
+          }
+
+          const toolCall: ToolCall = {
+            toolCallId: 'tool-call-1',
+            toolUseId: toolUse.toolUseId,
+            runId: toolUse.runId,
+            stepId: 'step-1',
+            toolName: toolUse.toolName,
+            input: toolUse.input,
+            inputPreview: toolUse.inputPreview,
+            capabilities: ['project_read'],
+            riskLevel: 'low',
+            sideEffect: 'none',
+            status: 'waiting_for_approval',
+            requestedAt: '2026-05-17T00:00:02.250Z',
+          };
+          const approvalRequest: ApprovalRequest = {
+            approvalRequestId: 'approval-request-1',
+            toolUseId: toolUse.toolUseId,
+            toolCallId: toolCall.toolCallId,
+            runId: toolUse.runId,
+            stepId: toolCall.stepId,
+            toolName: toolUse.toolName,
+            capabilities: toolCall.capabilities,
+            riskLevel: toolCall.riskLevel,
+            title: 'Approve read_file',
+            summary: 'User approval is required.',
+            preview: {
+              action: 'read_file',
+              targets: [{
+                kind: 'file',
+                label: 'package.json',
+                sensitivity: 'normal',
+              }],
+            },
+            requestedScope: 'once',
+            status: 'pending',
+            createdAt: '2026-05-17T00:00:02.300Z',
+          };
+
+          return {
+            toolResults: [],
+            pendingApprovals: [{
+              approvalRequest,
+              toolUse,
+              toolCall,
+            }],
+          };
+        },
+      },
+      clock: { now: () => '2026-05-17T00:00:04.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: () => 'step-1',
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `service-event-${index}`;
+          };
+        })(),
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `message-${index}`;
+          };
+        })(),
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(requests).toHaveLength(1);
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'tool.use.created',
+      'model.step.completed',
+    ]);
+    expect(streamed.map((event) => event.eventType)).not.toContain('run.completed');
+    expect(repository.getRun('run-1')).toMatchObject({
+      status: 'running',
+    });
+    expect(service.listMessagesBySession('session-1')).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: 'Read package.json',
+      }),
+    ]);
+  });
+
   it('passes workspace baseline context to model step requests for session messages', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const baselineInputs: unknown[] = [];
@@ -883,6 +1017,20 @@ describe('SessionRunService', () => {
         visibility: 'user',
         persist: 'transient',
         payload: { delta: 'Hello' },
+      },
+      {
+        eventId: 'event-assistant-completed',
+        schemaVersion: 1,
+        eventType: 'assistant.output.completed',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 2,
+        createdAt: '2026-05-17T00:00:02.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'required',
+        payload: { content: 'Hello' },
       },
     ]);
     service.createSession({

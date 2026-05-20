@@ -400,6 +400,7 @@ export class SessionRunService {
     userMessageId: string;
   }): AsyncIterable<RuntimeEvent> {
     let assistantContent = '';
+    let sawAssistantOutputCompleted = false;
     let lastSequence = 0;
     let terminalEvent: RuntimeEvent | undefined;
 
@@ -437,6 +438,7 @@ export class SessionRunService {
         assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
       }
       if (eventWithRequest.eventType === 'assistant.output.completed') {
+        sawAssistantOutputCompleted = true;
         const content = getAssistantCompletedContent(eventWithRequest.payload);
         if (content) {
           assistantContent = content;
@@ -536,6 +538,10 @@ export class SessionRunService {
         this.repository.appendRuntimeEvent(eventWithRequest);
         yield eventWithRequest;
       }
+      return;
+    }
+
+    if (!sawAssistantOutputCompleted || assistantContent.length === 0) {
       return;
     }
 
