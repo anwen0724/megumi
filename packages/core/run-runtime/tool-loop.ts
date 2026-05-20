@@ -83,11 +83,8 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       signal: input.signal,
     });
 
-    if (outcome.pendingApprovals && outcome.pendingApprovals.length > 0) {
-      return;
-    }
-
     const toolResults = outcome.toolResults ?? [];
+    const hasPendingApprovals = Boolean(outcome.pendingApprovals && outcome.pendingApprovals.length > 0);
 
     for (const toolResult of toolResults) {
       sequenceOffset += 1;
@@ -114,11 +111,16 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       });
     }
 
+    accumulatedToolResults = [...accumulatedToolResults, ...toolResults];
+
+    if (hasPendingApprovals) {
+      return;
+    }
+
     if (toolResults.length === 0) {
       return;
     }
 
-    accumulatedToolResults = [...accumulatedToolResults, ...toolResults];
     request = {
       ...request,
       stepId: input.ids.nextStepId(),

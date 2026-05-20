@@ -319,6 +319,71 @@ describe('run model tool loop', () => {
     ]);
   });
 
+  it('emits completed tool results before stopping for pending approvals', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      aiPort: {
+        async *streamModelStep(input) {
+          requests.push(input.request);
+          yield toolUseCreatedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+          yield modelStepCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+        },
+      },
+      toolUseHandler: {
+        async handleToolUses(input) {
+          const toolCall = createToolCall(input.toolUses[0]);
+          const pendingApproval: PendingToolApproval = {
+            approvalRequest: createApprovalRequest(input.toolUses[0], toolCall),
+            toolUse: input.toolUses[0],
+            toolCall,
+          };
+
+          return {
+            toolResults: [createToolResult()],
+            pendingApprovals: [pendingApproval],
+          };
+        },
+      },
+      ids: {
+        nextEventId: (() => {
+          let next = 1;
+          return () => {
+            next += 1;
+            return `mixed-event-${next}`;
+          };
+        })(),
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+    }));
+
+    expect(requests).toHaveLength(1);
+    expect(events.map((event) => event.eventType)).toEqual([
+      'tool.use.created',
+      'model.step.completed',
+      'tool.result.created',
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      eventType: 'tool.result.created',
+      payload: {
+        toolResultId: 'tool-result-1',
+        toolUseId: 'call-read',
+      },
+    });
+  });
+
   it('emits run failed instead of throwing when model step limit is exhausted', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
