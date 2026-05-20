@@ -8,8 +8,8 @@ import {
 import type { ToolDefinition, ToolCall } from '@megumi/shared/tool-contracts';
 
 const definition: ToolDefinition = {
-  name: 'workspace_read_file',
-  description: 'Read a normal workspace file.',
+  name: 'read_file',
+  description: 'Read a normal project file.',
   inputSchema: {
     type: 'object',
     properties: { path: { type: 'string' } },
@@ -19,7 +19,7 @@ const definition: ToolDefinition = {
     type: 'object',
     properties: { content: { type: 'string' } },
   },
-  capabilities: ['workspace_read'],
+  capabilities: ['project_read'],
   riskLevel: 'low',
   sideEffect: 'none',
   availability: { status: 'available' },
@@ -27,17 +27,18 @@ const definition: ToolDefinition = {
 
 const call: ToolCall = {
   toolCallId: 'tool-call-1',
+  toolUseId: 'tool-use-1',
   runId: 'run-1',
   stepId: 'step-1',
   actionId: 'action-1',
-  toolName: 'workspace_read_file',
+  toolName: 'read_file',
   input: { path: 'src/index.ts' },
   inputPreview: {
     summary: 'Read src/index.ts',
     targets: [{ kind: 'file', label: 'src/index.ts', sensitivity: 'normal' }],
     redactionState: 'none',
   },
-  capabilities: ['workspace_read'],
+  capabilities: ['project_read'],
   riskLevel: 'low',
   sideEffect: 'none',
   status: 'requested',
@@ -53,12 +54,19 @@ describe('tool validation and normalization', () => {
 
   it('normalizes successful tool results', () => {
     expect(normalizeToolResult(call, {
+      toolResultId: 'tool-result-1',
       structuredContent: { content: 'hello' },
+      createdAt: '2026-05-20T00:00:01.000Z',
       metadata: { lineCount: 1 },
     })).toEqual({
+      toolResultId: 'tool-result-1',
+      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      runId: 'run-1',
       kind: 'success',
       structuredContent: { content: 'hello' },
+      redactionState: 'none',
+      createdAt: '2026-05-20T00:00:01.000Z',
       metadata: { lineCount: 1 },
     });
   });

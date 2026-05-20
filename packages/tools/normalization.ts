@@ -6,22 +6,30 @@ import type {
 } from '@megumi/shared/tool-contracts';
 
 export interface NormalizeToolResultInput {
+  toolResultId: ToolResult['toolResultId'];
   structuredContent?: ToolResult['structuredContent'];
   textContent?: string;
   contentRefs?: ToolResult['contentRefs'];
+  redactionState?: ToolResult['redactionState'];
+  createdAt: ToolResult['createdAt'];
   metadata?: ToolResult['metadata'];
 }
 
 export function normalizeToolResult(
-  toolCall: Pick<ToolCall, 'toolCallId'>,
+  toolCall: Pick<ToolCall, 'toolCallId' | 'toolUseId' | 'runId'>,
   input: NormalizeToolResultInput,
 ): ToolResult {
   return {
+    toolResultId: input.toolResultId,
+    toolUseId: toolCall.toolUseId,
     toolCallId: toolCall.toolCallId,
+    runId: toolCall.runId,
     kind: 'success',
     ...(input.structuredContent !== undefined ? { structuredContent: input.structuredContent } : {}),
     ...(input.textContent !== undefined ? { textContent: input.textContent } : {}),
     ...(input.contentRefs ? { contentRefs: input.contentRefs } : {}),
+    redactionState: input.redactionState ?? 'none',
+    createdAt: input.createdAt,
     ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 }

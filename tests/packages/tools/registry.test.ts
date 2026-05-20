@@ -3,15 +3,15 @@ import { createStaticToolRegistry } from '@megumi/tools/registry';
 import type { ToolDefinition } from '@megumi/shared/tool-contracts';
 
 const readTool: ToolDefinition = {
-  name: 'workspace_read_file',
-  description: 'Read a normal workspace file.',
+  name: 'read_file',
+  description: 'Read a normal project file.',
   inputSchema: {
     type: 'object',
     properties: { path: { type: 'string' } },
     required: ['path'],
   },
   annotations: { readOnlyHint: true },
-  capabilities: ['workspace_read'],
+  capabilities: ['project_read'],
   riskLevel: 'low',
   sideEffect: 'none',
   availability: { status: 'available' },
@@ -46,7 +46,7 @@ describe('createStaticToolRegistry', () => {
   it('finds definitions by Claude-compatible tool name', () => {
     const registry = createStaticToolRegistry([readTool]);
 
-    expect(registry.getDefinition('workspace_read_file')?.description).toContain('Read');
+    expect(registry.getDefinition('read_file')?.description).toContain('Read');
     expect(registry.getDefinition('workspace.file.read')).toBeUndefined();
   });
 
