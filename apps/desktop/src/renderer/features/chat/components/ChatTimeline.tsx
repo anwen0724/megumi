@@ -211,30 +211,37 @@ export function ChatTimeline() {
               />
             ) : null}
           </div>
-        ) : currentProjectId === null ? (
+        ) : (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-md text-center">
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-accent)]">
                 <Sparkles size={24} aria-hidden="true" />
               </div>
               <h1 className="text-xl font-semibold text-[var(--color-text)]">Welcome to Megumi</h1>
-              <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                Open a workspace to get started.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  void useProjectStore.getState().useExistingProject();
-                }}
-                className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-              >
-                Open workspace
-              </button>
+              {currentProjectId === null ? (
+                <>
+                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                    Open a workspace to get started.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void useProjectStore.getState().useExistingProject();
+                    }}
+                    className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                  >
+                    Open workspace
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                    Megumi is ready to help with this workspace.
+                  </p>
+                  <p className="mt-3 text-sm text-[var(--color-text-muted)]">{currentProject?.repoPath}</p>
+                </>
+              )}
             </div>
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-[var(--color-text-muted)]">{currentProject?.repoPath}</p>
           </div>
         )}
       </div>

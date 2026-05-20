@@ -418,7 +418,7 @@ describe('ChatTimeline', () => {
     expect(window.megumi.project.useExisting).toHaveBeenCalled();
   });
 
-  it('shows the project repoPath when a project is selected but no messages exist', () => {
+  it('shows the welcome empty state and project repoPath when a project is selected but no messages exist', () => {
     useProjectStore.setState({
       projects: [
         {
@@ -439,8 +439,9 @@ describe('ChatTimeline', () => {
 
     render(<ChatTimeline />);
 
+    expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
+    expect(screen.getByText('Megumi is ready to help with this workspace.')).toBeInTheDocument();
     expect(screen.getByText('/home/user/test')).toBeInTheDocument();
-    expect(screen.queryByText('Welcome to Megumi')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open workspace' })).not.toBeInTheDocument();
   });
 });
