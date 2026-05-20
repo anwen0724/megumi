@@ -1,14 +1,14 @@
 # Megumi
 
-Megumi is a local-first desktop AI workspace companion.
+Megumi is a local-first desktop AI agent tool for working with local code workspaces.
 
-It is designed for working with local projects and files through a calm desktop interface: choose a workspace, configure an AI provider, start a conversation, and stream model responses directly inside the app.
+The first product direction is to bring a Claude Code / Codex-style agentic development workflow into a desktop app: choose a workspace, configure an AI provider, ask the agent to inspect context, plan work, request permission for actions, edit files, run commands, and stream progress in one visible session.
 
 ## Status
 
 Megumi is in early development.
 
-The current build includes the desktop shell, custom UI, provider settings, local configuration storage, and OpenAI-compatible streaming chat. Deeper agent capabilities such as tool execution, approvals, workspace context, memory, and artifacts are planned as the runtime matures.
+The current build includes the desktop shell, custom UI, provider settings, local configuration storage, project/workspace selection, session/run streaming, and foundations for approvals, artifacts, memory, and workspace context. Concrete built-in tools, file edits, command execution, and richer permission workflows are still under development.
 
 ## Features
 
@@ -18,18 +18,21 @@ Available today:
 - Local provider configuration
 - DeepSeek / OpenAI-compatible chat runtime
 - Streaming assistant responses
+- Project/workspace selection
+- Session/run event timeline foundations
+- Foundations for approvals, artifacts, memory, and workspace context
 - Local `~/.megumi` runtime directory
 - Local secret storage through Electron safeStorage
 - Warm and neutral desktop UI themes
 
 Planned:
 
-- Workspace-aware context
-- Tool execution
-- Approval flows
-- Artifacts and task state
-- Long-term memory
-- Richer agent workflows
+- Built-in workspace tools
+- File editing and patch workflows
+- Command execution with permission controls
+- Richer approval and audit flows
+- Deeper context and memory integration
+- Claude Code-style agent workflows in a desktop interface
 
 ## Screenshots
 
