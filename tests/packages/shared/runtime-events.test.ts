@@ -763,8 +763,12 @@ describe('05 tool-use runtime events', () => {
         modelStepId: 'model-step-1',
         providerToolUseId: 'call-provider-1',
         toolName: 'read_file',
+        input: { path: 'package.json' },
       },
-    }).payload).toMatchObject({ toolUseId: 'tool-use-1' });
+    }).payload).toMatchObject({
+      toolUseId: 'tool-use-1',
+      input: { path: 'package.json' },
+    });
   });
 
   it('accepts model output, detected tool-use, and completed model step events', () => {
@@ -843,6 +847,29 @@ describe('05 tool-use runtime events', () => {
       payload: {
         modelStepId: 'model-step-1',
         finishReason: 'stop',
+        rawProviderBody: { secret: 'sk-test' },
+      },
+    })).toThrow();
+  });
+
+  it('rejects extra payload fields on tool-use created events', () => {
+    expect(() => RuntimeEventSchema.parse({
+      eventId: 'event-tool-use-created-extra',
+      schemaVersion: 1,
+      eventType: 'tool.use.created',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 4,
+      createdAt: '2026-05-20T00:00:03.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolUseId: 'tool-use-1',
+        modelStepId: 'model-step-1',
+        providerToolUseId: 'call-provider-1',
+        toolName: 'read_file',
+        input: { path: 'package.json' },
         rawProviderBody: { secret: 'sk-test' },
       },
     })).toThrow();
@@ -947,6 +974,7 @@ describe('05 tool-use runtime events', () => {
         modelStepId: 'model-step-1',
         providerToolUseId: 'call-provider-1',
         toolName: 'read_file',
+        input: { path: 'package.json' },
       },
     });
 

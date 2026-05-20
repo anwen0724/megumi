@@ -1,4 +1,5 @@
 import type { ChatRuntimeRequest, ChatTokenUsage } from '@megumi/shared/chat-contracts';
+import type { JsonValue } from '@megumi/shared/json';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeErrorCode } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -316,7 +317,7 @@ function createModelStepToolUseCreated(
       providerToolUseId: toolCall.id,
       toolName: toolCall.name,
       input: parseToolArguments(toolCall.argumentsText),
-    } as never,
+    },
   });
 }
 
@@ -349,14 +350,14 @@ function modelStepIdFor(input: AiModelStepAdapterRequest): string {
   return String(input.request.modelStepId ?? input.stepId);
 }
 
-function parseToolArguments(argumentsText: string): object {
+function parseToolArguments(argumentsText: string): JsonValue {
   if (!argumentsText.trim()) {
     return {};
   }
 
   try {
     const value = JSON.parse(argumentsText);
-    return isRecord(value) ? value : {};
+    return isRecord(value) ? value as JsonValue : {};
   } catch {
     return {};
   }

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
+import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
 import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
 import type { FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
 
@@ -302,6 +303,7 @@ describe('OpenAI-compatible adapter', () => {
       'model.step.completed',
     ]);
     expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events.map((event) => RuntimeEventSchema.parse(event))).toEqual(events);
     expect(events[1]).toMatchObject({
       eventType: 'tool.use.created',
       stepId: 'step-1',

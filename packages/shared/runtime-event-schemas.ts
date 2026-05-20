@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { JsonObjectSchema } from './json';
+import { JsonObjectSchema, JsonValueSchema } from './json';
 import { RuntimeContextSchema } from './runtime-context';
 import { RuntimeErrorSchema } from './runtime-errors';
 import {
@@ -303,6 +303,7 @@ const ToolUseCreatedPayloadSchema = z
     modelStepId: z.string().min(1),
     providerToolUseId: z.string().min(1),
     toolName: z.string().min(1),
+    input: JsonValueSchema,
   })
   .strict();
 

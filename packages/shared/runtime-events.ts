@@ -304,6 +304,7 @@ export interface ToolUseCreatedPayload {
   modelStepId: string;
   providerToolUseId: string;
   toolName: string;
+  input: JsonValue;
 }
 
 export interface ToolResultCreatedPayload {
