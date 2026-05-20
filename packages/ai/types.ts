@@ -4,6 +4,7 @@ import type { ModelId } from '@megumi/shared/model-contracts';
 import type { ProviderId, ProviderKind } from '@megumi/shared/provider-contracts';
 import type { RunId } from '@megumi/shared/ids';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { JsonObject } from '@megumi/shared/json';
 
 export interface ProviderRuntimeConfig {
   providerId: ProviderId;
@@ -49,6 +50,36 @@ export interface OpenAICompatibleMessage {
   content: string;
   name?: string;
   tool_call_id?: string;
+  tool_calls?: OpenAICompatibleToolCall[];
+}
+
+export interface OpenAICompatibleToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+export interface OpenAICompatibleToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: JsonObject;
+  };
+}
+
+export interface OpenAICompatibleChatCompletionRequestBody {
+  model: string;
+  messages: OpenAICompatibleMessage[];
+  stream?: boolean;
+  stream_options?: {
+    include_usage: boolean;
+  };
+  tools?: OpenAICompatibleToolDefinition[];
+  tool_choice?: 'auto';
 }
 
 export interface OpenAICompatibleAdapterOptions {

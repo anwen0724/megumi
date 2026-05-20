@@ -1,13 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
-import {
-  mapModelStepToOpenAICompatibleMessages,
-  mapToOpenAICompatibleMessages,
-} from '@megumi/ai/prompt/message-mapper';
+import * as messageMapper from '@megumi/ai/prompt/message-mapper';
 import { buildSystemPrompt } from '@megumi/ai/prompt/system-prompt';
 import { AI_PROVIDER_DEFAULTS } from '@megumi/ai/models';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
+import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 
 const request: ChatRuntimeRequest = {
   requestId: 'request-1',
@@ -53,7 +50,7 @@ describe('system prompt', () => {
 
 describe('OpenAI-compatible message mapper', () => {
   it('prepends a context system message and maps chat roles', () => {
-    expect(mapToOpenAICompatibleMessages(request)).toEqual([
+    expect(messageMapper.mapToOpenAICompatibleMessages(request)).toEqual([
       {
         role: 'system',
         content: buildSystemPrompt(request.context),
@@ -70,7 +67,7 @@ describe('OpenAI-compatible message mapper', () => {
   });
 
   it('keeps explicit system messages after the generated context prompt', () => {
-    const messages = mapToOpenAICompatibleMessages({
+    const messages = messageMapper.mapToOpenAICompatibleMessages({
       ...request,
       messages: [
         {
@@ -95,7 +92,7 @@ describe('OpenAI-compatible message mapper', () => {
   });
 
   it('maps session messages for model step requests', () => {
-    expect(mapModelStepToOpenAICompatibleMessages({
+    expect(messageMapper.mapModelStepToOpenAICompatibleMessages({
       requestId: 'request-1',
       sessionId: 'session-1',
       runId: 'run-1',
@@ -125,8 +122,8 @@ describe('OpenAI-compatible message mapper', () => {
     ]);
   });
 
-  it('adds run mode runtime instructions to model step system prompts', () => {
-    const messages = mapModelStepToOpenAICompatibleMessages({
+  it('adds permission mode runtime instructions to model step system prompts', () => {
+    const messages = messageMapper.mapModelStepToOpenAICompatibleMessages({
       requestId: 'request-1',
       sessionId: 'session-1',
       runId: 'run-1',
@@ -143,18 +140,112 @@ describe('OpenAI-compatible message mapper', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         },
       ],
-      modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+      modeSnapshot: {
+        permissionMode: 'plan',
+        source: 'user',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
       modeSnapshotRef: 'mode-snapshot:1',
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    expect(messages[0]).toEqual({
-      role: 'system',
-      content: expect.stringContaining('Run mode: plan'),
-    });
     expect(messages[0]?.content).toContain('Permission mode: plan');
-    expect(messages[0]?.content).toContain('Output expectation: implementation_plan_artifact');
     expect(messages[0]?.content).toContain('Do not modify files or run side-effecting commands.');
+    expect(messages[0]?.content).not.toContain('Task intent:');
+    expect(messages[0]?.content).not.toContain('Output expectation:');
+  });
+
+  it('maps model step tool definitions to OpenAI-compatible request tools', () => {
+    const readFileTool: ToolDefinition = {
+      name: 'read_file',
+      description: 'Read a file from the current workspace.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+        },
+        required: ['path'],
+      },
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      availability: { status: 'available' },
+    };
+
+    expect(messageMapper.mapModelStepToOpenAICompatibleRequest({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      messages: [],
+      toolDefinitions: [readFileTool],
+      createdAt: '2026-05-17T00:00:00.000Z',
+    })).toMatchObject({
+      model: 'gpt-5.5',
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'read_file',
+            description: 'Read a file from the current workspace.',
+            parameters: readFileTool.inputSchema,
+          },
+        },
+      ],
+      tool_choice: 'auto',
+    });
+  });
+
+  it('appends previous tool results as OpenAI-compatible tool messages', () => {
+    const toolResult: ToolResult = {
+      toolResultId: 'tool-result-1',
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      kind: 'success',
+      textContent: 'File contents',
+      redactionState: 'none',
+      createdAt: '2026-05-17T00:00:01.000Z',
+    };
+
+    expect(messageMapper.mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      messages: [],
+      toolResults: [toolResult],
+      createdAt: '2026-05-17T00:00:00.000Z',
+    })).toContainEqual({
+      role: 'tool',
+      tool_call_id: 'tool-use-1',
+      content: 'File contents',
+    });
+  });
+
+  it('uses permission mode snapshots without legacy task intent or output expectation prompt lines', () => {
+    const messages = messageMapper.mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      messages: [],
+      modeSnapshot: {
+        permissionMode: 'plan',
+        source: 'user',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    expect(messages[0]?.content).toContain('Permission mode: plan');
+    expect(messages[0]?.content).not.toContain('Task intent:');
+    expect(messages[0]?.content).not.toContain('Output expectation:');
   });
 
   it('exposes phase 1 provider defaults', () => {

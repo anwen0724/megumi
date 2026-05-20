@@ -2,9 +2,30 @@ import type { ChatMessage, ChatRuntimeRequest } from '@megumi/shared/chat-contra
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { RunMode } from '@megumi/shared/run-mode-contracts';
-import type { OpenAICompatibleMessage } from '../types';
+import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
+import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
+import type {
+  OpenAICompatibleChatCompletionRequestBody,
+  OpenAICompatibleMessage,
+  OpenAICompatibleToolDefinition,
+} from '../types';
 import { buildSystemPrompt } from './system-prompt';
+
+export function mapModelStepToOpenAICompatibleRequest(
+  request: ModelStepRuntimeRequest,
+): OpenAICompatibleChatCompletionRequestBody {
+  const tools = request.toolDefinitions?.map(mapToolDefinition);
+
+  return {
+    model: String(request.modelId),
+    messages: mapModelStepToOpenAICompatibleMessages(request),
+    stream: true,
+    stream_options: {
+      include_usage: true,
+    },
+    ...(tools && tools.length > 0 ? { tools, tool_choice: 'auto' as const } : {}),
+  };
+}
 
 export function mapModelStepToOpenAICompatibleMessages(request: ModelStepRuntimeRequest): OpenAICompatibleMessage[] {
   const messages: OpenAICompatibleMessage[] = [
@@ -12,13 +33,17 @@ export function mapModelStepToOpenAICompatibleMessages(request: ModelStepRuntime
       role: 'system',
       content: buildSystemPrompt(
         toChatRuntimeContext(request.context),
-        request.modeSnapshot ? buildRunModePromptLines(request.modeSnapshot) : [],
+        request.modeSnapshot ? buildPermissionModePromptLines(request.modeSnapshot) : [],
       ),
     },
   ];
 
   for (const message of request.messages) {
     messages.push(mapSessionMessage(message));
+  }
+
+  for (const toolResult of request.toolResults ?? []) {
+    messages.push(mapToolResult(toolResult));
   }
 
   return messages;
@@ -48,12 +73,9 @@ function mapMessage(message: ChatMessage): OpenAICompatibleMessage {
   };
 }
 
-function buildRunModePromptLines(mode: RunMode): string[] {
+function buildPermissionModePromptLines(mode: PermissionModeSnapshot): string[] {
   return [
-    `Run mode: ${mode.preset ?? 'custom'}`,
-    `Task intent: ${mode.taskIntent}`,
     `Permission mode: ${mode.permissionMode}`,
-    `Output expectation: ${mode.outputExpectation}`,
     mode.permissionMode === 'plan'
       ? 'Produce a reviewable implementation plan. Do not modify files or run side-effecting commands.'
       : 'Produce the requested response within the current runtime and host boundaries.',
@@ -69,6 +91,45 @@ function mapSessionMessage(message: SessionMessage): OpenAICompatibleMessage {
 
 function toOpenAICompatibleRole(role: SessionMessage['role']): OpenAICompatibleMessage['role'] {
   return role === 'host' ? 'system' : role;
+}
+
+function mapToolDefinition(tool: ToolDefinition): OpenAICompatibleToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema,
+    },
+  };
+}
+
+function mapToolResult(toolResult: ToolResult): OpenAICompatibleMessage {
+  return {
+    role: 'tool',
+    tool_call_id: String(toolResult.toolUseId),
+    content: stringifyToolResultContent(toolResult),
+  };
+}
+
+function stringifyToolResultContent(toolResult: ToolResult): string {
+  if (toolResult.textContent !== undefined) {
+    return toolResult.textContent;
+  }
+
+  if (toolResult.structuredContent !== undefined) {
+    return JSON.stringify(toolResult.structuredContent);
+  }
+
+  if (toolResult.denialReason) {
+    return toolResult.denialReason;
+  }
+
+  if (toolResult.error) {
+    return toolResult.error.message;
+  }
+
+  return '';
 }
 
 function toChatRuntimeContext(context: RunContext | undefined): ChatRuntimeRequest['context'] | undefined {
