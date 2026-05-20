@@ -7,6 +7,8 @@ import {
   SANDBOX_LEVELS,
   TOOL_CAPABILITIES,
   TOOL_CALL_STATUSES,
+  TOOL_POLICY_DECISIONS,
+  TOOL_RESULT_KINDS,
   TOOL_SIDE_EFFECTS,
   TOOL_USE_STATUSES,
   ApprovalRequestSchema,
@@ -81,6 +83,8 @@ describe('tool-contracts', () => {
       'destructive',
       'unknown',
     ]);
+    expect(TOOL_RESULT_KINDS).toEqual(['success', 'tool_error', 'policy_denied', 'user_rejected', 'redacted']);
+    expect(TOOL_POLICY_DECISIONS).toEqual(['allow', 'ask', 'deny']);
   });
 
   it('accepts Claude-compatible snake_case tool definitions with JSON Schema', () => {
