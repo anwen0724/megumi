@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateToolPolicy } from '@megumi/security/tool-policy';
+import { evaluateToolPolicy, type EvaluateToolPolicyInput } from '@megumi/security/tool-policy';
 import type { JsonObject } from '@megumi/shared/json';
+import { ACTIVE_PERMISSION_MODES } from '@megumi/shared/permission-mode-contracts';
 import type { ToolCall, ToolDefinition } from '@megumi/shared/tool-contracts';
 
 const readDefinition: ToolDefinition = {
@@ -48,6 +49,18 @@ function callFor(definition: ToolDefinition, input: JsonObject = { path: 'src/in
 }
 
 describe('evaluateToolPolicy', () => {
+  it('rejects legacy read_only as a permission mode at compile time', () => {
+    const input = {
+      definition: readDefinition,
+      toolCall: callFor(readDefinition),
+      // @ts-expect-error read_only is a classifier label, not a target permission mode.
+      permissionMode: 'read_only',
+      evaluatedAt: '2026-05-16T00:00:00.000Z',
+    } satisfies EvaluateToolPolicyInput;
+
+    expect(input.permissionMode).toBe('read_only');
+  });
+
   it('allows low-risk project reads with read-only sandbox and audit fields', () => {
     const decision = evaluateToolPolicy({
       definition: readDefinition,
@@ -74,6 +87,19 @@ describe('evaluateToolPolicy', () => {
       },
       evaluatedAt: '2026-05-16T00:00:00.000Z',
     });
+  });
+
+  it('records each target permission mode without fallback normalization', () => {
+    for (const permissionMode of ACTIVE_PERMISSION_MODES) {
+      const decision = evaluateToolPolicy({
+        definition: readDefinition,
+        toolCall: callFor(readDefinition),
+        permissionMode,
+        evaluatedAt: '2026-05-16T00:00:00.000Z',
+      });
+
+      expect(decision.mode).toBe(permissionMode);
+    }
   });
 
   it('asks for project writes in default mode', () => {

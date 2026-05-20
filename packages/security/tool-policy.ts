@@ -1,10 +1,10 @@
 import type { SandboxRequirement, ToolCall, ToolDefinition, ToolPolicyDecision, ToolRiskLevel } from '@megumi/shared/tool-contracts';
-import { isPermissionMode, type PermissionMode } from '@megumi/shared/permission-mode-contracts';
+import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
 
 export interface EvaluateToolPolicyInput {
   definition: ToolDefinition;
   toolCall: ToolCall;
-  permissionMode: string;
+  permissionMode: PermissionMode;
   workspaceRoot?: string;
   protectedPathHints?: string[];
   evaluatedAt: string;
@@ -98,16 +98,12 @@ function createPolicyDecision(
     toolUseId: input.toolCall.toolUseId,
     toolCallId: input.toolCall.toolCallId,
     runId: input.toolCall.runId,
-    mode: normalizePermissionMode(input.permissionMode),
+    mode: input.permissionMode,
     capability: input.definition.capabilities[0],
     sideEffect: input.definition.sideEffect,
     evaluatedAt: input.evaluatedAt,
     ...decision,
   };
-}
-
-function normalizePermissionMode(mode: string): PermissionMode {
-  return isPermissionMode(mode) ? mode : 'default';
 }
 
 function createSandboxRequirement(
