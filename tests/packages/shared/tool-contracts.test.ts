@@ -281,6 +281,27 @@ describe('tool-contracts', () => {
     }
   });
 
+  it('persists permission classifier guard labels in permission decisions', () => {
+    for (const classifierLabel of ['project_boundary', 'sensitive_policy'] as const) {
+      expect(PermissionDecisionSchema.parse({
+        permissionDecisionId: `permission-decision-${classifierLabel}`,
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        runId: 'run-1',
+        decision: 'ask',
+        source: 'classifier',
+        reason: `Classifier recorded ${classifierLabel}.`,
+        mode: 'auto',
+        classifierLabel,
+        target: 'src/index.ts',
+        capability: 'project_write',
+        sideEffect: 'project_file_operation',
+        effectiveRiskLevel: 'medium',
+        evaluatedAt: '2026-05-20T00:00:02.000Z',
+      }).classifierLabel).toBe(classifierLabel);
+    }
+  });
+
   it('parses ToolResult success, policy deny, and user rejection', () => {
     expect(ToolResultSchema.parse({
       toolResultId: 'tool-result-1',

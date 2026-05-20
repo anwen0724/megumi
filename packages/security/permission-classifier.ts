@@ -1,15 +1,11 @@
 import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
 import type {
+  PermissionClassifierLabel,
   ToolCapability,
   ToolPolicyDecisionValue,
   ToolSideEffect,
 } from '@megumi/shared/tool-contracts';
 import type { CommandClassifierLabel } from './command-classifier';
-
-export type PermissionClassifierLabel =
-  | CommandClassifierLabel
-  | 'project_boundary'
-  | 'sensitive_policy';
 
 export interface PermissionClassifierInput {
   permissionMode: PermissionMode;
@@ -56,15 +52,6 @@ export function createRuleBasedPermissionClassifier(): PermissionClassifier {
         };
       }
 
-      if (input.sideEffect === 'none' || input.capability === 'project_read') {
-        return {
-          decision: 'allow',
-          classifierLabel: 'read_only',
-          reason: 'Auto allows project-local read.',
-          confidence: 0.95,
-        };
-      }
-
       if (input.capability === 'project_write' && input.sideEffect === 'project_file_operation') {
         if (!input.projectPath?.insideProject || input.projectPath.protected || input.projectPath.sensitive) {
           return {
@@ -80,6 +67,24 @@ export function createRuleBasedPermissionClassifier(): PermissionClassifier {
           classifierLabel: 'project_file_operation',
           reason: 'Auto allows ordinary project file edits.',
           confidence: 0.8,
+        };
+      }
+
+      if (input.capability === 'project_write') {
+        return {
+          decision: 'ask',
+          classifierLabel: 'project_file_operation',
+          reason: 'Auto requires project path evidence before allowing project writes.',
+          confidence: 0.7,
+        };
+      }
+
+      if (input.capability === 'project_read' || input.sideEffect === 'none') {
+        return {
+          decision: 'allow',
+          classifierLabel: 'read_only',
+          reason: 'Auto allows project-local read.',
+          confidence: 0.95,
         };
       }
 

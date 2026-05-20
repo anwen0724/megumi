@@ -124,6 +124,13 @@ export const COMMAND_CLASSIFIER_LABELS = [
 ] as const;
 export type CommandClassifierLabel = (typeof COMMAND_CLASSIFIER_LABELS)[number];
 
+export const PERMISSION_CLASSIFIER_LABELS = [
+  ...COMMAND_CLASSIFIER_LABELS,
+  'project_boundary',
+  'sensitive_policy',
+] as const;
+export type PermissionClassifierLabel = (typeof PERMISSION_CLASSIFIER_LABELS)[number];
+
 export const APPROVAL_SCOPES = ['once', 'run', 'project', 'local'] as const;
 export type ApprovalScope = (typeof APPROVAL_SCOPES)[number];
 
@@ -301,7 +308,7 @@ export interface PermissionDecision {
   reason: string;
   mode: PermissionMode;
   matchedRule?: PermissionMatchedRule;
-  classifierLabel?: CommandClassifierLabel;
+  classifierLabel?: PermissionClassifierLabel;
   target?: string;
   capability: ToolCapability;
   sideEffect: ToolSideEffect;
@@ -323,7 +330,7 @@ export const PermissionDecisionSchema = z
     reason: z.string().min(1),
     mode: PermissionModeSchema,
     matchedRule: PermissionMatchedRuleSchema.optional(),
-    classifierLabel: z.enum(COMMAND_CLASSIFIER_LABELS).optional(),
+    classifierLabel: z.enum(PERMISSION_CLASSIFIER_LABELS).optional(),
     target: z.string().min(1).optional(),
     capability: z.enum(TOOL_CAPABILITIES),
     sideEffect: z.enum(TOOL_SIDE_EFFECTS),
