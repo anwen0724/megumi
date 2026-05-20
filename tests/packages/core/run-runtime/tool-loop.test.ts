@@ -2,8 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { ToolResult } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ToolCall, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { runModelToolLoop } from '@megumi/core/run-runtime/tool-loop';
+import type { PendingToolApproval } from '@megumi/core/run-runtime/tool-loop';
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   const output: T[] = [];
@@ -127,12 +128,57 @@ function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   };
 }
 
+function createToolCall(toolUse: ToolUse, overrides: Partial<ToolCall> = {}): ToolCall {
+  return {
+    toolCallId: 'tool-call-1',
+    toolUseId: toolUse.toolUseId,
+    runId: toolUse.runId,
+    stepId: 'step-1',
+    toolName: toolUse.toolName,
+    input: toolUse.input,
+    inputPreview: toolUse.inputPreview,
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    sideEffect: 'none',
+    status: 'waiting_for_approval',
+    requestedAt: '2026-05-17T00:00:02.250Z',
+    ...overrides,
+  };
+}
+
+function createApprovalRequest(
+  toolUse: ToolUse,
+  toolCall: ToolCall,
+  overrides: Partial<ApprovalRequest> = {},
+): ApprovalRequest {
+  return {
+    approvalRequestId: 'approval-1',
+    toolUseId: toolUse.toolUseId,
+    toolCallId: toolCall.toolCallId,
+    runId: toolUse.runId,
+    stepId: String(toolCall.stepId),
+    toolName: toolUse.toolName,
+    capabilities: toolCall.capabilities,
+    riskLevel: toolCall.riskLevel,
+    title: 'Approve read_file',
+    summary: 'User approval is required.',
+    preview: {
+      action: 'read_file',
+      targets: [],
+    },
+    requestedScope: 'once',
+    status: 'pending',
+    createdAt: '2026-05-17T00:00:02.300Z',
+    ...overrides,
+  };
+}
+
 describe('run model tool loop', () => {
   it('feeds tool results into the next model step after handling tool uses', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
     const events = await collect(runModelToolLoop({
-      initialRequest: createRequest(),
+      request: createRequest(),
       aiPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
@@ -226,7 +272,7 @@ describe('run model tool loop', () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
     const events = await collect(runModelToolLoop({
-      initialRequest: createRequest(),
+      request: createRequest(),
       aiPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
@@ -246,14 +292,15 @@ describe('run model tool loop', () => {
       },
       toolUseHandler: {
         async handleToolUses(input) {
+          const toolCall = createToolCall(input.toolUses[0]);
+          const pendingApproval: PendingToolApproval = {
+            approvalRequest: createApprovalRequest(input.toolUses[0], toolCall),
+            toolUse: input.toolUses[0],
+            toolCall,
+          };
+
           return {
-            pendingApprovals: [
-              {
-                approvalRequestId: 'approval-1',
-                toolUseId: input.toolUses[0].toolUseId,
-                reason: 'User approval is required.',
-              },
-            ],
+            pendingApprovals: [pendingApproval],
             toolResults: [],
           };
         },
@@ -270,5 +317,69 @@ describe('run model tool loop', () => {
       'tool.use.created',
       'model.step.completed',
     ]);
+  });
+
+  it('emits run failed instead of throwing when model step limit is exhausted', async () => {
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      maxModelSteps: 1,
+      aiPort: {
+        async *streamModelStep(input) {
+          yield toolUseCreatedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+          yield modelStepCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+        },
+      },
+      toolUseHandler: {
+        async handleToolUses() {
+          return {
+            toolResults: [createToolResult()],
+          };
+        },
+      },
+      ids: {
+        nextEventId: (() => {
+          let next = 1;
+          return () => {
+            next += 1;
+            return `loop-event-${next}`;
+          };
+        })(),
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'tool.use.created',
+      'model.step.completed',
+      'tool.result.created',
+      'run.failed',
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      eventType: 'run.failed',
+      sequence: 4,
+      payload: {
+        error: {
+          code: 'runtime_protocol_violation',
+          message: 'Model tool loop exceeded maxModelSteps (1).',
+          retryable: false,
+          source: 'core',
+          details: {
+            reason: 'runtime_loop_limit_exceeded',
+            maxModelSteps: 1,
+          },
+        },
+      },
+    });
   });
 });

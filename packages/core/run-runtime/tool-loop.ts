@@ -1,14 +1,17 @@
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime-events';
-import { createToolResultCreatedEvent } from '@megumi/shared/runtime-event-factory';
-import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+import {
+  createRunFailedEvent,
+  createToolResultCreatedEvent,
+} from '@megumi/shared/runtime-event-factory';
+import type { ApprovalRequest, ToolCall, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import type { AiModelStepPort } from '../ports/ai-port';
 import { runModelStep } from './model-step';
 
 export interface PendingToolApproval {
-  approvalRequestId: string;
-  toolUseId: string;
-  reason: string;
+  approvalRequest: ApprovalRequest;
+  toolUse: ToolUse;
+  toolCall: ToolCall;
 }
 
 export interface ToolUseHandlerOutcome {
@@ -31,7 +34,7 @@ export interface ModelToolLoopIds {
 }
 
 export interface RunModelToolLoopInput {
-  initialRequest: ModelStepRuntimeRequest;
+  request: ModelStepRuntimeRequest;
   aiPort: AiModelStepPort;
   toolUseHandler: ToolUseHandlerPort;
   ids: ModelToolLoopIds;
@@ -41,7 +44,7 @@ export interface RunModelToolLoopInput {
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {
   const maxModelSteps = input.maxModelSteps ?? 8;
-  let request = input.initialRequest;
+  let request = input.request;
   let sequenceOffset = 0;
   let accumulatedToolResults = [...(request.toolResults ?? [])];
 
@@ -125,7 +128,32 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     };
   }
 
-  throw new Error(`Model tool loop exceeded maxModelSteps (${maxModelSteps}).`);
+  yield createRunFailedEvent({
+    eventId: input.ids.nextEventId(),
+    request: {
+      requestId: request.requestId,
+      providerId: request.providerId,
+      modelId: request.modelId,
+      messages: [],
+      createdAt: request.createdAt,
+      runtimeContext: request.runtimeContext,
+    },
+    runId: request.runId,
+    sequence: sequenceOffset + 1,
+    createdAt: new Date().toISOString(),
+    error: {
+      code: 'runtime_protocol_violation',
+      message: `Model tool loop exceeded maxModelSteps (${maxModelSteps}).`,
+      severity: 'error',
+      retryable: false,
+      source: 'core',
+      details: {
+        reason: 'runtime_loop_limit_exceeded',
+        maxModelSteps,
+      },
+      debugId: request.runtimeContext?.debugId ?? `debug:${request.requestId}`,
+    },
+  });
 }
 
 function createToolUseFromEvent(event: TypedRuntimeEvent<'tool.use.created'>): ToolUse {
