@@ -60,13 +60,10 @@ export type ToolAvailabilityStatus = (typeof TOOL_AVAILABILITY_STATUSES)[number]
 export const TOOL_USE_STATUSES = [
   'created',
   'validated',
-  'waiting_for_approval',
-  'approved',
+  'queued_for_execution',
+  'completed',
   'denied',
-  'running',
-  'succeeded',
   'failed',
-  'cancelled',
 ] as const;
 export type ToolUseStatus = (typeof TOOL_USE_STATUSES)[number];
 
@@ -98,21 +95,27 @@ export const TOOL_POLICY_DECISIONS = ['allow', 'ask', 'deny'] as const;
 export type ToolPolicyDecisionValue = (typeof TOOL_POLICY_DECISIONS)[number];
 
 export const PERMISSION_DECISION_SOURCES = [
+  'user_rule',
+  'project_rule',
+  'local_rule',
   'permission_mode',
-  'rule',
   'classifier',
-  'user',
-  'system',
+  'hard_guard',
+  'system_default',
 ] as const;
 export type PermissionDecisionSource = (typeof PERMISSION_DECISION_SOURCES)[number];
 
-export const PERMISSION_RULE_SCOPES = ['system', 'project', 'local', 'run'] as const;
+export const PERMISSION_RULE_SCOPES = ['user', 'project', 'local', 'system'] as const;
 export type PermissionRuleScope = (typeof PERMISSION_RULE_SCOPES)[number];
 
 export const COMMAND_CLASSIFIER_LABELS = [
   'read_only',
+  'verification',
   'project_write',
-  'network_access',
+  'project_file_operation',
+  'dependency_install',
+  'network',
+  'git_mutation',
   'destructive',
   'unknown',
 ] as const;
@@ -222,7 +225,7 @@ export interface ToolUse {
   toolUseId: ToolUseId | string;
   runId: RunId | string;
   modelStepId: ModelStepId | string;
-  providerToolUseId?: string;
+  providerToolUseId: string;
   toolName: ToolName;
   input: JsonValue;
   inputPreview: ToolInputPreview;
@@ -238,7 +241,7 @@ export const ToolUseSchema = z
     toolUseId: IdSchema,
     runId: IdSchema,
     modelStepId: IdSchema,
-    providerToolUseId: IdSchema.optional(),
+    providerToolUseId: IdSchema,
     toolName: ToolNameSchema,
     input: JsonValueSchema,
     inputPreview: ToolInputPreviewSchema,

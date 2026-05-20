@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   APPROVAL_SCOPES,
+  COMMAND_CLASSIFIER_LABELS,
+  PERMISSION_DECISION_SOURCES,
+  PERMISSION_RULE_SCOPES,
   SANDBOX_LEVELS,
   TOOL_CAPABILITIES,
   TOOL_CALL_STATUSES,
   TOOL_SIDE_EFFECTS,
+  TOOL_USE_STATUSES,
   ApprovalRequestSchema,
   PermissionDecisionSchema,
   SandboxRequirementSchema,
@@ -27,9 +31,56 @@ describe('tool-contracts', () => {
       'system_integration',
       'external_app',
     ]);
-    expect(TOOL_SIDE_EFFECTS).toContain('project_file_operation');
-    expect(SANDBOX_LEVELS).toContain('project_write');
-    expect(SANDBOX_LEVELS).not.toContain('workspace_write');
+    expect(TOOL_SIDE_EFFECTS).toEqual([
+      'none',
+      'read_external',
+      'project_file_operation',
+      'execute_command',
+      'access_network',
+      'access_secret',
+      'modify_external',
+      'system_change',
+    ]);
+    expect(SANDBOX_LEVELS).toEqual([
+      'none',
+      'read_only_project',
+      'project_write',
+      'restricted_command',
+      'network_restricted',
+      'host_restricted',
+    ]);
+  });
+
+  it('defines full ToolUse lifecycle and permission audit constants', () => {
+    expect(TOOL_USE_STATUSES).toEqual([
+      'created',
+      'validated',
+      'queued_for_execution',
+      'completed',
+      'denied',
+      'failed',
+    ]);
+    expect(PERMISSION_DECISION_SOURCES).toEqual([
+      'user_rule',
+      'project_rule',
+      'local_rule',
+      'permission_mode',
+      'classifier',
+      'hard_guard',
+      'system_default',
+    ]);
+    expect(PERMISSION_RULE_SCOPES).toEqual(['user', 'project', 'local', 'system']);
+    expect(COMMAND_CLASSIFIER_LABELS).toEqual([
+      'read_only',
+      'verification',
+      'project_write',
+      'project_file_operation',
+      'dependency_install',
+      'network',
+      'git_mutation',
+      'destructive',
+      'unknown',
+    ]);
   });
 
   it('accepts Claude-compatible snake_case tool definitions with JSON Schema', () => {
@@ -100,6 +151,23 @@ describe('tool-contracts', () => {
     expect(toolUse.providerToolUseId).toBe('call-provider-1');
   });
 
+  it('rejects ToolUse without providerToolUseId', () => {
+    expect(() => ToolUseSchema.parse({
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      modelStepId: 'model-step-1',
+      toolName: 'read_file',
+      input: { path: 'src/index.ts' },
+      inputPreview: {
+        summary: 'Read src/index.ts',
+        targets: [{ kind: 'file', label: 'src/index.ts', sensitivity: 'normal' }],
+        redactionState: 'none',
+      },
+      status: 'created',
+      createdAt: '2026-05-20T00:00:00.000Z',
+    })).toThrow();
+  });
+
   it('parses ToolCall without requiring RunActionId', () => {
     expect(TOOL_CALL_STATUSES).toContain('waiting_for_approval');
 
@@ -124,6 +192,26 @@ describe('tool-contracts', () => {
 
     expect(call.toolUseId).toBe('tool-use-1');
     expect(call).not.toHaveProperty('actionId');
+  });
+
+  it('rejects ToolCall without toolUseId', () => {
+    expect(() => ToolCallSchema.parse({
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'read_file',
+      input: { path: 'src/index.ts' },
+      inputPreview: {
+        summary: 'Read src/index.ts',
+        targets: [{ kind: 'file', label: 'src/index.ts', sensitivity: 'normal' }],
+        redactionState: 'none',
+      },
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      status: 'requested',
+      requestedAt: '2026-05-20T00:00:01.000Z',
+    })).toThrow();
   });
 
   it('parses permission decisions with audit fields', () => {
@@ -217,5 +305,32 @@ describe('tool-contracts', () => {
       allowedRoots: ['C:/all/work/study/megumi'],
       networkPolicy: 'deny',
     }).level).toBe('project_write');
+  });
+
+  it('rejects legacy actionKind and workspace sandbox values', () => {
+    expect(() => ApprovalRequestSchema.parse({
+      approvalRequestId: 'approval-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      actionKind: 'call_tool',
+      toolName: 'write_file',
+      capabilities: ['project_write'],
+      riskLevel: 'medium',
+      title: 'Approve write_file',
+      summary: 'Write src/index.ts',
+      preview: {
+        action: 'Write file',
+        targets: [{ kind: 'file', label: 'src/index.ts', sensitivity: 'normal' }],
+      },
+      requestedScope: 'once',
+      status: 'pending',
+      createdAt: '2026-05-20T00:00:06.000Z',
+    })).toThrow();
+
+    expect(() => SandboxRequirementSchema.parse({ level: 'workspace_read' })).toThrow();
+    expect(() => SandboxRequirementSchema.parse({ level: 'workspace_write' })).toThrow();
+    expect(() => SandboxRequirementSchema.parse({ level: 'workspace_write', networkPolicy: 'deny' })).toThrow();
   });
 });
