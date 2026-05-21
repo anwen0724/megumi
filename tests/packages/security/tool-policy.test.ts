@@ -217,6 +217,63 @@ describe('evaluatePermissionPolicy', () => {
     },
   );
 
+  it('blocks run_command cat option path project boundary escapes before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'cat --path=../outside.txt', cwd: '.' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(cat --path=../outside.txt)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'project_boundary',
+      target: '../outside.txt',
+    });
+  });
+
+  it('blocks run_command redirection-prefixed project boundary escapes before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'echo hi >..\\outside.txt', cwd: '.' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(echo hi >..\\outside.txt)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'project_boundary',
+      target: '../outside.txt',
+    });
+  });
+
+  it('blocks run_command at-prefixed project boundary escapes before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'cat @../outside.txt', cwd: '.' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(cat @../outside.txt)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'project_boundary',
+      target: '../outside.txt',
+    });
+  });
+
   it('blocks run_command type project boundary escapes before allow-ish policy defaults', () => {
     const decision = evaluate({
       definition: commandDefinition,

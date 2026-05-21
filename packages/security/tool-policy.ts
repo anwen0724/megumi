@@ -259,9 +259,16 @@ function normalizeCommandName(token: string | undefined): string {
 }
 
 function normalizeCommandPathToken(token: string): string {
-  return token.trim()
+  const trimmed = token.trim()
     .replace(/^['"`]+|['"`]+$/g, '')
     .replace(/[),\]]+$/g, '');
+
+  const optionValue = extractOptionPathValue(trimmed);
+  const pathCandidate = optionValue ?? trimmed;
+
+  return pathCandidate
+    .replace(/^['"`]+|['"`]+$/g, '')
+    .replace(/^(?:>>?|<|@)+/, '');
 }
 
 function isIgnoredCommandToken(token: string): boolean {
@@ -278,6 +285,23 @@ function isShellOperatorToken(token: string): boolean {
 
 function isUrlToken(token: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(token);
+}
+
+function extractOptionPathValue(token: string): string | undefined {
+  if (!token.startsWith('-')) {
+    return undefined;
+  }
+
+  const equalIndex = token.indexOf('=');
+  const colonIndex = token.indexOf(':');
+  const separatorIndexes = [equalIndex, colonIndex].filter((index) => index > 0);
+  if (separatorIndexes.length === 0) {
+    return undefined;
+  }
+
+  const separatorIndex = Math.min(...separatorIndexes);
+  const value = token.slice(separatorIndex + 1).trim();
+  return value.length > 0 ? value : undefined;
 }
 
 function isExplicitPathToken(token: string): boolean {
