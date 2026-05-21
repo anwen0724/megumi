@@ -137,6 +137,7 @@ export type PermissionClassifierLabel = (typeof PERMISSION_CLASSIFIER_LABELS)[nu
 
 export const APPROVAL_SCOPES = ['once', 'run', 'project', 'local'] as const;
 export type ApprovalScope = (typeof APPROVAL_SCOPES)[number];
+export const ApprovalScopeSchema = z.enum(APPROVAL_SCOPES);
 
 export const APPROVAL_STATUSES = ['pending', 'approved', 'denied', 'expired', 'cancelled'] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
@@ -285,7 +286,7 @@ export type SandboxRequirement = z.infer<typeof SandboxRequirementSchema>;
 
 export const ApprovalRequirementSchema = z
   .object({
-    scope: z.enum(APPROVAL_SCOPES),
+    scope: ApprovalScopeSchema,
     reason: z.string().min(1),
   })
   .strict();
@@ -422,7 +423,7 @@ export const ApprovalRequestSchema = z
     title: z.string().min(1),
     summary: z.string().min(1),
     preview: ApprovalPreviewSchema,
-    requestedScope: z.enum(APPROVAL_SCOPES),
+    requestedScope: ApprovalScopeSchema,
     status: z.enum(APPROVAL_STATUSES),
     createdAt: IsoDateTimeSchema,
     expiresAt: IsoDateTimeSchema.optional(),
@@ -440,7 +441,7 @@ export const ApprovalRecordSchema = z
     runId: IdSchema,
     stepId: IdSchema,
     decision: z.enum(['approved', 'denied', 'expired', 'cancelled']),
-    scope: z.enum(APPROVAL_SCOPES),
+    scope: ApprovalScopeSchema,
     decidedBy: z.enum(['user', 'host', 'system']),
     reason: z.string().min(1).optional(),
     decidedAt: IsoDateTimeSchema,

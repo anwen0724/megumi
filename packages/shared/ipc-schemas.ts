@@ -20,10 +20,12 @@ import {
   ImplementationPlanArtifactStatusSchema,
 } from './run-mode-contracts';
 import {
+  ApprovalScopeSchema,
   ApprovalRecordSchema,
   ToolCallSchema,
   ToolDefinitionSchema,
 } from './tool-contracts';
+import { PermissionModeSchema } from './permission-mode-contracts';
 import {
   CancelRequestSchema,
   RecoverableRunSummarySchema,
@@ -130,7 +132,6 @@ export const ProviderDeleteApiKeyPayloadSchema = z
 export const ProviderEmptyDataSchema = z.object({}).strict();
 
 export const SessionMessageIpcRoleSchema = z.enum(['system', 'user', 'assistant', 'tool']);
-export const ComposerModeSchema = z.enum(['chat', 'plan', 'execute', 'review']);
 
 export const SessionMessageIpcSchema = z
   .object({
@@ -149,7 +150,7 @@ export const SessionMessageRuntimeContextSchema = z
     workspaceLabel: z.string().min(1).optional(),
     workspacePath: z.string().min(1).optional(),
     sessionTitle: z.string().min(1).optional(),
-    composerMode: ComposerModeSchema.optional(),
+    permissionMode: PermissionModeSchema.optional(),
   })
   .strict();
 
@@ -299,7 +300,7 @@ export const ApprovalResolvePayloadSchema = z
   .object({
     approvalRequestId: z.string().min(1),
     decision: z.enum(['approved', 'denied']),
-    scope: z.enum(['once', 'run']),
+    scope: ApprovalScopeSchema,
     reason: z.string().min(1).optional(),
     decidedAt: IsoDateTimeSchema,
   })

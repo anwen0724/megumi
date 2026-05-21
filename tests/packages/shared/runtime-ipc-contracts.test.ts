@@ -554,7 +554,7 @@ describe('provider and chat ipc schemas', () => {
         context: {
           workspaceLabel: 'Megumi',
           workspacePath: 'C:/all/work/study/megumi',
-          composerMode: 'chat',
+          permissionMode: 'default',
         },
         createdAt: '2026-05-12T00:00:00.000Z',
       },
@@ -566,6 +566,60 @@ describe('provider and chat ipc schemas', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('accepts permissionMode in session message runtime context', () => {
+    const parsed = SessionMessageSendRequestSchema.parse({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-1',
+          role: 'user',
+          content: 'Plan a change',
+          createdAt: '2026-05-20T00:00:00.000Z',
+        }],
+        context: {
+          workspaceId: 'project-1',
+          workspacePath: 'C:/all/work/study/megumi',
+          sessionTitle: 'Plan a change',
+          permissionMode: 'plan',
+        },
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.message.send,
+        source: 'renderer',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+      context: {
+        requestId: 'ipc-session-message-send-1',
+        traceId: 'trace-1',
+        operationName: 'session.message.send',
+        source: 'renderer',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+    });
+
+    expect(parsed.payload.context?.permissionMode).toBe('plan');
+  });
+
+  it('rejects legacy composerMode in session message runtime context', () => {
+    expect(() => SessionMessageSendPayloadSchema.parse({
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      messages: [{
+        id: 'message-1',
+        role: 'user',
+        content: 'Hello',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      }],
+      context: {
+        composerMode: 'execute',
+      },
+      createdAt: '2026-05-20T00:00:00.000Z',
+    })).toThrow();
   });
 
   it('uses a target request id for chat cancellation payloads', () => {
@@ -665,7 +719,7 @@ describe('agent context runtime IPC schemas', () => {
         }],
         context: {
           workspacePath: 'C:/all/work/study/megumi',
-          composerMode: 'chat',
+          permissionMode: 'default',
         },
         createdAt: '2026-05-17T00:00:00.000Z',
       },

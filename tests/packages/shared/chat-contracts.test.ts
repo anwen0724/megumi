@@ -24,14 +24,23 @@ describe('chat contracts', () => {
       context: {
         workspaceLabel: 'Megumi',
         workspacePath: 'C:/all/work/study/megumi',
-        composerMode: 'chat',
+        permissionMode: 'default',
       },
       createdAt: '2026-05-11T00:00:00.000Z',
     };
 
     expect(request.providerId).toBe('deepseek');
     expect(request.messages[0]?.role).toBe('user');
+    expect(request.context?.permissionMode).toBe('default');
+    expect(request.context).not.toHaveProperty('composerMode');
     expect(JSON.stringify(request)).not.toContain('apiKey');
+  });
+
+  it('does not model legacy composerMode in chat runtime context', () => {
+    // @ts-expect-error composerMode is intentionally removed from ChatRuntimeContext.
+    const legacyContext: ChatRuntimeRequest['context'] = { composerMode: 'chat' };
+
+    expect(legacyContext).toHaveProperty('composerMode');
   });
 
   it('keeps runtime events out of the chat request contract', () => {

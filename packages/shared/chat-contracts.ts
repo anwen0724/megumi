@@ -1,13 +1,12 @@
 import type { IsoDateTime, MessageId, RunId, SessionId, WorkspaceId } from './ids';
 import type { ModelId } from './model-contracts';
+import type { PermissionMode } from './permission-mode-contracts';
 import type { ProviderId } from './provider-contracts';
 import type { RuntimeContext } from './runtime-context';
 
 export const CHAT_ROLES = ['system', 'user', 'assistant', 'tool'] as const;
 
 export type ChatRole = (typeof CHAT_ROLES)[number];
-
-export type ComposerMode = 'chat' | 'plan' | 'execute' | 'review';
 
 export interface ChatMessage {
   id: MessageId | string;
@@ -23,7 +22,7 @@ export interface ChatRuntimeContext {
   workspaceLabel?: string;
   workspacePath?: string;
   sessionTitle?: string;
-  composerMode?: ComposerMode;
+  permissionMode?: PermissionMode;
 }
 
 export interface ChatRuntimeRequest {
