@@ -6,6 +6,7 @@ import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { ToolCallSchema } from '@megumi/shared/tool-contracts';
 
 function runtimeEvent(
   eventType: RuntimeEvent['eventType'],
@@ -199,6 +200,46 @@ describe('runtime event dispatcher', () => {
       startedAt: '2026-05-20T00:00:01.000Z',
     });
     expect(useChatStore.getState().agentStatus).toBe('running');
+  });
+
+  it('stores denied tool calls with a shared-schema-valid runtime error', () => {
+    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 1, {
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        toolUseId: 'tool-use-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'edit_file',
+        input: { path: 'src/app.ts' },
+        inputPreview: {
+          summary: 'Edit src/app.ts',
+          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
+          redactionState: 'none',
+        },
+        capabilities: ['project_write'],
+        riskLevel: 'medium',
+        sideEffect: 'project_file_operation',
+        status: 'requested',
+        requestedAt: '2026-05-20T00:00:00.000Z',
+      },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('tool.call.denied', 2, {
+      toolCallId: 'tool-call-1',
+      reason: 'User denied the requested tool call.',
+    }));
+
+    const storedToolCall = useToolCallStore.getState().toolCallsById['tool-call-1'];
+    expect(ToolCallSchema.parse(storedToolCall)).toEqual(storedToolCall);
+    expect(storedToolCall).toMatchObject({
+      status: 'denied',
+      error: {
+        code: 'approval_denied',
+        message: 'User denied the requested tool call.',
+        severity: 'info',
+        retryable: false,
+        source: 'approval',
+      },
+    });
   });
 
   it('projects approval events and waiting status into renderer stores', () => {

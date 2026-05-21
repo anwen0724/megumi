@@ -98,12 +98,12 @@ function applyToolEvent(event: RuntimeEvent): void {
         ...current,
         status: 'denied',
         error: {
-          code: 'tool_denied',
+          code: 'approval_denied',
           message: payload.reason ?? 'Tool call was denied.',
           severity: 'info',
           retryable: false,
-          source: 'policy',
-        } as unknown as RuntimeError,
+          source: 'approval',
+        },
         completedAt: event.createdAt,
       });
     }
