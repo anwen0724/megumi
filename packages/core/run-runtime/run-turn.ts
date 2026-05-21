@@ -47,8 +47,7 @@ import {
   type RunTurnResult,
 } from './types';
 import {
-  createRunModeRuntimeInstruction,
-  defaultActionKindForRunMode,
+  createPermissionModeRuntimeInstruction,
   resolveRunModeSnapshot,
 } from './run-mode';
 
@@ -72,27 +71,22 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     mode: input.mode,
     modeSnapshot: input.modeSnapshot,
   });
-  const runModeInstruction = createRunModeRuntimeInstruction(resolvedMode);
-  const actionKind = input.actionKind
-    ?? (input.contextPatch ? 'update_context' : defaultActionKindForRunMode(resolvedMode));
+  const runModeInstruction = createPermissionModeRuntimeInstruction(resolvedMode);
+  const actionKind = input.actionKind ?? (input.contextPatch ? 'update_context' : 'emit_message');
   const stepKind = stepKindForAction(actionKind);
 
   let run: Run = {
     runId,
     sessionId: input.sessionId,
     ...(input.triggerMessageId ? { triggerMessageId: input.triggerMessageId } : {}),
-    mode: resolvedMode.preset ?? input.mode,
+    mode: resolvedMode.permissionMode,
     ...(input.modeSnapshotRef ? { modeSnapshotRef: input.modeSnapshotRef } : {}),
     goal: input.goal,
     status: 'queued',
     createdAt,
     ...(input.sourcePlanId ? { sourcePlanId: input.sourcePlanId } : {}),
     metadata: {
-      runMode: {
-        taskIntent: runModeInstruction.taskIntent,
-        permissionMode: runModeInstruction.permissionMode,
-        outputExpectation: runModeInstruction.outputExpectation,
-      },
+      permissionMode: runModeInstruction.permissionMode,
     } satisfies JsonObject,
   };
 
@@ -492,15 +486,8 @@ function createRecoveryObservationForAction(
 }
 
 function createDefaultRunModeActionInputPreview(mode: RunMode): RunAction['inputPreview'] | undefined {
-  if (mode.outputExpectation !== 'implementation_plan_artifact') {
-    return undefined;
-  }
-
   return {
-    artifactKind: 'implementation_plan',
-    taskIntent: mode.taskIntent,
     permissionMode: mode.permissionMode,
-    outputExpectation: mode.outputExpectation,
   };
 }
 
@@ -522,12 +509,6 @@ function readString(value: Record<string, unknown>, key: string, fallback?: stri
 }
 
 function stepKindForAction(actionKind: RunAction['kind']): RunStep['kind'] {
-  if (actionKind === 'call_tool') {
-    return 'tool';
-  }
-  if (actionKind === 'request_approval') {
-    return 'approval';
-  }
   if (actionKind === 'update_context') {
     return 'context';
   }

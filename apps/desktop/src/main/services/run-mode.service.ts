@@ -1,6 +1,6 @@
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import {
-  RUN_MODE_PRESET_DEFAULTS,
+  PermissionModeSchema,
   type ImplementationPlanArtifactRecord,
   type ImplementationPlanArtifactStatus,
   type RunMode,
@@ -49,11 +49,11 @@ export class RunModeService {
     modeSnapshot?: RunMode;
     createdAt: string;
   }): RunModeSnapshot {
-    const mode = input.modeSnapshot ?? resolvePresetMode(input.mode);
+    const mode = normalizeRunMode(input.modeSnapshot ?? input.mode);
     const snapshot: RunModeSnapshot = {
       modeSnapshotId: this.ids.modeSnapshotId(),
       runId: input.runId,
-      modeLabel: mode.preset ?? input.mode,
+      modeLabel: mode.permissionMode,
       mode,
       createdAt: input.createdAt,
     };
@@ -77,7 +77,7 @@ export class RunModeService {
     mode: RunMode;
     createdAt: string;
   }): ImplementationPlanArtifactRecord | undefined {
-    if (input.mode.outputExpectation !== 'implementation_plan_artifact') {
+    if (input.mode.permissionMode !== 'plan') {
       return undefined;
     }
 
@@ -90,7 +90,7 @@ export class RunModeService {
       updatedAt: input.createdAt,
       metadata: {
         artifactKind: 'implementation_plan',
-        modePreset: input.mode.preset ?? 'plan',
+        permissionMode: input.mode.permissionMode,
       },
     });
 
@@ -119,16 +119,16 @@ export class RunModeService {
   }
 }
 
-function resolvePresetMode(mode: string): RunMode {
-  if (mode in RUN_MODE_PRESET_DEFAULTS) {
-    return RUN_MODE_PRESET_DEFAULTS[mode as keyof typeof RUN_MODE_PRESET_DEFAULTS];
+function normalizeRunMode(input: RunMode | string): RunMode {
+  if (typeof input === 'string') {
+    return {
+      permissionMode: PermissionModeSchema.parse(input),
+      source: 'system',
+    };
   }
 
   return {
-    preset: mode,
-    taskIntent: 'answer',
-    permissionMode: 'default',
-    outputExpectation: 'assistant_message',
-    selectionSource: 'host_inference',
+    permissionMode: PermissionModeSchema.parse(input.permissionMode),
+    ...(input.source ? { source: input.source } : {}),
   };
 }

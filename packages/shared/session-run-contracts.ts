@@ -82,9 +82,6 @@ export const RUN_ACTION_STATUSES = [
 export type RunActionStatus = (typeof RUN_ACTION_STATUSES)[number];
 
 export const RUN_ACTION_KINDS = [
-  'call_model',
-  'call_tool',
-  'request_approval',
   'emit_message',
   'create_artifact',
   'update_context',

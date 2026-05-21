@@ -1,71 +1,59 @@
-import type { RunActionKind } from '@megumi/shared/session-run-contracts';
-import {
-  RUN_MODE_PRESET_DEFAULTS,
-  type PermissionMode,
-  type RunMode,
-  isActivePermissionMode,
-} from '@megumi/shared/run-mode-contracts';
+import type { PermissionMode, RunMode } from '@megumi/shared/run-mode-contracts';
+import { PermissionModeSchema } from '@megumi/shared/run-mode-contracts';
 
 export interface ResolveRunModeSnapshotInput {
-  mode: string;
+  permissionMode?: string;
+  mode?: string;
   modeSnapshot?: RunMode;
 }
 
-export interface RunModeRuntimeInstruction {
-  taskIntent: RunMode['taskIntent'];
+export interface PermissionModeRuntimeInstruction {
   permissionMode: PermissionMode;
-  outputExpectation: RunMode['outputExpectation'];
   instruction: string;
 }
 
 export function resolveRunModeSnapshot(input: ResolveRunModeSnapshotInput): RunMode {
   if (input.modeSnapshot) {
-    assertRuntimePermissionModeSupported(input.modeSnapshot);
-    return input.modeSnapshot;
-  }
-
-  const preset = input.mode in RUN_MODE_PRESET_DEFAULTS
-    ? input.mode as keyof typeof RUN_MODE_PRESET_DEFAULTS
-    : 'chat';
-  const mode = RUN_MODE_PRESET_DEFAULTS[preset];
-  assertRuntimePermissionModeSupported(mode);
-  return mode;
-}
-
-export function assertRuntimePermissionModeSupported(mode: RunMode): void {
-  if (!isActivePermissionMode(mode.permissionMode)) {
-    throw new Error(
-      `Permission mode ${mode.permissionMode} is reserved for a later capability stage.`,
-    );
-  }
-}
-
-export function defaultActionKindForRunMode(mode: RunMode): RunActionKind {
-  assertRuntimePermissionModeSupported(mode);
-
-  if (mode.outputExpectation === 'implementation_plan_artifact') {
-    return 'create_artifact';
-  }
-
-  return 'emit_message';
-}
-
-export function createRunModeRuntimeInstruction(mode: RunMode): RunModeRuntimeInstruction {
-  assertRuntimePermissionModeSupported(mode);
-
-  if (mode.permissionMode === 'plan') {
     return {
-      taskIntent: mode.taskIntent,
-      permissionMode: mode.permissionMode,
-      outputExpectation: mode.outputExpectation,
-      instruction: 'Produce a reviewable implementation plan. Do not modify files or run side-effecting commands.',
+      permissionMode: PermissionModeSchema.parse(input.modeSnapshot.permissionMode),
+      ...(input.modeSnapshot.source ? { source: input.modeSnapshot.source } : {}),
     };
   }
 
   return {
-    taskIntent: mode.taskIntent,
-    permissionMode: mode.permissionMode,
-    outputExpectation: mode.outputExpectation,
-    instruction: 'Produce the requested response within the current runtime and host boundaries.',
+    permissionMode: PermissionModeSchema.parse(input.permissionMode ?? input.mode ?? 'default'),
+    source: 'system',
   };
 }
+
+export function createPermissionModeRuntimeInstruction(mode: RunMode): PermissionModeRuntimeInstruction {
+  const permissionMode = PermissionModeSchema.parse(mode.permissionMode);
+
+  if (permissionMode === 'plan') {
+    return {
+      permissionMode,
+      instruction: 'Plan mode: read and analyze project context, ask for verification commands, deny writes and unknown commands.',
+    };
+  }
+
+  if (permissionMode === 'accept_edits') {
+    return {
+      permissionMode,
+      instruction: 'Accept edits mode: ordinary project edits and verification commands may proceed when policy allows them.',
+    };
+  }
+
+  if (permissionMode === 'auto') {
+    return {
+      permissionMode,
+      instruction: 'Auto mode: use rule-based permission classification and preserve auditable reasons for automatic decisions.',
+    };
+  }
+
+  return {
+    permissionMode,
+    instruction: 'Default mode: read-only project context may proceed; writes and commands require ask-first policy handling.',
+  };
+}
+
+export const createRunModeRuntimeInstruction = createPermissionModeRuntimeInstruction;

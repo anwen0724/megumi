@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
 
 function createRepo() {
@@ -49,14 +48,22 @@ describe('RunModeService', () => {
 
     const snapshot = service.createModeSnapshot({
       runId: 'run:1',
-      mode: 'execute',
-      modeSnapshot: RUN_MODE_PRESET_DEFAULTS.execute,
+      mode: 'accept_edits',
+      modeSnapshot: {
+        permissionMode: 'accept_edits',
+        source: 'user',
+      },
       createdAt: '2026-05-15T00:00:00.000Z',
     });
 
     expect(snapshot.modeSnapshotId).toBe('mode-snapshot:1');
-    expect(snapshot.modeLabel).toBe('execute');
-    expect(snapshot.mode.permissionMode).toBe('default');
+    expect(snapshot.modeLabel).toBe('accept_edits');
+    expect(snapshot.mode).toEqual({
+      permissionMode: 'accept_edits',
+      source: 'user',
+    });
+    expect(snapshot.mode).not.toHaveProperty('taskIntent');
+    expect(snapshot.mode).not.toHaveProperty('outputExpectation');
   });
 
   it('rejects source plans that are not accepted', () => {
@@ -91,12 +98,40 @@ describe('RunModeService', () => {
     const plan = service.createPlanRecordForRun({
       runId: 'run:plan',
       goal: 'Write plan',
-      mode: RUN_MODE_PRESET_DEFAULTS.plan,
+      mode: {
+        permissionMode: 'plan',
+        source: 'user',
+      },
       createdAt: '2026-05-15T00:00:00.000Z',
     });
 
     expect(plan?.planArtifactId).toBe('plan:created');
     expect(plan?.status).toBe('proposed');
+    expect(plan?.metadata).toEqual({
+      artifactKind: 'implementation_plan',
+      permissionMode: 'plan',
+    });
+  });
+
+  it('does not create proposed plan records outside plan permission mode', () => {
+    const repo = createRepo();
+    const service = new RunModeService({
+      repository: repo,
+      ids: { modeSnapshotId: () => 'mode-snapshot:1', planArtifactId: () => 'plan:created' },
+    });
+
+    const plan = service.createPlanRecordForRun({
+      runId: 'run:default',
+      goal: 'Write answer',
+      mode: {
+        permissionMode: 'default',
+        source: 'user',
+      },
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    expect(plan).toBeUndefined();
+    expect(repo.plans.size).toBe(0);
   });
 
   it('syncs created implementation plans into generic artifact compatibility service', () => {
@@ -117,9 +152,8 @@ describe('RunModeService', () => {
       runId: 'run:1',
       goal: 'Write plans',
       mode: {
-        taskIntent: 'plan',
         permissionMode: 'plan',
-        outputExpectation: 'implementation_plan_artifact',
+        source: 'user',
       },
       createdAt: '2026-05-16T00:00:00.000Z',
     });
@@ -145,9 +179,8 @@ describe('RunModeService', () => {
       runId: 'run:1',
       goal: 'Write plans',
       mode: {
-        taskIntent: 'plan',
         permissionMode: 'plan',
-        outputExpectation: 'implementation_plan_artifact',
+        source: 'user',
       },
       createdAt: '2026-05-16T00:00:00.000Z',
     });

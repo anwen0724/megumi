@@ -52,7 +52,7 @@ describe('run runtime lifecycle events', () => {
       sessionId: 'session-1',
       sequence: 1,
       createdAt: '2026-05-15T00:00:00.000Z',
-      mode: 'chat',
+      mode: 'default',
       goal: 'Answer',
       triggerMessageId: 'message-1',
     })).toMatchObject({
@@ -65,7 +65,7 @@ describe('run runtime lifecycle events', () => {
       persist: 'required',
       payload: {
         status: 'queued',
-        mode: 'chat',
+        mode: 'default',
         goal: 'Answer',
         triggerMessageId: 'message-1',
       },
@@ -78,7 +78,7 @@ describe('run runtime lifecycle events', () => {
     const result = await runTurn({
       sessionId: 'session-1',
       triggerMessageId: 'message-1',
-      mode: 'chat',
+      mode: 'default',
       goal: 'Answer the user',
       lifecycle: sink,
       hostBoundary: {
@@ -98,6 +98,9 @@ describe('run runtime lifecycle events', () => {
     });
 
     expect(result.run.status).toBe('completed');
+    expect(result.run.metadata).toEqual({
+      permissionMode: 'default',
+    });
     expect(result.step.status).toBe('succeeded');
     expect(result.step).toMatchObject({
       kind: 'model',
@@ -135,7 +138,7 @@ describe('run runtime lifecycle events', () => {
     const result = await runTurn({
       sessionId: 'session-1',
       triggerMessageId: 'message-1',
-      mode: 'chat',
+      mode: 'default',
       goal: 'Answer the user',
       lifecycle: sink,
       hostBoundary: {
@@ -169,7 +172,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'chat',
+      mode: 'default',
       goal: 'Fail safely',
       lifecycle: sink,
       hostBoundary: {
@@ -210,7 +213,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'chat',
+      mode: 'default',
       goal: 'Use workspace context',
       actionKind: 'update_context',
       contextPatch: {
@@ -275,14 +278,11 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'execute',
-      modeSnapshotRef: 'mode-snapshot:execute',
+      mode: 'default',
+      modeSnapshotRef: 'mode-snapshot:default',
       modeSnapshot: {
-        preset: 'execute',
-        taskIntent: 'work',
         permissionMode: 'default',
-        outputExpectation: 'execution_result',
-        selectionSource: 'user_selected',
+        source: 'user',
       },
       sourcePlanId: 'plan:accepted',
       goal: 'Execute accepted plan',
@@ -306,17 +306,15 @@ describe('run runtime lifecycle events', () => {
       },
     });
 
-    expect(result.run.mode).toBe('execute');
-    expect(result.run.modeSnapshotRef).toBe('mode-snapshot:execute');
+    expect(result.run.mode).toBe('default');
+    expect(result.run.modeSnapshotRef).toBe('mode-snapshot:default');
     expect(result.run.sourcePlanId).toBe('plan:accepted');
-    expect(result.run.metadata?.runMode).toEqual({
-      taskIntent: 'work',
+    expect(result.run.metadata).toEqual({
       permissionMode: 'default',
-      outputExpectation: 'execution_result',
     });
   });
 
-  it('uses create_artifact as plan mode default action intent', async () => {
+  it('keeps plan permission mode as an emit_message run by default', async () => {
     const { sink } = createSink();
 
     const result = await runTurn({
@@ -324,11 +322,8 @@ describe('run runtime lifecycle events', () => {
       mode: 'plan',
       modeSnapshotRef: 'mode-snapshot:plan',
       modeSnapshot: {
-        preset: 'plan',
-        taskIntent: 'plan',
         permissionMode: 'plan',
-        outputExpectation: 'implementation_plan_artifact',
-        selectionSource: 'user_selected',
+        source: 'user',
       },
       goal: 'Write a plan',
       lifecycle: sink,
@@ -339,9 +334,9 @@ describe('run runtime lifecycle events', () => {
           stepId: action.stepId,
           actionId: action.actionId,
           source: 'runtime',
-          kind: 'plan_artifact_requested',
+          kind: 'message_emitted',
           receivedAt: '2026-05-15T00:00:00.000Z',
-          summary: 'Implementation plan artifact requested.',
+          summary: 'Message emitted.',
         }),
       },
       clock: { now: () => '2026-05-15T00:00:00.000Z' },
@@ -351,97 +346,11 @@ describe('run runtime lifecycle events', () => {
       },
     });
 
-    expect(result.action.kind).toBe('create_artifact');
+    expect(result.run.mode).toBe('plan');
+    expect(result.action.kind).toBe('emit_message');
     expect(result.action.inputPreview).toEqual({
-      artifactKind: 'implementation_plan',
-      taskIntent: 'plan',
       permissionMode: 'plan',
-      outputExpectation: 'implementation_plan_artifact',
     });
-  });
-
-  it('creates a tool step and consumes a tool observation for call_tool actions', async () => {
-    const { sink, events } = createSink();
-    const result = await runTurn({
-      sessionId: 'session-1',
-      mode: 'execute',
-      goal: 'Read a file',
-      actionKind: 'call_tool',
-      actionInputPreview: {
-        toolName: 'workspace_read_file',
-        summary: 'Read src/index.ts',
-      },
-      lifecycle: sink,
-      hostBoundary: {
-        handleAction: (action) => ({
-          observationId: 'observation-tool-1',
-          runId: action.runId,
-          stepId: action.stepId,
-          actionId: action.actionId,
-          source: 'tool',
-          kind: 'tool_result',
-          receivedAt: '2026-05-16T00:00:04.000Z',
-          summary: 'Read file.',
-          metadata: {
-            toolCallId: 'tool-call-1',
-            toolName: 'workspace_read_file',
-            status: 'succeeded',
-          },
-        }),
-      },
-      clock: { now: () => '2026-05-16T00:00:00.000Z' },
-      ids: {
-        ...ids,
-        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
-      },
-    });
-
-    expect(result.step.kind).toBe('tool');
-    expect(result.action.kind).toBe('call_tool');
-    expect(result.observation.source).toBe('tool');
-    expect(events.some((event) => event.eventType === 'observation.received')).toBe(true);
-  });
-
-  it('keeps approval waits as waiting_for_approval instead of completing the run', async () => {
-    const { sink } = createSink();
-    const result = await runTurn({
-      sessionId: 'session-1',
-      mode: 'execute',
-      goal: 'Write a file',
-      actionKind: 'request_approval',
-      actionInputPreview: {
-        approvalRequestId: 'approval-1',
-        toolName: 'workspace_write_file',
-        summary: 'Approve write',
-      },
-      lifecycle: sink,
-      hostBoundary: {
-        handleAction: (action) => ({
-          observationId: 'observation-approval-1',
-          runId: action.runId,
-          stepId: action.stepId,
-          actionId: action.actionId,
-          source: 'approval',
-          kind: 'approval_requested',
-          receivedAt: '2026-05-16T00:00:04.000Z',
-          summary: 'Waiting for approval.',
-          metadata: {
-            approvalRequestId: 'approval-1',
-            status: 'pending',
-          },
-        }),
-      },
-      clock: { now: () => '2026-05-16T00:00:00.000Z' },
-      ids: {
-        ...ids,
-        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
-      },
-    });
-
-    expect(result.step.kind).toBe('approval');
-    expect(result.run.status).toBe('waiting_for_approval');
-    expect(result.step.status).toBe('waiting_for_approval');
-    expect(result.action.status).toBe('waiting_for_approval');
   });
 
   it('emits checkpoint observation and event for save_checkpoint action', async () => {
@@ -449,7 +358,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'execute',
+      mode: 'default',
       goal: 'Save recovery state',
       actionKind: 'save_checkpoint',
       actionInput: {
@@ -486,7 +395,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'execute',
+      mode: 'default',
       goal: 'Cancel the run',
       actionKind: 'cancel',
       actionInput: {
@@ -516,7 +425,7 @@ describe('run runtime lifecycle events', () => {
     const { sink } = createSink();
     const result = await runTurn({
       sessionId: 'session:artifact',
-      mode: 'execute',
+      mode: 'default',
       goal: 'Reference report',
       actionKind: 'create_artifact',
       actionInputPreview: {

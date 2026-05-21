@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  RUN_ACTION_KINDS,
   RunActionKindSchema,
   RunActionSchema,
   RunObservationSchema,
@@ -42,9 +43,6 @@ describe('session run contracts', () => {
     ]);
     expect(RunStepKindSchema.options).toContain('observation');
     expect(RunActionKindSchema.options).toEqual([
-      'call_model',
-      'call_tool',
-      'request_approval',
       'emit_message',
       'create_artifact',
       'update_context',
@@ -55,6 +53,20 @@ describe('session run contracts', () => {
     ]);
     expect(RunActionKindSchema.options).not.toContain('plan');
     expect(RunObservationSourceSchema.options).toContain('runtime');
+  });
+
+  it('keeps RunAction kinds for Host maintenance only', () => {
+    expect(RUN_ACTION_KINDS).toEqual([
+      'emit_message',
+      'create_artifact',
+      'update_context',
+      'update_memory',
+      'save_checkpoint',
+      'recover',
+      'cancel',
+    ]);
+    expect(RUN_ACTION_KINDS).not.toContain('call_tool');
+    expect(RUN_ACTION_KINDS).not.toContain('request_approval');
   });
 
   it('validates the minimum Session shape strictly', () => {
