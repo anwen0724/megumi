@@ -149,7 +149,7 @@ describe('ChatTimeline', () => {
     expect(screen.getByText('Open a workspace to get started.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open workspace' })).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toBeInTheDocument();
-    expect(screen.getByLabelText('Composer mode')).toHaveValue('chat');
+    expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
   });
 
