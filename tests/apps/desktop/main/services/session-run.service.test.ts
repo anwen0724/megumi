@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
+import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import {
   SessionRunService,
   type SessionRunContextService,
@@ -917,6 +918,180 @@ describe('SessionRunService', () => {
       content: 'Final answer after tool result.',
       runId: 'run-1',
     });
+  });
+
+  it('persists model step records before tool handlers persist model tool uses', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const toolRepository = new ToolRepository(db);
+    const service = new SessionRunService({
+      repository,
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+
+          if (requests.length === 1) {
+            yield toolUseCreatedEvent(1);
+            yield modelStepCompletedEvent(2);
+            return;
+          }
+
+          yield {
+            ...assistantOutputCompletedEvent(1),
+            stepId: request.stepId,
+          };
+        },
+        cancelModelStep: () => true,
+      },
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses(input) {
+              const [toolUse] = input.toolUses;
+              expect(toolUse).toMatchObject({
+                toolUseId: 'tool-use-1',
+                modelStepId: 'model-step-1',
+              });
+              toolRepository.saveToolUse(toolUse);
+              return {
+                toolResults: [createToolResult({ toolUseId: toolUse.toolUseId })],
+              };
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
+          };
+        },
+      },
+      clock: { now: () => '2026-05-17T00:00:04.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `step-${index}`;
+          };
+        })(),
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `service-event-${index}`;
+          };
+        })(),
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `message-${index}`;
+          };
+        })(),
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(toolRepository.listToolUsesByRun('run-1')).toEqual([
+      expect.objectContaining({
+        toolUseId: 'tool-use-1',
+        modelStepId: 'model-step-1',
+      }),
+    ]);
+    expect(streamed.at(-1)?.eventType).toBe('run.completed');
+  });
+
+  it('marks session message runs failed when the tool runtime throws after model tool use', async () => {
+    const service = createServiceWithModelStepStream([
+      toolUseCreatedEvent(1),
+      modelStepCompletedEvent(2),
+    ], {
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses() {
+              throw new Error('tool persistence failed');
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
+          };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'tool.use.created',
+      'model.step.completed',
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+    expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toEqual([
+      'run.started',
+      'tool.use.created',
+      'model.step.completed',
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
   });
 
   it('does not emit action.requested for model tool use runs', async () => {

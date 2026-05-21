@@ -178,7 +178,7 @@ describe('Composer', () => {
     const onStop = vi.fn();
     render(<Composer status="sending" onSubmit={onSubmit} onStop={onStop} initialValue="Continue this plan" />);
 
-    expect(screen.getByText('Sending')).toBeInTheDocument();
+    expect(screen.queryByText('Sending')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('Continue this plan');
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), ' after this run');
@@ -191,12 +191,13 @@ describe('Composer', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
-  it('shows running status, keeps the compact draft placeholder, and uses Stop for the active run', async () => {
+  it('keeps the normal placeholder while running and uses Stop for the active run', async () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
     render(<Composer status="running" onSubmit={onSubmit} onStop={onStop} />);
 
-    expect(screen.getByPlaceholderText('Draft a follow-up while Megumi works...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Ask Megumi anything...')).toBeInTheDocument();
+    expect(screen.queryByText('Megumi is working')).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'continue');
     await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-pro');
@@ -205,7 +206,6 @@ describe('Composer', () => {
 
     const rightControls = screen.getByTestId('composer-actions');
 
-    expect(screen.getByText('Megumi is working')).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-pro');
     expect(rightControls).toHaveTextContent('Default');

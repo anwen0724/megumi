@@ -357,7 +357,7 @@ describe('interaction baseline acceptance', () => {
       }),
     });
     expect(screen.getByText('Finish the interaction baseline')).toBeInTheDocument();
-    expect(screen.getByText('Sending')).toBeInTheDocument();
+    expect(screen.queryByText('Sending')).not.toBeInTheDocument();
 
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the interaction baseline.');
     expect(screen.getByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();

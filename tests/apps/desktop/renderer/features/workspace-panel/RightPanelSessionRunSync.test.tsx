@@ -277,8 +277,8 @@ describe('right workspace panel session run sync', () => {
     const request = latestSessionMessageSendRequest(session);
     emitRuntimeStarted(request);
 
-    expect(screen.getByText('正在处理')).toBeInTheDocument();
-    expect(screen.getByText('正在启动运行...')).toBeInTheDocument();
+    expect(screen.getByText('Start with the shell')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /processing disclosure/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
@@ -340,7 +340,7 @@ describe('right workspace panel session run sync', () => {
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
-    expect(screen.getByText('处理失败')).toBeInTheDocument();
+    expect(screen.queryByText('Processing failed')).not.toBeInTheDocument();
     expect(screen.getAllByText('Runtime chat failed for "please fail this run".').length).toBeGreaterThanOrEqual(1);
   });
 });

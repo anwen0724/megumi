@@ -226,13 +226,21 @@ export function useSessionTimeline() {
       return;
     }
 
-    await window.megumi.session.message.cancel(
+    const result = await window.megumi.session.message.cancel(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.cancel, {
         targetRequestId: requestId,
       }, {
         traceId: activeTraceIdRef.current ?? undefined,
       }),
     );
+
+    if (result?.ok && result.data.cancelled) {
+      useChatStore.getState().clearStream();
+      activeRequestIdRef.current = null;
+      activeTraceIdRef.current = null;
+      runSessionIdRef.current = null;
+      processedSequencesRef.current.clear();
+    }
   }, []);
 
   return {

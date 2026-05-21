@@ -4,10 +4,8 @@ import {
   Bot,
   Brain,
   Clock3,
-  LoaderCircle,
   Paperclip,
   SendHorizontal,
-  Sparkles,
   Square,
   TriangleAlert,
 } from 'lucide-react';
@@ -39,16 +37,8 @@ interface ComposerProps {
 
 const statusConfig = {
   idle: null,
-  sending: {
-    label: 'Sending',
-    variant: 'accent',
-    icon: LoaderCircle,
-  },
-  running: {
-    label: 'Megumi is working',
-    variant: 'accent',
-    icon: Sparkles,
-  },
+  sending: null,
+  running: null,
   'waiting-approval': {
     label: 'Waiting for approval',
     variant: 'approval',
@@ -85,7 +75,7 @@ export function Composer({
   const canSend = trimmedValue.length > 0 && !sendLocked;
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
-  const placeholder = showStop ? 'Draft a follow-up while Megumi works...' : 'Ask Megumi anything...';
+  const placeholder = 'Ask Megumi anything...';
   const activeStatus = statusConfig[status];
   const StatusIcon = activeStatus?.icon;
 

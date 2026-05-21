@@ -315,7 +315,7 @@ describe('ChatTimeline', () => {
     expect(session.message.send).toHaveBeenCalled();
   });
 
-  it('shows processing disclosure while a sent message is waiting for runtime events', async () => {
+  it('does not show processing disclosure while a sent message is waiting for runtime events', async () => {
     installMegumiMock();
     selectMegumiProject();
     render(<ChatTimeline />);
@@ -324,19 +324,14 @@ describe('ChatTimeline', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Collapse processing disclosure/ })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      );
+      expect(screen.getByText('Start with the shell')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('正在处理')).toBeInTheDocument();
-    expect(screen.getByText('当前动作')).toBeInTheDocument();
-    expect(screen.getByText('正在连接模型...')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /processing disclosure/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
   });
 
-  it('keeps processing disclosure around the final response on the real runtime event path', async () => {
+  it('keeps only messages around the final response on the real runtime event path', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
     render(<ChatTimeline />);
@@ -364,12 +359,8 @@ describe('ChatTimeline', () => {
     });
 
     const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
-    expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('已处理'));
-    expect(timelineText.indexOf('已处理')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
-    expect(screen.getByRole('button', { name: /Expand processing disclosure/ })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
+    expect(screen.queryByRole('button', { name: /Expand processing disclosure/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
   });
 
@@ -411,51 +402,49 @@ describe('ChatTimeline', () => {
     expect(session.message.send).toHaveBeenCalledTimes(1);
   });
 
-  it('renders active processing disclosure after the latest user message without showing guessed future work', () => {
+  it('does not render the processing disclosure card while a run is active', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
         role: 'user',
-        content: '请检查当前 UI',
+        content: 'Check current UI',
         stepNum: 1,
         timestamp: '2026-05-10T12:00:00.000Z',
       }),
     ]);
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('context.effective.updated', 2, { sourceCount: 2 }));
-    useRunStore.getState().applyRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: '处理中' }));
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'Working' }));
     useChatStore.setState({
       agentStatus: 'running',
-      streamingText: '处理中',
+      streamingText: 'Working',
       isStreaming: true,
     });
 
     render(<ChatTimeline />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    expect(timeline).toHaveTextContent('请检查当前 UI');
-    expect(timeline).toHaveTextContent('正在处理');
-    expect(timeline).toHaveTextContent('41s');
-    expect(timeline).toHaveTextContent('当前动作');
-    expect(timeline).toHaveTextContent('正在生成回复...');
-    expect(timeline).toHaveTextContent('已更新有效上下文');
-    expect(timeline).toHaveTextContent('处理中');
-    expect(timeline).not.toHaveTextContent(/下一步|思考过程|chain-of-thought/i);
+    expect(timeline).toHaveTextContent('Check current UI');
+    expect(timeline).not.toHaveTextContent('Current action');
+    expect(timeline).not.toHaveTextContent('Processing');
+    expect(timeline).not.toHaveTextContent('Waiting for the first runtime event');
+    expect(timeline).toHaveTextContent('Working');
+    expect(timeline).not.toHaveTextContent(/chain-of-thought/i);
   });
 
-  it('renders completed processing disclosure collapsed before final assistant response', async () => {
+  it('does not render completed processing disclosure before final assistant response', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
         role: 'user',
-        content: '总结 UI 调整',
+        content: 'Summarize UI updates',
         stepNum: 1,
         timestamp: '2026-05-10T12:00:00.000Z',
       }),
       createMessage({
         id: 'message-assistant',
         role: 'assistant',
-        content: '已完成 UI 调整总结。',
+        content: 'UI update summary is complete.',
         stepNum: 2,
         timestamp: '2026-05-10T12:01:43.000Z',
       }),
@@ -463,7 +452,7 @@ describe('ChatTimeline', () => {
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('step.completed', 2, {
       kind: 'model',
-      title: '生成 UI 总结',
+      title: 'Generate UI summary',
     }, { stepId: 'step-1' }));
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.completed', 3, {}, {
       createdAt: '2026-05-10T12:01:42.000Z',
@@ -472,17 +461,11 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
 
     const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
-    expect(timelineText.indexOf('总结 UI 调整')).toBeLessThan(timelineText.indexOf('已处理'));
-    expect(timelineText.indexOf('已处理')).toBeLessThan(timelineText.indexOf('已完成 UI 调整总结。'));
-    expect(screen.getByRole('button', { name: /Expand processing disclosure/ })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
-    expect(screen.queryByText('已完成步骤：生成 UI 总结')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /Expand processing disclosure/ }));
-
-    expect(screen.getByText('已完成步骤：生成 UI 总结')).toBeInTheDocument();
+    expect(timelineText).toContain('Summarize UI updates');
+    expect(timelineText).not.toContain('Completed steps');
+    expect(timelineText).toContain('UI update summary is complete.');
+    expect(screen.queryByRole('button', { name: /Expand processing disclosure/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Generate UI summary/)).not.toBeInTheDocument();
   });
 
   it('wires the running composer Stop button to the active session message cancel request', async () => {

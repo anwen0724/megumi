@@ -11,6 +11,7 @@ import {
 } from '@megumi/core/run-runtime/tool-loop';
 import {
   createRunCompletedEvent,
+  createRunFailedEvent,
   createRunStartedEvent,
   createRunStatusChangedEvent,
   createStepCompletedEvent,
@@ -167,6 +168,11 @@ export class SessionRunService {
   private readonly ids: SessionRunServiceIds;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
   private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
+  private readonly activeSessionMessageRuns = new Map<string, {
+    runId: string;
+    sessionId: string;
+    stepId: string;
+  }>();
 
   constructor(options: SessionRunServiceOptions) {
     this.repository = options.repository;
@@ -372,21 +378,86 @@ export class SessionRunService {
           permissionMode,
         })
       : undefined;
+    this.activeSessionMessageRuns.set(input.requestId, {
+      runId,
+      sessionId: session.sessionId,
+      stepId,
+    });
 
     return {
       data: { requestId: input.requestId },
-      events: this.streamAndPersistModelStep({
+      events: this.trackActiveSessionMessageRun(input.requestId, this.streamAndPersistModelStep({
         request,
         run,
         step,
         userMessageId: userMessage.messageId,
         ...(toolRuntime ? { toolRuntime } : {}),
-      }),
+      })),
     };
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
-    return this.modelStepProvider?.cancelModelStep(payload.targetRequestId) ?? false;
+    const providerCancelled = this.modelStepProvider?.cancelModelStep(payload.targetRequestId) ?? false;
+    const activeRun = this.activeSessionMessageRuns.get(payload.targetRequestId);
+
+    if (!activeRun) {
+      return providerCancelled;
+    }
+
+    const persistedRun = this.repository.getRun(activeRun.runId);
+    if (!persistedRun || ['completed', 'failed', 'cancelled'].includes(persistedRun.status)) {
+      this.activeSessionMessageRuns.delete(payload.targetRequestId);
+      return providerCancelled;
+    }
+
+    const cancelledAt = this.clock.now();
+    const lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(activeRun.runId));
+    const runningStep = this.repository.listStepsByRun(activeRun.runId)
+      .reverse()
+      .find((step) => ['running', 'waiting_for_approval'].includes(step.status));
+
+    if (runningStep) {
+      this.repository.saveStep({
+        ...runningStep,
+        status: 'cancelled',
+        completedAt: cancelledAt,
+      });
+    }
+
+    this.repository.saveRun({
+      ...persistedRun,
+      status: 'cancelled',
+      cancelledAt,
+    });
+    this.repository.appendRuntimeEvent(createRuntimeEvent({
+      eventId: this.ids.eventId(),
+      eventType: 'run.cancelled',
+      runId: activeRun.runId,
+      sessionId: activeRun.sessionId,
+      stepId: runningStep?.stepId ?? activeRun.stepId,
+      requestId: payload.targetRequestId,
+      sequence: lastSequence + 1,
+      createdAt: cancelledAt,
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        reason: providerCancelled
+          ? 'Provider request was cancelled.'
+          : 'Session message run was cancelled by the user.',
+      },
+    }));
+    this.repository.appendRuntimeEvent(createRunStatusChangedEvent({
+      eventId: this.ids.eventId(),
+      sessionId: activeRun.sessionId,
+      runId: activeRun.runId,
+      sequence: lastSequence + 2,
+      createdAt: cancelledAt,
+      from: persistedRun.status,
+      to: 'cancelled',
+    }));
+    this.activeSessionMessageRuns.delete(payload.targetRequestId);
+    return true;
   }
 
   resumeApproval(input: ToolApprovalResumeInput): AsyncIterable<RuntimeEvent> | undefined {
@@ -436,6 +507,17 @@ export class SessionRunService {
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
     return this.repository.listRuntimeEventsByRun(runId);
+  }
+
+  private async *trackActiveSessionMessageRun(
+    requestId: string,
+    events: AsyncIterable<RuntimeEvent>,
+  ): AsyncIterable<RuntimeEvent> {
+    try {
+      yield* events;
+    } finally {
+      this.activeSessionMessageRuns.delete(requestId);
+    }
   }
 
   private resolveSessionForMessage(payload: SessionMessageSendPayload): Session {
@@ -520,37 +602,59 @@ export class SessionRunService {
         })
       : modelStepProvider.streamModelStep(input.request);
 
-    for await (const event of modelEvents) {
-      const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
-      lastSequence = eventWithRequest.sequence;
-      this.repository.appendRuntimeEvent(eventWithRequest);
-      if (eventWithRequest.eventType === 'assistant.output.delta' || eventWithRequest.eventType === 'model.output.delta') {
-        assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
-      }
-      if (eventWithRequest.eventType === 'assistant.output.completed') {
-        sawAssistantOutputCompleted = true;
-        const content = getAssistantCompletedContent(eventWithRequest.payload);
-        if (content) {
-          assistantContent = content;
+    try {
+      for await (const event of modelEvents) {
+        const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
+        lastSequence = eventWithRequest.sequence;
+        this.persistModelStepRecordFromEvent(input.request, eventWithRequest, currentModelStep.stepId);
+        this.repository.appendRuntimeEvent(eventWithRequest);
+        if (eventWithRequest.eventType === 'assistant.output.delta' || eventWithRequest.eventType === 'model.output.delta') {
+          assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
         }
-      }
-      if (eventWithRequest.eventType === 'model.step.completed') {
-        const completedStep = this.markModelStepSucceeded(
-          modelStepsById,
-          eventWithRequest.stepId ?? currentModelStep.stepId,
-          eventWithRequest.createdAt,
-        );
-        if (completedStep && completedStep.stepId === currentModelStep.stepId) {
-          currentModelStep = completedStep;
+        if (eventWithRequest.eventType === 'assistant.output.completed') {
+          sawAssistantOutputCompleted = true;
+          const content = getAssistantCompletedContent(eventWithRequest.payload);
+          if (content) {
+            assistantContent = content;
+          }
         }
-        if (!isToolCallModelStepCompletion(eventWithRequest.payload)) {
-          sawFinalModelStepCompleted = true;
+        if (eventWithRequest.eventType === 'model.step.completed') {
+          const modelStepId = getModelStepId(eventWithRequest.payload);
+          if (modelStepId) {
+            this.persistModelStepRecordFromEvent(input.request, eventWithRequest, currentModelStep.stepId, {
+              status: 'succeeded',
+              completedAt: eventWithRequest.createdAt,
+            });
+          }
+          const completedStep = this.markModelStepSucceeded(
+            modelStepsById,
+            eventWithRequest.stepId ?? currentModelStep.stepId,
+            eventWithRequest.createdAt,
+          );
+          if (completedStep && completedStep.stepId === currentModelStep.stepId) {
+            currentModelStep = completedStep;
+          }
+          if (!isToolCallModelStepCompletion(eventWithRequest.payload)) {
+            sawFinalModelStepCompleted = true;
+          }
         }
+        if (eventWithRequest.eventType === 'run.failed' || eventWithRequest.eventType === 'run.cancelled') {
+          terminalEvent = eventWithRequest;
+        }
+        yield eventWithRequest;
       }
-      if (eventWithRequest.eventType === 'run.failed' || eventWithRequest.eventType === 'run.cancelled') {
-        terminalEvent = eventWithRequest;
-      }
-      yield eventWithRequest;
+    } catch (error) {
+      const failedEvent = withRequestMetadata(createRunFailedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.request.sessionId,
+        runId: input.request.runId,
+        sequence: lastSequence += 1,
+        createdAt: this.clock.now(),
+        error: createRuntimeErrorFromUnknown(error),
+      }), input.request);
+      this.repository.appendRuntimeEvent(failedEvent);
+      terminalEvent = failedEvent;
+      yield failedEvent;
     }
 
     if (pendingContinuations.length > 0 && toolRuntime) {
@@ -970,6 +1074,49 @@ export class SessionRunService {
     }), input.request);
   }
 
+  private persistModelStepRecordFromEvent(
+    request: ModelStepRuntimeRequest,
+    event: RuntimeEvent,
+    fallbackStepId: string,
+    overrides: {
+      status?: RunStep['status'];
+      completedAt?: string;
+      error?: RuntimeError;
+    } = {},
+  ) {
+    if (
+      event.eventType !== 'model.step.started' &&
+      event.eventType !== 'model.step.completed' &&
+      event.eventType !== 'tool.use.created'
+    ) {
+      return;
+    }
+
+    const modelStepId = getModelStepId(event.payload) ?? request.modelStepId;
+    if (!modelStepId) {
+      return;
+    }
+
+    const existing = this.repository.getModelStep(modelStepId);
+    this.repository.saveModelStep({
+      modelStepId,
+      runId: request.runId,
+      stepId: event.stepId ?? request.stepId ?? existing?.stepId ?? fallbackStepId,
+      providerId: request.providerId,
+      modelId: request.modelId,
+      status: overrides.status ?? existing?.status ?? 'running',
+      startedAt: existing?.startedAt ?? event.createdAt,
+      ...(overrides.completedAt ?? existing?.completedAt ? {
+        completedAt: overrides.completedAt ?? existing?.completedAt,
+      } : {}),
+      ...(overrides.error ?? existing?.error ? { error: overrides.error ?? existing?.error } : {}),
+      metadata: {
+        ...(existing?.metadata ?? {}),
+        sourceEventType: event.eventType,
+      },
+    });
+  }
+
   private markModelStepSucceeded(
     modelStepsById: Map<string, RunStep>,
     stepId: string,
@@ -1079,6 +1226,14 @@ function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | und
   return isRuntimeError(payload.error) ? payload.error : undefined;
 }
 
+function getModelStepId(payload: RuntimeEvent['payload']): string | undefined {
+  if (!isObjectRecord(payload)) {
+    return undefined;
+  }
+
+  return typeof payload.modelStepId === 'string' ? payload.modelStepId : undefined;
+}
+
 function getToolResultEventId(payload: RuntimeEvent['payload']): string | undefined {
   if (!isObjectRecord(payload)) {
     return undefined;
@@ -1091,6 +1246,18 @@ function createFallbackRuntimeError(message: string): RuntimeError {
   return {
     code: 'runtime_unknown',
     message,
+    severity: 'error',
+    retryable: false,
+    source: 'core',
+  };
+}
+
+function createRuntimeErrorFromUnknown(error: unknown): RuntimeError {
+  return {
+    code: 'runtime_unknown',
+    message: error instanceof Error && error.message
+      ? error.message
+      : 'Session message run failed.',
     severity: 'error',
     retryable: false,
     source: 'core',

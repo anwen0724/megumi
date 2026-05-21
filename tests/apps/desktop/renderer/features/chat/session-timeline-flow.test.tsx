@@ -471,5 +471,11 @@ describe('useSessionTimeline', () => {
         source: 'renderer',
       }),
     }));
+    expect(useChatStore.getState()).toMatchObject({
+      agentStatus: 'idle',
+      streamingText: '',
+      isStreaming: false,
+      pendingToolCalls: [],
+    });
   });
 });
