@@ -19,6 +19,7 @@ import {
 } from './permission-classifier';
 import {
   classifyProjectPath,
+  DEFAULT_PROTECTED_PATHS,
   type ProjectPathClassification,
 } from './project-boundary-policy';
 import { matchPermissionRule } from './permission-rule-matcher';
@@ -213,11 +214,18 @@ function classifyCommandReferencedProjectPath(
 
 function extractCommandPathReferences(command: string): string[] {
   const references = new Set<string>();
+  const protectedDirectoriesPattern = DEFAULT_PROTECTED_PATHS.directories
+    .map(escapeRegExp)
+    .join('|');
+  const protectedFilesPattern = DEFAULT_PROTECTED_PATHS.files
+    .map(escapeRegExp)
+    .join('|');
   const patterns: RegExp[] = [
     /\.env(?:\.[^\s"'`;|&<>]*)?/gi,
     /(?:^|[\s"'`])((?:secrets[\\/][^\s"'`;|&<>]+))/gi,
     /(?:^|[\s"'`])([^\s"'`;|&<>]+\.(?:pem|key))/gi,
-    /(?:^|[\s"'`])(\.(?:git|megumi|vscode|idea|husky)(?:[\\/][^\s"'`;|&<>]+)?)/gi,
+    new RegExp(`(?:^|[\\s"'\\\`])((?:\\.[\\\\/])?(?:${protectedFilesPattern}))(?=$|[\\s"'\\\`;|&<>])`, 'gi'),
+    new RegExp(`(?:^|[\\s"'\\\`])((?:\\.[\\\\/])?(?:${protectedDirectoriesPattern})(?:[\\\\/][^\\s"'\\\`;|&<>]+)?)(?=$|[\\s"'\\\`;|&<>])`, 'gi'),
   ];
 
   for (const pattern of patterns) {
@@ -228,6 +236,10 @@ function extractCommandPathReferences(command: string): string[] {
   }
 
   return [...references].filter((reference) => reference.length > 0);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
 }
 
 function findMatchedRule(

@@ -194,6 +194,28 @@ describe('evaluatePermissionPolicy', () => {
     });
   });
 
+  it.each(['.mcp.json', '.gitconfig'])(
+    'does not allow run_command references to protected default file %s through ordinary allow rules',
+    (protectedFile) => {
+      const decision = evaluate({
+        definition: commandDefinition,
+        toolInput: { command: `cat ${protectedFile}`, cwd: '.' },
+        permissionMode: 'default',
+        settings: {
+          deny: [],
+          allow: [{ scope: 'local', pattern: `run_command(cat ${protectedFile})` }],
+          ask: [],
+        },
+      });
+
+      expect(decision).toMatchObject({
+        decision: 'deny',
+        source: 'protected_path',
+        target: protectedFile,
+      });
+    },
+  );
+
   it('does not allow run_command references to protected paths through ordinary allow rules', () => {
     const decision = evaluate({
       definition: commandDefinition,
