@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
+import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -40,6 +42,8 @@ describe('runtime event dispatcher', () => {
       sessionSnapshots: {},
     });
     useRunStore.getState().resetRuns();
+    useToolCallStore.getState().reset();
+    useApprovalStore.getState().reset();
   });
 
   it('applies stream events to run state and commits completed assistant content', () => {
@@ -160,6 +164,125 @@ describe('runtime event dispatcher', () => {
       'artifact.created',
     ]);
     expect(useChatStore.getState().messages).toEqual([]);
+  });
+
+  it('projects tool call events into the renderer tool-call store', () => {
+    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 1, {
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        toolUseId: 'tool-use-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        actionId: 'action-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+        inputPreview: {
+          summary: 'Read README.md',
+          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
+          redactionState: 'none',
+        },
+        capabilities: ['project_read'],
+        riskLevel: 'low',
+        sideEffect: 'none',
+        status: 'requested',
+        requestedAt: '2026-05-20T00:00:00.000Z',
+      },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('tool.call.started', 2, {
+      toolCallId: 'tool-call-1',
+      startedAt: '2026-05-20T00:00:01.000Z',
+    }));
+
+    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
+      toolCallId: 'tool-call-1',
+      status: 'running',
+      startedAt: '2026-05-20T00:00:01.000Z',
+    });
+    expect(useChatStore.getState().agentStatus).toBe('running');
+  });
+
+  it('projects approval events and waiting status into renderer stores', () => {
+    dispatchRuntimeEvent(runtimeEvent('approval.requested', 1, {
+      approvalRequest: {
+        approvalRequestId: 'approval-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'edit_file',
+        capabilities: ['project_write'],
+        riskLevel: 'medium',
+        title: 'Edit file',
+        summary: 'Edit src/app.ts',
+        preview: {
+          action: 'Edit file',
+          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
+        },
+        requestedScope: 'once',
+        status: 'pending',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('run.status.changed', 2, {
+      from: 'running',
+      to: 'waiting_for_approval',
+    }));
+    dispatchRuntimeEvent(runtimeEvent('approval.resolved', 3, {
+      approvalRequestId: 'approval-1',
+      decision: 'approved',
+      scope: 'once',
+      decidedAt: '2026-05-20T00:00:02.000Z',
+    }));
+
+    expect(useApprovalStore.getState().approvalRequestsById['approval-1']).toMatchObject({
+      status: 'approved',
+      resolvedAt: '2026-05-20T00:00:02.000Z',
+    });
+    expect(useChatStore.getState().agentStatus).toBe('running');
+  });
+
+  it('does not project duplicate tool events twice', () => {
+    const requested = runtimeEvent('tool.call.requested', 1, {
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        toolUseId: 'tool-use-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+        inputPreview: {
+          summary: 'Read README.md',
+          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
+          redactionState: 'none',
+        },
+        capabilities: ['project_read'],
+        riskLevel: 'low',
+        sideEffect: 'none',
+        status: 'requested',
+        requestedAt: '2026-05-20T00:00:00.000Z',
+      },
+    });
+    const started = runtimeEvent('tool.call.started', 2, {
+      toolCallId: 'tool-call-1',
+      startedAt: '2026-05-20T00:00:01.000Z',
+    });
+    const duplicateStartedWithDifferentCreatedAt = {
+      ...started,
+      createdAt: '2026-05-20T00:00:09.000Z',
+      payload: {
+        toolCallId: 'tool-call-1',
+      },
+    } as RuntimeEvent;
+
+    dispatchRuntimeEvent(requested);
+    dispatchRuntimeEvent(requested);
+    dispatchRuntimeEvent(started);
+    dispatchRuntimeEvent(duplicateStartedWithDifferentCreatedAt);
+
+    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
+      status: 'running',
+      startedAt: '2026-05-20T00:00:01.000Z',
+    });
   });
 });
 

@@ -30,8 +30,9 @@ import {
 } from './runtime-events';
 import {
   APPROVAL_SCOPES,
-  TOOL_POLICY_DECISIONS,
-  TOOL_RISK_LEVELS,
+  ApprovalRequestSchema,
+  ToolCallSchema,
+  ToolPolicyDecisionSchema,
   type ApprovalScope,
 } from './tool-contracts';
 import {
@@ -440,10 +441,7 @@ const RetryFailedPayloadSchema = z
 
 const ToolCallRequestedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
-    toolName: z.string().min(1),
-    inputPreview: JsonObjectSchema.optional(),
-    approvalRequired: z.boolean(),
+    toolCall: ToolCallSchema,
   })
   .strict();
 
@@ -458,52 +456,42 @@ const ToolCallPolicyDecidedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
     toolName: z.string().min(1),
-    decision: z.enum(TOOL_POLICY_DECISIONS),
-    effectiveRiskLevel: z.enum(TOOL_RISK_LEVELS),
-    reason: z.string().min(1),
+    policyDecision: ToolPolicyDecisionSchema,
   })
   .strict();
 
 const ToolCallStartedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
-    toolName: z.string().min(1),
+    startedAt: RuntimeEventIsoDateTimeSchema.optional(),
   })
   .strict();
 
 const ToolCallCompletedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
-    toolName: z.string().min(1),
-    resultPreview: JsonObjectSchema.optional(),
-    durationMs: z.number().nonnegative().optional(),
+    completedAt: RuntimeEventIsoDateTimeSchema.optional(),
   })
   .strict();
 
 const ToolCallFailedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
-    toolName: z.string().min(1),
     error: RuntimeErrorSchema,
-    durationMs: z.number().nonnegative().optional(),
+    completedAt: RuntimeEventIsoDateTimeSchema.optional(),
   })
   .strict();
 
 const ToolCallDeniedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
-    toolName: z.string().min(1),
     reason: z.string().min(1),
   })
   .strict();
 
 const ApprovalRequestedPayloadSchema = z
   .object({
-    approvalId: z.string().min(1),
-    toolCallId: z.string().min(1).optional(),
-    title: z.string().min(1),
-    description: z.string().min(1),
-    riskLevel: z.enum(['low', 'medium', 'high']),
+    approvalRequest: ApprovalRequestSchema,
   })
   .strict();
 

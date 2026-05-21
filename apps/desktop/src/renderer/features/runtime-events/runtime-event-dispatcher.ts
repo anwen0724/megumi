@@ -5,9 +5,13 @@ import type {
   RunFailedPayload,
   RuntimeEvent,
 } from '@megumi/shared/runtime-events';
+import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { ApprovalRequest, ApprovalStatus, ToolCall, ToolPolicyDecision } from '@megumi/shared/tool-contracts';
+import { useApprovalStore } from '../../entities/approval';
 import { useChatStore } from '../../entities/chat/store';
 import type { TimelineMessageData } from '../../entities/chat/types';
 import { useRunStore } from '../../entities/run/store';
+import { useToolCallStore } from '../../entities/tool-call';
 
 const completedContentsByRun = new Map<string, string>();
 
@@ -30,6 +34,103 @@ function hasRuntimeEventAlreadyBeenDispatched(event: RuntimeEvent): boolean {
   return events.some((item) => item.eventId === event.eventId || item.sequence === event.sequence);
 }
 
+function applyToolEvent(event: RuntimeEvent): void {
+  const store = useToolCallStore.getState();
+
+  if (event.eventType === 'tool.call.requested') {
+    const toolCall = (event.payload as { toolCall?: ToolCall }).toolCall;
+    if (toolCall) {
+      store.upsertToolCall(toolCall);
+    }
+  }
+
+  if (event.eventType === 'tool.call.policy_decided') {
+    const payload = event.payload as { toolCallId: string; policyDecision: ToolPolicyDecision };
+    const current = store.toolCallsById[payload.toolCallId];
+    if (current) {
+      store.upsertToolCall({ ...current, policyDecision: payload.policyDecision });
+    }
+  }
+
+  if (event.eventType === 'tool.call.started') {
+    const payload = event.payload as { toolCallId: string; startedAt?: string };
+    const current = store.toolCallsById[payload.toolCallId];
+    if (current) {
+      store.upsertToolCall({
+        ...current,
+        status: 'running',
+        startedAt: payload.startedAt ?? event.createdAt,
+      });
+    }
+    useChatStore.getState().setAgentStatus('running');
+  }
+
+  if (event.eventType === 'tool.call.completed') {
+    const payload = event.payload as { toolCallId: string; completedAt?: string };
+    const current = store.toolCallsById[payload.toolCallId];
+    if (current) {
+      store.upsertToolCall({
+        ...current,
+        status: 'succeeded',
+        completedAt: payload.completedAt ?? event.createdAt,
+      });
+    }
+  }
+
+  if (event.eventType === 'tool.call.failed') {
+    const payload = event.payload as { toolCallId: string; error?: RuntimeError; completedAt?: string };
+    const current = store.toolCallsById[payload.toolCallId];
+    if (current) {
+      store.upsertToolCall({
+        ...current,
+        status: 'failed',
+        error: payload.error,
+        completedAt: payload.completedAt ?? event.createdAt,
+      });
+    }
+  }
+
+  if (event.eventType === 'tool.call.denied') {
+    const payload = event.payload as { toolCallId: string; reason?: string };
+    const current = store.toolCallsById[payload.toolCallId];
+    if (current) {
+      store.upsertToolCall({
+        ...current,
+        status: 'denied',
+        error: {
+          code: 'tool_denied',
+          message: payload.reason ?? 'Tool call was denied.',
+          severity: 'info',
+          retryable: false,
+          source: 'policy',
+        } as unknown as RuntimeError,
+        completedAt: event.createdAt,
+      });
+    }
+  }
+}
+
+function applyApprovalEvent(event: RuntimeEvent): void {
+  const store = useApprovalStore.getState();
+
+  if (event.eventType === 'approval.requested') {
+    const request = (event.payload as { approvalRequest?: ApprovalRequest }).approvalRequest;
+    if (request) {
+      store.upsertApprovalRequest(request);
+    }
+  }
+
+  if (event.eventType === 'approval.resolved') {
+    const payload = event.payload as {
+      approvalRequestId: string;
+      decision: Exclude<ApprovalStatus, 'pending'>;
+      decidedAt?: string;
+    };
+    store.markResolved(payload.approvalRequestId, payload.decision, payload.decidedAt ?? event.createdAt);
+    useChatStore.getState().setAgentStatus('running');
+  }
+}
+
 export function dispatchRuntimeEvent(event: RuntimeEvent): void {
   const alreadyDispatched = hasRuntimeEventAlreadyBeenDispatched(event);
   useRunStore.getState().applyRuntimeEvent(event);
@@ -38,10 +139,24 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
     return;
   }
 
+  applyToolEvent(event);
+  applyApprovalEvent(event);
+
   const chatState = useChatStore.getState();
 
   if (event.eventType === 'run.started') {
     chatState.setAgentStatus('running');
+    return;
+  }
+
+  if (event.eventType === 'run.status.changed') {
+    const to = (event.payload as { to?: string }).to;
+    if (to === 'waiting_for_approval') {
+      chatState.setAgentStatus('waiting-approval');
+    }
+    if (to === 'running') {
+      chatState.setAgentStatus('running');
+    }
     return;
   }
 

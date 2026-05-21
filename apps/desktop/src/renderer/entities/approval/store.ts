@@ -5,6 +5,7 @@ export interface ApprovalState {
   approvalRequestsById: Record<string, ApprovalRequest>;
   upsertApprovalRequest(request: ApprovalRequest): void;
   markResolved(approvalRequestId: string, status: Exclude<ApprovalStatus, 'pending'>, resolvedAt: string): void;
+  listByRun(runId: string): ApprovalRequest[];
   pendingApprovals(): ApprovalRequest[];
   reset(): void;
 }
@@ -35,6 +36,9 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
   }),
   pendingApprovals: () => Object.values(get().approvalRequestsById)
     .filter((request) => request.status === 'pending')
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+  listByRun: (runId) => Object.values(get().approvalRequestsById)
+    .filter((request) => request.runId === runId)
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
   reset: () => set({ approvalRequestsById: {} }),
 }));

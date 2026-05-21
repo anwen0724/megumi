@@ -35,4 +35,32 @@ describe('useApprovalStore', () => {
       resolvedAt: '2026-05-16T00:00:01.000Z',
     });
   });
+
+  it('lists approvals for a run sorted by creation time', () => {
+    const laterApproval: ApprovalRequest = {
+      ...approval,
+      approvalRequestId: 'approval-2',
+      createdAt: '2026-05-16T00:00:02.000Z',
+    };
+    const earlierApproval: ApprovalRequest = {
+      ...approval,
+      approvalRequestId: 'approval-3',
+      createdAt: '2026-05-16T00:00:01.000Z',
+    };
+    const otherRunApproval: ApprovalRequest = {
+      ...approval,
+      approvalRequestId: 'approval-4',
+      runId: 'run-2',
+      createdAt: '2026-05-16T00:00:00.000Z',
+    };
+
+    useApprovalStore.getState().upsertApprovalRequest(laterApproval);
+    useApprovalStore.getState().upsertApprovalRequest(otherRunApproval);
+    useApprovalStore.getState().upsertApprovalRequest(earlierApproval);
+
+    expect(useApprovalStore.getState().listByRun('run-1').map((item) => item.approvalRequestId)).toEqual([
+      'approval-3',
+      'approval-2',
+    ]);
+  });
 });

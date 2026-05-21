@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   ApprovalExpiredEventSchema,
+  ApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema,
   ContextPatchRequestedEventSchema,
   RuntimeEventSchema,
   RuntimeEventTypeSchema,
   ToolCallDeniedEventSchema,
   ToolCallPolicyDecidedEventSchema,
+  ToolCallRequestedEventSchema,
   isTerminalRuntimeEvent,
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime-event-schemas';
@@ -355,6 +357,75 @@ describe('context runtime events', () => {
 });
 
 describe('tool and approval runtime events', () => {
+  it('accepts requested tool and approval events with full shared objects', () => {
+    const base = {
+      eventId: 'event-tool-requested',
+      schemaVersion: 1 as const,
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-05-20T00:00:00.000Z',
+      source: 'tool' as const,
+      visibility: 'user' as const,
+      persist: 'required' as const,
+    };
+    const toolCall = {
+      toolCallId: 'tool-call-1',
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      actionId: 'action-1',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
+      inputPreview: {
+        summary: 'Read README.md',
+        targets: [{ kind: 'file' as const, label: 'README.md', sensitivity: 'normal' as const }],
+        redactionState: 'none' as const,
+      },
+      capabilities: ['project_read' as const],
+      riskLevel: 'low' as const,
+      sideEffect: 'none' as const,
+      status: 'requested' as const,
+      requestedAt: '2026-05-20T00:00:00.000Z',
+    };
+    const approvalRequest = {
+      approvalRequestId: 'approval-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'edit_file',
+      capabilities: ['project_write' as const],
+      riskLevel: 'medium' as const,
+      title: 'Edit file',
+      summary: 'Edit src/app.ts',
+      preview: {
+        action: 'Edit file',
+        targets: [{ kind: 'file' as const, label: 'src/app.ts', sensitivity: 'normal' as const }],
+      },
+      requestedScope: 'once' as const,
+      status: 'pending' as const,
+      createdAt: '2026-05-20T00:00:00.000Z',
+    };
+
+    const toolCallRequestedEvent = {
+      ...base,
+      eventType: 'tool.call.requested' as const,
+      payload: { toolCall },
+    };
+    const approvalRequestedEvent = {
+      ...base,
+      eventId: 'event-approval-requested',
+      eventType: 'approval.requested' as const,
+      source: 'approval' as const,
+      payload: { approvalRequest },
+    };
+
+    expect(ToolCallRequestedEventSchema.parse(toolCallRequestedEvent).payload.toolCall.toolCallId).toBe('tool-call-1');
+    expect(ApprovalRequestedEventSchema.parse(approvalRequestedEvent).payload.approvalRequest.approvalRequestId).toBe('approval-1');
+  });
+
   it('validates policy decided, denied, and approval expired events', () => {
     const base = {
       eventId: 'event-tool-1',
@@ -369,18 +440,30 @@ describe('tool and approval runtime events', () => {
       visibility: 'debug' as const,
       persist: 'required' as const,
     };
+    const policyDecision = {
+      permissionDecisionId: 'permission-decision-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      decision: 'allow' as const,
+      source: 'permission_mode' as const,
+      reason: 'Read-only project tool.',
+      mode: 'default' as const,
+      capability: 'project_read' as const,
+      sideEffect: 'none' as const,
+      effectiveRiskLevel: 'low' as const,
+      evaluatedAt: '2026-05-16T00:00:00.000Z',
+    };
 
     expect(ToolCallPolicyDecidedEventSchema.parse({
       ...base,
       eventType: 'tool.call.policy_decided',
       payload: {
         toolCallId: 'tool-call-1',
-        toolName: 'workspace_read_file',
-        decision: 'allow',
-        effectiveRiskLevel: 'low',
-        reason: 'Read-only workspace tool.',
+        toolName: 'read_file',
+        policyDecision,
       },
-    }).payload.decision).toBe('allow');
+    }).payload.policyDecision.decision).toBe('allow');
 
     expect(ToolCallDeniedEventSchema.parse({
       ...base,
@@ -388,7 +471,6 @@ describe('tool and approval runtime events', () => {
       eventType: 'tool.call.denied',
       payload: {
         toolCallId: 'tool-call-1',
-        toolName: 'workspace_write_file',
         reason: 'Plan mode blocks workspace writes.',
       },
     }).payload.reason).toContain('Plan mode');
@@ -425,6 +507,20 @@ describe('tool and approval runtime events', () => {
   });
 
   it('creates typed tool events through the generic runtime event factory', () => {
+    const policyDecision = {
+      permissionDecisionId: 'permission-decision-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      decision: 'allow' as const,
+      source: 'permission_mode' as const,
+      reason: 'Read-only project tool.',
+      mode: 'default' as const,
+      capability: 'project_read' as const,
+      sideEffect: 'none' as const,
+      effectiveRiskLevel: 'low' as const,
+      evaluatedAt: '2026-05-16T00:00:00.000Z',
+    };
     const event = createRuntimeEvent({
       eventId: 'event-tool-3',
       eventType: 'tool.call.policy_decided',
@@ -439,10 +535,8 @@ describe('tool and approval runtime events', () => {
       persist: 'required',
       payload: {
         toolCallId: 'tool-call-1',
-        toolName: 'workspace_read_file',
-        decision: 'allow',
-        effectiveRiskLevel: 'low',
-        reason: 'Read-only workspace tool.',
+        toolName: 'read_file',
+        policyDecision,
       },
     });
 

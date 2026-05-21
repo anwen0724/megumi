@@ -18,10 +18,11 @@ import type {
   ContextPatchRequestedPayload,
 } from './run-context-contracts';
 import type {
+  ApprovalRequest,
   ApprovalScope,
   ApprovalStatus,
-  ToolPolicyDecisionValue,
-  ToolRiskLevel,
+  ToolCall,
+  ToolPolicyDecision,
 } from './tool-contracts';
 import type {
   CancelReason,
@@ -423,10 +424,7 @@ export interface RetryFailedPayload {
 }
 
 export interface ToolCallRequestedPayload {
-  toolCallId: string;
-  toolName: string;
-  inputPreview?: Record<string, JsonValue>;
-  approvalRequired: boolean;
+  toolCall: ToolCall;
 }
 
 export interface ToolCallValidatedPayload {
@@ -437,42 +435,32 @@ export interface ToolCallValidatedPayload {
 export interface ToolCallPolicyDecidedPayload {
   toolCallId: string;
   toolName: string;
-  decision: ToolPolicyDecisionValue;
-  effectiveRiskLevel: ToolRiskLevel;
-  reason: string;
+  policyDecision: ToolPolicyDecision;
 }
 
 export interface ToolCallStartedPayload {
   toolCallId: string;
-  toolName: string;
+  startedAt?: string;
 }
 
 export interface ToolCallCompletedPayload {
   toolCallId: string;
-  toolName: string;
-  resultPreview?: Record<string, JsonValue>;
-  durationMs?: number;
+  completedAt?: string;
 }
 
 export interface ToolCallFailedPayload {
   toolCallId: string;
-  toolName: string;
   error: RuntimeError;
-  durationMs?: number;
+  completedAt?: string;
 }
 
 export interface ToolCallDeniedPayload {
   toolCallId: string;
-  toolName: string;
   reason: string;
 }
 
 export interface ApprovalRequestedPayload {
-  approvalId: string;
-  toolCallId?: string;
-  title: string;
-  description: string;
-  riskLevel: 'low' | 'medium' | 'high';
+  approvalRequest: ApprovalRequest;
 }
 
 export interface ApprovalResolvedPayload {
