@@ -298,6 +298,82 @@ describe('OpenAI-compatible message mapper', () => {
     ]);
   });
 
+  it('replays model step provider reasoning state on matching assistant tool call messages', () => {
+    const toolUse: ToolUse = {
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      modelStepId: 'model-step-1',
+      providerToolUseId: 'provider-tool-use-1',
+      toolName: 'list_directory',
+      input: { path: 'docs' },
+      inputPreview: {
+        summary: 'list_directory docs',
+        targets: [],
+        redactionState: 'none',
+      },
+      status: 'created',
+      createdAt: '2026-05-17T00:00:01.000Z',
+    };
+    const toolResult: ToolResult = {
+      toolResultId: 'tool-result-1',
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      kind: 'success',
+      textContent: 'directory README.md',
+      redactionState: 'none',
+      createdAt: '2026-05-17T00:00:02.000Z',
+    };
+
+    const messages = messageMapper.mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-2',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      messages: [],
+      toolUses: [toolUse],
+      toolResults: [toolResult],
+      providerStates: [
+        {
+          modelStepId: 'model-step-1',
+          providerId: 'deepseek',
+          modelId: 'deepseek-v4-flash',
+          blocks: [
+            {
+              type: 'reasoning_content',
+              text: 'I should inspect the docs directory.',
+            },
+          ],
+        },
+      ],
+      createdAt: '2026-05-17T00:00:03.000Z',
+    });
+
+    expect(messages.slice(-2)).toEqual([
+      {
+        role: 'assistant',
+        content: '',
+        reasoning_content: 'I should inspect the docs directory.',
+        tool_calls: [
+          {
+            id: 'tool-use-1',
+            type: 'function',
+            function: {
+              name: 'list_directory',
+              arguments: '{"path":"docs"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'tool-use-1',
+        content: 'directory README.md',
+      },
+    ]);
+  });
+
   it('serializes non-text tool result fallback content with result metadata', () => {
     const toolResult: ToolResult = {
       toolResultId: 'tool-result-1',

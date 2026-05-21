@@ -3,7 +3,8 @@ import type { ChatTokenUsage } from '@megumi/shared/chat-contracts';
 export interface OpenAICompatibleStreamChunk {
   choices?: Array<{
     delta?: {
-      content?: string;
+      content?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{
         index?: number;
         id?: string;
@@ -26,6 +27,10 @@ export interface OpenAICompatibleStreamChunk {
 export type OpenAICompatibleStreamResult =
   | {
       type: 'delta';
+      delta: string;
+    }
+  | {
+      type: 'reasoning_delta';
       delta: string;
     }
   | {
@@ -95,8 +100,16 @@ function* parseSsePart(part: string): Iterable<OpenAICompatibleStreamResult> {
     const chunk = JSON.parse(data) as OpenAICompatibleStreamChunk;
     const choice = chunk.choices?.[0];
     const delta = choice?.delta?.content;
+    const reasoningDelta = choice?.delta?.reasoning_content;
 
-    if (delta !== undefined) {
+    if (typeof reasoningDelta === 'string') {
+      yield {
+        type: 'reasoning_delta',
+        delta: reasoningDelta,
+      };
+    }
+
+    if (typeof delta === 'string') {
       yield {
         type: 'delta',
         delta,

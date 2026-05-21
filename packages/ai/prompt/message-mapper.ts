@@ -1,7 +1,7 @@
 import type { ChatMessage, ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
 import type { ToolDefinition, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import type {
@@ -42,7 +42,11 @@ export function mapModelStepToOpenAICompatibleMessages(request: ModelStepRuntime
     messages.push(mapSessionMessage(message));
   }
 
-  messages.push(...mapPreviousToolInteractions(request.toolUses ?? [], request.toolResults ?? []));
+  messages.push(...mapPreviousToolInteractions(
+    request.toolUses ?? [],
+    request.toolResults ?? [],
+    request.providerStates ?? [],
+  ));
 
   return messages;
 }
@@ -110,7 +114,11 @@ function mapToolResult(toolResult: ToolResult): OpenAICompatibleMessage {
   };
 }
 
-function mapPreviousToolInteractions(toolUses: ToolUse[], toolResults: ToolResult[]): OpenAICompatibleMessage[] {
+function mapPreviousToolInteractions(
+  toolUses: ToolUse[],
+  toolResults: ToolResult[],
+  providerStates: ModelStepProviderState[] = [],
+): OpenAICompatibleMessage[] {
   if (toolResults.length === 0) {
     return [];
   }
@@ -123,9 +131,14 @@ function mapPreviousToolInteractions(toolUses: ToolUse[], toolResults: ToolResul
 
   const flush = () => {
     if (currentToolCalls.length > 0) {
+      const reasoningContent = currentModelStepId
+        ? reasoningContentForModelStep(providerStates, currentModelStepId)
+        : undefined;
+
       messages.push({
         role: 'assistant',
         content: '',
+        ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
         tool_calls: currentToolCalls.map(mapToolUseToOpenAICompatibleToolCall),
       });
     }
@@ -156,6 +169,20 @@ function mapPreviousToolInteractions(toolUses: ToolUse[], toolResults: ToolResul
 
   flush();
   return messages;
+}
+
+function reasoningContentForModelStep(
+  providerStates: ModelStepProviderState[],
+  modelStepId: string,
+): string | undefined {
+  const text = providerStates
+    .filter((state) => String(state.modelStepId) === modelStepId)
+    .flatMap((state) => state.blocks)
+    .filter((block) => block.type === 'reasoning_content')
+    .map((block) => block.text)
+    .join('');
+
+  return text.length > 0 ? text : undefined;
 }
 
 function mapToolUseToOpenAICompatibleToolCall(toolUse: ToolUse) {

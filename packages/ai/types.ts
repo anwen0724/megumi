@@ -49,6 +49,7 @@ export interface OpenAICompatibleMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   name?: string;
+  reasoning_content?: string;
   tool_call_id?: string;
   tool_calls?: OpenAICompatibleToolCall[];
 }

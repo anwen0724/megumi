@@ -107,6 +107,12 @@ export function createModelStepStartedEvent(
   return createRuntimeEvent(input);
 }
 
+export function createModelStepProviderStateRecordedEvent(
+  input: RunRuntimeEventFactoryInput<'model.step.provider_state.recorded'>,
+): TypedRuntimeEvent<'model.step.provider_state.recorded'> {
+  return createRuntimeEvent(input);
+}
+
 export function createToolUseCreatedEvent(
   input: RunRuntimeEventFactoryInput<'tool.use.created'>,
 ): TypedRuntimeEvent<'tool.use.created'> {

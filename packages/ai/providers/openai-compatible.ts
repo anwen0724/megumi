@@ -1,11 +1,12 @@
 import type { ChatRuntimeRequest, ChatTokenUsage } from '@megumi/shared/chat-contracts';
-import type { JsonValue } from '@megumi/shared/json';
+import type { JsonObject, JsonValue } from '@megumi/shared/json';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeErrorCode } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import {
   createAssistantCompletedEvent,
   createAssistantDeltaEvent,
+  createModelStepProviderStateRecordedEvent,
   createModelStepStartedEvent,
   createRuntimeEvent,
   createRunCancelledEvent,
@@ -31,6 +32,10 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
   return {
     providerId: options.providerId,
     async *streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent> {
+      const requestBody = mapModelStepToOpenAICompatibleRequest(input.request);
+      const diagnostics = createProviderRequestDiagnostics(requestBody, input.request.toolResults?.length ? 'tool_continuation' : 'initial');
+      let failureStage: ProviderFailureStage = 'fetch_throw';
+
       try {
         const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
           method: 'POST',
@@ -38,26 +43,36 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
             authorization: `Bearer ${input.config.apiKey}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify(mapModelStepToOpenAICompatibleRequest(input.request)),
+          body: JSON.stringify(requestBody),
           signal: input.signal,
         });
 
         if (!response.ok) {
-          yield failedModelStepEvent(input, mapHttpStatus(response.status), clock.now());
+          yield failedModelStepEvent(input, mapHttpStatus(response.status), clock.now(), {
+            ...diagnostics,
+            failureStage: 'http_error',
+            httpStatus: response.status,
+            httpStatusText: response.statusText,
+            ...(await providerErrorBodyPreview(response)),
+          });
           return;
         }
 
         let usage: ChatTokenUsage | undefined;
         let content = '';
+        let reasoningContent = '';
         let finishReason: string | undefined;
         const toolCalls = new Map<number, OpenAICompatibleToolCallAccumulator>();
 
         yield createModelStepStarted(input, clock.now());
+        failureStage = 'stream_parse_error';
 
         for await (const item of parseOpenAICompatibleSseStream(response.body)) {
           if (item.type === 'delta') {
             content += item.delta;
             yield createModelOutputDelta(input, item.delta, clock.now());
+          } else if (item.type === 'reasoning_delta') {
+            reasoningContent += item.delta;
           } else if (item.type === 'tool_call_delta') {
             appendToolCallDelta(toolCalls, item);
           } else if (item.type === 'finish') {
@@ -65,6 +80,10 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
           } else if (item.type === 'usage') {
             usage = item.usage;
           }
+        }
+
+        if (reasoningContent.length > 0) {
+          yield createModelStepProviderStateRecorded(input, reasoningContent, clock.now());
         }
 
         for (const toolCall of [...toolCalls.entries()].sort(([left], [right]) => left - right).map(([, value]) => value)) {
@@ -91,10 +110,25 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
           return;
         }
 
-        yield failedModelStepEvent(input, 'provider_network_error', clock.now());
+        yield failedModelStepEvent(input, 'provider_network_error', clock.now(), {
+          ...diagnostics,
+          failureStage,
+          ...errorDiagnostics(error),
+        });
       }
     },
     async *streamChat(input: AiChatAdapterRequest): AsyncIterable<RuntimeEvent> {
+      const requestBody = {
+        model: input.request.modelId || input.config.defaultModelId,
+        messages: mapToOpenAICompatibleMessages(input.request),
+        stream: true,
+        stream_options: {
+          include_usage: true,
+        },
+      };
+      const diagnostics = createProviderRequestDiagnostics(requestBody, 'chat');
+      let failureStage: ProviderFailureStage = 'fetch_throw';
+
       try {
         const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
           method: 'POST',
@@ -102,24 +136,24 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
             authorization: `Bearer ${input.config.apiKey}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify({
-            model: input.request.modelId || input.config.defaultModelId,
-            messages: mapToOpenAICompatibleMessages(input.request),
-            stream: true,
-            stream_options: {
-              include_usage: true,
-            },
-          }),
+          body: JSON.stringify(requestBody),
           signal: input.signal,
         });
 
         if (!response.ok) {
-          yield failedEvent(input, mapHttpStatus(response.status), clock.now());
+          yield failedEvent(input, mapHttpStatus(response.status), clock.now(), {
+            ...diagnostics,
+            failureStage: 'http_error',
+            httpStatus: response.status,
+            httpStatusText: response.statusText,
+            ...(await providerErrorBodyPreview(response)),
+          });
           return;
         }
 
         let usage: ChatTokenUsage | undefined;
         let content = '';
+        failureStage = 'stream_parse_error';
 
         for await (const item of parseOpenAICompatibleSseStream(response.body)) {
           if (item.type === 'delta') {
@@ -161,7 +195,11 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
           return;
         }
 
-        yield failedEvent(input, 'provider_network_error', clock.now());
+        yield failedEvent(input, 'provider_network_error', clock.now(), {
+          ...diagnostics,
+          failureStage,
+          ...errorDiagnostics(error),
+        });
       }
     },
   };
@@ -187,6 +225,7 @@ function failedEvent(
   input: AiChatAdapterRequest,
   code: RuntimeErrorCode,
   createdAt: string,
+  diagnostics: JsonObject = {},
 ): RuntimeEvent {
   return createRunFailedEvent({
     eventId: input.eventIdFactory(),
@@ -203,9 +242,74 @@ function failedEvent(
       details: {
         providerId: input.config.providerId,
         modelId: String(input.request.modelId || input.config.defaultModelId),
+        ...diagnostics,
       },
     },
   });
+}
+
+type ProviderFailureStage = 'http_error' | 'fetch_throw' | 'stream_parse_error';
+type ProviderRequestShape = 'chat' | 'initial' | 'tool_continuation';
+
+interface OpenAICompatibleRequestDiagnosticsBody {
+  messages: Array<{ role: string; tool_calls?: unknown[] }>;
+  tools?: unknown[];
+}
+
+function createProviderRequestDiagnostics(
+  body: OpenAICompatibleRequestDiagnosticsBody,
+  requestShape: ProviderRequestShape,
+): JsonObject {
+  return {
+    boundary: 'provider',
+    operation: 'chat_completions_stream',
+    requestShape,
+    messageRoles: body.messages.map((message) => message.role),
+    toolDefinitionCount: body.tools?.length ?? 0,
+    toolUseCount: body.messages.reduce((count, message) => count + (message.tool_calls?.length ?? 0), 0),
+    toolResultCount: body.messages.filter((message) => message.role === 'tool').length,
+  };
+}
+
+async function providerErrorBodyPreview(response: Response): Promise<JsonObject> {
+  try {
+    const body = await response.text();
+    const preview = safeDiagnosticTextPreview(body);
+    return preview ? { providerErrorBodyPreview: preview } : {};
+  } catch (error) {
+    return {
+      providerErrorBodyReadError: safeDiagnosticTextPreview(errorMessageForDiagnostic(error)),
+    };
+  }
+}
+
+function errorDiagnostics(error: unknown): JsonObject {
+  return {
+    errorName: errorNameForDiagnostic(error),
+    errorMessage: safeDiagnosticTextPreview(errorMessageForDiagnostic(error)),
+  };
+}
+
+function errorNameForDiagnostic(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
+function errorMessageForDiagnostic(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function safeDiagnosticTextPreview(value: string): string {
+  const maxLength = 2000;
+  return redactDiagnosticText(value).slice(0, maxLength);
+}
+
+function redactDiagnosticText(value: string): string {
+  return value
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b/g, 'Bearer [redacted]')
+    .replace(/\bsk-[A-Za-z0-9._-]{8,}\b/g, '[redacted]')
+    .replace(/\b(apiKey|api_key|token|secret|password)=([^&\s]+)/gi, '$1=[redacted]')
+    .replace(/\b(token|secret|password):\s*([^,\s]+)/gi, '$1: [redacted]')
+    .replace(/("(?:apiKey|api_key|token|secret|password|authorization|cookie)"\s*:\s*")([^"]*)(")/gi, '$1[redacted]$3');
 }
 
 interface OpenAICompatibleToolCallDelta {
@@ -321,6 +425,38 @@ function createModelStepToolUseCreated(
   });
 }
 
+function createModelStepProviderStateRecorded(
+  input: AiModelStepAdapterRequest,
+  reasoningContent: string,
+  createdAt: string,
+): RuntimeEvent {
+  return createModelStepProviderStateRecordedEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'model.step.provider_state.recorded',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      modelStepId: modelStepIdFor(input),
+      providerId: input.config.providerId,
+      modelId: String(input.request.modelId || input.config.defaultModelId),
+      blocks: [
+        {
+          type: 'reasoning_content',
+          text: reasoningContent,
+        },
+      ],
+    },
+  });
+}
+
 function createModelStepCompleted(
   input: AiModelStepAdapterRequest,
   payload: { content: string; finishReason?: string; usage?: ChatTokenUsage },
@@ -392,6 +528,7 @@ function failedModelStepEvent(
   input: AiModelStepAdapterRequest,
   code: RuntimeErrorCode,
   createdAt: string,
+  diagnostics: JsonObject = {},
 ): RuntimeEvent {
   return createRunFailedEvent({
     eventId: input.eventIdFactory(),
@@ -408,6 +545,7 @@ function failedModelStepEvent(
       details: {
         providerId: input.config.providerId,
         modelId: String(input.request.modelId || input.config.defaultModelId),
+        ...diagnostics,
       },
     },
   });

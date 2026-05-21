@@ -52,6 +52,7 @@ import type {
   MemoryRiskLevel,
   MemoryScope,
 } from './memory-contracts';
+import type { ModelStepProviderState } from './model-step-contracts';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 
@@ -82,6 +83,7 @@ export const RUNTIME_EVENT_TYPES = [
   'assistant.output.completed',
   'model.step.started',
   'model.output.delta',
+  'model.step.provider_state.recorded',
   'model.tool_use.detected',
   'model.step.completed',
   'tool.use.created',
@@ -297,6 +299,8 @@ export interface ModelOutputDeltaPayload {
   modelStepId: string;
   delta: string;
 }
+
+export interface ModelStepProviderStateRecordedPayload extends ModelStepProviderState {}
 
 export interface ModelToolUseDetectedPayload {
   modelStepId: string;
@@ -627,6 +631,7 @@ export type RuntimeEventPayloadByType = {
   'assistant.output.completed': AssistantOutputCompletedPayload;
   'model.step.started': ModelStepStartedPayload;
   'model.output.delta': ModelOutputDeltaPayload;
+  'model.step.provider_state.recorded': ModelStepProviderStateRecordedPayload;
   'model.tool_use.detected': ModelToolUseDetectedPayload;
   'model.step.completed': ModelStepCompletedPayload;
   'tool.use.created': ToolUseCreatedPayload;

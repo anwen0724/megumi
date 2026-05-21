@@ -916,12 +916,43 @@ describe('05 tool-use runtime events', () => {
     });
 
     expect(RuntimeEventSchema.parse({
+      eventId: 'event-model-provider-state-recorded',
+      schemaVersion: 1,
+      eventType: 'model.step.provider_state.recorded',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 3,
+      createdAt: '2026-05-20T00:00:01.500Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        blocks: [
+          {
+            type: 'reasoning_content',
+            text: 'I need to inspect docs.',
+          },
+        ],
+      },
+    }).payload).toMatchObject({
+      modelStepId: 'model-step-1',
+      blocks: [
+        {
+          type: 'reasoning_content',
+        },
+      ],
+    });
+
+    expect(RuntimeEventSchema.parse({
       eventId: 'event-model-step-completed',
       schemaVersion: 1,
       eventType: 'model.step.completed',
       runId: 'run-1',
       stepId: 'step-1',
-      sequence: 3,
+      sequence: 4,
       createdAt: '2026-05-20T00:00:02.000Z',
       source: 'provider',
       visibility: 'system',

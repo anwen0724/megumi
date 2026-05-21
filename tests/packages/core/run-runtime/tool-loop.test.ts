@@ -94,6 +94,38 @@ function modelStepCompletedEvent(input: {
   };
 }
 
+function modelStepProviderStateRecordedEvent(input: {
+  eventId: string;
+  sequence: number;
+  stepId: string;
+  modelStepId: string;
+}): RuntimeEvent {
+  return {
+    eventId: input.eventId,
+    schemaVersion: 1,
+    eventType: 'model.step.provider_state.recorded',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: input.stepId,
+    sequence: input.sequence,
+    createdAt: '2026-05-17T00:00:01.500Z',
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      modelStepId: input.modelStepId,
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      blocks: [
+        {
+          type: 'reasoning_content',
+          text: 'I need to inspect docs.',
+        },
+      ],
+    },
+  };
+}
+
 function assistantCompletedEvent(input: {
   eventId: string;
   sequence: number;
@@ -276,6 +308,83 @@ describe('run model tool loop', () => {
       },
     });
     expect(events.at(-1)?.eventType).toBe('assistant.output.completed');
+  });
+
+  it('feeds provider state into the next model step after tool handling', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+
+    await collect(runModelToolLoop({
+      request: createRequest({
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+      }),
+      aiPort: {
+        async *streamModelStep(input) {
+          requests.push(input.request);
+
+          if (requests.length === 1) {
+            yield modelStepProviderStateRecordedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            });
+            yield toolUseCreatedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            });
+            yield modelStepCompletedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            });
+            return;
+          }
+
+          yield assistantCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+          });
+        },
+      },
+      toolUseHandler: {
+        async handleToolUses() {
+          return {
+            toolResults: [createToolResult()],
+          };
+        },
+      },
+      ids: {
+        nextEventId: (() => {
+          let next = 1;
+          return () => {
+            next += 1;
+            return `provider-state-event-${next}`;
+          };
+        })(),
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+    }));
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.providerStates).toEqual([
+      {
+        modelStepId: 'model-step-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        blocks: [
+          {
+            type: 'reasoning_content',
+            text: 'I need to inspect docs.',
+          },
+        ],
+      },
+    ]);
   });
 
   it('stops before requesting another model step when tool handling returns pending approvals', async () => {

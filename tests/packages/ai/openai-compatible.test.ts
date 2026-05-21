@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
 import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
-import type { FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
+import type { AiModelStepAdapterRequest, FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
 
 const request: ChatRuntimeRequest = {
   requestId: 'request-1',
@@ -62,6 +62,41 @@ describe('OpenAI-compatible adapter', () => {
     return {
       request,
       runId: 'run-1',
+      config,
+      nextSequence: () => {
+        sequence += 1;
+        return sequence;
+      },
+      eventIdFactory: () => `event-${sequence + 1}`,
+    };
+  }
+
+  function modelStepInput(overrides: Partial<AiModelStepAdapterRequest['request']> = {}): AiModelStepAdapterRequest {
+    let sequence = 0;
+
+    return {
+      request: {
+        requestId: 'request-1',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        providerId: 'openai' as const,
+        modelId: 'gpt-4.1',
+        messages: [
+          {
+            messageId: 'message-1',
+            sessionId: 'session-1',
+            role: 'user' as const,
+            content: 'Read package.json',
+            status: 'completed' as const,
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+        ],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        ...overrides,
+      },
+      runId: 'run-1',
+      stepId: 'step-1',
       config,
       nextSequence: () => {
         sequence += 1;
@@ -324,6 +359,88 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
+  it('records provider reasoning state without exposing it as visible model output', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"reasoning_content":"I need to inspect docs."}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":null}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-list","type":"function","function":{"name":"list_directory","arguments":"{\\"path\\":"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"docs\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'deepseek',
+      defaultBaseUrl: 'https://api.deepseek.com',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    const events = await collect(adapter.streamModelStep({
+      ...modelStepInput({
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        modelStepId: 'model-step-1',
+        toolDefinitions: [
+          {
+            name: 'list_directory',
+            description: 'List a project directory.',
+            inputSchema: {
+              type: 'object',
+              properties: { path: { type: 'string' } },
+              required: ['path'],
+              additionalProperties: false,
+            },
+            capabilities: ['project_read'],
+            riskLevel: 'low',
+            sideEffect: 'none',
+            availability: { status: 'available' },
+          },
+        ],
+      }),
+      config: {
+        providerId: 'deepseek',
+        kind: 'openai-compatible',
+        baseUrl: 'https://api.deepseek.com',
+        apiKey: 'sk-test',
+        defaultModelId: 'deepseek-v4-flash',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'model.step.started',
+      'model.step.provider_state.recorded',
+      'tool.use.created',
+      'model.step.completed',
+    ]);
+    expect(events.map((event) => RuntimeEventSchema.parse(event))).toEqual(events);
+    expect(events).not.toContainEqual(expect.objectContaining({
+      eventType: 'model.output.delta',
+    }));
+    expect(events[1]).toMatchObject({
+      eventType: 'model.step.provider_state.recorded',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        blocks: [
+          {
+            type: 'reasoning_content',
+            text: 'I need to inspect docs.',
+          },
+        ],
+      },
+    });
+    expect(events[2]).toMatchObject({
+      eventType: 'tool.use.created',
+      payload: {
+        toolName: 'list_directory',
+        input: { path: 'docs' },
+      },
+    });
+  });
+
   it('maps auth failures to typed failed events', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response('bad key', { status: 401 }));
     const adapter = createOpenAICompatibleAdapter({
@@ -347,10 +464,10 @@ describe('OpenAI-compatible adapter', () => {
             message: 'Provider rejected the API key.',
             retryable: false,
             source: 'provider',
-            details: {
+            details: expect.objectContaining({
               providerId: 'openai',
               modelId: 'gpt-4.1',
-            },
+            }),
           }),
         }),
       }),
@@ -424,15 +541,175 @@ describe('OpenAI-compatible adapter', () => {
           error: expect.objectContaining({
             code: 'provider_network_error',
             message: 'Provider network request failed.',
-            details: {
+            details: expect.objectContaining({
               providerId: 'openai',
               modelId: 'gpt-4.1',
-            },
+            }),
           }),
         }),
       }),
     ]);
     expect(JSON.stringify(events)).not.toContain('sk-secret-raw-header');
     expect(JSON.stringify(events)).not.toContain('cause');
+  });
+
+  it('records provider HTTP diagnostics for failed tool continuation model steps', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(
+      '{"error":{"message":"tool message rejected","debug":"sk-provider-secret-12345678"}}',
+      { status: 400, statusText: 'Bad Request' },
+    ));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    const [event] = await collect(adapter.streamModelStep(modelStepInput({
+      toolDefinitions: [
+        {
+          name: 'read_file',
+          description: 'Read a project file.',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: false,
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          availability: { status: 'available' },
+        },
+      ],
+      toolUses: [
+        {
+          toolUseId: 'tool-use-1',
+          runId: 'run-1',
+          modelStepId: 'step-1',
+          providerToolUseId: 'tool-use-1',
+          toolName: 'read_file',
+          input: { path: 'package.json' },
+          inputPreview: {
+            summary: 'read_file',
+            targets: [],
+            redactionState: 'none',
+          },
+          status: 'created',
+          createdAt: '2026-05-17T00:00:01.000Z',
+        },
+      ],
+      toolResults: [
+        {
+          toolResultId: 'tool-result-1',
+          toolUseId: 'tool-use-1',
+          runId: 'run-1',
+          kind: 'success',
+          textContent: 'File contents',
+          redactionState: 'none',
+          createdAt: '2026-05-17T00:00:02.000Z',
+        },
+      ],
+    })));
+
+    expect(event).toMatchObject({
+      eventType: 'run.failed',
+      payload: {
+        error: {
+          code: 'provider_network_error',
+          details: {
+            providerId: 'openai',
+            modelId: 'gpt-4.1',
+            boundary: 'provider',
+            operation: 'chat_completions_stream',
+            failureStage: 'http_error',
+            httpStatus: 400,
+            httpStatusText: 'Bad Request',
+            providerErrorBodyPreview: expect.stringContaining('tool message rejected'),
+            requestShape: 'tool_continuation',
+            messageRoles: ['system', 'user', 'assistant', 'tool'],
+            toolDefinitionCount: 1,
+            toolUseCount: 1,
+            toolResultCount: 1,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(event)).not.toContain('sk-provider-secret-12345678');
+  });
+
+  it('records fetch throw diagnostics without exposing raw causes', async () => {
+    const fetch = vi.fn<FetchLike>().mockRejectedValue(new TypeError('connect failed with sk-provider-secret-12345678'));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    const [event] = await collect(adapter.streamModelStep(modelStepInput()));
+
+    expect(event).toMatchObject({
+      eventType: 'run.failed',
+      payload: {
+        error: {
+          code: 'provider_network_error',
+          details: {
+            providerId: 'openai',
+            modelId: 'gpt-4.1',
+            boundary: 'provider',
+            operation: 'chat_completions_stream',
+            failureStage: 'fetch_throw',
+            errorName: 'TypeError',
+            errorMessage: 'connect failed with [redacted]',
+            requestShape: 'initial',
+            messageRoles: ['system', 'user'],
+            toolDefinitionCount: 0,
+            toolUseCount: 0,
+            toolResultCount: 0,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(event)).not.toContain('sk-provider-secret-12345678');
+    expect(JSON.stringify(event)).not.toContain('cause');
+  });
+
+  it('records stream parse diagnostics for malformed provider SSE chunks', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n',
+      'data: {definitely not json}\n\n',
+    ]));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    const events = await collect(adapter.streamModelStep(modelStepInput()));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'model.step.started',
+      'model.output.delta',
+      'run.failed',
+    ]);
+    expect(events[2]).toMatchObject({
+      eventType: 'run.failed',
+      payload: {
+        error: {
+          code: 'provider_network_error',
+          details: {
+            providerId: 'openai',
+            modelId: 'gpt-4.1',
+            boundary: 'provider',
+            operation: 'chat_completions_stream',
+            failureStage: 'stream_parse_error',
+            errorName: 'SyntaxError',
+            requestShape: 'initial',
+          },
+        },
+      },
+    });
   });
 });

@@ -1,4 +1,4 @@
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime-events';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
 import {
@@ -50,6 +50,7 @@ export interface PendingToolApprovalContinuation {
   request: ModelStepRuntimeRequest;
   accumulatedToolUses: ToolUse[];
   accumulatedToolResults: ToolResult[];
+  accumulatedProviderStates: ModelStepProviderState[];
 }
 
 export interface ModelToolLoopIds {
@@ -74,9 +75,11 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
   let sequenceOffset = 0;
   let accumulatedToolUses = [...(request.toolUses ?? [])];
   let accumulatedToolResults = [...(request.toolResults ?? [])];
+  let accumulatedProviderStates = [...(request.providerStates ?? [])];
 
   for (let modelStepCount = 0; modelStepCount < maxModelSteps; modelStepCount += 1) {
     const toolUses: ToolUse[] = [];
+    const providerStates: ModelStepProviderState[] = [];
     let stepMaxSequence = sequenceOffset;
 
     for await (const event of runModelStep({
@@ -95,6 +98,10 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
         toolUses.push(createToolUseFromEvent(eventWithLoopSequence));
       }
 
+      if (isModelStepProviderStateRecordedEvent(eventWithLoopSequence)) {
+        providerStates.push(eventWithLoopSequence.payload);
+      }
+
       yield eventWithLoopSequence;
     }
 
@@ -105,6 +112,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     }
 
     accumulatedToolUses = [...accumulatedToolUses, ...toolUses];
+    accumulatedProviderStates = [...accumulatedProviderStates, ...providerStates];
 
     const outcome = await input.toolUseHandler.handleToolUses({
       request,
@@ -174,6 +182,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
         ...request,
         toolUses: accumulatedToolUses,
         toolResults: accumulatedToolResults,
+        providerStates: accumulatedProviderStates,
       };
 
       for (const pendingApproval of outcome.pendingApprovals ?? []) {
@@ -182,6 +191,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
           request: continuationRequest,
           accumulatedToolUses,
           accumulatedToolResults,
+          accumulatedProviderStates,
         });
       }
       return;
@@ -197,6 +207,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       modelStepId: input.ids.nextModelStepId(),
       toolUses: accumulatedToolUses,
       toolResults: accumulatedToolResults,
+      providerStates: accumulatedProviderStates,
       createdAt: new Date().toISOString(),
     };
   }
@@ -250,6 +261,16 @@ function createToolUseFromEvent(event: TypedRuntimeEvent<'tool.use.created'>): T
 
 function isToolUseCreatedEvent(event: RuntimeEvent): event is TypedRuntimeEvent<'tool.use.created'> {
   if (event.eventType !== 'tool.use.created') {
+    return false;
+  }
+
+  return RuntimeEventSchema.safeParse(event).success;
+}
+
+function isModelStepProviderStateRecordedEvent(
+  event: RuntimeEvent,
+): event is TypedRuntimeEvent<'model.step.provider_state.recorded'> {
+  if (event.eventType !== 'model.step.provider_state.recorded') {
     return false;
   }
 
