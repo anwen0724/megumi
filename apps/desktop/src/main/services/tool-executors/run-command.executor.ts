@@ -18,7 +18,7 @@ export interface RunCommandInput {
   command: string;
   cwd?: string;
   timeoutMs?: number;
-  envPolicy?: 'inherit_safe' | 'empty';
+  envPolicy?: 'default' | 'minimal' | 'none';
 }
 
 export interface RunCommandResult {
@@ -73,7 +73,7 @@ export function createRunCommandExecutor(options: RunCommandExecutorOptions): Ru
 
         const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', input.command], {
           cwd,
-          env: input.envPolicy === 'empty' ? {} : process.env,
+          env: resolveEnvironment(input.envPolicy),
           windowsHide: true,
         });
 
@@ -154,10 +154,39 @@ function readEnvPolicy(input: Record<string, unknown>): RunCommandInput['envPoli
   if (value === undefined) {
     return undefined;
   }
-  if (value === 'inherit_safe' || value === 'empty') {
+  if (value === 'default' || value === 'minimal' || value === 'none') {
     return value;
   }
   throw new Error('Invalid envPolicy input.');
+}
+
+const MINIMAL_ENV_KEYS = [
+  'PATH',
+  'Path',
+  'SystemRoot',
+  'SYSTEMROOT',
+  'WINDIR',
+  'TEMP',
+  'TMP',
+  'ComSpec',
+  'COMSPEC',
+] as const;
+
+function resolveEnvironment(envPolicy: RunCommandInput['envPolicy']): NodeJS.ProcessEnv {
+  if (envPolicy === 'none') {
+    return {};
+  }
+  if (envPolicy === 'minimal') {
+    const env: NodeJS.ProcessEnv = {};
+    for (const key of MINIMAL_ENV_KEYS) {
+      const value = process.env[key];
+      if (value !== undefined) {
+        env[key] = value;
+      }
+    }
+    return env;
+  }
+  return process.env;
 }
 
 function resolveProjectCwd(projectRoot: string, cwd: string): string {

@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolCall } from '@megumi/shared/tool-contracts';
-import { createRunCommandExecutor } from '@megumi/desktop/main/services/tool-executors/run-command.executor';
+import {
+  createRunCommandExecutor,
+  type SpawnLike,
+} from '@megumi/desktop/main/services/tool-executors/run-command.executor';
 
 describe('RunCommandExecutor', () => {
   it('runs project-bound commands through a Host adapter without exposing a powershell tool name', async () => {
@@ -81,6 +84,90 @@ describe('RunCommandExecutor', () => {
         redactionState: 'redacted',
         createdAt: '2026-05-20T00:00:00.000Z',
       });
+  });
+
+  it('runs commands with an empty environment when envPolicy is none', async () => {
+    const spawn = vi.fn(() => fakeChildProcess({
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+    }));
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await executor.runCommand({ command: 'npm test', envPolicy: 'none' });
+
+    expect(spawn).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', 'npm test'],
+      expect.objectContaining({ env: {} }),
+    );
+  });
+
+  it('runs commands with process.env when envPolicy is default', async () => {
+    const spawn = vi.fn(() => fakeChildProcess({
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+    }));
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await executor.runCommand({ command: 'npm test', envPolicy: 'default' });
+
+    expect(spawn).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', 'npm test'],
+      expect.objectContaining({ env: process.env }),
+    );
+  });
+
+  it('accepts minimal envPolicy and passes only a safe environment subset', async () => {
+    const previousSecret = process.env.MEGUMI_RUN_COMMAND_SECRET_TEST_KEY;
+    process.env.MEGUMI_RUN_COMMAND_SECRET_TEST_KEY = 'secret-value';
+    let capturedEnv: NodeJS.ProcessEnv | undefined;
+    const spawn = vi.fn<SpawnLike>((_command, _args, options) => {
+      capturedEnv = options.env;
+      return fakeChildProcess({
+        stdout: 'ok\n',
+        stderr: '',
+        exitCode: 0,
+      });
+    });
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    try {
+      await expect(executor.execute(toolCall({ command: 'npm test', envPolicy: 'minimal' })))
+        .resolves.toMatchObject({
+          kind: 'success',
+          structuredContent: {
+            stdoutPreview: 'ok\n',
+          },
+        });
+
+      expect(capturedEnv).toBeDefined();
+      expect(capturedEnv).not.toBe(process.env);
+      expect(capturedEnv).not.toHaveProperty('MEGUMI_RUN_COMMAND_SECRET_TEST_KEY');
+    } finally {
+      if (previousSecret === undefined) {
+        delete process.env.MEGUMI_RUN_COMMAND_SECRET_TEST_KEY;
+      } else {
+        process.env.MEGUMI_RUN_COMMAND_SECRET_TEST_KEY = previousSecret;
+      }
+    }
   });
 
   it('truncates stdout and stderr previews at the output limit', async () => {
