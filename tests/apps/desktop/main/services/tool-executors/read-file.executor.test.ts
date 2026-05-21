@@ -1,0 +1,78 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import type { ToolCall } from '@megumi/shared/tool-contracts';
+import { createReadFileExecutor } from '@megumi/desktop/main/services/tool-executors/read-file.executor';
+
+describe('ReadFileExecutor', () => {
+  it('reads a project-local file and redacts runtime secrets', async () => {
+    const executor = createReadFileExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(new Map([
+        ['C:\\project\\src\\index.ts', 'const token = "sk-secret-token";'],
+      ])),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.execute(toolCall('read_file', { path: 'src/index.ts' })))
+      .resolves.toMatchObject({
+        kind: 'success',
+        structuredContent: {
+          path: 'src/index.ts',
+          content: 'const token = "[redacted]";',
+          truncated: false,
+        },
+        textContent: 'const token = "[redacted]";',
+      });
+  });
+
+  it('rejects paths outside the project', async () => {
+    const executor = createReadFileExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(new Map()),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.execute(toolCall('read_file', { path: '../outside.txt' })))
+      .rejects.toThrow(/outside the project/);
+  });
+});
+
+function toolCall(toolName: string, input: Record<string, unknown>): ToolCall {
+  return {
+    toolCallId: 'tool-call-1',
+    toolUseId: 'tool-use-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName,
+    input: input as ToolCall['input'],
+    inputPreview: { summary: toolName, targets: [], redactionState: 'none' },
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    sideEffect: 'none',
+    status: 'running',
+    requestedAt: '2026-05-20T00:00:00.000Z',
+  };
+}
+
+function fakeFileSystem(files: Map<string, string>) {
+  return {
+    async readFile(filePath: string) {
+      const value = files.get(filePath);
+      if (value === undefined) throw new Error(`Missing file: ${filePath}`);
+      return value;
+    },
+    async writeFile() {},
+    async mkdir() {},
+    async stat(filePath: string) {
+      if (files.has(filePath)) {
+        return { isFile: () => true, isDirectory: () => false, size: files.get(filePath)?.length ?? 0 };
+      }
+      throw new Error(`Missing path: ${filePath}`);
+    },
+    async readdir() {
+      return [];
+    },
+  };
+}

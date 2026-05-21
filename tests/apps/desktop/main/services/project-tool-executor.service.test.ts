@@ -1,0 +1,144 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import type { ToolCall } from '@megumi/shared/tool-contracts';
+import { createProjectToolExecutor } from '@megumi/desktop/main/services/project-tool-executor.service';
+
+describe('ProjectToolExecutor', () => {
+  it('reads and redacts project-local files', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\README.md', 'hello sk-secret-token'],
+    ]);
+    const executor = createProjectToolExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(files),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    const result = await executor.executeToolCall(toolCall('read_file', { path: 'README.md' }));
+
+    expect(result).toMatchObject({
+      toolResultId: 'tool-result-1',
+      kind: 'success',
+      structuredContent: {
+        path: 'README.md',
+        content: 'hello [redacted]',
+        truncated: false,
+      },
+      textContent: 'hello [redacted]',
+      redactionState: 'redacted',
+      createdAt: '2026-05-20T00:00:00.000Z',
+    });
+  });
+
+  it('lists, globs, and searches without leaving the project root', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\src\\index.ts', 'export const answer = 42;'],
+      ['C:\\project\\src\\secret.pem', 'private key'],
+      ['C:\\project\\package.json', '{"scripts":{"test":"vitest"}}'],
+    ]);
+    const executor = createProjectToolExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(files),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.executeToolCall(toolCall('read_file', { path: '../outside.txt' })))
+      .resolves.toMatchObject({ kind: 'tool_error' });
+
+    expect(await executor.executeToolCall(toolCall('list_directory', { path: 'src' })))
+      .toMatchObject({ structuredContent: { entries: [{ name: 'index.ts', kind: 'file' }] } });
+
+    expect(await executor.executeToolCall(toolCall('glob', { pattern: 'src/*.ts' })))
+      .toMatchObject({ structuredContent: { matches: ['src/index.ts'] } });
+
+    expect(await executor.executeToolCall(toolCall('search_text', { query: 'answer', path: 'src' })))
+      .toMatchObject({ structuredContent: { matches: [{ path: 'src/index.ts', line: 1 }] } });
+  });
+
+  it('edits and writes ordinary project files', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\src\\index.ts', 'export const answer = 41;'],
+    ]);
+    const executor = createProjectToolExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(files),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    expect(await executor.executeToolCall(toolCall('edit_file', {
+      path: 'src/index.ts',
+      oldText: '41',
+      newText: '42',
+    }))).toMatchObject({ structuredContent: { replacements: 1 } });
+    expect(files.get('C:\\project\\src\\index.ts')).toBe('export const answer = 42;');
+
+    expect(await executor.executeToolCall(toolCall('write_file', {
+      path: 'src/new.ts',
+      content: 'export {}',
+    }))).toMatchObject({ structuredContent: { created: true, overwritten: false } });
+    expect(files.get('C:\\project\\src\\new.ts')).toBe('export {}');
+  });
+});
+
+function toolCall(toolName: string, input: Record<string, unknown>): ToolCall {
+  return {
+    toolCallId: 'tool-call-1',
+    toolUseId: 'tool-use-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName,
+    input: input as ToolCall['input'],
+    inputPreview: {
+      summary: `${toolName}`,
+      targets: [],
+      redactionState: 'none',
+    },
+    capabilities: toolName === 'edit_file' || toolName === 'write_file' ? ['project_write'] : ['project_read'],
+    riskLevel: 'low',
+    sideEffect: toolName === 'edit_file' || toolName === 'write_file' ? 'project_file_operation' : 'none',
+    status: 'running',
+    requestedAt: '2026-05-20T00:00:00.000Z',
+  };
+}
+
+function fakeFileSystem(files: Map<string, string>) {
+  return {
+    async readFile(filePath: string) {
+      const value = files.get(filePath);
+      if (value === undefined) throw new Error(`Missing file: ${filePath}`);
+      return value;
+    },
+    async writeFile(filePath: string, content: string) {
+      files.set(filePath, content);
+    },
+    async mkdir() {},
+    async stat(filePath: string) {
+      if (files.has(filePath)) {
+        return { isFile: () => true, isDirectory: () => false, size: files.get(filePath)?.length ?? 0 };
+      }
+      const prefix = filePath.endsWith('\\') ? filePath : `${filePath}\\`;
+      if ([...files.keys()].some((file) => file.startsWith(prefix))) {
+        return { isFile: () => false, isDirectory: () => true, size: 0 };
+      }
+      throw new Error(`Missing path: ${filePath}`);
+    },
+    async readdir(filePath: string) {
+      const prefix = filePath.endsWith('\\') ? filePath : `${filePath}\\`;
+      const names = new Set<string>();
+      for (const file of files.keys()) {
+        if (!file.startsWith(prefix)) continue;
+        const rest = file.slice(prefix.length);
+        const name = rest.split('\\')[0];
+        if (name) names.add(name);
+      }
+      return [...names].map((name) => {
+        const full = `${prefix}${name}`;
+        const isFile = files.has(full);
+        return { name, isFile: () => isFile, isDirectory: () => !isFile };
+      });
+    },
+  };
+}
