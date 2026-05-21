@@ -3,6 +3,7 @@ import {
   optionalString,
   redactToolText,
   requireString,
+  resolveProjectPath,
   successResult,
   walkProjectFiles,
   type ProjectToolExecutorContext,
@@ -15,7 +16,8 @@ export function createSearchTextExecutor(context: ProjectToolExecutorContext): S
       const input = inputRecord(toolCall);
       const query = requireString(input, 'query');
       const searchPath = optionalString(input, 'path', '.');
-      const files = await walkProjectFiles(context, searchPath);
+      const searchRoot = resolveProjectPath(context, searchPath);
+      const files = await walkProjectFiles(context, searchRoot.relativePath);
       const matches: Array<{ path: string; line: number; snippet: string }> = [];
       let redactionState: 'none' | 'redacted' = 'none';
 
@@ -39,7 +41,7 @@ export function createSearchTextExecutor(context: ProjectToolExecutorContext): S
       }
 
       return successResult(context, toolCall, {
-        structuredContent: { query, path: searchPath, matches },
+        structuredContent: { query, path: searchRoot.relativePath, matches },
         textContent: matches.map((match) => `${match.path}:${match.line}: ${match.snippet}`).join('\n'),
         redactionState,
       });

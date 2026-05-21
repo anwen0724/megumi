@@ -2,7 +2,7 @@ import {
   inputRecord,
   optionalPositiveInteger,
   redactToolText,
-  resolveProjectPath,
+  assertOrdinaryProjectPath,
   successResult,
   truncateUtf8,
   type ProjectToolExecutorContext,
@@ -20,7 +20,7 @@ export function createReadFileExecutor(context: ProjectToolExecutorContext): Sin
         throw new Error('Missing or invalid string input: path');
       }
       const maxBytes = optionalPositiveInteger(input, 'maxBytes', DEFAULT_MAX_BYTES);
-      const resolved = resolveProjectPath(context, path);
+      const resolved = assertOrdinaryProjectPath(context, path);
       const rawContent = await context.fileSystem.readFile(resolved.absolutePath, 'utf8');
       const truncated = truncateUtf8(rawContent, maxBytes);
       const redacted = redactToolText(truncated.content);

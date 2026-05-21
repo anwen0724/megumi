@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ToolCall } from '@megumi/shared/tool-contracts';
 import { createReadFileExecutor } from '@megumi/desktop/main/services/tool-executors/read-file.executor';
 
@@ -37,6 +37,38 @@ describe('ReadFileExecutor', () => {
     await expect(executor.execute(toolCall('read_file', { path: '../outside.txt' })))
       .rejects.toThrow(/outside the project/);
   });
+
+  it('rejects protected project paths before reading from disk', async () => {
+    const fileSystem = fakeFileSystem(new Map([
+      ['C:\\project\\.git\\config', '[core]\nrepositoryformatversion = 0'],
+    ]));
+    const executor = createReadFileExecutor({
+      projectRoot: 'C:/project',
+      fileSystem,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.execute(toolCall('read_file', { path: '.git/config' })))
+      .rejects.toThrow(/protected/);
+    expect(fileSystem.readFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects sensitive project paths before reading from disk', async () => {
+    const fileSystem = fakeFileSystem(new Map([
+      ['C:\\project\\.env', 'OPENAI_API_KEY=sk-secret-token'],
+    ]));
+    const executor = createReadFileExecutor({
+      projectRoot: 'C:/project',
+      fileSystem,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.execute(toolCall('read_file', { path: '.env' })))
+      .rejects.toThrow(/sensitive/);
+    expect(fileSystem.readFile).not.toHaveBeenCalled();
+  });
 });
 
 function toolCall(toolName: string, input: Record<string, unknown>): ToolCall {
@@ -58,11 +90,11 @@ function toolCall(toolName: string, input: Record<string, unknown>): ToolCall {
 
 function fakeFileSystem(files: Map<string, string>) {
   return {
-    async readFile(filePath: string) {
+    readFile: vi.fn(async (filePath: string) => {
       const value = files.get(filePath);
       if (value === undefined) throw new Error(`Missing file: ${filePath}`);
       return value;
-    },
+    }),
     async writeFile() {},
     async mkdir() {},
     async stat(filePath: string) {

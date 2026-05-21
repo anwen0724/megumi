@@ -19,10 +19,35 @@ describe('SearchTextExecutor', () => {
       .resolves.toMatchObject({
         kind: 'success',
         structuredContent: {
+          path: 'src',
           matches: [{
             path: 'src/index.ts',
             line: 1,
             snippet: 'const token = "[redacted]";',
+          }],
+        },
+      });
+  });
+
+  it('returns normalized slash project-relative search root paths', async () => {
+    const executor = createSearchTextExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(new Map([
+        ['C:\\project\\src\\nested\\index.ts', 'needle'],
+      ])),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.execute(toolCall('search_text', { query: 'needle', path: '.\\src' })))
+      .resolves.toMatchObject({
+        kind: 'success',
+        structuredContent: {
+          path: 'src',
+          matches: [{
+            path: 'src/nested/index.ts',
+            line: 1,
+            snippet: 'needle',
           }],
         },
       });
