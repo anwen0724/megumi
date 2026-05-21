@@ -16,13 +16,6 @@ const PRODUCTION_ROOTS = [
   'apps/desktop/src/renderer',
 ];
 
-const ALLOWED_HOST_MAINTENANCE_FILES = [
-  'packages/shared/session-run-contracts.ts',
-  'packages/core/run-runtime/run-turn.ts',
-  'packages/core/run-runtime/events.ts',
-  'tests/architecture/agent-action-permission-tools-v1-final-source-guards.test.ts',
-];
-
 function projectPath(path: string): string {
   return relative(ROOT, path).replace(/\\/g, '/');
 }
@@ -96,7 +89,6 @@ describe('agent action permission tools v1 final source guards', () => {
     ];
 
     const offenders = productionFiles()
-      .filter((file) => !ALLOWED_HOST_MAINTENANCE_FILES.includes(projectPath(file)))
       .filter((file) => forbidden.some((needle) => readFileSync(file, 'utf8').includes(needle)))
       .map(projectPath);
 
