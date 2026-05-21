@@ -79,15 +79,19 @@ describe('runtime event dispatcher', () => {
     ]);
   });
 
-  it('falls back to streaming text then Done when a run completes without completed content', () => {
+  it('commits streaming text and does not synthesize Done when a run completes without assistant output', () => {
     dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 1, { delta: 'Streamed answer' }));
     dispatchRuntimeEvent(runtimeEvent('run.completed', 2));
     dispatchRuntimeEvent(runtimeEvent('run.completed', 3, {}, { runId: 'run-2' }));
 
     expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
       'Streamed answer',
-      'Done.',
     ]);
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'idle',
+    });
   });
 
   it('adds failed and cancelled assistant messages and uses the default cancellation reason', () => {

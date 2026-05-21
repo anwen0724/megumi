@@ -13,7 +13,7 @@ import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
-import type { ApprovalRequest, ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 let db: Database.Database | null = null;
@@ -207,6 +207,7 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
   contextService?: SessionRunContextService;
   runModeService?: SessionRunServiceOptions['runModeService'];
   toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
+  toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -217,6 +218,7 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
     ...(options?.contextService ? { contextService: options.contextService } : {}),
     ...(options?.runModeService ? { runModeService: options.runModeService } : {}),
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
+    ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         options?.onRequest?.(request);
@@ -701,6 +703,80 @@ describe('SessionRunService', () => {
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
       expect.objectContaining({ role: 'assistant', content: 'Hello', runId: 'run-1' }),
     ]));
+  });
+
+  it('passes available project tool definitions to the provider request when a session has a workspace', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const toolDefinitions: ToolDefinition[] = [{
+      name: 'list_directory',
+      title: 'List directory',
+      description: 'List files in a project directory.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+        },
+        required: ['path'],
+      },
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      availability: { status: 'available' },
+    }];
+    const service = createServiceWithModelStepStream([
+      assistantOutputCompletedEvent(1),
+    ], {
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses() {
+              return { toolResults: [], runtimeEvents: [] };
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
+          };
+        },
+      },
+      toolDefinitionProvider: {
+        listDefinitions(input) {
+          expect(input).toEqual({
+            runId: 'run-1',
+            permissionMode: 'default',
+            providerCapabilitySummary: { supportsToolUse: true },
+          });
+          return toolDefinitions;
+        },
+      },
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'List docs files',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.toolDefinitions).toEqual(toolDefinitions);
   });
 
   it('continues session message runs through tool results before completing with final assistant output', async () => {

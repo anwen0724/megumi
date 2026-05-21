@@ -45,7 +45,7 @@ import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { createRuntimeEvent, createToolResultCreatedEvent } from '@megumi/shared/runtime-event-factory';
-import type { ToolResult } from '@megumi/shared/tool-contracts';
+import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 
@@ -79,6 +79,16 @@ export interface SessionRunToolRuntimeFactory {
   }): Promise<ToolUseHandlerPort & ToolApprovalResumePort>;
 }
 
+export interface SessionRunToolDefinitionProvider {
+  listDefinitions(input: {
+    runId: string;
+    permissionMode: PermissionMode;
+    providerCapabilitySummary?: {
+      supportsToolUse?: boolean;
+    };
+  }): ToolDefinition[];
+}
+
 interface ApprovalContinuationGroup {
   groupId: string;
   request: ModelStepRuntimeRequest;
@@ -103,6 +113,7 @@ export interface SessionRunServiceOptions {
   >;
   modelStepProvider?: SessionRunModelStepProvider;
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
+  toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   hostBoundary?: RunHostBoundaryPort;
   clock?: SessionRunServiceClock;
   ids?: Partial<SessionRunServiceIds>;
@@ -150,6 +161,7 @@ export class SessionRunService {
   >;
   private readonly modelStepProvider?: SessionRunModelStepProvider;
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
+  private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
@@ -162,6 +174,7 @@ export class SessionRunService {
     this.runModeService = options.runModeService;
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
+    this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
@@ -329,6 +342,13 @@ export class SessionRunService {
       goal: userMessage.content,
       session,
     });
+    const toolDefinitions = session.workspacePath && this.toolDefinitionProvider
+      ? this.toolDefinitionProvider.listDefinitions({
+          runId,
+          permissionMode,
+          providerCapabilitySummary: { supportsToolUse: true },
+        })
+      : undefined;
     const request: ModelStepRuntimeRequest = {
       requestId: input.requestId,
       sessionId: session.sessionId,
@@ -338,6 +358,7 @@ export class SessionRunService {
       modelId: input.payload.modelId,
       messages: toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage),
       ...(context ? { context } : {}),
+      ...(toolDefinitions && toolDefinitions.length > 0 ? { toolDefinitions } : {}),
       ...(modeSnapshot ? {
         modeSnapshot: toPermissionModeSnapshot(modeSnapshot, createdAt),
         modeSnapshotRef: modeSnapshot.modeSnapshotId,

@@ -224,9 +224,13 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
   if (event.eventType === 'run.completed') {
     const state = useChatStore.getState();
     const completedContent = completedContentsByRun.get(event.runId)?.trim();
-    const assistantContent = completedContent || state.streamingText.trim() || 'Done.';
+    const assistantContent = completedContent || state.streamingText.trim();
     completedContentsByRun.delete(event.runId);
-    state.commitStream(createMessage('assistant', assistantContent));
+    if (assistantContent) {
+      state.commitStream(createMessage('assistant', assistantContent));
+    } else {
+      state.clearStream();
+    }
     return;
   }
 

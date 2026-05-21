@@ -102,6 +102,7 @@ const sessionRunService = new SessionRunService({
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
   toolRuntimeFactory,
+  toolDefinitionProvider: toolRegistry,
 });
 const toolService = new ToolService({
   repository: toolRepository,
