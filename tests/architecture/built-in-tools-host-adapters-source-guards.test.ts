@@ -21,6 +21,16 @@ function listSourceFiles(relativeDirectory: string): string[] {
   });
 }
 
+function functionSection(source: string, functionName: string, nextFunctionName: string): string {
+  const start = source.indexOf(`function ${functionName}`);
+  const end = source.indexOf(`function ${nextFunctionName}`, start + 1);
+
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+
+  return source.slice(start, end);
+}
+
 describe('built-in tools and host adapters source guards', () => {
   it('keeps provider-facing tool names platform neutral', () => {
     const definitions = read('packages/tools/built-ins/index.ts');
@@ -45,14 +55,35 @@ describe('built-in tools and host adapters source guards', () => {
 
   it('keeps Host execution behind PermissionPolicy', () => {
     const handler = read('apps/desktop/src/main/services/tool-use-handler.service.ts');
-    const policyIndex = handler.indexOf('evaluatePermissionPolicy({');
-    const executeIndex = handler.indexOf('projectExecutor.executeToolCall');
+    const handleSingleToolUse = functionSection(handler, 'handleSingleToolUse', 'runtimeEventBase');
+    const policyIndex = handleSingleToolUse.indexOf('evaluatePermissionPolicy({');
+    const executeIndex = handleSingleToolUse.indexOf('projectExecutor.executeToolCall');
 
     expect(policyIndex).toBeGreaterThan(-1);
     expect(executeIndex).toBeGreaterThan(-1);
     expect(policyIndex).toBeLessThan(executeIndex);
-    expect(handler).toContain("decision.decision === 'ask'");
-    expect(handler).toContain("decision.decision === 'deny'");
+    expect(handleSingleToolUse).toContain("decision.decision === 'ask'");
+    expect(handleSingleToolUse).toContain("decision.decision === 'deny'");
+  });
+
+  it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
+    const handler = read('apps/desktop/src/main/services/tool-use-handler.service.ts');
+    const resumeToolApproval = functionSection(handler, 'resumeToolApproval', 'handleSingleToolUse');
+    const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
+    const getToolCallIndex = resumeToolApproval.indexOf('repository.getToolCall(approvalRequest.toolCallId)');
+    const saveApprovalIndex = resumeToolApproval.indexOf('repository.saveApprovalRequest');
+    const deniedBranchIndex = resumeToolApproval.indexOf("input.decision === 'denied'");
+    const rejectedResultIndex = resumeToolApproval.indexOf("kind: 'user_rejected'");
+    const executeIndex = resumeToolApproval.indexOf('projectExecutor.executeToolCall');
+
+    expect(getApprovalIndex).toBeGreaterThan(-1);
+    expect(getToolCallIndex).toBeGreaterThan(getApprovalIndex);
+    expect(saveApprovalIndex).toBeGreaterThan(getToolCallIndex);
+    expect(deniedBranchIndex).toBeGreaterThan(saveApprovalIndex);
+    expect(rejectedResultIndex).toBeGreaterThan(deniedBranchIndex);
+    expect(executeIndex).toBeGreaterThan(deniedBranchIndex);
+    expect(executeIndex).toBeGreaterThan(rejectedResultIndex);
+    expect(resumeToolApproval).not.toContain('evaluatePermissionPolicy({');
   });
 
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {
