@@ -209,37 +209,109 @@ function classifyCommandReferencedProjectPath(
 
   return classifications.find((classification) => !classification.insideProject)
     ?? classifications.find((classification) => classification.protected)
-    ?? classifications.find((classification) => classification.sensitive);
+    ?? classifications.find((classification) => classification.sensitive)
+    ?? classifications[0];
 }
 
 function extractCommandPathReferences(command: string): string[] {
   const references = new Set<string>();
-  const protectedDirectoriesPattern = DEFAULT_PROTECTED_PATHS.directories
-    .map(escapeRegExp)
-    .join('|');
-  const protectedFilesPattern = DEFAULT_PROTECTED_PATHS.files
-    .map(escapeRegExp)
-    .join('|');
-  const patterns: RegExp[] = [
-    /\.env(?:\.[^\s"'`;|&<>]*)?/gi,
-    /(?:^|[\s"'`])((?:secrets[\\/][^\s"'`;|&<>]+))/gi,
-    /(?:^|[\s"'`])([^\s"'`;|&<>]+\.(?:pem|key))/gi,
-    new RegExp(`(?:^|[\\s"'\\\`])((?:\\.[\\\\/])?(?:${protectedFilesPattern}))(?=$|[\\s"'\\\`;|&<>])`, 'gi'),
-    new RegExp(`(?:^|[\\s"'\\\`])((?:\\.[\\\\/])?(?:${protectedDirectoriesPattern})(?:[\\\\/][^\\s"'\\\`;|&<>]+)?)(?=$|[\\s"'\\\`;|&<>])`, 'gi'),
-  ];
 
-  for (const pattern of patterns) {
-    for (const match of command.matchAll(pattern)) {
-      const value = match[1] ?? match[0];
-      references.add(value.trim().replace(/^['"`]+|['"`]+$/g, ''));
+  const tokens = tokenizeCommand(command);
+  const commandName = normalizeCommandName(tokens[0]);
+  const allowSimpleFilenames = isFileArgumentCommand(commandName);
+
+  for (const [index, token] of tokens.entries()) {
+    if (index === 0) {
+      continue;
+    }
+
+    const reference = normalizeCommandPathToken(token);
+    if (!reference || isIgnoredCommandToken(reference)) {
+      continue;
+    }
+
+    if (isExplicitPathToken(reference) || isProtectedOrSensitiveToken(reference)) {
+      references.add(reference);
+      continue;
+    }
+
+    if (allowSimpleFilenames && isSimpleFilenameToken(reference)) {
+      references.add(reference);
     }
   }
 
   return [...references].filter((reference) => reference.length > 0);
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+function tokenizeCommand(command: string): string[] {
+  const tokens: string[] = [];
+  const tokenPattern = /"([^"]*)"|'([^']*)'|`([^`]*)`|(\S+)/g;
+
+  for (const match of command.matchAll(tokenPattern)) {
+    tokens.push(match[1] ?? match[2] ?? match[3] ?? match[4] ?? '');
+  }
+
+  return tokens;
+}
+
+function normalizeCommandName(token: string | undefined): string {
+  return (token ?? '').trim().toLowerCase();
+}
+
+function normalizeCommandPathToken(token: string): string {
+  return token.trim()
+    .replace(/^['"`]+|['"`]+$/g, '')
+    .replace(/[),\]]+$/g, '');
+}
+
+function isIgnoredCommandToken(token: string): boolean {
+  return token.length === 0
+    || token.startsWith('-')
+    || isShellOperatorToken(token)
+    || isUrlToken(token);
+}
+
+function isShellOperatorToken(token: string): boolean {
+  return /^(?:\|\||&&|[|;<>])$/.test(token)
+    || /(?:>>?|<|\|\||&&|;)$/.test(token);
+}
+
+function isUrlToken(token: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(token);
+}
+
+function isExplicitPathToken(token: string): boolean {
+  return /^(?:\.\.[\\/]|\.?[\\/]|[A-Za-z]:[\\/]|~[\\/])/.test(token)
+    || /[\\/]/.test(token);
+}
+
+function isProtectedOrSensitiveToken(token: string): boolean {
+  const normalized = token.replace(/\\/g, '/');
+  const firstSegment = normalized.split('/')[0];
+
+  return normalized === '.env'
+    || normalized.startsWith('.env.')
+    || normalized === 'id_rsa'
+    || normalized === 'id_ed25519'
+    || normalized.startsWith('secrets/')
+    || /\.(?:pem|key)$/i.test(normalized)
+    || DEFAULT_PROTECTED_PATHS.files.includes(normalized as never)
+    || DEFAULT_PROTECTED_PATHS.directories.includes(firstSegment as never);
+}
+
+function isSimpleFilenameToken(token: string): boolean {
+  return /^[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+$/.test(token)
+    || isProtectedOrSensitiveToken(token);
+}
+
+function isFileArgumentCommand(commandName: string): boolean {
+  return commandName === 'cat'
+    || commandName === 'type'
+    || commandName === 'get-content'
+    || commandName === 'gc'
+    || commandName === 'rg'
+    || commandName === 'grep'
+    || commandName === 'findstr';
 }
 
 function findMatchedRule(

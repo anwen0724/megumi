@@ -194,6 +194,83 @@ describe('evaluatePermissionPolicy', () => {
     });
   });
 
+  it.each(['plan', 'accept_edits'] as const)(
+    'blocks run_command cat project boundary escapes in %s mode before allow-ish policy defaults',
+    (permissionMode) => {
+      const decision = evaluate({
+        definition: commandDefinition,
+        toolInput: { command: 'cat ../outside.txt', cwd: '.' },
+        permissionMode,
+        settings: {
+          deny: [],
+          allow: [{ scope: 'local', pattern: 'run_command(cat ../outside.txt)' }],
+          ask: [],
+        },
+      });
+
+      expect(decision).toMatchObject({
+        decision: 'deny',
+        source: 'project_boundary',
+        target: '../outside.txt',
+        classifierLabel: 'read_only',
+      });
+    },
+  );
+
+  it('blocks run_command type project boundary escapes before allow-ish policy defaults', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'type ..\\outside.txt', cwd: '.' },
+      permissionMode: 'accept_edits',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(type ..\\outside.txt)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'project_boundary',
+      target: '../outside.txt',
+      classifierLabel: 'read_only',
+    });
+  });
+
+  it('blocks run_command rg project boundary escapes before allow-ish policy defaults', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'rg token ../outside', cwd: '.' },
+      permissionMode: 'plan',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(rg token ../outside)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'project_boundary',
+      target: '../outside',
+    });
+  });
+
+  it('keeps ordinary project-local run_command file reads on normal command policy', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'cat README.md', cwd: '.' },
+      permissionMode: 'plan',
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'allow',
+      source: 'permission_mode',
+      target: 'README.md',
+      classifierLabel: 'read_only',
+    });
+  });
+
   it.each(['.mcp.json', '.gitconfig'])(
     'does not allow run_command references to protected default file %s through ordinary allow rules',
     (protectedFile) => {
