@@ -94,6 +94,29 @@ describe('runtime event dispatcher', () => {
     });
   });
 
+  it('commits model output deltas for agent runs', () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Docs ' }, {
+      source: 'provider',
+    }));
+    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 3, { modelStepId: 'model-step-1', delta: 'summary.' }, {
+      source: 'provider',
+    }));
+    dispatchRuntimeEvent(runtimeEvent('model.step.completed', 4, { modelStepId: 'model-step-1', finishReason: 'stop' }, {
+      source: 'provider',
+    }));
+    dispatchRuntimeEvent(runtimeEvent('run.completed', 5));
+
+    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
+      'Docs summary.',
+    ]);
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'idle',
+    });
+  });
+
   it('adds failed and cancelled assistant messages and uses the default cancellation reason', () => {
     dispatchRuntimeEvent(runtimeEvent('run.failed', 1, {
       error: {

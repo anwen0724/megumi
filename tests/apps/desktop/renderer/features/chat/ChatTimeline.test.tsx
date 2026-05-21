@@ -257,7 +257,7 @@ describe('ChatTimeline', () => {
     expect(screen.getByText('I can help with that.')).toBeInTheDocument();
   });
 
-  it('renders active run tool calls and pending approvals from entity stores', () => {
+  it('renders pending approvals without the separate tool-call card section', () => {
     installMegumiMock();
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useToolCallStore.getState().upsertToolCall(createToolCall());
@@ -267,9 +267,9 @@ describe('ChatTimeline', () => {
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     expect(timeline).toHaveTextContent('run_command');
-    expect(timeline).toHaveTextContent('Waiting for approval');
     expect(timeline).toHaveTextContent('Run npm test');
-    expect(timeline).toHaveTextContent('Policy: ask - Command execution requires approval in default mode.');
+    expect(screen.queryByRole('heading', { name: 'Tool calls' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Policy: ask - Command execution requires approval in default mode.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve run_command' })).toBeInTheDocument();
   });
 
@@ -315,7 +315,7 @@ describe('ChatTimeline', () => {
     expect(session.message.send).toHaveBeenCalled();
   });
 
-  it('does not show processing disclosure while a sent message is waiting for runtime events', async () => {
+  it('shows processing disclosure while a sent message is waiting for runtime events', async () => {
     installMegumiMock();
     selectMegumiProject();
     render(<ChatTimeline />);
@@ -327,8 +327,7 @@ describe('ChatTimeline', () => {
       expect(screen.getByText('Start with the shell')).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole('button', { name: /processing disclosure/ })).not.toBeInTheDocument();
-    expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /processing disclosure/ })).toBeInTheDocument();
   });
 
   it('keeps only messages around the final response on the real runtime event path', async () => {
@@ -360,7 +359,6 @@ describe('ChatTimeline', () => {
 
     const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
     expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
-    expect(screen.queryByRole('button', { name: /Expand processing disclosure/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
   });
 
@@ -402,7 +400,7 @@ describe('ChatTimeline', () => {
     expect(session.message.send).toHaveBeenCalledTimes(1);
   });
 
-  it('does not render the processing disclosure card while a run is active', () => {
+  it('renders the processing disclosure while a run is active', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
@@ -425,14 +423,12 @@ describe('ChatTimeline', () => {
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     expect(timeline).toHaveTextContent('Check current UI');
-    expect(timeline).not.toHaveTextContent('Current action');
-    expect(timeline).not.toHaveTextContent('Processing');
-    expect(timeline).not.toHaveTextContent('Waiting for the first runtime event');
+    expect(screen.getByRole('button', { name: /processing disclosure/ })).toHaveAttribute('aria-expanded', 'true');
     expect(timeline).toHaveTextContent('Working');
     expect(timeline).not.toHaveTextContent(/chain-of-thought/i);
   });
 
-  it('does not render completed processing disclosure before final assistant response', () => {
+  it('renders completed processing disclosure collapsed before final assistant response', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
@@ -462,9 +458,8 @@ describe('ChatTimeline', () => {
 
     const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
     expect(timelineText).toContain('Summarize UI updates');
-    expect(timelineText).not.toContain('Completed steps');
     expect(timelineText).toContain('UI update summary is complete.');
-    expect(screen.queryByRole('button', { name: /Expand processing disclosure/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Expand processing disclosure/ })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/Generate UI summary/)).not.toBeInTheDocument();
   });
 

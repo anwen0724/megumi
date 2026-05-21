@@ -1,6 +1,7 @@
 import type {
   AssistantOutputCompletedPayload,
   AssistantOutputDeltaPayload,
+  ModelOutputDeltaPayload,
   RunCancelledPayload,
   RunFailedPayload,
   RuntimeEvent,
@@ -211,8 +212,11 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
     return;
   }
 
-  if (event.eventType === 'assistant.output.delta') {
-    chatState.appendStreamToken((event.payload as AssistantOutputDeltaPayload).delta);
+  if (event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta') {
+    const delta = event.eventType === 'assistant.output.delta'
+      ? (event.payload as AssistantOutputDeltaPayload).delta
+      : (event.payload as ModelOutputDeltaPayload).delta;
+    chatState.appendStreamToken(delta);
     return;
   }
 
