@@ -106,7 +106,7 @@ describe('runChatTurn', () => {
       payload: {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        runKind: 'chat',
+        runKind: 'agent',
       },
     });
   });
