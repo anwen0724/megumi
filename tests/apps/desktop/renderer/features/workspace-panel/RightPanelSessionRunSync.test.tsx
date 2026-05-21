@@ -264,12 +264,12 @@ describe('right workspace panel session run sync', () => {
     const session = installMegumiMock();
     renderChatWithRightPanel();
 
-    const modeSelect = screen.getByLabelText('Composer mode');
+    const modeSelect = screen.getByLabelText('Permission mode');
     const modelSelect = screen.getByLabelText('Model');
     const textarea = screen.getByLabelText('Message Megumi');
     const sendButton = screen.getByRole('button', { name: 'Send message' });
 
-    fireEvent.change(modeSelect, { target: { value: 'execute' } });
+    fireEvent.change(modeSelect, { target: { value: 'auto' } });
     fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
     fireEvent.change(textarea, { target: { value: 'Start with the shell' } });
     fireEvent.click(sendButton);
@@ -285,6 +285,9 @@ describe('right workspace panel session run sync', () => {
     expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
 
     expect(request.requestId).toBe(session.message.send.mock.calls[0][0].requestId);
+    expect(request.payload.context).toEqual(expect.objectContaining({
+      permissionMode: 'auto',
+    }));
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the shell.');
     expect(screen.getByText('Runtime response from deepseek-v4-pro for the shell.')).toBeInTheDocument();
 

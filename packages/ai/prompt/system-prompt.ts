@@ -15,8 +15,8 @@ export function buildSystemPrompt(context: ChatRuntimeContext | undefined, extra
     lines.push(`Current session: ${context.sessionTitle}`);
   }
 
-  if (context?.composerMode) {
-    lines.push(`Composer mode: ${context.composerMode}`);
+  if (context?.permissionMode) {
+    lines.push(`Permission mode: ${context.permissionMode}`);
   }
 
   lines.push(...extraLines);

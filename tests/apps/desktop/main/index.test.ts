@@ -100,6 +100,17 @@ const mocks = vi.hoisted(() => {
       getBaselineContext: vi.fn(),
       listWorkspaceSourcesByRun: vi.fn(),
     })),
+    ToolService: vi.fn(function ToolService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
+        listDefinitions: vi.fn(),
+        getToolCall: vi.fn(),
+        resolveApproval: vi.fn(),
+      };
+    }),
     createDefaultToolService: vi.fn(() => ({
       listDefinitions: vi.fn(),
       getToolCall: vi.fn(),
@@ -249,6 +260,7 @@ vi.mock('@megumi/desktop/main/services/run-context.service', () => ({
 }));
 
 vi.mock('@megumi/desktop/main/services/tool.service', () => ({
+  ToolService: mocks.ToolService,
   createDefaultToolService: mocks.createDefaultToolService,
 }));
 
@@ -341,6 +353,7 @@ describe('main runtime logger composition', () => {
     mocks.MegumiHomeConfigService.mockClear();
     mocks.ProviderRuntimeService.mockClear();
     mocks.createDefaultRunContextService.mockClear();
+    mocks.ToolService.mockClear();
     mocks.createDefaultToolService.mockClear();
     mocks.createDatabase.mockClear();
     mocks.migrateDatabase.mockClear();
@@ -369,7 +382,7 @@ describe('main runtime logger composition', () => {
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
     const sessionRunService = mocks.SessionRunService.mock.results[0]?.value;
     const runContextService = mocks.createDefaultRunContextService.mock.results[0]?.value;
-    const toolService = mocks.createDefaultToolService.mock.results[0]?.value;
+    const toolService = mocks.ToolService.mock.results[0]?.value;
     const recoveryService = mocks.createRecoveryService.mock.results[0]?.value;
     const artifactService = mocks.ArtifactService.mock.results[0]?.value;
     const memoryService = mocks.createMemoryService.mock.results[0]?.value;
@@ -385,9 +398,6 @@ describe('main runtime logger composition', () => {
     lifecycleOptions.registerAllHandlers();
 
     expect(mocks.createDefaultRunContextService).toHaveBeenCalledWith(
-      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
-    );
-    expect(mocks.createDefaultToolService).toHaveBeenCalledWith(
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
     );
     expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
@@ -428,6 +438,11 @@ describe('main runtime logger composition', () => {
       runModeService,
       contextService: runContextService,
       modelStepProvider: modelStepProviderService,
+    }));
+    expect(mocks.ToolService).toHaveBeenCalledWith(expect.objectContaining({
+      repository: expect.any(Object),
+      registry: expect.any(Object),
+      resumeApproval: expect.any(Function),
     }));
     expect(mocks.ArtifactService).toHaveBeenCalledWith({
       repository: expect.any(Object),

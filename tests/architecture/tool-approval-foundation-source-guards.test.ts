@@ -83,6 +83,25 @@ describe('tool approval foundation source guards', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('does not expose legacy chat plan execute review composer mode as a renderer selection model', () => {
+    const files = [
+      'apps/desktop/src/renderer/features/chat/components/composer-options.ts',
+      'apps/desktop/src/renderer/features/chat/components/Composer.tsx',
+      'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
+      'packages/shared/ipc-schemas.ts',
+      'packages/shared/chat-contracts.ts',
+    ];
+
+    for (const file of files) {
+      const source = readFileSync(join(process.cwd(), file), 'utf8');
+      expect(source).not.toContain('composerMode');
+      expect(source).not.toMatch(/\bComposerMode\b/);
+      expect(source).not.toContain('COMPOSER_MODE_OPTIONS');
+      expect(source).not.toContain("'execute'");
+      expect(source).not.toContain("'review'");
+    }
+  });
 });
 
 function collectProductionFiles(): string[] {

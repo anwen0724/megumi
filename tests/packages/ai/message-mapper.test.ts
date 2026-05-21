@@ -15,7 +15,7 @@ const request: ChatRuntimeRequest = {
     workspaceLabel: 'Megumi Workspace',
     workspacePath: 'C:/all/work/study/megumi',
     sessionTitle: 'Provider runtime',
-    composerMode: 'plan',
+    permissionMode: 'plan',
   },
   messages: [
     {
@@ -41,7 +41,7 @@ describe('system prompt', () => {
         'Current workspace: Megumi Workspace',
         'Workspace path: C:/all/work/study/megumi',
         'Current session: Provider runtime',
-        'Composer mode: plan',
+        'Permission mode: plan',
         'Use the provided context only as lightweight orientation. Do not claim to have inspected files unless tool results are provided.',
       ].join('\n'),
     );
