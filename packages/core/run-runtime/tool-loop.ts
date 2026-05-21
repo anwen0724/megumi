@@ -36,8 +36,13 @@ export interface ToolApprovalResumeInput {
   reason?: string;
 }
 
+export interface ToolApprovalResumeOutcome {
+  toolResult: ToolResult;
+  runtimeEvents?: RuntimeEvent[];
+}
+
 export interface ToolApprovalResumePort {
-  resumeToolApproval(input: ToolApprovalResumeInput): Promise<ToolResult | undefined>;
+  resumeToolApproval(input: ToolApprovalResumeInput): Promise<ToolApprovalResumeOutcome | undefined>;
 }
 
 export interface PendingToolApprovalContinuation {

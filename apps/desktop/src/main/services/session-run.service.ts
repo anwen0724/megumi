@@ -5,6 +5,7 @@ import {
   runModelToolLoop,
   type PendingToolApprovalContinuation,
   type ToolApprovalResumeInput,
+  type ToolApprovalResumeOutcome,
   type ToolApprovalResumePort,
   type ToolUseHandlerPort,
 } from '@megumi/core/run-runtime/tool-loop';
@@ -760,10 +761,11 @@ export class SessionRunService {
       return;
     }
 
-    const toolResult = await continuation.toolRuntime.resumeToolApproval(input);
-    if (!toolResult) {
+    const resumeOutcome = await continuation.toolRuntime.resumeToolApproval(input);
+    if (!resumeOutcome) {
       return;
     }
+    const { toolResult } = resumeOutcome;
 
     let lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(continuation.request.runId));
     continuation.pendingByApprovalId.delete(input.approvalRequestId);
@@ -794,14 +796,26 @@ export class SessionRunService {
     yield approvalResolvedEvent;
 
     if (continuation.pendingByApprovalId.size > 0) {
-      const toolResultEvent = this.createToolResultRuntimeEvent({
+      const resumeEvents = this.persistResumeRuntimeEvents({
         request: continuation.request,
         stepId: continuation.step.stepId,
-        sequence: lastSequence += 1,
-        toolResult,
+        lastSequence,
+        outcome: resumeOutcome,
       });
-      this.repository.appendRuntimeEvent(toolResultEvent);
-      yield toolResultEvent;
+      lastSequence = resumeEvents.lastSequence;
+      for (const event of resumeEvents.events) {
+        yield event;
+      }
+      if (!resumeEvents.hasToolResultEvent) {
+        const toolResultEvent = this.createToolResultRuntimeEvent({
+          request: continuation.request,
+          stepId: continuation.step.stepId,
+          sequence: lastSequence += 1,
+          toolResult,
+        });
+        this.repository.appendRuntimeEvent(toolResultEvent);
+        yield toolResultEvent;
+      }
       return;
     }
 
@@ -824,14 +838,27 @@ export class SessionRunService {
     this.repository.appendRuntimeEvent(runningEvent);
     yield runningEvent;
 
-    const toolResultEvent = this.createToolResultRuntimeEvent({
+    const resumeEvents = this.persistResumeRuntimeEvents({
       request: continuation.request,
       stepId: continuation.step.stepId,
-      sequence: lastSequence += 1,
-      toolResult,
+      lastSequence,
+      outcome: resumeOutcome,
     });
-    this.repository.appendRuntimeEvent(toolResultEvent);
-    yield toolResultEvent;
+    lastSequence = resumeEvents.lastSequence;
+    for (const event of resumeEvents.events) {
+      yield event;
+    }
+
+    if (!resumeEvents.hasToolResultEvent) {
+      const toolResultEvent = this.createToolResultRuntimeEvent({
+        request: continuation.request,
+        stepId: continuation.step.stepId,
+        sequence: lastSequence += 1,
+        toolResult,
+      });
+      this.repository.appendRuntimeEvent(toolResultEvent);
+      yield toolResultEvent;
+    }
 
     const resumedStep = this.repository.saveStep({
       stepId: this.ids.stepId(),
@@ -861,6 +888,36 @@ export class SessionRunService {
       toolRuntime: continuation.toolRuntime,
       emitRunStarted: false,
     });
+  }
+
+  private persistResumeRuntimeEvents(input: {
+    request: ModelStepRuntimeRequest;
+    stepId: RunStep['stepId'];
+    lastSequence: number;
+    outcome: ToolApprovalResumeOutcome;
+  }): {
+    events: RuntimeEvent[];
+    lastSequence: number;
+    hasToolResultEvent: boolean;
+  } {
+    let lastSequence = input.lastSequence;
+    const events: RuntimeEvent[] = [];
+    let hasToolResultEvent = false;
+
+    for (const event of input.outcome.runtimeEvents ?? []) {
+      const eventWithRequest = withSequenceAfter(withRequestMetadata({
+        ...event,
+        sessionId: event.sessionId ?? input.request.sessionId,
+        stepId: event.stepId ?? String(input.stepId),
+      }, input.request), lastSequence);
+      lastSequence = eventWithRequest.sequence;
+      hasToolResultEvent ||= eventWithRequest.eventType === 'tool.result.created'
+        && getToolResultEventId(eventWithRequest.payload) === String(input.outcome.toolResult.toolResultId);
+      this.repository.appendRuntimeEvent(eventWithRequest);
+      events.push(eventWithRequest);
+    }
+
+    return { events, lastSequence, hasToolResultEvent };
   }
 
   private createToolResultRuntimeEvent(input: {
@@ -999,6 +1056,14 @@ function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | und
   }
 
   return isRuntimeError(payload.error) ? payload.error : undefined;
+}
+
+function getToolResultEventId(payload: RuntimeEvent['payload']): string | undefined {
+  if (!isObjectRecord(payload)) {
+    return undefined;
+  }
+
+  return typeof payload.toolResultId === 'string' ? payload.toolResultId : undefined;
 }
 
 function createFallbackRuntimeError(message: string): RuntimeError {

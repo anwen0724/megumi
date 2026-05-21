@@ -4,6 +4,7 @@ import type { ToolRegistry } from '@megumi/tools/registry';
 import type {
   PendingToolApproval,
   ToolApprovalResumeInput,
+  ToolApprovalResumeOutcome,
   ToolApprovalResumePort,
   ToolUseHandlerPort,
 } from '@megumi/core/run-runtime/tool-loop';
@@ -113,7 +114,7 @@ export function createToolUseHandlerService(options: ToolUseHandlerServiceOption
 async function resumeToolApproval(
   options: ResolvedToolUseHandlerServiceOptions,
   input: ToolApprovalResumeInput,
-): Promise<ToolResult | undefined> {
+): Promise<ToolApprovalResumeOutcome | undefined> {
   const approvalRequest = options.repository.getApprovalRequest(input.approvalRequestId);
   if (!approvalRequest) {
     return undefined;
@@ -131,13 +132,13 @@ async function resumeToolApproval(
   });
 
   if (input.decision === 'denied') {
-    options.repository.saveToolCall({
+    const deniedToolCall = options.repository.saveToolCall({
       ...toolCall,
       status: 'denied',
       completedAt: input.decidedAt,
     });
 
-    return options.repository.saveToolResult({
+    const toolResult = options.repository.saveToolResult({
       toolResultId: options.ids.toolResultId(),
       toolUseId: toolCall.toolUseId,
       toolCallId: toolCall.toolCallId,
@@ -148,6 +149,13 @@ async function resumeToolApproval(
       redactionState: 'none',
       createdAt: input.decidedAt,
     });
+    return {
+      toolResult,
+      runtimeEvents: [
+        createToolCallDeniedRuntimeEventFromToolCall(deniedToolCall, toolResult.denialReason ?? toolResult.textContent ?? 'User rejected the requested tool call.'),
+        createToolResultCreatedRuntimeEventFromToolResult(toolResult),
+      ],
+    };
   }
 
   const runningToolCall = options.repository.saveToolCall({
@@ -157,7 +165,7 @@ async function resumeToolApproval(
   });
   const toolResult = await options.projectExecutor.executeToolCall(runningToolCall);
 
-  options.repository.saveToolCall({
+  const completedToolCall = options.repository.saveToolCall({
     ...runningToolCall,
     status: toolResult.kind === 'success' ? 'succeeded' : 'failed',
     completedAt: toolResult.createdAt,
@@ -165,7 +173,17 @@ async function resumeToolApproval(
     ...(toolResult.error ? { error: toolResult.error } : {}),
   });
 
-  return options.repository.saveToolResult(toolResult);
+  const savedToolResult = options.repository.saveToolResult(toolResult);
+  return {
+    toolResult: savedToolResult,
+    runtimeEvents: [
+      createToolCallStartedRuntimeEventFromToolCall(runningToolCall),
+      toolResult.kind === 'success'
+        ? createToolCallCompletedRuntimeEventFromToolCall(completedToolCall)
+        : createToolCallFailedRuntimeEventFromToolCall(completedToolCall, toolResult.error),
+      createToolResultCreatedRuntimeEventFromToolResult(savedToolResult),
+    ],
+  };
 }
 
 async function handleSingleToolUse(
@@ -301,6 +319,25 @@ function runtimeEventBase(request: ModelStepRuntimeRequest, eventId: string, cre
   };
 }
 
+function runtimeEventBaseForToolCall(toolCall: ToolCall, eventId: string, createdAt: string) {
+  return {
+    eventId,
+    runId: toolCall.runId,
+    stepId: String(toolCall.stepId),
+    sequence: 1,
+    createdAt,
+  };
+}
+
+function runtimeEventBaseForToolResult(toolResult: ToolResult, eventId: string) {
+  return {
+    eventId,
+    runId: toolResult.runId,
+    sequence: 1,
+    createdAt: toolResult.createdAt,
+  };
+}
+
 function createToolCallRequestedRuntimeEvent(
   request: ModelStepRuntimeRequest,
   toolCall: ToolCall,
@@ -401,12 +438,40 @@ function createToolCallStartedRuntimeEvent(
   });
 }
 
+function createToolCallStartedRuntimeEventFromToolCall(toolCall: ToolCall): RuntimeEvent {
+  return createToolCallStartedEvent({
+    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:started`, toolCall.startedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.started',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      ...(toolCall.startedAt ? { startedAt: toolCall.startedAt } : {}),
+    },
+  });
+}
+
 function createToolCallCompletedRuntimeEvent(
   request: ModelStepRuntimeRequest,
   toolCall: ToolCall,
 ): RuntimeEvent {
   return createToolCallCompletedEvent({
     ...runtimeEventBase(request, `event:${toolCall.toolCallId}:completed`, toolCall.completedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.completed',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+    },
+  });
+}
+
+function createToolCallCompletedRuntimeEventFromToolCall(toolCall: ToolCall): RuntimeEvent {
+  return createToolCallCompletedEvent({
+    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:completed`, toolCall.completedAt ?? toolCall.requestedAt),
     eventType: 'tool.call.completed',
     source: 'tool',
     visibility: 'user',
@@ -437,6 +502,24 @@ function createToolCallFailedRuntimeEvent(
   });
 }
 
+function createToolCallFailedRuntimeEventFromToolCall(
+  toolCall: ToolCall,
+  error: RuntimeError | undefined,
+): RuntimeEvent {
+  return createToolCallFailedEvent({
+    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:failed`, toolCall.completedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.failed',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      error: error ?? createToolRuntimeError('Tool execution failed.'),
+      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+    },
+  });
+}
+
 function createToolCallDeniedRuntimeEvent(
   request: ModelStepRuntimeRequest,
   toolCall: ToolCall,
@@ -455,12 +538,46 @@ function createToolCallDeniedRuntimeEvent(
   });
 }
 
+function createToolCallDeniedRuntimeEventFromToolCall(
+  toolCall: ToolCall,
+  reason: string,
+): RuntimeEvent {
+  return createToolCallDeniedEvent({
+    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:denied`, toolCall.completedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.denied',
+    source: 'security',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      reason,
+    },
+  });
+}
+
 function createToolResultCreatedRuntimeEvent(
   request: ModelStepRuntimeRequest,
   toolResult: ToolResult,
 ): RuntimeEvent {
   return createToolResultCreatedEvent({
     ...runtimeEventBase(request, `event:${toolResult.toolResultId}:created`, toolResult.createdAt),
+    eventType: 'tool.result.created',
+    source: 'tool',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      toolResultId: toolResult.toolResultId,
+      toolUseId: toolResult.toolUseId,
+      ...(toolResult.toolCallId ? { toolCallId: toolResult.toolCallId } : {}),
+      kind: toolResult.kind,
+      summary: createToolResultSummary(toolResult),
+    },
+  });
+}
+
+function createToolResultCreatedRuntimeEventFromToolResult(toolResult: ToolResult): RuntimeEvent {
+  return createToolResultCreatedEvent({
+    ...runtimeEventBaseForToolResult(toolResult, `event:${toolResult.toolResultId}:created`),
     eventType: 'tool.result.created',
     source: 'tool',
     visibility: 'system',

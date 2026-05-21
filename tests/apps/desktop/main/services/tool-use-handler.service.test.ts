@@ -247,10 +247,74 @@ describe('ToolUseHandlerService', () => {
       toolCallId: 'tool-call-1',
       kind: 'success',
     }));
-    expect(result).toMatchObject({
+    expect(result?.toolResult).toMatchObject({
       toolResultId: 'tool-result-executed',
       kind: 'success',
     });
+    expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.started',
+      'tool.call.completed',
+      'tool.result.created',
+    ]);
+  });
+
+  it('resumes approved waiting tool calls with failed tool status runtime events', async () => {
+    const toolCall = waitingToolCall();
+    const approvalRequest = pendingApprovalRequest(toolCall);
+    const repository = fakeRepository({
+      toolCalls: new Map([[toolCall.toolCallId, toolCall]]),
+      approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
+    });
+    const executor = {
+      executeToolCall: vi.fn(async (runningToolCall: ToolCall): Promise<ToolResult> => ({
+        toolResultId: 'tool-result-failed',
+        toolUseId: runningToolCall.toolUseId,
+        toolCallId: runningToolCall.toolCallId,
+        runId: runningToolCall.runId,
+        kind: 'tool_error',
+        textContent: 'failed',
+        error: {
+          code: 'runtime_unknown',
+          message: 'Tool failed.',
+          severity: 'error',
+          retryable: false,
+          source: 'tool',
+        },
+        redactionState: 'none',
+        createdAt: '2026-05-20T00:00:04.000Z',
+      })),
+    };
+    const handler = createToolUseHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const result = await handler.resumeToolApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-20T00:00:03.000Z',
+    });
+
+    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: 'tool-call-1',
+      status: 'failed',
+      completedAt: '2026-05-20T00:00:04.000Z',
+    }));
+    expect(result?.toolResult).toMatchObject({
+      toolResultId: 'tool-result-failed',
+      kind: 'tool_error',
+    });
+    expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.started',
+      'tool.call.failed',
+      'tool.result.created',
+    ]);
   });
 
   it('resumes denied waiting tool calls by saving a user_rejected ToolResult without execution', async () => {
@@ -296,10 +360,14 @@ describe('ToolUseHandlerService', () => {
       kind: 'user_rejected',
       denialReason: 'Not now',
     }));
-    expect(result).toMatchObject({
+    expect(result?.toolResult).toMatchObject({
       kind: 'user_rejected',
       textContent: 'Not now',
     });
+    expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.denied',
+      'tool.result.created',
+    ]);
   });
 });
 

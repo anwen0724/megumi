@@ -382,6 +382,109 @@ function toolCallRequestedRuntimeEvent(): RuntimeEvent {
   };
 }
 
+function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' | 'failure' | 'denied'): RuntimeEvent[] {
+  const toolCallId = String(toolResult.toolCallId ?? 'tool-call-1');
+  const started: RuntimeEvent = {
+    eventId: `event-${toolCallId}-started`,
+    schemaVersion: 1,
+    eventType: 'tool.call.started',
+    runId: 'run-1',
+    sessionId: 'session-1',
+    stepId: 'step-1',
+    sequence: 1,
+    createdAt: '2026-05-17T00:00:05.000Z',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId,
+      startedAt: '2026-05-17T00:00:05.000Z',
+    },
+  };
+  const terminal: RuntimeEvent = status === 'denied'
+    ? {
+        eventId: `event-${toolCallId}-denied`,
+        schemaVersion: 1,
+        eventType: 'tool.call.denied',
+        runId: 'run-1',
+        sessionId: 'session-1',
+        stepId: 'step-1',
+        sequence: 2,
+        createdAt: toolResult.createdAt,
+        source: 'security',
+        visibility: 'user',
+        persist: 'required',
+        payload: {
+          toolCallId,
+          reason: toolResult.denialReason ?? 'User rejected the requested tool call.',
+        },
+      }
+    : status === 'failure'
+      ? {
+          eventId: `event-${toolCallId}-failed`,
+          schemaVersion: 1,
+          eventType: 'tool.call.failed',
+          runId: 'run-1',
+          sessionId: 'session-1',
+          stepId: 'step-1',
+          sequence: 2,
+          createdAt: toolResult.createdAt,
+          source: 'tool',
+          visibility: 'user',
+          persist: 'required',
+          payload: {
+            toolCallId,
+            error: toolResult.error ?? {
+              code: 'runtime_unknown',
+              message: 'Tool failed.',
+              severity: 'error',
+              retryable: false,
+              source: 'tool',
+            },
+            completedAt: toolResult.createdAt,
+          },
+        }
+      : {
+          eventId: `event-${toolCallId}-completed`,
+          schemaVersion: 1,
+          eventType: 'tool.call.completed',
+          runId: 'run-1',
+          sessionId: 'session-1',
+          stepId: 'step-1',
+          sequence: 2,
+          createdAt: toolResult.createdAt,
+          source: 'tool',
+          visibility: 'user',
+          persist: 'required',
+          payload: {
+            toolCallId,
+            completedAt: toolResult.createdAt,
+          },
+        };
+  const result: RuntimeEvent = {
+    eventId: `event-${toolResult.toolResultId}-created`,
+    schemaVersion: 1,
+    eventType: 'tool.result.created',
+    runId: 'run-1',
+    sessionId: 'session-1',
+    stepId: 'step-1',
+    sequence: 3,
+    createdAt: toolResult.createdAt,
+    source: 'tool',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      toolResultId: String(toolResult.toolResultId),
+      toolUseId: String(toolResult.toolUseId),
+      ...(toolResult.toolCallId ? { toolCallId: String(toolResult.toolCallId) } : {}),
+      kind: toolResult.kind,
+      summary: toolResult.textContent ?? toolResult.denialReason ?? toolResult.kind,
+    },
+  };
+
+  return status === 'denied' ? [terminal, result] : [started, terminal, result];
+}
+
 function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   return {
     toolResultId: 'tool-result-1',
@@ -1009,7 +1112,10 @@ describe('SessionRunService', () => {
             },
             async resumeToolApproval(input) {
               resumeInputs.push(input);
-              return toolResult;
+              return {
+                toolResult,
+                runtimeEvents: approvalResumeRuntimeEvents(toolResult, 'success'),
+              };
             },
           };
         },
@@ -1105,6 +1211,8 @@ describe('SessionRunService', () => {
     expect(resumed.map((event) => event.eventType)).toEqual([
       'approval.resolved',
       'run.status.changed',
+      'tool.call.started',
+      'tool.call.completed',
       'tool.result.created',
       'assistant.output.completed',
       'step.status.changed',
@@ -1116,6 +1224,7 @@ describe('SessionRunService', () => {
       ...streamed,
       ...resumed,
     ].filter((event) => event.eventType === 'run.started')).toHaveLength(1);
+    expect(resumed.filter((event) => event.eventType === 'tool.result.created')).toHaveLength(1);
     expect(service.listRuntimeEventsByRun('run-1')
       .filter((event) => event.eventType === 'run.started')).toHaveLength(1);
     expect(repository.getRun('run-1')).toMatchObject({
@@ -1224,7 +1333,13 @@ describe('SessionRunService', () => {
             },
             async resumeToolApproval(input) {
               resumeInputs.push(input);
-              return toolResultsByApproval.get(input.approvalRequestId);
+              const toolResult = toolResultsByApproval.get(input.approvalRequestId);
+              return toolResult
+                ? {
+                    toolResult,
+                    runtimeEvents: approvalResumeRuntimeEvents(toolResult, 'success'),
+                  }
+                : undefined;
             },
           };
         },
@@ -1295,6 +1410,8 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(1);
     expect(firstResume.map((event) => event.eventType)).toEqual([
       'approval.resolved',
+      'tool.call.started',
+      'tool.call.completed',
       'tool.result.created',
     ]);
     expect(repository.getRun('run-1')).toMatchObject({ status: 'waiting_for_approval' });
@@ -1322,6 +1439,8 @@ describe('SessionRunService', () => {
     expect(secondResume.map((event) => event.eventType)).toEqual([
       'approval.resolved',
       'run.status.changed',
+      'tool.call.started',
+      'tool.call.completed',
       'tool.result.created',
       'assistant.output.completed',
       'step.status.changed',
