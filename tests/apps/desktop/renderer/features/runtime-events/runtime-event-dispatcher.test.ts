@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
@@ -30,8 +30,13 @@ function runtimeEvent(
   } as RuntimeEvent;
 }
 
+function waitForStreamFlush(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 40));
+}
+
 describe('runtime event dispatcher', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     useChatStore.setState({
       messages: [],
       streamingText: '',
@@ -45,6 +50,10 @@ describe('runtime event dispatcher', () => {
     useRunStore.getState().resetRuns();
     useToolCallStore.getState().reset();
     useApprovalStore.getState().reset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('applies stream events to run state and commits completed assistant content', () => {
@@ -115,6 +124,56 @@ describe('runtime event dispatcher', () => {
       isStreaming: false,
       agentStatus: 'idle',
     });
+  });
+
+  it('buffers model output deltas before flushing them to chat state', async () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+
+    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Docs ' }, {
+      source: 'provider',
+    }));
+    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 3, { modelStepId: 'model-step-1', delta: 'summary.' }, {
+      source: 'provider',
+    }));
+
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'running',
+    });
+
+    await waitForStreamFlush();
+
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: 'Docs summary.',
+      isStreaming: true,
+      agentStatus: 'running',
+    });
+  });
+
+  it('flushes buffered model output before completing a run', async () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Final answer.' }, {
+      source: 'provider',
+    }));
+
+    dispatchRuntimeEvent(runtimeEvent('run.completed', 3));
+
+    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
+      'Final answer.',
+    ]);
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'idle',
+    });
+
+    await waitForStreamFlush();
+
+    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
+      'Final answer.',
+    ]);
+    expect(useChatStore.getState().streamingText).toBe('');
   });
 
   it('adds failed and cancelled assistant messages and uses the default cancellation reason', () => {

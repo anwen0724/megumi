@@ -17,6 +17,9 @@ import { useRunStore } from '../../entities/run/store';
 import { useToolCallStore } from '../../entities/tool-call';
 
 const completedContentsByRun = new Map<string, string>();
+const STREAM_OUTPUT_FLUSH_DELAY_MS = 32;
+let bufferedStreamOutput = '';
+let streamOutputFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
 function createMessage(role: TimelineMessageData['role'], content: string): TimelineMessageData {
   const now = new Date().toISOString();
@@ -35,6 +38,39 @@ function hasRuntimeEventAlreadyBeenDispatched(event: RuntimeEvent): boolean {
 
   const events = useRunStore.getState().eventsByRun[event.runId] ?? [];
   return events.some((item) => item.eventId === event.eventId || item.sequence === event.sequence);
+}
+
+function flushBufferedStreamOutput(): void {
+  const output = bufferedStreamOutput;
+  bufferedStreamOutput = '';
+
+  if (!output) {
+    return;
+  }
+
+  useChatStore.getState().appendStreamToken(output);
+}
+
+function discardBufferedStreamOutput(): void {
+  bufferedStreamOutput = '';
+}
+
+function appendBufferedStreamOutput(delta: string): void {
+  if (!delta) {
+    return;
+  }
+
+  bufferedStreamOutput += delta;
+
+  if (streamOutputFlushTimer) {
+    return;
+  }
+
+  const scheduleTimeout = typeof window !== 'undefined' ? window.setTimeout.bind(window) : setTimeout;
+  streamOutputFlushTimer = scheduleTimeout(() => {
+    streamOutputFlushTimer = null;
+    flushBufferedStreamOutput();
+  }, STREAM_OUTPUT_FLUSH_DELAY_MS);
 }
 
 function applyToolEvent(event: RuntimeEvent): void {
@@ -216,7 +252,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
     const delta = event.eventType === 'assistant.output.delta'
       ? (event.payload as AssistantOutputDeltaPayload).delta
       : (event.payload as ModelOutputDeltaPayload).delta;
-    chatState.appendStreamToken(delta);
+    appendBufferedStreamOutput(delta);
     return;
   }
 
@@ -226,6 +262,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
   }
 
   if (event.eventType === 'run.completed') {
+    flushBufferedStreamOutput();
     const state = useChatStore.getState();
     const completedContent = completedContentsByRun.get(event.runId)?.trim();
     const assistantContent = completedContent || state.streamingText.trim();
@@ -239,6 +276,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
   }
 
   if (event.eventType === 'run.failed') {
+    discardBufferedStreamOutput();
     const payload = event.payload as RunFailedPayload;
     const message = payload.error.message;
     chatState.addMessage(createMessage('assistant', message));
@@ -250,6 +288,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
   }
 
   if (event.eventType === 'run.cancelled') {
+    discardBufferedStreamOutput();
     const payload = event.payload as RunCancelledPayload;
     const reason = payload.reason ?? payload.error?.message ?? 'Session message was cancelled.';
     chatState.addMessage(createMessage('assistant', reason));
