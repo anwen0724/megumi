@@ -28,7 +28,7 @@ export function createPermissionSettingsService(
     async loadForProject(projectRoot) {
       const scoped: ScopedPermissionSettings[] = [];
 
-      const userSettings = await readSettingsIfPresent(options.fileSystem, options.userConfigPath);
+      const userSettings = await readUserSettingsIfPresent(options.fileSystem, options.userConfigPath);
       if (userSettings) {
         scoped.push({ scope: 'user', settings: userSettings });
       }
@@ -63,4 +63,24 @@ async function readSettingsIfPresent(
   }
 
   return PermissionSettingsSchema.parse(await fileSystem.readJson(filePath));
+}
+
+async function readUserSettingsIfPresent(
+  fileSystem: PermissionSettingsFileSystem,
+  filePath: string,
+): Promise<PermissionSettings | undefined> {
+  if (!(await fileSystem.pathExists(filePath))) {
+    return undefined;
+  }
+
+  const raw = await fileSystem.readJson(filePath);
+  if (!isRecord(raw) || raw.permissions === undefined) {
+    return undefined;
+  }
+
+  return PermissionSettingsSchema.parse({ permissions: raw.permissions });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

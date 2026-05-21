@@ -1,11 +1,18 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { createDefaultMegumiConfig } from '@megumi/desktop/main/services/megumi-home.service';
 import { createPermissionSettingsService } from '@megumi/desktop/main/services/permission-settings.service';
 
 describe('PermissionSettingsService', () => {
   it('loads User, Project, and Local permission settings in stable scope order', async () => {
     const files = new Map<string, unknown>([
-      ['C:/home/.megumi/config.json', { permissions: { deny: ['run_command(curl *)'] } }],
+      [
+        'C:/home/.megumi/config.json',
+        {
+          ...createDefaultMegumiConfig(),
+          permissions: { deny: ['run_command(curl *)'] },
+        },
+      ],
       ['C:/project/.megumi/settings.json', { permissions: { allow: ['run_command(npm test)'] } }],
       ['C:/project/.megumi/settings.local.json', { permissions: { ask: ['run_command(npm install *)'] } }],
     ]);
@@ -29,6 +36,27 @@ describe('PermissionSettingsService', () => {
   it('ignores missing settings files but rejects malformed existing settings', async () => {
     const files = new Map<string, unknown>([
       ['C:/project/.megumi/settings.local.json', { permissions: { allow: ['invalid pattern'] } }],
+    ]);
+    const service = createPermissionSettingsService({
+      userConfigPath: 'C:/home/.megumi/config.json',
+      fileSystem: {
+        readJson: async (filePath) => files.get(normalizePath(filePath)),
+        pathExists: async (filePath) => files.has(normalizePath(filePath)),
+      },
+    });
+
+    await expect(service.loadForProject('C:/project')).rejects.toThrow(/Permission rule/);
+  });
+
+  it('rejects malformed user permissions from the broader Megumi Home config', async () => {
+    const files = new Map<string, unknown>([
+      [
+        'C:/home/.megumi/config.json',
+        {
+          ...createDefaultMegumiConfig(),
+          permissions: { allow: ['invalid pattern'] },
+        },
+      ],
     ]);
     const service = createPermissionSettingsService({
       userConfigPath: 'C:/home/.megumi/config.json',
