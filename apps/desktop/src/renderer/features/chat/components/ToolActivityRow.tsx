@@ -1,6 +1,5 @@
 import { CheckCircle2, ChevronRight } from 'lucide-react';
-import type { CompletedToolActivity, PendingToolCall } from '../../../entities/chat/store';
-import { ToolCallStatusCard } from '../../../entities/tool-call';
+import type { CompletedToolActivity } from '../../../entities/chat/store';
 import { Badge, cx } from '../../../shared/ui';
 
 interface ToolActivityRowProps {
@@ -9,18 +8,12 @@ interface ToolActivityRowProps {
   onToggle: () => void;
 }
 
-function toCompletedToolCall(activity: CompletedToolActivity): PendingToolCall {
-  return {
-    id: activity.id,
-    name: activity.name,
-    args: activity.args,
-    status: 'completed',
-    result: activity.result,
-    duration: activity.duration,
-  };
-}
-
 export function ToolActivityRow({ activity, expanded, onToggle }: ToolActivityRowProps) {
+  const preferredArg = activity.args.query ?? activity.args.command ?? activity.args.path ?? activity.args.url;
+  const detail = typeof preferredArg === 'string' && preferredArg.trim().length > 0
+    ? preferredArg
+    : JSON.stringify(activity.args);
+
   return (
     <section className="space-y-2" aria-label={`Completed tool activity ${activity.name}`}>
       <button
@@ -51,7 +44,19 @@ export function ToolActivityRow({ activity, expanded, onToggle }: ToolActivityRo
         <span className="shrink-0 text-xs text-[var(--color-text-muted)]">{activity.duration}</span>
       </button>
 
-      {expanded ? <ToolCallStatusCard toolCall={toCompletedToolCall(activity)} /> : null}
+      {expanded ? (
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{activity.name}</h3>
+            <Badge variant="success">Completed</Badge>
+            <span className="text-xs text-[var(--color-text-muted)]">{activity.duration}</span>
+          </div>
+          <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">{detail}</p>
+          <p className="mt-2 rounded-md bg-[var(--color-surface-muted)] px-2 py-1.5 text-xs text-[var(--color-text)]">
+            {activity.result}
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }

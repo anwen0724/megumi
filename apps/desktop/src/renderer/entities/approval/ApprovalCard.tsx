@@ -1,25 +1,32 @@
+import { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { ApprovalRequest } from '../../features/approvals/store';
+import type { ApprovalRequest, ApprovalScope } from '@megumi/shared/tool-contracts';
 import { Badge, Button, Panel } from '../../shared/ui';
+
+export interface ApprovalCardResolvePayload {
+  approvalRequestId: string;
+  decision: 'approved' | 'denied';
+  scope: ApprovalScope;
+  reason?: string;
+}
 
 interface ApprovalCardProps {
   request: ApprovalRequest;
-  onApprove: () => void;
-  onDeny: () => void;
-  onViewDetails?: () => void;
+  onResolve: (payload: ApprovalCardResolvePayload) => void;
 }
 
-function formatArguments(args: Record<string, unknown>): string {
-  const preferred = args.command ?? args.path ?? args.url;
-  if (typeof preferred === 'string' && preferred.trim().length > 0) {
-    return preferred;
+const approvalScopes: ApprovalScope[] = ['once', 'run', 'project', 'local'];
+
+export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
+  const [scope, setScope] = useState<ApprovalScope>(request.requestedScope);
+
+  function resolve(decision: 'approved' | 'denied') {
+    onResolve({
+      approvalRequestId: request.approvalRequestId,
+      decision,
+      scope,
+    });
   }
-
-  return JSON.stringify(args);
-}
-
-export function ApprovalCard({ request, onApprove, onDeny, onViewDetails }: ApprovalCardProps) {
-  const details = formatArguments(request.arguments);
 
   return (
     <Panel className="p-3">
@@ -32,27 +39,33 @@ export function ApprovalCard({ request, onApprove, onDeny, onViewDetails }: Appr
             <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{request.toolName}</h3>
             <Badge variant="approval">Approval needed</Badge>
           </div>
-          <p className="mt-2 text-sm text-[var(--color-text-muted)]">{request.displayText}</p>
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">{request.summary}</p>
           <p className="mt-2 truncate rounded-md bg-[var(--color-surface-muted)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]">
-            {details}
+            {request.preview.action}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="primary" onClick={onApprove} aria-label={`Approve ${request.toolName}`}>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="sr-only" htmlFor={`${request.approvalRequestId}-scope`}>
+              Approval scope
+            </label>
+            <select
+              id={`${request.approvalRequestId}-scope`}
+              aria-label="Approval scope"
+              value={scope}
+              onChange={(event) => setScope(event.target.value as ApprovalScope)}
+              className="h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
+            >
+              {approvalScopes.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" variant="primary" onClick={() => resolve('approved')} aria-label={`Approve ${request.toolName}`}>
               Approve
             </Button>
-            <Button size="sm" variant="secondary" onClick={onDeny} aria-label={`Deny ${request.toolName}`}>
+            <Button size="sm" variant="secondary" onClick={() => resolve('denied')} aria-label={`Deny ${request.toolName}`}>
               Deny
             </Button>
-            {onViewDetails ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onViewDetails}
-                aria-label={`View ${request.toolName} details`}
-              >
-                Details
-              </Button>
-            ) : null}
           </div>
         </div>
       </div>

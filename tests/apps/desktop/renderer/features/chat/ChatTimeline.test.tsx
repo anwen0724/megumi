@@ -4,11 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
+import type { ApprovalRequest, ToolCall } from '@megumi/shared/tool-contracts';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let runtimeSequence = 1;
@@ -33,6 +36,70 @@ function createMessage(overrides: Partial<TimelineMessageData> = {}): TimelineMe
     content: 'Hello from Megumi',
     stepNum: 1,
     timestamp: '2026-05-10T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
+  return {
+    toolCallId: 'tool-call-1',
+    toolUseId: 'tool-use-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName: 'run_command',
+    input: { command: 'npm test' },
+    inputPreview: {
+      summary: 'Run npm test',
+      targets: [{ kind: 'command', label: 'npm test' }],
+      redactionState: 'none',
+    },
+    capabilities: ['command_run'],
+    riskLevel: 'medium',
+    sideEffect: 'execute_command',
+    policyDecision: {
+      permissionDecisionId: 'permission-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      decision: 'ask',
+      source: 'permission_mode',
+      reason: 'Command execution requires approval in default mode.',
+      mode: 'default',
+      capability: 'command_run',
+      sideEffect: 'execute_command',
+      effectiveRiskLevel: 'medium',
+      requiredApproval: {
+        scope: 'run',
+        reason: 'Command execution requires approval in default mode.',
+      },
+      evaluatedAt: '2026-05-20T00:00:01.000Z',
+    },
+    status: 'waiting_for_approval',
+    requestedAt: '2026-05-20T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function createApprovalRequest(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
+  return {
+    approvalRequestId: 'approval-1',
+    toolUseId: 'tool-use-1',
+    toolCallId: 'tool-call-1',
+    permissionDecisionId: 'permission-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName: 'run_command',
+    capabilities: ['command_run'],
+    riskLevel: 'medium',
+    title: 'Approve command',
+    summary: 'Run npm test',
+    preview: {
+      action: 'npm test',
+      targets: [{ kind: 'command', label: 'npm test' }],
+    },
+    requestedScope: 'once',
+    status: 'pending',
+    createdAt: '2026-05-20T00:00:02.000Z',
     ...overrides,
   };
 }
@@ -78,6 +145,9 @@ function installMegumiMock() {
       cancel: vi.fn(),
     },
   };
+  const approval = {
+    resolve: vi.fn().mockResolvedValue({ ok: true, requestId: 'request-approval-1' }),
+  };
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
@@ -90,6 +160,7 @@ function installMegumiMock() {
           cancel: session.message.cancel,
         },
       },
+      approval,
       runtime: {
         onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
           runtimeEventCallback = callback;
@@ -101,7 +172,7 @@ function installMegumiMock() {
       provider: { list: vi.fn(), update: vi.fn(), setApiKey: vi.fn(), deleteApiKey: vi.fn() },
     },
   });
-  return session;
+  return { ...session, approval };
 }
 
 function selectMegumiProject() {
@@ -136,6 +207,8 @@ describe('ChatTimeline', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date('2026-05-10T12:00:42.000Z'));
     useRunStore.getState().resetRuns();
+    useToolCallStore.getState().reset();
+    useApprovalStore.getState().reset();
   });
 
   afterEach(() => {
@@ -182,6 +255,50 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
     expect(screen.getByText('Can you inspect the shell?')).toBeInTheDocument();
     expect(screen.getByText('I can help with that.')).toBeInTheDocument();
+  });
+
+  it('renders active run tool calls and pending approvals from entity stores', () => {
+    installMegumiMock();
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    useToolCallStore.getState().upsertToolCall(createToolCall());
+    useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
+
+    render(<ChatTimeline />);
+
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
+    expect(timeline).toHaveTextContent('run_command');
+    expect(timeline).toHaveTextContent('Waiting for approval');
+    expect(timeline).toHaveTextContent('Run npm test');
+    expect(timeline).toHaveTextContent('Policy: ask - Command execution requires approval in default mode.');
+    expect(screen.getByRole('button', { name: 'Approve run_command' })).toBeInTheDocument();
+  });
+
+  it('resolves pending approvals through the approval preload API', async () => {
+    const megumi = installMegumiMock();
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
+
+    render(<ChatTimeline />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'run');
+    await userEvent.click(screen.getByRole('button', { name: 'Approve run_command' }));
+
+    expect(megumi.approval.resolve).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        approvalRequestId: 'approval-1',
+        decision: 'approved',
+        scope: 'run',
+        decidedAt: '2026-05-10T12:00:42.000Z',
+      },
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.approval.resolve,
+        source: 'renderer',
+      }),
+      context: expect.objectContaining({
+        operationName: 'approval.resolve',
+        source: 'renderer',
+      }),
+    }));
   });
 
   it('submits a message through the runtime chat flow', async () => {

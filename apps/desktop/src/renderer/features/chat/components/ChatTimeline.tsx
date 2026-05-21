@@ -1,11 +1,15 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import type { ApprovalResolvePayload } from '@megumi/shared/ipc-schemas';
+import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { CompletedToolActivity } from '../../../entities/chat/store';
+import { ApprovalCard, type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatStore } from '../../../entities/chat/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
-import { ToolCallStatusCard } from '../../../entities/tool-call';
+import { ToolCallStatusCard, useToolCallStore } from '../../../entities/tool-call';
+import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import {
   createProcessingDisclosureModel,
   formatProcessingDuration,
@@ -67,10 +71,28 @@ export function ChatTimeline() {
   const activeRunId = useRunStore((state) => state.activeRunId);
   const activeRun = useRunStore((state) => (activeRunId ? state.runs[activeRunId] : undefined));
   const activeRunEvents = useRunStore((state) => (activeRunId ? state.eventsByRun[activeRunId] ?? EMPTY_EVENTS : EMPTY_EVENTS));
+  const toolCallsById = useToolCallStore((state) => state.toolCallsById);
+  const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const runIsActive = agentStatus === 'sending' || Boolean(activeRun && !['completed', 'failed', 'cancelled'].includes(activeRun.status));
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
   const processingNow = useProcessingNow(runIsActive);
   const { sendSessionMessage, cancelSessionMessage } = useSessionTimeline();
+
+  const toolCalls = useMemo(() => (
+    activeRunId
+      ? Object.values(toolCallsById)
+        .filter((toolCall) => toolCall.runId === activeRunId)
+        .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt))
+      : []
+  ), [activeRunId, toolCallsById]);
+
+  const pendingApprovals = useMemo(() => (
+    activeRunId
+      ? Object.values(approvalRequestsById)
+        .filter((request) => request.runId === activeRunId && request.status === 'pending')
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+      : []
+  ), [activeRunId, approvalRequestsById]);
 
   const eventProcessingDisclosure = useMemo(() => {
     if (!activeRun) {
@@ -128,6 +150,8 @@ export function ChatTimeline() {
     messages.length > 0 ||
     isStreaming ||
     pendingToolCalls.length > 0 ||
+    toolCalls.length > 0 ||
+    pendingApprovals.length > 0 ||
     completedToolActivities.length > 0 ||
     Boolean(processingDisclosure) ||
     agentStatus === 'sending' ||
@@ -140,6 +164,18 @@ export function ChatTimeline() {
 
   function handleStop() {
     void cancelSessionMessage();
+  }
+
+  async function resolveApproval(payload: ApprovalCardResolvePayload) {
+    const resolvePayload: ApprovalResolvePayload = {
+      ...payload,
+      decidedAt: new Date().toISOString(),
+    };
+
+    await window.megumi.approval.resolve(createRendererRuntimeIpcRequest(
+      IPC_CHANNELS.approval.resolve,
+      resolvePayload,
+    ));
   }
 
   function toggleActivity(activityId: string) {
@@ -192,10 +228,43 @@ export function ChatTimeline() {
             {pendingToolCalls.length > 0 ? (
               <section aria-label="Active tool calls" className="space-y-2">
                 <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-                  Active tool calls
+                  Legacy active tool calls
                 </h2>
                 {pendingToolCalls.map((toolCall) => (
-                  <ToolCallStatusCard key={toolCall.id} toolCall={toolCall} />
+                  <div
+                    key={toolCall.id}
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-muted)]"
+                  >
+                    {toolCall.name}
+                  </div>
+                ))}
+              </section>
+            ) : null}
+
+            {toolCalls.length > 0 ? (
+              <section aria-label="Tool calls" className="space-y-2">
+                <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Tool calls
+                </h2>
+                {toolCalls.map((toolCall) => (
+                  <ToolCallStatusCard key={toolCall.toolCallId} toolCall={toolCall} />
+                ))}
+              </section>
+            ) : null}
+
+            {pendingApprovals.length > 0 ? (
+              <section aria-label="Pending approvals" className="space-y-2">
+                <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                  Pending approvals
+                </h2>
+                {pendingApprovals.map((request) => (
+                  <ApprovalCard
+                    key={request.approvalRequestId}
+                    request={request}
+                    onResolve={(payload) => {
+                      void resolveApproval(payload);
+                    }}
+                  />
                 ))}
               </section>
             ) : null}
