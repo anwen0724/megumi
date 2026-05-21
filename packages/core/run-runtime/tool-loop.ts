@@ -28,6 +28,24 @@ export interface ToolUseHandlerPort {
   }): Promise<ToolUseHandlerOutcome>;
 }
 
+export interface ToolApprovalResumeInput {
+  approvalRequestId: string;
+  decision: 'approved' | 'denied';
+  decidedAt: string;
+  reason?: string;
+}
+
+export interface ToolApprovalResumePort {
+  resumeToolApproval(input: ToolApprovalResumeInput): Promise<ToolResult | undefined>;
+}
+
+export interface PendingToolApprovalContinuation {
+  pendingApproval: PendingToolApproval;
+  request: ModelStepRuntimeRequest;
+  accumulatedToolUses: ToolUse[];
+  accumulatedToolResults: ToolResult[];
+}
+
 export interface ModelToolLoopIds {
   nextEventId: () => string;
   nextStepId: () => string;
@@ -41,6 +59,7 @@ export interface RunModelToolLoopInput {
   ids: ModelToolLoopIds;
   signal?: AbortSignal;
   maxModelSteps?: number;
+  onPendingApproval?: (continuation: PendingToolApprovalContinuation) => void;
 }
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {
@@ -118,6 +137,20 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     accumulatedToolResults = [...accumulatedToolResults, ...toolResults];
 
     if (hasPendingApprovals) {
+      const continuationRequest: ModelStepRuntimeRequest = {
+        ...request,
+        toolUses: accumulatedToolUses,
+        toolResults: accumulatedToolResults,
+      };
+
+      for (const pendingApproval of outcome.pendingApprovals ?? []) {
+        input.onPendingApproval?.({
+          pendingApproval,
+          request: continuationRequest,
+          accumulatedToolUses,
+          accumulatedToolResults,
+        });
+      }
       return;
     }
 

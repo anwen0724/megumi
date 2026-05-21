@@ -18,6 +18,7 @@ import {
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import type { ToolService } from '../../services/tool.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type ToolHandlersService = Pick<
   ToolService,
@@ -68,11 +69,16 @@ export function registerToolHandlers(
       channel: IPC_CHANNELS.approval.resolve,
       requestSchema: ApprovalResolveRequestSchema,
       logger: options.logger,
-      handle: (
+      handle: async (
         request: RuntimeIpcRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
-      ): ApprovalResolveData => ({
-        approval: service.resolveApproval(request.payload),
-      }),
+        event,
+      ): Promise<ApprovalResolveData> => {
+        const response = service.resolveApproval(request.payload);
+        if (response.events) {
+          void forwardRuntimeEvents(event.sender, response.events, { logger: options.logger });
+        }
+        return { approval: response.approval };
+      },
       mapError: mapToolIpcError,
     }),
   );

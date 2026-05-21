@@ -4,6 +4,7 @@ import { createToolUseHandlerService } from '@megumi/desktop/main/services/tool-
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type {
+  ApprovalRequest,
   PermissionDecision,
   ToolCall,
   ToolResult,
@@ -162,6 +163,122 @@ describe('ToolUseHandlerService', () => {
       status: 'waiting_for_approval',
     }));
   });
+
+  it('resumes approved waiting tool calls by resolving approval and executing the host adapter', async () => {
+    const toolCall = waitingToolCall();
+    const approvalRequest = pendingApprovalRequest(toolCall);
+    const repository = fakeRepository({
+      toolCalls: new Map([[toolCall.toolCallId, toolCall]]),
+      approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
+    });
+    const executor = {
+      executeToolCall: vi.fn(async (runningToolCall: ToolCall): Promise<ToolResult> => ({
+        toolResultId: 'tool-result-executed',
+        toolUseId: runningToolCall.toolUseId,
+        toolCallId: runningToolCall.toolCallId,
+        runId: runningToolCall.runId,
+        kind: 'success',
+        textContent: 'executed',
+        redactionState: 'none',
+        createdAt: '2026-05-20T00:00:04.000Z',
+      })),
+    };
+    const handler = createToolUseHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const result = await handler.resumeToolApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-20T00:00:03.000Z',
+    });
+
+    expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
+      approvalRequestId: 'approval-request-1',
+      status: 'approved',
+      resolvedAt: '2026-05-20T00:00:03.000Z',
+    }));
+    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: 'tool-call-1',
+      status: 'running',
+      startedAt: '2026-05-20T00:00:03.000Z',
+    }));
+    expect(executor.executeToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: 'tool-call-1',
+      status: 'running',
+    }));
+    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: 'tool-call-1',
+      status: 'succeeded',
+      completedAt: '2026-05-20T00:00:04.000Z',
+      resultPreview: 'executed',
+    }));
+    expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
+      toolResultId: 'tool-result-executed',
+      toolCallId: 'tool-call-1',
+      kind: 'success',
+    }));
+    expect(result).toMatchObject({
+      toolResultId: 'tool-result-executed',
+      kind: 'success',
+    });
+  });
+
+  it('resumes denied waiting tool calls by saving a user_rejected ToolResult without execution', async () => {
+    const toolCall = waitingToolCall();
+    const approvalRequest = pendingApprovalRequest(toolCall);
+    const repository = fakeRepository({
+      toolCalls: new Map([[toolCall.toolCallId, toolCall]]),
+      approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
+    });
+    const executor = { executeToolCall: vi.fn() };
+    const handler = createToolUseHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const result = await handler.resumeToolApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'denied',
+      decidedAt: '2026-05-20T00:00:03.000Z',
+      reason: 'Not now',
+    });
+
+    expect(executor.executeToolCall).not.toHaveBeenCalled();
+    expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
+      approvalRequestId: 'approval-request-1',
+      status: 'denied',
+      resolvedAt: '2026-05-20T00:00:03.000Z',
+    }));
+    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: 'tool-call-1',
+      status: 'denied',
+      completedAt: '2026-05-20T00:00:03.000Z',
+    }));
+    expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
+      toolResultId: 'tool-result-1',
+      toolCallId: 'tool-call-1',
+      kind: 'user_rejected',
+      denialReason: 'Not now',
+    }));
+    expect(result).toMatchObject({
+      kind: 'user_rejected',
+      textContent: 'Not now',
+    });
+  });
 });
 
 function modelRequest(): ModelStepRuntimeRequest {
@@ -204,12 +321,70 @@ function fixedIds() {
   };
 }
 
-function fakeRepository() {
+function waitingToolCall(): ToolCall {
+  return {
+    toolCallId: 'tool-call-1',
+    toolUseId: 'tool-use-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName: 'read_file',
+    input: { path: 'README.md' },
+    inputPreview: {
+      summary: 'read_file',
+      targets: [],
+      redactionState: 'none',
+    },
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    sideEffect: 'none',
+    status: 'waiting_for_approval',
+    requestedAt: '2026-05-20T00:00:01.000Z',
+    approvalRequestId: 'approval-request-1',
+  };
+}
+
+function pendingApprovalRequest(toolCall: ToolCall): ApprovalRequest {
+  return {
+    approvalRequestId: 'approval-request-1',
+    toolUseId: toolCall.toolUseId,
+    toolCallId: toolCall.toolCallId,
+    runId: toolCall.runId,
+    stepId: String(toolCall.stepId),
+    toolName: toolCall.toolName,
+    capabilities: toolCall.capabilities,
+    riskLevel: toolCall.riskLevel,
+    title: 'Approve read_file',
+    summary: 'User approval is required.',
+    preview: {
+      action: 'read_file',
+      targets: [],
+    },
+    requestedScope: 'once',
+    status: 'pending',
+    createdAt: '2026-05-20T00:00:02.000Z',
+  };
+}
+
+function fakeRepository(initial?: {
+  toolCalls?: Map<string, ToolCall>;
+  approvalRequests?: Map<string, ApprovalRequest>;
+}) {
+  const toolCalls = initial?.toolCalls ?? new Map<string, ToolCall>();
+  const approvalRequests = initial?.approvalRequests ?? new Map<string, ApprovalRequest>();
+
   return {
     saveToolUse: vi.fn((value) => value),
-    saveToolCall: vi.fn((value) => value),
+    saveToolCall: vi.fn((value: ToolCall) => {
+      toolCalls.set(value.toolCallId, value);
+      return value;
+    }),
+    getToolCall: vi.fn((toolCallId: string) => toolCalls.get(toolCallId)),
     savePermissionDecision: vi.fn((value: PermissionDecision) => value),
-    saveApprovalRequest: vi.fn((value) => value),
+    saveApprovalRequest: vi.fn((value: ApprovalRequest) => {
+      approvalRequests.set(value.approvalRequestId, value);
+      return value;
+    }),
+    getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
     saveToolResult: vi.fn((value) => value),
   };
 }

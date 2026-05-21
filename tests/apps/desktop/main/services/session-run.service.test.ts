@@ -201,7 +201,7 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
 function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
   contextService?: SessionRunContextService;
   runModeService?: SessionRunServiceOptions['runModeService'];
-  toolUseHandler?: SessionRunServiceOptions['toolUseHandler'];
+  toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -211,7 +211,7 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
     ...(options?.runModeService ? { runModeService: options.runModeService } : {}),
-    ...(options?.toolUseHandler ? { toolUseHandler: options.toolUseHandler } : {}),
+    ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         options?.onRequest?.(request);
@@ -562,10 +562,21 @@ describe('SessionRunService', () => {
         },
         cancelModelStep: () => true,
       },
-      toolUseHandler: {
-        async handleToolUses() {
+      toolRuntimeFactory: {
+        async create(input) {
+          expect(input).toEqual({
+            projectRoot: 'C:/all/work/study/megumi',
+            permissionMode: 'default',
+          });
           return {
-            toolResults: [toolResult],
+            async handleToolUses() {
+              return {
+                toolResults: [toolResult],
+              };
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
           };
         },
       },
@@ -598,6 +609,7 @@ describe('SessionRunService', () => {
     });
     service.createSession({
       title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
@@ -737,8 +749,10 @@ describe('SessionRunService', () => {
     ]));
   });
 
-  it('keeps session message runs open when the tool loop stops for pending approval', async () => {
+  it('marks session message runs waiting and resumes live continuation after approval resolution', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
+    const resumeInputs: unknown[] = [];
+    const toolResult = createToolResult();
     db = new Database(':memory:');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
@@ -747,63 +761,83 @@ describe('SessionRunService', () => {
       modelStepProvider: {
         streamModelStep: async function* (request) {
           requests.push(request);
-          yield toolUseCreatedEvent(1);
-          yield modelStepCompletedEvent(2);
+          if (requests.length === 1) {
+            yield toolUseCreatedEvent(1);
+            yield modelStepCompletedEvent(2);
+            return;
+          }
+          yield {
+            ...assistantOutputCompletedEvent(1),
+            stepId: request.stepId,
+          };
         },
         cancelModelStep: () => true,
       },
-      toolUseHandler: {
-        async handleToolUses(input) {
-          const toolUse = input.toolUses[0];
-          if (!toolUse) {
-            throw new Error('Expected one tool use.');
-          }
-
-          const toolCall: ToolCall = {
-            toolCallId: 'tool-call-1',
-            toolUseId: toolUse.toolUseId,
-            runId: toolUse.runId,
-            stepId: 'step-1',
-            toolName: toolUse.toolName,
-            input: toolUse.input,
-            inputPreview: toolUse.inputPreview,
-            capabilities: ['project_read'],
-            riskLevel: 'low',
-            sideEffect: 'none',
-            status: 'waiting_for_approval',
-            requestedAt: '2026-05-17T00:00:02.250Z',
-          };
-          const approvalRequest: ApprovalRequest = {
-            approvalRequestId: 'approval-request-1',
-            toolUseId: toolUse.toolUseId,
-            toolCallId: toolCall.toolCallId,
-            runId: toolUse.runId,
-            stepId: toolCall.stepId,
-            toolName: toolUse.toolName,
-            capabilities: toolCall.capabilities,
-            riskLevel: toolCall.riskLevel,
-            title: 'Approve read_file',
-            summary: 'User approval is required.',
-            preview: {
-              action: 'read_file',
-              targets: [{
-                kind: 'file',
-                label: 'package.json',
-                sensitivity: 'normal',
-              }],
-            },
-            requestedScope: 'once',
-            status: 'pending',
-            createdAt: '2026-05-17T00:00:02.300Z',
-          };
+      toolRuntimeFactory: {
+        async create(input) {
+          expect(input).toEqual({
+            projectRoot: 'C:/all/work/study/megumi',
+            permissionMode: 'plan',
+          });
 
           return {
-            toolResults: [],
-            pendingApprovals: [{
-              approvalRequest,
-              toolUse,
-              toolCall,
-            }],
+            async handleToolUses(handleInput) {
+              const toolUse = handleInput.toolUses[0];
+              if (!toolUse) {
+                throw new Error('Expected one tool use.');
+              }
+
+              const toolCall: ToolCall = {
+                toolCallId: 'tool-call-1',
+                toolUseId: toolUse.toolUseId,
+                runId: toolUse.runId,
+                stepId: 'step-1',
+                toolName: toolUse.toolName,
+                input: toolUse.input,
+                inputPreview: toolUse.inputPreview,
+                capabilities: ['project_read'],
+                riskLevel: 'low',
+                sideEffect: 'none',
+                status: 'waiting_for_approval',
+                requestedAt: '2026-05-17T00:00:02.250Z',
+              };
+              const approvalRequest: ApprovalRequest = {
+                approvalRequestId: 'approval-request-1',
+                toolUseId: toolUse.toolUseId,
+                toolCallId: toolCall.toolCallId,
+                runId: toolUse.runId,
+                stepId: toolCall.stepId,
+                toolName: toolUse.toolName,
+                capabilities: toolCall.capabilities,
+                riskLevel: toolCall.riskLevel,
+                title: 'Approve read_file',
+                summary: 'User approval is required.',
+                preview: {
+                  action: 'read_file',
+                  targets: [{
+                    kind: 'file',
+                    label: 'package.json',
+                    sensitivity: 'normal',
+                  }],
+                },
+                requestedScope: 'once',
+                status: 'pending',
+                createdAt: '2026-05-17T00:00:02.300Z',
+              };
+
+              return {
+                toolResults: [],
+                pendingApprovals: [{
+                  approvalRequest,
+                  toolUse,
+                  toolCall,
+                }],
+              };
+            },
+            async resumeToolApproval(input) {
+              resumeInputs.push(input);
+              return toolResult;
+            },
           };
         },
       },
@@ -830,6 +864,7 @@ describe('SessionRunService', () => {
     });
     service.createSession({
       title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
@@ -845,6 +880,9 @@ describe('SessionRunService', () => {
           content: 'Read package.json',
           createdAt: '2026-05-17T00:00:00.000Z',
         }],
+        context: {
+          permissionMode: 'plan',
+        },
         createdAt: '2026-05-17T00:00:00.000Z',
       },
     });
@@ -858,10 +896,11 @@ describe('SessionRunService', () => {
       'run.started',
       'tool.use.created',
       'model.step.completed',
+      'run.status.changed',
     ]);
     expect(streamed.map((event) => event.eventType)).not.toContain('run.completed');
     expect(repository.getRun('run-1')).toMatchObject({
-      status: 'running',
+      status: 'waiting_for_approval',
     });
     expect(service.listMessagesBySession('session-1')).toEqual([
       expect.objectContaining({
@@ -869,6 +908,41 @@ describe('SessionRunService', () => {
         content: 'Read package.json',
       }),
     ]);
+
+    const resumed = [];
+    const resumeEvents = service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-17T00:00:05.000Z',
+    });
+    expect(resumeEvents).toBeDefined();
+    for await (const event of resumeEvents ?? []) {
+      resumed.push(event);
+    }
+
+    expect(resumeInputs).toEqual([{
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-17T00:00:05.000Z',
+    }]);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      toolResults: [expect.objectContaining({ toolResultId: 'tool-result-1' })],
+    });
+    expect(resumed.map((event) => event.eventType)).toEqual([
+      'approval.resolved',
+      'run.status.changed',
+      'tool.result.created',
+      'run.started',
+      'assistant.output.completed',
+      'step.status.changed',
+      'step.completed',
+      'run.status.changed',
+      'run.completed',
+    ]);
+    expect(repository.getRun('run-1')).toMatchObject({
+      status: 'completed',
+    });
   });
 
   it('passes workspace baseline context to model step requests for session messages', async () => {
@@ -942,7 +1016,7 @@ describe('SessionRunService', () => {
           workspaceId: 'workspace-1',
           workspacePath: 'C:/all/work/study/megumi',
           sessionTitle: 'Workspace session',
-          composerMode: 'execute',
+          permissionMode: 'accept_edits',
         },
         createdAt: '2026-05-17T00:00:00.000Z',
       },
@@ -1016,7 +1090,7 @@ describe('SessionRunService', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         }],
         context: {
-          composerMode: 'plan',
+          permissionMode: 'plan',
         },
         createdAt: '2026-05-17T00:00:00.000Z',
       },
@@ -1037,7 +1111,7 @@ describe('SessionRunService', () => {
       expect.objectContaining({
         modeSnapshot: {
           permissionMode: 'plan',
-          source: 'system',
+          source: 'user',
           createdAt: '2026-05-17T00:00:00.000Z',
         },
         modeSnapshotRef: 'mode-snapshot:1',
@@ -1050,10 +1124,11 @@ describe('SessionRunService', () => {
     migrateDatabase(db);
     const requests: ModelStepRuntimeRequest[] = [];
     const sessionRepository = new SessionRunRepository(db);
+    const runModeRepository = new RunModeRepository(db);
     const service = new SessionRunService({
       repository: sessionRepository,
       runModeService: new RunModeService({
-        repository: new RunModeRepository(db),
+        repository: runModeRepository,
         ids: {
           modeSnapshotId: () => 'mode-snapshot:real-repo',
           planArtifactId: () => 'plan:real-repo',
@@ -1098,7 +1173,7 @@ describe('SessionRunService', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         }],
         context: {
-          composerMode: 'plan',
+          permissionMode: 'plan',
         },
         createdAt: '2026-05-17T00:00:00.000Z',
       },
@@ -1113,13 +1188,19 @@ describe('SessionRunService', () => {
         modeSnapshotRef: 'mode-snapshot:real-repo',
         modeSnapshot: {
           permissionMode: 'plan',
-          source: 'system',
+          source: 'user',
           createdAt: '2026-05-17T00:00:00.000Z',
         },
       }),
     ]);
     expect(sessionRepository.getRun('run-1')).toMatchObject({
+      mode: 'plan',
       modeSnapshotRef: 'mode-snapshot:real-repo',
+    });
+    expect(runModeRepository.getModeSnapshotByRun('run-1')).toMatchObject({
+      mode: expect.objectContaining({
+        permissionMode: 'plan',
+      }),
     });
   });
 

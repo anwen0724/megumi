@@ -3,10 +3,12 @@ import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
+import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
+import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
 import { registerAllHandlers } from './ipc/register-handlers';
@@ -14,14 +16,17 @@ import { createMainWindow } from './app/create-window';
 import { registerAppLifecycle } from './app/lifecycle';
 import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-errors';
 import { createRuntimeJsonlLoggerForMegumiHome } from './services/runtime-logger.service';
-import { SessionRunService } from './services/session-run.service';
+import { SessionRunService, type SessionRunToolRuntimeFactory } from './services/session-run.service';
 import { createModelStepProviderService } from './services/model-step-provider.service';
 import { MegumiHomeConfigService } from './services/megumi-home-config.service';
 import { ProviderRuntimeService } from './services/provider-runtime.service';
 import { createElectronSecretStoreService } from './services/secret-store.service';
 import { RunModeService } from './services/run-mode.service';
 import { createDefaultRunContextService } from './services/run-context.service';
-import { createDefaultToolService } from './services/tool.service';
+import { ToolService } from './services/tool.service';
+import { createToolUseHandlerService } from './services/tool-use-handler.service';
+import { createProjectToolExecutor } from './services/project-tool-executor.service';
+import { createPermissionSettingsService } from './services/permission-settings.service';
 import { createRecoveryService } from './services/recovery.service';
 import { ArtifactContentStore } from './services/artifact-content-store.service';
 import { ArtifactService } from './services/artifact.service';
@@ -39,9 +44,14 @@ loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
 const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
 const runContextService = createDefaultRunContextService(megumiHomePaths);
-const toolService = createDefaultToolService(megumiHomePaths);
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
 migrateDatabase(database);
+const toolRepository = new ToolRepository(database);
+const toolRegistry = createBuiltInToolRegistry();
+const permissionSettingsService = createPermissionSettingsService({
+  userConfigPath: megumiHomePaths.configPath,
+  fileSystem: fs,
+});
 const projectService = createProjectService({
   repository: new ProjectRepository(database),
   chooseDirectory: () => dialog.showOpenDialog({
@@ -74,11 +84,29 @@ const providerRuntimeService = new ProviderRuntimeService({
   configCredentials,
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
+const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
+  async create({ projectRoot, permissionMode }) {
+    return createToolUseHandlerService({
+      registry: toolRegistry,
+      repository: toolRepository,
+      permissionMode,
+      projectRoot,
+      settings: await permissionSettingsService.loadForProject(projectRoot),
+      projectExecutor: createProjectToolExecutor({ projectRoot }),
+    });
+  },
+};
 const sessionRunService = new SessionRunService({
   repository: new SessionRunRepository(database),
   runModeService: runModeService,
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
+  toolRuntimeFactory,
+});
+const toolService = new ToolService({
+  repository: toolRepository,
+  registry: toolRegistry,
+  resumeApproval: (input) => sessionRunService.resumeApproval(input),
 });
 const workspaceFilesService = createWorkspaceFilesService({
   isWorkspaceRootAllowed: createWorkspaceRootAuthorizer({

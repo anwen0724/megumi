@@ -4,7 +4,10 @@ import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contract
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { ApprovalRequest, ToolCall, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { runModelToolLoop } from '@megumi/core/run-runtime/tool-loop';
-import type { PendingToolApproval } from '@megumi/core/run-runtime/tool-loop';
+import type {
+  PendingToolApproval,
+  PendingToolApprovalContinuation,
+} from '@megumi/core/run-runtime/tool-loop';
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   const output: T[] = [];
@@ -277,6 +280,7 @@ describe('run model tool loop', () => {
 
   it('stops before requesting another model step when tool handling returns pending approvals', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
+    const continuations: PendingToolApprovalContinuation[] = [];
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
@@ -317,9 +321,42 @@ describe('run model tool loop', () => {
         nextStepId: () => 'step-2',
         nextModelStepId: () => 'model-step-2',
       },
+      onPendingApproval: (continuation) => {
+        continuations.push(continuation);
+      },
     }));
 
     expect(requests).toHaveLength(1);
+    expect(continuations).toEqual([
+      expect.objectContaining({
+        pendingApproval: expect.objectContaining({
+          approvalRequest: expect.objectContaining({
+            approvalRequestId: 'approval-1',
+          }),
+          toolCall: expect.objectContaining({
+            toolCallId: 'tool-call-1',
+            status: 'waiting_for_approval',
+          }),
+        }),
+        request: expect.objectContaining({
+          stepId: 'step-1',
+          toolUses: [
+            expect.objectContaining({
+              toolUseId: 'call-read',
+              toolName: 'read_file',
+            }),
+          ],
+          toolResults: [],
+        }),
+        accumulatedToolUses: [
+          expect.objectContaining({
+            toolUseId: 'call-read',
+            toolName: 'read_file',
+          }),
+        ],
+        accumulatedToolResults: [],
+      }),
+    ]);
     expect(events.map((event) => event.eventType)).toEqual([
       'tool.use.created',
       'model.step.completed',

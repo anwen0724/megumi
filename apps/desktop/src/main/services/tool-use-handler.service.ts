@@ -3,6 +3,8 @@ import { validateToolInput } from '@megumi/tools/validation';
 import type { ToolRegistry } from '@megumi/tools/registry';
 import type {
   PendingToolApproval,
+  ToolApprovalResumeInput,
+  ToolApprovalResumePort,
   ToolUseHandlerPort,
 } from '@megumi/core/run-runtime/tool-loop';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
@@ -20,7 +22,13 @@ import type { ProjectToolExecutor } from './project-tool-executor.service';
 
 export interface ToolUseHandlerRepositoryPort extends Pick<
   ToolRepository,
-  'saveToolUse' | 'saveToolCall' | 'savePermissionDecision' | 'saveApprovalRequest' | 'saveToolResult'
+  | 'saveToolUse'
+  | 'saveToolCall'
+  | 'getToolCall'
+  | 'savePermissionDecision'
+  | 'saveApprovalRequest'
+  | 'getApprovalRequest'
+  | 'saveToolResult'
 > {}
 
 export interface ToolUseHandlerServiceOptions {
@@ -49,7 +57,7 @@ interface SingleToolUseOutcome {
   pendingApproval?: PendingToolApproval;
 }
 
-export function createToolUseHandlerService(options: ToolUseHandlerServiceOptions): ToolUseHandlerPort {
+export function createToolUseHandlerService(options: ToolUseHandlerServiceOptions): ToolUseHandlerPort & ToolApprovalResumePort {
   const resolvedOptions: ResolvedToolUseHandlerServiceOptions = {
     ...options,
     now: options.now ?? (() => new Date().toISOString()),
@@ -79,7 +87,68 @@ export function createToolUseHandlerService(options: ToolUseHandlerServiceOption
 
       return { toolResults, pendingApprovals };
     },
+    async resumeToolApproval(input) {
+      return resumeToolApproval(resolvedOptions, input);
+    },
   };
+}
+
+async function resumeToolApproval(
+  options: ResolvedToolUseHandlerServiceOptions,
+  input: ToolApprovalResumeInput,
+): Promise<ToolResult | undefined> {
+  const approvalRequest = options.repository.getApprovalRequest(input.approvalRequestId);
+  if (!approvalRequest) {
+    return undefined;
+  }
+
+  const toolCall = options.repository.getToolCall(approvalRequest.toolCallId);
+  if (!toolCall) {
+    return undefined;
+  }
+
+  options.repository.saveApprovalRequest({
+    ...approvalRequest,
+    status: input.decision,
+    resolvedAt: input.decidedAt,
+  });
+
+  if (input.decision === 'denied') {
+    options.repository.saveToolCall({
+      ...toolCall,
+      status: 'denied',
+      completedAt: input.decidedAt,
+    });
+
+    return options.repository.saveToolResult({
+      toolResultId: options.ids.toolResultId(),
+      toolUseId: toolCall.toolUseId,
+      toolCallId: toolCall.toolCallId,
+      runId: toolCall.runId,
+      kind: 'user_rejected',
+      textContent: input.reason ?? 'User rejected the requested tool call.',
+      denialReason: input.reason ?? 'User rejected the requested tool call.',
+      redactionState: 'none',
+      createdAt: input.decidedAt,
+    });
+  }
+
+  const runningToolCall = options.repository.saveToolCall({
+    ...toolCall,
+    status: 'running',
+    startedAt: input.decidedAt,
+  });
+  const toolResult = await options.projectExecutor.executeToolCall(runningToolCall);
+
+  options.repository.saveToolCall({
+    ...runningToolCall,
+    status: toolResult.kind === 'success' ? 'succeeded' : 'failed',
+    completedAt: toolResult.createdAt,
+    resultPreview: toolResult.textContent,
+    ...(toolResult.error ? { error: toolResult.error } : {}),
+  });
+
+  return options.repository.saveToolResult(toolResult);
 }
 
 async function handleSingleToolUse(

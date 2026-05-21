@@ -13,11 +13,23 @@ import type {
 } from '@megumi/shared/ipc-schemas';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import type { ToolRegistry } from '@megumi/tools/registry';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { MegumiHomePaths } from './megumi-home.service';
+
+export interface ApprovalResolveServiceResult {
+  approval: ApprovalRecord;
+  events?: AsyncIterable<RuntimeEvent>;
+}
 
 export interface ToolServiceOptions {
   registry: ToolRegistry;
   repository: ToolRepository;
+  resumeApproval?: (input: {
+    approvalRequestId: string;
+    decision: 'approved' | 'denied';
+    decidedAt: string;
+    reason?: string;
+  }) => AsyncIterable<RuntimeEvent> | undefined;
   now?: () => string;
   idFactory?: {
     approvalRecordId(): string;
@@ -47,7 +59,7 @@ export class ToolService {
     return this.options.repository.getToolCall(toolCallId);
   }
 
-  resolveApproval(payload: ApprovalResolvePayload): ApprovalRecord {
+  resolveApproval(payload: ApprovalResolvePayload): ApprovalResolveServiceResult {
     const request = this.options.repository.getApprovalRequest(payload.approvalRequestId);
     if (!request) {
       throw new Error(`Approval request not found: ${payload.approvalRequestId}`);
@@ -66,7 +78,22 @@ export class ToolService {
       decidedAt: payload.decidedAt ?? this.now(),
     };
 
-    return this.options.repository.saveApprovalRecord(record);
+    const approval = this.options.repository.saveApprovalRecord(record);
+    this.options.repository.saveApprovalRequest({
+      ...request,
+      status: payload.decision,
+      resolvedAt: record.decidedAt,
+    });
+
+    return {
+      approval,
+      events: this.options.resumeApproval?.({
+        approvalRequestId: request.approvalRequestId,
+        decision: payload.decision,
+        decidedAt: record.decidedAt,
+        ...(payload.reason ? { reason: payload.reason } : {}),
+      }),
+    };
   }
 }
 

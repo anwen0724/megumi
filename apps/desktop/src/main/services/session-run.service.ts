@@ -3,6 +3,9 @@ import { runTurn } from '@megumi/core/run-runtime/run-turn';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/run-runtime/types';
 import {
   runModelToolLoop,
+  type PendingToolApprovalContinuation,
+  type ToolApprovalResumeInput,
+  type ToolApprovalResumePort,
   type ToolUseHandlerPort,
 } from '@megumi/core/run-runtime/tool-loop';
 import {
@@ -24,6 +27,7 @@ import type {
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
 import {
   isPermissionMode,
+  type PermissionMode,
   type PermissionModeSelectionSource,
   type PermissionModeSnapshot,
 } from '@megumi/shared/permission-mode-contracts';
@@ -40,6 +44,8 @@ import type { ImplementationPlanArtifactRecord, RunMode, RunModeSnapshot } from 
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { createRuntimeEvent, createToolResultCreatedEvent } from '@megumi/shared/runtime-event-factory';
+import type { ToolResult } from '@megumi/shared/tool-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 
@@ -66,6 +72,23 @@ export interface SessionRunModelStepProvider {
   cancelModelStep(requestId: string): boolean;
 }
 
+export interface SessionRunToolRuntimeFactory {
+  create(input: {
+    projectRoot: string;
+    permissionMode: PermissionMode;
+  }): Promise<ToolUseHandlerPort & ToolApprovalResumePort>;
+}
+
+interface ApprovalContinuation {
+  request: ModelStepRuntimeRequest;
+  run: Run;
+  step: RunStep;
+  userMessageId: string;
+  pending: PendingToolApprovalContinuation;
+  resumePort: ToolApprovalResumePort;
+  toolRuntime: ToolUseHandlerPort & ToolApprovalResumePort;
+}
+
 export interface SessionRunServiceOptions {
   repository: SessionRunRepository;
   contextService?: SessionRunContextService;
@@ -78,7 +101,7 @@ export interface SessionRunServiceOptions {
     | 'updatePlanStatus'
   >;
   modelStepProvider?: SessionRunModelStepProvider;
-  toolUseHandler?: ToolUseHandlerPort;
+  toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   hostBoundary?: RunHostBoundaryPort;
   clock?: SessionRunServiceClock;
   ids?: Partial<SessionRunServiceIds>;
@@ -125,17 +148,18 @@ export class SessionRunService {
     | 'updatePlanStatus'
   >;
   private readonly modelStepProvider?: SessionRunModelStepProvider;
-  private readonly toolUseHandler?: ToolUseHandlerPort;
+  private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
+  private readonly pendingApprovals = new Map<string, ApprovalContinuation>();
 
   constructor(options: SessionRunServiceOptions) {
     this.repository = options.repository;
     this.contextService = options.contextService;
     this.runModeService = options.runModeService;
     this.modelStepProvider = options.modelStepProvider;
-    this.toolUseHandler = options.toolUseHandler;
+    this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
@@ -251,7 +275,8 @@ export class SessionRunService {
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
     const lastUserMessage = findLastUserChatMessage(input.payload.messages);
-    const mode = input.payload.context?.composerMode ?? 'chat';
+    const permissionMode = input.payload.context?.permissionMode ?? 'default';
+    const mode = permissionMode;
 
     if (!lastUserMessage) {
       throw new Error('Session message send requires a user message.');
@@ -280,6 +305,7 @@ export class SessionRunService {
     const modeSnapshot = this.runModeService?.createModeSnapshot({
       runId,
       mode,
+      modeSnapshot: createPermissionModeRunMode(permissionMode),
       createdAt,
     });
     const run = modeSnapshot
@@ -317,6 +343,12 @@ export class SessionRunService {
       runtimeContext: input.runtimeContext,
       createdAt,
     };
+    const toolRuntime = session.workspacePath
+      ? await this.toolRuntimeFactory?.create({
+          projectRoot: session.workspacePath,
+          permissionMode,
+        })
+      : undefined;
 
     return {
       data: { requestId: input.requestId },
@@ -325,12 +357,23 @@ export class SessionRunService {
         run,
         step,
         userMessageId: userMessage.messageId,
+        ...(toolRuntime ? { toolRuntime } : {}),
       }),
     };
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
     return this.modelStepProvider?.cancelModelStep(payload.targetRequestId) ?? false;
+  }
+
+  resumeApproval(input: ToolApprovalResumeInput): AsyncIterable<RuntimeEvent> | undefined {
+    const continuation = this.pendingApprovals.get(input.approvalRequestId);
+    if (!continuation) {
+      return undefined;
+    }
+
+    this.pendingApprovals.delete(input.approvalRequestId);
+    return this.resumeApprovalContinuation(continuation, input);
   }
 
   private createInitialContextForRun(input: {
@@ -398,13 +441,16 @@ export class SessionRunService {
     run: Run;
     step: RunStep;
     userMessageId: string;
+    toolRuntime?: ToolUseHandlerPort & ToolApprovalResumePort;
+    startSequence?: number;
   }): AsyncIterable<RuntimeEvent> {
     let assistantContent = '';
     let sawAssistantOutputCompleted = false;
     let sawFinalModelStepCompleted = false;
-    let lastSequence = 0;
+    let lastSequence = input.startSequence ?? 0;
     let terminalEvent: RuntimeEvent | undefined;
     let currentModelStep = input.step;
+    let pendingContinuation: PendingToolApprovalContinuation | undefined;
     const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
 
     const startedEvent = withRequestMetadata(createRunStartedEvent({
@@ -418,13 +464,14 @@ export class SessionRunService {
     yield startedEvent;
 
     const modelStepProvider = this.requireModelStepProvider();
-    const modelEvents = this.toolUseHandler
+    const toolRuntime = input.toolRuntime;
+    const modelEvents = toolRuntime
       ? runModelToolLoop({
           request: input.request,
           aiPort: {
             streamModelStep: ({ request }) => modelStepProvider.streamModelStep(request),
           },
-          toolUseHandler: this.toolUseHandler,
+          toolUseHandler: toolRuntime,
           ids: {
             nextEventId: this.ids.eventId,
             nextStepId: () => {
@@ -441,6 +488,18 @@ export class SessionRunService {
               return step.stepId;
             },
             nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
+          },
+          onPendingApproval: (pending) => {
+            pendingContinuation = pending;
+            this.pendingApprovals.set(pending.pendingApproval.approvalRequest.approvalRequestId, {
+              request: input.request,
+              run: input.run,
+              step: currentModelStep,
+              userMessageId: input.userMessageId,
+              pending,
+              resumePort: toolRuntime,
+              toolRuntime,
+            });
           },
         })
       : modelStepProvider.streamModelStep(input.request);
@@ -476,6 +535,40 @@ export class SessionRunService {
         terminalEvent = eventWithRequest;
       }
       yield eventWithRequest;
+    }
+
+    if (pendingContinuation && toolRuntime) {
+      const waitingAt = this.clock.now();
+      const waitingRun = this.repository.saveRun({
+        ...input.run,
+        status: 'waiting_for_approval',
+      });
+      const waitingStep = this.repository.saveStep({
+        ...currentModelStep,
+        status: 'waiting_for_approval',
+      });
+      currentModelStep = waitingStep;
+      this.pendingApprovals.set(pendingContinuation.pendingApproval.approvalRequest.approvalRequestId, {
+        request: input.request,
+        run: waitingRun,
+        step: waitingStep,
+        userMessageId: input.userMessageId,
+        pending: pendingContinuation,
+        resumePort: toolRuntime,
+        toolRuntime,
+      });
+      const waitingEvent = withRequestMetadata(createRunStatusChangedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.request.sessionId,
+        runId: input.request.runId,
+        sequence: lastSequence += 1,
+        createdAt: waitingAt,
+        from: 'running',
+        to: 'waiting_for_approval',
+      }), input.request);
+      this.repository.appendRuntimeEvent(waitingEvent);
+      yield waitingEvent;
+      return;
     }
 
     const completedAt = this.clock.now();
@@ -653,6 +746,110 @@ export class SessionRunService {
     }
 
     return this.runModeService;
+  }
+
+  private async *resumeApprovalContinuation(
+    continuation: ApprovalContinuation,
+    input: ToolApprovalResumeInput,
+  ): AsyncIterable<RuntimeEvent> {
+    const toolResult = await continuation.resumePort.resumeToolApproval(input);
+    if (!toolResult) {
+      return;
+    }
+
+    let lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(continuation.request.runId));
+    const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
+    const runningRun = this.repository.saveRun({
+      ...persistedRun,
+      status: 'running',
+    });
+
+    const approvalResolvedEvent = withRequestMetadata(createRuntimeEvent({
+      eventId: this.ids.eventId(),
+      eventType: 'approval.resolved',
+      runId: continuation.request.runId,
+      sessionId: continuation.request.sessionId,
+      stepId: continuation.step.stepId,
+      requestId: continuation.request.requestId,
+      runtimeContext: continuation.request.runtimeContext,
+      sequence: lastSequence += 1,
+      createdAt: input.decidedAt,
+      source: 'approval',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        approvalRequestId: input.approvalRequestId,
+        decision: input.decision,
+        scope: continuation.pending.pendingApproval.approvalRequest.requestedScope,
+        decidedAt: input.decidedAt,
+      },
+    }), continuation.request);
+    this.repository.appendRuntimeEvent(approvalResolvedEvent);
+    yield approvalResolvedEvent;
+
+    const runningEvent = withRequestMetadata(createRunStatusChangedEvent({
+      eventId: this.ids.eventId(),
+      sessionId: continuation.request.sessionId,
+      runId: continuation.request.runId,
+      sequence: lastSequence += 1,
+      createdAt: input.decidedAt,
+      from: 'waiting_for_approval',
+      to: 'running',
+    }), continuation.request);
+    this.repository.appendRuntimeEvent(runningEvent);
+    yield runningEvent;
+
+    const toolResultEvent = withRequestMetadata(createToolResultCreatedEvent({
+      eventId: this.ids.eventId(),
+      eventType: 'tool.result.created',
+      runId: continuation.request.runId,
+      sessionId: continuation.request.sessionId,
+      stepId: continuation.step.stepId,
+      requestId: continuation.request.requestId,
+      runtimeContext: continuation.request.runtimeContext,
+      sequence: lastSequence += 1,
+      createdAt: toolResult.createdAt,
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolResultId: String(toolResult.toolResultId),
+        toolUseId: String(toolResult.toolUseId),
+        ...(toolResult.toolCallId ? { toolCallId: String(toolResult.toolCallId) } : {}),
+        kind: toolResult.kind,
+        summary: createToolResultSummary(toolResult),
+      },
+    }), continuation.request);
+    this.repository.appendRuntimeEvent(toolResultEvent);
+    yield toolResultEvent;
+
+    const resumedStep = this.repository.saveStep({
+      stepId: this.ids.stepId(),
+      runId: continuation.request.runId,
+      kind: 'model',
+      status: 'running',
+      title: 'Model response',
+      startedAt: input.decidedAt,
+    });
+    const resumedRequest: ModelStepRuntimeRequest = {
+      ...continuation.pending.request,
+      stepId: resumedStep.stepId,
+      modelStepId: `model-step:${crypto.randomUUID()}`,
+      toolResults: [
+        ...continuation.pending.accumulatedToolResults,
+        toolResult,
+      ],
+      createdAt: input.decidedAt,
+    };
+
+    yield* this.streamAndPersistModelStep({
+      request: resumedRequest,
+      run: runningRun,
+      step: resumedStep,
+      userMessageId: continuation.userMessageId,
+      startSequence: lastSequence,
+      toolRuntime: continuation.toolRuntime,
+    });
   }
 
   private markModelStepSucceeded(
@@ -833,9 +1030,43 @@ function toSessionMessageRole(
   return role === 'tool' ? 'host' : role;
 }
 
+function createPermissionModeRunMode(permissionMode: PermissionMode): RunMode {
+  return {
+    preset: permissionMode,
+    taskIntent: permissionMode === 'plan' ? 'plan' : 'answer',
+    permissionMode,
+    outputExpectation: permissionMode === 'plan' ? 'implementation_plan_artifact' : 'assistant_message',
+    selectionSource: 'user_selected',
+  };
+}
+
+function nextRuntimeSequence(events: RuntimeEvent[]): number {
+  return events.reduce((max, event) => Math.max(max, event.sequence), 0);
+}
+
+function createToolResultSummary(toolResult: ToolResult): string {
+  if (toolResult.textContent && toolResult.textContent.length > 0) {
+    return toolResult.textContent;
+  }
+
+  if (toolResult.denialReason && toolResult.denialReason.length > 0) {
+    return toolResult.denialReason;
+  }
+
+  if (toolResult.error) {
+    return toolResult.error.message;
+  }
+
+  if (toolResult.structuredContent !== undefined) {
+    return JSON.stringify(toolResult.structuredContent);
+  }
+
+  return toolResult.kind;
+}
+
 export interface CreateDefaultSessionRunServiceOptions {
   contextService?: SessionRunContextService;
-  toolUseHandler?: ToolUseHandlerPort;
+  toolRuntimeFactory?: SessionRunToolRuntimeFactory;
 }
 
 export function createDefaultSessionRunService(
@@ -850,6 +1081,6 @@ export function createDefaultSessionRunService(
     repository: new SessionRunRepository(database),
     runModeService: new RunModeService({ repository: runModeRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
-    ...(options.toolUseHandler ? { toolUseHandler: options.toolUseHandler } : {}),
+    ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
   });
 }
