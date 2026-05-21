@@ -159,7 +159,22 @@ describe('agent action permission tools v1 acceptance', () => {
   });
 
   it('keeps auto auditable and denies protected path writes', () => {
-    const decision = evaluatePermissionPolicy({
+    const autoEditDecision = evaluatePermissionPolicy({
+      definition: definition('edit_file'),
+      toolCall: toolCall({
+        toolName: 'edit_file',
+        input: { path: 'src/index.ts', oldText: 'a', newText: 'b' },
+        capabilities: ['project_write'],
+        riskLevel: 'medium',
+        sideEffect: 'project_file_operation',
+      }),
+      permissionMode: 'auto',
+      projectRoot,
+      settings: { allow: [], ask: [], deny: [] },
+      evaluatedAt: '2026-05-20T00:00:00.000Z',
+    });
+
+    const protectedPathDecision = evaluatePermissionPolicy({
       definition: definition('write_file'),
       toolCall: toolCall({
         toolName: 'write_file',
@@ -174,7 +189,12 @@ describe('agent action permission tools v1 acceptance', () => {
       evaluatedAt: '2026-05-20T00:00:00.000Z',
     });
 
-    expect(decision.decision).toBe('deny');
-    expect(decision.reason).toMatch(/Protected path|protected/i);
+    expect(autoEditDecision.decision).toBe('allow');
+    expect(autoEditDecision.source).toBe('classifier');
+    expect(autoEditDecision.mode).toBe('auto');
+    expect(autoEditDecision.reason).toEqual(expect.any(String));
+    expect(autoEditDecision.reason.length).toBeGreaterThan(0);
+    expect(protectedPathDecision.decision).toBe('deny');
+    expect(protectedPathDecision.reason).toMatch(/Protected path|protected/i);
   });
 });

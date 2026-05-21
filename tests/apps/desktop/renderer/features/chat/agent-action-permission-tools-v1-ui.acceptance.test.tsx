@@ -11,17 +11,18 @@ describe('agent action permission tools v1 renderer acceptance', () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(<Composer onSubmit={onSubmit} />);
+    const permissionModeSelect = screen.getByLabelText('Permission mode') as HTMLSelectElement;
 
-    expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
-    expect(screen.getAllByRole('option').map((option) => option.getAttribute('value'))).toEqual(expect.arrayContaining([
+    expect(permissionModeSelect).toHaveValue('default');
+    expect(Array.from(permissionModeSelect.options).map((option) => option.value)).toEqual([
       'default',
       'accept_edits',
       'plan',
       'auto',
-    ]));
+    ]);
     expect(screen.queryByLabelText('Composer mode')).not.toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Permission mode'), 'auto');
+    await user.selectOptions(permissionModeSelect, 'auto');
     await user.type(screen.getByLabelText('Message Megumi'), 'Fix tests');
     await user.click(screen.getByRole('button', { name: 'Send message' }));
 
