@@ -45,8 +45,8 @@ describe('built-in tools and host adapters source guards', () => {
 
   it('keeps Host execution behind PermissionPolicy', () => {
     const handler = read('apps/desktop/src/main/services/tool-use-handler.service.ts');
-    const policyIndex = handler.indexOf('evaluatePermissionPolicy');
-    const executeIndex = handler.indexOf('executeToolCall');
+    const policyIndex = handler.indexOf('evaluatePermissionPolicy({');
+    const executeIndex = handler.indexOf('projectExecutor.executeToolCall');
 
     expect(policyIndex).toBeGreaterThan(-1);
     expect(executeIndex).toBeGreaterThan(-1);
@@ -67,6 +67,9 @@ describe('built-in tools and host adapters source guards', () => {
     expect(combined).not.toContain('dontAsk');
     expect(combined).not.toContain('TaskIntent');
     expect(combined).not.toContain('OutputExpectation');
+    expect(combined).not.toContain('Task Mode');
+    expect(combined).not.toContain('RunAction.call_tool');
+    expect(combined).not.toContain('action-centered');
     expect(combined).not.toContain('mcp_tool_execute');
   });
 });
