@@ -79,13 +79,14 @@ export interface SessionRunToolRuntimeFactory {
   }): Promise<ToolUseHandlerPort & ToolApprovalResumePort>;
 }
 
-interface ApprovalContinuation {
+interface ApprovalContinuationGroup {
+  groupId: string;
   request: ModelStepRuntimeRequest;
   run: Run;
   step: RunStep;
   userMessageId: string;
-  pending: PendingToolApprovalContinuation;
-  resumePort: ToolApprovalResumePort;
+  pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
+  resolvedResults: ToolResult[];
   toolRuntime: ToolUseHandlerPort & ToolApprovalResumePort;
 }
 
@@ -152,7 +153,8 @@ export class SessionRunService {
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
-  private readonly pendingApprovals = new Map<string, ApprovalContinuation>();
+  private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
+  private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
 
   constructor(options: SessionRunServiceOptions) {
     this.repository = options.repository;
@@ -372,7 +374,6 @@ export class SessionRunService {
       return undefined;
     }
 
-    this.pendingApprovals.delete(input.approvalRequestId);
     return this.resumeApprovalContinuation(continuation, input);
   }
 
@@ -443,6 +444,7 @@ export class SessionRunService {
     userMessageId: string;
     toolRuntime?: ToolUseHandlerPort & ToolApprovalResumePort;
     startSequence?: number;
+    emitRunStarted?: boolean;
   }): AsyncIterable<RuntimeEvent> {
     let assistantContent = '';
     let sawAssistantOutputCompleted = false;
@@ -450,18 +452,20 @@ export class SessionRunService {
     let lastSequence = input.startSequence ?? 0;
     let terminalEvent: RuntimeEvent | undefined;
     let currentModelStep = input.step;
-    let pendingContinuation: PendingToolApprovalContinuation | undefined;
+    const pendingContinuations: PendingToolApprovalContinuation[] = [];
     const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
 
-    const startedEvent = withRequestMetadata(createRunStartedEvent({
-      eventId: this.ids.eventId(),
-      sessionId: input.request.sessionId,
-      runId: input.request.runId,
-      sequence: lastSequence += 1,
-      createdAt: input.request.createdAt,
-    }), input.request);
-    this.repository.appendRuntimeEvent(startedEvent);
-    yield startedEvent;
+    if (input.emitRunStarted !== false) {
+      const startedEvent = withRequestMetadata(createRunStartedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.request.sessionId,
+        runId: input.request.runId,
+        sequence: lastSequence += 1,
+        createdAt: input.request.createdAt,
+      }), input.request);
+      this.repository.appendRuntimeEvent(startedEvent);
+      yield startedEvent;
+    }
 
     const modelStepProvider = this.requireModelStepProvider();
     const toolRuntime = input.toolRuntime;
@@ -490,16 +494,7 @@ export class SessionRunService {
             nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
           },
           onPendingApproval: (pending) => {
-            pendingContinuation = pending;
-            this.pendingApprovals.set(pending.pendingApproval.approvalRequest.approvalRequestId, {
-              request: input.request,
-              run: input.run,
-              step: currentModelStep,
-              userMessageId: input.userMessageId,
-              pending,
-              resumePort: toolRuntime,
-              toolRuntime,
-            });
+            pendingContinuations.push(pending);
           },
         })
       : modelStepProvider.streamModelStep(input.request);
@@ -537,7 +532,7 @@ export class SessionRunService {
       yield eventWithRequest;
     }
 
-    if (pendingContinuation && toolRuntime) {
+    if (pendingContinuations.length > 0 && toolRuntime) {
       const waitingAt = this.clock.now();
       const waitingRun = this.repository.saveRun({
         ...input.run,
@@ -548,15 +543,24 @@ export class SessionRunService {
         status: 'waiting_for_approval',
       });
       currentModelStep = waitingStep;
-      this.pendingApprovals.set(pendingContinuation.pendingApproval.approvalRequest.approvalRequestId, {
+      const groupId = `${input.request.runId}:${input.request.stepId}:${this.ids.eventId()}`;
+      const group: ApprovalContinuationGroup = {
+        groupId,
         request: input.request,
         run: waitingRun,
         step: waitingStep,
         userMessageId: input.userMessageId,
-        pending: pendingContinuation,
-        resumePort: toolRuntime,
+        pendingByApprovalId: new Map(pendingContinuations.map((pending) => [
+          pending.pendingApproval.approvalRequest.approvalRequestId,
+          pending,
+        ])),
+        resolvedResults: [],
         toolRuntime,
-      });
+      };
+      this.pendingApprovalGroups.set(groupId, group);
+      for (const approvalRequestId of group.pendingByApprovalId.keys()) {
+        this.pendingApprovals.set(approvalRequestId, group);
+      }
       const waitingEvent = withRequestMetadata(createRunStatusChangedEvent({
         eventId: this.ids.eventId(),
         sessionId: input.request.sessionId,
@@ -749,20 +753,23 @@ export class SessionRunService {
   }
 
   private async *resumeApprovalContinuation(
-    continuation: ApprovalContinuation,
+    continuation: ApprovalContinuationGroup,
     input: ToolApprovalResumeInput,
   ): AsyncIterable<RuntimeEvent> {
-    const toolResult = await continuation.resumePort.resumeToolApproval(input);
+    const pending = continuation.pendingByApprovalId.get(input.approvalRequestId);
+    if (!pending) {
+      return;
+    }
+
+    const toolResult = await continuation.toolRuntime.resumeToolApproval(input);
     if (!toolResult) {
       return;
     }
 
     let lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(continuation.request.runId));
-    const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
-    const runningRun = this.repository.saveRun({
-      ...persistedRun,
-      status: 'running',
-    });
+    continuation.pendingByApprovalId.delete(input.approvalRequestId);
+    this.pendingApprovals.delete(input.approvalRequestId);
+    continuation.resolvedResults.push(toolResult);
 
     const approvalResolvedEvent = withRequestMetadata(createRuntimeEvent({
       eventId: this.ids.eventId(),
@@ -780,12 +787,31 @@ export class SessionRunService {
       payload: {
         approvalRequestId: input.approvalRequestId,
         decision: input.decision,
-        scope: continuation.pending.pendingApproval.approvalRequest.requestedScope,
+        scope: pending.pendingApproval.approvalRequest.requestedScope,
         decidedAt: input.decidedAt,
       },
     }), continuation.request);
     this.repository.appendRuntimeEvent(approvalResolvedEvent);
     yield approvalResolvedEvent;
+
+    if (continuation.pendingByApprovalId.size > 0) {
+      const toolResultEvent = this.createToolResultRuntimeEvent({
+        request: continuation.request,
+        stepId: continuation.step.stepId,
+        sequence: lastSequence += 1,
+        toolResult,
+      });
+      this.repository.appendRuntimeEvent(toolResultEvent);
+      yield toolResultEvent;
+      return;
+    }
+
+    this.pendingApprovalGroups.delete(continuation.groupId);
+    const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
+    const runningRun = this.repository.saveRun({
+      ...persistedRun,
+      status: 'running',
+    });
 
     const runningEvent = withRequestMetadata(createRunStatusChangedEvent({
       eventId: this.ids.eventId(),
@@ -799,27 +825,12 @@ export class SessionRunService {
     this.repository.appendRuntimeEvent(runningEvent);
     yield runningEvent;
 
-    const toolResultEvent = withRequestMetadata(createToolResultCreatedEvent({
-      eventId: this.ids.eventId(),
-      eventType: 'tool.result.created',
-      runId: continuation.request.runId,
-      sessionId: continuation.request.sessionId,
+    const toolResultEvent = this.createToolResultRuntimeEvent({
+      request: continuation.request,
       stepId: continuation.step.stepId,
-      requestId: continuation.request.requestId,
-      runtimeContext: continuation.request.runtimeContext,
       sequence: lastSequence += 1,
-      createdAt: toolResult.createdAt,
-      source: 'tool',
-      visibility: 'system',
-      persist: 'required',
-      payload: {
-        toolResultId: String(toolResult.toolResultId),
-        toolUseId: String(toolResult.toolUseId),
-        ...(toolResult.toolCallId ? { toolCallId: String(toolResult.toolCallId) } : {}),
-        kind: toolResult.kind,
-        summary: createToolResultSummary(toolResult),
-      },
-    }), continuation.request);
+      toolResult,
+    });
     this.repository.appendRuntimeEvent(toolResultEvent);
     yield toolResultEvent;
 
@@ -832,12 +843,12 @@ export class SessionRunService {
       startedAt: input.decidedAt,
     });
     const resumedRequest: ModelStepRuntimeRequest = {
-      ...continuation.pending.request,
+      ...continuation.request,
       stepId: resumedStep.stepId,
       modelStepId: `model-step:${crypto.randomUUID()}`,
       toolResults: [
-        ...continuation.pending.accumulatedToolResults,
-        toolResult,
+        ...(pending.request.toolResults ?? []),
+        ...continuation.resolvedResults,
       ],
       createdAt: input.decidedAt,
     };
@@ -849,7 +860,37 @@ export class SessionRunService {
       userMessageId: continuation.userMessageId,
       startSequence: lastSequence,
       toolRuntime: continuation.toolRuntime,
+      emitRunStarted: false,
     });
+  }
+
+  private createToolResultRuntimeEvent(input: {
+    request: ModelStepRuntimeRequest;
+    stepId: RunStep['stepId'];
+    sequence: number;
+    toolResult: ToolResult;
+  }): RuntimeEvent {
+    return withRequestMetadata(createToolResultCreatedEvent({
+      eventId: this.ids.eventId(),
+      eventType: 'tool.result.created',
+      runId: input.request.runId,
+      sessionId: input.request.sessionId,
+      stepId: String(input.stepId),
+      requestId: input.request.requestId,
+      runtimeContext: input.request.runtimeContext,
+      sequence: input.sequence,
+      createdAt: input.toolResult.createdAt,
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolResultId: String(input.toolResult.toolResultId),
+        toolUseId: String(input.toolResult.toolUseId),
+        ...(input.toolResult.toolCallId ? { toolCallId: String(input.toolResult.toolCallId) } : {}),
+        kind: input.toolResult.kind,
+        summary: createToolResultSummary(input.toolResult),
+      },
+    }), input.request);
   }
 
   private markModelStepSucceeded(

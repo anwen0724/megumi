@@ -64,6 +64,9 @@ export class ToolService {
     if (!request) {
       throw new Error(`Approval request not found: ${payload.approvalRequestId}`);
     }
+    if (request.status !== 'pending') {
+      throw new Error(`Approval request already resolved: ${payload.approvalRequestId}`);
+    }
 
     const record: ApprovalRecord = {
       approvalRecordId: this.idFactory.approvalRecordId(),

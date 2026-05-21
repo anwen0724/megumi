@@ -239,24 +239,40 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
 }
 
 function toolUseCreatedEvent(sequence: number): RuntimeEvent {
+  return toolUseCreatedEventFor({
+    sequence,
+    toolUseId: 'tool-use-1',
+    providerToolUseId: 'provider-tool-use-1',
+    input: { path: 'package.json' },
+  });
+}
+
+function toolUseCreatedEventFor(input: {
+  sequence: number;
+  toolUseId: string;
+  providerToolUseId: string;
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
+  input?: Record<string, unknown>;
+}): RuntimeEvent {
   return {
-    eventId: `event-tool-use-${sequence}`,
+    eventId: `event-tool-use-${input.sequence}`,
     schemaVersion: 1,
     eventType: 'tool.use.created',
     sessionId: 'session-1',
     runId: 'run-1',
     stepId: 'step-1',
-    sequence,
+    sequence: input.sequence,
     createdAt: '2026-05-17T00:00:01.000Z',
     source: 'provider',
     visibility: 'system',
     persist: 'required',
     payload: {
-      toolUseId: 'tool-use-1',
+      toolUseId: input.toolUseId,
       modelStepId: 'model-step-1',
-      providerToolUseId: 'provider-tool-use-1',
-      toolName: 'read_file',
-      input: { path: 'package.json' },
+      providerToolUseId: input.providerToolUseId,
+      toolName: input.toolName ?? 'read_file',
+      input: input.input ?? input.toolInput ?? { path: 'package.json' },
     },
   };
 }
@@ -325,7 +341,7 @@ function assistantOutputCompletedEvent(sequence: number): RuntimeEvent {
   };
 }
 
-function createToolResult(): ToolResult {
+function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   return {
     toolResultId: 'tool-result-1',
     toolUseId: 'tool-use-1',
@@ -335,6 +351,7 @@ function createToolResult(): ToolResult {
     textContent: 'package contents',
     redactionState: 'none',
     createdAt: '2026-05-17T00:00:02.500Z',
+    ...overrides,
   };
 }
 
@@ -933,16 +950,236 @@ describe('SessionRunService', () => {
       'approval.resolved',
       'run.status.changed',
       'tool.result.created',
-      'run.started',
       'assistant.output.completed',
       'step.status.changed',
       'step.completed',
       'run.status.changed',
       'run.completed',
     ]);
+    expect([
+      ...streamed,
+      ...resumed,
+    ].filter((event) => event.eventType === 'run.started')).toHaveLength(1);
+    expect(service.listRuntimeEventsByRun('run-1')
+      .filter((event) => event.eventType === 'run.started')).toHaveLength(1);
     expect(repository.getRun('run-1')).toMatchObject({
       status: 'completed',
     });
+  });
+
+  it('waits for all pending approvals from one model step before resuming once with all tool results', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const resumeInputs: unknown[] = [];
+    const toolResultsByApproval = new Map([
+      ['approval-request-1', createToolResult({
+        toolResultId: 'tool-result-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        textContent: 'first result',
+      })],
+      ['approval-request-2', createToolResult({
+        toolResultId: 'tool-result-2',
+        toolUseId: 'tool-use-2',
+        toolCallId: 'tool-call-2',
+        textContent: 'second result',
+      })],
+    ]);
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const service = new SessionRunService({
+      repository,
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+          if (requests.length === 1) {
+            yield toolUseCreatedEventFor({
+              sequence: 1,
+              toolUseId: 'tool-use-1',
+              providerToolUseId: 'provider-tool-use-1',
+              input: { path: 'package.json' },
+            });
+            yield toolUseCreatedEventFor({
+              sequence: 2,
+              toolUseId: 'tool-use-2',
+              providerToolUseId: 'provider-tool-use-2',
+              input: { path: 'README.md' },
+            });
+            yield modelStepCompletedEvent(3);
+            return;
+          }
+
+          yield {
+            ...assistantOutputCompletedEvent(1),
+            stepId: request.stepId,
+          };
+        },
+        cancelModelStep: () => true,
+      },
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses(input) {
+              return {
+                toolResults: [],
+                pendingApprovals: input.toolUses.map((toolUse, index) => {
+                  const ordinal = index + 1;
+                  const toolCall: ToolCall = {
+                    toolCallId: `tool-call-${ordinal}`,
+                    toolUseId: toolUse.toolUseId,
+                    runId: toolUse.runId,
+                    stepId: 'step-1',
+                    toolName: toolUse.toolName,
+                    input: toolUse.input,
+                    inputPreview: toolUse.inputPreview,
+                    capabilities: ['project_read'],
+                    riskLevel: 'low',
+                    sideEffect: 'none',
+                    status: 'waiting_for_approval',
+                    requestedAt: '2026-05-17T00:00:02.250Z',
+                  };
+                  const approvalRequest: ApprovalRequest = {
+                    approvalRequestId: `approval-request-${ordinal}`,
+                    toolUseId: toolUse.toolUseId,
+                    toolCallId: toolCall.toolCallId,
+                    runId: toolUse.runId,
+                    stepId: toolCall.stepId,
+                    toolName: toolUse.toolName,
+                    capabilities: toolCall.capabilities,
+                    riskLevel: toolCall.riskLevel,
+                    title: `Approve ${toolUse.toolName}`,
+                    summary: 'User approval is required.',
+                    preview: {
+                      action: toolUse.inputPreview.summary,
+                      targets: [],
+                    },
+                    requestedScope: 'once',
+                    status: 'pending',
+                    createdAt: '2026-05-17T00:00:02.300Z',
+                  };
+
+                  return {
+                    approvalRequest,
+                    toolUse,
+                    toolCall,
+                  };
+                }),
+              };
+            },
+            async resumeToolApproval(input) {
+              resumeInputs.push(input);
+              return toolResultsByApproval.get(input.approvalRequestId);
+            },
+          };
+        },
+      },
+      clock: { now: () => '2026-05-17T00:00:04.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `step-${index}`;
+          };
+        })(),
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `service-event-${index}`;
+          };
+        })(),
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `message-${index}`;
+          };
+        })(),
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read two files',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+    expect(repository.getRun('run-1')).toMatchObject({ status: 'waiting_for_approval' });
+
+    const firstResume = [];
+    for await (const event of service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-17T00:00:05.000Z',
+    }) ?? []) {
+      firstResume.push(event);
+    }
+
+    expect(requests).toHaveLength(1);
+    expect(firstResume.map((event) => event.eventType)).toEqual([
+      'approval.resolved',
+      'tool.result.created',
+    ]);
+    expect(repository.getRun('run-1')).toMatchObject({ status: 'waiting_for_approval' });
+
+    const secondResume = [];
+    for await (const event of service.resumeApproval({
+      approvalRequestId: 'approval-request-2',
+      decision: 'approved',
+      decidedAt: '2026-05-17T00:00:06.000Z',
+    }) ?? []) {
+      secondResume.push(event);
+    }
+
+    expect(resumeInputs).toEqual([
+      expect.objectContaining({ approvalRequestId: 'approval-request-1' }),
+      expect.objectContaining({ approvalRequestId: 'approval-request-2' }),
+    ]);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      toolResults: [
+        expect.objectContaining({ toolResultId: 'tool-result-1' }),
+        expect.objectContaining({ toolResultId: 'tool-result-2' }),
+      ],
+    });
+    expect(secondResume.map((event) => event.eventType)).toEqual([
+      'approval.resolved',
+      'run.status.changed',
+      'tool.result.created',
+      'assistant.output.completed',
+      'step.status.changed',
+      'step.completed',
+      'run.status.changed',
+      'run.completed',
+    ]);
+    expect([
+      ...streamed,
+      ...firstResume,
+      ...secondResume,
+    ].filter((event) => event.eventType === 'run.started')).toHaveLength(1);
+    expect(service.listRuntimeEventsByRun('run-1')
+      .filter((event) => event.eventType === 'run.started')).toHaveLength(1);
   });
 
   it('passes workspace baseline context to model step requests for session messages', async () => {

@@ -107,6 +107,60 @@ describe('ToolService', () => {
       }),
     })]);
   });
+
+  it('rejects a second resolve for an already resolved approval request without overwriting state or resuming again', () => {
+    const approvalRequest = createApprovalRequest();
+    const approvalRequests = new Map([[approvalRequest.approvalRequestId, approvalRequest]]);
+    const repository = {
+      getToolCall: vi.fn(),
+      getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
+      saveApprovalRecord: vi.fn((value) => value),
+      saveApprovalRequest: vi.fn((value: ApprovalRequest) => {
+        approvalRequests.set(value.approvalRequestId, value);
+        return value;
+      }),
+    };
+    const resumeApproval = vi.fn(() => asyncEvents([]));
+    const service = new ToolService({
+      registry: createBuiltInToolRegistry(),
+      repository: repository as never,
+      resumeApproval,
+      idFactory: {
+        approvalRecordId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `approval-record-${index}`;
+          };
+        })(),
+      },
+    });
+
+    const first = service.resolveApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      scope: 'once',
+      decidedAt: '2026-05-20T00:00:03.000Z',
+    });
+
+    expect(first.approval).toMatchObject({
+      approvalRecordId: 'approval-record-1',
+      decision: 'approved',
+    });
+    expect(() => service.resolveApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'denied',
+      scope: 'once',
+      decidedAt: '2026-05-20T00:00:04.000Z',
+      reason: 'Changed my mind',
+    })).toThrow(/already resolved/);
+    expect(approvalRequests.get('approval-request-1')).toMatchObject({
+      status: 'approved',
+      resolvedAt: '2026-05-20T00:00:03.000Z',
+    });
+    expect(repository.saveApprovalRecord).toHaveBeenCalledTimes(1);
+    expect(resumeApproval).toHaveBeenCalledTimes(1);
+  });
 });
 
 async function* asyncEvents(events: RuntimeEvent[]): AsyncIterable<RuntimeEvent> {
