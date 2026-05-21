@@ -11,7 +11,8 @@ import type {
   ApprovalResolvePayload,
   ToolDefinitionsListPayload,
 } from '@megumi/shared/ipc-schemas';
-import { createStaticToolRegistry, type ToolRegistry } from '@megumi/tools/registry';
+import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
+import type { ToolRegistry } from '@megumi/tools/registry';
 import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface ToolServiceOptions {
@@ -37,8 +38,8 @@ export class ToolService {
   listDefinitions(payload: ToolDefinitionsListPayload): ToolDefinition[] {
     return this.options.registry.listDefinitions({
       runId: payload.runId,
-      runMode: 'unknown',
       permissionMode: 'default',
+      providerCapabilitySummary: { supportsToolUse: true },
     });
   }
 
@@ -75,6 +76,6 @@ export function createDefaultToolService(homePaths: MegumiHomePaths): ToolServic
 
   return new ToolService({
     repository: new ToolRepository(database),
-    registry: createStaticToolRegistry([]),
+    registry: createBuiltInToolRegistry(),
   });
 }
