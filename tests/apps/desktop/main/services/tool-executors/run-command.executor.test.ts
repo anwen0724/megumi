@@ -1,0 +1,194 @@
+// @vitest-environment node
+import { describe, expect, it, vi } from 'vitest';
+import type { ToolCall } from '@megumi/shared/tool-contracts';
+import { createRunCommandExecutor } from '@megumi/desktop/main/services/tool-executors/run-command.executor';
+
+describe('RunCommandExecutor', () => {
+  it('runs project-bound commands through a Host adapter without exposing a powershell tool name', async () => {
+    const spawn = vi.fn(() => fakeChildProcess({
+      stdout: 'ok token=secret\n',
+      stderr: '',
+      exitCode: 0,
+    }));
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn,
+      nowMs: (() => {
+        let value = 1000;
+        return () => {
+          value += 25;
+          return value;
+        };
+      })(),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    const result = await executor.runCommand({
+      command: 'npm test',
+      cwd: '.',
+      timeoutMs: 1000,
+    });
+
+    expect(spawn).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', 'npm test'],
+      expect.objectContaining({ cwd: expect.stringContaining('project') }),
+    );
+    expect(result).toMatchObject({
+      exitCode: 0,
+      stdoutPreview: 'ok token=[redacted]\n',
+      stderrPreview: '',
+      durationMs: 25,
+      truncated: false,
+    });
+  });
+
+  it('returns a model-consumable ToolResult from execute', async () => {
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn: vi.fn(() => fakeChildProcess({
+        stdout: 'passed\n',
+        stderr: 'warn token=secret\n',
+        exitCode: 1,
+      })),
+      nowMs: (() => {
+        let value = 0;
+        return () => {
+          value += 8;
+          return value;
+        };
+      })(),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.execute(toolCall({ command: 'npm test' })))
+      .resolves.toMatchObject({
+        toolResultId: 'tool-result-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        runId: 'run-1',
+        kind: 'success',
+        structuredContent: {
+          exitCode: 1,
+          stdoutPreview: 'passed\n',
+          stderrPreview: 'warn token=[redacted]\n',
+          durationMs: 8,
+          truncated: false,
+        },
+        textContent: expect.stringContaining('stdout:\npassed\n'),
+        redactionState: 'redacted',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      });
+  });
+
+  it('truncates stdout and stderr previews at the output limit', async () => {
+    const largeOutput = 'x'.repeat(64 * 1024 + 1);
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn: vi.fn(() => fakeChildProcess({
+        stdout: largeOutput,
+        stderr: largeOutput,
+        exitCode: 0,
+      })),
+      nowMs: () => 0,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    const result = await executor.runCommand({ command: 'npm test' });
+
+    expect(result.stdoutPreview).toHaveLength(64 * 1024);
+    expect(result.stderrPreview).toHaveLength(64 * 1024);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('rejects cwd outside the project and kills a timed-out child process', async () => {
+    const spawn = vi.fn(() => fakeChildProcess({ stdout: '', stderr: '', exitCode: 0 }));
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.runCommand({ command: 'pwd', cwd: '../outside' }))
+      .rejects.toThrow(/outside the project/);
+    expect(spawn).not.toHaveBeenCalled();
+
+    const child = fakeChildProcess({ stdout: '', stderr: '', exitCode: null, neverClose: true });
+    const timeoutExecutor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn: vi.fn(() => child),
+      nowMs: () => 0,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(timeoutExecutor.runCommand({ command: 'npm test', timeoutMs: 1 }))
+      .rejects.toThrow(/timed out/);
+    expect(child.kill).toHaveBeenCalled();
+  });
+});
+
+function toolCall(input: Record<string, unknown>): ToolCall {
+  return {
+    toolCallId: 'tool-call-1',
+    toolUseId: 'tool-use-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName: 'run_command',
+    input: input as ToolCall['input'],
+    inputPreview: {
+      summary: 'run_command',
+      targets: [{ kind: 'command', label: String(input.command ?? 'command') }],
+      redactionState: 'none',
+    },
+    capabilities: ['command_run'],
+    riskLevel: 'medium',
+    sideEffect: 'execute_command',
+    status: 'running',
+    requestedAt: '2026-05-20T00:00:00.000Z',
+  };
+}
+
+function fakeChildProcess(input: {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  neverClose?: boolean;
+}) {
+  const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  const child = {
+    stdout: {
+      on: vi.fn((event: string, listener: (chunk: Buffer) => void) => {
+        if (event === 'data' && input.stdout) {
+          listener(Buffer.from(input.stdout));
+        }
+      }),
+    },
+    stderr: {
+      on: vi.fn((event: string, listener: (chunk: Buffer) => void) => {
+        if (event === 'data' && input.stderr) {
+          listener(Buffer.from(input.stderr));
+        }
+      }),
+    },
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      const list = listeners.get(event) ?? [];
+      list.push(listener);
+      listeners.set(event, list);
+      if (event === 'close' && !input.neverClose) {
+        queueMicrotask(() => listener(input.exitCode));
+      }
+      return child;
+    }),
+    kill: vi.fn(() => {
+      for (const listener of listeners.get('close') ?? []) {
+        listener(null);
+      }
+    }),
+  };
+  return child;
+}

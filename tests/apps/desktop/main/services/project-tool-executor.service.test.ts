@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ToolCall } from '@megumi/shared/tool-contracts';
 import { createProjectToolExecutor } from '@megumi/desktop/main/services/project-tool-executor.service';
 
@@ -81,6 +81,31 @@ describe('ProjectToolExecutor', () => {
     }))).toMatchObject({ structuredContent: { created: true, overwritten: false } });
     expect(files.get('C:\\project\\src\\new.ts')).toBe('export {}');
   });
+
+  it('dispatches run_command to the command executor', async () => {
+    const spawn = vi.fn(() => fakeChildProcess({ stdout: 'ok\n', stderr: '', exitCode: 0 }));
+    const executor = createProjectToolExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(new Map()),
+      spawn,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await expect(executor.executeToolCall(toolCall('run_command', { command: 'npm test' })))
+      .resolves.toMatchObject({
+        kind: 'success',
+        structuredContent: {
+          exitCode: 0,
+          stdoutPreview: 'ok\n',
+        },
+      });
+    expect(spawn).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', 'npm test'],
+      expect.objectContaining({ cwd: expect.stringContaining('project') }),
+    );
+  });
 });
 
 function toolCall(toolName: string, input: Record<string, unknown>): ToolCall {
@@ -96,12 +121,47 @@ function toolCall(toolName: string, input: Record<string, unknown>): ToolCall {
       targets: [],
       redactionState: 'none',
     },
-    capabilities: toolName === 'edit_file' || toolName === 'write_file' ? ['project_write'] : ['project_read'],
+    capabilities: toolName === 'run_command'
+      ? ['command_run']
+      : toolName === 'edit_file' || toolName === 'write_file' ? ['project_write'] : ['project_read'],
     riskLevel: 'low',
-    sideEffect: toolName === 'edit_file' || toolName === 'write_file' ? 'project_file_operation' : 'none',
+    sideEffect: toolName === 'run_command'
+      ? 'execute_command'
+      : toolName === 'edit_file' || toolName === 'write_file' ? 'project_file_operation' : 'none',
     status: 'running',
     requestedAt: '2026-05-20T00:00:00.000Z',
   };
+}
+
+function fakeChildProcess(input: {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}) {
+  const child = {
+    stdout: {
+      on: vi.fn((event: string, listener: (chunk: Buffer) => void) => {
+        if (event === 'data' && input.stdout) {
+          listener(Buffer.from(input.stdout));
+        }
+      }),
+    },
+    stderr: {
+      on: vi.fn((event: string, listener: (chunk: Buffer) => void) => {
+        if (event === 'data' && input.stderr) {
+          listener(Buffer.from(input.stderr));
+        }
+      }),
+    },
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      if (event === 'close') {
+        queueMicrotask(() => listener(input.exitCode));
+      }
+      return child;
+    }),
+    kill: vi.fn(),
+  };
+  return child;
 }
 
 function fakeFileSystem(files: Map<string, string>) {

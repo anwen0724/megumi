@@ -7,6 +7,7 @@ import {
 import { redactRuntimeMessage } from '@megumi/security/redaction';
 import { normalizeToolResult } from '@megumi/tools/normalization';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
+import type { SpawnLike } from './run-command.executor';
 
 export interface ProjectToolFileSystem {
   readFile(path: string, encoding: 'utf8'): Promise<string>;
@@ -23,6 +24,7 @@ export interface ProjectToolFileSystem {
 export interface ProjectToolExecutorOptions {
   projectRoot: string;
   fileSystem?: ProjectToolFileSystem;
+  spawn?: SpawnLike;
   now?: () => string;
   ids?: {
     toolResultId(): string;
@@ -32,6 +34,7 @@ export interface ProjectToolExecutorOptions {
 export interface ProjectToolExecutorContext {
   projectRoot: string;
   fileSystem: ProjectToolFileSystem;
+  spawn?: SpawnLike;
   now: () => string;
   ids: {
     toolResultId(): string;
@@ -290,3 +293,4 @@ export { createGlobExecutor } from './glob.executor';
 export { createSearchTextExecutor } from './search-text.executor';
 export { createEditFileExecutor } from './edit-file.executor';
 export { createWriteFileExecutor } from './write-file.executor';
+export { createRunCommandExecutor } from './run-command.executor';

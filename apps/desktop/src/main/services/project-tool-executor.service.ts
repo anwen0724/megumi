@@ -6,6 +6,7 @@ import {
   createGlobExecutor,
   createListDirectoryExecutor,
   createReadFileExecutor,
+  createRunCommandExecutor,
   createSearchTextExecutor,
   createWriteFileExecutor,
   type ProjectToolFileSystem,
@@ -31,6 +32,7 @@ export function createProjectToolExecutor(options: ProjectToolExecutorOptions): 
     search_text: createSearchTextExecutor(context),
     edit_file: createEditFileExecutor(context),
     write_file: createWriteFileExecutor(context),
+    run_command: createRunCommandExecutor(context),
   };
 
   return {
