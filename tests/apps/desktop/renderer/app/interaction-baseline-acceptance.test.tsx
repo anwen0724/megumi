@@ -315,12 +315,12 @@ describe('interaction baseline acceptance', () => {
     expect(screen.getByRole('button', { name: 'Maximize or restore window' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close window' })).toBeInTheDocument();
 
-    const modeSelect = screen.getByLabelText('Composer mode');
+    const modeSelect = screen.getByLabelText('Permission mode');
     const modelSelect = screen.getByLabelText('Model');
     const textarea = screen.getByLabelText('Message Megumi');
     const sendButton = screen.getByRole('button', { name: 'Send message' });
 
-    fireEvent.change(modeSelect, { target: { value: 'execute' } });
+    fireEvent.change(modeSelect, { target: { value: 'auto' } });
     fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
     fireEvent.change(textarea, { target: { value: 'Finish the interaction baseline' } });
     fireEvent.click(sendButton);
@@ -341,7 +341,7 @@ describe('interaction baseline acceptance', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-pro',
         context: expect.objectContaining({
-          composerMode: 'execute',
+          permissionMode: 'auto',
           workspaceId: 'project-1',
         }),
         messages: expect.arrayContaining([
