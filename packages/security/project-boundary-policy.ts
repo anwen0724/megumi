@@ -19,6 +19,7 @@ export interface ProjectPathClassificationInput {
   projectRoot: string;
   targetPath: string;
   platform?: NodeJS.Platform;
+  protectedPathHints?: readonly string[];
 }
 
 export interface ProjectPathClassification {
@@ -40,17 +41,21 @@ export function classifyProjectPath(input: ProjectPathClassificationInput): Proj
     absolutePath,
     relativePath,
     insideProject,
-    protected: insideProject && isProtectedProjectPath(relativePath),
+    protected: insideProject && isProtectedProjectPath(relativePath, input.protectedPathHints),
     sensitive: insideProject && isSensitiveProjectPath(relativePath),
   };
 }
 
-export function isProtectedProjectPath(relativePath: string): boolean {
+export function isProtectedProjectPath(
+  relativePath: string,
+  protectedPathHints: readonly string[] = [],
+): boolean {
   const normalized = normalizePath(relativePath);
   const firstSegment = normalized.split('/')[0];
 
   return DEFAULT_PROTECTED_PATHS.directories.includes(firstSegment as never)
-    || DEFAULT_PROTECTED_PATHS.files.includes(normalized as never);
+    || DEFAULT_PROTECTED_PATHS.files.includes(normalized as never)
+    || protectedPathHints.some((hint) => matchesProtectedPathHint(normalized, hint));
 }
 
 export function isSensitiveProjectPath(relativePath: string): boolean {
@@ -64,6 +69,12 @@ function pathApiForPlatform(platform: NodeJS.Platform): typeof path.win32 | type
 
 function normalizePath(value: string): string {
   return value.replace(/\\/g, '/');
+}
+
+function matchesProtectedPathHint(relativePath: string, hint: string): boolean {
+  const normalizedHint = normalizePath(hint).replace(/^\/+|\/+$/g, '');
+  return normalizedHint.length > 0
+    && (relativePath === normalizedHint || relativePath.startsWith(`${normalizedHint}/`));
 }
 
 function isInsideProject(relativePath: string, pathApi: typeof path.win32 | typeof path.posix): boolean {

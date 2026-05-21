@@ -113,8 +113,21 @@ function evaluate(input: {
 }
 
 describe('evaluatePermissionPolicy', () => {
-  it('keeps evaluateToolPolicy as a compatibility export', () => {
-    expect(evaluateToolPolicy).toBe(evaluatePermissionPolicy);
+  it('keeps evaluateToolPolicy compatible with old workspaceRoot inputs', () => {
+    const decision = evaluateToolPolicy({
+      definition: readDefinition,
+      toolCall: callFor(readDefinition, { path: '.megumi/settings.json' }),
+      permissionMode: 'default',
+      workspaceRoot: projectRoot,
+      protectedPathHints: ['.megumi'],
+      evaluatedAt,
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'ask',
+      source: 'protected_path',
+      target: '.megumi/settings.json',
+    });
   });
 
   it('applies deny rules before allow rules across scopes', () => {
@@ -157,6 +170,47 @@ describe('evaluatePermissionPolicy', () => {
       decision: 'deny',
       source: 'protected_path',
       target: '.megumi/settings.json',
+    });
+  });
+
+  it('does not allow run_command references to sensitive paths through ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'cat .env', cwd: '.' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(cat .env)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'ask',
+      source: 'sensitive_policy',
+      target: '.env',
+      classifierLabel: 'secret_or_env',
+      requiredApproval: { scope: 'once' },
+    });
+  });
+
+  it('does not allow run_command references to protected paths through ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'Remove-Item .megumi/settings.json', cwd: '.' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(Remove-Item .megumi/settings.json)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'protected_path',
+      target: '.megumi/settings.json',
+      classifierLabel: 'destructive',
     });
   });
 
@@ -272,6 +326,39 @@ describe('evaluatePermissionPolicy', () => {
       decision: 'deny',
       source: 'permission_mode',
       classifierLabel: 'unknown',
+    });
+  });
+
+  it('does not allow definitions with write capability even when sideEffect is none', () => {
+    const mismatchedWriteDefinition: ToolDefinition = {
+      ...readDefinition,
+      name: 'mismatched_write',
+      description: 'A mismatched tool definition with write capability and no side effect.',
+      capabilities: ['project_write'],
+      sideEffect: 'none',
+      riskLevel: 'medium',
+    };
+
+    const planDecision = evaluate({
+      definition: mismatchedWriteDefinition,
+      toolInput: { path: 'src/index.ts' },
+      permissionMode: 'plan',
+    });
+
+    expect(planDecision).toMatchObject({
+      decision: 'deny',
+      source: 'permission_mode',
+    });
+    expect(planDecision.requiredApproval).toBeUndefined();
+
+    expect(evaluate({
+      definition: mismatchedWriteDefinition,
+      toolInput: { path: 'src/index.ts' },
+      permissionMode: 'default',
+    })).toMatchObject({
+      decision: 'ask',
+      source: 'permission_mode',
+      requiredApproval: { scope: 'once' },
     });
   });
 

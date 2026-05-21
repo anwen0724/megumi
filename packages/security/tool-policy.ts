@@ -28,9 +28,16 @@ export interface EvaluatePermissionPolicyInput {
   toolCall: ToolCall;
   permissionMode: PermissionMode;
   projectRoot: string;
+  protectedPathHints?: readonly string[];
   settings?: MergedPermissionSettings;
   classifier?: PermissionClassifier;
   evaluatedAt: string;
+}
+
+export interface EvaluateToolPolicyCompatibilityInput extends Omit<EvaluatePermissionPolicyInput, 'projectRoot'> {
+  projectRoot?: string;
+  workspaceRoot?: string;
+  protectedPathHints?: readonly string[];
 }
 
 type EvaluateModeDefaultResult = {
@@ -46,7 +53,7 @@ type HardGuardResult = {
 
 type RuleBucket = keyof MergedPermissionSettings;
 
-export type EvaluateToolPolicyInput = EvaluatePermissionPolicyInput;
+export type EvaluateToolPolicyInput = EvaluatePermissionPolicyInput | EvaluateToolPolicyCompatibilityInput;
 
 export function evaluatePermissionPolicy(input: EvaluatePermissionPolicyInput): PermissionDecision {
   const commandClassification = classifyToolCommand(input);
@@ -125,7 +132,18 @@ export function evaluatePermissionPolicy(input: EvaluatePermissionPolicyInput): 
   });
 }
 
-export const evaluateToolPolicy = evaluatePermissionPolicy;
+export function evaluateToolPolicy(input: EvaluateToolPolicyInput): ToolPolicyDecision {
+  return evaluatePermissionPolicy(normalizeEvaluateToolPolicyInput(input));
+}
+
+function normalizeEvaluateToolPolicyInput(input: EvaluateToolPolicyInput): EvaluatePermissionPolicyInput {
+  const compatibilityInput = input as EvaluateToolPolicyCompatibilityInput;
+  return {
+    ...input,
+    projectRoot: input.projectRoot ?? compatibilityInput.workspaceRoot ?? '.',
+    protectedPathHints: input.protectedPathHints ?? compatibilityInput.protectedPathHints,
+  };
+}
 
 function classifyToolCommand(input: EvaluatePermissionPolicyInput) {
   if (input.definition.name !== 'run_command' || !isRecord(input.toolCall.input)) {
@@ -142,10 +160,16 @@ function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPa
   }
 
   if (input.definition.name === 'run_command') {
+    const commandPath = classifyCommandReferencedProjectPath(input);
+    if (commandPath) {
+      return commandPath;
+    }
+
     const cwd = input.toolCall.input.cwd;
     return classifyProjectPath({
       projectRoot: input.projectRoot,
       targetPath: typeof cwd === 'string' ? cwd : '.',
+      protectedPathHints: input.protectedPathHints,
     });
   }
 
@@ -156,7 +180,54 @@ function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPa
     return undefined;
   }
 
-  return classifyProjectPath({ projectRoot: input.projectRoot, targetPath });
+  return classifyProjectPath({
+    projectRoot: input.projectRoot,
+    targetPath,
+    protectedPathHints: input.protectedPathHints,
+  });
+}
+
+function classifyCommandReferencedProjectPath(
+  input: EvaluatePermissionPolicyInput,
+): ProjectPathClassification | undefined {
+  if (!isRecord(input.toolCall.input)) {
+    return undefined;
+  }
+
+  const command = input.toolCall.input.command;
+  if (typeof command !== 'string') {
+    return undefined;
+  }
+
+  const classifications = extractCommandPathReferences(command)
+    .map((targetPath) => classifyProjectPath({
+      projectRoot: input.projectRoot,
+      targetPath,
+      protectedPathHints: input.protectedPathHints,
+    }));
+
+  return classifications.find((classification) => !classification.insideProject)
+    ?? classifications.find((classification) => classification.protected)
+    ?? classifications.find((classification) => classification.sensitive);
+}
+
+function extractCommandPathReferences(command: string): string[] {
+  const references = new Set<string>();
+  const patterns: RegExp[] = [
+    /\.env(?:\.[^\s"'`;|&<>]*)?/gi,
+    /(?:^|[\s"'`])((?:secrets[\\/][^\s"'`;|&<>]+))/gi,
+    /(?:^|[\s"'`])([^\s"'`;|&<>]+\.(?:pem|key))/gi,
+    /(?:^|[\s"'`])(\.(?:git|megumi|vscode|idea|husky)(?:[\\/][^\s"'`;|&<>]+)?)/gi,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of command.matchAll(pattern)) {
+      const value = match[1] ?? match[0];
+      references.add(value.trim().replace(/^['"`]+|['"`]+$/g, ''));
+    }
+  }
+
+  return [...references].filter((reference) => reference.length > 0);
 }
 
 function findMatchedRule(
@@ -356,7 +427,8 @@ function sandboxLevelForDefinition(definition: ToolDefinition): SandboxRequireme
 }
 
 function isProjectRead(definition: ToolDefinition): boolean {
-  return definition.sideEffect === 'none' || definition.capabilities.includes('project_read');
+  return !isProjectWrite(definition)
+    && (definition.sideEffect === 'none' || definition.capabilities.includes('project_read'));
 }
 
 function isProjectWrite(definition: ToolDefinition): boolean {
