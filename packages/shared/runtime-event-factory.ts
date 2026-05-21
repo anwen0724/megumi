@@ -119,6 +119,60 @@ export function createToolResultCreatedEvent(
   return createRuntimeEvent(input);
 }
 
+export function createToolCallRequestedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.requested'>,
+): TypedRuntimeEvent<'tool.call.requested'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolCallPolicyDecidedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.policy_decided'>,
+): TypedRuntimeEvent<'tool.call.policy_decided'> {
+  return createRuntimeEvent(input);
+}
+
+export function createPermissionDecisionCreatedEvent(
+  input: RunRuntimeEventFactoryInput<'permission.decision.created'>,
+): TypedRuntimeEvent<'permission.decision.created'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolCallApprovalRequestedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.approval_requested'>,
+): TypedRuntimeEvent<'tool.call.approval_requested'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolCallStartedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.started'>,
+): TypedRuntimeEvent<'tool.call.started'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolCallCompletedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.completed'>,
+): TypedRuntimeEvent<'tool.call.completed'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolCallFailedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.failed'>,
+): TypedRuntimeEvent<'tool.call.failed'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolCallDeniedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.denied'>,
+): TypedRuntimeEvent<'tool.call.denied'> {
+  return createRuntimeEvent(input);
+}
+
+export function createApprovalRequestedEvent(
+  input: RunRuntimeEventFactoryInput<'approval.requested'>,
+): TypedRuntimeEvent<'approval.requested'> {
+  return createRuntimeEvent(input);
+}
+
 export function createRunWaitingForApprovalEvent(
   input: RunRuntimeEventFactoryInput<'run.waiting_for_approval'>,
 ): TypedRuntimeEvent<'run.waiting_for_approval'> {

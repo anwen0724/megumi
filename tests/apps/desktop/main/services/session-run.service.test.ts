@@ -346,6 +346,42 @@ function assistantOutputCompletedEvent(sequence: number): RuntimeEvent {
   };
 }
 
+function toolCallRequestedRuntimeEvent(): RuntimeEvent {
+  return {
+    eventId: 'event-tool-call-requested',
+    schemaVersion: 1,
+    eventType: 'tool.call.requested',
+    runId: 'run-1',
+    sessionId: 'session-1',
+    stepId: 'step-1',
+    sequence: 1,
+    createdAt: '2026-05-20T00:00:01.000Z',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        toolUseId: 'tool-use-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'read_file',
+        input: { path: 'package.json' },
+        inputPreview: {
+          summary: 'read_file',
+          targets: [],
+          redactionState: 'none',
+        },
+        capabilities: ['project_read'],
+        riskLevel: 'low',
+        sideEffect: 'none',
+        status: 'requested',
+        requestedAt: '2026-05-20T00:00:01.000Z',
+      },
+    },
+  };
+}
+
 function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   return {
     toolResultId: 'tool-result-1',
@@ -600,6 +636,7 @@ describe('SessionRunService', () => {
             async handleToolUses() {
               return {
                 toolResults: [toolResult],
+                runtimeEvents: [toolCallRequestedRuntimeEvent()],
               };
             },
             async resumeToolApproval() {
@@ -686,6 +723,7 @@ describe('SessionRunService', () => {
       'run.started',
       'tool.use.created',
       'model.step.completed',
+      'tool.call.requested',
       'tool.result.created',
       'assistant.output.completed',
       'step.status.changed',
@@ -700,6 +738,113 @@ describe('SessionRunService', () => {
       content: 'Final answer after tool result.',
       runId: 'run-1',
     });
+  });
+
+  it('does not emit action.requested for model tool use runs', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const toolResult = createToolResult({
+      toolCallId: 'tool-call-1',
+    });
+    db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const service = new SessionRunService({
+      repository,
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+
+          if (requests.length === 1) {
+            yield toolUseCreatedEvent(1);
+            yield modelStepCompletedEvent(2);
+            return;
+          }
+
+          yield {
+            ...assistantOutputCompletedEvent(1),
+            stepId: request.stepId,
+          };
+        },
+        cancelModelStep: () => true,
+      },
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses() {
+              return {
+                toolResults: [toolResult],
+                runtimeEvents: [toolCallRequestedRuntimeEvent()],
+              };
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
+          };
+        },
+      },
+      clock: { now: () => '2026-05-17T00:00:04.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `step-${index}`;
+          };
+        })(),
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `service-event-${index}`;
+          };
+        })(),
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `message-${index}`;
+          };
+        })(),
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-5.2',
+        messages: [{
+          id: 'message-input-1',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-20T00:00:00.000Z',
+        }],
+        context: {
+          sessionTitle: 'Read package.json',
+          permissionMode: 'default',
+        },
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+    });
+    const events = [];
+    for await (const event of result.events) {
+      events.push(event);
+    }
+    const eventTypes = events.map((event) => event.eventType);
+
+    expect(eventTypes).toContain('tool.use.created');
+    expect(eventTypes).toContain('tool.call.requested');
+    expect(eventTypes).toContain('tool.result.created');
+    expect(eventTypes).not.toContain('action.requested');
   });
 
   it('completes session message runs from real adapter model output deltas and model step completion', async () => {

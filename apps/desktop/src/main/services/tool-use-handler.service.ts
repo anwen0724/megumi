@@ -10,6 +10,20 @@ import type {
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { MergedPermissionSettings } from '@megumi/shared/permission-settings-contracts';
 import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
+import {
+  createApprovalRequestedEvent,
+  createPermissionDecisionCreatedEvent,
+  createToolCallApprovalRequestedEvent,
+  createToolCallCompletedEvent,
+  createToolCallDeniedEvent,
+  createToolCallFailedEvent,
+  createToolCallPolicyDecidedEvent,
+  createToolCallRequestedEvent,
+  createToolCallStartedEvent,
+  createToolResultCreatedEvent,
+} from '@megumi/shared/runtime-event-factory';
+import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type {
   ApprovalRequest,
   PermissionDecision,
@@ -55,6 +69,7 @@ interface ResolvedToolUseHandlerServiceOptions extends ToolUseHandlerServiceOpti
 interface SingleToolUseOutcome {
   toolResult?: ToolResult;
   pendingApproval?: PendingToolApproval;
+  runtimeEvents?: RuntimeEvent[];
 }
 
 export function createToolUseHandlerService(options: ToolUseHandlerServiceOptions): ToolUseHandlerPort & ToolApprovalResumePort {
@@ -73,6 +88,7 @@ export function createToolUseHandlerService(options: ToolUseHandlerServiceOption
     async handleToolUses(input) {
       const toolResults: ToolResult[] = [];
       const pendingApprovals: PendingToolApproval[] = [];
+      const runtimeEvents: RuntimeEvent[] = [];
 
       for (const toolUse of input.toolUses) {
         resolvedOptions.repository.saveToolUse(toolUse);
@@ -83,9 +99,10 @@ export function createToolUseHandlerService(options: ToolUseHandlerServiceOption
         if (outcome.pendingApproval) {
           pendingApprovals.push(outcome.pendingApproval);
         }
+        runtimeEvents.push(...(outcome.runtimeEvents ?? []));
       }
 
-      return { toolResults, pendingApprovals };
+      return { toolResults, pendingApprovals, runtimeEvents };
     },
     async resumeToolApproval(input) {
       return resumeToolApproval(resolvedOptions, input);
@@ -189,6 +206,9 @@ async function handleSingleToolUse(
     status: 'requested',
     requestedAt: options.now(),
   });
+  const runtimeEvents: RuntimeEvent[] = [
+    createToolCallRequestedRuntimeEvent(request, requestedToolCall),
+  ];
 
   const evaluatedDecision = evaluatePermissionPolicy({
     definition,
@@ -202,10 +222,20 @@ async function handleSingleToolUse(
     ...evaluatedDecision,
     permissionDecisionId: options.ids.permissionDecisionId(),
   });
+  runtimeEvents.push(
+    createToolCallPolicyDecidedRuntimeEvent(request, requestedToolCall, decision),
+    createPermissionDecisionCreatedRuntimeEvent(request, requestedToolCall, decision),
+  );
 
   if (decision.decision === 'deny') {
+    const toolResult = saveDeniedResult(options, toolUse, requestedToolCall, decision);
+    runtimeEvents.push(
+      createToolCallDeniedRuntimeEvent(request, requestedToolCall, decision.reason),
+      createToolResultCreatedRuntimeEvent(request, toolResult),
+    );
     return {
-      toolResult: saveDeniedResult(options, toolUse, requestedToolCall, decision),
+      toolResult,
+      runtimeEvents,
     };
   }
 
@@ -219,7 +249,14 @@ async function handleSingleToolUse(
       approvalRequestId: approvalRequest.approvalRequestId,
       status: 'waiting_for_approval',
     });
-    return { pendingApproval: { approvalRequest, toolUse, toolCall: waitingToolCall } };
+    runtimeEvents.push(
+      createToolCallApprovalRequestedRuntimeEvent(request, waitingToolCall, approvalRequest),
+      createApprovalRequestedRuntimeEvent(request, approvalRequest),
+    );
+    return {
+      pendingApproval: { approvalRequest, toolUse, toolCall: waitingToolCall },
+      runtimeEvents,
+    };
   }
 
   const runningToolCall = options.repository.saveToolCall({
@@ -229,16 +266,223 @@ async function handleSingleToolUse(
     status: 'running',
     startedAt: options.now(),
   });
+  runtimeEvents.push(createToolCallStartedRuntimeEvent(request, runningToolCall));
   const result = await options.projectExecutor.executeToolCall(runningToolCall);
-  options.repository.saveToolCall({
+  const completedToolCall = options.repository.saveToolCall({
     ...runningToolCall,
     status: result.kind === 'success' ? 'succeeded' : 'failed',
     completedAt: result.createdAt,
     resultPreview: result.textContent,
     ...(result.error ? { error: result.error } : {}),
   });
+  runtimeEvents.push(
+    result.kind === 'success'
+      ? createToolCallCompletedRuntimeEvent(request, completedToolCall)
+      : createToolCallFailedRuntimeEvent(request, completedToolCall, result.error),
+    createToolResultCreatedRuntimeEvent(request, result),
+  );
 
-  return { toolResult: options.repository.saveToolResult(result) };
+  return {
+    toolResult: options.repository.saveToolResult(result),
+    runtimeEvents,
+  };
+}
+
+function runtimeEventBase(request: ModelStepRuntimeRequest, eventId: string, createdAt: string) {
+  return {
+    eventId,
+    runId: request.runId,
+    sessionId: request.sessionId,
+    stepId: request.stepId,
+    requestId: request.requestId,
+    runtimeContext: request.runtimeContext,
+    sequence: 1,
+    createdAt,
+  };
+}
+
+function createToolCallRequestedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+): RuntimeEvent {
+  return createToolCallRequestedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:requested`, toolCall.requestedAt),
+    eventType: 'tool.call.requested',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: { toolCall },
+  });
+}
+
+function createToolCallPolicyDecidedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  decision: PermissionDecision,
+): RuntimeEvent {
+  return createToolCallPolicyDecidedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:policy-decided`, decision.evaluatedAt),
+    eventType: 'tool.call.policy_decided',
+    source: 'security',
+    visibility: 'debug',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      toolName: toolCall.toolName,
+      policyDecision: decision,
+    },
+  });
+}
+
+function createPermissionDecisionCreatedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  decision: PermissionDecision,
+): RuntimeEvent {
+  return createPermissionDecisionCreatedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:permission-decision-created`, decision.evaluatedAt),
+    eventType: 'permission.decision.created',
+    source: 'security',
+    visibility: 'debug',
+    persist: 'required',
+    payload: {
+      permissionDecision: decision,
+    },
+  });
+}
+
+function createToolCallApprovalRequestedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  approvalRequest: ApprovalRequest,
+): RuntimeEvent {
+  return createToolCallApprovalRequestedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:approval-requested`, approvalRequest.createdAt),
+    eventType: 'tool.call.approval_requested',
+    source: 'approval',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      toolName: toolCall.toolName,
+      approvalRequest,
+    },
+  });
+}
+
+function createApprovalRequestedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  approvalRequest: ApprovalRequest,
+): RuntimeEvent {
+  return createApprovalRequestedEvent({
+    ...runtimeEventBase(request, `event:${approvalRequest.approvalRequestId}:requested`, approvalRequest.createdAt),
+    eventType: 'approval.requested',
+    source: 'approval',
+    visibility: 'user',
+    persist: 'required',
+    payload: { approvalRequest },
+  });
+}
+
+function createToolCallStartedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+): RuntimeEvent {
+  return createToolCallStartedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:started`, toolCall.startedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.started',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      ...(toolCall.startedAt ? { startedAt: toolCall.startedAt } : {}),
+    },
+  });
+}
+
+function createToolCallCompletedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+): RuntimeEvent {
+  return createToolCallCompletedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:completed`, toolCall.completedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.completed',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+    },
+  });
+}
+
+function createToolCallFailedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  error: RuntimeError | undefined,
+): RuntimeEvent {
+  return createToolCallFailedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:failed`, toolCall.completedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.failed',
+    source: 'tool',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      error: error ?? createToolRuntimeError('Tool execution failed.'),
+      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+    },
+  });
+}
+
+function createToolCallDeniedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  reason: string,
+): RuntimeEvent {
+  return createToolCallDeniedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:denied`, toolCall.completedAt ?? toolCall.requestedAt),
+    eventType: 'tool.call.denied',
+    source: 'security',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      toolCallId: toolCall.toolCallId,
+      reason,
+    },
+  });
+}
+
+function createToolResultCreatedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolResult: ToolResult,
+): RuntimeEvent {
+  return createToolResultCreatedEvent({
+    ...runtimeEventBase(request, `event:${toolResult.toolResultId}:created`, toolResult.createdAt),
+    eventType: 'tool.result.created',
+    source: 'tool',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      toolResultId: toolResult.toolResultId,
+      toolUseId: toolResult.toolUseId,
+      ...(toolResult.toolCallId ? { toolCallId: toolResult.toolCallId } : {}),
+      kind: toolResult.kind,
+      summary: createToolResultSummary(toolResult),
+    },
+  });
+}
+
+function createToolRuntimeError(message: string): RuntimeError {
+  return {
+    code: 'runtime_unknown',
+    message,
+    severity: 'error',
+    retryable: false,
+    source: 'tool',
+  };
 }
 
 function createApprovalRequest(
@@ -269,6 +513,26 @@ function createApprovalRequest(
     status: 'pending',
     createdAt: options.now(),
   };
+}
+
+function createToolResultSummary(toolResult: ToolResult): string {
+  if (toolResult.textContent && toolResult.textContent.length > 0) {
+    return toolResult.textContent;
+  }
+
+  if (toolResult.denialReason && toolResult.denialReason.length > 0) {
+    return toolResult.denialReason;
+  }
+
+  if (toolResult.error) {
+    return toolResult.error.message;
+  }
+
+  if (toolResult.structuredContent !== undefined) {
+    return JSON.stringify(toolResult.structuredContent);
+  }
+
+  return toolResult.kind;
 }
 
 function saveDeniedResult(

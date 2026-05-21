@@ -822,6 +822,16 @@ describe('memory runtime events', () => {
 });
 
 describe('05 tool-use runtime events', () => {
+  it('does not expose action-centered tool or approval events as the v1 tool path', () => {
+    expect(RUNTIME_EVENT_TYPES).not.toContain('action.requested');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.use.created');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.call.requested');
+    expect(RUNTIME_EVENT_TYPES).toContain('permission.decision.created');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.result.created');
+    expect(RUNTIME_EVENT_TYPES).toContain('approval.requested');
+    expect(RUNTIME_EVENT_TYPES).toContain('approval.resolved');
+  });
+
   it('accepts model step and tool-use events', () => {
     expect(RuntimeEventSchema.parse({
       eventId: 'event-model-step-started',

@@ -23,6 +23,7 @@ import {
   RUNTIME_EVENT_TYPES,
   RUNTIME_EVENT_VISIBILITIES,
   type RuntimeEvent,
+  type RuntimeEventEnvelopeType,
   type RuntimeEventPersistMode,
   type RuntimeEventSource,
   type RuntimeEventType,
@@ -31,6 +32,7 @@ import {
 import {
   APPROVAL_SCOPES,
   ApprovalRequestSchema,
+  PermissionDecisionSchema,
   ToolCallSchema,
   ToolPolicyDecisionSchema,
   type ApprovalScope,
@@ -460,6 +462,20 @@ const ToolCallPolicyDecidedPayloadSchema = z
   })
   .strict();
 
+const PermissionDecisionCreatedPayloadSchema = z
+  .object({
+    permissionDecision: PermissionDecisionSchema,
+  })
+  .strict();
+
+const ToolCallApprovalRequestedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    toolName: z.string().min(1),
+    approvalRequest: ApprovalRequestSchema,
+  })
+  .strict();
+
 const ToolCallStartedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
@@ -645,7 +661,7 @@ const MemoryAccessRecordedPayloadSchema = z
   })
   .strict();
 
-function eventSchema<TType extends RuntimeEventType, TPayloadSchema extends z.ZodTypeAny>(
+function eventSchema<TType extends RuntimeEventEnvelopeType, TPayloadSchema extends z.ZodTypeAny>(
   eventType: TType,
   payload: TPayloadSchema,
 ) {
@@ -719,6 +735,14 @@ export const ToolCallValidatedEventSchema = eventSchema('tool.call.validated', T
 export const ToolCallPolicyDecidedEventSchema = eventSchema(
   'tool.call.policy_decided',
   ToolCallPolicyDecidedPayloadSchema,
+);
+export const PermissionDecisionCreatedEventSchema = eventSchema(
+  'permission.decision.created',
+  PermissionDecisionCreatedPayloadSchema,
+);
+export const ToolCallApprovalRequestedEventSchema = eventSchema(
+  'tool.call.approval_requested',
+  ToolCallApprovalRequestedPayloadSchema,
 );
 export const ToolCallStartedEventSchema = eventSchema('tool.call.started', ToolCallStartedPayloadSchema);
 export const ToolCallCompletedEventSchema = eventSchema('tool.call.completed', ToolCallCompletedPayloadSchema);
@@ -822,6 +846,8 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ToolCallRequestedEventSchema,
   ToolCallValidatedEventSchema,
   ToolCallPolicyDecidedEventSchema,
+  PermissionDecisionCreatedEventSchema,
+  ToolCallApprovalRequestedEventSchema,
   ToolCallStartedEventSchema,
   ToolCallCompletedEventSchema,
   ToolCallFailedEventSchema,

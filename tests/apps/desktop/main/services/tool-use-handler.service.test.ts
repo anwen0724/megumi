@@ -71,6 +71,14 @@ describe('ToolUseHandlerService', () => {
       textContent: 'hello',
     })]);
     expect(outcome.pendingApprovals).toEqual([]);
+    expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.requested',
+      'tool.call.policy_decided',
+      'permission.decision.created',
+      'tool.call.started',
+      'tool.call.completed',
+      'tool.result.created',
+    ]);
     expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'success',
       toolCallId: 'tool-call-1',
@@ -111,6 +119,13 @@ describe('ToolUseHandlerService', () => {
       toolCallId: 'tool-call-1',
     })]);
     expect(outcome.pendingApprovals).toEqual([]);
+    expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.requested',
+      'tool.call.policy_decided',
+      'permission.decision.created',
+      'tool.call.denied',
+      'tool.result.created',
+    ]);
     expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'policy_denied',
       toolCallId: 'tool-call-1',
@@ -151,6 +166,13 @@ describe('ToolUseHandlerService', () => {
         status: 'waiting_for_approval',
       }),
     })]);
+    expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.requested',
+      'tool.call.policy_decided',
+      'permission.decision.created',
+      'tool.call.approval_requested',
+      'approval.requested',
+    ]);
     expect(executor.executeToolCall).not.toHaveBeenCalled();
     expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
       toolUseId: 'tool-use-1',

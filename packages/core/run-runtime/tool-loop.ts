@@ -18,6 +18,7 @@ export interface PendingToolApproval {
 export interface ToolUseHandlerOutcome {
   toolResults?: ToolResult[];
   pendingApprovals?: PendingToolApproval[];
+  runtimeEvents?: RuntimeEvent[];
 }
 
 export interface ToolUseHandlerPort {
@@ -107,9 +108,36 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     });
 
     const toolResults = outcome.toolResults ?? [];
+    const runtimeEvents = outcome.runtimeEvents ?? [];
     const hasPendingApprovals = Boolean(outcome.pendingApprovals && outcome.pendingApprovals.length > 0);
 
+    for (const event of runtimeEvents) {
+      sequenceOffset += 1;
+      yield {
+        ...event,
+        runId: event.runId ?? request.runId,
+        sessionId: event.sessionId ?? request.sessionId,
+        stepId: event.stepId ?? request.stepId,
+        requestId: event.requestId ?? request.requestId,
+        ...(event.context ? { context: event.context } : request.runtimeContext ? { context: request.runtimeContext } : {}),
+        sequence: sequenceOffset,
+      };
+    }
+
+    const emittedToolResultIds = new Set(
+      runtimeEvents
+        .filter((event) => event.eventType === 'tool.result.created')
+        .map((event) => {
+          const payload = event.payload as { toolResultId?: unknown };
+          return typeof payload.toolResultId === 'string' ? payload.toolResultId : undefined;
+        })
+        .filter((toolResultId): toolResultId is string => Boolean(toolResultId)),
+    );
+
     for (const toolResult of toolResults) {
+      if (emittedToolResultIds.has(String(toolResult.toolResultId))) {
+        continue;
+      }
       sequenceOffset += 1;
       yield createToolResultCreatedEvent({
         eventId: input.ids.nextEventId(),

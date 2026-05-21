@@ -21,6 +21,7 @@ import type {
   ApprovalRequest,
   ApprovalScope,
   ApprovalStatus,
+  PermissionDecision,
   ToolCall,
   ToolPolicyDecision,
 } from './tool-contracts';
@@ -69,7 +70,6 @@ export const RUNTIME_EVENT_TYPES = [
   'step.status.changed',
   'step.completed',
   'step.failed',
-  'action.requested',
   'observation.received',
   'context.patch.requested',
   'context.patch.applied',
@@ -89,6 +89,8 @@ export const RUNTIME_EVENT_TYPES = [
   'tool.call.requested',
   'tool.call.validated',
   'tool.call.policy_decided',
+  'permission.decision.created',
+  'tool.call.approval_requested',
   'tool.call.started',
   'tool.call.completed',
   'tool.call.failed',
@@ -132,6 +134,14 @@ export const RUNTIME_EVENT_TYPES = [
 
 export type RuntimeEventType = (typeof RUNTIME_EVENT_TYPES)[number];
 
+export const HOST_MAINTENANCE_RUNTIME_EVENT_TYPES = [
+  // Host maintenance only. Model tool execution must use tool.use/tool.call/tool.result events.
+  'action.requested',
+] as const;
+
+export type HostMaintenanceRuntimeEventType = (typeof HOST_MAINTENANCE_RUNTIME_EVENT_TYPES)[number];
+export type RuntimeEventEnvelopeType = RuntimeEventType | HostMaintenanceRuntimeEventType;
+
 export const TERMINAL_RUNTIME_EVENT_TYPES = [
   'run.completed',
   'run.failed',
@@ -167,7 +177,7 @@ export type RuntimeEventPersistMode = (typeof RUNTIME_EVENT_PERSIST_MODES)[numbe
 export interface RuntimeEvent<TPayload extends object = object> {
   eventId: string;
   schemaVersion: typeof RUNTIME_EVENT_SCHEMA_VERSION;
-  eventType: RuntimeEventType;
+  eventType: RuntimeEventEnvelopeType;
   runId?: string;
   sessionId?: string;
   stepId?: string;
@@ -438,6 +448,16 @@ export interface ToolCallPolicyDecidedPayload {
   policyDecision: ToolPolicyDecision;
 }
 
+export interface PermissionDecisionCreatedPayload {
+  permissionDecision: PermissionDecision;
+}
+
+export interface ToolCallApprovalRequestedPayload {
+  toolCallId: string;
+  toolName: string;
+  approvalRequest: ApprovalRequest;
+}
+
 export interface ToolCallStartedPayload {
   toolCallId: string;
   startedAt?: string;
@@ -614,6 +634,8 @@ export type RuntimeEventPayloadByType = {
   'tool.call.requested': ToolCallRequestedPayload;
   'tool.call.validated': ToolCallValidatedPayload;
   'tool.call.policy_decided': ToolCallPolicyDecidedPayload;
+  'permission.decision.created': PermissionDecisionCreatedPayload;
+  'tool.call.approval_requested': ToolCallApprovalRequestedPayload;
   'tool.call.started': ToolCallStartedPayload;
   'tool.call.completed': ToolCallCompletedPayload;
   'tool.call.failed': ToolCallFailedPayload;
