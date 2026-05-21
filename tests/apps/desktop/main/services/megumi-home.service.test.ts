@@ -3,6 +3,7 @@ import path from 'path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   createDefaultMegumiConfig,
+  createMegumiConfigSchema,
   initializeMegumiHome,
   initializeMegumiHomeSync,
   resolveMegumiHomePath,
@@ -167,6 +168,7 @@ describe('Megumi Home foundation', () => {
   it('creates a single-file config with provider defaults and no duplicated chat model', () => {
     const config = createDefaultMegumiConfig();
 
+    expect(config).not.toHaveProperty('permissions');
     expect(config.chat).toEqual({
       defaultProvider: 'deepseek',
     });
@@ -187,6 +189,25 @@ describe('Megumi Home foundation', () => {
       kind: 'anthropic',
       defaultModel: 'claude-sonnet-4-6',
       apiKeyEnv: 'ANTHROPIC_API_KEY',
+    });
+  });
+
+  it('exposes optional permission rules in the generated config schema', () => {
+    const schema = createMegumiConfigSchema();
+
+    expect(schema).toMatchObject({
+      required: ['version', 'app', 'chat', 'providers'],
+      properties: {
+        permissions: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            allow: { type: 'array', items: { type: 'string' } },
+            ask: { type: 'array', items: { type: 'string' } },
+            deny: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
     });
   });
 

@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
+import type { PermissionRules } from '@megumi/shared/permission-settings-contracts';
 
 export const MEGUMI_HOME_VERSION = 1;
 export const MEGUMI_HOME_MIGRATION_ID = 'megumi-home-v1';
@@ -48,6 +49,7 @@ export interface MegumiHomeConfig {
     defaultProvider: string;
   };
   providers: Record<string, MegumiProviderConfig>;
+  permissions?: PermissionRules;
 }
 
 export interface MegumiHomeVersion {
@@ -271,6 +273,30 @@ export function createMegumiConfigSchema(): Record<string, unknown> {
               type: 'string',
             },
             secretRef: {
+              type: 'string',
+            },
+          },
+        },
+      },
+      permissions: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          allow: {
+            type: 'array',
+            items: {
+              type: 'string',
+            },
+          },
+          ask: {
+            type: 'array',
+            items: {
+              type: 'string',
+            },
+          },
+          deny: {
+            type: 'array',
+            items: {
               type: 'string',
             },
           },
