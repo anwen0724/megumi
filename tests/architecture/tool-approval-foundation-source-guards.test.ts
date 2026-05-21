@@ -102,6 +102,14 @@ describe('tool approval foundation source guards', () => {
       expect(source).not.toContain("'review'");
     }
   });
+
+  it('does not keep bypass or stronger approval policy decisions in v1 tool contracts', () => {
+    const source = readFileSync(join(process.cwd(), 'packages/shared/tool-contracts.ts'), 'utf8');
+
+    expect(source).not.toContain('bypass_permissions');
+    expect(source).not.toContain('require_sandbox');
+    expect(source).not.toContain('require_stronger_approval');
+  });
 });
 
 function collectProductionFiles(): string[] {

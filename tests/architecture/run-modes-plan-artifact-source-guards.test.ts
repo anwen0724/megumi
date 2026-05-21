@@ -72,53 +72,22 @@ describe('run modes and plan artifact source guards', () => {
     expect(contracts).not.toMatch(/RUN_ACTION_KINDS[\s\S]*['"]plan['"]/);
   });
 
-  it('keeps only default and plan permission modes active in 04', () => {
-    const source = readProjectFile(join(ROOT, 'packages/shared/run-mode-contracts.ts'));
+  it('keeps active permission modes aligned with 05 target posture set', () => {
+    const source = readProjectFile(join(ROOT, 'packages/shared/permission-mode-contracts.ts'));
 
-    expect(source).toContain("export const ACTIVE_PERMISSION_MODES = ['default', 'plan'] as const");
-    expect(source).toContain("'accept_edits'");
-    expect(source).toContain("'auto'");
-    expect(source).toContain("'bypass_permissions'");
-    expect(source).not.toMatch(/ACTIVE_PERMISSION_MODES[\s\S]*accept_edits/);
-    expect(source).not.toMatch(/ACTIVE_PERMISSION_MODES[\s\S]*auto/);
-    expect(source).not.toMatch(/ACTIVE_PERMISSION_MODES[\s\S]*bypass_permissions/);
+    expect(source).toContain("export const ACTIVE_PERMISSION_MODES = ['default', 'accept_edits', 'plan', 'auto'] as const");
+    expect(source).not.toContain("'bypass_permissions'");
+    expect(source).not.toContain("'read_only'");
+    expect(source).not.toContain("'execute'");
+    expect(source).not.toContain("'review'");
   });
 
-  it('does not implement future tool approval sandbox checkpoint memory or generic artifact systems in 04 files', () => {
-    const runModeFiles = [
-      ...filesUnder('packages/shared'),
-      ...filesUnder('packages/core'),
-      ...filesUnder('packages/db'),
-      ...filesUnder('apps/desktop/src/main'),
-      ...filesUnder('apps/desktop/src/renderer'),
-    ].filter((file) => /run-mode|run-mode|plan|plan\.handler/.test(projectPath(file)));
+  it('does not keep old 04-stage guard assumptions after 05 tool foundation is active', () => {
+    const currentArchitecture = readProjectFile(join(ROOT, '.local-docs/architecture/agent-runtime-architecture.md'));
 
-    const forbiddenPatterns = [
-      /ToolCall/,
-      /tool registry/i,
-      /tool executor/i,
-      /approval workflow/i,
-      /policy evaluator/i,
-      /sandbox evaluator/i,
-      /checkpoint restore/i,
-      /artifact content/i,
-      /artifact version/i,
-      /artifact render/i,
-      /artifact export/i,
-      /memory candidate/i,
-      /long-term memory/i,
-      /MCP client/i,
-      /connector/i,
-      /multi-agent/i,
-      /handoff/i,
-      /parallel subagents/i,
-    ];
-
-    const offenders = runModeFiles
-      .filter((file) => forbiddenPatterns.some((pattern) => pattern.test(readProjectFile(file))))
-      .map(projectPath);
-
-    expect(offenders).toEqual([]);
+    expect(currentArchitecture).toContain('tool-use-centered');
+    expect(currentArchitecture).toContain('PermissionPolicy');
+    expect(currentArchitecture).toContain('ApprovalRequest');
   });
 
   it('keeps renderer run mode code behind typed preload and away from Host privileges', () => {
