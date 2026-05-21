@@ -60,11 +60,45 @@ describe('createStaticToolRegistry', () => {
     })).toBeUndefined();
   });
 
+  it('supports destructured getDefinition with visibility input', () => {
+    const { getDefinition } = createStaticToolRegistry([readTool]);
+
+    expect(getDefinition('read_file', {
+      runId: 'run-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+    })?.name).toBe('read_file');
+  });
+
   it('finds definitions by Claude-compatible tool name', () => {
     const registry = createStaticToolRegistry([readTool]);
 
     expect(registry.getDefinition('read_file')?.description).toContain('Read');
     expect(registry.getDefinition('workspace.file.read')).toBeUndefined();
+  });
+
+  it('prevents caller mutation from changing registry availability or order', () => {
+    const registry = createStaticToolRegistry([readTool, {
+      ...readTool,
+      name: 'list_directory',
+      description: 'List a project directory.',
+    }]);
+    const firstList = registry.listDefinitions({
+      runId: 'run-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+    });
+
+    firstList[0].availability.status = 'disabled';
+    firstList[1].capabilities.push('command_run');
+
+    expect(registry.listDefinitions({
+      runId: 'run-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+    }).map((definition) => definition.name)).toEqual(['read_file', 'list_directory']);
+    expect(registry.getDefinition('read_file')?.availability.status).toBe('available');
+    expect(registry.getDefinition('list_directory')?.capabilities).toEqual(['project_read']);
   });
 
   it('rejects duplicate tool names', () => {

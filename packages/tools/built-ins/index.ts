@@ -18,7 +18,21 @@ export const BUILT_IN_TOOL_NAMES = [
   'run_command',
 ] as const;
 
-export const BUILT_IN_TOOL_DEFINITIONS: ToolDefinition[] = [
+function cloneToolDefinition(definition: ToolDefinition): ToolDefinition {
+  return JSON.parse(JSON.stringify(definition)) as ToolDefinition;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const nestedValue of Object.values(value)) {
+      deepFreeze(nestedValue);
+    }
+    Object.freeze(value);
+  }
+  return value;
+}
+
+export const BUILT_IN_TOOL_DEFINITIONS: ToolDefinition[] = deepFreeze([
   readFileDefinition,
   listDirectoryDefinition,
   globDefinition,
@@ -26,8 +40,8 @@ export const BUILT_IN_TOOL_DEFINITIONS: ToolDefinition[] = [
   editFileDefinition,
   writeFileDefinition,
   runCommandDefinition,
-];
+] satisfies ToolDefinition[]);
 
 export function createBuiltInToolRegistry() {
-  return createStaticToolRegistry(BUILT_IN_TOOL_DEFINITIONS);
+  return createStaticToolRegistry(BUILT_IN_TOOL_DEFINITIONS.map(cloneToolDefinition));
 }

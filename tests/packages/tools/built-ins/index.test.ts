@@ -59,4 +59,30 @@ describe('built-in tool definitions', () => {
       providerCapabilitySummary: { supportsToolUse: false },
     })).toEqual([]);
   });
+
+  it('exports deeply frozen built-in definitions', () => {
+    expect(Object.isFrozen(BUILT_IN_TOOL_DEFINITIONS)).toBe(true);
+    expect(Object.isFrozen(BUILT_IN_TOOL_DEFINITIONS[0])).toBe(true);
+    expect(Object.isFrozen(BUILT_IN_TOOL_DEFINITIONS[0].capabilities)).toBe(true);
+    expect(Object.isFrozen(BUILT_IN_TOOL_DEFINITIONS[0].availability)).toBe(true);
+    expect(Object.isFrozen(BUILT_IN_TOOL_DEFINITIONS[0].inputSchema)).toBe(true);
+    expect(Object.isFrozen(BUILT_IN_TOOL_DEFINITIONS[0].inputSchema.properties)).toBe(true);
+  });
+
+  it('keeps exported built-in mutations from affecting registry availability or order', () => {
+    try {
+      BUILT_IN_TOOL_DEFINITIONS[0].availability.status = 'disabled';
+      BUILT_IN_TOOL_DEFINITIONS[0].capabilities.push('command_run');
+    } catch {
+      // Frozen exports may throw; the assertion below verifies the public behavior.
+    }
+
+    expect(createBuiltInToolRegistry().listDefinitions({
+      runId: 'run-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+      providerCapabilitySummary: { supportsToolUse: true },
+    }).map((tool) => tool.name)).toEqual(BUILT_IN_TOOL_NAMES);
+    expect(createBuiltInToolRegistry().getDefinition('read_file')?.capabilities).toEqual(['project_read']);
+  });
 });
