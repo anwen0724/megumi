@@ -18,8 +18,8 @@ const readTool: ToolDefinition = {
 };
 
 const disabledTool: ToolDefinition = {
-  name: 'shell_run_command',
-  description: 'Run a shell command.',
+  name: 'run_command',
+  description: 'Run a project-scoped command.',
   inputSchema: {
     type: 'object',
     properties: { command: { type: 'string' } },
@@ -38,9 +38,26 @@ describe('createStaticToolRegistry', () => {
 
     expect(registry.listDefinitions({
       runId: 'run-1',
-      runMode: 'chat',
+      projectId: 'project-1',
       permissionMode: 'default',
     })).toEqual([readTool]);
+  });
+
+  it('hides tools when the provider cannot use tools', () => {
+    const registry = createStaticToolRegistry([readTool]);
+
+    expect(registry.listDefinitions({
+      runId: 'run-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+      providerCapabilitySummary: { supportsToolUse: false },
+    })).toEqual([]);
+    expect(registry.getDefinition('read_file', {
+      runId: 'run-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+      providerCapabilitySummary: { supportsToolUse: false },
+    })).toBeUndefined();
   });
 
   it('finds definitions by Claude-compatible tool name', () => {

@@ -1,19 +1,18 @@
+import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
 import type { ToolDefinition } from '@megumi/shared/tool-contracts';
 
 export interface ToolRegistryListInput {
   runId: string;
-  workspaceId?: string;
-  runMode: string;
-  permissionMode: string;
-  taskIntent?: string;
+  projectId?: string;
+  permissionMode: PermissionMode;
   providerCapabilitySummary?: {
     supportsToolUse?: boolean;
   };
 }
 
 export interface ToolRegistry {
-  listDefinitions(input: ToolRegistryListInput): ToolDefinition[];
-  getDefinition(toolName: string, input?: ToolRegistryListInput): ToolDefinition | undefined;
+  listDefinitions<TInput extends ToolRegistryListInput>(input: TInput): ToolDefinition[];
+  getDefinition<TInput extends ToolRegistryListInput>(toolName: string, input?: TInput): ToolDefinition | undefined;
 }
 
 export function createStaticToolRegistry(definitions: readonly ToolDefinition[]): ToolRegistry {
