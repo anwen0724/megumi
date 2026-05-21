@@ -1,75 +1,326 @@
-import type { SandboxRequirement, ToolCall, ToolDefinition, ToolPolicyDecision, ToolRiskLevel } from '@megumi/shared/tool-contracts';
 import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
+import type { MergedPermissionSettings } from '@megumi/shared/permission-settings-contracts';
+import type {
+  PermissionDecision,
+  PermissionDecisionSource,
+  PermissionMatchedRule,
+  PermissionClassifierLabel,
+  SandboxRequirement,
+  ToolCall,
+  ToolDefinition,
+  ToolPolicyDecision,
+  ToolPolicyDecisionValue,
+  ToolRiskLevel,
+} from '@megumi/shared/tool-contracts';
+import { classifyCommand, type CommandClassifierLabel } from './command-classifier';
+import {
+  createRuleBasedPermissionClassifier,
+  type PermissionClassifier,
+} from './permission-classifier';
+import {
+  classifyProjectPath,
+  type ProjectPathClassification,
+} from './project-boundary-policy';
+import { matchPermissionRule } from './permission-rule-matcher';
 
-export interface EvaluateToolPolicyInput {
+export interface EvaluatePermissionPolicyInput {
   definition: ToolDefinition;
   toolCall: ToolCall;
   permissionMode: PermissionMode;
-  workspaceRoot?: string;
-  protectedPathHints?: string[];
+  projectRoot: string;
+  settings?: MergedPermissionSettings;
+  classifier?: PermissionClassifier;
   evaluatedAt: string;
 }
 
-export function evaluateToolPolicy(input: EvaluateToolPolicyInput): ToolPolicyDecision {
-  const targetLabels = input.toolCall.inputPreview.targets.map((target) => target.label);
-  const touchesProtectedPath = targetLabels.some((label) =>
-    input.protectedPathHints?.some((hint) => label.includes(hint)),
-  );
-  const touchesSecret = input.toolCall.inputPreview.targets.some((target) => target.sensitivity === 'secret');
+type EvaluateModeDefaultResult = {
+  decision: ToolPolicyDecisionValue;
+  reason: string;
+};
 
-  if (touchesProtectedPath || touchesSecret || input.definition.capabilities.includes('secret_read')) {
-    return createPolicyDecision(input, {
-      decision: 'deny',
-      source: 'system_default',
-      reason: 'Tool call targets protected or secret content.',
-      effectiveRiskLevel: 'critical',
-      requiredSandbox: createSandboxRequirement(input, 'host_restricted'),
+type HardGuardResult = {
+  decision: ToolPolicyDecisionValue;
+  source: PermissionDecisionSource;
+  reason: string;
+};
+
+type RuleBucket = keyof MergedPermissionSettings;
+
+export type EvaluateToolPolicyInput = EvaluatePermissionPolicyInput;
+
+export function evaluatePermissionPolicy(input: EvaluatePermissionPolicyInput): PermissionDecision {
+  const commandClassification = classifyToolCommand(input);
+  const projectPath = classifyToolTargetPath(input);
+
+  const denyRule = findMatchedRule(input, 'deny');
+  if (denyRule) {
+    return createPermissionDecision(input, 'deny', 'rule', `Denied by ${denyRule.scope} permission rule.`, {
+      matchedRule: { ...denyRule, decision: 'deny' },
+      commandLabel: commandClassification?.label,
+      projectPath,
     });
   }
 
-  if (input.permissionMode === 'plan' && hasSideEffect(input.definition)) {
-    return createPolicyDecision(input, {
-      decision: 'deny',
-      source: 'permission_mode',
-      reason: 'plan permissionMode blocks side-effecting tool calls.',
-      effectiveRiskLevel: escalateRisk(input.definition.riskLevel, 'high'),
-      requiredSandbox: createSandboxRequirement(input, sandboxLevelForDefinition(input.definition)),
+  const hardGuard = evaluateHardGuards(input, projectPath);
+  if (hardGuard) {
+    return createPermissionDecision(input, hardGuard.decision, hardGuard.source, hardGuard.reason, {
+      commandLabel: commandClassification?.label,
+      projectPath,
     });
   }
 
-  if (requiresApproval(input.definition)) {
-    return createPolicyDecision(input, {
-      decision: 'ask',
-      source: 'system_default',
-      reason: 'Tool call requires user approval.',
-      effectiveRiskLevel: input.definition.riskLevel,
-      requiredApproval: {
-        scope: 'once',
-        reason: 'User approval is required for this tool capability.',
-      },
-      requiredSandbox: createSandboxRequirement(input, sandboxLevelForDefinition(input.definition)),
+  const allowRule = findMatchedRule(input, 'allow');
+  if (allowRule) {
+    return createPermissionDecision(input, 'allow', 'rule', `Allowed by ${allowRule.scope} permission rule.`, {
+      matchedRule: { ...allowRule, decision: 'allow' },
+      commandLabel: commandClassification?.label,
+      projectPath,
     });
   }
 
-  return createPolicyDecision(input, {
-    decision: 'allow',
-    source: 'system_default',
-    reason: 'Read-only low-risk tool call is allowed.',
-    effectiveRiskLevel: input.definition.riskLevel,
-    requiredSandbox: createSandboxRequirement(input, sandboxLevelForDefinition(input.definition)),
+  const askRule = findMatchedRule(input, 'ask');
+  if (askRule) {
+    return createPermissionDecision(input, 'ask', 'rule', `Asked by ${askRule.scope} permission rule.`, {
+      matchedRule: { ...askRule, decision: 'ask' },
+      commandLabel: commandClassification?.label,
+      projectPath,
+    });
+  }
+
+  const modeDefault = evaluatePermissionModeDefault(input, commandClassification?.label, projectPath);
+  if (modeDefault) {
+    return createPermissionDecision(input, modeDefault.decision, 'permission_mode', modeDefault.reason, {
+      commandLabel: commandClassification?.label,
+      projectPath,
+    });
+  }
+
+  if (input.permissionMode === 'auto') {
+    const classifier = input.classifier ?? createRuleBasedPermissionClassifier();
+    const classified = classifier.classify({
+      permissionMode: input.permissionMode,
+      toolName: input.definition.name,
+      capability: input.definition.capabilities[0],
+      sideEffect: input.definition.sideEffect,
+      commandLabel: commandClassification?.label,
+      projectPath: projectPath
+        ? {
+            insideProject: projectPath.insideProject,
+            protected: projectPath.protected,
+            sensitive: projectPath.sensitive,
+          }
+        : undefined,
+    });
+
+    return createPermissionDecision(input, classified.decision, 'classifier', classified.reason, {
+      classifierLabel: classified.classifierLabel,
+      projectPath,
+      confidence: classified.confidence,
+    });
+  }
+
+  return createPermissionDecision(input, 'ask', 'permission_mode', 'Fallback asks for user approval.', {
+    commandLabel: commandClassification?.label,
+    projectPath,
   });
 }
 
-function hasSideEffect(definition: ToolDefinition): boolean {
-  return definition.sideEffect !== 'none' && definition.sideEffect !== 'read_external';
+export const evaluateToolPolicy = evaluatePermissionPolicy;
+
+function classifyToolCommand(input: EvaluatePermissionPolicyInput) {
+  if (input.definition.name !== 'run_command' || !isRecord(input.toolCall.input)) {
+    return undefined;
+  }
+
+  const command = input.toolCall.input.command;
+  return classifyCommand(typeof command === 'string' ? command : '');
 }
 
-function requiresApproval(definition: ToolDefinition): boolean {
-  return definition.riskLevel === 'medium'
-    || definition.riskLevel === 'high'
-    || definition.riskLevel === 'critical'
-    || hasSideEffect(definition)
-    || definition.capabilities.some((capability) => capability !== 'project_read');
+function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPathClassification | undefined {
+  if (!isRecord(input.toolCall.input)) {
+    return undefined;
+  }
+
+  if (input.definition.name === 'run_command') {
+    const cwd = input.toolCall.input.cwd;
+    return classifyProjectPath({
+      projectRoot: input.projectRoot,
+      targetPath: typeof cwd === 'string' ? cwd : '.',
+    });
+  }
+
+  const targetPath = input.toolCall.input.path ?? input.toolCall.input.targetPath;
+  if (typeof targetPath !== 'string') {
+    return undefined;
+  }
+
+  return classifyProjectPath({ projectRoot: input.projectRoot, targetPath });
+}
+
+function findMatchedRule(
+  input: EvaluatePermissionPolicyInput,
+  bucket: RuleBucket,
+): Omit<PermissionMatchedRule, 'decision'> | undefined {
+  return (input.settings?.[bucket] ?? []).find((rule) =>
+    matchPermissionRule(rule.pattern, {
+      toolName: input.definition.name,
+      input: input.toolCall.input,
+    }).matched,
+  );
+}
+
+function evaluateHardGuards(
+  input: EvaluatePermissionPolicyInput,
+  projectPath: ProjectPathClassification | undefined,
+): HardGuardResult | undefined {
+  const writesProject = isProjectWrite(input.definition);
+  const commandRunsOutsideProject = input.definition.capabilities.includes('command_run')
+    && projectPath
+    && !projectPath.insideProject;
+
+  if (projectPath && !projectPath.insideProject && (writesProject || commandRunsOutsideProject)) {
+    return {
+      decision: 'deny',
+      source: 'project_boundary',
+      reason: 'Project boundary blocks writes and command execution outside the project.',
+    };
+  }
+
+  if (projectPath?.protected && writesProject) {
+    return {
+      decision: 'deny',
+      source: 'protected_path',
+      reason: 'Protected path blocks ordinary project writes.',
+    };
+  }
+
+  if (projectPath?.sensitive) {
+    return {
+      decision: 'ask',
+      source: 'sensitive_policy',
+      reason: 'Sensitive path requires explicit user confirmation.',
+    };
+  }
+
+  return undefined;
+}
+
+function evaluatePermissionModeDefault(
+  input: EvaluatePermissionPolicyInput,
+  commandLabel: CommandClassifierLabel | undefined,
+  projectPath: ProjectPathClassification | undefined,
+): EvaluateModeDefaultResult | undefined {
+  const readsProject = isProjectRead(input.definition);
+  const writesProject = isProjectWrite(input.definition);
+
+  if (input.permissionMode === 'default') {
+    if (readsProject) {
+      return { decision: 'allow', reason: 'default allows project reads.' };
+    }
+
+    return { decision: 'ask', reason: 'default asks before writes or commands.' };
+  }
+
+  if (input.permissionMode === 'accept_edits') {
+    if (readsProject) {
+      return { decision: 'allow', reason: 'accept_edits allows project reads.' };
+    }
+
+    if (writesProject && projectPath?.insideProject && !projectPath.protected && !projectPath.sensitive) {
+      return { decision: 'allow', reason: 'accept_edits allows ordinary project edits.' };
+    }
+
+    if (isAllowedCommandInAcceptEdits(commandLabel)) {
+      return { decision: 'allow', reason: `accept_edits allows ${commandLabel} commands.` };
+    }
+
+    if (commandLabel === 'destructive' || commandLabel === 'unknown') {
+      return { decision: 'deny', reason: 'accept_edits denies destructive and unknown commands.' };
+    }
+
+    return { decision: 'ask', reason: 'accept_edits asks before risky commands.' };
+  }
+
+  if (input.permissionMode === 'plan') {
+    if (readsProject) {
+      return { decision: 'allow', reason: 'plan allows read-only tools.' };
+    }
+
+    if (isAllowedCommandInPlan(commandLabel)) {
+      return { decision: 'allow', reason: `plan allows ${commandLabel} commands.` };
+    }
+
+    if (commandLabel === 'verification') {
+      return { decision: 'ask', reason: 'plan asks before verification commands.' };
+    }
+
+    return { decision: 'deny', reason: 'plan denies writes, mutations, destructive commands, and unknown commands.' };
+  }
+
+  return undefined;
+}
+
+function createPermissionDecision(
+  input: EvaluatePermissionPolicyInput,
+  decision: ToolPolicyDecisionValue,
+  source: PermissionDecisionSource,
+  reason: string,
+  options: {
+    matchedRule?: PermissionMatchedRule;
+    commandLabel?: CommandClassifierLabel;
+    classifierLabel?: PermissionClassifierLabel;
+    projectPath?: ProjectPathClassification;
+    confidence?: number;
+  } = {},
+): PermissionDecision {
+  return {
+    permissionDecisionId: `permission-decision:${input.toolCall.toolCallId}`,
+    toolUseId: input.toolCall.toolUseId,
+    toolCallId: input.toolCall.toolCallId,
+    runId: input.toolCall.runId,
+    decision,
+    source,
+    reason,
+    mode: input.permissionMode,
+    ...(options.matchedRule ? { matchedRule: options.matchedRule } : {}),
+    ...classifierLabelFields(options),
+    ...targetField(options.projectPath),
+    capability: input.definition.capabilities[0],
+    sideEffect: input.definition.sideEffect,
+    effectiveRiskLevel: decision === 'deny'
+      ? escalateRisk(input.definition.riskLevel, 'high')
+      : input.definition.riskLevel,
+    ...(decision === 'ask' ? { requiredApproval: { scope: 'once', reason } } : {}),
+    requiredSandbox: createSandboxRequirement(input),
+    evaluatedAt: input.evaluatedAt,
+    ...(typeof options.confidence === 'number' ? { metadata: { confidence: options.confidence } } : {}),
+  };
+}
+
+function classifierLabelFields(options: {
+  commandLabel?: CommandClassifierLabel;
+  classifierLabel?: PermissionClassifierLabel;
+}): Pick<PermissionDecision, 'classifierLabel'> | Record<string, never> {
+  const classifierLabel = options.classifierLabel ?? options.commandLabel;
+  return classifierLabel ? { classifierLabel } : {};
+}
+
+function targetField(
+  projectPath: ProjectPathClassification | undefined,
+): Pick<PermissionDecision, 'target'> | Record<string, never> {
+  if (!projectPath || projectPath.relativePath === '') {
+    return {};
+  }
+
+  return { target: projectPath.relativePath };
+}
+
+function createSandboxRequirement(input: EvaluatePermissionPolicyInput): SandboxRequirement {
+  return {
+    level: sandboxLevelForDefinition(input.definition),
+    allowedRoots: [input.projectRoot],
+    networkPolicy: 'deny',
+  };
 }
 
 function sandboxLevelForDefinition(definition: ToolDefinition): SandboxRequirement['level'] {
@@ -88,37 +339,39 @@ function sandboxLevelForDefinition(definition: ToolDefinition): SandboxRequireme
   return 'host_restricted';
 }
 
-function createPolicyDecision(
-  input: EvaluateToolPolicyInput,
-  decision: Pick<ToolPolicyDecision, 'decision' | 'source' | 'reason' | 'effectiveRiskLevel'>
-    & Partial<Pick<ToolPolicyDecision, 'requiredApproval' | 'requiredSandbox'>>,
-): ToolPolicyDecision {
-  return {
-    permissionDecisionId: `${input.toolCall.toolCallId}:policy`,
-    toolUseId: input.toolCall.toolUseId,
-    toolCallId: input.toolCall.toolCallId,
-    runId: input.toolCall.runId,
-    mode: input.permissionMode,
-    capability: input.definition.capabilities[0],
-    sideEffect: input.definition.sideEffect,
-    evaluatedAt: input.evaluatedAt,
-    ...decision,
-  };
+function isProjectRead(definition: ToolDefinition): boolean {
+  return definition.sideEffect === 'none' || definition.capabilities.includes('project_read');
 }
 
-function createSandboxRequirement(
-  input: EvaluateToolPolicyInput,
-  level: SandboxRequirement['level'],
-): SandboxRequirement {
-  return {
-    level,
-    ...(input.workspaceRoot ? { allowedRoots: [input.workspaceRoot] } : {}),
-    ...(input.protectedPathHints ? { protectedPaths: input.protectedPathHints } : {}),
-    networkPolicy: level === 'network_restricted' ? 'restricted' : 'deny',
-  };
+function isProjectWrite(definition: ToolDefinition): boolean {
+  return definition.capabilities.includes('project_write')
+    || definition.sideEffect === 'project_file_operation';
+}
+
+function isAllowedCommandInAcceptEdits(
+  commandLabel: CommandClassifierLabel | undefined,
+): commandLabel is 'read_only' | 'search_or_list' | 'git_read' | 'verification' {
+  return commandLabel === 'read_only'
+    || commandLabel === 'search_or_list'
+    || commandLabel === 'git_read'
+    || commandLabel === 'verification';
+}
+
+function isAllowedCommandInPlan(
+  commandLabel: CommandClassifierLabel | undefined,
+): commandLabel is 'read_only' | 'search_or_list' | 'git_read' {
+  return commandLabel === 'read_only'
+    || commandLabel === 'search_or_list'
+    || commandLabel === 'git_read';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function escalateRisk(current: ToolRiskLevel, minimum: ToolRiskLevel): ToolRiskLevel {
   const order: ToolRiskLevel[] = ['low', 'medium', 'high', 'critical'];
   return order.indexOf(current) >= order.indexOf(minimum) ? current : minimum;
 }
+
+export type { ToolPolicyDecision };

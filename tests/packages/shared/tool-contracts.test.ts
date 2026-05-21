@@ -63,6 +63,10 @@ describe('tool-contracts', () => {
       'failed',
     ]);
     expect(PERMISSION_DECISION_SOURCES).toEqual([
+      'rule',
+      'protected_path',
+      'sensitive_policy',
+      'project_boundary',
       'user_rule',
       'project_rule',
       'local_rule',

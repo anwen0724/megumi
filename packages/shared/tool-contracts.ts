@@ -95,6 +95,10 @@ export const TOOL_POLICY_DECISIONS = ['allow', 'ask', 'deny'] as const;
 export type ToolPolicyDecisionValue = (typeof TOOL_POLICY_DECISIONS)[number];
 
 export const PERMISSION_DECISION_SOURCES = [
+  'rule',
+  'protected_path',
+  'sensitive_policy',
+  'project_boundary',
   'user_rule',
   'project_rule',
   'local_rule',

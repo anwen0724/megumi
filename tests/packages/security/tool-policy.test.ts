@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateToolPolicy, type EvaluateToolPolicyInput } from '@megumi/security/tool-policy';
+import {
+  evaluatePermissionPolicy,
+  evaluateToolPolicy,
+  type EvaluatePermissionPolicyInput,
+} from '@megumi/security/tool-policy';
 import type { JsonObject } from '@megumi/shared/json';
-import { ACTIVE_PERMISSION_MODES } from '@megumi/shared/permission-mode-contracts';
+import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
+import type { MergedPermissionSettings } from '@megumi/shared/permission-settings-contracts';
+import type {
+  PermissionClassifier,
+  PermissionClassifierResult,
+} from '@megumi/security/permission-classifier';
 import type { ToolCall, ToolDefinition } from '@megumi/shared/tool-contracts';
 
+const projectRoot = 'C:/all/work/study/megumi';
+const evaluatedAt = '2026-05-20T00:00:00.000Z';
+
 const readDefinition: ToolDefinition = {
-  name: 'project_read_file',
+  name: 'read_file',
   description: 'Read a normal project file.',
   inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
   annotations: { readOnlyHint: true },
@@ -16,9 +28,13 @@ const readDefinition: ToolDefinition = {
 };
 
 const writeDefinition: ToolDefinition = {
-  name: 'project_write_file',
+  name: 'write_file',
   description: 'Write a project file.',
-  inputSchema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] },
+  inputSchema: {
+    type: 'object',
+    properties: { path: { type: 'string' }, content: { type: 'string' } },
+    required: ['path', 'content'],
+  },
   annotations: { destructiveHint: true },
   capabilities: ['project_write'],
   riskLevel: 'medium',
@@ -26,126 +42,235 @@ const writeDefinition: ToolDefinition = {
   availability: { status: 'available' },
 };
 
-function callFor(definition: ToolDefinition, input: JsonObject = { path: 'src/index.ts' }): ToolCall {
+const commandDefinition: ToolDefinition = {
+  name: 'run_command',
+  description: 'Run a command in the project.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      command: { type: 'string' },
+      cwd: { type: 'string' },
+    },
+    required: ['command'],
+  },
+  annotations: { destructiveHint: true },
+  capabilities: ['command_run'],
+  riskLevel: 'high',
+  sideEffect: 'execute_command',
+  availability: { status: 'available' },
+};
+
+function callFor(definition: ToolDefinition, input: JsonObject): ToolCall {
+  const target = String(input.path ?? input.targetPath ?? input.cwd ?? input.command ?? '.');
+
   return {
     toolCallId: 'tool-call-1',
     toolUseId: 'tool-use-1',
     runId: 'run-1',
     stepId: 'step-1',
-    actionId: 'action-1',
     toolName: definition.name,
     input,
     inputPreview: {
       summary: definition.description,
-      targets: [{ kind: 'file', label: String(input.path ?? 'src/index.ts'), sensitivity: 'normal' }],
+      targets: [{ kind: definition.name === 'run_command' ? 'command' : 'file', label: target, sensitivity: 'normal' }],
       redactionState: 'none',
     },
     capabilities: definition.capabilities,
     riskLevel: definition.riskLevel,
     sideEffect: definition.sideEffect,
     status: 'requested',
-    requestedAt: '2026-05-16T00:00:00.000Z',
+    requestedAt: evaluatedAt,
   };
 }
 
-describe('evaluateToolPolicy', () => {
-  it('rejects legacy read_only as a permission mode at compile time', () => {
-    const input = {
-      definition: readDefinition,
-      toolCall: callFor(readDefinition),
-      // @ts-expect-error read_only is a classifier label, not a target permission mode.
-      permissionMode: 'read_only',
-      evaluatedAt: '2026-05-16T00:00:00.000Z',
-    } satisfies EvaluateToolPolicyInput;
+function evaluate(input: {
+  definition: ToolDefinition;
+  toolInput: JsonObject;
+  permissionMode: PermissionMode;
+  settings?: MergedPermissionSettings;
+  classifier?: PermissionClassifier;
+}) {
+  return evaluatePermissionPolicy({
+    definition: input.definition,
+    toolCall: callFor(input.definition, input.toolInput),
+    permissionMode: input.permissionMode,
+    projectRoot,
+    settings: input.settings,
+    classifier: input.classifier,
+    evaluatedAt,
+  });
+}
 
-    expect(input.permissionMode).toBe('read_only');
+describe('evaluatePermissionPolicy', () => {
+  it('keeps evaluateToolPolicy as a compatibility export', () => {
+    expect(evaluateToolPolicy).toBe(evaluatePermissionPolicy);
   });
 
-  it('allows low-risk project reads with read-only sandbox and audit fields', () => {
-    const decision = evaluateToolPolicy({
-      definition: readDefinition,
-      toolCall: callFor(readDefinition),
+  it('applies deny rules before allow rules across scopes', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'npm test', cwd: '.' },
       permissionMode: 'default',
-      workspaceRoot: 'C:/all/work/study/megumi',
-      evaluatedAt: '2026-05-16T00:00:00.000Z',
+      settings: {
+        deny: [{ scope: 'project', pattern: 'run_command(npm *)' }],
+        allow: [{ scope: 'local', pattern: 'run_command(npm test)' }],
+        ask: [],
+      },
     });
 
     expect(decision).toMatchObject({
-      permissionDecisionId: 'tool-call-1:policy',
-      toolUseId: 'tool-use-1',
-      toolCallId: 'tool-call-1',
-      runId: 'run-1',
-      decision: 'allow',
-      source: 'system_default',
-      mode: 'default',
-      capability: 'project_read',
-      sideEffect: 'none',
-      effectiveRiskLevel: 'low',
-      requiredSandbox: {
-        level: 'read_only_project',
-        networkPolicy: 'deny',
+      decision: 'deny',
+      source: 'rule',
+      matchedRule: {
+        scope: 'project',
+        pattern: 'run_command(npm *)',
+        decision: 'deny',
       },
-      evaluatedAt: '2026-05-16T00:00:00.000Z',
+      classifierLabel: 'verification',
     });
   });
 
-  it('records each target permission mode without fallback normalization', () => {
-    for (const permissionMode of ACTIVE_PERMISSION_MODES) {
-      const decision = evaluateToolPolicy({
-        definition: readDefinition,
-        toolCall: callFor(readDefinition),
-        permissionMode,
-        evaluatedAt: '2026-05-16T00:00:00.000Z',
-      });
-
-      expect(decision.mode).toBe(permissionMode);
-    }
-  });
-
-  it('asks for project writes in default mode', () => {
-    const decision = evaluateToolPolicy({
+  it('applies hard guards before ordinary allow rules', () => {
+    const decision = evaluate({
       definition: writeDefinition,
-      toolCall: callFor(writeDefinition, { path: 'src/index.ts', content: 'hello' }),
+      toolInput: { path: '.megumi/settings.json', content: '{}' },
       permissionMode: 'default',
-      workspaceRoot: 'C:/all/work/study/megumi',
-      evaluatedAt: '2026-05-16T00:00:00.000Z',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'write_file(.megumi/settings.json)' }],
+        ask: [],
+      },
     });
 
-    expect(decision.decision).toBe('ask');
-    expect(decision.source).toBe('system_default');
-    expect(decision.capability).toBe('project_write');
-    expect(decision.sideEffect).toBe('project_file_operation');
-    expect(decision.requiredApproval).toMatchObject({ scope: 'once' });
-    expect(decision.requiredSandbox?.level).toBe('project_write');
-  });
-
-  it('denies project writes in plan mode', () => {
-    const decision = evaluateToolPolicy({
-      definition: writeDefinition,
-      toolCall: callFor(writeDefinition, { path: 'src/index.ts', content: 'hello' }),
-      permissionMode: 'plan',
-      workspaceRoot: 'C:/all/work/study/megumi',
-      evaluatedAt: '2026-05-16T00:00:00.000Z',
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'protected_path',
+      target: '.megumi/settings.json',
     });
-
-    expect(decision.decision).toBe('deny');
-    expect(decision.source).toBe('permission_mode');
-    expect(decision.mode).toBe('plan');
-    expect(decision.reason).toContain('plan');
   });
 
-  it('denies protected or secret targets', () => {
-    const decision = evaluateToolPolicy({
+  it('uses default mode defaults for reads and writes', () => {
+    expect(evaluate({
       definition: readDefinition,
-      toolCall: callFor(readDefinition, { path: '.env' }),
+      toolInput: { path: 'src/index.ts' },
       permissionMode: 'default',
-      workspaceRoot: 'C:/all/work/study/megumi',
-      protectedPathHints: ['.env'],
-      evaluatedAt: '2026-05-16T00:00:00.000Z',
+    })).toMatchObject({
+      decision: 'allow',
+      source: 'permission_mode',
+      requiredSandbox: { level: 'read_only_project', allowedRoots: [projectRoot] },
     });
 
-    expect(decision.decision).toBe('deny');
-    expect(decision.source).toBe('system_default');
-    expect(decision.effectiveRiskLevel).toBe('critical');
+    expect(evaluate({
+      definition: writeDefinition,
+      toolInput: { path: 'src/index.ts', content: 'hello' },
+      permissionMode: 'default',
+    })).toMatchObject({
+      decision: 'ask',
+      source: 'permission_mode',
+      requiredApproval: { scope: 'once' },
+      requiredSandbox: { level: 'project_write', allowedRoots: [projectRoot] },
+    });
+  });
+
+  it('uses plan mode defaults for edits and commands', () => {
+    expect(evaluate({
+      definition: writeDefinition,
+      toolInput: { path: 'src/index.ts', content: 'hello' },
+      permissionMode: 'plan',
+    })).toMatchObject({
+      decision: 'deny',
+      source: 'permission_mode',
+    });
+
+    expect(evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'npm test', cwd: '.' },
+      permissionMode: 'plan',
+    })).toMatchObject({
+      decision: 'ask',
+      source: 'permission_mode',
+      classifierLabel: 'verification',
+      requiredApproval: { scope: 'once' },
+    });
+
+    expect(evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'unknown-tool --flag', cwd: '.' },
+      permissionMode: 'plan',
+    })).toMatchObject({
+      decision: 'deny',
+      source: 'permission_mode',
+      classifierLabel: 'unknown',
+    });
+  });
+
+  it('uses accept_edits defaults for ordinary project writes and verification commands', () => {
+    expect(evaluate({
+      definition: writeDefinition,
+      toolInput: { path: 'src/index.ts', content: 'hello' },
+      permissionMode: 'accept_edits',
+    })).toMatchObject({
+      decision: 'allow',
+      source: 'permission_mode',
+      target: 'src/index.ts',
+    });
+
+    expect(evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'npx tsc --noEmit', cwd: '.' },
+      permissionMode: 'accept_edits',
+    })).toMatchObject({
+      decision: 'allow',
+      source: 'permission_mode',
+      classifierLabel: 'verification',
+    });
+  });
+
+  it('uses auto classifier after hard guards and mode default defer', () => {
+    const classifier: PermissionClassifier = {
+      classify: (): PermissionClassifierResult => ({
+        decision: 'allow',
+        classifierLabel: 'project_file_operation',
+        reason: 'Auto classifier allows ordinary project edit.',
+        confidence: 0.82,
+      }),
+    };
+
+    expect(evaluate({
+      definition: writeDefinition,
+      toolInput: { path: 'src/index.ts', content: 'hello' },
+      permissionMode: 'auto',
+      classifier,
+    })).toMatchObject({
+      decision: 'allow',
+      source: 'classifier',
+      classifierLabel: 'project_file_operation',
+      metadata: { confidence: 0.82 },
+      target: 'src/index.ts',
+    });
+
+    expect(evaluate({
+      definition: writeDefinition,
+      toolInput: { path: '.env', content: 'TOKEN=value' },
+      permissionMode: 'auto',
+      classifier,
+    })).toMatchObject({
+      decision: 'ask',
+      source: 'sensitive_policy',
+      target: '.env',
+      requiredApproval: { scope: 'once' },
+    });
+  });
+
+  it('uses the target evaluate input contract', () => {
+    const input = {
+      definition: readDefinition,
+      toolCall: callFor(readDefinition, { path: 'README.md' }),
+      permissionMode: 'default',
+      projectRoot,
+      evaluatedAt,
+    } satisfies EvaluatePermissionPolicyInput;
+
+    expect(evaluatePermissionPolicy(input).decision).toBe('allow');
   });
 });
