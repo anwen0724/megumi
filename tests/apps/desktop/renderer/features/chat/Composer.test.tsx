@@ -53,6 +53,8 @@ describe('Composer', () => {
       ['plan', 'Plan'],
       ['auto', 'Auto'],
     ]);
+    expect(screen.queryByLabelText('Composer mode')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Chat' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Execute' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Review' })).not.toBeInTheDocument();
   });
