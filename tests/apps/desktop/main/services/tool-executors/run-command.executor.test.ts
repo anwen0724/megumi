@@ -191,6 +191,28 @@ describe('RunCommandExecutor', () => {
     expect(result.truncated).toBe(true);
   });
 
+  it('preserves multibyte UTF-8 characters split across stdout chunks', async () => {
+    const multibyte = Buffer.from('中', 'utf8');
+    const executor = createRunCommandExecutor({
+      projectRoot: 'C:/project',
+      spawn: vi.fn(() => fakeChildProcess({
+        stdout: [
+          multibyte.subarray(0, 1),
+          multibyte.subarray(1),
+          '\n',
+        ],
+        stderr: '',
+        exitCode: 0,
+      })),
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    const result = await executor.runCommand({ command: 'npm test' });
+
+    expect(result.stdoutPreview).toBe('中\n');
+  });
+
   it('rejects cwd outside the project and kills a timed-out child process', async () => {
     const spawn = vi.fn(() => fakeChildProcess({ stdout: '', stderr: '', exitCode: 0 }));
     const executor = createRunCommandExecutor({
@@ -240,9 +262,11 @@ function toolCall(input: Record<string, unknown>): ToolCall {
   };
 }
 
+type OutputChunk = Buffer | string;
+
 function fakeChildProcess(input: {
-  stdout: string;
-  stderr: string;
+  stdout: string | OutputChunk[];
+  stderr: string | OutputChunk[];
   exitCode: number | null;
   neverClose?: boolean;
 }) {
@@ -250,15 +274,15 @@ function fakeChildProcess(input: {
   const child = {
     stdout: {
       on: vi.fn((event: string, listener: (chunk: Buffer) => void) => {
-        if (event === 'data' && input.stdout) {
-          listener(Buffer.from(input.stdout));
+        if (event === 'data') {
+          emitOutputChunks(input.stdout, listener);
         }
       }),
     },
     stderr: {
       on: vi.fn((event: string, listener: (chunk: Buffer) => void) => {
-        if (event === 'data' && input.stderr) {
-          listener(Buffer.from(input.stderr));
+        if (event === 'data') {
+          emitOutputChunks(input.stderr, listener);
         }
       }),
     },
@@ -278,4 +302,11 @@ function fakeChildProcess(input: {
     }),
   };
   return child;
+}
+
+function emitOutputChunks(output: string | OutputChunk[], listener: (chunk: Buffer) => void): void {
+  const chunks = Array.isArray(output) ? output : output ? [Buffer.from(output)] : [];
+  for (const chunk of chunks) {
+    listener(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8'));
+  }
 }

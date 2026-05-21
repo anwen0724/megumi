@@ -67,8 +67,8 @@ export function createRunCommandExecutor(options: RunCommandExecutorOptions): Ru
       const startedAt = nowMs();
 
       return new Promise<RunCommandResult>((resolve, reject) => {
-        let stdout = '';
-        let stderr = '';
+        const stdout = createOutputCollector(OUTPUT_LIMIT);
+        const stderr = createOutputCollector(OUTPUT_LIMIT);
         let settled = false;
 
         const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', input.command], {
@@ -88,10 +88,10 @@ export function createRunCommandExecutor(options: RunCommandExecutorOptions): Ru
         }, timeoutMs);
 
         child.stdout?.on('data', (chunk) => {
-          stdout += chunk.toString();
+          stdout.append(chunk);
         });
         child.stderr?.on('data', (chunk) => {
-          stderr += chunk.toString();
+          stderr.append(chunk);
         });
         child.on('error', (error) => {
           if (settled) {
@@ -107,8 +107,8 @@ export function createRunCommandExecutor(options: RunCommandExecutorOptions): Ru
           }
           settled = true;
           clearTimeout(timer);
-          const stdoutPreview = truncateUtf8(stdout, OUTPUT_LIMIT);
-          const stderrPreview = truncateUtf8(stderr, OUTPUT_LIMIT);
+          const stdoutPreview = stdout.preview();
+          const stderrPreview = stderr.preview();
 
           resolve({
             exitCode,
@@ -197,15 +197,76 @@ function resolveProjectCwd(projectRoot: string, cwd: string): string {
   return classification.absolutePath;
 }
 
-function truncateUtf8(content: string, maxBytes: number): { content: string; truncated: boolean } {
-  const buffer = Buffer.from(content, 'utf8');
-  if (buffer.byteLength <= maxBytes) {
-    return { content, truncated: false };
-  }
+function createOutputCollector(maxBytes: number): {
+  append(chunk: Buffer | string): void;
+  preview(): { content: string; truncated: boolean };
+} {
+  const chunks: Buffer[] = [];
+  let byteLength = 0;
+  let truncated = false;
+
   return {
-    content: buffer.subarray(0, maxBytes).toString('utf8'),
-    truncated: true,
+    append(chunk) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8');
+      const remaining = maxBytes - byteLength;
+      if (remaining <= 0) {
+        if (buffer.byteLength > 0) {
+          truncated = true;
+        }
+        return;
+      }
+
+      if (buffer.byteLength > remaining) {
+        chunks.push(buffer.subarray(0, remaining));
+        byteLength += remaining;
+        truncated = true;
+        return;
+      }
+
+      chunks.push(buffer);
+      byteLength += buffer.byteLength;
+    },
+    preview() {
+      const content = Buffer.concat(chunks, byteLength);
+      return {
+        content: trimToUtf8Boundary(content).toString('utf8'),
+        truncated,
+      };
+    },
   };
+}
+
+function trimToUtf8Boundary(buffer: Buffer): Buffer {
+  if (buffer.byteLength === 0) {
+    return buffer;
+  }
+
+  let sequenceStart = buffer.byteLength - 1;
+  while (sequenceStart >= 0 && (buffer[sequenceStart] & 0b1100_0000) === 0b1000_0000) {
+    sequenceStart -= 1;
+  }
+
+  if (sequenceStart < 0) {
+    return Buffer.alloc(0);
+  }
+
+  const leadByte = buffer[sequenceStart];
+  const actualLength = buffer.byteLength - sequenceStart;
+  let expectedLength = 1;
+
+  if ((leadByte & 0b1111_1000) === 0b1111_0000) {
+    expectedLength = 4;
+  } else if ((leadByte & 0b1111_0000) === 0b1110_0000) {
+    expectedLength = 3;
+  } else if ((leadByte & 0b1110_0000) === 0b1100_0000) {
+    expectedLength = 2;
+  }
+
+  if (actualLength < expectedLength) {
+    return buffer.subarray(0, sequenceStart);
+  }
+
+  return buffer;
 }
 
 function formatRunCommandText(result: RunCommandResult): string {
