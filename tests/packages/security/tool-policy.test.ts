@@ -255,6 +255,44 @@ describe('evaluatePermissionPolicy', () => {
     });
   });
 
+  it('blocks run_command file-descriptor redirection project boundary escapes before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'echo hi 2>..\\outside.txt', cwd: '.' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(echo hi 2>..\\outside.txt)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'project_boundary',
+      target: '../outside.txt',
+    });
+  });
+
+  it('blocks run_command all-stream redirection project boundary escapes before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'echo hi *>..\\outside.txt', cwd: '.' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'run_command(echo hi *>..\\outside.txt)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'deny',
+      source: 'project_boundary',
+      target: '../outside.txt',
+    });
+  });
+
   it('blocks run_command at-prefixed project boundary escapes before ordinary allow rules', () => {
     const decision = evaluate({
       definition: commandDefinition,

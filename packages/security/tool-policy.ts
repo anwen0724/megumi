@@ -268,7 +268,7 @@ function normalizeCommandPathToken(token: string): string {
 
   return pathCandidate
     .replace(/^['"`]+|['"`]+$/g, '')
-    .replace(/^(?:>>?|<|@)+/, '');
+    .replace(/^(?:(?:\d+|\*|&)?>>?|<|@)+/, '');
 }
 
 function isIgnoredCommandToken(token: string): boolean {
