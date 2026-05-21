@@ -4,6 +4,8 @@ import type {
   RunCancelledPayload,
   RunFailedPayload,
   RuntimeEvent,
+  ToolCallApprovalRequestedPayload,
+  ToolResultCreatedPayload,
 } from '@megumi/shared/runtime-events';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { ApprovalRequest, ApprovalStatus, ToolCall, ToolPolicyDecision } from '@megumi/shared/tool-contracts';
@@ -50,6 +52,30 @@ function applyToolEvent(event: RuntimeEvent): void {
     if (current) {
       store.upsertToolCall({ ...current, policyDecision: payload.policyDecision });
     }
+  }
+
+  if (event.eventType === 'tool.call.approval_requested') {
+    const payload = event.payload as ToolCallApprovalRequestedPayload & { toolCall?: ToolCall };
+    const approvalRequestId = payload.approvalRequest.approvalRequestId;
+
+    if (payload.toolCall) {
+      store.upsertToolCall({
+        ...payload.toolCall,
+        approvalRequestId,
+        status: 'waiting_for_approval',
+      });
+    } else {
+      const current = store.toolCallsById[payload.toolCallId];
+      if (current) {
+        store.upsertToolCall({
+          ...current,
+          approvalRequestId,
+          status: 'waiting_for_approval',
+        });
+      }
+    }
+
+    useApprovalStore.getState().upsertApprovalRequest(payload.approvalRequest);
   }
 
   if (event.eventType === 'tool.call.started') {
@@ -107,6 +133,31 @@ function applyToolEvent(event: RuntimeEvent): void {
         completedAt: event.createdAt,
       });
     }
+  }
+
+  if (event.eventType === 'tool.result.created') {
+    const payload = event.payload as ToolResultCreatedPayload;
+    if (!payload.toolCallId) {
+      return;
+    }
+
+    const current = store.toolCallsById[payload.toolCallId];
+    if (!current) {
+      return;
+    }
+
+    const status = payload.kind === 'tool_error'
+      ? 'failed'
+      : payload.kind === 'policy_denied' || payload.kind === 'user_rejected'
+        ? 'denied'
+        : 'succeeded';
+
+    store.upsertToolCall({
+      ...current,
+      status,
+      resultPreview: payload.summary,
+      completedAt: event.createdAt,
+    });
   }
 }
 

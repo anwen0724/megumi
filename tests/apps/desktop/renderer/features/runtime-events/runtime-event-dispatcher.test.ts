@@ -282,6 +282,106 @@ describe('runtime event dispatcher', () => {
     expect(useChatStore.getState().agentStatus).toBe('running');
   });
 
+  it('projects tool-call approval request events into tool and approval stores', () => {
+    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 1, {
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        toolUseId: 'tool-use-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'edit_file',
+        input: { path: 'src/app.ts' },
+        inputPreview: {
+          summary: 'Edit src/app.ts',
+          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
+          redactionState: 'none',
+        },
+        capabilities: ['project_write'],
+        riskLevel: 'medium',
+        sideEffect: 'project_file_operation',
+        status: 'requested',
+        requestedAt: '2026-05-20T00:00:00.000Z',
+      },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('tool.call.approval_requested', 2, {
+      toolCallId: 'tool-call-1',
+      toolName: 'edit_file',
+      approvalRequest: {
+        approvalRequestId: 'approval-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'edit_file',
+        capabilities: ['project_write'],
+        riskLevel: 'medium',
+        title: 'Edit file',
+        summary: 'Edit src/app.ts',
+        preview: {
+          action: 'Edit file',
+          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
+        },
+        requestedScope: 'once',
+        status: 'pending',
+        createdAt: '2026-05-20T00:00:01.000Z',
+      },
+    }));
+
+    expect(useApprovalStore.getState().approvalRequestsById['approval-1']).toMatchObject({
+      approvalRequestId: 'approval-1',
+      status: 'pending',
+    });
+    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
+      approvalRequestId: 'approval-1',
+      status: 'waiting_for_approval',
+    });
+  });
+
+  it('projects tool result events onto existing tool calls without synthesizing missing calls', () => {
+    dispatchRuntimeEvent(runtimeEvent('tool.result.created', 1, {
+      toolResultId: 'tool-result-missing',
+      toolUseId: 'tool-use-missing',
+      toolCallId: 'tool-call-missing',
+      kind: 'success',
+      summary: 'Missing tool call result.',
+    }));
+    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 2, {
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        toolUseId: 'tool-use-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+        inputPreview: {
+          summary: 'Read README.md',
+          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
+          redactionState: 'none',
+        },
+        capabilities: ['project_read'],
+        riskLevel: 'low',
+        sideEffect: 'none',
+        status: 'running',
+        requestedAt: '2026-05-20T00:00:00.000Z',
+        startedAt: '2026-05-20T00:00:01.000Z',
+      },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('tool.result.created', 3, {
+      toolResultId: 'tool-result-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      kind: 'success',
+      summary: 'Read 12 lines from README.md.',
+    }));
+
+    expect(useToolCallStore.getState().toolCallsById['tool-call-missing']).toBeUndefined();
+    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
+      status: 'succeeded',
+      resultPreview: 'Read 12 lines from README.md.',
+      completedAt: '2026-05-17T00:00:03.000Z',
+    });
+  });
+
   it('does not project duplicate tool events twice', () => {
     const requested = runtimeEvent('tool.call.requested', 1, {
       toolCall: {
