@@ -149,7 +149,9 @@ function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPa
     });
   }
 
-  const targetPath = input.toolCall.input.path ?? input.toolCall.input.targetPath;
+  const targetPath = input.toolCall.input.path
+    ?? input.toolCall.input.targetPath
+    ?? input.toolCall.input.pattern;
   if (typeof targetPath !== 'string') {
     return undefined;
   }
@@ -173,10 +175,11 @@ function evaluateHardGuards(
   input: EvaluatePermissionPolicyInput,
   projectPath: ProjectPathClassification | undefined,
 ): HardGuardResult | undefined {
+  const readsProject = isProjectRead(input.definition);
   const writesProject = isProjectWrite(input.definition);
 
   if (projectPath && !projectPath.insideProject) {
-    if (isProjectRead(input.definition) && input.definition.sideEffect === 'none') {
+    if (readsProject && input.definition.sideEffect === 'none') {
       return {
         decision: 'ask',
         source: 'project_boundary',
@@ -191,11 +194,19 @@ function evaluateHardGuards(
     };
   }
 
-  if (projectPath?.protected && writesProject) {
+  if (projectPath?.protected) {
+    if (writesProject || input.definition.capabilities.includes('command_run')) {
+      return {
+        decision: 'deny',
+        source: 'protected_path',
+        reason: 'Protected path blocks ordinary project writes and commands.',
+      };
+    }
+
     return {
-      decision: 'deny',
+      decision: 'ask',
       source: 'protected_path',
-      reason: 'Protected path blocks ordinary project writes.',
+      reason: 'Protected path reads require explicit user confirmation.',
     };
   }
 

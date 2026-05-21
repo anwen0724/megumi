@@ -27,6 +27,17 @@ const readDefinition: ToolDefinition = {
   availability: { status: 'available' },
 };
 
+const globDefinition: ToolDefinition = {
+  name: 'glob',
+  description: 'Find project files by pattern.',
+  inputSchema: { type: 'object', properties: { pattern: { type: 'string' } }, required: ['pattern'] },
+  annotations: { readOnlyHint: true },
+  capabilities: ['project_read'],
+  riskLevel: 'low',
+  sideEffect: 'none',
+  availability: { status: 'available' },
+};
+
 const writeDefinition: ToolDefinition = {
   name: 'write_file',
   description: 'Write a project file.',
@@ -61,7 +72,7 @@ const commandDefinition: ToolDefinition = {
 };
 
 function callFor(definition: ToolDefinition, input: JsonObject): ToolCall {
-  const target = String(input.path ?? input.targetPath ?? input.cwd ?? input.command ?? '.');
+  const target = String(input.path ?? input.targetPath ?? input.pattern ?? input.cwd ?? input.command ?? '.');
 
   return {
     toolCallId: 'tool-call-1',
@@ -165,6 +176,46 @@ describe('evaluatePermissionPolicy', () => {
       decision: 'ask',
       source: 'project_boundary',
       target: '../outside.txt',
+      requiredApproval: { scope: 'once' },
+    });
+  });
+
+  it('classifies glob pattern as a project-bound target before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: globDefinition,
+      toolInput: { pattern: '../outside/**' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'glob(../outside/**)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'ask',
+      source: 'project_boundary',
+      target: '../outside/**',
+      requiredApproval: { scope: 'once' },
+    });
+  });
+
+  it('asks for protected path reads before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: readDefinition,
+      toolInput: { path: '.git/config' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'read_file(.git/config)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'ask',
+      source: 'protected_path',
+      target: '.git/config',
       requiredApproval: { scope: 'once' },
     });
   });
