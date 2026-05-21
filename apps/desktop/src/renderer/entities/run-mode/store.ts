@@ -4,7 +4,7 @@ import {
   type ImplementationPlanArtifactStatus,
   type PermissionMode,
   type RunModeSnapshot,
-  isActivePermissionMode,
+  isPermissionMode,
 } from '@megumi/shared/run-mode-contracts';
 
 interface RunModeState {
@@ -62,7 +62,7 @@ export const useRunModeStore = create<RunModeState>((set) => ({
 
     return { plansByRun: nextPlansByRun };
   }),
-  isPermissionModeEnabled: (permissionMode) => isActivePermissionMode(permissionMode),
+  isPermissionModeEnabled: (permissionMode) => isPermissionMode(permissionMode),
   clearRunModeState: () => set({
     activeRunId: null,
     modeSnapshotsByRun: {},

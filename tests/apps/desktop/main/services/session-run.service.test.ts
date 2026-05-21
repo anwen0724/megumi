@@ -13,7 +13,6 @@ import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 import type { ApprovalRequest, ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -119,7 +118,10 @@ function createServiceWithRunModeRecorder(records: unknown[]) {
           modeSnapshotId: 'mode-snapshot:1',
           runId: input.runId,
           modeLabel: input.mode,
-          mode: input.modeSnapshot ?? RUN_MODE_PRESET_DEFAULTS.chat,
+          mode: input.modeSnapshot ?? {
+            permissionMode: 'default',
+            source: 'system',
+          },
           createdAt: input.createdAt,
         };
       },
@@ -162,7 +164,10 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
           modeSnapshotId: 'mode-snapshot:1',
           runId: input.runId,
           modeLabel: input.mode,
-          mode: input.modeSnapshot ?? RUN_MODE_PRESET_DEFAULTS.plan,
+          mode: input.modeSnapshot ?? {
+            permissionMode: 'plan',
+            source: 'system',
+          },
           createdAt: input.createdAt,
         };
       },
@@ -387,7 +392,7 @@ describe('SessionRunService', () => {
     const result = await service.startRun({
       sessionId: 'session-1',
       goal: 'Answer',
-      mode: 'chat',
+      mode: 'default',
       createdAt: '2026-05-15T00:00:00.000Z',
     });
 
@@ -411,7 +416,7 @@ describe('SessionRunService', () => {
     await service.startRun({
       sessionId: 'session-1',
       goal: 'Use workspace context',
-      mode: 'chat',
+      mode: 'default',
       createdAt: '2026-05-15T00:00:00.000Z',
     });
 
@@ -436,8 +441,11 @@ describe('SessionRunService', () => {
     const result = await service.startRun({
       sessionId: 'session-1',
       goal: 'Execute plan',
-      mode: 'execute',
-      modeSnapshot: RUN_MODE_PRESET_DEFAULTS.execute,
+      mode: 'default',
+      modeSnapshot: {
+        permissionMode: 'default',
+        source: 'user',
+      },
       sourcePlanId: 'plan:accepted',
       createdAt: '2026-05-15T00:00:00.000Z',
     });
@@ -462,7 +470,10 @@ describe('SessionRunService', () => {
       sessionId: 'session-1',
       goal: 'Write a plan',
       mode: 'plan',
-      modeSnapshot: RUN_MODE_PRESET_DEFAULTS.plan,
+      modeSnapshot: {
+        permissionMode: 'plan',
+        source: 'user',
+      },
       createdAt: '2026-05-15T00:00:00.000Z',
     });
 
@@ -1296,7 +1307,10 @@ describe('SessionRunService', () => {
             modeSnapshotId: 'mode-snapshot:1',
             runId: input.runId,
             modeLabel: input.mode,
-            mode: input.modeSnapshot ?? RUN_MODE_PRESET_DEFAULTS.plan,
+            mode: input.modeSnapshot ?? {
+              permissionMode: 'plan',
+              source: 'system',
+            },
             createdAt: input.createdAt,
           };
         },

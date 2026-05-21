@@ -191,7 +191,7 @@ function toModeSnapshotRow(snapshot: RunModeSnapshot): ModeSnapshotRow {
     mode_label: snapshot.modeLabel,
     mode_json: stringifyJson(snapshot.mode),
     permission_mode: snapshot.mode.permissionMode,
-    selection_source: snapshot.mode.selectionSource ?? null,
+    selection_source: snapshot.mode.source ?? null,
     created_at: snapshot.createdAt,
     metadata_json: snapshot.metadata ? stringifyJson(snapshot.metadata) : null,
   };

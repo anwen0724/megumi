@@ -1,5 +1,4 @@
 ﻿import { beforeEach, describe, expect, it } from 'vitest';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 import { useRunModeStore } from '@megumi/desktop/renderer/entities/run-mode';
 
 describe('useRunModeStore', () => {
@@ -12,7 +11,10 @@ describe('useRunModeStore', () => {
       modeSnapshotId: 'mode-snapshot:1',
       runId: 'run:1',
       modeLabel: 'plan',
-      mode: RUN_MODE_PRESET_DEFAULTS.plan,
+      mode: {
+        permissionMode: 'plan',
+        source: 'user',
+      },
       createdAt: '2026-05-15T00:00:00.000Z',
     });
 
@@ -36,11 +38,10 @@ describe('useRunModeStore', () => {
     expect(useRunModeStore.getState().plansByRun['run:plan'].acceptedAt).toBe('2026-05-15T00:00:01.000Z');
   });
 
-  it('marks reserved permission modes as disabled for 04 UI state', () => {
+  it('enables the 05 permission posture modes', () => {
     expect(useRunModeStore.getState().isPermissionModeEnabled('default')).toBe(true);
     expect(useRunModeStore.getState().isPermissionModeEnabled('plan')).toBe(true);
-    expect(useRunModeStore.getState().isPermissionModeEnabled('accept_edits')).toBe(false);
-    expect(useRunModeStore.getState().isPermissionModeEnabled('auto')).toBe(false);
-    expect(useRunModeStore.getState().isPermissionModeEnabled('bypass_permissions')).toBe(false);
+    expect(useRunModeStore.getState().isPermissionModeEnabled('accept_edits')).toBe(true);
+    expect(useRunModeStore.getState().isPermissionModeEnabled('auto')).toBe(true);
   });
 });

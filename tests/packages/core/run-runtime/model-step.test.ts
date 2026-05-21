@@ -27,7 +27,7 @@ describe('run model step foundation', () => {
     expect(isModelStep({ kind: 'model' })).toBe(true);
     expect(isModelStep({ kind: 'tool' })).toBe(false);
     expect(isModelMessageAction({ kind: 'emit_message' })).toBe(true);
-    expect(isModelMessageAction({ kind: 'call_tool' })).toBe(false);
+    expect(isModelMessageAction({ kind: 'create_artifact' })).toBe(false);
   });
 
   it('creates a redaction-safe model message observation shell', () => {

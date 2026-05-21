@@ -3,7 +3,6 @@ import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
-import { RUN_MODE_PRESET_DEFAULTS } from '@megumi/shared/run-mode-contracts';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');
@@ -35,12 +34,16 @@ describe('RunModeRepository', () => {
     const database = createTestDatabase();
     seedRun(database);
     const repo = new RunModeRepository(database);
+    const mode = {
+      permissionMode: 'plan' as const,
+      source: 'user' as const,
+    };
 
     repo.saveModeSnapshot({
       modeSnapshotId: 'mode-snapshot:1',
       runId: 'run:1',
       modeLabel: 'plan',
-      mode: RUN_MODE_PRESET_DEFAULTS.plan,
+      mode,
       createdAt: '2026-05-15T00:00:00.000Z',
       metadata: { source: 'test' },
     });
@@ -49,7 +52,7 @@ describe('RunModeRepository', () => {
       modeSnapshotId: 'mode-snapshot:1',
       runId: 'run:1',
       modeLabel: 'plan',
-      mode: RUN_MODE_PRESET_DEFAULTS.plan,
+      mode,
       createdAt: '2026-05-15T00:00:00.000Z',
       metadata: { source: 'test' },
     });

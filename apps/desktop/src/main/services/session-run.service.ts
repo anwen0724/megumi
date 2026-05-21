@@ -28,7 +28,6 @@ import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/sessi
 import {
   isPermissionMode,
   type PermissionMode,
-  type PermissionModeSelectionSource,
   type PermissionModeSnapshot,
 } from '@megumi/shared/permission-mode-contracts';
 import type {
@@ -1052,17 +1051,9 @@ function toPermissionModeSnapshot(
 
   return {
     permissionMode: isPermissionMode(mode.permissionMode) ? mode.permissionMode : 'default',
-    source: toPermissionModeSelectionSource(mode.selectionSource),
+    source: mode.source ?? 'system',
     createdAt: 'createdAt' in value ? value.createdAt : requestCreatedAt,
   };
-}
-
-function toPermissionModeSelectionSource(source: RunMode['selectionSource']): PermissionModeSelectionSource {
-  if (source === 'user_selected' || source === 'user_confirmation') {
-    return 'user';
-  }
-
-  return 'system';
 }
 
 function toSessionMessageRole(
@@ -1073,11 +1064,8 @@ function toSessionMessageRole(
 
 function createPermissionModeRunMode(permissionMode: PermissionMode): RunMode {
   return {
-    preset: permissionMode,
-    taskIntent: permissionMode === 'plan' ? 'plan' : 'answer',
     permissionMode,
-    outputExpectation: permissionMode === 'plan' ? 'implementation_plan_artifact' : 'assistant_message',
-    selectionSource: 'user_selected',
+    source: 'user',
   };
 }
 
