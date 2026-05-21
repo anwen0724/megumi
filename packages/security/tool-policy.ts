@@ -174,15 +174,20 @@ function evaluateHardGuards(
   projectPath: ProjectPathClassification | undefined,
 ): HardGuardResult | undefined {
   const writesProject = isProjectWrite(input.definition);
-  const commandRunsOutsideProject = input.definition.capabilities.includes('command_run')
-    && projectPath
-    && !projectPath.insideProject;
 
-  if (projectPath && !projectPath.insideProject && (writesProject || commandRunsOutsideProject)) {
+  if (projectPath && !projectPath.insideProject) {
+    if (isProjectRead(input.definition) && input.definition.sideEffect === 'none') {
+      return {
+        decision: 'ask',
+        source: 'project_boundary',
+        reason: 'Project boundary requires approval before reading outside the project.',
+      };
+    }
+
     return {
       decision: 'deny',
       source: 'project_boundary',
-      reason: 'Project boundary blocks writes and command execution outside the project.',
+      reason: 'Project boundary blocks writes, commands, and side effects outside the project.',
     };
   }
 
@@ -308,11 +313,11 @@ function classifierLabelFields(options: {
 function targetField(
   projectPath: ProjectPathClassification | undefined,
 ): Pick<PermissionDecision, 'target'> | Record<string, never> {
-  if (!projectPath || projectPath.relativePath === '') {
+  if (!projectPath) {
     return {};
   }
 
-  return { target: projectPath.relativePath };
+  return { target: projectPath.relativePath || '.' };
 }
 
 function createSandboxRequirement(input: EvaluatePermissionPolicyInput): SandboxRequirement {

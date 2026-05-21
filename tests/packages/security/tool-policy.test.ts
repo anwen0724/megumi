@@ -149,6 +149,26 @@ describe('evaluatePermissionPolicy', () => {
     });
   });
 
+  it('asks for project-outside reads before ordinary allow rules', () => {
+    const decision = evaluate({
+      definition: readDefinition,
+      toolInput: { path: '../outside.txt' },
+      permissionMode: 'default',
+      settings: {
+        deny: [],
+        allow: [{ scope: 'local', pattern: 'read_file(../outside.txt)' }],
+        ask: [],
+      },
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'ask',
+      source: 'project_boundary',
+      target: '../outside.txt',
+      requiredApproval: { scope: 'once' },
+    });
+  });
+
   it('uses default mode defaults for reads and writes', () => {
     expect(evaluate({
       definition: readDefinition,
@@ -223,6 +243,20 @@ describe('evaluatePermissionPolicy', () => {
       decision: 'allow',
       source: 'permission_mode',
       classifierLabel: 'verification',
+    });
+  });
+
+  it('records project root command targets as dot', () => {
+    const decision = evaluate({
+      definition: commandDefinition,
+      toolInput: { command: 'npm test', cwd: '.' },
+      permissionMode: 'plan',
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'ask',
+      source: 'permission_mode',
+      target: '.',
     });
   });
 
