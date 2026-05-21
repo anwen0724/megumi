@@ -835,6 +835,7 @@ function toSessionMessageRole(
 
 export interface CreateDefaultSessionRunServiceOptions {
   contextService?: SessionRunContextService;
+  toolUseHandler?: ToolUseHandlerPort;
 }
 
 export function createDefaultSessionRunService(
@@ -849,5 +850,6 @@ export function createDefaultSessionRunService(
     repository: new SessionRunRepository(database),
     runModeService: new RunModeService({ repository: runModeRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
+    ...(options.toolUseHandler ? { toolUseHandler: options.toolUseHandler } : {}),
   });
 }
