@@ -1,6 +1,7 @@
+import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 
-export type ComposerMode = 'chat' | 'plan' | 'execute' | 'review';
+export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel =
   | 'deepseek-v4-flash'
   | 'deepseek-v4-pro'
@@ -22,11 +23,11 @@ interface ComposerModelOption extends ComposerOption<ComposerModel> {
   providerId: ProviderId;
 }
 
-export const COMPOSER_MODE_OPTIONS: ComposerOption<ComposerMode>[] = [
-  { value: 'chat', label: 'Chat' },
+export const COMPOSER_PERMISSION_MODE_OPTIONS: ComposerOption<ComposerPermissionMode>[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'accept_edits', label: 'Accept edits' },
   { value: 'plan', label: 'Plan' },
-  { value: 'execute', label: 'Execute' },
-  { value: 'review', label: 'Review' },
+  { value: 'auto', label: 'Auto' },
 ];
 
 export const COMPOSER_MODEL_OPTIONS: ComposerModelOption[] = [
@@ -42,8 +43,8 @@ export const COMPOSER_MODEL_OPTIONS: ComposerModelOption[] = [
   { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', providerId: 'anthropic' },
 ];
 
-export function getComposerModeLabel(mode: ComposerMode): string {
-  return COMPOSER_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode;
+export function getComposerPermissionModeLabel(permissionMode: ComposerPermissionMode): string {
+  return COMPOSER_PERMISSION_MODE_OPTIONS.find((option) => option.value === permissionMode)?.label ?? permissionMode;
 }
 
 export function getComposerModelLabel(model: string): string {

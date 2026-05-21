@@ -141,7 +141,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Hello Megumi',
-        mode: 'chat',
+        permissionMode: 'plan',
         model: 'deepseek-v4-flash',
       });
     });
@@ -154,7 +154,7 @@ describe('useSessionTimeline', () => {
         context: expect.objectContaining({
           workspaceId: 'project-1',
           workspacePath: 'C:/all/work/study/megumi',
-          composerMode: 'chat',
+          permissionMode: 'plan',
           sessionTitle: 'Hello Megumi',
         }),
         messages: expect.arrayContaining([
@@ -244,7 +244,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Summarize runtime chat',
-        mode: 'execute',
+        permissionMode: 'auto',
         model: 'deepseek-v4-pro',
       });
     });
@@ -300,7 +300,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Use OpenAI',
-        mode: 'chat',
+        permissionMode: 'default',
         model: 'gpt-4.1',
       });
     });
@@ -322,7 +322,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Return final only',
-        mode: 'chat',
+        permissionMode: 'default',
         model: 'deepseek-v4-flash',
       });
     });
@@ -374,7 +374,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Use unsupported provider',
-        mode: 'chat',
+        permissionMode: 'default',
         model: 'claude-opus-4-7',
       });
     });
@@ -411,14 +411,14 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Try Claude first',
-        mode: 'chat',
+        permissionMode: 'default',
         model: 'claude-opus-4-7',
       });
     });
 
     await act(async () => {
       await result.current.retryLastSessionMessage({
-        mode: 'chat',
+        permissionMode: 'default',
         model: 'deepseek-v4-flash',
       });
     });
@@ -445,7 +445,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.sendSessionMessage({
         message: 'Cancel me',
-        mode: 'chat',
+        permissionMode: 'default',
         model: 'deepseek-v4-flash',
       });
     });

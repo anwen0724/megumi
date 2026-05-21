@@ -109,7 +109,7 @@ function createSessionMessageSendPayload(
       workspaceLabel: activeProject?.name ?? undefined,
       workspacePath: activeProject?.repoPath ?? undefined,
       sessionTitle: activeSession?.title ?? undefined,
-      composerMode: payload.mode,
+      permissionMode: payload.permissionMode,
     },
     createdAt: new Date().toISOString(),
   };
@@ -208,7 +208,7 @@ export function useSessionTimeline() {
     }
   }, []);
 
-  const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'mode' | 'model'>) => {
+  const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'permissionMode' | 'model'>) => {
     if (!lastPayloadRef.current) {
       return;
     }

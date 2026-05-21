@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COMPOSER_MODE_OPTIONS,
   COMPOSER_MODEL_OPTIONS,
-  getComposerModeLabel,
+  COMPOSER_PERMISSION_MODE_OPTIONS,
   getComposerModelLabel,
+  getComposerPermissionModeLabel,
   getProviderIdForModel,
 } from '@megumi/desktop/renderer/features/chat/components/composer-options';
 
 describe('composer options', () => {
-  it('lists supported composer modes', () => {
-    expect(COMPOSER_MODE_OPTIONS.map((option) => option.value)).toEqual(['chat', 'plan', 'execute', 'review']);
-    expect(getComposerModeLabel('chat')).toBe('Chat');
-    expect(getComposerModeLabel('plan')).toBe('Plan');
-    expect(getComposerModeLabel('execute')).toBe('Execute');
-    expect(getComposerModeLabel('review')).toBe('Review');
+  it('lists supported permission modes', () => {
+    expect(COMPOSER_PERMISSION_MODE_OPTIONS.map((option) => option.value)).toEqual([
+      'default',
+      'accept_edits',
+      'plan',
+      'auto',
+    ]);
+    expect(getComposerPermissionModeLabel('default')).toBe('Default');
+    expect(getComposerPermissionModeLabel('accept_edits')).toBe('Accept edits');
+    expect(getComposerPermissionModeLabel('plan')).toBe('Plan');
+    expect(getComposerPermissionModeLabel('auto')).toBe('Auto');
   });
 
   it('lists model options with provider ownership', () => {

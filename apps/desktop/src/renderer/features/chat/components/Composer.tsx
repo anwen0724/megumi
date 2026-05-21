@@ -13,17 +13,17 @@ import {
 } from 'lucide-react';
 import { Badge, Button, IconButton, cx } from '../../../shared/ui';
 import {
-  COMPOSER_MODE_OPTIONS,
   COMPOSER_MODEL_OPTIONS,
-  type ComposerMode,
+  COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,
+  type ComposerPermissionMode,
 } from './composer-options';
 
 export type ComposerStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
 
 export interface ComposerSubmitPayload {
   message: string;
-  mode: ComposerMode;
+  permissionMode: ComposerPermissionMode;
   model: ComposerModel;
 }
 
@@ -73,11 +73,11 @@ export function Composer({
   onAttachFiles,
   onShowApproval,
 }: ComposerProps) {
-  const modeId = useId();
+  const permissionModeId = useId();
   const modelId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(initialValue);
-  const [mode, setMode] = useState<ComposerMode>('chat');
+  const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>('default');
   const [model, setModel] = useState<ComposerModel>('deepseek-v4-flash');
   const trimmedValue = value.trim();
   const inputLocked = status === 'waiting-approval';
@@ -112,7 +112,7 @@ export function Composer({
 
     onSubmit({
       message: trimmedValue,
-      mode,
+      permissionMode,
       model,
     });
     setValue('');
@@ -197,19 +197,19 @@ export function Composer({
 
           <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">
             <div className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
-              <label htmlFor={modeId} className="sr-only">
-                Composer mode
+              <label htmlFor={permissionModeId} className="sr-only">
+                Permission mode
               </label>
               <Bot size={14} aria-hidden="true" />
               <select
-                id={modeId}
-                aria-label="Composer mode"
-                value={mode}
+                id={permissionModeId}
+                aria-label="Permission mode"
+                value={permissionMode}
                 disabled={inputLocked}
-                onChange={(event) => setMode(event.target.value as ComposerMode)}
+                onChange={(event) => setPermissionMode(event.target.value as ComposerPermissionMode)}
                 className="bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
               >
-                {COMPOSER_MODE_OPTIONS.map((option) => (
+                {COMPOSER_PERMISSION_MODE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
