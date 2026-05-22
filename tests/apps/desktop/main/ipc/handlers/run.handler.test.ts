@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Run } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 const { handle } = vi.hoisted(() => ({
@@ -21,10 +22,53 @@ describe('registerRunHandlers', () => {
     const { registerRunHandlers } = await import('@megumi/desktop/main/ipc/handlers/run.handler');
 
     registerRunHandlers({
+      listRunsBySession: vi.fn(),
       listRuntimeEventsByRun: vi.fn(),
     });
 
+    expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.run.listBySession, expect.any(Function));
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.run.events.list, expect.any(Function));
+  });
+
+  it('returns persisted runs for a session', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { registerRunHandlers } = await import('@megumi/desktop/main/ipc/handlers/run.handler');
+    const runs: Run[] = [
+      {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        mode: 'default',
+        goal: 'Hello',
+        status: 'completed',
+        createdAt: '2026-05-17T00:00:00.000Z',
+        completedAt: '2026-05-17T00:00:05.000Z',
+      },
+    ];
+    const service = {
+      listRunsBySession: vi.fn(() => runs),
+      listRuntimeEventsByRun: vi.fn(),
+    };
+
+    registerRunHandlers(service);
+
+    const handler = handle.mock.calls.find(([channel]) => channel === IPC_CHANNELS.run.listBySession)?.[1];
+    await expect(handler({}, {
+      requestId: 'ipc-run-list-by-session-1',
+      payload: { sessionId: 'session-1' },
+      meta: {
+        channel: IPC_CHANNELS.run.listBySession,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    })).resolves.toMatchObject({
+      ok: true,
+      data: { runs },
+      meta: {
+        requestId: 'ipc-run-list-by-session-1',
+        channel: IPC_CHANNELS.run.listBySession,
+      },
+    });
+    expect(service.listRunsBySession).toHaveBeenCalledWith('session-1');
   });
 
   it('returns runtime events for a run', async () => {
@@ -46,6 +90,7 @@ describe('registerRunHandlers', () => {
       },
     ];
     const service = {
+      listRunsBySession: vi.fn(),
       listRuntimeEventsByRun: vi.fn(() => events),
     };
 

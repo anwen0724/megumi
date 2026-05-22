@@ -77,6 +77,8 @@ import type {
   RunContextSourcesListPayload,
   RunEventsListData,
   RunEventsListPayload,
+  RunListBySessionData,
+  RunListBySessionPayload,
   RunResumeData,
   RunResumePayload,
   RunRetryData,
@@ -87,6 +89,8 @@ import type {
   SessionListPayload,
   SessionMessageCancelData,
   SessionMessageCancelPayload,
+  SessionMessageListData,
+  SessionMessageListPayload,
   SessionMessageSendData,
   SessionMessageSendPayload,
   ToolCallGetData,
@@ -177,6 +181,10 @@ export const api = {
     ): Promise<RuntimeIpcResult<SessionListData, typeof IPC_CHANNELS.session.list>> =>
       invokeRuntimeIpc(IPC_CHANNELS.session.list, request),
     message: {
+      list: (
+        request: BusinessRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.message.list>,
+      ): Promise<RuntimeIpcResult<SessionMessageListData, typeof IPC_CHANNELS.session.message.list>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.session.message.list, request),
       send: (
         request: BusinessRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.session.message.send>,
       ): Promise<RuntimeIpcResult<SessionMessageSendData, typeof IPC_CHANNELS.session.message.send>> =>
@@ -188,6 +196,10 @@ export const api = {
     },
   },
   run: {
+    listBySession: (
+      request: BusinessRequest<RunListBySessionPayload, typeof IPC_CHANNELS.run.listBySession>,
+    ): Promise<RuntimeIpcResult<RunListBySessionData, typeof IPC_CHANNELS.run.listBySession>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.run.listBySession, request),
     events: {
       list: (
         request: BusinessRequest<RunEventsListPayload, typeof IPC_CHANNELS.run.events.list>,

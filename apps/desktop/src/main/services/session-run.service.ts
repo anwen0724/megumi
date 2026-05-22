@@ -206,6 +206,10 @@ export class SessionRunService {
     return this.repository.listMessagesBySession(sessionId);
   }
 
+  listRunsBySession(sessionId: string): Run[] {
+    return this.repository.listRunsBySession(sessionId);
+  }
+
   async startRun(payload: RunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }> {
     const session = this.repository.getSession(payload.sessionId);
     const runId = this.ids.runId();

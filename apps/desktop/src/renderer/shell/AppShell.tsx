@@ -4,6 +4,7 @@ import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import { ChatTimeline } from '../features/chat';
+import { useSessionHistoryHydration } from '../features/session-history/use-session-history-hydration';
 import { LeftSidebar, type SidebarProjectItem } from './LeftSidebar';
 import { RightWorkspacePanel } from './RightWorkspacePanel';
 import { SettingsModal } from './SettingsModal';
@@ -20,14 +21,18 @@ export function AppShell() {
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const createLocalSession = useSessionStore((state) => state.createLocalSession);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
+  const { hydrateSessions, hydrateSessionTimeline } = useSessionHistoryHydration();
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   const titlebarTitle = activeSession?.title ?? 'New session';
 
   useEffect(() => {
-    void useProjectStore.getState().loadProjects();
-  }, []);
+    void (async () => {
+      await useProjectStore.getState().loadProjects();
+      await hydrateSessions();
+    })();
+  }, [hydrateSessions]);
 
   const sidebarProjects = useMemo<SidebarProjectItem[]>(
     () => {
@@ -78,7 +83,7 @@ export function AppShell() {
     useChatStore.getState().loadSessionSnapshot(session.id);
   }
 
-  function handleSelectSession(sessionId: string) {
+  async function handleSelectSession(sessionId: string) {
     if (sessionId === activeSessionId) {
       return;
     }
@@ -90,10 +95,10 @@ export function AppShell() {
 
     saveActiveChatSnapshot();
     if (selectedSession.projectId !== currentProjectId) {
-      void useProjectStore.getState().openProject(selectedSession.projectId);
+      await useProjectStore.getState().openProject(selectedSession.projectId);
     }
     setActiveSession(sessionId);
-    useChatStore.getState().loadSessionSnapshot(sessionId);
+    await hydrateSessionTimeline(sessionId);
   }
 
   return (
@@ -104,7 +109,9 @@ export function AppShell() {
         allProjects={projects}
         onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
         onCreateSession={handleCreateSession}
-        onSelectSession={handleSelectSession}
+        onSelectSession={(sessionId) => {
+          void handleSelectSession(sessionId);
+        }}
         onUseExistingProject={() => {
           void useProjectStore.getState().useExistingProject();
         }}

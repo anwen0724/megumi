@@ -58,13 +58,45 @@ function installMegumiMock() {
         deleteApiKey: vi.fn().mockResolvedValue({ ok: true }),
       },
       session: {
+        list: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            sessions: [
+              {
+                sessionId: 'session-1',
+                workspaceId: 'project-1',
+                workspacePath: 'C:/all/work/study/megumi',
+                title: 'Planning the UI',
+                status: 'active',
+                createdAt: '2026-05-10T00:00:00.000Z',
+                updatedAt: '2026-05-10T00:00:00.000Z',
+              },
+              {
+                sessionId: 'session-2',
+                workspaceId: 'project-1',
+                workspacePath: 'C:/all/work/study/megumi',
+                title: 'Review notes',
+                status: 'active',
+                createdAt: '2026-05-10T00:10:00.000Z',
+                updatedAt: '2026-05-10T00:10:00.000Z',
+              },
+            ],
+          },
+        }),
         message: {
+          list: vi.fn().mockResolvedValue({ ok: true, data: { messages: [] } }),
           send: vi.fn().mockResolvedValue({ ok: true }),
           cancel: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true }, meta: {} }),
         },
       },
       runtime: {
         onEvent: vi.fn(() => () => undefined),
+      },
+      run: {
+        listBySession: vi.fn().mockResolvedValue({ ok: true, data: { runs: [] } }),
+        events: {
+          list: vi.fn().mockResolvedValue({ ok: true, data: { events: [] } }),
+        },
       },
     },
   });
@@ -184,6 +216,76 @@ describe('AppShell', () => {
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Context' })).toBeVisible();
+  });
+
+  it('hydrates historical sessions without selecting one until the user restores it', async () => {
+    installMegumiMock();
+    window.megumi.session.list = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        sessions: [
+          {
+            sessionId: 'session-history',
+            title: 'Historical investigation',
+            workspaceId: 'project-1',
+            workspacePath: 'C:/all/work/study/megumi',
+            status: 'active',
+            createdAt: '2026-05-09T00:00:00.000Z',
+            updatedAt: '2026-05-09T00:30:00.000Z',
+          },
+        ],
+      },
+    });
+    window.megumi.session.message.list = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        messages: [
+          {
+            messageId: 'message-user-history',
+            sessionId: 'session-history',
+            role: 'user',
+            content: 'What changed yesterday?',
+            status: 'completed',
+            createdAt: '2026-05-09T00:00:00.000Z',
+            completedAt: '2026-05-09T00:00:00.000Z',
+          },
+          {
+            messageId: 'message-assistant-history',
+            sessionId: 'session-history',
+            role: 'assistant',
+            content: 'The timeline was updated.',
+            status: 'completed',
+            createdAt: '2026-05-09T00:01:00.000Z',
+            completedAt: '2026-05-09T00:01:00.000Z',
+          },
+        ],
+      },
+    });
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: null,
+      activeAgentType: 'free',
+    });
+    useChatStore.getState().clearSessionSnapshots();
+
+    renderShell();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Historical investigation/ })).toBeInTheDocument();
+    });
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(screen.queryByText('What changed yesterday?')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Historical investigation/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('What changed yesterday?')).toBeInTheDocument();
+    });
+    expect(screen.getByText('The timeline was updated.')).toBeInTheDocument();
+    expect(useSessionStore.getState().activeSessionId).toBe('session-history');
+    expect(window.megumi.session.message.list).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { sessionId: 'session-history' },
+    }));
   });
 
   it('calls loadProjects on mount', () => {

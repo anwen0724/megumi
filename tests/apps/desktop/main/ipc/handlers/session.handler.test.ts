@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 const { handle } = vi.hoisted(() => ({
@@ -60,14 +61,60 @@ describe('registerSessionHandlers', () => {
     registerSessionHandlers({
       createSession: vi.fn(),
       listSessions: vi.fn(),
+      listMessagesBySession: vi.fn(),
       sendSessionMessage: vi.fn(),
       cancelSessionMessage: vi.fn(),
     });
 
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.session.create, expect.any(Function));
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.session.list, expect.any(Function));
+    expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.session.message.list, expect.any(Function));
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.session.message.send, expect.any(Function));
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.session.message.cancel, expect.any(Function));
+  });
+
+  it('returns persisted messages for a session', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
+    const messages: SessionMessage[] = [
+      {
+        messageId: 'message-1',
+        sessionId: 'session-1',
+        role: 'user',
+        content: 'Hello',
+        status: 'completed',
+        createdAt: '2026-05-17T00:00:00.000Z',
+        completedAt: '2026-05-17T00:00:00.000Z',
+      },
+    ];
+    const service = {
+      createSession: vi.fn(),
+      listSessions: vi.fn(),
+      listMessagesBySession: vi.fn(() => messages),
+      sendSessionMessage: vi.fn(),
+      cancelSessionMessage: vi.fn(),
+    };
+
+    registerSessionHandlers(service);
+
+    const handler = handle.mock.calls.find(([channel]) => channel === IPC_CHANNELS.session.message.list)?.[1];
+    await expect(handler({}, {
+      requestId: 'ipc-session-message-list-1',
+      payload: { sessionId: 'session-1' },
+      meta: {
+        channel: IPC_CHANNELS.session.message.list,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    })).resolves.toMatchObject({
+      ok: true,
+      data: { messages },
+      meta: {
+        requestId: 'ipc-session-message-list-1',
+        channel: IPC_CHANNELS.session.message.list,
+      },
+    });
+    expect(service.listMessagesBySession).toHaveBeenCalledWith('session-1');
   });
 
   it('sends session messages and forwards runtime events', async () => {
@@ -91,6 +138,7 @@ describe('registerSessionHandlers', () => {
     const service = {
       createSession: vi.fn(),
       listSessions: vi.fn(),
+      listMessagesBySession: vi.fn(),
       sendSessionMessage: vi.fn(async () => ({
         data: { requestId: 'ipc-session-message-send-1' },
         events: async function* () {

@@ -6,6 +6,8 @@ import type {
   SessionCreateData,
   SessionCreatePayload,
   SessionListData,
+  SessionMessageListData,
+  SessionMessageListPayload,
   SessionMessageCancelData,
   SessionMessageCancelPayload,
   SessionMessageSendData,
@@ -14,6 +16,7 @@ import type {
 import {
   SessionCreateRequestSchema,
   SessionListRequestSchema,
+  SessionMessageListRequestSchema,
   SessionMessageCancelRequestSchema,
   SessionMessageSendRequestSchema,
 } from '@megumi/shared/ipc-schemas';
@@ -24,7 +27,7 @@ import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type SessionHandlersService = Pick<
   SessionRunService,
-  'createSession' | 'listSessions' | 'sendSessionMessage' | 'cancelSessionMessage'
+  'createSession' | 'listSessions' | 'listMessagesBySession' | 'sendSessionMessage' | 'cancelSessionMessage'
 >;
 
 export interface RegisterSessionHandlersOptions {
@@ -58,6 +61,21 @@ export function registerSessionHandlers(
       logger: options.logger,
       handle: (): SessionListData => ({
         sessions: service.listSessions(),
+      }),
+      mapError: mapSessionIpcError,
+    }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.session.message.list,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.session.message.list,
+      requestSchema: SessionMessageListRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.message.list>,
+      ): SessionMessageListData => ({
+        messages: service.listMessagesBySession(request.payload.sessionId) as SessionMessageListData['messages'],
       }),
       mapError: mapSessionIpcError,
     }),

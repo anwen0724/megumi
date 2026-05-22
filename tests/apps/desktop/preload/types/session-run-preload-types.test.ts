@@ -13,11 +13,13 @@ describe('session and run preload API shape', () => {
         create: vi.fn(),
         list: vi.fn(),
         message: {
+          list: vi.fn(),
           send: vi.fn(),
           cancel: vi.fn(),
         },
       },
       run: {
+        listBySession: vi.fn(),
         events: {
           list: vi.fn(),
         },
@@ -44,9 +46,17 @@ describe('session and run preload API shape', () => {
     const eventsRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.run.events.list, {
       runId: 'run-1',
     });
+    const messagesRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.list, {
+      sessionId: 'session-1',
+    });
+    const runsRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.run.listBySession, {
+      sessionId: 'session-1',
+    });
 
     await api.session.create(createRequest);
+    await api.session.message.list(messagesRequest);
     await api.session.message.send(sendRequest);
+    await api.run.listBySession(runsRequest);
     await api.run.events.list(eventsRequest);
 
     expect(api.session.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -58,6 +68,22 @@ describe('session and run preload API shape', () => {
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.session.message.send,
       }),
+    }));
+    expect(api.session.message.list).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.session.message.list,
+      }),
+      payload: {
+        sessionId: 'session-1',
+      },
+    }));
+    expect(api.run.listBySession).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.run.listBySession,
+      }),
+      payload: {
+        sessionId: 'session-1',
+      },
     }));
     expect(api.run.events.list).toHaveBeenCalledWith(expect.objectContaining({
       meta: expect.objectContaining({

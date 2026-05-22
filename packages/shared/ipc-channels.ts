@@ -14,11 +14,13 @@ export const IPC_CHANNELS = {
     create: 'session:create',
     list: 'session:list',
     message: {
+      list: 'session:message:list',
       send: 'session:message:send',
       cancel: 'session:message:cancel',
     },
   },
   run: {
+    listBySession: 'run:list-by-session',
     events: {
       list: 'run:events:list',
     },
@@ -105,8 +107,10 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.provider.deleteApiKey,
   IPC_CHANNELS.session.create,
   IPC_CHANNELS.session.list,
+  IPC_CHANNELS.session.message.list,
   IPC_CHANNELS.session.message.send,
   IPC_CHANNELS.session.message.cancel,
+  IPC_CHANNELS.run.listBySession,
   IPC_CHANNELS.run.events.list,
   IPC_CHANNELS.runContext.baselineGet,
   IPC_CHANNELS.runContext.sourcesList,

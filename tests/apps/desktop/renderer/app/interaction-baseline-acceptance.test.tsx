@@ -97,9 +97,49 @@ function installMegumiMock() {
         deleteApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
       },
       session: {
+        list: vi.fn().mockResolvedValue({
+          ok: true,
+          data: { sessions: [] },
+          meta: {
+            requestId: 'ipc-session-list-1',
+            channel: IPC_CHANNELS.session.list,
+            handledAt: '2026-05-10T12:00:00.100Z',
+          },
+        }),
         message: {
           send: session.message.send,
           cancel: session.message.cancel,
+          list: vi.fn().mockResolvedValue({
+            ok: true,
+            data: { messages: [] },
+            meta: {
+              requestId: 'ipc-session-message-list-1',
+              channel: IPC_CHANNELS.session.message.list,
+              handledAt: '2026-05-10T12:00:00.100Z',
+            },
+          }),
+        },
+      },
+      run: {
+        listBySession: vi.fn().mockResolvedValue({
+          ok: true,
+          data: { runs: [] },
+          meta: {
+            requestId: 'ipc-run-list-by-session-1',
+            channel: IPC_CHANNELS.run.listBySession,
+            handledAt: '2026-05-10T12:00:00.100Z',
+          },
+        }),
+        events: {
+          list: vi.fn().mockResolvedValue({
+            ok: true,
+            data: { events: [] },
+            meta: {
+              requestId: 'ipc-run-events-list-1',
+              channel: IPC_CHANNELS.run.events.list,
+              handledAt: '2026-05-10T12:00:00.100Z',
+            },
+          }),
         },
       },
       project: {

@@ -228,6 +228,12 @@ export class SessionRunRepository {
     return row ? fromRunRow(row) : undefined;
   }
 
+  listRunsBySession(sessionId: string): Run[] {
+    return (this.database
+      .prepare('SELECT * FROM runs WHERE session_id = ? ORDER BY created_at ASC, run_id ASC')
+      .all(sessionId) as RunRow[]).map(fromRunRow);
+  }
+
   saveStep(step: RunStep): RunStep {
     this.database.prepare(`
       INSERT INTO run_steps (

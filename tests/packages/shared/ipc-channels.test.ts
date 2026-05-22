@@ -10,8 +10,10 @@ describe('ipc channel contracts', () => {
     expect(IPC_CHANNELS.provider.deleteApiKey).toBe('provider:delete-api-key');
     expect(IPC_CHANNELS.session.create).toBe('session:create');
     expect(IPC_CHANNELS.session.list).toBe('session:list');
+    expect(IPC_CHANNELS.session.message.list).toBe('session:message:list');
     expect(IPC_CHANNELS.session.message.send).toBe('session:message:send');
     expect(IPC_CHANNELS.session.message.cancel).toBe('session:message:cancel');
+    expect(IPC_CHANNELS.run.listBySession).toBe('run:list-by-session');
     expect(IPC_CHANNELS.run.events.list).toBe('run:events:list');
     expect(IPC_CHANNELS.runContext.baselineGet).toBe('run-context:baseline:get');
     expect(IPC_CHANNELS.runContext.sourcesList).toBe('run-context:sources:list');
@@ -31,7 +33,9 @@ describe('ipc channel contracts', () => {
 
   it('checks known IPC channel strings', () => {
     expect(isIpcChannel('provider:list')).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.session.message.list)).toBe(true);
     expect(isIpcChannel('session:message:send')).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.run.listBySession)).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.project.list)).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.project.useExisting)).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.project.open)).toBe(true);

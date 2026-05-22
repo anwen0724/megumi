@@ -75,9 +75,56 @@ describe('SessionRunRepository', () => {
     expect(repo.getSession('session-1')?.title).toBe('Lifecycle');
     expect(repo.listMessagesBySession('session-1')).toHaveLength(1);
     expect(repo.getRun('run-1')?.status).toBe('queued');
+    expect(repo.listRunsBySession('session-1')).toEqual([
+      expect.objectContaining({ runId: 'run-1', sessionId: 'session-1' }),
+    ]);
     expect(repo.listStepsByRun('run-1')[0]).toMatchObject({ kind: 'model' });
     expect(repo.listActionsByRun('run-1')[0]).toMatchObject({ kind: 'emit_message' });
     expect(repo.listObservationsByRun('run-1')[0]).toMatchObject({ summary: 'Message emitted' });
+  });
+
+  it('lists runs for one session in creation order', () => {
+    const repo = createRepo();
+    repo.saveSession({
+      sessionId: 'session-1',
+      title: 'First session',
+      status: 'active',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+    });
+    repo.saveSession({
+      sessionId: 'session-2',
+      title: 'Second session',
+      status: 'active',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+    });
+    repo.saveRun({
+      runId: 'run-2',
+      sessionId: 'session-1',
+      mode: 'default',
+      goal: 'Second',
+      status: 'completed',
+      createdAt: '2026-05-15T00:00:02.000Z',
+    });
+    repo.saveRun({
+      runId: 'run-other',
+      sessionId: 'session-2',
+      mode: 'default',
+      goal: 'Other',
+      status: 'completed',
+      createdAt: '2026-05-15T00:00:03.000Z',
+    });
+    repo.saveRun({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      mode: 'default',
+      goal: 'First',
+      status: 'completed',
+      createdAt: '2026-05-15T00:00:01.000Z',
+    });
+
+    expect(repo.listRunsBySession('session-1').map((run) => run.runId)).toEqual(['run-1', 'run-2']);
   });
 
   it('appends runtime events and rejects duplicate run sequences', () => {

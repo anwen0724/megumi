@@ -15,10 +15,14 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'session.create';
     case IPC_CHANNELS.session.list:
       return 'session.list';
+    case IPC_CHANNELS.session.message.list:
+      return 'session.message.list';
     case IPC_CHANNELS.session.message.send:
       return 'session.message.send';
     case IPC_CHANNELS.session.message.cancel:
       return 'session.message.cancel';
+    case IPC_CHANNELS.run.listBySession:
+      return 'run.list-by-session';
     case IPC_CHANNELS.run.events.list:
       return 'run.events.list';
     case IPC_CHANNELS.runContext.baselineGet:

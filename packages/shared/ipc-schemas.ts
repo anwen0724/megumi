@@ -183,6 +183,18 @@ export const SessionMessageCancelDataSchema = z
   })
   .strict();
 
+export const SessionMessageListPayloadSchema = z
+  .object({
+    sessionId: z.string().min(1),
+  })
+  .strict();
+
+export const SessionMessageListDataSchema = z
+  .object({
+    messages: z.array(SessionMessageSchema),
+  })
+  .strict();
+
 export const SessionCreatePayloadSchema = z
   .object({
     title: z.string().min(1),
@@ -604,6 +616,17 @@ export const RunEventsListDataSchema = z
   })
   .strict();
 
+export const RunListBySessionPayloadSchema = z
+  .object({
+    sessionId: z.string().min(1),
+  })
+  .strict();
+export const RunListBySessionDataSchema = z
+  .object({
+    runs: z.array(RunSchema),
+  })
+  .strict();
+
 export const ProviderListRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.provider.list,
   ProviderListPayloadSchema,
@@ -634,6 +657,11 @@ export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(
   SessionMessageCancelPayloadSchema,
 );
 
+export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.message.list,
+  SessionMessageListPayloadSchema,
+);
+
 export const SessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.create,
   SessionCreatePayloadSchema,
@@ -647,6 +675,11 @@ export const SessionListRequestSchema = createRuntimeIpcRequestSchema(
 export const RunEventsListRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.run.events.list,
   RunEventsListPayloadSchema,
+);
+
+export const RunListBySessionRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.run.listBySession,
+  RunListBySessionPayloadSchema,
 );
 
 export const RunContextBaselineGetRequestSchema = createRuntimeIpcRequestSchema(
@@ -854,6 +887,11 @@ export const SessionMessageCancelResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.session.message.cancel,
 );
 
+export const SessionMessageListResultSchema = createRuntimeIpcResultSchema(
+  SessionMessageListDataSchema,
+  IPC_CHANNELS.session.message.list,
+);
+
 export const SessionCreateResultSchema = createRuntimeIpcResultSchema(
   SessionCreateDataSchema,
   IPC_CHANNELS.session.create,
@@ -867,6 +905,11 @@ export const SessionListResultSchema = createRuntimeIpcResultSchema(
 export const RunEventsListResultSchema = createRuntimeIpcResultSchema(
   RunEventsListDataSchema,
   IPC_CHANNELS.run.events.list,
+);
+
+export const RunListBySessionResultSchema = createRuntimeIpcResultSchema(
+  RunListBySessionDataSchema,
+  IPC_CHANNELS.run.listBySession,
 );
 
 export const RunContextBaselineGetResultSchema = createRuntimeIpcResultSchema(
@@ -1108,12 +1151,16 @@ export type SessionMessageSendPayload = z.infer<typeof SessionMessageSendPayload
 export type SessionMessageSendData = z.infer<typeof SessionMessageSendDataSchema>;
 export type SessionMessageCancelPayload = z.infer<typeof SessionMessageCancelPayloadSchema>;
 export type SessionMessageCancelData = z.infer<typeof SessionMessageCancelDataSchema>;
+export type SessionMessageListPayload = z.infer<typeof SessionMessageListPayloadSchema>;
+export type SessionMessageListData = z.infer<typeof SessionMessageListDataSchema>;
 export type SessionCreatePayload = z.infer<typeof SessionCreatePayloadSchema>;
 export type SessionCreateData = z.infer<typeof SessionCreateDataSchema>;
 export type SessionListPayload = z.infer<typeof SessionListPayloadSchema>;
 export type SessionListData = z.infer<typeof SessionListDataSchema>;
 export type RunStartPayload = z.infer<typeof RunStartPayloadSchema>;
 export type RunStartData = z.infer<typeof RunStartDataSchema>;
+export type RunListBySessionPayload = z.infer<typeof RunListBySessionPayloadSchema>;
+export type RunListBySessionData = z.infer<typeof RunListBySessionDataSchema>;
 export type RunEventsListPayload = z.infer<typeof RunEventsListPayloadSchema>;
 export type RunEventsListData = z.infer<typeof RunEventsListDataSchema>;
 export type RunContextBaselineGetPayload = z.infer<typeof RunContextBaselineGetPayloadSchema>;

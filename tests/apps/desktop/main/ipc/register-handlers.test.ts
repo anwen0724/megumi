@@ -75,8 +75,10 @@ describe('registerAllHandlers', () => {
     const sessionRunService = {
       createSession: vi.fn(),
       listSessions: vi.fn(),
+      listMessagesBySession: vi.fn(),
       sendSessionMessage: vi.fn(),
       cancelSessionMessage: vi.fn(),
+      listRunsBySession: vi.fn(),
       listRuntimeEventsByRun: vi.fn(),
     };
 

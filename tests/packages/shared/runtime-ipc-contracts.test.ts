@@ -55,12 +55,14 @@ import {
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
   RunEventsListRequestSchema,
+  RunListBySessionRequestSchema,
   RunResumeRequestSchema,
   RunRetryRequestSchema,
   SessionCreateRequestSchema,
   SessionListRequestSchema,
   SessionMessageCancelPayloadSchema,
   SessionMessageCancelRequestSchema,
+  SessionMessageListRequestSchema,
   SessionMessageSendPayloadSchema,
   SessionMessageSendRequestSchema,
   ToolDefinitionsListRequestSchema,
@@ -686,6 +688,16 @@ describe('session run ipc contracts', () => {
         createdAt: '2026-05-15T00:00:00.000Z',
       },
     }).meta.channel).toBe('session:list');
+
+    expect(SessionMessageListRequestSchema.parse({
+      requestId: 'ipc-session-message-list-1',
+      payload: { sessionId: 'session-1' },
+      meta: {
+        channel: IPC_CHANNELS.session.message.list,
+        source: 'renderer',
+        createdAt: '2026-05-15T00:00:00.000Z',
+      },
+    }).payload.sessionId).toBe('session-1');
   });
 
   it('registers plan-specific IPC channels in the runtime envelope', () => {
@@ -767,6 +779,16 @@ describe('agent context runtime IPC schemas', () => {
         source: 'renderer',
       },
     }).payload.targetRequestId).toBe('ipc-session-message-send-1');
+
+    expect(RunListBySessionRequestSchema.parse({
+      requestId: 'ipc-run-list-by-session-1',
+      payload: { sessionId: 'session-1' },
+      meta: {
+        channel: IPC_CHANNELS.run.listBySession,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).payload.sessionId).toBe('session-1');
 
     expect(RunEventsListRequestSchema.parse({
       requestId: 'ipc-run-events-list-1',
