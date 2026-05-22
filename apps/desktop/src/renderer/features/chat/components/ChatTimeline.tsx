@@ -56,10 +56,29 @@ function useProcessingNow(active: boolean) {
   return now;
 }
 
+function StreamingAssistantMessage() {
+  const streamingText = useChatStore((state) => state.streamingText);
+  const isStreaming = useChatStore((state) => state.isStreaming);
+
+  if (!isStreaming) {
+    return null;
+  }
+
+  return (
+    <TimelineMessage
+      streaming
+      message={{
+        role: 'assistant',
+        content: streamingText,
+        timestamp: new Date().toISOString(),
+      }}
+    />
+  );
+}
+
 export function ChatTimeline() {
   const [expandedActivityIds, setExpandedActivityIds] = useState<Set<string>>(() => new Set());
   const messages = useChatStore((state) => state.messages);
-  const streamingText = useChatStore((state) => state.streamingText);
   const isStreaming = useChatStore((state) => state.isStreaming);
   const pendingToolCalls = useChatStore((state) => state.pendingToolCalls);
   const completedToolActivities = useChatStore((state) => state.completedToolActivities);
@@ -86,15 +105,21 @@ export function ChatTimeline() {
       : []
   ), [activeRunId, approvalRequestsById]);
 
-  const eventProcessingDisclosure = useMemo(() => (
-    activeRun
-      ? createProcessingDisclosureModel({
-          run: activeRun,
-          events: activeRunEvents,
-          now: processingNow,
-        })
-      : null
-  ), [activeRun, activeRunEvents, processingNow]);
+  const eventProcessingDisclosure = useMemo(() => {
+    if (!activeRun) {
+      return null;
+    }
+
+    const model = createProcessingDisclosureModel({
+      run: activeRun,
+      events: activeRunEvents,
+      now: processingNow,
+    });
+
+    return model && isStreaming && model.status === 'running'
+      ? { ...model, currentAction: '正在生成回复...' }
+      : model;
+  }, [activeRun, activeRunEvents, isStreaming, processingNow]);
 
   const timelineItems: TimelineItem[] = [
     ...messages.map((message) => ({
@@ -244,16 +269,7 @@ export function ChatTimeline() {
               </section>
             ) : null}
 
-            {isStreaming ? (
-              <TimelineMessage
-                streaming
-                message={{
-                  role: 'assistant',
-                  content: streamingText,
-                  timestamp: new Date().toISOString(),
-                }}
-              />
-            ) : null}
+            <StreamingAssistantMessage />
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">

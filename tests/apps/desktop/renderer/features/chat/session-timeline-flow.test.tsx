@@ -1,5 +1,5 @@
 ﻿// @vitest-environment jsdom
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -208,7 +208,9 @@ describe('useSessionTimeline', () => {
     });
 
     expect(useChatStore.getState().agentStatus).toBe('running');
-    expect(useChatStore.getState().streamingText).toBe('Hi there');
+    await waitFor(() => {
+      expect(useChatStore.getState().streamingText).toBe('Hi there');
+    });
 
     act(() => {
       emitRuntimeEvent({

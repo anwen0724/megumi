@@ -1260,13 +1260,15 @@ describe('SessionRunService', () => {
       'run.started',
       'model.step.started',
       'model.output.delta',
-      'model.output.delta',
       'model.step.completed',
       'step.status.changed',
       'step.completed',
       'run.status.changed',
       'run.completed',
     ]);
+    expect(streamed.find((event) => event.eventType === 'model.output.delta')?.payload).toMatchObject({
+      delta: 'Hello Megumi.',
+    });
     expect(service.listMessagesBySession('session-1')).toEqual(expect.arrayContaining([
       expect.objectContaining({
         role: 'assistant',

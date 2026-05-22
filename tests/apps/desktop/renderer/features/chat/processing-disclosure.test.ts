@@ -61,13 +61,26 @@ describe('processing disclosure projection', () => {
       status: 'running',
       statusLabel: '正在处理',
       durationLabel: '41s',
-      currentAction: '正在生成回复...',
       live: true,
     });
+    expect(model!.currentAction).toBeDefined();
+    expect(model!.completedEntries.map((entry) => entry.id)).not.toContain('event-4');
     expect(model!.completedEntries.map((entry) => entry.label)).toEqual([
       '已更新有效上下文',
       '已完成步骤：读取当前上下文',
     ]);
+  });
+
+  it('does not create a visible model for a bare run start event', () => {
+    const model = createProcessingDisclosureModel({
+      run: runSummary('running'),
+      events: [
+        runtimeEvent('run.started', 1, { runKind: 'chat' }),
+      ],
+      now: new Date('2026-05-18T12:00:10.000Z'),
+    });
+
+    expect(model).toBeNull();
   });
 
   it('creates a completed model that remains factual and has no guessed next step', () => {

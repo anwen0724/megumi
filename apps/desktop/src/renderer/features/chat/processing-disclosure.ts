@@ -97,7 +97,6 @@ export function formatProcessingDuration(startedAt: string, endedAt: string | Da
 
 function describeCurrentAction(events: RuntimeEvent[]): string | undefined {
   for (const event of [...events].reverse()) {
-    if (event.eventType === 'assistant.output.delta') return '正在生成回复...';
     if (event.eventType === 'assistant.output.completed') return '正在整理最终回复...';
     if (event.eventType === 'approval.requested') return `等待审批：${payloadText(event, 'title') ?? '用户确认'}`;
     if (event.eventType === 'tool.call.started') return `正在执行工具：${payloadText(event, 'toolName') ?? '工具调用'}`;
@@ -109,7 +108,6 @@ function describeCurrentAction(events: RuntimeEvent[]): string | undefined {
       return `正在处理步骤：${stepLabel(event)}`;
     }
     if (event.eventType === 'run.cancelling') return '正在取消运行...';
-    if (event.eventType === 'run.started') return '正在启动运行...';
   }
 
   return undefined;
@@ -233,12 +231,16 @@ function terminalEvent(events: RuntimeEvent[]): RuntimeEvent | undefined {
   );
 }
 
+function isTextDeltaEvent(event: RuntimeEvent): boolean {
+  return event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta';
+}
+
 export function createProcessingDisclosureModel({
   run,
   events,
   now = new Date(),
 }: CreateProcessingDisclosureModelInput): ProcessingDisclosureModel | null {
-  const orderedEvents = sortedEvents(events);
+  const orderedEvents = sortedEvents(events).filter((event) => !isTextDeltaEvent(event));
 
   if (orderedEvents.length === 0) {
     return null;
@@ -266,6 +268,12 @@ export function createProcessingDisclosureModel({
     })
     .filter((entry): entry is ProcessingDisclosureEntry => Boolean(entry));
 
+  const currentAction = status === 'running' ? describeCurrentAction(orderedEvents) : undefined;
+
+  if (status === 'running' && !currentAction && completedEntries.length === 0) {
+    return null;
+  }
+
   return {
     runId: run.runId,
     status,
@@ -274,7 +282,7 @@ export function createProcessingDisclosureModel({
     live: status === 'running',
     startedAt,
     endedAt,
-    currentAction: status === 'running' ? describeCurrentAction(orderedEvents) : undefined,
+    currentAction,
     completedEntries,
   };
 }

@@ -17,6 +17,7 @@ import { useRunStore } from '../../entities/run/store';
 import { useToolCallStore } from '../../entities/tool-call';
 
 const completedContentsByRun = new Map<string, string>();
+const dispatchedTextDeltaEvents = new Set<string>();
 const STREAM_OUTPUT_FLUSH_DELAY_MS = 32;
 let bufferedStreamOutput = '';
 let streamOutputFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -38,6 +39,27 @@ function hasRuntimeEventAlreadyBeenDispatched(event: RuntimeEvent): boolean {
 
   const events = useRunStore.getState().eventsByRun[event.runId] ?? [];
   return events.some((item) => item.eventId === event.eventId || item.sequence === event.sequence);
+}
+
+function textDeltaDispatchKey(event: RuntimeEvent): string {
+  return `${event.runId ?? 'no-run'}:${event.eventId}:${event.sequence}`;
+}
+
+function hasTextDeltaAlreadyBeenDispatched(event: RuntimeEvent): boolean {
+  const key = textDeltaDispatchKey(event);
+  if (dispatchedTextDeltaEvents.has(key)) {
+    return true;
+  }
+  dispatchedTextDeltaEvents.add(key);
+  return false;
+}
+
+function clearTextDeltaDispatchKeysForRun(runId: string): void {
+  for (const key of dispatchedTextDeltaEvents) {
+    if (key.startsWith(`${runId}:`)) {
+      dispatchedTextDeltaEvents.delete(key);
+    }
+  }
 }
 
 function flushBufferedStreamOutput(): void {
@@ -220,6 +242,18 @@ function applyApprovalEvent(event: RuntimeEvent): void {
 }
 
 export function dispatchRuntimeEvent(event: RuntimeEvent): void {
+  if (event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta') {
+    if (!event.runId || hasTextDeltaAlreadyBeenDispatched(event)) {
+      return;
+    }
+    const delta = event.eventType === 'assistant.output.delta'
+      ? (event.payload as AssistantOutputDeltaPayload).delta
+      : (event.payload as ModelOutputDeltaPayload).delta;
+    appendBufferedStreamOutput(delta);
+    useChatStore.getState().setAgentStatus('running');
+    return;
+  }
+
   const alreadyDispatched = hasRuntimeEventAlreadyBeenDispatched(event);
   useRunStore.getState().applyRuntimeEvent(event);
 
@@ -233,6 +267,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
   const chatState = useChatStore.getState();
 
   if (event.eventType === 'run.started') {
+    clearTextDeltaDispatchKeysForRun(event.runId);
     chatState.setAgentStatus('running');
     return;
   }
@@ -245,14 +280,6 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
     if (to === 'running') {
       chatState.setAgentStatus('running');
     }
-    return;
-  }
-
-  if (event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta') {
-    const delta = event.eventType === 'assistant.output.delta'
-      ? (event.payload as AssistantOutputDeltaPayload).delta
-      : (event.payload as ModelOutputDeltaPayload).delta;
-    appendBufferedStreamOutput(delta);
     return;
   }
 
@@ -272,6 +299,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
     } else {
       state.clearStream();
     }
+    clearTextDeltaDispatchKeysForRun(event.runId);
     return;
   }
 
@@ -284,6 +312,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
     chatState.setAgentStatus('error');
     chatState.setLastError(message);
     completedContentsByRun.delete(event.runId);
+    clearTextDeltaDispatchKeysForRun(event.runId);
     return;
   }
 
@@ -295,5 +324,6 @@ export function dispatchRuntimeEvent(event: RuntimeEvent): void {
     chatState.clearStream();
     chatState.setLastError(reason);
     completedContentsByRun.delete(event.runId);
+    clearTextDeltaDispatchKeysForRun(event.runId);
   }
 }

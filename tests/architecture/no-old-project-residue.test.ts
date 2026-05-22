@@ -96,6 +96,9 @@ const allowedCurrentLifecycleTerms = new Map<string, string[]>([
   ['tests/apps/desktop/renderer/shell/AppShell.test.tsx', [
     joinForbidden('PROJECT', '_'),
   ]],
+  ['AGENTS.md', [
+    joinForbidden('PROJECT', '_'),
+  ]],
 ]);
 
 function shouldIgnore(filePath: string): boolean {

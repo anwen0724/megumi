@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TimelineMessageData } from '../../../entities/chat/types';
 import { Badge, cx } from '../../../shared/ui';
 
@@ -13,7 +14,7 @@ function formatTime(timestamp: string): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function TimelineMessage({ message, streaming = false }: TimelineMessageProps) {
+function TimelineMessageComponent({ message, streaming = false }: TimelineMessageProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
@@ -46,3 +47,5 @@ export function TimelineMessage({ message, streaming = false }: TimelineMessageP
     </article>
   );
 }
+
+export const TimelineMessage = memo(TimelineMessageComponent);

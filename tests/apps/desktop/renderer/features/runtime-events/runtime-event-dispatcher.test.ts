@@ -56,7 +56,7 @@ describe('runtime event dispatcher', () => {
     vi.useRealTimers();
   });
 
-  it('applies stream events to run state and commits completed assistant content', () => {
+  it('keeps text deltas out of run event state and commits completed assistant content', () => {
     dispatchRuntimeEvent(runtimeEvent('run.started', 1, {
       providerId: 'deepseek',
       modelId: 'deepseek-v4-flash',
@@ -73,7 +73,7 @@ describe('runtime event dispatcher', () => {
       status: 'completed',
       updatedAt: '2026-05-17T00:00:05.000Z',
     });
-    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
+    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.sequence)).toEqual([1, 4, 5]);
     expect(useChatStore.getState()).toMatchObject({
       streamingText: '',
       isStreaming: false,
@@ -200,6 +200,23 @@ describe('runtime event dispatcher', () => {
     expect(useRunStore.getState().lastError).toBe('Provider is disabled.');
   });
 
+  it('does not store text delta runtime events in the run event timeline', async () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Docs ' }, {
+      source: 'provider',
+    }));
+    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'answer.' }));
+    dispatchRuntimeEvent(runtimeEvent('context.effective.updated', 4, { sourceCount: 1 }));
+
+    await waitForStreamFlush();
+
+    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventType)).toEqual([
+      'run.started',
+      'context.effective.updated',
+    ]);
+    expect(useChatStore.getState().streamingText).toBe('Docs answer.');
+  });
+
   it('does not apply duplicate runtime events to chat timeline state', () => {
     const delta = runtimeEvent('assistant.output.delta', 1, { delta: 'Hello' });
     const completed = runtimeEvent('assistant.output.completed', 2, { content: 'Hello.' });
@@ -214,7 +231,7 @@ describe('runtime event dispatcher', () => {
 
     expect(useChatStore.getState().messages.map((message) => message.content)).toEqual(['Hello.']);
     expect(useChatStore.getState().streamingText).toBe('');
-    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.sequence)).toEqual([2, 3]);
   });
 
   it('ignores events without run ids for run and chat state', () => {
