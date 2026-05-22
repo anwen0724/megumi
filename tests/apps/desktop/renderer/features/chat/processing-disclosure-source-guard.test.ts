@@ -26,4 +26,12 @@ describe('processing disclosure source guard', () => {
     expect(component).not.toContain('rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]');
     expect(component).not.toContain('shadow-sm');
   });
+
+  it('keeps timeline messages visually lightweight instead of rendering chat cards', () => {
+    const component = readSource('apps/desktop/src/renderer/features/chat/components/TimelineMessage.tsx');
+
+    expect(component).not.toContain('rounded-xl');
+    expect(component).not.toContain('border-[var(--color-accent)] bg-[var(--color-accent)]');
+    expect(component).not.toContain('border-[var(--color-border)] bg-[var(--color-surface)]');
+  });
 });

@@ -122,6 +122,17 @@ export function ChatTimeline() {
       now: processingNow,
     });
 
+    if (model && isStreaming && model.status === 'running' && model.completedEntries.length > 0) {
+      return {
+        ...model,
+        status: 'completed' as const,
+        statusLabel: '已处理',
+        live: false,
+        endedAt: new Date().toISOString(),
+        currentAction: undefined,
+      };
+    }
+
     return model && isStreaming && model.status === 'running'
       ? { ...model, currentAction: '正在生成回复...' }
       : model;

@@ -25,6 +25,7 @@ const bufferedStreamOutputsByRun = new Map<string, {
   sessionId: string | null;
   flushTimer: ReturnType<typeof setTimeout> | null;
 }>();
+const activeToolCallIdsByRun = new Map<string, Set<string>>();
 
 interface DispatchRuntimeEventOptions {
   sessionId?: string | null;
@@ -192,7 +193,61 @@ function streamingTextForSession(sessionId: string | null): string {
   return state.sessionSnapshots[sessionId]?.streamingText ?? '';
 }
 
-function flushBufferedStreamOutput(runId: string): void {
+function hasActiveToolWork(runId: string): boolean {
+  return (activeToolCallIdsByRun.get(runId)?.size ?? 0) > 0;
+}
+
+function markActiveToolWork(event: RuntimeEvent): void {
+  if (!event.runId) {
+    return;
+  }
+
+  if (event.eventType === 'run.started') {
+    activeToolCallIdsByRun.set(event.runId, new Set());
+    return;
+  }
+
+  const payload = event.payload as { toolCallId?: string; toolCall?: { toolCallId?: string } };
+  const toolCallId = payload.toolCallId ?? payload.toolCall?.toolCallId;
+
+  if (!toolCallId) {
+    if (event.eventType === 'run.completed' || event.eventType === 'run.failed' || event.eventType === 'run.cancelled') {
+      activeToolCallIdsByRun.delete(event.runId);
+    }
+    return;
+  }
+
+  const activeToolCallIds = activeToolCallIdsByRun.get(event.runId) ?? new Set<string>();
+
+  if (
+    event.eventType === 'tool.call.requested' ||
+    event.eventType === 'tool.call.started' ||
+    event.eventType === 'tool.call.approval_requested'
+  ) {
+    activeToolCallIds.add(toolCallId);
+  }
+
+  if (
+    event.eventType === 'tool.call.completed' ||
+    event.eventType === 'tool.call.failed' ||
+    event.eventType === 'tool.call.denied' ||
+    event.eventType === 'tool.result.created'
+  ) {
+    activeToolCallIds.delete(toolCallId);
+  }
+
+  if (activeToolCallIds.size === 0) {
+    activeToolCallIdsByRun.delete(event.runId);
+  } else {
+    activeToolCallIdsByRun.set(event.runId, activeToolCallIds);
+  }
+}
+
+function flushBufferedStreamOutput(runId: string, options: { force?: boolean } = {}): void {
+  if (!options.force && hasActiveToolWork(runId)) {
+    return;
+  }
+
   const buffer = bufferedStreamOutputsByRun.get(runId);
   if (!buffer?.output) {
     return;
@@ -422,6 +477,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     return;
   }
 
+  markActiveToolWork(event);
   applyToolEvent(event);
   applyApprovalEvent(event);
 
@@ -447,8 +503,18 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     return;
   }
 
-  if (event.eventType === 'run.completed') {
+  if (
+    event.eventType === 'tool.call.completed' ||
+    event.eventType === 'tool.call.failed' ||
+    event.eventType === 'tool.call.denied' ||
+    event.eventType === 'tool.result.created'
+  ) {
     flushBufferedStreamOutput(event.runId);
+    return;
+  }
+
+  if (event.eventType === 'run.completed') {
+    flushBufferedStreamOutput(event.runId, { force: true });
     const completedContent = completedContentsByRun.get(event.runId)?.trim();
     const assistantContent = completedContent || streamingTextForSession(targetSessionId).trim();
     completedContentsByRun.delete(event.runId);

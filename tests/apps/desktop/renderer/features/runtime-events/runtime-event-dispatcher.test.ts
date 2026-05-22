@@ -157,6 +157,51 @@ describe('runtime event dispatcher', () => {
     });
   });
 
+  it('keeps assistant text hidden while tool work is still active and reveals it after tools complete', async () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 2, {
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        toolUseId: 'tool-use-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+        inputPreview: {
+          summary: 'Read README.md',
+          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
+          redactionState: 'none',
+        },
+        capabilities: ['project_read'],
+        riskLevel: 'low',
+        sideEffect: 'none',
+        status: 'running',
+        requestedAt: '2026-05-20T00:00:00.000Z',
+      },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'Final answer starts.' }));
+
+    await waitForStreamFlush();
+
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'running',
+    });
+
+    dispatchRuntimeEvent(runtimeEvent('tool.call.completed', 4, {
+      toolCallId: 'tool-call-1',
+      toolName: 'read_file',
+      completedAt: '2026-05-20T00:00:02.000Z',
+    }));
+
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: 'Final answer starts.',
+      isStreaming: true,
+      agentStatus: 'running',
+    });
+  });
+
   it('writes live stream deltas to the owning session snapshot when another session is active', async () => {
     useSessionStore.setState({
       sessions: [

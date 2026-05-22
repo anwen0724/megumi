@@ -484,7 +484,9 @@ describe('ChatTimeline', () => {
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     expect(timeline).toHaveTextContent('Check current UI');
-    expect(screen.getByRole('button', { name: /processing disclosure/ })).toHaveAttribute('aria-expanded', 'true');
+    const processingToggle = screen.getByRole('button', { name: /processing disclosure/ });
+    expect(processingToggle).toHaveTextContent('已处理');
+    expect(processingToggle).toHaveAttribute('aria-expanded', 'false');
     expect(timeline).toHaveTextContent('Working');
     expect(timeline).not.toHaveTextContent(/chain-of-thought/i);
   });
@@ -513,6 +515,37 @@ describe('ChatTimeline', () => {
     expect(timeline).toHaveTextContent('正在处理');
     expect(timeline).not.toHaveTextContent('live');
     expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
+  });
+
+  it('collapses completed process disclosure before showing the streaming answer', () => {
+    useChatStore.getState().setMessages([
+      createMessage({
+        id: 'message-user',
+        role: 'user',
+        content: 'Inspect project first',
+        stepNum: 1,
+        timestamp: '2026-05-10T12:00:00.000Z',
+      }),
+    ]);
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('tool.call.completed', 2, {
+      toolCallId: 'tool-call-1',
+      toolName: 'read_file',
+      completedAt: '2026-05-10T12:00:06.000Z',
+    }));
+    useChatStore.setState({
+      agentStatus: 'running',
+      streamingText: 'Here is the project summary.',
+      isStreaming: true,
+    });
+
+    render(<ChatTimeline />);
+
+    const processingToggle = screen.getByRole('button', { name: /Expand processing disclosure/ });
+    const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
+    expect(processingToggle).toHaveTextContent('已处理');
+    expect(processingToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(timelineText.indexOf('已处理')).toBeLessThan(timelineText.indexOf('Here is the project summary.'));
   });
 
   it('renders completed processing disclosure collapsed before final assistant response', () => {
