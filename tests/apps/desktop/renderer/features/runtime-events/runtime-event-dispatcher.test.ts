@@ -148,6 +148,10 @@ describe('runtime event dispatcher', () => {
       agentStatus: 'running',
     });
 
+    dispatchRuntimeEvent(runtimeEvent('model.step.completed', 4, { modelStepId: 'model-step-1', finishReason: 'stop' }, {
+      source: 'provider',
+    }));
+
     await waitForStreamFlush();
 
     expect(useChatStore.getState()).toMatchObject({
@@ -262,8 +266,8 @@ describe('runtime event dispatcher', () => {
       agentStatus: 'idle',
     });
     expect(useChatStore.getState().sessionSnapshots['session-1']).toMatchObject({
-      streamingText: 'Verilog is an HDL.',
-      isStreaming: true,
+      streamingText: '',
+      isStreaming: false,
       agentStatus: 'running',
     });
   });
@@ -366,12 +370,16 @@ describe('runtime event dispatcher', () => {
     }));
     dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'answer.' }));
     dispatchRuntimeEvent(runtimeEvent('context.effective.updated', 4, { sourceCount: 1 }));
+    dispatchRuntimeEvent(runtimeEvent('model.step.completed', 5, { modelStepId: 'model-step-1', finishReason: 'stop' }, {
+      source: 'provider',
+    }));
 
     await waitForStreamFlush();
 
     expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventType)).toEqual([
       'run.started',
       'context.effective.updated',
+      'model.step.completed',
     ]);
     expect(useChatStore.getState().streamingText).toBe('Docs answer.');
   });

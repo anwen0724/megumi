@@ -417,8 +417,8 @@ describe('ChatTimeline', () => {
 
     expect(screen.queryByText('Verilog is an HDL.')).not.toBeInTheDocument();
     expect(useChatStore.getState().sessionSnapshots[originalSessionId]).toMatchObject({
-      streamingText: 'Verilog is an HDL.',
-      isStreaming: true,
+      streamingText: '',
+      isStreaming: false,
       agentStatus: 'running',
     });
   });

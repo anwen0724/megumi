@@ -208,11 +208,20 @@ describe('useSessionTimeline', () => {
     });
 
     expect(useChatStore.getState().agentStatus).toBe('running');
-    await waitFor(() => {
-      expect(useChatStore.getState().streamingText).toBe('Hi there');
-    });
+    expect(useChatStore.getState().streamingText).toBe('');
 
     act(() => {
+      emitRuntimeEvent({
+        eventType: 'model.step.completed',
+        requestId,
+        runId: 'run-1',
+        source: 'provider',
+        visibility: 'system',
+        payload: {
+          modelStepId: 'model-step-1',
+          finishReason: 'stop',
+        },
+      });
       emitRuntimeEvent({
         eventType: 'assistant.output.completed',
         requestId,

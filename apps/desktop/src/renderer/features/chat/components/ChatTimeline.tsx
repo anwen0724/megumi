@@ -232,7 +232,10 @@ export function ChatTimeline() {
         {hasTimelineContent ? (
           <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-4xl flex-col gap-4">
             {processingDisclosure && !latestUserMessageItemId ? (
-              <ProcessingDisclosure model={processingDisclosure} />
+              <ProcessingDisclosure
+                key={`${processingDisclosure.runId}:${processingDisclosure.status}`}
+                model={processingDisclosure}
+              />
             ) : null}
 
             {timelineItems.map((item) => (
@@ -248,7 +251,10 @@ export function ChatTimeline() {
                 )}
 
                 {processingDisclosure && item.id === latestUserMessageItemId ? (
-                  <ProcessingDisclosure model={processingDisclosure} />
+                  <ProcessingDisclosure
+                    key={`${processingDisclosure.runId}:${processingDisclosure.status}`}
+                    model={processingDisclosure}
+                  />
                 ) : null}
               </Fragment>
             ))}

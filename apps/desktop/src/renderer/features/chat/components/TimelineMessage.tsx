@@ -30,7 +30,7 @@ function TimelineMessageComponent({ message, streaming = false }: TimelineMessag
         className={cx(
           'max-w-2xl text-sm leading-7',
           isUser
-            ? 'text-right text-[var(--color-text)]'
+            ? 'rounded-lg bg-[var(--color-accent-soft)] px-4 py-3 text-right text-[var(--color-text)]'
             : 'text-left text-[var(--color-text)]',
           message.role === 'system'
             ? 'max-w-md text-center text-[var(--color-text-muted)]'

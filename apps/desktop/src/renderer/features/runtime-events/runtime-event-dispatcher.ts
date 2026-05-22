@@ -26,6 +26,7 @@ const bufferedStreamOutputsByRun = new Map<string, {
   flushTimer: ReturnType<typeof setTimeout> | null;
 }>();
 const activeToolCallIdsByRun = new Map<string, Set<string>>();
+const answerRevealAllowedByRun = new Set<string>();
 
 interface DispatchRuntimeEventOptions {
   sessionId?: string | null;
@@ -204,6 +205,7 @@ function markActiveToolWork(event: RuntimeEvent): void {
 
   if (event.eventType === 'run.started') {
     activeToolCallIdsByRun.set(event.runId, new Set());
+    answerRevealAllowedByRun.delete(event.runId);
     return;
   }
 
@@ -243,8 +245,13 @@ function markActiveToolWork(event: RuntimeEvent): void {
   }
 }
 
+function allowAnswerReveal(runId: string): void {
+  answerRevealAllowedByRun.add(runId);
+  flushBufferedStreamOutput(runId);
+}
+
 function flushBufferedStreamOutput(runId: string, options: { force?: boolean } = {}): void {
-  if (!options.force && hasActiveToolWork(runId)) {
+  if (!options.force && (hasActiveToolWork(runId) || !answerRevealAllowedByRun.has(runId))) {
     return;
   }
 
@@ -503,17 +510,33 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     return;
   }
 
+  if (event.eventType === 'model.step.completed') {
+    allowAnswerReveal(event.runId);
+    return;
+  }
+
+  if (event.eventType === 'step.completed') {
+    const kind = (event.payload as { kind?: string }).kind;
+    if (kind === 'model') {
+      allowAnswerReveal(event.runId);
+      return;
+    }
+  }
+
   if (
     event.eventType === 'tool.call.completed' ||
     event.eventType === 'tool.call.failed' ||
     event.eventType === 'tool.call.denied' ||
     event.eventType === 'tool.result.created'
   ) {
-    flushBufferedStreamOutput(event.runId);
+    if (!hasActiveToolWork(event.runId)) {
+      allowAnswerReveal(event.runId);
+    }
     return;
   }
 
   if (event.eventType === 'run.completed') {
+    answerRevealAllowedByRun.add(event.runId);
     flushBufferedStreamOutput(event.runId, { force: true });
     const completedContent = completedContentsByRun.get(event.runId)?.trim();
     const assistantContent = completedContent || streamingTextForSession(targetSessionId).trim();
@@ -524,6 +547,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
       clearStreamForSession(targetSessionId);
     }
     bufferedStreamOutputsByRun.delete(event.runId);
+    answerRevealAllowedByRun.delete(event.runId);
     clearTextDeltaDispatchKeysForRun(event.runId);
     return;
   }
@@ -537,6 +561,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     setAgentStatusForSession(targetSessionId, 'error');
     setLastErrorForSession(targetSessionId, message);
     completedContentsByRun.delete(event.runId);
+    answerRevealAllowedByRun.delete(event.runId);
     clearTextDeltaDispatchKeysForRun(event.runId);
     return;
   }
@@ -549,6 +574,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     clearStreamForSession(targetSessionId);
     setLastErrorForSession(targetSessionId, reason);
     completedContentsByRun.delete(event.runId);
+    answerRevealAllowedByRun.delete(event.runId);
     clearTextDeltaDispatchKeysForRun(event.runId);
   }
 }
