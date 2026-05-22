@@ -37,7 +37,7 @@ describe('ProcessingDisclosure', () => {
     );
     expect(screen.getByText('正在处理')).toBeInTheDocument();
     expect(screen.getByText('42s')).toBeInTheDocument();
-    expect(screen.getByText('live')).toBeInTheDocument();
+    expect(screen.queryByText('live')).not.toBeInTheDocument();
     expect(screen.getByText('当前动作')).toBeInTheDocument();
     expect(screen.getByText('正在生成回复...')).toBeInTheDocument();
     expect(screen.getByText('已完成')).toBeInTheDocument();

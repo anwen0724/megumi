@@ -19,4 +19,11 @@ describe('processing disclosure source guard', () => {
     expect(combined).not.toMatch(/chain-of-thought|hidden reasoning|raw reasoning/i);
     expect(combined).not.toMatch(/思考过程|下一步|next step/i);
   });
+
+  it('keeps processing disclosure visually lightweight instead of rendering a card container', () => {
+    const component = readSource('apps/desktop/src/renderer/features/chat/components/ProcessingDisclosure.tsx');
+
+    expect(component).not.toContain('rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]');
+    expect(component).not.toContain('shadow-sm');
+  });
 });

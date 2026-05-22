@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -50,6 +51,11 @@ describe('runtime event dispatcher', () => {
     useRunStore.getState().resetRuns();
     useToolCallStore.getState().reset();
     useApprovalStore.getState().reset();
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
   });
 
   afterEach(() => {
@@ -149,6 +155,114 @@ describe('runtime event dispatcher', () => {
       isStreaming: true,
       agentStatus: 'running',
     });
+  });
+
+  it('writes live stream deltas to the owning session snapshot when another session is active', async () => {
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          title: 'Original session',
+          agentType: 'free',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        },
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          title: 'Visible session',
+          agentType: 'free',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      activeSessionId: 'session-2',
+      activeAgentType: 'free',
+    });
+    useChatStore.setState({
+      messages: [],
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'idle',
+      sessionSnapshots: {
+        'session-1': {
+          messages: [
+            {
+              id: 'message-user',
+              role: 'user',
+              content: 'Explain Verilog',
+              timestamp: '2026-05-17T00:00:00.000Z',
+            },
+          ],
+          streamingText: '',
+          isStreaming: false,
+          pendingToolCalls: [],
+          completedToolActivities: [],
+          agentStatus: 'running',
+          lastError: null,
+        },
+      },
+    });
+
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }, { sessionId: 'session-1' }));
+    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 2, { delta: 'Verilog is ' }, { sessionId: 'session-1' }));
+    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'an HDL.' }, { sessionId: 'session-1' }));
+
+    await waitForStreamFlush();
+
+    expect(useChatStore.getState()).toMatchObject({
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'idle',
+    });
+    expect(useChatStore.getState().sessionSnapshots['session-1']).toMatchObject({
+      streamingText: 'Verilog is an HDL.',
+      isStreaming: true,
+      agentStatus: 'running',
+    });
+  });
+
+  it('commits completed assistant content to the owning session snapshot when another session is active', () => {
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: 'session-2',
+      activeAgentType: 'free',
+    });
+    useChatStore.setState({
+      messages: [],
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'idle',
+      sessionSnapshots: {
+        'session-1': {
+          messages: [],
+          streamingText: 'Draft answer',
+          isStreaming: true,
+          pendingToolCalls: [],
+          completedToolActivities: [],
+          agentStatus: 'running',
+          lastError: null,
+        },
+      },
+    });
+
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }, { sessionId: 'session-1' }));
+    dispatchRuntimeEvent(runtimeEvent('assistant.output.completed', 2, { content: 'Final answer.' }, { sessionId: 'session-1' }));
+    dispatchRuntimeEvent(runtimeEvent('run.completed', 3, {}, { sessionId: 'session-1' }));
+
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStore.getState().sessionSnapshots['session-1']).toMatchObject({
+      streamingText: '',
+      isStreaming: false,
+      agentStatus: 'idle',
+    });
+    expect(useChatStore.getState().sessionSnapshots['session-1'].messages).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Final answer.',
+      }),
+    ]);
   });
 
   it('flushes buffered model output before completing a run', async () => {

@@ -268,11 +268,9 @@ export function createProcessingDisclosureModel({
     })
     .filter((entry): entry is ProcessingDisclosureEntry => Boolean(entry));
 
-  const currentAction = status === 'running' ? describeCurrentAction(orderedEvents) : undefined;
-
-  if (status === 'running' && !currentAction && completedEntries.length === 0) {
-    return null;
-  }
+  const currentAction = status === 'running'
+    ? describeCurrentAction(orderedEvents) ?? '正在启动运行...'
+    : undefined;
 
   return {
     runId: run.runId,

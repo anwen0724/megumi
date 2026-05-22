@@ -278,7 +278,7 @@ describe('right workspace panel session run sync', () => {
     emitRuntimeStarted(request);
 
     expect(screen.getByText('Start with the shell')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /processing disclosure/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /processing disclosure/ })).toHaveTextContent('正在处理');
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();

@@ -115,17 +115,12 @@ function createSessionMessageSendPayload(
   };
 }
 
-function isRunSessionStillActive(sessionId: string | null): boolean {
-  return useSessionStore.getState().activeSessionId === sessionId;
-}
-
 function shouldProcessRuntimeEvent(
   event: RuntimeEvent,
   activeRequestId: string | null,
-  runSessionId: string | null,
   processedSequences: Map<string, number>,
 ): boolean {
-  if (!event.runId || event.requestId !== activeRequestId || !isRunSessionStillActive(runSessionId)) {
+  if (!event.runId || event.requestId !== activeRequestId) {
     return false;
   }
 
@@ -163,10 +158,9 @@ export function useSessionTimeline() {
       if (shouldProcessRuntimeEvent(
         event,
         activeRequestIdRef.current,
-        runSessionIdRef.current,
         processedSequencesRef.current,
       )) {
-        dispatchRuntimeEvent(event);
+        dispatchRuntimeEvent(event, { sessionId: runSessionIdRef.current });
       }
     });
   }, []);

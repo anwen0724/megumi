@@ -71,7 +71,7 @@ describe('processing disclosure projection', () => {
     ]);
   });
 
-  it('does not create a visible model for a bare run start event', () => {
+  it('creates a visible running model for a bare run start event', () => {
     const model = createProcessingDisclosureModel({
       run: runSummary('running'),
       events: [
@@ -80,7 +80,12 @@ describe('processing disclosure projection', () => {
       now: new Date('2026-05-18T12:00:10.000Z'),
     });
 
-    expect(model).toBeNull();
+    expect(model).toMatchObject({
+      status: 'running',
+      statusLabel: '正在处理',
+      currentAction: '正在启动运行...',
+      completedEntries: [],
+    });
   });
 
   it('creates a completed model that remains factual and has no guessed next step', () => {

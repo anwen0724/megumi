@@ -8,6 +8,7 @@ import { ApprovalCard, type ApprovalCardResolvePayload, useApprovalStore } from 
 import { useChatStore } from '../../../entities/chat/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
+import { useSessionStore } from '../../../entities/session/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import {
   createProcessingDisclosureModel,
@@ -83,6 +84,7 @@ export function ChatTimeline() {
   const pendingToolCalls = useChatStore((state) => state.pendingToolCalls);
   const completedToolActivities = useChatStore((state) => state.completedToolActivities);
   const agentStatus = useChatStore((state) => state.agentStatus);
+  const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const projects = useProjectStore((state) => state.projects);
   const activeRunId = useRunStore((state) => state.activeRunId);
@@ -92,18 +94,22 @@ export function ChatTimeline() {
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
   const { sendSessionMessage, cancelSessionMessage } = useSessionTimeline();
 
-  const activeRun = activeRunId ? runs[activeRunId] : null;
-  const activeRunEvents = activeRunId ? (eventsByRun[activeRunId] ?? EMPTY_EVENTS) : EMPTY_EVENTS;
+  const activeRunCandidate = activeRunId ? runs[activeRunId] : null;
+  const activeRun = activeRunCandidate && (!activeSessionId || !activeRunCandidate.sessionId || activeRunCandidate.sessionId === activeSessionId)
+    ? activeRunCandidate
+    : null;
+  const visibleRunId = activeRun?.runId ?? null;
+  const activeRunEvents = visibleRunId ? (eventsByRun[visibleRunId] ?? EMPTY_EVENTS) : EMPTY_EVENTS;
   const runIsActive = activeRun?.status === 'running' || activeRun?.status === 'waiting_for_approval';
   const processingNow = useProcessingNow(Boolean(runIsActive));
 
   const pendingApprovals = useMemo(() => (
-    activeRunId
+    visibleRunId
       ? Object.values(approvalRequestsById)
-        .filter((request) => request.runId === activeRunId && request.status === 'pending')
+        .filter((request) => request.runId === visibleRunId && request.status === 'pending')
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
       : []
-  ), [activeRunId, approvalRequestsById]);
+  ), [visibleRunId, approvalRequestsById]);
 
   const eventProcessingDisclosure = useMemo(() => {
     if (!activeRun) {

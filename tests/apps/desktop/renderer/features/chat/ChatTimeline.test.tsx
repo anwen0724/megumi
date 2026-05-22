@@ -6,6 +6,7 @@ import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
@@ -204,6 +205,11 @@ describe('ChatTimeline', () => {
       loading: false,
       error: null,
     });
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: null,
+      activeAgentType: 'free',
+    });
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.setSystemTime(new Date('2026-05-10T12:00:42.000Z'));
     useRunStore.getState().resetRuns();
@@ -362,6 +368,61 @@ describe('ChatTimeline', () => {
     expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
   });
 
+  it('continues writing live runtime output to the original session after switching sessions', async () => {
+    const session = installMegumiMock();
+    selectMegumiProject();
+    render(<ChatTimeline />);
+
+    fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Explain Verilog' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => {
+      expect(session.message.send).toHaveBeenCalledTimes(1);
+    });
+
+    const originalSessionId = useSessionStore.getState().activeSessionId;
+    expect(originalSessionId).toBeTruthy();
+    if (!originalSessionId) {
+      throw new Error('Expected an active session after sending a message.');
+    }
+    useChatStore.getState().saveCurrentSessionSnapshot(originalSessionId);
+    useSessionStore.setState((state) => ({
+      sessions: [
+        ...state.sessions,
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          title: 'Other session',
+          agentType: 'free',
+          createdAt: '2026-05-10T12:00:00.000Z',
+          updatedAt: '2026-05-10T12:00:00.000Z',
+        },
+      ],
+      activeSessionId: 'session-2',
+    }));
+    useChatStore.getState().loadSessionSnapshot('session-2');
+
+    const requestId = session.message.send.mock.calls[0][0].requestId;
+
+    act(() => {
+      emitRuntimeEvent('run.started', requestId, { runKind: 'chat' }, { sessionId: originalSessionId });
+      emitRuntimeEvent('assistant.output.delta', requestId, { delta: 'Verilog is an HDL.' }, {
+        sessionId: originalSessionId,
+      });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+
+    expect(screen.queryByText('Verilog is an HDL.')).not.toBeInTheDocument();
+    expect(useChatStore.getState().sessionSnapshots[originalSessionId]).toMatchObject({
+      streamingText: 'Verilog is an HDL.',
+      isStreaming: true,
+      agentStatus: 'running',
+    });
+  });
+
   it('renders persisted runtime error messages and does not retry from an empty draft', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
@@ -426,6 +487,32 @@ describe('ChatTimeline', () => {
     expect(screen.getByRole('button', { name: /processing disclosure/ })).toHaveAttribute('aria-expanded', 'true');
     expect(timeline).toHaveTextContent('Working');
     expect(timeline).not.toHaveTextContent(/chain-of-thought/i);
+  });
+
+  it('keeps a lightweight processing disclosure visible for pure text streaming runs', () => {
+    useChatStore.getState().setMessages([
+      createMessage({
+        id: 'message-user',
+        role: 'user',
+        content: 'Explain Verilog',
+        stepNum: 1,
+        timestamp: '2026-05-10T12:00:00.000Z',
+      }),
+    ]);
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
+    useChatStore.setState({
+      agentStatus: 'running',
+      streamingText: 'Verilog is an HDL.',
+      isStreaming: true,
+    });
+
+    render(<ChatTimeline />);
+
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
+    const timelineText = timeline.textContent ?? '';
+    expect(timeline).toHaveTextContent('正在处理');
+    expect(timeline).not.toHaveTextContent('live');
+    expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
   });
 
   it('renders completed processing disclosure collapsed before final assistant response', () => {

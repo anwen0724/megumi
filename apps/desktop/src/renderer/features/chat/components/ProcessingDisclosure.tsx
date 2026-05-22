@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronRight, CircleDot, XCircle } from 'lucide-react';
-import { Badge, cx } from '../../../shared/ui';
+import { cx } from '../../../shared/ui';
 import type { ProcessingDisclosureEntry, ProcessingDisclosureModel } from '../processing-disclosure';
 
 interface ProcessingDisclosureProps {
@@ -48,11 +48,10 @@ export function ProcessingDisclosure({ model }: ProcessingDisclosureProps) {
         />
         <span className="font-medium text-[var(--color-text-muted)]">{model.statusLabel}</span>
         <span>{model.durationLabel}</span>
-        {model.live ? <Badge variant="accent">live</Badge> : null}
       </button>
 
       {expanded ? (
-        <div className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm shadow-sm">
+        <div className="space-y-3 pl-6 text-sm">
           {model.currentAction ? (
             <div>
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
