@@ -31,9 +31,34 @@ export * from './runtime-request';
 export * from './runtime-result';
 export { IsoDateTimeSchema } from './runtime-validation';
 export * from './chat-stream-events';
-export * from './chat-stream-event-schemas';
 export * from './chat-stream-event-factory';
 export {
-  ApprovalRequestedEventSchema,
-  ApprovalResolvedEventSchema,
+  ApprovalRequestStatusSchema,
+  ApprovalResolutionStatusSchema,
+  AssistantTextCancelledPartialEventSchema,
+  AssistantTextCompletedEventSchema,
+  AssistantTextDeltaEventSchema,
+  AssistantTextFailedEventSchema,
+  AssistantTextPhaseSchema,
+  AssistantTextStartedEventSchema,
+  AssistantThinkingCompletedEventSchema,
+  AssistantThinkingDeltaEventSchema,
+  AssistantThinkingStartedEventSchema,
+  ChatStreamEventIdSchema,
+  ChatStreamEventSchema,
+  ChatStreamEventTypeSchema,
+  ChatStreamIsoDateTimeSchema,
+  ChatStreamSeqSchema,
+  ToolCompletedEventSchema,
+  ToolDeniedEventSchema,
+  ToolFailedEventSchema,
+  ToolStartedEventSchema,
+  TurnCancelledEventSchema,
+  TurnCompletedEventSchema,
+  TurnFailedEventSchema,
+  TurnStartedEventSchema,
+  UserMessageCommittedEventSchema,
+  ApprovalRequestedEventSchema as ChatStreamApprovalRequestedEventSchema,
+  ApprovalResolvedEventSchema as ChatStreamApprovalResolvedEventSchema,
+  type ChatStreamEventFromSchema,
 } from './chat-stream-event-schemas';

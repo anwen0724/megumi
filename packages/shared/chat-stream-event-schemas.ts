@@ -66,7 +66,16 @@ function chatStreamEventSchema<TType extends ChatStreamEventType, TShape extends
       eventType: z.literal(eventType),
       ...shape,
     })
-    .strict();
+    .strict()
+    .superRefine((event, ctx) => {
+      if (event.streamId === event.runId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['streamId'],
+          message: 'streamId must be independent from runId.',
+        });
+      }
+    });
 }
 
 const OptionalTextSchema = z.string().optional();
@@ -201,7 +210,7 @@ export const ApprovalResolvedEventSchema = chatStreamEventSchema('approval.resol
   decision: ApprovalResolutionStatusSchema.optional(),
 });
 
-const ChatStreamEventUnionSchema = z.discriminatedUnion('eventType', [
+const ChatStreamEventUnionSchema = z.union([
   TurnStartedEventSchema,
   TurnCompletedEventSchema,
   TurnFailedEventSchema,
@@ -223,14 +232,6 @@ const ChatStreamEventUnionSchema = z.discriminatedUnion('eventType', [
   ApprovalResolvedEventSchema,
 ]);
 
-export const ChatStreamEventSchema = ChatStreamEventUnionSchema.superRefine((event, ctx) => {
-  if (event.streamId === event.runId) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['streamId'],
-      message: 'streamId must be independent from runId.',
-    });
-  }
-}) satisfies z.ZodType<ChatStreamEvent>;
+export const ChatStreamEventSchema = ChatStreamEventUnionSchema satisfies z.ZodType<ChatStreamEvent>;
 
 export type ChatStreamEventFromSchema = z.infer<typeof ChatStreamEventSchema>;

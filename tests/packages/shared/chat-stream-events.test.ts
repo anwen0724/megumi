@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import * as Shared from '@megumi/shared';
 import {
   ChatStreamEventSchema,
   ChatStreamEventTypeSchema,
@@ -71,6 +72,7 @@ describe('chat stream event contract', () => {
         clientMessageId: 'client-message-1',
         messageId: 'message-user-1',
         text: 'Hello',
+        seq: 2,
       },
       {
         ...base,
@@ -78,7 +80,7 @@ describe('chat stream event contract', () => {
         eventType: 'assistant.text.started',
         textId: 'text-answer-1',
         phase: 'answer',
-        seq: 2,
+        seq: 3,
       },
       {
         ...base,
@@ -87,7 +89,7 @@ describe('chat stream event contract', () => {
         textId: 'text-answer-1',
         phase: 'answer',
         delta: 'Hello there',
-        seq: 3,
+        seq: 4,
       },
       {
         ...base,
@@ -95,14 +97,14 @@ describe('chat stream event contract', () => {
         eventType: 'assistant.text.completed',
         textId: 'text-answer-1',
         phase: 'answer',
-        seq: 4,
+        seq: 5,
       },
       {
         ...base,
         eventId: 'chat-stream-event-6',
         eventType: 'turn.completed',
         elapsedMs: 1200,
-        seq: 5,
+        seq: 6,
       },
     ] satisfies ChatStreamEvent[];
 
@@ -197,6 +199,22 @@ describe('chat stream event contract', () => {
     })).toThrow();
   });
 
+  it('rejects runId as streamId on per-event schemas', () => {
+    expect(() => ToolCompletedEventSchema.parse({
+      ...base,
+      eventId: 'chat-stream-event-tool-invalid-stream',
+      eventType: 'tool.completed',
+      streamId: base.runId,
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      toolResultId: 'tool-result-1',
+      toolName: 'read_file',
+      displayName: 'Read file',
+      inputSummary: 'docs/README.md',
+      resultSummary: 'Read 20 lines.',
+    })).toThrow(/streamId/);
+  });
+
   it('rejects raw provider bodies and final UI copy fields on payloads', () => {
     expect(() => ChatStreamEventSchema.parse({
       ...base,
@@ -248,5 +266,56 @@ describe('chat stream event factory', () => {
       delta: 'Streaming answer.',
     });
     expect(ChatStreamEventSchema.parse(event)).toEqual(event);
+  });
+});
+
+describe('root shared exports', () => {
+  it('keeps approval event schema root exports on runtime event envelopes', () => {
+    const approvalRequest = {
+      approvalRequestId: 'approval-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'edit_file',
+      capabilities: ['project_write' as const],
+      riskLevel: 'medium' as const,
+      title: 'Edit file',
+      summary: 'Edit src/app.ts',
+      preview: {
+        action: 'Edit file',
+        targets: [{ kind: 'file' as const, label: 'src/app.ts', sensitivity: 'normal' as const }],
+      },
+      requestedScope: 'once' as const,
+      status: 'pending' as const,
+      createdAt: '2026-05-20T00:00:00.000Z',
+    };
+
+    const runtimeApprovalRequestedEvent = {
+      eventId: 'event-approval-requested',
+      schemaVersion: 1 as const,
+      eventType: 'approval.requested',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-05-20T00:00:00.000Z',
+      source: 'approval' as const,
+      visibility: 'user' as const,
+      persist: 'required' as const,
+      payload: { approvalRequest },
+    };
+
+    expect(Shared.ApprovalRequestedEventSchema.parse(runtimeApprovalRequestedEvent)).toEqual(
+      runtimeApprovalRequestedEvent,
+    );
+    expect(() => Shared.ApprovalRequestedEventSchema.parse({
+      ...base,
+      eventType: 'approval.requested',
+      approvalId: 'approval-1',
+      scope: 'project',
+      status: 'pending',
+      title: 'Run command',
+    })).toThrow();
   });
 });
