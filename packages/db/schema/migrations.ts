@@ -31,6 +31,19 @@ function archiveTableIfNeeded(
   database.exec(`ALTER TABLE ${sourceTableName} RENAME TO ${legacyTableName};`);
 }
 
+function addColumnIfMissing(
+  database: MegumiDatabase,
+  tableName: string,
+  columnName: string,
+  definition: string,
+): void {
+  if (tableColumns(database, tableName).some((column) => column.name === columnName)) {
+    return;
+  }
+
+  database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition};`);
+}
+
 function archiveLegacyToolPersistenceTables(database: MegumiDatabase): void {
   if (!tableExists(database, 'tool_calls')) {
     return;
@@ -233,6 +246,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       sort_time TEXT NOT NULL,
+      turn_order INTEGER NOT NULL DEFAULT 0,
       blocks_json TEXT NOT NULL,
       message_json TEXT NOT NULL,
       FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
@@ -839,6 +853,18 @@ export function migrateDatabase(database: MegumiDatabase): void {
     );
   `);
 
+  addColumnIfMissing(database, 'timeline_messages', 'turn_order', 'INTEGER');
+
+  database.exec(`
+    UPDATE timeline_messages
+    SET turn_order = CASE role WHEN 'assistant' THEN 1 ELSE 0 END
+    WHERE turn_order IS NULL;
+  `);
+
+  database.exec(`
+    DROP INDEX IF EXISTS idx_timeline_messages_session_order;
+  `);
+
 
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_session_messages_session_id
@@ -861,7 +887,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
     WHERE run_id IS NOT NULL;
 
     CREATE INDEX IF NOT EXISTS idx_timeline_messages_session_order
-    ON timeline_messages(project_id, session_id, sort_time, message_id);
+    ON timeline_messages(project_id, session_id, sort_time, run_id, turn_order, message_id);
 
     CREATE INDEX IF NOT EXISTS idx_timeline_messages_run_id
     ON timeline_messages(run_id);

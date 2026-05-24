@@ -169,6 +169,7 @@ function committedAssistant(messageId: string, runId: string, text: string): Tim
     projectId: 'project-1',
     sessionId: 'session-1',
     runId,
+    turnOrder: 1,
     createdAt: '2026-05-24T00:00:00.000Z',
     updatedAt: '2026-05-24T00:00:00.000Z',
     blocks: [{
@@ -183,14 +184,16 @@ function committedAssistant(messageId: string, runId: string, text: string): Tim
   };
 }
 
-function committedUser(messageId: string, text: string): TimelineUserMessage {
+function committedUser(messageId: string, text: string, runId = 'run-history'): TimelineUserMessage {
   return {
     messageId,
     role: 'user',
     projectId: 'project-1',
     sessionId: 'session-1',
-    createdAt: '2026-05-23T23:59:59.000Z',
-    updatedAt: '2026-05-23T23:59:59.000Z',
+    runId,
+    turnOrder: 0,
+    createdAt: '2026-05-24T00:00:00.000Z',
+    updatedAt: '2026-05-24T00:00:00.000Z',
     blocks: [{
       blockId: `user-text:${messageId}`,
       kind: 'user_text',
@@ -679,7 +682,7 @@ describe('useSessionTimeline', () => {
       activeAgentType: 'free',
     });
     useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
-      committedUser('message-user-history', 'Canonical user prompt'),
+      committedUser('message-user-history', 'Canonical user prompt', 'run-history'),
       committedAssistant('assistant:run-history', 'run-history', 'Canonical answer'),
     ]);
     const { result } = renderHook(() => useSessionTimeline());
@@ -719,7 +722,7 @@ describe('useSessionTimeline', () => {
       activeAgentType: 'free',
     });
     useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
-      committedUser('message-user-history', 'Canonical user prompt'),
+      committedUser('message-user-history', 'Canonical user prompt', 'run-completed'),
       committedAssistant('assistant:run-completed', 'run-completed', 'Completed answer'),
       {
         ...committedAssistant('assistant:run-failed', 'run-failed', 'Partial answer'),

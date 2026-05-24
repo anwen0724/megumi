@@ -236,6 +236,7 @@ function ensureAssistantMessage(
     messageId,
     role: 'assistant',
     runId: event.runId,
+    turnOrder: 1,
     projectId: event.projectId,
     sessionId: event.sessionId,
     createdAt: event.createdAt,
@@ -266,6 +267,8 @@ function upsertUserMessage(
 
   if (existing) {
     existing.messageId = event.messageId;
+    existing.runId = event.runId;
+    existing.turnOrder = 0;
     existing.clientMessageId = event.clientMessageId;
     existing.projectId = event.projectId;
     existing.sessionId = event.sessionId;
@@ -288,6 +291,8 @@ function upsertUserMessage(
     role: 'user',
     projectId: event.projectId,
     sessionId: event.sessionId,
+    runId: event.runId,
+    turnOrder: 0,
     clientMessageId: event.clientMessageId,
     createdAt: event.createdAt,
     updatedAt: event.createdAt,

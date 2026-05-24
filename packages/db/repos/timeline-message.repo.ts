@@ -53,6 +53,7 @@ interface TimelineMessageRow {
   created_at: string;
   updated_at: string;
   sort_time: string;
+  turn_order: number;
   blocks_json: string;
   message_json: string;
 }
@@ -90,10 +91,10 @@ export class TimelineMessageRepository {
         this.database.prepare(`
           INSERT INTO timeline_messages (
             message_id, project_id, session_id, run_id, role, status,
-            created_at, updated_at, sort_time, blocks_json, message_json
+            created_at, updated_at, sort_time, turn_order, blocks_json, message_json
           ) VALUES (
             @message_id, @project_id, @session_id, @run_id, @role, @status,
-            @created_at, @updated_at, @sort_time, @blocks_json, @message_json
+            @created_at, @updated_at, @sort_time, @turn_order, @blocks_json, @message_json
           )
           ON CONFLICT(message_id) DO UPDATE SET
             project_id = excluded.project_id,
@@ -104,6 +105,7 @@ export class TimelineMessageRepository {
             created_at = excluded.created_at,
             updated_at = excluded.updated_at,
             sort_time = excluded.sort_time,
+            turn_order = excluded.turn_order,
             blocks_json = excluded.blocks_json,
             message_json = excluded.message_json
         `).run(toTimelineMessageRow(message));
@@ -156,7 +158,7 @@ export class TimelineMessageRepository {
       SELECT *
       FROM timeline_messages
       WHERE project_id = ? AND session_id = ?
-      ORDER BY sort_time ASC, message_id ASC
+      ORDER BY sort_time ASC, run_id ASC, turn_order ASC, message_id ASC
     `).all(input.projectId, input.sessionId) as TimelineMessageRow[];
 
     const messages: TimelineMessage[] = [];
@@ -253,17 +255,33 @@ function validateCommitOwnership(input: TimelineCommitInput, messages: TimelineM
     if (
       message.projectId !== input.projectId ||
       String(message.sessionId) !== input.sessionId ||
-      (message.role === 'assistant' && String(message.runId) !== input.runId)
+      (message.runId !== undefined && String(message.runId) !== input.runId)
     ) {
       throw new Error('Timeline commit message ownership mismatch.');
     }
   }
 }
 
+function messageRunId(message: TimelineMessage): string {
+  return message.role === 'assistant' ? String(message.runId) : String(message.runId ?? '');
+}
+
+function messageTurnOrder(message: TimelineMessage): number {
+  return message.turnOrder ?? (message.role === 'user' ? 0 : 1);
+}
+
 function sortMessages(messages: TimelineMessage[]): TimelineMessage[] {
   return [...messages].sort((left, right) => {
     const createdOrder = left.createdAt.localeCompare(right.createdAt);
-    return createdOrder === 0 ? String(left.messageId).localeCompare(String(right.messageId)) : createdOrder;
+    if (createdOrder !== 0) return createdOrder;
+
+    const runOrder = messageRunId(left).localeCompare(messageRunId(right));
+    if (runOrder !== 0) return runOrder;
+
+    const turnOrder = messageTurnOrder(left) - messageTurnOrder(right);
+    if (turnOrder !== 0) return turnOrder;
+
+    return String(left.messageId).localeCompare(String(right.messageId));
   });
 }
 
@@ -282,12 +300,13 @@ function toTimelineMessageRow(message: TimelineMessage): TimelineMessageRow {
     message_id: String(message.messageId),
     project_id: message.projectId,
     session_id: String(message.sessionId),
-    run_id: message.role === 'assistant' ? String(message.runId) : null,
+    run_id: messageRunId(message) || null,
     role: message.role,
     status: 'committed',
     created_at: message.createdAt,
     updated_at: message.updatedAt ?? message.createdAt,
     sort_time: message.createdAt,
+    turn_order: messageTurnOrder(message),
     blocks_json: stringifyJson(message.blocks),
     message_json: stringifyJson(message),
   };

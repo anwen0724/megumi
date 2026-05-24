@@ -72,6 +72,7 @@ export interface TimelineMessageBase {
   sessionId: SessionId | string;
   createdAt: string;
   updatedAt?: string;
+  turnOrder?: number;
 }
 
 export interface TimelineBlockBase {
@@ -99,6 +100,7 @@ export type UserTimelineBlock = UserTextBlock | UserAttachmentBlock;
 
 export interface TimelineUserMessage extends TimelineMessageBase {
   role: 'user';
+  runId?: RunId | string;
   clientMessageId?: string;
   blocks: UserTimelineBlock[];
 }

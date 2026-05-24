@@ -88,6 +88,27 @@ function messageIdentity(message: TimelineMessage): string {
   return `user:${message.clientMessageId ?? message.messageId}`;
 }
 
+function messageRunId(message: TimelineMessage): string {
+  return message.role === 'assistant' ? String(message.runId) : String(message.runId ?? '');
+}
+
+function messageTurnOrder(message: TimelineMessage): number {
+  return message.turnOrder ?? (message.role === 'user' ? 0 : 1);
+}
+
+function compareTimelineMessages(left: TimelineMessage, right: TimelineMessage): number {
+  const createdOrder = left.createdAt.localeCompare(right.createdAt);
+  if (createdOrder !== 0) return createdOrder;
+
+  const runOrder = messageRunId(left).localeCompare(messageRunId(right));
+  if (runOrder !== 0) return runOrder;
+
+  const turnOrder = messageTurnOrder(left) - messageTurnOrder(right);
+  if (turnOrder !== 0) return turnOrder;
+
+  return String(left.messageId).localeCompare(String(right.messageId));
+}
+
 function upsertPendingUserMessage(
   current: TimelineMessage[],
   input: {
@@ -138,18 +159,14 @@ function upsertPendingUserMessage(
     role: 'user',
     projectId: input.projectId,
     sessionId: input.sessionId,
+    turnOrder: 0,
     clientMessageId: input.clientMessageId,
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
     blocks: [block],
   };
 
-  return [...current, message].sort((left, right) => {
-    const createdOrder = left.createdAt.localeCompare(right.createdAt);
-    return createdOrder === 0
-      ? String(left.messageId).localeCompare(String(right.messageId))
-      : createdOrder;
-  });
+  return [...current, message].sort(compareTimelineMessages);
 }
 
 function mergeCommittedMessages(
@@ -175,12 +192,7 @@ function mergeCommittedMessages(
     }
   }
 
-  return [...byIdentity.values()].sort((left, right) => {
-    const createdOrder = left.createdAt.localeCompare(right.createdAt);
-    return createdOrder === 0
-      ? String(left.messageId).localeCompare(String(right.messageId))
-      : createdOrder;
-  });
+  return [...byIdentity.values()].sort(compareTimelineMessages);
 }
 
 export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {

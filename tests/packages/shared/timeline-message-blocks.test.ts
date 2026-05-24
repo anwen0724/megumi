@@ -37,6 +37,8 @@ describe('timeline message and block contracts', () => {
     const message = {
       ...messageBase,
       role: 'user',
+      runId: 'run-1',
+      turnOrder: 0,
       clientMessageId: 'client-message-1',
       blocks: [
         {
@@ -67,6 +69,7 @@ describe('timeline message and block contracts', () => {
       messageId: 'assistant-message-1',
       role: 'assistant',
       runId: 'run-1',
+      turnOrder: 1,
       blocks: [
         {
           blockId: 'process-run-1',

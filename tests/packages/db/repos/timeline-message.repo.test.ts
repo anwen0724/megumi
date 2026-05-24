@@ -62,6 +62,8 @@ const userMessage: TimelineUserMessage = {
   role: 'user',
   projectId: 'project-1',
   sessionId: 'session-1',
+  runId: 'run-1',
+  turnOrder: 0,
   createdAt: '2026-05-24T00:00:00.000Z',
   updatedAt: '2026-05-24T00:00:00.000Z',
   blocks: [
@@ -80,7 +82,8 @@ const assistantMessage: TimelineAssistantMessage = {
   projectId: 'project-1',
   sessionId: 'session-1',
   runId: 'run-1',
-  createdAt: '2026-05-24T00:00:01.000Z',
+  turnOrder: 1,
+  createdAt: '2026-05-24T00:00:00.000Z',
   updatedAt: '2026-05-24T00:00:03.000Z',
   blocks: [
     {
@@ -127,6 +130,7 @@ describe('TimelineMessageRepository', () => {
       'message-user-1',
       'assistant:run-1',
     ]);
+    expect(result.messages.map((message) => message.turnOrder)).toEqual([0, 1]);
     expect(result.messages[1]).toMatchObject({
       role: 'assistant',
       runId: 'run-1',

@@ -108,6 +108,7 @@ const TimelineMessageBaseShape = {
   sessionId: z.string().min(1),
   createdAt: TimelineIsoDateTimeSchema,
   updatedAt: TimelineIsoDateTimeSchema.optional(),
+  turnOrder: z.number().int().nonnegative().optional(),
 } satisfies z.ZodRawShape;
 
 const OptionalTextSchema = z.string().optional();
@@ -251,6 +252,7 @@ export const TimelineUserMessageSchema = z
   .object({
     ...TimelineMessageBaseShape,
     role: z.literal('user'),
+    runId: z.string().min(1).optional(),
     clientMessageId: TimelineIdSchema.optional(),
     blocks: z.array(UserTimelineBlockSchema).min(1),
   })
