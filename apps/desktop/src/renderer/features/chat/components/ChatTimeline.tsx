@@ -1,15 +1,17 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { ApprovalResolvePayload } from '@megumi/shared/ipc-schemas';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { CompletedToolActivity } from '../../../entities/chat/store';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import { ApprovalCard, type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatStore } from '../../../entities/chat/store';
+import type { TimelineMessageData } from '../../../entities/chat/types';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
+import { chatStreamSessionKey, useChatStreamStore } from '../../chat-stream';
 import {
   createProcessingDisclosureModel,
   formatProcessingDuration,
@@ -18,29 +20,12 @@ import {
 import { Composer, type ComposerStatus, type ComposerSubmitPayload } from './Composer';
 import { ProcessingDisclosure } from './ProcessingDisclosure';
 import { TimelineMessage } from './TimelineMessage';
-import { ToolActivityRow } from './ToolActivityRow';
 import { useSessionTimeline } from '../hooks/use-session-timeline';
 
 const EMPTY_EVENTS: RuntimeEvent[] = [];
+const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
 
-type TimelineItem =
-  | {
-      id: string;
-      kind: 'message';
-      timestamp: string;
-      message: Parameters<typeof TimelineMessage>[0]['message'];
-    }
-  | {
-      id: string;
-      kind: 'activity';
-      timestamp: string;
-      activity: CompletedToolActivity;
-    };
-
-function toTimeValue(timestamp: string): number {
-  const value = new Date(timestamp).getTime();
-  return Number.isNaN(value) ? 0 : value;
-}
+type TimelineRenderableMessage = CanonicalTimelineMessage | TimelineMessageData;
 
 function useProcessingNow(active: boolean) {
   const [now, setNow] = useState(() => new Date());
@@ -57,32 +42,10 @@ function useProcessingNow(active: boolean) {
   return now;
 }
 
-function StreamingAssistantMessage() {
-  const streamingText = useChatStore((state) => state.streamingText);
-  const isStreaming = useChatStore((state) => state.isStreaming);
-
-  if (!isStreaming) {
-    return null;
-  }
-
-  return (
-    <TimelineMessage
-      streaming
-      message={{
-        role: 'assistant',
-        content: streamingText,
-        timestamp: new Date().toISOString(),
-      }}
-    />
-  );
-}
-
 export function ChatTimeline() {
-  const [expandedActivityIds, setExpandedActivityIds] = useState<Set<string>>(() => new Set());
   const messages = useChatStore((state) => state.messages);
   const isStreaming = useChatStore((state) => state.isStreaming);
   const pendingToolCalls = useChatStore((state) => state.pendingToolCalls);
-  const completedToolActivities = useChatStore((state) => state.completedToolActivities);
   const agentStatus = useChatStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
@@ -93,6 +56,24 @@ export function ChatTimeline() {
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
   const { sendSessionMessage, cancelSessionMessage } = useSessionTimeline();
+  const activeChatStreamSessionKey = currentProjectId && activeSessionId
+    ? chatStreamSessionKey(currentProjectId, activeSessionId)
+    : null;
+  const canonicalMessages = useChatStreamStore((state) => (
+    activeChatStreamSessionKey
+      ? state.sessions[activeChatStreamSessionKey]?.messages ?? EMPTY_CANONICAL_MESSAGES
+      : EMPTY_CANONICAL_MESSAGES
+  ));
+  const timelineMessages = useMemo<TimelineRenderableMessage[]>(() => {
+    const canonicalMessageIds = new Set(canonicalMessages.map((message) => message.messageId));
+    const legacyMessages = messages.filter((message) => !canonicalMessageIds.has(message.id));
+
+    return [...legacyMessages, ...canonicalMessages].sort((left, right) => {
+      const leftTimestamp = 'messageId' in left ? left.createdAt : left.timestamp;
+      const rightTimestamp = 'messageId' in right ? right.createdAt : right.timestamp;
+      return new Date(leftTimestamp).getTime() - new Date(rightTimestamp).getTime();
+    });
+  }, [canonicalMessages, messages]);
 
   const activeRunCandidate = activeRunId ? runs[activeRunId] : null;
   const activeRun = activeRunCandidate && (!activeSessionId || !activeRunCandidate.sessionId || activeRunCandidate.sessionId === activeSessionId)
@@ -138,50 +119,30 @@ export function ChatTimeline() {
       : model;
   }, [activeRun, activeRunEvents, isStreaming, processingNow]);
 
-  const timelineItems: TimelineItem[] = [
-    ...messages.map((message) => ({
-      id: `message-${message.id}`,
-      kind: 'message' as const,
-      timestamp: message.timestamp,
-      message,
-    })),
-    ...completedToolActivities.map((activity) => ({
-      id: `activity-${activity.id}`,
-      kind: 'activity' as const,
-      timestamp: activity.completedAt,
-      activity,
-    })),
-  ].sort((left, right) => toTimeValue(left.timestamp) - toTimeValue(right.timestamp));
-
-  const latestUserMessageItemId = [...timelineItems].reverse().find((item) => (
-    item.kind === 'message' && item.message.role === 'user'
-  ))?.id;
-  const latestUserMessageItem = latestUserMessageItemId
-    ? timelineItems.find((item) => item.id === latestUserMessageItemId)
-    : null;
+  const latestUserMessage = [...messages].reverse().find((message) => message.role === 'user') ?? null;
   const pendingProcessingDisclosure: ProcessingDisclosureModel | null =
-    agentStatus === 'sending' && latestUserMessageItem
+    agentStatus === 'sending' && latestUserMessage
       ? {
           runId: 'pending-session-message',
           status: 'running',
           statusLabel: '正在处理',
-          durationLabel: formatProcessingDuration(latestUserMessageItem.timestamp, processingNow),
+          durationLabel: formatProcessingDuration(latestUserMessage.timestamp, processingNow),
           live: true,
-          startedAt: latestUserMessageItem.timestamp,
+          startedAt: latestUserMessage.timestamp,
           currentAction: '正在连接模型...',
           completedEntries: [],
         }
       : null;
-  const processingDisclosure = eventProcessingDisclosure ?? pendingProcessingDisclosure;
+  const showLegacyPendingDisclosure = canonicalMessages.length === 0;
+  const processingDisclosure = showLegacyPendingDisclosure
+    ? (eventProcessingDisclosure ?? pendingProcessingDisclosure)
+    : null;
   const hasFailedTool = pendingToolCalls.some((toolCall) => toolCall.status === 'failed');
   const composerStatus: ComposerStatus = hasFailedTool ? 'error' : agentStatus;
   const hasTimelineContent =
-    messages.length > 0 ||
+    timelineMessages.length > 0 ||
     Boolean(processingDisclosure) ||
-    isStreaming ||
-    pendingToolCalls.length > 0 ||
     pendingApprovals.length > 0 ||
-    completedToolActivities.length > 0 ||
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
     agentStatus === 'error';
@@ -206,20 +167,6 @@ export function ChatTimeline() {
     ));
   }
 
-  function toggleActivity(activityId: string) {
-    setExpandedActivityIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(activityId)) {
-        next.delete(activityId);
-      } else {
-        next.add(activityId);
-      }
-
-      return next;
-    });
-  }
-
   return (
     <main
       data-testid="chat-timeline-root"
@@ -231,49 +178,19 @@ export function ChatTimeline() {
       >
         {hasTimelineContent ? (
           <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-4xl flex-col gap-4">
-            {processingDisclosure && !latestUserMessageItemId ? (
+            {processingDisclosure ? (
               <ProcessingDisclosure
                 key={`${processingDisclosure.runId}:${processingDisclosure.status}`}
                 model={processingDisclosure}
               />
             ) : null}
 
-            {timelineItems.map((item) => (
-              <Fragment key={item.id}>
-                {item.kind === 'message' ? (
-                  <TimelineMessage message={item.message} />
-                ) : (
-                  <ToolActivityRow
-                    activity={item.activity}
-                    expanded={expandedActivityIds.has(item.activity.id)}
-                    onToggle={() => toggleActivity(item.activity.id)}
-                  />
-                )}
-
-                {processingDisclosure && item.id === latestUserMessageItemId ? (
-                  <ProcessingDisclosure
-                    key={`${processingDisclosure.runId}:${processingDisclosure.status}`}
-                    model={processingDisclosure}
-                  />
-                ) : null}
-              </Fragment>
+            {timelineMessages.map((message) => (
+              <TimelineMessage
+                key={'messageId' in message ? message.messageId : message.id}
+                message={message}
+              />
             ))}
-
-            {pendingToolCalls.length > 0 ? (
-              <section aria-label="Active tool calls" className="space-y-2">
-                <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-                  Legacy active tool calls
-                </h2>
-                {pendingToolCalls.map((toolCall) => (
-                  <div
-                    key={toolCall.id}
-                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-muted)]"
-                  >
-                    {toolCall.name}
-                  </div>
-                ))}
-              </section>
-            ) : null}
 
             {pendingApprovals.length > 0 ? (
               <section aria-label="Pending approvals" className="space-y-2">
@@ -291,8 +208,6 @@ export function ChatTimeline() {
                 ))}
               </section>
             ) : null}
-
-            <StreamingAssistantMessage />
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">

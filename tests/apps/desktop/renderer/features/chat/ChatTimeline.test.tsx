@@ -12,6 +12,10 @@ import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
+import {
+  chatStreamSessionKey,
+  useChatStreamStore,
+} from '@megumi/desktop/renderer/features/chat-stream';
 import type { ApprovalRequest, ToolCall } from '@megumi/shared/tool-contracts';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
@@ -215,6 +219,7 @@ describe('ChatTimeline', () => {
     useRunStore.getState().resetRuns();
     useToolCallStore.getState().reset();
     useApprovalStore.getState().reset();
+    useChatStreamStore.getState().reset();
   });
 
   afterEach(() => {
@@ -487,11 +492,11 @@ describe('ChatTimeline', () => {
     const processingToggle = screen.getByRole('button', { name: /processing disclosure/ });
     expect(processingToggle).toHaveTextContent('已处理');
     expect(processingToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(timeline).toHaveTextContent('Working');
+    expect(timeline).not.toHaveTextContent('Working');
     expect(timeline).not.toHaveTextContent(/chain-of-thought/i);
   });
 
-  it('keeps a lightweight processing disclosure visible for pure text streaming runs', () => {
+  it('keeps a lightweight processing disclosure visible without rendering legacy streamingText', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
@@ -511,13 +516,13 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    const timelineText = timeline.textContent ?? '';
     expect(timeline).toHaveTextContent('正在处理');
     expect(timeline).not.toHaveTextContent('live');
-    expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
+    expect(timeline).toHaveTextContent('Explain Verilog');
+    expect(timeline).not.toHaveTextContent('Verilog is an HDL.');
   });
 
-  it('collapses completed process disclosure before showing the streaming answer', () => {
+  it('collapses completed process disclosure without rendering legacy streamingText', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
@@ -542,10 +547,11 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
 
     const processingToggle = screen.getByRole('button', { name: /Expand processing disclosure/ });
-    const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     expect(processingToggle).toHaveTextContent('已处理');
     expect(processingToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(timelineText.indexOf('已处理')).toBeLessThan(timelineText.indexOf('Here is the project summary.'));
+    expect(timeline).toHaveTextContent('Inspect project first');
+    expect(timeline).not.toHaveTextContent('Here is the project summary.');
   });
 
   it('renders completed processing disclosure collapsed before final assistant response', () => {
@@ -658,5 +664,239 @@ describe('ChatTimeline', () => {
     expect(screen.getByText('Megumi is ready to help with this workspace.')).toBeInTheDocument();
     expect(screen.getByText('/home/user/test')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open workspace' })).not.toBeInTheDocument();
+  });
+
+  it('renders canonical chat stream messages as the live timeline source', () => {
+    installMegumiMock();
+    selectMegumiProject();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        title: 'Canonical session',
+        agentType: 'free',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        updatedAt: '2026-05-10T12:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStreamStore.getState().setActiveSession('project-1', 'session-1');
+    useChatStreamStore.setState({
+      sessions: {
+        [chatStreamSessionKey('project-1', 'session-1')]: {
+          projectId: 'project-1',
+          sessionId: 'session-1',
+          streamsById: {},
+          messages: [
+            {
+              messageId: 'message-user-1',
+              role: 'user',
+              projectId: 'project-1',
+              sessionId: 'session-1',
+              createdAt: '2026-05-10T12:00:00.000Z',
+              blocks: [{
+                blockId: 'user-text-1',
+                kind: 'user_text',
+                text: '读取 docs 目录',
+                format: 'plain',
+              }],
+            },
+            {
+              messageId: 'assistant:run-1',
+              role: 'assistant',
+              projectId: 'project-1',
+              sessionId: 'session-1',
+              runId: 'run-1',
+              createdAt: '2026-05-10T12:00:01.000Z',
+              blocks: [
+                {
+                  blockId: 'process:run-1',
+                  kind: 'process_disclosure',
+                  runId: 'run-1',
+                  status: 'completed',
+                  startedAt: '2026-05-10T12:00:01.000Z',
+                  endedAt: '2026-05-10T12:00:04.000Z',
+                  items: [{
+                    itemId: 'tool:tool-use-1',
+                    kind: 'tool_activity',
+                    toolUseId: 'tool-use-1',
+                    toolName: 'list_directory',
+                    inputSummary: 'docs',
+                    status: 'succeeded',
+                  }],
+                },
+                {
+                  blockId: 'answer:run-1',
+                  kind: 'answer_text',
+                  runId: 'run-1',
+                  textId: 'text-answer-1',
+                  status: 'streaming',
+                  text: 'docs 目录包含 README.md',
+                  format: 'markdown',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    render(<ChatTimeline />);
+
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
+    expect(timeline).toHaveTextContent('读取 docs 目录');
+    expect(timeline).toHaveTextContent('已处理');
+    expect(timeline).toHaveTextContent('docs 目录包含 README.md');
+    expect(timeline).not.toHaveTextContent('Streaming');
+    expect(timeline).not.toHaveTextContent('Legacy active tool calls');
+    expect(timeline).not.toHaveTextContent('TOOL CALLS');
+  });
+
+  it('does not render old streamingText when canonical answer text exists', () => {
+    installMegumiMock();
+    selectMegumiProject();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        title: 'Canonical session',
+        agentType: 'free',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        updatedAt: '2026-05-10T12:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStore.setState({
+      streamingText: 'OLD STREAMING TEXT',
+      isStreaming: true,
+      agentStatus: 'running',
+    });
+    useChatStreamStore.getState().setActiveSession('project-1', 'session-1');
+    useChatStreamStore.setState({
+      sessions: {
+        [chatStreamSessionKey('project-1', 'session-1')]: {
+          projectId: 'project-1',
+          sessionId: 'session-1',
+          streamsById: {},
+          messages: [{
+            messageId: 'assistant:run-1',
+            role: 'assistant',
+            projectId: 'project-1',
+            sessionId: 'session-1',
+            runId: 'run-1',
+            createdAt: '2026-05-10T12:00:01.000Z',
+            blocks: [{
+              blockId: 'answer:run-1',
+              kind: 'answer_text',
+              runId: 'run-1',
+              textId: 'text-answer-1',
+              status: 'streaming',
+              text: 'NEW CANONICAL ANSWER',
+              format: 'markdown',
+            }],
+          }],
+        },
+      },
+    });
+
+    render(<ChatTimeline />);
+
+    expect(screen.getByText('NEW CANONICAL ANSWER')).toBeInTheDocument();
+    expect(screen.queryByText('OLD STREAMING TEXT')).not.toBeInTheDocument();
+  });
+
+  it('keeps legacy history with canonical live assistant blocks without rendering streamingText', () => {
+    installMegumiMock();
+    selectMegumiProject();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        title: 'Mixed session',
+        agentType: 'free',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        updatedAt: '2026-05-10T12:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStore.setState({
+      messages: [
+        createMessage({
+          id: 'legacy-user-history',
+          role: 'user',
+          content: 'Earlier user question',
+          timestamp: '2026-05-10T11:59:00.000Z',
+        }),
+        createMessage({
+          id: 'legacy-assistant-history',
+          role: 'assistant',
+          content: 'Earlier assistant answer',
+          timestamp: '2026-05-10T11:59:10.000Z',
+        }),
+        createMessage({
+          id: 'message-user-1',
+          role: 'user',
+          content: 'Read docs now',
+          timestamp: '2026-05-10T12:00:00.000Z',
+        }),
+      ],
+      streamingText: 'OLD STREAMING TEXT',
+      isStreaming: true,
+      agentStatus: 'running',
+    });
+    useChatStreamStore.getState().setActiveSession('project-1', 'session-1');
+    useChatStreamStore.setState({
+      sessions: {
+        [chatStreamSessionKey('project-1', 'session-1')]: {
+          projectId: 'project-1',
+          sessionId: 'session-1',
+          streamsById: {},
+          messages: [
+            {
+              messageId: 'message-user-1',
+              role: 'user',
+              projectId: 'project-1',
+              sessionId: 'session-1',
+              createdAt: '2026-05-10T12:00:00.000Z',
+              blocks: [{
+                blockId: 'user-text-1',
+                kind: 'user_text',
+                text: 'Read docs now',
+                format: 'plain',
+              }],
+            },
+            {
+              messageId: 'assistant:run-1',
+              role: 'assistant',
+              projectId: 'project-1',
+              sessionId: 'session-1',
+              runId: 'run-1',
+              createdAt: '2026-05-10T12:00:01.000Z',
+              blocks: [{
+                blockId: 'answer:run-1',
+                kind: 'answer_text',
+                runId: 'run-1',
+                textId: 'text-answer-1',
+                status: 'streaming',
+                text: 'CANONICAL LIVE ANSWER',
+                format: 'markdown',
+              }],
+            },
+          ],
+        },
+      },
+    });
+
+    render(<ChatTimeline />);
+
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
+    expect(timeline).toHaveTextContent('Earlier user question');
+    expect(timeline).toHaveTextContent('Earlier assistant answer');
+    expect(timeline).toHaveTextContent('CANONICAL LIVE ANSWER');
+    expect(screen.getAllByText('Read docs now')).toHaveLength(1);
+    expect(timeline).not.toHaveTextContent('OLD STREAMING TEXT');
   });
 });
