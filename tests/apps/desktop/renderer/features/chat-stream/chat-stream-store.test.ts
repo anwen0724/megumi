@@ -39,6 +39,16 @@ function committedAssistant(messageId: string, runId: string, text: string): Tim
   };
 }
 
+function expectLiveRunPreserved(runId: string, staleText: string): void {
+  const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+  expect(messages).toEqual([
+    expect.objectContaining({
+      messageId: `assistant:${runId}`,
+    }),
+  ]);
+  expect(JSON.stringify(messages)).not.toContain(staleText);
+}
+
 describe('chat stream store', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -390,6 +400,136 @@ describe('chat stream store', () => {
       }),
     ]);
     expect(JSON.stringify(messages)).not.toContain('Committed stale answer');
+  });
+
+  it('does not overwrite a live assistant message while thinking is streaming', () => {
+    const store = useChatStreamStore.getState();
+
+    store.dispatch(event({
+      eventType: 'turn.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 1,
+      runId: 'run-live',
+      userMessageId: 'message-user-live',
+    }));
+    store.dispatch(event({
+      eventType: 'assistant.thinking.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 2,
+      runId: 'run-live',
+      thinkingId: 'thinking-live',
+    }));
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [
+      committedAssistant('assistant:run-live', 'run-live', 'Committed stale thinking snapshot'),
+    ]);
+
+    expectLiveRunPreserved('run-live', 'Committed stale thinking snapshot');
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages[0]).toMatchObject({
+      blocks: [
+        expect.objectContaining({
+          kind: 'process_disclosure',
+          items: [
+            expect.objectContaining({
+              kind: 'thinking',
+              status: 'streaming',
+            }),
+          ],
+        }),
+      ],
+    });
+  });
+
+  it('does not overwrite a live assistant message while a tool activity is running', () => {
+    const store = useChatStreamStore.getState();
+
+    store.dispatch(event({
+      eventType: 'turn.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 1,
+      runId: 'run-live',
+      userMessageId: 'message-user-live',
+    }));
+    store.dispatch(event({
+      eventType: 'tool.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 2,
+      runId: 'run-live',
+      toolUseId: 'tool-use-live',
+      toolCallId: 'tool-call-live',
+      toolName: 'read_file',
+      inputSummary: 'README.md',
+    }));
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [
+      committedAssistant('assistant:run-live', 'run-live', 'Committed stale tool snapshot'),
+    ]);
+
+    expectLiveRunPreserved('run-live', 'Committed stale tool snapshot');
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages[0]).toMatchObject({
+      blocks: [
+        expect.objectContaining({
+          kind: 'process_disclosure',
+          items: [
+            expect.objectContaining({
+              kind: 'tool_activity',
+              status: 'running',
+              toolName: 'read_file',
+            }),
+          ],
+        }),
+      ],
+    });
+  });
+
+  it('does not overwrite a live assistant message while an approval activity is pending', () => {
+    const store = useChatStreamStore.getState();
+
+    store.dispatch(event({
+      eventType: 'turn.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 1,
+      runId: 'run-live',
+      userMessageId: 'message-user-live',
+    }));
+    store.dispatch(event({
+      eventType: 'approval.requested',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 2,
+      runId: 'run-live',
+      approvalId: 'approval-live',
+      toolUseId: 'tool-use-live',
+      scope: 'project',
+      status: 'pending',
+      title: 'Approve read_file',
+      subjectSummary: 'README.md',
+    }));
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [
+      committedAssistant('assistant:run-live', 'run-live', 'Committed stale approval snapshot'),
+    ]);
+
+    expectLiveRunPreserved('run-live', 'Committed stale approval snapshot');
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages[0]).toMatchObject({
+      blocks: [
+        expect.objectContaining({
+          kind: 'process_disclosure',
+          items: [
+            expect.objectContaining({
+              kind: 'approval_activity',
+              status: 'pending',
+              approvalId: 'approval-live',
+            }),
+          ],
+        }),
+      ],
+    });
   });
 
   it('does not dedupe committed messages by answer text content', () => {
