@@ -85,7 +85,7 @@ function messageIdentity(message: TimelineMessage): string {
     return `assistant:${message.runId}`;
   }
 
-  return `message:${message.messageId}`;
+  return `user:${message.clientMessageId ?? message.messageId}`;
 }
 
 function upsertPendingUserMessage(
@@ -126,6 +126,7 @@ function upsertPendingUserMessage(
         ...existing,
         projectId: input.projectId,
         sessionId: input.sessionId,
+        clientMessageId: input.clientMessageId,
         updatedAt: input.createdAt,
         blocks,
       };
@@ -137,6 +138,7 @@ function upsertPendingUserMessage(
     role: 'user',
     projectId: input.projectId,
     sessionId: input.sessionId,
+    clientMessageId: input.clientMessageId,
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
     blocks: [block],

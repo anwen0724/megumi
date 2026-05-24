@@ -266,6 +266,7 @@ function upsertUserMessage(
 
   if (existing) {
     existing.messageId = event.messageId;
+    existing.clientMessageId = event.clientMessageId;
     existing.projectId = event.projectId;
     existing.sessionId = event.sessionId;
     const blockIndex = existing.blocks.findIndex((candidate) => candidate.kind === 'user_text');
@@ -287,6 +288,7 @@ function upsertUserMessage(
     role: 'user',
     projectId: event.projectId,
     sessionId: event.sessionId,
+    clientMessageId: event.clientMessageId,
     createdAt: event.createdAt,
     updatedAt: event.createdAt,
     blocks: [block],

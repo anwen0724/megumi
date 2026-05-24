@@ -99,6 +99,7 @@ export type UserTimelineBlock = UserTextBlock | UserAttachmentBlock;
 
 export interface TimelineUserMessage extends TimelineMessageBase {
   role: 'user';
+  clientMessageId?: string;
   blocks: UserTimelineBlock[];
 }
 

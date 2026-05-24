@@ -37,6 +37,7 @@ describe('timeline message and block contracts', () => {
     const message = {
       ...messageBase,
       role: 'user',
+      clientMessageId: 'client-message-1',
       blocks: [
         {
           blockId: 'block-user-text-1',

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import type { TimelineAssistantMessage } from '@megumi/shared/timeline-message-blocks';
+import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline-message-blocks';
 import {
   chatStreamSessionKey,
   useChatStreamStore,
@@ -35,6 +35,24 @@ function committedAssistant(messageId: string, runId: string, text: string): Tim
       status: 'completed',
       text,
       format: 'markdown',
+    }],
+  };
+}
+
+function committedUser(messageId: string, clientMessageId: string, text: string): TimelineUserMessage {
+  return {
+    messageId,
+    role: 'user',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    clientMessageId,
+    createdAt: '2026-05-24T00:00:01.000Z',
+    updatedAt: '2026-05-24T00:00:01.000Z',
+    blocks: [{
+      blockId: `user-text:${messageId}`,
+      kind: 'user_text',
+      text,
+      format: 'plain',
     }],
   };
 }
@@ -601,6 +619,31 @@ describe('chat stream store', () => {
     expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages.map((message) => message.messageId)).toEqual([
       'assistant:run-a',
       'assistant:run-b',
+    ]);
+  });
+
+  it('reconciles pending user messages when committed history hydrates first', () => {
+    const store = useChatStreamStore.getState();
+    store.addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'client-message-1',
+      text: 'What is inside docs?',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [
+      committedUser('message-user-1', 'client-message-1', 'What is inside docs?'),
+    ]);
+
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages).toEqual([
+      expect.objectContaining({
+        messageId: 'message-user-1',
+        clientMessageId: 'client-message-1',
+        role: 'user',
+        blocks: [expect.objectContaining({
+          kind: 'user_text',
+          text: 'What is inside docs?',
+        })],
+      }),
     ]);
   });
 

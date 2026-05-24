@@ -251,6 +251,7 @@ export const TimelineUserMessageSchema = z
   .object({
     ...TimelineMessageBaseShape,
     role: z.literal('user'),
+    clientMessageId: TimelineIdSchema.optional(),
     blocks: z.array(UserTimelineBlockSchema).min(1),
   })
   .strict() satisfies z.ZodType<TimelineUserMessage>;
