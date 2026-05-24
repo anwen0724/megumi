@@ -8,6 +8,10 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import {
+  chatStreamSessionKey,
+  useChatStreamStore,
+} from '@megumi/desktop/renderer/features/chat-stream';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
 
 const project: Project = {
@@ -42,6 +46,7 @@ function resetStores() {
   });
 
   useRunStore.getState().resetRuns();
+  useChatStreamStore.getState().reset();
 }
 
 function submitPrompt(prompt: string) {
@@ -87,6 +92,9 @@ function installMegumiMock() {
       runtime: {
         onEvent: vi.fn(() => () => undefined),
       },
+      chatStream: {
+        onEvent: vi.fn(() => () => undefined),
+      },
       provider: {
         list: vi.fn(),
         update: vi.fn(),
@@ -97,6 +105,20 @@ function installMegumiMock() {
   });
 
   return session;
+}
+
+function expectCanonicalUserMessage(sessionId: string, text: string) {
+  expect(useChatStreamStore.getState().sessions[
+    chatStreamSessionKey('project-1', sessionId)
+  ].messages).toEqual([
+    expect.objectContaining({
+      role: 'user',
+      blocks: [expect.objectContaining({
+        kind: 'user_text',
+        text,
+      })],
+    }),
+  ]);
 }
 
 describe('auto session on first send', () => {
@@ -127,6 +149,7 @@ describe('auto session on first send', () => {
       createdAt: '2026-05-10T12:00:00.000Z',
       updatedAt: '2026-05-10T12:00:00.000Z',
     });
+    expectCanonicalUserMessage(state.sessions[0].id, 'first line\nsecond line');
   });
 
   it('does not create or send a runtime session when no project is selected', () => {
@@ -170,6 +193,7 @@ describe('auto session on first send', () => {
     const state = useSessionStore.getState();
     expect(state.sessions).toEqual([existingSession]);
     expect(state.activeSessionId).toBe(existingSession.id);
+    expectCanonicalUserMessage(existingSession.id, 'Continue in the active session');
   });
 
   it('renames a manually-created empty New session from its first message', () => {
@@ -193,6 +217,7 @@ describe('auto session on first send', () => {
     submitPrompt('Rename this session from prompt');
 
     expect(useSessionStore.getState().sessions[0].title).toBe('Rename this session from...');
+    expectCanonicalUserMessage('session-new', 'Rename this session from prompt');
   });
 
   it('does not rename an existing titled session on send', () => {
@@ -216,5 +241,6 @@ describe('auto session on first send', () => {
     submitPrompt('This should not rename the session');
 
     expect(useSessionStore.getState().sessions[0].title).toBe('Planning the UI');
+    expectCanonicalUserMessage('session-existing', 'This should not rename the session');
   });
 });

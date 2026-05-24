@@ -43,6 +43,11 @@ describe('renderer chat stream source guards', () => {
       const source = read(file);
 
       expect(source).not.toContain('streamingText');
+      expect(source).not.toContain('commitStream');
+      expect(source).not.toContain('appendStreamToken');
+      expect(source).not.toContain('pendingToolCalls');
+      expect(source).not.toContain('completedToolActivities');
+      expect(source).not.toContain('TimelineMessageData');
       expect(source).not.toContain('answerRevealAllowedByRun');
       expect(source).not.toContain('bufferedStreamOutputsByRun');
     }
@@ -62,8 +67,10 @@ describe('renderer chat stream source guards', () => {
     expect(source).toContain('useChatStreamStore');
     expect(source).toContain('chatStreamSessionKey');
     expect(source).toContain('canonicalMessages');
+    expect(source).toContain('timelineMessages = canonicalMessages');
     expect(source).not.toContain('StreamingAssistantMessage');
     expect(source).not.toContain('streamingText');
+    expect(source).not.toContain('TimelineMessageData');
     expect(source).not.toContain('bufferedStreamOutputsByRun');
     expect(source).not.toContain('answerRevealAllowedByRun');
   });

@@ -256,7 +256,7 @@ describe('right workspace panel session run sync', () => {
     runtimeEventCallback = null;
   });
 
-  it('shows session run state from runtime stream events in the timeline without mock workspace rows', async () => {
+  it('keeps runtime-only run state out of canonical timeline messages without mock workspace rows', async () => {
     const session = installMegumiMock();
     renderChatWithRightPanel();
 
@@ -274,7 +274,7 @@ describe('right workspace panel session run sync', () => {
     emitRuntimeStarted(request);
 
     expect(screen.getByText('Start with the shell')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /processing disclosure/ })).toHaveTextContent('正在处理');
+    expect(screen.getByRole('button', { name: 'Stop current run' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
@@ -285,7 +285,7 @@ describe('right workspace panel session run sync', () => {
       permissionMode: 'auto',
     }));
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the shell.');
-    expect(screen.getByText('Runtime response from deepseek-v4-pro for the shell.')).toBeInTheDocument();
+    expect(screen.queryByText('Runtime response from deepseek-v4-pro for the shell.')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
 
@@ -317,10 +317,10 @@ describe('right workspace panel session run sync', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
 
     expect(screen.getByText('Keep my timeline')).toBeInTheDocument();
-    expect(screen.getByText('Runtime response from deepseek-v4-flash for timeline persistence.')).toBeInTheDocument();
+    expect(screen.queryByText('Runtime response from deepseek-v4-flash for timeline persistence.')).not.toBeInTheDocument();
   });
 
-  it('shows failed runtime chat state in the timeline without a Tasks tab', async () => {
+  it('shows failed runtime chat status without writing an error timeline message', async () => {
     const session = installMegumiMock();
     renderChatWithRightPanel();
 
@@ -337,6 +337,7 @@ describe('right workspace panel session run sync', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
     expect(screen.queryByText('Processing failed')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Runtime chat failed for "please fail this run".').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.queryByText('Runtime chat failed for "please fail this run".')).not.toBeInTheDocument();
   });
 });

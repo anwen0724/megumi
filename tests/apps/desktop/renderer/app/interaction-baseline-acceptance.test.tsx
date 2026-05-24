@@ -1,6 +1,7 @@
 ﻿// @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
@@ -14,12 +15,17 @@ import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
 import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
+import {
+  chatStreamSessionKey,
+  useChatStreamStore,
+} from '@megumi/desktop/renderer/features/chat-stream';
 
 const { minimize, toggleMaximize, close } = vi.hoisted(() => ({
   minimize: vi.fn(),
   toggleMaximize: vi.fn(),
   close: vi.fn(),
 }));
+const scrollTo = vi.fn();
 
 vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
   windowControls: {
@@ -30,7 +36,9 @@ vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
 }));
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
+let chatStreamEventCallback: ((event: ChatStreamEvent) => void) | null = null;
 let sequence = 1;
+let chatStreamSequence = 1;
 type SessionMessageSendRequest = RuntimeIpcRequest<
   SessionMessageSendPayload,
   typeof IPC_CHANNELS.session.message.send
@@ -53,9 +61,29 @@ function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' 
   } as RuntimeEvent);
 }
 
+function emitChatStreamEvent(
+  request: SessionMessageSendRequest,
+  event: Partial<ChatStreamEvent> & Pick<ChatStreamEvent, 'eventType'>,
+) {
+  const seq = chatStreamSequence++;
+  chatStreamEventCallback?.({
+    eventId: `chat-stream-event-${seq}`,
+    projectId: request.payload.context?.workspaceId ?? 'project-1',
+    sessionId: request.payload.sessionId ?? useSessionStore.getState().activeSessionId ?? 'session-1',
+    runId: `${request.requestId}-run`,
+    streamId: `${request.requestId}-stream`,
+    streamKind: 'main',
+    seq,
+    createdAt: `2026-05-10T12:00:00.${String(seq).padStart(3, '0')}Z`,
+    ...event,
+  } as ChatStreamEvent);
+}
+
 function installMegumiMock() {
   runtimeEventCallback = null;
+  chatStreamEventCallback = null;
   sequence = 1;
+  chatStreamSequence = 1;
   const session = {
     message: {
       send: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
@@ -172,6 +200,14 @@ function installMegumiMock() {
           };
         }),
       },
+      chatStream: {
+        onEvent: vi.fn((callback: (event: ChatStreamEvent) => void) => {
+          chatStreamEventCallback = callback;
+          return () => {
+            chatStreamEventCallback = null;
+          };
+        }),
+      },
       workspace: {
         files: {
           list: vi.fn().mockImplementation((request: { payload: { workspaceRoot: string; directoryPath: string } }) => Promise.resolve({
@@ -207,6 +243,10 @@ function latestSessionMessageSendRequest(session: ReturnType<typeof installMegum
 
 function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string) {
   act(() => {
+    const currentUserMessage = request.payload.messages.at(-1);
+    const clientMessageId = String(currentUserMessage?.id ?? 'client-message-1');
+    const userText = currentUserMessage?.content ?? '';
+
     emitRuntimeEvent({
       eventType: 'run.started',
       requestId: request.requestId,
@@ -245,11 +285,45 @@ function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string)
       visibility: 'system',
       payload: {},
     });
+    emitChatStreamEvent(request, {
+      eventType: 'turn.started',
+      userMessageId: `message-${clientMessageId}`,
+      clientMessageId,
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'user.message.committed',
+      clientMessageId,
+      messageId: `message-${clientMessageId}`,
+      text: userText,
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'assistant.text.started',
+      textId: `${request.requestId}-answer`,
+      phase: 'answer',
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'assistant.text.delta',
+      textId: `${request.requestId}-answer`,
+      phase: 'answer',
+      delta: content,
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'assistant.text.completed',
+      textId: `${request.requestId}-answer`,
+      phase: 'answer',
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'turn.completed',
+    });
   });
 }
 
 function emitRuntimeFailure(request: SessionMessageSendRequest, message: string) {
   act(() => {
+    const currentUserMessage = request.payload.messages.at(-1);
+    const clientMessageId = String(currentUserMessage?.id ?? 'client-message-1');
+    const userText = currentUserMessage?.content ?? '';
+
     emitRuntimeEvent({
       eventType: 'run.failed',
       requestId: request.requestId,
@@ -268,6 +342,23 @@ function emitRuntimeFailure(request: SessionMessageSendRequest, message: string)
           },
         },
       },
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'turn.started',
+      userMessageId: `message-${clientMessageId}`,
+      clientMessageId,
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'user.message.committed',
+      clientMessageId,
+      messageId: `message-${clientMessageId}`,
+      text: userText,
+    });
+    emitChatStreamEvent(request, {
+      eventType: 'turn.failed',
+      errorCode: 'provider_network_error',
+      errorMessage: message,
+      recoverable: true,
     });
   });
 }
@@ -304,6 +395,7 @@ function resetStores() {
   });
 
   useRunStore.getState().resetRuns();
+  useChatStreamStore.getState().reset();
   useWorkspaceFilesStore.getState().reset();
   useArtifactStore.getState().clearArtifacts();
   useMemoryStore.setState({
@@ -327,11 +419,55 @@ function renderAppShell() {
   );
 }
 
+function activeCanonicalMessages() {
+  const activeSessionId = useSessionStore.getState().activeSessionId;
+
+  if (!activeSessionId) {
+    throw new Error('Expected an active session.');
+  }
+
+  return useChatStreamStore.getState().sessions[
+    chatStreamSessionKey('project-1', activeSessionId)
+  ].messages;
+}
+
+function expectCanonicalUserText(text: string) {
+  expect(activeCanonicalMessages()).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      role: 'user',
+      blocks: [expect.objectContaining({
+        kind: 'user_text',
+        text,
+      })],
+    }),
+  ]));
+}
+
+function expectCanonicalAssistantAnswer(text: string) {
+  expect(activeCanonicalMessages()).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      role: 'assistant',
+      blocks: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'answer_text',
+          status: 'completed',
+          text,
+        }),
+      ]),
+    }),
+  ]));
+}
+
 describe('interaction baseline acceptance', () => {
   beforeEach(() => {
     minimize.mockReset();
     toggleMaximize.mockReset();
     close.mockReset();
+    scrollTo.mockReset();
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
     vi.setSystemTime(new Date('2026-05-10T12:00:00.000Z'));
     installMegumiMock();
     resetStores();
@@ -339,6 +475,7 @@ describe('interaction baseline acceptance', () => {
 
   afterEach(() => {
     runtimeEventCallback = null;
+    chatStreamEventCallback = null;
     vi.setSystemTime(new Date());
   });
 
@@ -371,6 +508,7 @@ describe('interaction baseline acceptance', () => {
       projectId: 'project-1',
       agentType: 'free',
     });
+    expectCanonicalUserText('Finish the interaction baseline');
 
     expect(request).toMatchObject({
       payload: expect.objectContaining({
@@ -392,11 +530,10 @@ describe('interaction baseline acceptance', () => {
         source: 'renderer',
       }),
     });
-    expect(screen.getByText('Finish the interaction baseline')).toBeInTheDocument();
     expect(screen.queryByText('Sending')).not.toBeInTheDocument();
 
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the interaction baseline.');
-    expect(screen.getByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
+    expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-pro for the interaction baseline.');
 
     expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
@@ -443,8 +580,8 @@ describe('interaction baseline acceptance', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Collapse workspace panel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
 
-    expect(screen.getByText('Keep the conversation visible')).toBeInTheDocument();
-    expect(screen.getByText('Runtime response from deepseek-v4-flash for the visible conversation.')).toBeInTheDocument();
+    expectCanonicalUserText('Keep the conversation visible');
+    expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-flash for the visible conversation.');
   });
 
   it('surfaces runtime failure as a timeline message without retrying on model switch', async () => {
@@ -460,9 +597,25 @@ describe('interaction baseline acceptance', () => {
 
     emitRuntimeFailure(latestSessionMessageSendRequest(session), 'Runtime chat failed for "please fail this run".');
 
+    expect(useChatUiStore.getState().lastError).toBe('Runtime chat failed for "please fail this run".');
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
-    expect(screen.getAllByText('Runtime chat failed for "please fail this run".').length).toBeGreaterThanOrEqual(1);
+    const activeSessionId = useSessionStore.getState().activeSessionId;
+    expect(useChatStreamStore.getState().sessions[
+      chatStreamSessionKey('project-1', activeSessionId ?? '')
+    ].messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: 'assistant',
+        blocks: [expect.objectContaining({
+          kind: 'process_disclosure',
+          status: 'failed',
+          items: [expect.objectContaining({
+            kind: 'error_activity',
+            errorMessage: 'Runtime chat failed for "please fail this run".',
+          })],
+        })],
+      }),
+    ]));
 
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'deepseek-v4-flash' } });
     expect(session.message.send).toHaveBeenCalledTimes(1);
@@ -470,10 +623,6 @@ describe('interaction baseline acceptance', () => {
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
-    expect(
-      screen.getAllByText(
-        'Runtime chat failed for "please fail this run".',
-      ).length,
-    ).toBeGreaterThanOrEqual(1);
+    expect(useChatUiStore.getState().lastError).toBe('Runtime chat failed for "please fail this run".');
   });
 });

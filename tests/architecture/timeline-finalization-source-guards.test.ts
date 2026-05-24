@@ -37,6 +37,9 @@ describe('timeline finalization source guards', () => {
       expect(source).not.toContain('pendingToolCalls');
       expect(source).not.toContain('completedToolActivities');
       expect(source).not.toContain('TimelineMessageData');
+      expect(source).not.toContain('StreamingAssistantMessage');
+      expect(source).not.toContain('useChatStore');
+      expect(source).not.toContain('entities/chat/store');
     }
   });
 
@@ -49,5 +52,7 @@ describe('timeline finalization source guards', () => {
     expect(source).not.toContain('TOOL CALLS');
     expect(source).not.toContain('Legacy active tool calls');
     expect(source).not.toContain('Megumi is working');
+    expect(source).not.toContain('Runtime chat request');
+    expect(source).not.toContain('Mock agent run');
   });
 });
