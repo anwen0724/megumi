@@ -62,3 +62,5 @@ export {
   ApprovalResolvedEventSchema as ChatStreamApprovalResolvedEventSchema,
   type ChatStreamEventFromSchema,
 } from './chat-stream-event-schemas';
+export * from './timeline-message-blocks';
+export * from './timeline-message-block-schemas';
