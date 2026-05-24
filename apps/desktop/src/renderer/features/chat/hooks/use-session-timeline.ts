@@ -8,6 +8,7 @@ import type { TimelineMessageData } from '../../../entities/chat/types';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
+import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
@@ -148,6 +149,45 @@ export function useSessionTimeline() {
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
   const processedSequencesRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    const syncActiveSession = () => {
+      const currentProjectId = useProjectStore.getState().currentProjectId;
+      const { activeSessionId, sessions } = useSessionStore.getState();
+
+      if (!currentProjectId || !activeSessionId) {
+        useChatStreamStore.getState().setActiveSession(null, null);
+        return;
+      }
+
+      const activeSession = sessions.find((session) => session.id === activeSessionId);
+
+      if (!activeSession || activeSession.projectId !== currentProjectId) {
+        useChatStreamStore.getState().setActiveSession(null, null);
+        return;
+      }
+
+      useChatStreamStore.getState().setActiveSession(activeSession.projectId, activeSession.id);
+    };
+
+    syncActiveSession();
+
+    const unsubscribeProject = useProjectStore.subscribe(syncActiveSession);
+    const unsubscribeSession = useSessionStore.subscribe(syncActiveSession);
+
+    return () => {
+      unsubscribeProject();
+      unsubscribeSession();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!window.megumi?.chatStream?.onEvent) {
+      return undefined;
+    }
+
+    return window.megumi.chatStream.onEvent(dispatchChatStreamEvent);
+  }, []);
 
   useEffect(() => {
     if (!window.megumi?.runtime?.onEvent) {

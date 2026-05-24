@@ -2,15 +2,21 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import {
+  chatStreamSessionKey,
+  useChatStreamStore,
+} from '@megumi/desktop/renderer/features/chat-stream';
 import { useSessionTimeline } from '@megumi/desktop/renderer/features/chat/hooks/use-session-timeline';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
+let chatStreamEventCallback: ((event: ChatStreamEvent) => void) | null = null;
 let sequence = 1;
 
 function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' | 'sequence' | 'createdAt' | 'source' | 'visibility' | 'persist'> & {
@@ -31,6 +37,9 @@ function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' 
 }
 
 function installMegumiMock() {
+  const unsubscribeChatStream = vi.fn(() => {
+    chatStreamEventCallback = null;
+  });
   const session = {
     message: {
       send: vi.fn().mockImplementation((request) => Promise.resolve({
@@ -67,6 +76,12 @@ function installMegumiMock() {
       };
     }),
   };
+  const chatStream = {
+    onEvent: vi.fn((callback: (event: ChatStreamEvent) => void) => {
+      chatStreamEventCallback = callback;
+      return unsubscribeChatStream;
+    }),
+  };
 
   Object.defineProperty(window, 'megumi', {
     configurable: true,
@@ -79,15 +94,17 @@ function installMegumiMock() {
         deleteApiKey: vi.fn(),
       },
       runtime,
+      chatStream,
     },
   });
 
-  return { session, runtime };
+  return { session, runtime, chatStream, unsubscribeChatStream };
 }
 
 describe('useSessionTimeline', () => {
   beforeEach(() => {
     runtimeEventCallback = null;
+    chatStreamEventCallback = null;
     sequence = 1;
     useChatStore.setState({
       messages: [],
@@ -119,6 +136,97 @@ describe('useSessionTimeline', () => {
     });
     useArtifactStore.getState().clearArtifacts();
     useRunStore.getState().resetRuns();
+    useChatStreamStore.getState().reset();
+  });
+
+  it('clears active chat stream state when the current project no longer owns the active session', () => {
+    installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-project-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'Project 1 session',
+        createdAt: '2026-05-12T00:00:00.000Z',
+        updatedAt: '2026-05-12T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-project-1',
+      activeAgentType: 'free',
+    });
+    useProjectStore.setState({
+      currentProjectId: 'project-1',
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Megumi',
+          repoPath: 'C:/all/work/study/megumi',
+          createdAt: '2026-05-12T00:00:00.000Z',
+          projectId: 'project-1',
+          repoPathKey: 'c:/all/work/study/megumi',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'available' as const,
+        },
+        {
+          id: 'project-2',
+          name: 'Other',
+          repoPath: 'C:/all/work/study/other',
+          createdAt: '2026-05-12T00:00:00.000Z',
+          projectId: 'project-2',
+          repoPathKey: 'c:/all/work/study/other',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'available' as const,
+        },
+      ],
+    });
+    renderHook(() => useSessionTimeline());
+
+    expect(useChatStreamStore.getState()).toMatchObject({
+      activeProjectId: 'project-1',
+      activeSessionId: 'session-project-1',
+      activeSessionKey: chatStreamSessionKey('project-1', 'session-project-1'),
+    });
+
+    act(() => {
+      useProjectStore.setState({ currentProjectId: 'project-2' });
+    });
+
+    expect(useChatStreamStore.getState()).toMatchObject({
+      activeProjectId: null,
+      activeSessionId: null,
+      activeSessionKey: null,
+    });
+  });
+
+  it('dispatches chat stream listener events into the stream store and unsubscribes on unmount', () => {
+    const { unsubscribeChatStream } = installMegumiMock();
+    const { unmount } = renderHook(() => useSessionTimeline());
+
+    act(() => {
+      chatStreamEventCallback?.({
+        eventId: 'chat-stream-event-1',
+        eventType: 'turn.started',
+        projectId: 'project-1',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        streamId: 'stream-1',
+        streamKind: 'main',
+        seq: 1,
+        createdAt: '2026-05-24T00:00:00.000Z',
+        userMessageId: 'message-user-1',
+      });
+    });
+
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages).toEqual([
+      expect.objectContaining({
+        messageId: 'assistant:run-1',
+        role: 'assistant',
+      }),
+    ]);
+
+    unmount();
+
+    expect(unsubscribeChatStream).toHaveBeenCalledTimes(1);
+    expect(chatStreamEventCallback).toBeNull();
   });
 
   it('starts backend chat with an ipc request envelope, creates a session, and applies stream events', async () => {
@@ -176,6 +284,12 @@ describe('useSessionTimeline', () => {
       }),
     }));
     const requestId = session.message.send.mock.calls[0][0].requestId;
+    const activeSessionId = useSessionStore.getState().activeSessionId;
+    expect(useChatStreamStore.getState()).toMatchObject({
+      activeProjectId: 'project-1',
+      activeSessionId,
+      activeSessionKey: activeSessionId ? chatStreamSessionKey('project-1', activeSessionId) : null,
+    });
     expect(useSessionStore.getState().sessions[0].title).toBe('Hello Megumi');
     expect(useChatStore.getState().messages[0]).toMatchObject({
       role: 'user',
