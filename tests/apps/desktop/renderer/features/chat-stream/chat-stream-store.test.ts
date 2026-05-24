@@ -313,6 +313,66 @@ describe('chat stream store', () => {
     expect(JSON.stringify(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages)).toContain('Immediate');
   });
 
+  it('adds a pending user message to canonical session state', () => {
+    useChatStreamStore.getState().addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'client-message-1',
+      text: 'What is inside docs?',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages).toEqual([
+      expect.objectContaining({
+        messageId: 'client-message-1',
+        role: 'user',
+        projectId: 'project-1',
+        sessionId: 'session-1',
+        blocks: [expect.objectContaining({
+          kind: 'user_text',
+          text: 'What is inside docs?',
+        })],
+      }),
+    ]);
+  });
+
+  it('reconciles a pending user message when user.message.committed arrives', () => {
+    const store = useChatStreamStore.getState();
+    store.addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'client-message-1',
+      text: 'What is inside docs?',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    store.dispatch(event({
+      eventType: 'turn.started',
+      seq: 1,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      userMessageId: 'message-user-1',
+    }));
+    store.dispatch(event({
+      eventType: 'user.message.committed',
+      seq: 2,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      messageId: 'message-user-1',
+      clientMessageId: 'client-message-1',
+      text: 'What is inside docs?',
+    }));
+    store.flushStream('project-1', 'session-1', 'stream-1');
+
+    const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+    expect(messages.filter((message) => message.role === 'user')).toEqual([
+      expect.objectContaining({
+        messageId: 'message-user-1',
+        blocks: [expect.objectContaining({ kind: 'user_text', text: 'What is inside docs?' })],
+      }),
+    ]);
+  });
+
   it('hydrates committed messages by project and session without overwriting in-flight live messages', () => {
     const store = useChatStreamStore.getState();
 

@@ -698,6 +698,58 @@ describe('useSessionTimeline', () => {
     ]);
   });
 
+  it('builds model context from canonical user text and completed final answers only', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'Canonical context session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedUser('message-user-history', 'Canonical user prompt'),
+      committedAssistant('assistant:run-completed', 'run-completed', 'Completed answer'),
+      {
+        ...committedAssistant('assistant:run-failed', 'run-failed', 'Partial answer'),
+        blocks: [{
+          blockId: 'answer:run-failed',
+          kind: 'answer_text',
+          runId: 'run-failed',
+          textId: 'text-failed',
+          status: 'failed',
+          text: 'Partial answer',
+          format: 'markdown',
+        }],
+      },
+    ]);
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'Next prompt',
+        permissionMode: 'plan',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    const sentMessages = session.message.send.mock.calls[0][0].payload.messages as Array<{
+      role: string;
+      content: string;
+    }>;
+
+    expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'Canonical user prompt'],
+      ['assistant', 'Completed answer'],
+      ['user', 'Next prompt'],
+    ]);
+  });
+
   it('keeps legacy user context when canonical timeline only has assistant history', async () => {
     const { session } = installMegumiMock();
     useSessionStore.setState({

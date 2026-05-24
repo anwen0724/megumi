@@ -53,7 +53,9 @@ export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): C
       }] : [];
     }
 
-    const answer = message.blocks.find((block) => block.kind === 'answer_text');
+    const answer = message.blocks.find(
+      (block) => block.kind === 'answer_text' && block.status === 'completed',
+    );
     return answer?.text ? [{
       id: String(message.messageId),
       role: 'assistant',

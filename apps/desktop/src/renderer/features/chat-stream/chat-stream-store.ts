@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
+import type { TimelineMessage, TimelineUserMessage } from '@megumi/shared/timeline-message-blocks';
 import { createChatStreamBuffer, type ChatStreamBuffer } from './chat-stream-buffer';
 import { reduceChatStreamEvent } from './chat-stream-projection';
 
@@ -34,6 +34,11 @@ export interface ChatStreamStoreState {
   setActiveSession(projectId: string | null, sessionId: string | null): void;
   dispatch(event: ChatStreamEvent): void;
   flushStream(projectId: string, sessionId: string, streamId: string): void;
+  addPendingUserMessage(
+    projectId: string,
+    sessionId: string,
+    input: { clientMessageId: string; text: string; createdAt: string },
+  ): void;
   hydrateCommittedMessages(projectId: string, sessionId: string, messages: TimelineMessage[]): void;
   reset(): void;
 }
@@ -81,6 +86,68 @@ function messageIdentity(message: TimelineMessage): string {
   }
 
   return `message:${message.messageId}`;
+}
+
+function upsertPendingUserMessage(
+  current: TimelineMessage[],
+  input: {
+    projectId: string;
+    sessionId: string;
+    clientMessageId: string;
+    text: string;
+    createdAt: string;
+  },
+): TimelineMessage[] {
+  const existing = current.find(
+    (message): message is TimelineUserMessage =>
+      message.role === 'user' && message.messageId === input.clientMessageId,
+  );
+  const block = {
+    blockId: `user-text:${input.clientMessageId}`,
+    kind: 'user_text' as const,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    text: input.text,
+    format: 'plain' as const,
+  };
+
+  if (existing) {
+    return current.map((message) => {
+      if (message !== existing) {
+        return message;
+      }
+
+      const blockIndex = existing.blocks.findIndex((candidate) => candidate.kind === 'user_text');
+      const blocks = blockIndex === -1
+        ? [...existing.blocks, block]
+        : existing.blocks.map((candidate, index) => index === blockIndex ? block : candidate);
+
+      return {
+        ...existing,
+        projectId: input.projectId,
+        sessionId: input.sessionId,
+        updatedAt: input.createdAt,
+        blocks,
+      };
+    });
+  }
+
+  const message: TimelineUserMessage = {
+    messageId: input.clientMessageId,
+    role: 'user',
+    projectId: input.projectId,
+    sessionId: input.sessionId,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    blocks: [block],
+  };
+
+  return [...current, message].sort((left, right) => {
+    const createdOrder = left.createdAt.localeCompare(right.createdAt);
+    return createdOrder === 0
+      ? String(left.messageId).localeCompare(String(right.messageId))
+      : createdOrder;
+  });
 }
 
 function mergeCommittedMessages(
@@ -249,6 +316,31 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
     },
     flushStream: (projectId, sessionId, streamId) => {
       buffers.get(`${projectId}:${sessionId}:${streamId}`)?.flush();
+    },
+    addPendingUserMessage: (projectId, sessionId, input) => {
+      set((state) => {
+        const key = chatStreamSessionKey(projectId, sessionId);
+        const session = state.sessions[key] ?? {
+          projectId,
+          sessionId,
+          messages: [],
+          streamsById: {},
+        };
+
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...session,
+              messages: upsertPendingUserMessage(session.messages, {
+                projectId,
+                sessionId,
+                ...input,
+              }),
+            },
+          },
+        };
+      });
     },
     hydrateCommittedMessages: (projectId, sessionId, messages) => {
       set((state) => {
