@@ -1,6 +1,7 @@
 import {
   createChatStreamEvent,
   type AssistantTextPhase,
+  type ChatStreamApprovalScope,
   type ChatStreamEvent,
   type ChatStreamKind,
 } from '@megumi/shared';
@@ -71,6 +72,7 @@ interface ToolActivityState {
 interface ApprovalLinkState {
   toolUseId?: string;
   toolCallId?: string;
+  scope: ChatStreamApprovalScope;
 }
 
 type ToolTerminalKind = 'completed' | 'failed' | 'denied';
@@ -545,9 +547,11 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     if (!approvalId || !title) {
       return;
     }
-    const link = {
+    const requestedScope = stringValue(approvalRequest.requestedScope) ?? 'project';
+    const link: ApprovalLinkState = {
       ...(stringValue(approvalRequest.toolUseId) ? { toolUseId: stringValue(approvalRequest.toolUseId) } : {}),
       ...(stringValue(approvalRequest.toolCallId) ? { toolCallId: stringValue(approvalRequest.toolCallId) } : {}),
+      scope: requestedScope,
     };
     this.approvalLinksById.set(approvalId, link);
 
@@ -556,7 +560,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       eventType: 'approval.requested',
       approvalId,
       ...link,
-      scope: stringValue(approvalRequest.requestedScope) ?? 'project',
+      scope: requestedScope,
       status: 'pending',
       title,
       ...(stringValue(approvalRequest.summary) ? { description: stringValue(approvalRequest.summary) } : {}),
@@ -584,7 +588,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       approvalId: payload.approvalRequestId,
       ...(typeof payload.toolUseId === 'string' ? { toolUseId: payload.toolUseId } : link?.toolUseId ? { toolUseId: link.toolUseId } : {}),
       ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : link?.toolCallId ? { toolCallId: link.toolCallId } : {}),
-      scope: typeof payload.scope === 'string' ? payload.scope : 'project',
+      scope: typeof payload.scope === 'string' ? payload.scope : link?.scope ?? 'project',
       status: decision,
       decision,
     }));
@@ -606,7 +610,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       approvalId: payload.approvalRequestId,
       ...(link?.toolUseId ? { toolUseId: link.toolUseId } : {}),
       ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : link?.toolCallId ? { toolCallId: link.toolCallId } : {}),
-      scope: 'project',
+      scope: link?.scope ?? 'project',
       status: 'expired',
       decision: 'expired',
     }));

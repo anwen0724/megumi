@@ -805,7 +805,7 @@ describe('createChatStreamEventAdapter', () => {
     });
   });
 
-  it('maps approval expired to resolved with remembered tool linkage', () => {
+  it('maps approval expired to resolved with remembered tool linkage and scope', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
     subject.startTurn();
@@ -825,7 +825,7 @@ describe('createChatStreamEventAdapter', () => {
           title: 'Approve write_file',
           summary: 'Writing project file requires approval.',
           preview: { action: 'write_file', targets: [] },
-          requestedScope: 'project',
+          requestedScope: 'local',
           status: 'pending',
           createdAt: '2026-05-24T00:00:01.000Z',
         },
@@ -846,6 +846,7 @@ describe('createChatStreamEventAdapter', () => {
       approvalId: 'approval-request-1',
       toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      scope: 'local',
       status: 'expired',
       decision: 'expired',
     });
