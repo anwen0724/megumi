@@ -295,6 +295,7 @@ describe('ChatTimeline', () => {
     expect(scrollArea).toHaveClass('inset-0');
     expect(scrollArea).toHaveClass('overflow-y-auto');
     expect(scrollArea).toHaveClass('pb-72');
+    expect(scrollArea).toHaveAttribute('tabIndex', '0');
     expect(composerOverlay).toHaveClass('absolute');
     expect(composerOverlay).toHaveClass('inset-x-0');
     expect(composerOverlay).toHaveClass('bottom-0');

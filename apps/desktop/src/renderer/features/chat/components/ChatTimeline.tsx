@@ -13,6 +13,7 @@ import { chatStreamSessionKey, useChatStreamStore } from '../../chat-stream';
 import { Composer, type ComposerStatus, type ComposerSubmitPayload } from './Composer';
 import { TimelineMessage } from './TimelineMessage';
 import { useSessionTimeline } from '../hooks/use-session-timeline';
+import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
 
@@ -35,6 +36,26 @@ export function ChatTimeline() {
       : EMPTY_CANONICAL_MESSAGES
   ));
   const timelineMessages = canonicalMessages;
+  const timelineUpdateKey = useMemo(() => JSON.stringify(timelineMessages.map((message) => [
+    message.messageId,
+    message.updatedAt ?? message.createdAt,
+    message.blocks.map((block) => {
+      if (block.kind === 'answer_text') {
+        return `${block.blockId}:${block.text.length}:${block.status}`;
+      }
+      if (block.kind === 'process_disclosure') {
+        return `${block.blockId}:${block.status}:${block.items.length}`;
+      }
+      if (block.kind === 'user_text') {
+        return `${block.blockId}:${block.text.length}`;
+      }
+      return block.blockId;
+    }).join('|'),
+  ])), [timelineMessages]);
+  const timelineScroll = useTimelineAutoScroll({
+    sessionKey: activeChatStreamSessionKey,
+    updateKey: timelineUpdateKey,
+  });
 
   const activeRunCandidate = activeRunId ? runs[activeRunId] : null;
   const activeRun = activeRunCandidate && (!activeSessionId || !activeRunCandidate.sessionId || activeRunCandidate.sessionId === activeSessionId)
@@ -84,7 +105,13 @@ export function ChatTimeline() {
       className="relative min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)]"
     >
       <div
+        ref={timelineScroll.scrollRef}
         data-testid="chat-timeline-scroll"
+        tabIndex={0}
+        onScroll={timelineScroll.onScroll}
+        onWheel={timelineScroll.onWheel}
+        onPointerDown={timelineScroll.onPointerDown}
+        onKeyDown={timelineScroll.onKeyDown}
         className="absolute inset-0 overflow-y-auto px-6 pb-72 pt-6"
       >
         {hasTimelineContent ? (
