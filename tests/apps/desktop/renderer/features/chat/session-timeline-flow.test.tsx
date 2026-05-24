@@ -63,6 +63,17 @@ function runtimeEvent(overrides: Partial<RuntimeEvent> & Pick<RuntimeEvent, 'eve
   } as RuntimeEvent;
 }
 
+function chatEvent(overrides: Partial<ChatStreamEvent> & Pick<ChatStreamEvent, 'eventType' | 'runId' | 'streamId' | 'seq'>): ChatStreamEvent {
+  return {
+    eventId: `chat-stream-event-${overrides.seq}`,
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    streamKind: 'main',
+    createdAt: '2026-05-24T00:00:00.000Z',
+    ...overrides,
+  } as ChatStreamEvent;
+}
+
 function installMegumiMock() {
   const unsubscribeChatStream = vi.fn(() => {
     chatStreamEventCallback = null;
@@ -379,9 +390,12 @@ describe('useSessionTimeline', () => {
       activeSessionKey: activeSessionId ? chatStreamSessionKey('project-1', activeSessionId) : null,
     });
     expect(useSessionStore.getState().sessions[0].title).toBe('Hello Megumi');
-    expect(useChatStore.getState().messages[0]).toMatchObject({
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', activeSessionId ?? '')].messages[0]).toMatchObject({
       role: 'user',
-      content: 'Hello Megumi',
+      blocks: [expect.objectContaining({
+        kind: 'user_text',
+        text: 'Hello Megumi',
+      })],
     });
     expect(useChatStore.getState().agentStatus).toBe('sending');
 
@@ -487,7 +501,7 @@ describe('useSessionTimeline', () => {
     expect(useArtifactStore.getState().artifacts).toEqual([]);
   });
 
-  it('turns session message send failure envelopes into assistant messages', async () => {
+  it('turns session message send failure envelopes into status errors without legacy assistant messages', async () => {
     const { session } = installMegumiMock();
     session.message.send.mockResolvedValueOnce({
       ok: false,
@@ -522,9 +536,13 @@ describe('useSessionTimeline', () => {
       agentStatus: 'error',
       lastError: 'Provider API key is missing.',
     });
-    expect(useChatStore.getState().messages.map((message) => [message.role, message.content])).toEqual([
-      ['user', 'Use OpenAI'],
-      ['assistant', 'Provider API key is missing.'],
+    const activeSessionId = useSessionStore.getState().activeSessionId;
+    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', activeSessionId ?? '')].messages).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        blocks: [expect.objectContaining({ kind: 'user_text', text: 'Use OpenAI' })],
+      }),
     ]);
   });
 
@@ -611,8 +629,14 @@ describe('useSessionTimeline', () => {
       });
     });
 
+    const activeSessionId = useSessionStore.getState().activeSessionId;
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', activeSessionId ?? '')].messages).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        blocks: [expect.objectContaining({ kind: 'user_text', text: 'Use unsupported provider' })],
+      }),
+    ]);
     expect(useChatStore.getState().messages.map((message) => [message.role, message.content])).toEqual([
-      ['user', 'Use unsupported provider'],
       ['assistant', 'Provider is disabled.'],
     ]);
   });
@@ -750,7 +774,73 @@ describe('useSessionTimeline', () => {
     ]);
   });
 
-  it('keeps legacy user context when canonical timeline only has assistant history', async () => {
+  it('does not duplicate optimistic and committed user messages in canonical model context', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'No duplicate users',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'First prompt',
+        permissionMode: 'default',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    const firstPayload = session.message.send.mock.calls[0][0].payload;
+    const clientMessageId = firstPayload.messages.at(-1)?.id;
+    expect(clientMessageId).toEqual(expect.any(String));
+
+    useChatStreamStore.getState().dispatch(chatEvent({
+      eventType: 'turn.started',
+      seq: 1,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      userMessageId: 'message-user-1',
+    }));
+    useChatStreamStore.getState().dispatch(chatEvent({
+      eventType: 'user.message.committed',
+      seq: 2,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      messageId: 'message-user-1',
+      clientMessageId,
+      text: 'First prompt',
+    }));
+    useChatStreamStore.getState().flushStream('project-1', 'session-1', 'stream-1');
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'Second prompt',
+        permissionMode: 'default',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    const secondMessages = session.message.send.mock.calls[1][0].payload.messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(secondMessages.filter((message) => message.role === 'user' && message.content === 'First prompt')).toHaveLength(1);
+    expect(secondMessages.at(-1)).toMatchObject({ role: 'user', content: 'Second prompt' });
+  });
+
+  it('does not use legacy user context when canonical timeline only has assistant history', async () => {
     const { session } = installMegumiMock();
     useSessionStore.setState({
       sessions: [{
@@ -790,7 +880,6 @@ describe('useSessionTimeline', () => {
     }>;
 
     expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
-      ['user', 'Legacy user prompt'],
       ['assistant', 'Canonical answer'],
       ['user', 'Next prompt'],
     ]);

@@ -17,6 +17,11 @@ import {
   useChatStreamStore,
 } from '@megumi/desktop/renderer/features/chat-stream';
 import type { ApprovalRequest, ToolCall } from '@megumi/shared/tool-contracts';
+import type {
+  TimelineAssistantMessage,
+  TimelineMessage,
+  TimelineUserMessage,
+} from '@megumi/shared/timeline-message-blocks';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let runtimeSequence = 1;
@@ -43,6 +48,61 @@ function createMessage(overrides: Partial<TimelineMessageData> = {}): TimelineMe
     timestamp: '2026-05-10T00:00:00.000Z',
     ...overrides,
   };
+}
+
+function committedUser(messageId: string, text: string): TimelineUserMessage {
+  return {
+    messageId,
+    role: 'user',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    createdAt: '2026-05-24T00:00:00.000Z',
+    updatedAt: '2026-05-24T00:00:00.000Z',
+    blocks: [{
+      blockId: `user-text:${messageId}`,
+      kind: 'user_text',
+      text,
+      format: 'plain',
+    }],
+  };
+}
+
+function committedAssistant(messageId: string, runId: string, text: string): TimelineAssistantMessage {
+  return {
+    messageId,
+    role: 'assistant',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    runId,
+    createdAt: '2026-05-24T00:00:01.000Z',
+    updatedAt: '2026-05-24T00:00:01.000Z',
+    blocks: [{
+      blockId: `answer:${runId}`,
+      kind: 'answer_text',
+      runId,
+      textId: `text:${runId}`,
+      status: 'completed',
+      text,
+      format: 'markdown',
+    }],
+  };
+}
+
+function activateCanonicalSession(messages: TimelineMessage[]) {
+  selectMegumiProject();
+  useSessionStore.setState({
+    sessions: [{
+      id: 'session-1',
+      projectId: 'project-1',
+      title: 'Canonical session',
+      agentType: 'free',
+      createdAt: '2026-05-10T12:00:00.000Z',
+      updatedAt: '2026-05-10T12:00:00.000Z',
+    }],
+    activeSessionId: 'session-1',
+    activeAgentType: 'free',
+  });
+  useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', messages);
 }
 
 function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
@@ -258,14 +318,14 @@ describe('ChatTimeline', () => {
     expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 
-  it('renders existing messages from chat state', () => {
+  it('does not render existing legacy messages from chat state', () => {
     useChatStore.getState().setMessages([
       createMessage({ id: 'message-user', role: 'user', content: 'Can you inspect the shell?', stepNum: 1 }),
       createMessage({ id: 'message-assistant', role: 'assistant', content: 'I can help with that.', stepNum: 2 }),
     ]);
     render(<ChatTimeline />);
-    expect(screen.getByText('Can you inspect the shell?')).toBeInTheDocument();
-    expect(screen.getByText('I can help with that.')).toBeInTheDocument();
+    expect(screen.queryByText('Can you inspect the shell?')).not.toBeInTheDocument();
+    expect(screen.queryByText('I can help with that.')).not.toBeInTheDocument();
   });
 
   it('renders pending approvals in blocking controls without the separate tool-call card section', () => {
@@ -353,7 +413,7 @@ describe('ChatTimeline', () => {
     expect(session.message.send).toHaveBeenCalled();
   });
 
-  it('shows processing disclosure while a sent message is waiting for runtime events', async () => {
+  it('shows the pending canonical user message while waiting for stream events', async () => {
     installMegumiMock();
     selectMegumiProject();
     render(<ChatTimeline />);
@@ -365,10 +425,10 @@ describe('ChatTimeline', () => {
       expect(screen.getByText('Start with the shell')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: /processing disclosure/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /processing disclosure/ })).not.toBeInTheDocument();
   });
 
-  it('keeps only messages around the final response on the real runtime event path', async () => {
+  it('does not render legacy runtime final output without canonical stream messages', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
     render(<ChatTimeline />);
@@ -391,12 +451,9 @@ describe('ChatTimeline', () => {
       emitRuntimeEvent('run.completed', requestId);
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('Verilog is an HDL.')).toBeInTheDocument();
-    });
-
     const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
-    expect(timelineText.indexOf('Explain Verilog')).toBeLessThan(timelineText.indexOf('Verilog is an HDL.'));
+    expect(timelineText).toContain('Explain Verilog');
+    expect(timelineText).not.toContain('Verilog is an HDL.');
     expect(screen.queryByText('Megumi is connecting to the provider...')).not.toBeInTheDocument();
   });
 
@@ -455,7 +512,7 @@ describe('ChatTimeline', () => {
     });
   });
 
-  it('renders persisted runtime error messages and does not retry from an empty draft', async () => {
+  it('does not render persisted legacy runtime error messages and does not retry from an empty draft', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
     render(<ChatTimeline />);
@@ -467,23 +524,24 @@ describe('ChatTimeline', () => {
       expect(session.message.send).toHaveBeenCalledTimes(1);
     });
 
-    useChatStore.setState({
-      messages: [
-        createMessage({ id: 'message-user', role: 'user', content: 'please fail this run', stepNum: 1 }),
-        createMessage({
-          id: 'message-error',
-          role: 'assistant',
-          content: 'Provider API key is missing.',
-          stepNum: 2,
-        }),
-      ],
-      agentStatus: 'error',
-      lastError: 'Provider API key is missing.',
+    act(() => {
+      useChatStore.setState({
+        messages: [
+          createMessage({ id: 'message-user', role: 'user', content: 'please fail this run', stepNum: 1 }),
+          createMessage({
+            id: 'message-error',
+            role: 'assistant',
+            content: 'Provider API key is missing.',
+            stepNum: 2,
+          }),
+        ],
+        agentStatus: 'error',
+        lastError: 'Provider API key is missing.',
+      });
     });
 
-    await waitFor(() => {
-      expect(screen.getAllByText('Provider API key is missing.')).toHaveLength(1);
-    });
+    expect(screen.queryByText('Provider API key is missing.')).not.toBeInTheDocument();
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -493,7 +551,7 @@ describe('ChatTimeline', () => {
     expect(session.message.send).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the processing disclosure while a run is active', () => {
+  it('does not render legacy runtime processing disclosure while a run is active', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
@@ -514,16 +572,12 @@ describe('ChatTimeline', () => {
 
     render(<ChatTimeline />);
 
-    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    expect(timeline).toHaveTextContent('Check current UI');
-    const processingToggle = screen.getByRole('button', { name: /processing disclosure/ });
-    expect(processingToggle).toHaveTextContent('已处理');
-    expect(processingToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(timeline).not.toHaveTextContent('Working');
-    expect(timeline).not.toHaveTextContent(/chain-of-thought/i);
+    expect(screen.queryByText('Check current UI')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /processing disclosure/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Working')).not.toBeInTheDocument();
   });
 
-  it('keeps a lightweight processing disclosure visible without rendering legacy streamingText', () => {
+  it('does not render legacy streamingText or pending process fallback', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
@@ -542,14 +596,13 @@ describe('ChatTimeline', () => {
 
     render(<ChatTimeline />);
 
-    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    expect(timeline).toHaveTextContent('正在处理');
-    expect(timeline).not.toHaveTextContent('live');
-    expect(timeline).toHaveTextContent('Explain Verilog');
-    expect(timeline).not.toHaveTextContent('Verilog is an HDL.');
+    expect(screen.queryByText('正在处理')).not.toBeInTheDocument();
+    expect(screen.queryByText('live')).not.toBeInTheDocument();
+    expect(screen.queryByText('Explain Verilog')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verilog is an HDL.')).not.toBeInTheDocument();
   });
 
-  it('collapses completed process disclosure without rendering legacy streamingText', () => {
+  it('does not collapse legacy process disclosure without canonical blocks', () => {
     useChatStore.getState().setMessages([
       createMessage({
         id: 'message-user',
@@ -573,46 +626,53 @@ describe('ChatTimeline', () => {
 
     render(<ChatTimeline />);
 
-    const processingToggle = screen.getByRole('button', { name: /Expand processing disclosure/ });
-    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    expect(processingToggle).toHaveTextContent('已处理');
-    expect(processingToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(timeline).toHaveTextContent('Inspect project first');
-    expect(timeline).not.toHaveTextContent('Here is the project summary.');
+    expect(screen.queryByRole('button', { name: /Expand processing disclosure/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Inspect project first')).not.toBeInTheDocument();
+    expect(screen.queryByText('Here is the project summary.')).not.toBeInTheDocument();
   });
 
-  it('renders completed processing disclosure collapsed before final assistant response', () => {
-    useChatStore.getState().setMessages([
-      createMessage({
-        id: 'message-user',
-        role: 'user',
-        content: 'Summarize UI updates',
-        stepNum: 1,
-        timestamp: '2026-05-10T12:00:00.000Z',
-      }),
-      createMessage({
-        id: 'message-assistant',
-        role: 'assistant',
-        content: 'UI update summary is complete.',
-        stepNum: 2,
-        timestamp: '2026-05-10T12:01:43.000Z',
-      }),
+  it('renders canonical completed process disclosure collapsed before final assistant response', () => {
+    activateCanonicalSession([
+      committedUser('message-user-1', 'Summarize UI updates'),
+      {
+        ...committedAssistant('assistant:run-1', 'run-1', 'UI update summary is complete.'),
+        blocks: [
+          {
+            blockId: 'process:run-1',
+            kind: 'process_disclosure',
+            runId: 'run-1',
+            status: 'completed',
+            startedAt: '2026-05-10T12:00:01.000Z',
+            endedAt: '2026-05-10T12:01:42.000Z',
+            items: [{
+              itemId: 'step:model',
+              kind: 'assistant_text',
+              textId: 'prelude:model',
+              phase: 'prelude',
+              status: 'completed',
+              text: 'Generate UI summary',
+              format: 'plain',
+            }],
+          },
+          {
+            blockId: 'answer:run-1',
+            kind: 'answer_text',
+            runId: 'run-1',
+            textId: 'text:run-1',
+            status: 'completed',
+            text: 'UI update summary is complete.',
+            format: 'markdown',
+          },
+        ],
+      },
     ]);
-    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
-    useRunStore.getState().applyRuntimeEvent(runtimeEvent('step.completed', 2, {
-      kind: 'model',
-      title: 'Generate UI summary',
-    }, { stepId: 'step-1' }));
-    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.completed', 3, {}, {
-      createdAt: '2026-05-10T12:01:42.000Z',
-    }));
 
     render(<ChatTimeline />);
 
     const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
     expect(timelineText).toContain('Summarize UI updates');
     expect(timelineText).toContain('UI update summary is complete.');
-    expect(screen.getByRole('button', { name: /Expand processing disclosure/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/Generate UI summary/)).not.toBeInTheDocument();
   });
 
@@ -780,6 +840,40 @@ describe('ChatTimeline', () => {
     expect(timeline).not.toHaveTextContent('TOOL CALLS');
   });
 
+  it('renders canonical timeline messages without legacy flat message fallback', () => {
+    installMegumiMock();
+    selectMegumiProject();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        title: 'Canonical session',
+        agentType: 'free',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        updatedAt: '2026-05-10T12:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStore.setState({
+      messages: [{
+        id: 'legacy-user',
+        role: 'user',
+        content: 'Legacy duplicate',
+        timestamp: '2026-05-24T00:00:00.000Z',
+        stepNum: 1,
+      }],
+    });
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedUser('message-user-1', 'Canonical prompt'),
+    ]);
+
+    render(<ChatTimeline />);
+
+    expect(screen.getByText('Canonical prompt')).toBeInTheDocument();
+    expect(screen.queryByText('Legacy duplicate')).not.toBeInTheDocument();
+  });
+
   it('does not render old streamingText when canonical answer text exists', () => {
     installMegumiMock();
     selectMegumiProject();
@@ -834,7 +928,7 @@ describe('ChatTimeline', () => {
     expect(screen.queryByText('OLD STREAMING TEXT')).not.toBeInTheDocument();
   });
 
-  it('keeps legacy history with canonical live assistant blocks without rendering streamingText', () => {
+  it('renders canonical live assistant blocks without legacy history fallback or streamingText', () => {
     installMegumiMock();
     selectMegumiProject();
     useSessionStore.setState({
@@ -920,8 +1014,8 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    expect(timeline).toHaveTextContent('Earlier user question');
-    expect(timeline).toHaveTextContent('Earlier assistant answer');
+    expect(timeline).not.toHaveTextContent('Earlier user question');
+    expect(timeline).not.toHaveTextContent('Earlier assistant answer');
     expect(timeline).toHaveTextContent('CANONICAL LIVE ANSWER');
     expect(screen.getAllByText('Read docs now')).toHaveLength(1);
     expect(timeline).not.toHaveTextContent('OLD STREAMING TEXT');

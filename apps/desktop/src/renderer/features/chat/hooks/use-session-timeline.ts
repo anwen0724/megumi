@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { ChatMessage } from '@megumi/shared/chat-contracts';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useChatStore } from '../../../entities/chat/store';
-import type { TimelineMessageData } from '../../../entities/chat/types';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
@@ -21,20 +19,6 @@ function createId(prefix: string): string {
   }
 
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function createLocalMessage(
-  role: TimelineMessageData['role'],
-  content: string,
-  stepNum: number,
-): TimelineMessageData {
-  return {
-    id: createId(`message-${role}`),
-    role,
-    content,
-    stepNum,
-    timestamp: new Date().toISOString(),
-  };
 }
 
 function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null {
@@ -81,35 +65,13 @@ function renameEmptyManualSessionFromPrompt(payload: ComposerSubmitPayload, exis
   });
 }
 
-function toRuntimeMessage(message: TimelineMessageData): ChatMessage {
-  return {
-    id: message.id,
-    role: message.role,
-    content: message.content,
-    createdAt: message.timestamp,
-  };
-}
-
-function mergeCanonicalWithMissingLegacyUsers(
-  canonicalMessages: ChatMessage[],
-  legacyMessages: ChatMessage[],
-): ChatMessage[] {
-  const canonicalIds = new Set(canonicalMessages.map((message) => String(message.id)));
-  const missingLegacyUsers = legacyMessages.filter((message) =>
-    message.role === 'user' && !canonicalIds.has(String(message.id))
-  );
-
-  return [...canonicalMessages, ...missingLegacyUsers].sort((left, right) => {
-    const createdOrder = left.createdAt.localeCompare(right.createdAt);
-    return createdOrder === 0
-      ? String(left.id).localeCompare(String(right.id))
-      : createdOrder;
-  });
+function activeCanonicalMessageCount(projectId: string, sessionId: string): number {
+  return useChatStreamStore.getState().sessions[`${projectId}:${sessionId}`]?.messages.length ?? 0;
 }
 
 function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
-  userMessage: TimelineMessageData,
+  finalClientMessageId: string,
 ): SessionMessageSendPayload {
   const sessionState = useSessionStore.getState();
   const projectState = useProjectStore.getState();
@@ -122,17 +84,21 @@ function createSessionMessageSendPayload(
   const canonicalMessages = activeSessionKey
     ? useChatStreamStore.getState().sessions[activeSessionKey]?.messages ?? []
     : [];
-  const legacyMessages = useChatStore.getState().messages.map(toRuntimeMessage);
-  const historyMessages = canonicalMessages.length > 0
-    ? mergeCanonicalWithMissingLegacyUsers(chatMessagesFromTimelineMessages(canonicalMessages), legacyMessages)
-    : legacyMessages;
-  const messages = [...historyMessages, toRuntimeMessage(userMessage)];
+  const messages = chatMessagesFromTimelineMessages(canonicalMessages);
+  const finalMessageIndex = messages.findIndex((message) => String(message.id) === finalClientMessageId);
+  const orderedMessages = finalMessageIndex === -1
+    ? messages
+    : [
+        ...messages.slice(0, finalMessageIndex),
+        ...messages.slice(finalMessageIndex + 1),
+        messages[finalMessageIndex],
+      ];
 
   return {
     sessionId: sessionState.activeSessionId ?? undefined,
     providerId,
     modelId: payload.model,
-    messages,
+    messages: orderedMessages,
     context: {
       workspaceId: projectState.currentProjectId ?? undefined,
       workspaceLabel: activeProject?.name ?? undefined,
@@ -165,7 +131,6 @@ function shouldProcessRuntimeEvent(
 
 function failSessionMessageSend(message: string) {
   const current = useChatStore.getState();
-  current.addMessage(createLocalMessage('assistant', message, current.messages.length + 1));
   current.clearStream();
   current.setAgentStatus('error');
   current.setLastError(message);
@@ -243,25 +208,38 @@ export function useSessionTimeline() {
       return;
     }
 
-    const state = useChatStore.getState();
-    renameEmptyManualSessionFromPrompt(payload, state.messages.length);
+    const sessionState = useSessionStore.getState();
+    const projectState = useProjectStore.getState();
+    const activeSession = sessionState.sessions.find((session) => session.id === runSessionId);
+    const projectId = activeSession?.projectId ?? projectState.currentProjectId;
 
-    const userMessage = createLocalMessage('user', payload.message, state.messages.length + 1);
+    if (!projectId) {
+      failSessionMessageSend('Select a project before sending a message.');
+      return;
+    }
+
+    renameEmptyManualSessionFromPrompt(payload, activeCanonicalMessageCount(projectId, runSessionId));
+
+    const clientMessageId = createId('message-user');
+    const createdAt = new Date().toISOString();
+    useChatStreamStore.getState().addPendingUserMessage(projectId, runSessionId, {
+      clientMessageId,
+      text: payload.message,
+      createdAt,
+    });
     const requestId = `ipc-session-message-${createId('request')}`;
     const request = createRendererRuntimeIpcRequest(
       IPC_CHANNELS.session.message.send,
-      createSessionMessageSendPayload(payload, userMessage),
+      createSessionMessageSendPayload(payload, clientMessageId),
       { requestId },
     );
     activeRequestIdRef.current = request.requestId;
     activeTraceIdRef.current = request.context?.traceId ?? null;
     processedSequencesRef.current.clear();
 
-    state.addMessage(userMessage);
+    const state = useChatStore.getState();
     state.setAgentStatus('sending');
     state.setLastError(null);
-    state.clearToolCalls();
-    state.clearCompletedToolActivities();
 
     const result = await window.megumi.session.message.send(request);
 
