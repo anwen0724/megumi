@@ -30,20 +30,20 @@ function resolveEventSessionId(event: RuntimeEvent, options?: DispatchRuntimeEve
   return options?.sessionId ?? event.sessionId ?? useSessionStore.getState().activeSessionId;
 }
 
-function shouldProjectUiStatus(sessionId: string | null): boolean {
-  return !sessionId || sessionId === useSessionStore.getState().activeSessionId;
+function syncActiveChatUiSession(sessionId: string | null): void {
+  if (sessionId && sessionId === useSessionStore.getState().activeSessionId) {
+    useChatUiStore.getState().setActiveSession(sessionId);
+  }
 }
 
 function setAgentStatusForSession(sessionId: string | null, agentStatus: AgentRunStatus): void {
-  if (shouldProjectUiStatus(sessionId)) {
-    useChatUiStore.getState().setAgentStatus(agentStatus);
-  }
+  syncActiveChatUiSession(sessionId);
+  useChatUiStore.getState().setAgentStatus(agentStatus, sessionId);
 }
 
 function setLastErrorForSession(sessionId: string | null, lastError: string | null): void {
-  if (shouldProjectUiStatus(sessionId)) {
-    useChatUiStore.getState().setLastError(lastError);
-  }
+  syncActiveChatUiSession(sessionId);
+  useChatUiStore.getState().setLastError(lastError, sessionId);
 }
 
 function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): void {

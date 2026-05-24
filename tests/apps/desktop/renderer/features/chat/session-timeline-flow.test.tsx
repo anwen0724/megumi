@@ -206,8 +206,10 @@ describe('useSessionTimeline', () => {
     chatStreamEventCallback = null;
     sequence = 1;
     useChatUiStore.setState({
+      activeSessionId: null,
       agentStatus: 'idle',
       lastError: null,
+      sessionStates: {},
     });
     useSessionStore.setState({
       sessions: [],

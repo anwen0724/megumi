@@ -129,10 +129,10 @@ function shouldProcessRuntimeEvent(
   return true;
 }
 
-function failSessionMessageSend(message: string) {
+function failSessionMessageSend(message: string, sessionId?: string | null) {
   const current = useChatUiStore.getState();
-  current.setAgentStatus('error');
-  current.setLastError(message);
+  current.setAgentStatus('error', sessionId);
+  current.setLastError(message, sessionId);
 }
 
 export function useSessionTimeline() {
@@ -149,6 +149,7 @@ export function useSessionTimeline() {
 
       if (!currentProjectId || !activeSessionId) {
         useChatStreamStore.getState().setActiveSession(null, null);
+        useChatUiStore.getState().setActiveSession(null);
         return;
       }
 
@@ -156,10 +157,12 @@ export function useSessionTimeline() {
 
       if (!activeSession || activeSession.projectId !== currentProjectId) {
         useChatStreamStore.getState().setActiveSession(null, null);
+        useChatUiStore.getState().setActiveSession(null);
         return;
       }
 
       useChatStreamStore.getState().setActiveSession(activeSession.projectId, activeSession.id);
+      useChatUiStore.getState().setActiveSession(activeSession.id);
     };
 
     syncActiveSession();
@@ -213,7 +216,7 @@ export function useSessionTimeline() {
     const projectId = activeSession?.projectId ?? projectState.currentProjectId;
 
     if (!projectId) {
-      failSessionMessageSend('Select a project before sending a message.');
+      failSessionMessageSend('Select a project before sending a message.', runSessionId);
       return;
     }
 
@@ -237,13 +240,13 @@ export function useSessionTimeline() {
     processedSequencesRef.current.clear();
 
     const state = useChatUiStore.getState();
-    state.setAgentStatus('sending');
-    state.setLastError(null);
+    state.setAgentStatus('sending', runSessionId);
+    state.setLastError(null, runSessionId);
 
     const result = await window.megumi.session.message.send(request);
 
     if (!result.ok) {
-      failSessionMessageSend(result.error.message);
+      failSessionMessageSend(result.error.message, runSessionId);
     }
   }, []);
 
@@ -274,7 +277,7 @@ export function useSessionTimeline() {
     );
 
     if (result?.ok && result.data.cancelled) {
-      useChatUiStore.getState().setAgentStatus('idle');
+      useChatUiStore.getState().setAgentStatus('idle', runSessionIdRef.current);
       activeRequestIdRef.current = null;
       activeTraceIdRef.current = null;
       runSessionIdRef.current = null;

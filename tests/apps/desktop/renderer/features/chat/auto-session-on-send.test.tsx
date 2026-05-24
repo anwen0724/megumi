@@ -35,8 +35,10 @@ function resetStores() {
   });
 
   useChatUiStore.setState({
+    activeSessionId: null,
     agentStatus: 'idle',
     lastError: null,
+    sessionStates: {},
   });
 
   useRunStore.getState().resetRuns();

@@ -35,8 +35,10 @@ describe('runtime event dispatcher', () => {
   beforeEach(() => {
     vi.useRealTimers();
     useChatUiStore.setState({
+      activeSessionId: null,
       agentStatus: 'idle',
       lastError: null,
+      sessionStates: {},
     });
     useRunStore.getState().resetRuns();
     useToolCallStore.getState().reset();
@@ -106,7 +108,7 @@ describe('runtime event dispatcher', () => {
     });
   });
 
-  it('does not project UI status for inactive session runtime events', () => {
+  it('stores inactive session UI status without projecting it to the active session', () => {
     useSessionStore.setState({
       sessions: [],
       activeSessionId: 'session-2',
@@ -122,6 +124,12 @@ describe('runtime event dispatcher', () => {
     expect(useChatUiStore.getState()).toMatchObject({
       agentStatus: 'idle',
       lastError: null,
+      sessionStates: {
+        'session-1': expect.objectContaining({
+          agentStatus: 'running',
+          lastError: null,
+        }),
+      },
     });
   });
 

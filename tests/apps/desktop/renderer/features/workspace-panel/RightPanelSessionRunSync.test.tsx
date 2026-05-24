@@ -216,8 +216,10 @@ function resetStores() {
     loading: false,
   });
   useChatUiStore.setState({
+    activeSessionId: null,
     agentStatus: 'idle',
     lastError: null,
+    sessionStates: {},
   });
   useRunStore.getState().resetRuns();
   useWorkspaceFilesStore.getState().reset();

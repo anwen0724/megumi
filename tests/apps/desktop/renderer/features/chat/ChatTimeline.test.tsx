@@ -27,8 +27,10 @@ let runtimeSequence = 1;
 
 function resetChatUiStore() {
   useChatUiStore.setState({
+    activeSessionId: null,
     agentStatus: 'idle',
     lastError: null,
+    sessionStates: {},
   });
 }
 
@@ -476,8 +478,15 @@ describe('ChatTimeline', () => {
 
     expect(screen.queryByText('Verilog is an HDL.')).not.toBeInTheDocument();
     expect(useChatUiStore.getState()).toMatchObject({
-      agentStatus: 'sending',
+      activeSessionId: 'session-2',
+      agentStatus: 'idle',
       lastError: null,
+      sessionStates: {
+        [originalSessionId]: expect.objectContaining({
+          agentStatus: 'running',
+          lastError: null,
+        }),
+      },
     });
   });
 
