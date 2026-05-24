@@ -23,7 +23,11 @@ import {
   createRuntimeArtifactCreatedEvent,
   createRuntimeArtifactVersionCreatedEvent,
   createContextPatchRequestedEvent,
+  createModelThinkingCompletedEvent,
+  createModelThinkingDeltaEvent,
+  createModelThinkingStartedEvent,
   createModelStepStartedEvent,
+  createModelToolUseDetectedEvent,
   createRunWaitingForApprovalEvent,
   createRunStartedEvent,
   createRuntimeEvent,
@@ -1136,5 +1140,87 @@ describe('05 tool-use runtime events', () => {
     });
 
     expect(RuntimeEventSchema.parse(toolResultCreated)).toEqual(toolResultCreated);
+  });
+
+  it('accepts live model thinking events and creates them through factories', () => {
+    const started = createModelThinkingStartedEvent({
+      eventId: 'event-model-thinking-started',
+      eventType: 'model.thinking.started',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-05-24T00:00:00.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'transient',
+      payload: {
+        modelStepId: 'model-step-1',
+      },
+    });
+    const delta = createModelThinkingDeltaEvent({
+      eventId: 'event-model-thinking-delta',
+      eventType: 'model.thinking.delta',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      sequence: 2,
+      createdAt: '2026-05-24T00:00:00.100Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'transient',
+      payload: {
+        modelStepId: 'model-step-1',
+        delta: 'I need to inspect the project.',
+      },
+    });
+    const completed = createModelThinkingCompletedEvent({
+      eventId: 'event-model-thinking-completed',
+      eventType: 'model.thinking.completed',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      sequence: 3,
+      createdAt: '2026-05-24T00:00:00.200Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'transient',
+      payload: {
+        modelStepId: 'model-step-1',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(started)).toEqual(started);
+    expect(RuntimeEventSchema.parse(delta)).toEqual(delta);
+    expect(RuntimeEventSchema.parse(completed)).toEqual(completed);
+    expect(RUNTIME_EVENT_TYPES).toEqual(expect.arrayContaining([
+      'model.thinking.started',
+      'model.thinking.delta',
+      'model.thinking.completed',
+    ]));
+  });
+
+  it('creates model tool-use detected events through the factory helper', () => {
+    const event = createModelToolUseDetectedEvent({
+      eventId: 'event-model-tool-use-detected-factory',
+      eventType: 'model.tool_use.detected',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      sequence: 4,
+      createdAt: '2026-05-24T00:00:01.000Z',
+      source: 'provider',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'call-read',
+        providerToolUseId: 'call-read',
+        toolName: 'read_file',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(event)).toEqual(event);
+    expect(event.payload.toolName).toBe('read_file');
   });
 });

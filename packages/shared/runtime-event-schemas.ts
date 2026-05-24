@@ -315,6 +315,25 @@ const ModelStepProviderStateRecordedPayloadSchema = z
   })
   .strict();
 
+const ModelThinkingStartedPayloadSchema = z
+  .object({
+    modelStepId: z.string().min(1),
+  })
+  .strict();
+
+const ModelThinkingDeltaPayloadSchema = z
+  .object({
+    modelStepId: z.string().min(1),
+    delta: z.string(),
+  })
+  .strict();
+
+const ModelThinkingCompletedPayloadSchema = z
+  .object({
+    modelStepId: z.string().min(1),
+  })
+  .strict();
+
 const ModelToolUseDetectedPayloadSchema = z
   .object({
     modelStepId: z.string().min(1),
@@ -761,6 +780,18 @@ export const ModelStepProviderStateRecordedEventSchema = eventSchema(
   'model.step.provider_state.recorded',
   ModelStepProviderStateRecordedPayloadSchema,
 );
+export const ModelThinkingStartedEventSchema = eventSchema(
+  'model.thinking.started',
+  ModelThinkingStartedPayloadSchema,
+);
+export const ModelThinkingDeltaEventSchema = eventSchema(
+  'model.thinking.delta',
+  ModelThinkingDeltaPayloadSchema,
+);
+export const ModelThinkingCompletedEventSchema = eventSchema(
+  'model.thinking.completed',
+  ModelThinkingCompletedPayloadSchema,
+);
 export const ModelToolUseDetectedEventSchema = eventSchema('model.tool_use.detected', ModelToolUseDetectedPayloadSchema);
 export const ModelStepCompletedEventSchema = eventSchema('model.step.completed', ModelStepCompletedPayloadSchema);
 export const ToolUseCreatedEventSchema = eventSchema('tool.use.created', ToolUseCreatedPayloadSchema);
@@ -875,6 +906,9 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ModelStepStartedEventSchema,
   ModelOutputDeltaEventSchema,
   ModelStepProviderStateRecordedEventSchema,
+  ModelThinkingStartedEventSchema,
+  ModelThinkingDeltaEventSchema,
+  ModelThinkingCompletedEventSchema,
   ModelToolUseDetectedEventSchema,
   ModelStepCompletedEventSchema,
   ToolUseCreatedEventSchema,

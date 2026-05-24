@@ -84,6 +84,9 @@ export const RUNTIME_EVENT_TYPES = [
   'model.step.started',
   'model.output.delta',
   'model.step.provider_state.recorded',
+  'model.thinking.started',
+  'model.thinking.delta',
+  'model.thinking.completed',
   'model.tool_use.detected',
   'model.step.completed',
   'tool.use.created',
@@ -301,6 +304,19 @@ export interface ModelOutputDeltaPayload {
 }
 
 export interface ModelStepProviderStateRecordedPayload extends ModelStepProviderState {}
+
+export interface ModelThinkingStartedPayload {
+  modelStepId: string;
+}
+
+export interface ModelThinkingDeltaPayload {
+  modelStepId: string;
+  delta: string;
+}
+
+export interface ModelThinkingCompletedPayload {
+  modelStepId: string;
+}
 
 export interface ModelToolUseDetectedPayload {
   modelStepId: string;
@@ -632,6 +648,9 @@ export type RuntimeEventPayloadByType = {
   'model.step.started': ModelStepStartedPayload;
   'model.output.delta': ModelOutputDeltaPayload;
   'model.step.provider_state.recorded': ModelStepProviderStateRecordedPayload;
+  'model.thinking.started': ModelThinkingStartedPayload;
+  'model.thinking.delta': ModelThinkingDeltaPayload;
+  'model.thinking.completed': ModelThinkingCompletedPayload;
   'model.tool_use.detected': ModelToolUseDetectedPayload;
   'model.step.completed': ModelStepCompletedPayload;
   'tool.use.created': ToolUseCreatedPayload;

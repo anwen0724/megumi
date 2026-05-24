@@ -113,6 +113,30 @@ export function createModelStepProviderStateRecordedEvent(
   return createRuntimeEvent(input);
 }
 
+export function createModelThinkingStartedEvent(
+  input: RunRuntimeEventFactoryInput<'model.thinking.started'>,
+): TypedRuntimeEvent<'model.thinking.started'> {
+  return createRuntimeEvent(input);
+}
+
+export function createModelThinkingDeltaEvent(
+  input: RunRuntimeEventFactoryInput<'model.thinking.delta'>,
+): TypedRuntimeEvent<'model.thinking.delta'> {
+  return createRuntimeEvent(input);
+}
+
+export function createModelThinkingCompletedEvent(
+  input: RunRuntimeEventFactoryInput<'model.thinking.completed'>,
+): TypedRuntimeEvent<'model.thinking.completed'> {
+  return createRuntimeEvent(input);
+}
+
+export function createModelToolUseDetectedEvent(
+  input: RunRuntimeEventFactoryInput<'model.tool_use.detected'>,
+): TypedRuntimeEvent<'model.tool_use.detected'> {
+  return createRuntimeEvent(input);
+}
+
 export function createToolUseCreatedEvent(
   input: RunRuntimeEventFactoryInput<'tool.use.created'>,
 ): TypedRuntimeEvent<'tool.use.created'> {
