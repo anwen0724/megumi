@@ -56,10 +56,15 @@ describe('renderer chat stream source guards', () => {
     expect(source).not.toContain('ChatStreamEventSchema');
   });
 
-  it('keeps ChatTimeline migration out of renderer stream buffer plan', () => {
+  it('routes ChatTimeline live rendering through canonical chat-stream state', () => {
     const source = read('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
 
-    expect(source).not.toContain('useChatStreamStore');
-    expect(source).not.toContain('TimelineMessageSchema');
+    expect(source).toContain('useChatStreamStore');
+    expect(source).toContain('chatStreamSessionKey');
+    expect(source).toContain('canonicalMessages');
+    expect(source).not.toContain('StreamingAssistantMessage');
+    expect(source).not.toContain('streamingText');
+    expect(source).not.toContain('bufferedStreamOutputsByRun');
+    expect(source).not.toContain('answerRevealAllowedByRun');
   });
 });

@@ -80,4 +80,25 @@ describe('session timeline source guards', () => {
     expect(source).not.toContain("const LOCAL_WORKSPACE_ID = 'local-workspace'");
     expect(source).not.toContain('projectState.currentProjectId ?? LOCAL_WORKSPACE_ID');
   });
+
+  it('renders live assistant answers from canonical chat stream blocks instead of legacy streamingText', () => {
+    const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+
+    expect(source).toContain('useChatStreamStore');
+    expect(source).toContain('chatStreamSessionKey');
+    expect(source).toContain('canonicalMessages');
+    expect(source).not.toContain('StreamingAssistantMessage');
+    expect(source).not.toContain('<StreamingAssistantMessage');
+    expect(source).not.toContain('Legacy active tool calls');
+    expect(source).not.toContain('completedToolActivities.map');
+  });
+
+  it('keeps old standalone processing and tool card components out of the canonical timeline path', () => {
+    const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+
+    expect(source).not.toContain('<ToolActivityRow');
+    expect(source).not.toContain('TOOL CALLS');
+    expect(source).not.toContain('Answer started');
+    expect(source).not.toContain('Megumi is working');
+  });
 });
