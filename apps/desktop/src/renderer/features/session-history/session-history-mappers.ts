@@ -1,7 +1,7 @@
 import type { ChatMessage } from '@megumi/shared/chat-contracts';
 import type { Run, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
+import type { AnswerTextBlock, TimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import type { TimelineMessageData, TimelineMessageRole } from '../../entities/chat/types';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
 
@@ -14,6 +14,10 @@ function timelineRole(role: SessionMessage['role']): TimelineMessageRole {
     return 'system';
   }
   return role;
+}
+
+function isCompletedAnswerTextBlock(block: TimelineMessage['blocks'][number]): block is AnswerTextBlock {
+  return block.kind === 'answer_text' && block.status === 'completed';
 }
 
 export function localSessionFromPersistedSession(session: Session): LocalRendererSession {
@@ -53,9 +57,7 @@ export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): C
       }] : [];
     }
 
-    const answer = message.blocks.find(
-      (block) => block.kind === 'answer_text' && block.status === 'completed',
-    );
+    const answer = message.blocks.find(isCompletedAnswerTextBlock);
     return answer?.text ? [{
       id: String(message.messageId),
       role: 'assistant',
