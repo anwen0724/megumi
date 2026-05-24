@@ -69,7 +69,6 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
         let finishReason: string | undefined;
         const toolCalls = new Map<number, OpenAICompatibleToolCallAccumulator>();
         const detectedToolUseIds = new Set<string>();
-        const pendingDetectedToolCalls: Array<OpenAICompatibleToolCallAccumulator & { id: string; name: string }> = [];
 
         yield createModelStepStarted(input, clock.now());
         failureStage = 'stream_parse_error';
@@ -89,11 +88,7 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
             const toolCall = appendToolCallDelta(toolCalls, item);
             if (isDetectableToolCall(toolCall) && !detectedToolUseIds.has(toolCall.id)) {
               detectedToolUseIds.add(toolCall.id);
-              if (reasoningContent.length > 0) {
-                pendingDetectedToolCalls.push(toolCall);
-              } else {
-                yield createModelToolUseDetected(input, toolCall, clock.now());
-              }
+              yield createModelToolUseDetected(input, toolCall, clock.now());
             }
           } else if (item.type === 'finish') {
             finishReason = item.finishReason;
@@ -108,10 +103,6 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
 
         if (reasoningContent.length > 0) {
           yield createModelStepProviderStateRecorded(input, reasoningContent, clock.now());
-        }
-
-        for (const toolCall of pendingDetectedToolCalls) {
-          yield createModelToolUseDetected(input, toolCall, clock.now());
         }
 
         for (const toolCall of [...toolCalls.entries()].sort(([left], [right]) => left - right).map(([, value]) => value)) {

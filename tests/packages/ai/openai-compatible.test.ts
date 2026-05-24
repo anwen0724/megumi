@@ -417,6 +417,7 @@ describe('OpenAI-compatible adapter', () => {
   it('keeps one thinking lifecycle when reasoning continues after tool detection', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
       'data: {"choices":[{"delta":{"reasoning_content":"I need to inspect docs."}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"I will check."}}]}\n\n',
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-list","type":"function","function":{"name":"list_directory","arguments":"{\\"path\\":"}}]}}]}\n\n',
       'data: {"choices":[{"delta":{"reasoning_content":"Then I will summarize."}}]}\n\n',
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"docs\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
@@ -464,16 +465,30 @@ describe('OpenAI-compatible adapter', () => {
       'model.step.started',
       'model.thinking.started',
       'model.thinking.delta',
+      'model.output.delta',
+      'model.tool_use.detected',
       'model.thinking.delta',
       'model.thinking.completed',
       'model.step.provider_state.recorded',
-      'model.tool_use.detected',
       'tool.use.created',
       'model.step.completed',
     ]);
     expect(events.filter((event) => event.eventType === 'model.thinking.started')).toHaveLength(1);
     expect(events.filter((event) => event.eventType === 'model.thinking.completed')).toHaveLength(1);
     expect(events[3]).toMatchObject({
+      eventType: 'model.output.delta',
+      payload: {
+        delta: 'I will check.',
+      },
+    });
+    expect(events[4]).toMatchObject({
+      eventType: 'model.tool_use.detected',
+      payload: {
+        toolUseId: 'call-list',
+        toolName: 'list_directory',
+      },
+    });
+    expect(events[5]).toMatchObject({
       eventType: 'model.thinking.delta',
       payload: {
         delta: 'Then I will summarize.',
@@ -482,8 +497,12 @@ describe('OpenAI-compatible adapter', () => {
     const eventTypes = events.map((event) => event.eventType);
     expect(eventTypes.indexOf('model.thinking.completed'))
       .toBeGreaterThan(eventTypes.lastIndexOf('model.thinking.delta'));
+    expect(eventTypes.indexOf('model.tool_use.detected'))
+      .toBeLessThan(eventTypes.indexOf('model.thinking.completed'));
     expect(eventTypes.indexOf('model.thinking.completed'))
       .toBeLessThan(events.findIndex((event) => event.eventType === 'model.step.provider_state.recorded'));
+    expect(eventTypes.indexOf('model.tool_use.detected'))
+      .toBeLessThan(eventTypes.indexOf('tool.use.created'));
   });
 
   it('records provider reasoning state without exposing it as visible model output', async () => {
@@ -536,9 +555,9 @@ describe('OpenAI-compatible adapter', () => {
       'model.step.started',
       'model.thinking.started',
       'model.thinking.delta',
+      'model.tool_use.detected',
       'model.thinking.completed',
       'model.step.provider_state.recorded',
-      'model.tool_use.detected',
       'tool.use.created',
       'model.step.completed',
     ]);
@@ -560,12 +579,21 @@ describe('OpenAI-compatible adapter', () => {
       },
     });
     expect(events[3]).toMatchObject({
+      eventType: 'model.tool_use.detected',
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'call-list',
+        providerToolUseId: 'call-list',
+        toolName: 'list_directory',
+      },
+    });
+    expect(events[4]).toMatchObject({
       eventType: 'model.thinking.completed',
       payload: {
         modelStepId: 'model-step-1',
       },
     });
-    expect(events[4]).toMatchObject({
+    expect(events[5]).toMatchObject({
       eventType: 'model.step.provider_state.recorded',
       source: 'provider',
       visibility: 'system',
@@ -580,15 +608,6 @@ describe('OpenAI-compatible adapter', () => {
             text: 'I need to inspect docs.',
           },
         ],
-      },
-    });
-    expect(events[5]).toMatchObject({
-      eventType: 'model.tool_use.detected',
-      payload: {
-        modelStepId: 'model-step-1',
-        toolUseId: 'call-list',
-        providerToolUseId: 'call-list',
-        toolName: 'list_directory',
       },
     });
     expect(events[6]).toMatchObject({
