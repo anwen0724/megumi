@@ -173,7 +173,17 @@ function installMegumiMock() {
       project: {
         list: vi.fn().mockResolvedValue({
           ok: true,
-          data: { projects: [] },
+          data: {
+            projects: [{
+              projectId: 'project-1',
+              name: 'Megumi',
+              repoPath: 'C:/all/work/study/megumi',
+              repoPathKey: 'c:/all/work/study/megumi',
+              status: 'available',
+              createdAt: '2026-05-10T00:00:00.000Z',
+              lastOpenedAt: '2026-05-10T00:00:00.000Z',
+            }],
+          },
           meta: {
             requestId: 'ipc-project-list-1',
             channel: IPC_CHANNELS.project.list,
@@ -509,6 +519,7 @@ describe('interaction baseline acceptance', () => {
       agentType: 'free',
     });
     expectCanonicalUserText('Finish the interaction baseline');
+    expect(await screen.findByText('Finish the interaction baseline')).toBeInTheDocument();
 
     expect(request).toMatchObject({
       payload: expect.objectContaining({
@@ -534,12 +545,13 @@ describe('interaction baseline acceptance', () => {
 
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the interaction baseline.');
     expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-pro for the interaction baseline.');
+    expect(await screen.findByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
     expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
-    expect((await screen.findAllByText('No workspace selected')).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('No workspace selected')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
@@ -582,6 +594,8 @@ describe('interaction baseline acceptance', () => {
 
     expectCanonicalUserText('Keep the conversation visible');
     expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-flash for the visible conversation.');
+    expect(await screen.findByText('Keep the conversation visible')).toBeInTheDocument();
+    expect(await screen.findByText('Runtime response from deepseek-v4-flash for the visible conversation.')).toBeInTheDocument();
   });
 
   it('surfaces runtime failure as a timeline message without retrying on model switch', async () => {
