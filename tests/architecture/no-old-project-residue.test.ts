@@ -78,6 +78,18 @@ const allowedCurrentLifecycleTerms = new Map<string, string[]>([
   ['packages/shared/session-run-contracts.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
+  ['packages/shared/timeline-message-blocks.ts', [
+    joinForbidden('MESSAGE', '_'),
+  ]],
+  ['packages/shared/timeline-message-block-schemas.ts', [
+    joinForbidden('MESSAGE', '_'),
+  ]],
+  ['tests/packages/shared/timeline-message-blocks.test.ts', [
+    joinForbidden('MESSAGE', '_'),
+  ]],
+  ['tests/architecture/timeline-message-block-source-guards.test.ts', [
+    joinForbidden('MESSAGE', '_'),
+  ]],
   ['packages/shared/run-mode-contracts.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
