@@ -34,11 +34,55 @@ export interface ChatStreamStoreState {
   setActiveSession(projectId: string | null, sessionId: string | null): void;
   dispatch(event: ChatStreamEvent): void;
   flushStream(projectId: string, sessionId: string, streamId: string): void;
+  hydrateCommittedMessages(projectId: string, sessionId: string, messages: TimelineMessage[]): void;
   reset(): void;
 }
 
 export function chatStreamSessionKey(projectId: string, sessionId: string): string {
   return `${projectId}:${sessionId}`;
+}
+
+function isLiveStreamingMessage(message: TimelineMessage): boolean {
+  if (message.role !== 'assistant') {
+    return false;
+  }
+
+  return message.blocks.some((block) => block.kind === 'answer_text' && block.status === 'streaming');
+}
+
+function messageIdentity(message: TimelineMessage): string {
+  if (message.role === 'assistant') {
+    return `assistant:${message.runId}`;
+  }
+
+  return `message:${message.messageId}`;
+}
+
+function mergeCommittedMessages(current: TimelineMessage[], committed: TimelineMessage[]): TimelineMessage[] {
+  const byIdentity = new Map<string, TimelineMessage>();
+
+  for (const message of committed) {
+    byIdentity.set(messageIdentity(message), message);
+  }
+
+  for (const message of current) {
+    const identity = messageIdentity(message);
+    if (isLiveStreamingMessage(message)) {
+      byIdentity.set(identity, message);
+      continue;
+    }
+
+    if (!byIdentity.has(identity)) {
+      byIdentity.set(identity, message);
+    }
+  }
+
+  return [...byIdentity.values()].sort((left, right) => {
+    const createdOrder = left.createdAt.localeCompare(right.createdAt);
+    return createdOrder === 0
+      ? String(left.messageId).localeCompare(String(right.messageId))
+      : createdOrder;
+  });
 }
 
 export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
@@ -176,6 +220,27 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
     },
     flushStream: (projectId, sessionId, streamId) => {
       buffers.get(`${projectId}:${sessionId}:${streamId}`)?.flush();
+    },
+    hydrateCommittedMessages: (projectId, sessionId, messages) => {
+      set((state) => {
+        const key = chatStreamSessionKey(projectId, sessionId);
+        const session = state.sessions[key] ?? {
+          projectId,
+          sessionId,
+          messages: [],
+          streamsById: {},
+        };
+
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...session,
+              messages: mergeCommittedMessages(session.messages, messages),
+            },
+          },
+        };
+      });
     },
     reset: () => {
       for (const buffer of buffers.values()) {

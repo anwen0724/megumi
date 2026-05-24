@@ -10,6 +10,7 @@ import { createSessionTitleFromPrompt } from '../../../entities/session/session-
 import { useSessionStore } from '../../../entities/session/store';
 import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
+import { chatMessagesFromTimelineMessages } from '../../session-history/session-history-mappers';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
@@ -98,7 +99,16 @@ function createSessionMessageSendPayload(
   const providerId = getProviderIdForModel(payload.model);
   const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
   const activeProject = projectState.projects.find((project) => project.id === projectState.currentProjectId);
-  const messages = [...useChatStore.getState().messages, userMessage].map(toRuntimeMessage);
+  const activeSessionKey = activeSession && activeProject
+    ? `${activeSession.projectId}:${activeSession.id}`
+    : null;
+  const canonicalMessages = activeSessionKey
+    ? useChatStreamStore.getState().sessions[activeSessionKey]?.messages ?? []
+    : [];
+  const historyMessages = canonicalMessages.length > 0
+    ? chatMessagesFromTimelineMessages(canonicalMessages)
+    : useChatStore.getState().messages.map(toRuntimeMessage);
+  const messages = [...historyMessages, toRuntimeMessage(userMessage)];
 
   return {
     sessionId: sessionState.activeSessionId ?? undefined,

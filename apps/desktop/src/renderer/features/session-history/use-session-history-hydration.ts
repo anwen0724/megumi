@@ -7,11 +7,11 @@ import { useChatStore } from '../../entities/chat/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
+import { useChatStreamStore } from '../chat-stream';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import {
   hydratedRuntimeEventsForRuns,
   localSessionFromPersistedSession,
-  timelineMessagesFromPersistedMessages,
 } from './session-history-mappers';
 
 async function listRuntimeEventsByRun(runs: Run[]): Promise<Record<string, RuntimeEvent[]>> {
@@ -60,29 +60,34 @@ export function useSessionHistoryHydration() {
   }, []);
 
   const hydrateSessionTimeline = useCallback(async (sessionId: string) => {
-    const messageResult = await window.megumi.session.message.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.list, { sessionId }),
+    const sessionState = useSessionStore.getState();
+    if (sessionState.activeSessionId !== sessionId) {
+      return;
+    }
+
+    const activeSession = sessionState.sessions.find((session) => session.id === sessionId);
+    if (!activeSession?.projectId) {
+      return;
+    }
+
+    const timelineResult = await window.megumi.session.timeline.list(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.timeline.list, {
+        projectId: activeSession.projectId,
+        sessionId,
+      }),
     );
 
-    if (!messageResult.ok) {
-      useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(messageResult));
+    if (!timelineResult.ok) {
+      useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(timelineResult));
       return;
     }
 
-    const chatStore = useChatStore.getState();
-    const localSnapshot = chatStore.sessionSnapshots[sessionId];
-    if (messageResult.data.messages.length === 0 && localSnapshot) {
-      chatStore.loadSessionSnapshot(sessionId);
-      resetHydratedRunProjection();
-      return;
-    }
-
-    const messages = timelineMessagesFromPersistedMessages(messageResult.data.messages);
-    chatStore.setMessages(messages);
-    chatStore.clearStream();
-    chatStore.clearToolCalls();
-    chatStore.clearCompletedToolActivities();
-    chatStore.setLastError(null);
+    useChatStreamStore.getState().hydrateCommittedMessages(
+      activeSession.projectId,
+      sessionId,
+      timelineResult.data.messages,
+    );
+    useChatStore.getState().setLastError(null);
     resetHydratedRunProjection();
 
     const runsResult = await window.megumi.run.listBySession(

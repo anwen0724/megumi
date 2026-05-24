@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
+import type { TimelineAssistantMessage } from '@megumi/shared/timeline-message-blocks';
 import {
   chatStreamSessionKey,
   useChatStreamStore,
@@ -15,6 +16,27 @@ function event(input: Partial<ChatStreamEvent> & Pick<ChatStreamEvent, 'eventTyp
     createdAt: `2026-05-24T00:00:0${input.seq}.000Z`,
     ...input,
   } as ChatStreamEvent;
+}
+
+function committedAssistant(messageId: string, runId: string, text: string): TimelineAssistantMessage {
+  return {
+    messageId,
+    role: 'assistant',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    runId,
+    createdAt: runId === 'run-a' ? '2026-05-24T00:00:01.000Z' : '2026-05-24T00:00:02.000Z',
+    updatedAt: runId === 'run-a' ? '2026-05-24T00:00:01.000Z' : '2026-05-24T00:00:02.000Z',
+    blocks: [{
+      blockId: `answer:${runId}`,
+      kind: 'answer_text',
+      runId,
+      textId: `text:${runId}`,
+      status: 'completed',
+      text,
+      format: 'markdown',
+    }],
+  };
 }
 
 describe('chat stream store', () => {
@@ -279,6 +301,76 @@ describe('chat stream store', () => {
     useChatStreamStore.getState().flushStream('project-1', 'session-1', 'stream-1');
 
     expect(JSON.stringify(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages)).toContain('Immediate');
+  });
+
+  it('hydrates committed messages by project and session without overwriting in-flight live messages', () => {
+    const store = useChatStreamStore.getState();
+
+    store.dispatch(event({
+      eventType: 'turn.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 1,
+      runId: 'run-live',
+      userMessageId: 'message-user-live',
+    }));
+    store.dispatch(event({
+      eventType: 'assistant.text.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 2,
+      runId: 'run-live',
+      textId: 'text-live',
+      phase: 'answer',
+    }));
+    store.dispatch(event({
+      eventType: 'assistant.text.delta',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 3,
+      runId: 'run-live',
+      textId: 'text-live',
+      phase: 'answer',
+      delta: 'Streaming live',
+    }));
+    store.flushStream('project-1', 'session-1', 'stream-live');
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [{
+      messageId: 'assistant:run-old',
+      role: 'assistant',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-old',
+      createdAt: '2026-05-24T00:00:00.000Z',
+      blocks: [{
+        blockId: 'answer:run-old',
+        kind: 'answer_text',
+        runId: 'run-old',
+        textId: 'text-old',
+        status: 'completed',
+        text: 'Old answer',
+        format: 'markdown',
+      }],
+    }]);
+
+    const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+    expect(messages.map((message) => message.messageId)).toEqual(['assistant:run-old', 'assistant:run-live']);
+    expect(messages.find((message) => message.messageId === 'assistant:run-live')).toMatchObject({
+      role: 'assistant',
+      blocks: [{ kind: 'process_disclosure' }, { kind: 'answer_text', status: 'streaming', text: 'Streaming live' }],
+    });
+  });
+
+  it('does not dedupe committed messages by answer text content', () => {
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedAssistant('assistant:run-a', 'run-a', 'Same answer'),
+      committedAssistant('assistant:run-b', 'run-b', 'Same answer'),
+    ]);
+
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages.map((message) => message.messageId)).toEqual([
+      'assistant:run-a',
+      'assistant:run-b',
+    ]);
   });
 
   it('reset clears pending buffered work so timers do not re-add messages', () => {
