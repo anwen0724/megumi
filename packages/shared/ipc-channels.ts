@@ -85,6 +85,9 @@ export const IPC_CHANNELS = {
       list: 'workspace:files:list',
     },
   },
+  chatStream: {
+    event: 'chat-stream:event',
+  },
   runtime: {
     event: 'runtime:event',
   },
@@ -152,6 +155,7 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.memory.accessLogsList,
   IPC_CHANNELS.memory.recallPreview,
   IPC_CHANNELS.workspace.files.list,
+  IPC_CHANNELS.chatStream.event,
   IPC_CHANNELS.runtime.event,
 ] as const;
 

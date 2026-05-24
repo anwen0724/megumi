@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 const { invoke, on, removeListener } = vi.hoisted(() => ({
@@ -140,7 +141,7 @@ describe('preload api', () => {
     });
   });
 
-  it('exposes session message, run event, and runtime event APIs without old chat or agent namespaces', async () => {
+  it('exposes session message, run event, runtime event, and chat stream APIs without old chat or agent namespaces', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { api } = await import('@megumi/desktop/preload/api');
     const sendPayload = {
@@ -162,6 +163,7 @@ describe('preload api', () => {
       runId: 'run-1',
     }, 'ipc-run-events-list-1');
     const callback = vi.fn();
+    const chatStreamCallback = vi.fn();
 
     invoke.mockResolvedValue({
       ok: true,
@@ -177,6 +179,7 @@ describe('preload api', () => {
     await api.session.message.cancel(cancelRequest);
     await api.run.events.list(eventsRequest);
     const unsubscribe = api.runtime.onEvent(callback);
+    const unsubscribeChatStream = api.chatStream.onEvent(chatStreamCallback);
 
     expect('chat' in api).toBe(false);
     expect('agent' in api).toBe(false);
@@ -184,8 +187,10 @@ describe('preload api', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.session.message.cancel, cancelRequest);
     expect(invoke).toHaveBeenNthCalledWith(3, IPC_CHANNELS.run.events.list, eventsRequest);
     expect(on).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, expect.any(Function));
+    expect(on).toHaveBeenCalledWith(IPC_CHANNELS.chatStream.event, expect.any(Function));
 
     const listener = on.mock.calls[0][1];
+    const chatStreamListener = on.mock.calls[1][1];
     const runtimeEvent: RuntimeEvent = {
       eventId: 'event-1',
       schemaVersion: 1,
@@ -203,9 +208,30 @@ describe('preload api', () => {
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'assistant.output.delta',
     }));
+    const chatStreamEvent: ChatStreamEvent = {
+      eventId: 'chat-event-1',
+      eventType: 'assistant.text.delta',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      streamKind: 'main',
+      seq: 1,
+      createdAt: '2026-05-24T00:00:00.000Z',
+      textId: 'text-1',
+      phase: 'answer',
+      delta: 'Hi',
+    };
+    chatStreamListener({}, chatStreamEvent);
+    expect(chatStreamCallback).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'assistant.text.delta',
+      delta: 'Hi',
+    }));
 
     unsubscribe();
+    unsubscribeChatStream();
     expect(removeListener).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, listener);
+    expect(removeListener).toHaveBeenCalledWith(IPC_CHANNELS.chatStream.event, chatStreamListener);
   });
 
   it('does not expose old chat or agent preload namespaces in source', async () => {
@@ -215,7 +241,7 @@ describe('preload api', () => {
 
     expect(source).not.toMatch(/\bchat:\s*\{/);
     expect(source).not.toMatch(/\bagent:\s*\{/);
-    expect(source).not.toContain(['IPC_CHANNELS', 'chat'].join('.'));
+    expect(source).not.toMatch(/\bIPC_CHANNELS\.chat\./);
     expect(source).not.toContain(['IPC_CHANNELS', 'agent'].join('.'));
   });
 

@@ -17,6 +17,7 @@ import { registerAppLifecycle } from './app/lifecycle';
 import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-errors';
 import { createRuntimeJsonlLoggerForMegumiHome } from './services/runtime-logger.service';
 import { SessionRunService, type SessionRunToolRuntimeFactory } from './services/session-run.service';
+import { forwardChatStreamEvent } from './ipc/chat-stream-event-forwarder';
 import { createModelStepProviderService } from './services/model-step-provider.service';
 import { MegumiHomeConfigService } from './services/megumi-home-config.service';
 import { ProviderRuntimeService } from './services/provider-runtime.service';
@@ -33,7 +34,7 @@ import { ArtifactService } from './services/artifact.service';
 import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
 import fs from 'fs-extra';
-import { dialog } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
 import { ProjectRepository } from '@megumi/db/repos/project.repo';
 import { createProjectService } from './services/project.service';
 import { createWorkspaceFilesService } from './services/workspace-files.service';
@@ -103,6 +104,13 @@ const sessionRunService = new SessionRunService({
   modelStepProvider: modelStepProviderService,
   toolRuntimeFactory,
   toolDefinitionProvider: toolRegistry,
+  chatStreamEventSink: {
+    publish(event) {
+      for (const window of BrowserWindow.getAllWindows()) {
+        forwardChatStreamEvent(window.webContents, event, { logger: runtimeLogger });
+      }
+    },
+  },
 });
 const toolService = new ToolService({
   repository: toolRepository,

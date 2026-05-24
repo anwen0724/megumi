@@ -204,6 +204,7 @@ const mocks = vi.hoisted(() => {
       listDirectory: vi.fn(),
     })),
     showOpenDialog: vi.fn(),
+    getAllWindows: vi.fn(() => []),
   };
 });
 
@@ -329,6 +330,9 @@ vi.mock('@megumi/db/repos/project.repo', () => ({
 }));
 
 vi.mock('electron', () => ({
+  BrowserWindow: {
+    getAllWindows: mocks.getAllWindows,
+  },
   dialog: {
     showOpenDialog: mocks.showOpenDialog,
   },
@@ -369,6 +373,7 @@ describe('main runtime logger composition', () => {
     mocks.ProjectRepository.mockClear();
     mocks.createProjectService.mockClear();
     mocks.showOpenDialog.mockClear();
+    mocks.getAllWindows.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
@@ -438,6 +443,9 @@ describe('main runtime logger composition', () => {
       runModeService,
       contextService: runContextService,
       modelStepProvider: modelStepProviderService,
+      chatStreamEventSink: expect.objectContaining({
+        publish: expect.any(Function),
+      }),
     }));
     expect(mocks.ToolService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),

@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type {
   BusinessIpcChannel,
@@ -400,6 +401,16 @@ export const api = {
 
       ipcRenderer.on(IPC_CHANNELS.runtime.event, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.runtime.event, listener);
+    },
+  },
+  chatStream: {
+    onEvent: (callback: (event: ChatStreamEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, chatStreamEvent: ChatStreamEvent) => {
+        callback(chatStreamEvent);
+      };
+
+      ipcRenderer.on(IPC_CHANNELS.chatStream.event, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.chatStream.event, listener);
     },
   },
 };
