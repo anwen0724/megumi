@@ -10,6 +10,7 @@ import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useChatStreamStore } from '@megumi/desktop/renderer/features/chat-stream';
 import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 
 const { minimize, toggleMaximize, close } = vi.hoisted(() => ({
@@ -87,6 +88,9 @@ function installMegumiMock() {
           list: vi.fn().mockResolvedValue({ ok: true, data: { messages: [] } }),
           send: vi.fn().mockResolvedValue({ ok: true }),
           cancel: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true }, meta: {} }),
+        },
+        timeline: {
+          list: vi.fn().mockResolvedValue({ ok: true, data: { messages: [], diagnostics: [] } }),
         },
       },
       runtime: {
@@ -182,6 +186,7 @@ describe('AppShell', () => {
     });
 
     useRunStore.getState().resetRuns();
+    useChatStreamStore.getState().reset();
     useArtifactStore.getState().clearArtifacts();
     useMemoryStore.setState({
       settings: undefined,
@@ -236,29 +241,44 @@ describe('AppShell', () => {
         ],
       },
     });
-    window.megumi.session.message.list = vi.fn().mockResolvedValue({
+    window.megumi.session.timeline.list = vi.fn().mockResolvedValue({
       ok: true,
       data: {
         messages: [
           {
             messageId: 'message-user-history',
+            projectId: 'project-1',
             sessionId: 'session-history',
             role: 'user',
-            content: 'What changed yesterday?',
-            status: 'completed',
             createdAt: '2026-05-09T00:00:00.000Z',
-            completedAt: '2026-05-09T00:00:00.000Z',
+            updatedAt: '2026-05-09T00:00:00.000Z',
+            blocks: [{
+              blockId: 'user-text:message-user-history',
+              kind: 'user_text',
+              text: 'What changed yesterday?',
+              format: 'plain',
+            }],
           },
           {
-            messageId: 'message-assistant-history',
+            messageId: 'assistant:run-history',
+            projectId: 'project-1',
             sessionId: 'session-history',
+            runId: 'run-history',
             role: 'assistant',
-            content: 'The timeline was updated.',
-            status: 'completed',
             createdAt: '2026-05-09T00:01:00.000Z',
-            completedAt: '2026-05-09T00:01:00.000Z',
+            updatedAt: '2026-05-09T00:01:00.000Z',
+            blocks: [{
+              blockId: 'answer:run-history',
+              kind: 'answer_text',
+              runId: 'run-history',
+              textId: 'text-history',
+              status: 'completed',
+              text: 'The timeline was updated.',
+              format: 'markdown',
+            }],
           },
         ],
+        diagnostics: [],
       },
     });
     useSessionStore.setState({
@@ -283,8 +303,8 @@ describe('AppShell', () => {
     });
     expect(screen.getByText('The timeline was updated.')).toBeInTheDocument();
     expect(useSessionStore.getState().activeSessionId).toBe('session-history');
-    expect(window.megumi.session.message.list).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { sessionId: 'session-history' },
+    expect(window.megumi.session.timeline.list).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { projectId: 'project-1', sessionId: 'session-history' },
     }));
   });
 
@@ -468,6 +488,28 @@ describe('AppShell', () => {
         stepNum: 1,
       }),
     ]);
+    window.megumi.session.timeline.list = vi.fn().mockImplementation((request) => Promise.resolve({
+      ok: true,
+      data: {
+        messages: request.payload.sessionId === 'session-1'
+          ? [{
+              messageId: 'message-session-1-user',
+              projectId: 'project-1',
+              sessionId: 'session-1',
+              role: 'user',
+              createdAt: '2026-05-10T12:00:00.000Z',
+              updatedAt: '2026-05-10T12:00:00.000Z',
+              blocks: [{
+                blockId: 'user-text:message-session-1-user',
+                kind: 'user_text',
+                text: 'Saved in planning session',
+                format: 'plain',
+              }],
+            }]
+          : [],
+        diagnostics: [],
+      },
+    }));
 
     renderShell();
 
@@ -488,7 +530,9 @@ describe('AppShell', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Planning the UI/ }));
 
-    expect(screen.getByText('Saved in planning session')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Saved in planning session')).toBeInTheDocument();
+    });
     expect(screen.queryByText('Message in new session')).not.toBeInTheDocument();
     expect(useChatStore.getState().sessionSnapshots[createdSession.id].messages[0].content).toBe(
       'Message in new session',
