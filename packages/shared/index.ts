@@ -32,6 +32,7 @@ export * from './runtime-result';
 export { IsoDateTimeSchema } from './runtime-validation';
 export * from './chat-stream-events';
 export * from './chat-stream-event-factory';
+export * from './chat-stream-to-timeline-projection';
 export {
   ApprovalRequestStatusSchema,
   ApprovalResolutionStatusSchema,
