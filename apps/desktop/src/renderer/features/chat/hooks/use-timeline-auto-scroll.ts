@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type KeyboardEvent, type WheelEvent } from 'react';
+import { useEffect, useMemo, useRef, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 
 const STICKY_THRESHOLD_PX = 48;
 
@@ -24,6 +24,12 @@ function isNearBottom(element: HTMLElement): boolean {
 
 function scrollToBottom(element: HTMLElement): void {
   element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
+}
+
+function persistState(sessionKey: string | null, state: ScrollSessionState): void {
+  if (sessionKey) {
+    sessionScrollState.set(sessionKey, state);
+  }
 }
 
 export function useTimelineAutoScroll({ sessionKey, updateKey }: TimelineAutoScrollOptions) {
@@ -80,9 +86,7 @@ export function useTimelineAutoScroll({ sessionKey, updateKey }: TimelineAutoScr
         followBottom: isNearBottom(element),
         scrollTop: element.scrollTop,
       };
-      if (sessionKey) {
-        sessionScrollState.set(sessionKey, stateRef.current);
-      }
+      persistState(sessionKey, stateRef.current);
     },
     onWheel: (event: WheelEvent<HTMLDivElement>) => {
       if (event.deltaY < 0) {
@@ -90,19 +94,25 @@ export function useTimelineAutoScroll({ sessionKey, updateKey }: TimelineAutoScr
           ...stateRef.current,
           followBottom: false,
         };
-        if (sessionKey) {
-          sessionScrollState.set(sessionKey, stateRef.current);
-        }
+        persistState(sessionKey, stateRef.current);
       }
     },
-    onPointerDown: () => {
+    onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
+      const element = scrollRef.current;
+      if (!element || event.target !== element) {
+        return;
+      }
+
+      const scrollbarClick = event.clientX >= element.clientWidth || event.clientY >= element.clientHeight;
+      if (!scrollbarClick) {
+        return;
+      }
+
       stateRef.current = {
         ...stateRef.current,
         followBottom: false,
       };
-      if (sessionKey) {
-        sessionScrollState.set(sessionKey, stateRef.current);
-      }
+      persistState(sessionKey, stateRef.current);
     },
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'Home') {
@@ -110,9 +120,7 @@ export function useTimelineAutoScroll({ sessionKey, updateKey }: TimelineAutoScr
           ...stateRef.current,
           followBottom: false,
         };
-        if (sessionKey) {
-          sessionScrollState.set(sessionKey, stateRef.current);
-        }
+        persistState(sessionKey, stateRef.current);
       }
     },
   }), [sessionKey]);

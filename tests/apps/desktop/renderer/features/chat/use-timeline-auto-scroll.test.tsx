@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
-import type { WheelEvent } from 'react';
+import type { KeyboardEvent, PointerEvent, WheelEvent } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTimelineAutoScroll } from '@megumi/desktop/renderer/features/chat/hooks/use-timeline-auto-scroll';
 
@@ -85,5 +85,70 @@ describe('useTimelineAutoScroll', () => {
     rerender({ sessionKey: 'project-1:session-4', updateKey: 'two' });
 
     expect(second.scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'auto' });
+  });
+
+  it('keeps following bottom after a content pointer press while sticky', () => {
+    const { result, rerender } = renderHook(
+      ({ updateKey }) => useTimelineAutoScroll({ sessionKey: 'project-1:session-5', updateKey }),
+      { initialProps: { updateKey: 'one' } },
+    );
+    const element = makeScrollElement();
+    const child = document.createElement('div');
+    element.appendChild(child);
+    result.current.scrollRef.current = element;
+
+    act(() => {
+      result.current.onPointerDown({
+        target: child,
+        clientX: 10,
+        clientY: 10,
+      } as unknown as PointerEvent<HTMLDivElement>);
+    });
+    rerender({ updateKey: 'two' });
+
+    expect(element.scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'auto' });
+  });
+
+  it('stops following bottom for a scrollbar pointer press', () => {
+    const { result, rerender } = renderHook(
+      ({ updateKey }) => useTimelineAutoScroll({ sessionKey: 'project-1:session-6', updateKey }),
+      { initialProps: { updateKey: 'one' } },
+    );
+    const element = makeScrollElement();
+    result.current.scrollRef.current = element;
+
+    act(() => {
+      result.current.onPointerDown({
+        target: element,
+        clientX: 120,
+        clientY: 20,
+      } as unknown as PointerEvent<HTMLDivElement>);
+    });
+    rerender({ updateKey: 'two' });
+
+    expect(element.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('stops following bottom for upward keyboard scroll and resumes after returning to bottom', () => {
+    const { result, rerender } = renderHook(
+      ({ updateKey }) => useTimelineAutoScroll({ sessionKey: 'project-1:session-7', updateKey }),
+      { initialProps: { updateKey: 'one' } },
+    );
+    const element = makeScrollElement();
+    result.current.scrollRef.current = element;
+
+    act(() => {
+      result.current.onKeyDown({ key: 'PageUp' } as KeyboardEvent<HTMLDivElement>);
+    });
+    rerender({ updateKey: 'two' });
+    expect(element.scrollTo).not.toHaveBeenCalled();
+
+    act(() => {
+      element.scrollTop = 400;
+      result.current.onScroll();
+    });
+    rerender({ updateKey: 'three' });
+
+    expect(element.scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'auto' });
   });
 });
