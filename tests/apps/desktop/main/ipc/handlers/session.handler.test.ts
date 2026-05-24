@@ -24,7 +24,7 @@ function createRequest(channel: string, payload: Record<string, unknown>, reques
       requestId,
       traceId: `trace-${requestId}`,
       debugId: `debug-${requestId}`,
-      operationName: channel === 'session:message:send' ? 'session.message.send' : 'session.message.cancel',
+      operationName: channel.replace(/:/g, '.'),
       source: 'renderer',
       createdAt: '2026-05-17T00:00:00.000Z',
     },
@@ -48,6 +48,18 @@ function createSessionMessageSendPayload() {
   };
 }
 
+function createSessionServiceMock(overrides: Record<string, unknown> = {}) {
+  return {
+    createSession: vi.fn(),
+    listSessions: vi.fn(),
+    listMessagesBySession: vi.fn(),
+    listTimelineMessagesBySession: vi.fn(),
+    sendSessionMessage: vi.fn(),
+    cancelSessionMessage: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe('registerSessionHandlers', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -58,13 +70,7 @@ describe('registerSessionHandlers', () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
 
-    registerSessionHandlers({
-      createSession: vi.fn(),
-      listSessions: vi.fn(),
-      listMessagesBySession: vi.fn(),
-      sendSessionMessage: vi.fn(),
-      cancelSessionMessage: vi.fn(),
-    });
+    registerSessionHandlers(createSessionServiceMock());
 
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.session.create, expect.any(Function));
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.session.list, expect.any(Function));
@@ -87,13 +93,9 @@ describe('registerSessionHandlers', () => {
         completedAt: '2026-05-17T00:00:00.000Z',
       },
     ];
-    const service = {
-      createSession: vi.fn(),
-      listSessions: vi.fn(),
+    const service = createSessionServiceMock({
       listMessagesBySession: vi.fn(() => messages),
-      sendSessionMessage: vi.fn(),
-      cancelSessionMessage: vi.fn(),
-    };
+    });
 
     registerSessionHandlers(service);
 
@@ -117,6 +119,47 @@ describe('registerSessionHandlers', () => {
     expect(service.listMessagesBySession).toHaveBeenCalledWith('session-1');
   });
 
+  it('registers a timeline history list handler returning canonical TimelineMessage records', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
+    const service = createSessionServiceMock({
+      listTimelineMessagesBySession: vi.fn(() => ({
+        messages: [{
+          messageId: 'assistant:run-1',
+          role: 'assistant',
+          projectId: 'project-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          blocks: [{
+            blockId: 'process:run-1',
+            kind: 'process_disclosure',
+            runId: 'run-1',
+            status: 'completed',
+            items: [],
+          }],
+        }],
+        diagnostics: [],
+      })),
+    });
+
+    registerSessionHandlers(service);
+
+    const handler = handle.mock.calls.find(([channel]) => channel === IPC_CHANNELS.session.timeline.list)?.[1];
+    const result = await handler({}, createRequest(
+      IPC_CHANNELS.session.timeline.list,
+      { projectId: 'project-1', sessionId: 'session-1' },
+      'ipc-session-timeline-list-1',
+    ));
+
+    expect(result.ok).toBe(true);
+    expect(result.data.messages).toHaveLength(1);
+    expect(service.listTimelineMessagesBySession).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      sessionId: 'session-1',
+    });
+  });
+
   it('sends session messages and forwards runtime events', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
     const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
@@ -135,18 +178,14 @@ describe('registerSessionHandlers', () => {
       persist: 'transient',
       payload: { delta: 'Hello' },
     } satisfies RuntimeEvent;
-    const service = {
-      createSession: vi.fn(),
-      listSessions: vi.fn(),
-      listMessagesBySession: vi.fn(),
+    const service = createSessionServiceMock({
       sendSessionMessage: vi.fn(async () => ({
         data: { requestId: 'ipc-session-message-send-1' },
         events: async function* () {
           yield runtimeEvent;
         }(),
       })),
-      cancelSessionMessage: vi.fn(),
-    };
+    });
 
     registerSessionHandlers(service);
 

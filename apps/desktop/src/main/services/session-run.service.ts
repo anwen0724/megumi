@@ -39,6 +39,8 @@ import type {
   SessionMessageCancelPayload,
   SessionMessageSendData,
   SessionMessageSendPayload,
+  SessionTimelineListData,
+  SessionTimelineListPayload,
 } from '@megumi/shared/ipc-schemas';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { ImplementationPlanArtifactRecord, RunMode, RunModeSnapshot } from '@megumi/shared/run-mode-contracts';
@@ -127,6 +129,12 @@ export interface SessionRunServiceOptions {
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
+  timelineMessageRepository?: {
+    listCommittedMessagesBySession(input: {
+      projectId: string;
+      sessionId: string;
+    }): SessionTimelineListData;
+  };
   clock?: SessionRunServiceClock;
   ids?: Partial<SessionRunServiceIds>;
 }
@@ -180,6 +188,7 @@ export class SessionRunService {
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly chatStreamEventSink?: ChatStreamEventSink;
+  private readonly timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
@@ -199,6 +208,7 @@ export class SessionRunService {
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.chatStreamEventSink = options.chatStreamEventSink;
+    this.timelineMessageRepository = options.timelineMessageRepository;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
@@ -222,6 +232,14 @@ export class SessionRunService {
 
   listMessagesBySession(sessionId: string): SessionMessage[] {
     return this.repository.listMessagesBySession(sessionId);
+  }
+
+  listTimelineMessagesBySession(input: SessionTimelineListPayload): SessionTimelineListData {
+    if (!this.timelineMessageRepository) {
+      return { messages: [], diagnostics: [] };
+    }
+
+    return this.timelineMessageRepository.listCommittedMessagesBySession(input);
   }
 
   listRunsBySession(sessionId: string): Run[] {

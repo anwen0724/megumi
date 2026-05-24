@@ -17,6 +17,9 @@ describe('session and run preload API shape', () => {
           send: vi.fn(),
           cancel: vi.fn(),
         },
+        timeline: {
+          list: vi.fn(),
+        },
       },
       run: {
         listBySession: vi.fn(),

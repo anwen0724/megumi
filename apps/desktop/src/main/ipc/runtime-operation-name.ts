@@ -21,6 +21,8 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'session.message.send';
     case IPC_CHANNELS.session.message.cancel:
       return 'session.message.cancel';
+    case IPC_CHANNELS.session.timeline.list:
+      return 'session.timeline.list';
     case IPC_CHANNELS.run.listBySession:
       return 'run.list-by-session';
     case IPC_CHANNELS.run.events.list:

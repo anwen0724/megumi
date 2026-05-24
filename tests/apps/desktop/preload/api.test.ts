@@ -234,6 +234,19 @@ describe('preload api', () => {
     expect(removeListener).toHaveBeenCalledWith(IPC_CHANNELS.chatStream.event, chatStreamListener);
   });
 
+  it('exposes session.timeline.list through the typed preload API', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { api } = await import('@megumi/desktop/preload/api');
+    const request = createRequest(IPC_CHANNELS.session.timeline.list, {
+      projectId: 'project-1',
+      sessionId: 'session-1',
+    });
+
+    await api.session.timeline.list(request);
+
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.session.timeline.list, request);
+  });
+
   it('does not expose old chat or agent preload namespaces in source', async () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');

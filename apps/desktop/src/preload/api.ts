@@ -94,6 +94,8 @@ import type {
   SessionMessageListPayload,
   SessionMessageSendData,
   SessionMessageSendPayload,
+  SessionTimelineListData,
+  SessionTimelineListPayload,
   ToolCallGetData,
   ToolCallGetPayload,
   ToolDefinitionsListData,
@@ -194,6 +196,12 @@ export const api = {
         request: BusinessRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.session.message.cancel>,
       ): Promise<RuntimeIpcResult<SessionMessageCancelData, typeof IPC_CHANNELS.session.message.cancel>> =>
         invokeRuntimeIpc(IPC_CHANNELS.session.message.cancel, request),
+    },
+    timeline: {
+      list: (
+        request: BusinessRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.session.timeline.list>,
+      ): Promise<RuntimeIpcResult<SessionTimelineListData, typeof IPC_CHANNELS.session.timeline.list>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.session.timeline.list, request),
     },
   },
   run: {

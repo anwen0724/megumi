@@ -121,6 +121,7 @@ const sessionRunService = new SessionRunService({
   toolRuntimeFactory,
   toolDefinitionProvider: toolRegistry,
   chatStreamEventSink: chatStreamSink,
+  timelineMessageRepository,
 });
 const toolService = new ToolService({
   repository: toolRepository,
