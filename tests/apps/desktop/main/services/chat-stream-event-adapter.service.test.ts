@@ -331,6 +331,156 @@ describe('createChatStreamEventAdapter', () => {
     ]);
   });
 
+  it('maps tool call terminal runtime facts to chat stream activities', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.use.created',
+      sequence: 1,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-completed',
+        providerToolUseId: 'tool-use-completed',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.requested',
+      sequence: 2,
+      payload: {
+        toolCall: {
+          toolCallId: 'tool-call-completed',
+          toolUseId: 'tool-use-completed',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'read_file',
+          input: { path: 'README.md' },
+          inputPreview: {
+            summary: 'Read README.md',
+            targets: [],
+            redactionState: 'none',
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          status: 'requested',
+          requestedAt: '2026-05-24T00:00:01.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.completed',
+      sequence: 3,
+      payload: {
+        toolCallId: 'tool-call-completed',
+        completedAt: '2026-05-24T00:00:02.000Z',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.requested',
+      sequence: 4,
+      payload: {
+        toolCall: {
+          toolCallId: 'tool-call-failed',
+          toolUseId: 'tool-use-failed',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'run_command',
+          input: { command: 'npm test' },
+          inputPreview: {
+            summary: 'npm test',
+            targets: [],
+            redactionState: 'none',
+          },
+          capabilities: ['command_run'],
+          riskLevel: 'high',
+          sideEffect: 'runs_command',
+          status: 'requested',
+          requestedAt: '2026-05-24T00:00:03.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.failed',
+      sequence: 5,
+      payload: {
+        toolCallId: 'tool-call-failed',
+        error: {
+          code: 'runtime_unknown',
+          message: 'Command failed.',
+          severity: 'error',
+          retryable: false,
+          source: 'tool',
+        },
+        completedAt: '2026-05-24T00:00:04.000Z',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.requested',
+      sequence: 6,
+      payload: {
+        toolCall: {
+          toolCallId: 'tool-call-denied',
+          toolUseId: 'tool-use-denied',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'write_file',
+          input: { path: 'src/app.ts' },
+          inputPreview: {
+            summary: 'Write src/app.ts',
+            targets: [],
+            redactionState: 'none',
+          },
+          capabilities: ['project_write'],
+          riskLevel: 'medium',
+          sideEffect: 'writes_project',
+          status: 'requested',
+          requestedAt: '2026-05-24T00:00:05.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.denied',
+      sequence: 7,
+      payload: {
+        toolCallId: 'tool-call-denied',
+        reason: 'Plan mode blocks writes.',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'tool.started',
+      'tool.completed',
+      'tool.failed',
+      'tool.denied',
+    ]);
+    expect(events.at(-3)).toMatchObject({
+      eventType: 'tool.completed',
+      toolUseId: 'tool-use-completed',
+      toolCallId: 'tool-call-completed',
+      toolName: 'read_file',
+    });
+    expect(events.at(-2)).toMatchObject({
+      eventType: 'tool.failed',
+      toolUseId: 'tool-use-failed',
+      toolCallId: 'tool-call-failed',
+      toolName: 'run_command',
+      errorCode: 'runtime_unknown',
+      errorMessage: 'Command failed.',
+    });
+    expect(events.at(-1)).toMatchObject({
+      eventType: 'tool.denied',
+      toolUseId: 'tool-use-denied',
+      toolCallId: 'tool-call-denied',
+      toolName: 'write_file',
+      reason: 'Plan mode blocks writes.',
+    });
+  });
+
   it('preserves approval linkage when resolved runtime event only has approval id', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
@@ -375,6 +525,52 @@ describe('createChatStreamEventAdapter', () => {
       toolCallId: 'tool-call-1',
       status: 'rejected',
       decision: 'rejected',
+    });
+  });
+
+  it('maps approval expired to resolved with remembered tool linkage', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'approval.requested',
+      sequence: 1,
+      payload: {
+        approvalRequest: {
+          approvalRequestId: 'approval-request-1',
+          toolUseId: 'tool-use-1',
+          toolCallId: 'tool-call-1',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'write_file',
+          capabilities: ['project_write'],
+          riskLevel: 'medium',
+          title: 'Approve write_file',
+          summary: 'Writing project file requires approval.',
+          preview: { action: 'write_file', targets: [] },
+          requestedScope: 'project',
+          status: 'pending',
+          createdAt: '2026-05-24T00:00:01.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'approval.expired',
+      sequence: 2,
+      payload: {
+        approvalRequestId: 'approval-request-1',
+        toolCallId: 'tool-call-1',
+        expiredAt: '2026-05-24T00:05:01.000Z',
+      },
+    }));
+
+    expect(events.at(-1)).toMatchObject({
+      eventType: 'approval.resolved',
+      approvalId: 'approval-request-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      status: 'expired',
+      decision: 'expired',
     });
   });
 
