@@ -843,19 +843,6 @@ export class SessionRunService {
       return;
     }
 
-    this.repository.saveMessage({
-      messageId: this.ids.messageId(),
-      sessionId: input.request.sessionId,
-      runId: input.request.runId,
-      role: 'assistant',
-      content: assistantContent,
-      status: 'completed',
-      createdAt: completedAt,
-      completedAt,
-      metadata: {
-        triggerMessageId: input.userMessageId,
-      },
-    });
     const completedStep = this.repository.saveStep({
       ...currentModelStep,
       status: 'succeeded',
