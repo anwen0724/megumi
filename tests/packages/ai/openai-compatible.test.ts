@@ -334,12 +334,22 @@ describe('OpenAI-compatible adapter', () => {
 
     expect(events.map((event) => event.eventType)).toEqual([
       'model.step.started',
+      'model.tool_use.detected',
       'tool.use.created',
       'model.step.completed',
     ]);
-    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4]);
     expect(events.map((event) => RuntimeEventSchema.parse(event))).toEqual(events);
     expect(events[1]).toMatchObject({
+      eventType: 'model.tool_use.detected',
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'call-read',
+        providerToolUseId: 'call-read',
+        toolName: 'read_file',
+      },
+    });
+    expect(events[2]).toMatchObject({
       eventType: 'tool.use.created',
       stepId: 'step-1',
       payload: {
@@ -350,13 +360,130 @@ describe('OpenAI-compatible adapter', () => {
         input: { path: 'package.json' },
       },
     });
-    expect(events[2]).toMatchObject({
+    expect(events[3]).toMatchObject({
       eventType: 'model.step.completed',
       payload: {
         modelStepId: 'model-step-1',
         finishReason: 'tool_calls',
       },
     });
+  });
+
+  it('detects tool use before the completed tool-use event', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"I will check."}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-read","type":"function","function":{"name":"read_file","arguments":"{\\"path\\":"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-24T00:00:00.000Z' },
+    });
+
+    const events = await collect(adapter.streamModelStep(modelStepInput({
+      modelStepId: 'model-step-1',
+      toolDefinitions: [
+        {
+          name: 'read_file',
+          description: 'Read a project file.',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: false,
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          availability: { status: 'available' },
+        },
+      ],
+    })));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'model.step.started',
+      'model.output.delta',
+      'model.tool_use.detected',
+      'tool.use.created',
+      'model.step.completed',
+    ]);
+    expect(events.findIndex((event) => event.eventType === 'model.tool_use.detected'))
+      .toBeLessThan(events.findIndex((event) => event.eventType === 'tool.use.created'));
+  });
+
+  it('keeps one thinking lifecycle when reasoning continues after tool detection', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"reasoning_content":"I need to inspect docs."}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-list","type":"function","function":{"name":"list_directory","arguments":"{\\"path\\":"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"reasoning_content":"Then I will summarize."}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"docs\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'deepseek',
+      defaultBaseUrl: 'https://api.deepseek.com',
+      fetch,
+      clock: { now: () => '2026-05-24T00:00:00.000Z' },
+    });
+
+    const events = await collect(adapter.streamModelStep({
+      ...modelStepInput({
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        modelStepId: 'model-step-1',
+        toolDefinitions: [
+          {
+            name: 'list_directory',
+            description: 'List a project directory.',
+            inputSchema: {
+              type: 'object',
+              properties: { path: { type: 'string' } },
+              required: ['path'],
+              additionalProperties: false,
+            },
+            capabilities: ['project_read'],
+            riskLevel: 'low',
+            sideEffect: 'none',
+            availability: { status: 'available' },
+          },
+        ],
+      }),
+      config: {
+        providerId: 'deepseek',
+        kind: 'openai-compatible',
+        baseUrl: 'https://api.deepseek.com',
+        apiKey: 'sk-test',
+        defaultModelId: 'deepseek-v4-flash',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'model.step.started',
+      'model.thinking.started',
+      'model.thinking.delta',
+      'model.thinking.delta',
+      'model.thinking.completed',
+      'model.step.provider_state.recorded',
+      'model.tool_use.detected',
+      'tool.use.created',
+      'model.step.completed',
+    ]);
+    expect(events.filter((event) => event.eventType === 'model.thinking.started')).toHaveLength(1);
+    expect(events.filter((event) => event.eventType === 'model.thinking.completed')).toHaveLength(1);
+    expect(events[3]).toMatchObject({
+      eventType: 'model.thinking.delta',
+      payload: {
+        delta: 'Then I will summarize.',
+      },
+    });
+    const eventTypes = events.map((event) => event.eventType);
+    expect(eventTypes.indexOf('model.thinking.completed'))
+      .toBeGreaterThan(eventTypes.lastIndexOf('model.thinking.delta'));
+    expect(eventTypes.indexOf('model.thinking.completed'))
+      .toBeLessThan(events.findIndex((event) => event.eventType === 'model.step.provider_state.recorded'));
   });
 
   it('records provider reasoning state without exposing it as visible model output', async () => {
@@ -407,7 +534,11 @@ describe('OpenAI-compatible adapter', () => {
 
     expect(events.map((event) => event.eventType)).toEqual([
       'model.step.started',
+      'model.thinking.started',
+      'model.thinking.delta',
+      'model.thinking.completed',
       'model.step.provider_state.recorded',
+      'model.tool_use.detected',
       'tool.use.created',
       'model.step.completed',
     ]);
@@ -416,6 +547,25 @@ describe('OpenAI-compatible adapter', () => {
       eventType: 'model.output.delta',
     }));
     expect(events[1]).toMatchObject({
+      eventType: 'model.thinking.started',
+      payload: {
+        modelStepId: 'model-step-1',
+      },
+    });
+    expect(events[2]).toMatchObject({
+      eventType: 'model.thinking.delta',
+      payload: {
+        modelStepId: 'model-step-1',
+        delta: 'I need to inspect docs.',
+      },
+    });
+    expect(events[3]).toMatchObject({
+      eventType: 'model.thinking.completed',
+      payload: {
+        modelStepId: 'model-step-1',
+      },
+    });
+    expect(events[4]).toMatchObject({
       eventType: 'model.step.provider_state.recorded',
       source: 'provider',
       visibility: 'system',
@@ -432,7 +582,16 @@ describe('OpenAI-compatible adapter', () => {
         ],
       },
     });
-    expect(events[2]).toMatchObject({
+    expect(events[5]).toMatchObject({
+      eventType: 'model.tool_use.detected',
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'call-list',
+        providerToolUseId: 'call-list',
+        toolName: 'list_directory',
+      },
+    });
+    expect(events[6]).toMatchObject({
       eventType: 'tool.use.created',
       payload: {
         toolName: 'list_directory',

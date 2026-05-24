@@ -8,6 +8,10 @@ import {
   createAssistantDeltaEvent,
   createModelStepProviderStateRecordedEvent,
   createModelStepStartedEvent,
+  createModelThinkingCompletedEvent,
+  createModelThinkingDeltaEvent,
+  createModelThinkingStartedEvent,
+  createModelToolUseDetectedEvent,
   createRuntimeEvent,
   createRunCancelledEvent,
   createRunFailedEvent,
@@ -61,8 +65,11 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
         let usage: ChatTokenUsage | undefined;
         let content = '';
         let reasoningContent = '';
+        let reasoningStarted = false;
         let finishReason: string | undefined;
         const toolCalls = new Map<number, OpenAICompatibleToolCallAccumulator>();
+        const detectedToolUseIds = new Set<string>();
+        const pendingDetectedToolCalls: Array<OpenAICompatibleToolCallAccumulator & { id: string; name: string }> = [];
 
         yield createModelStepStarted(input, clock.now());
         failureStage = 'stream_parse_error';
@@ -73,8 +80,21 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
             yield createModelOutputDelta(input, item.delta, clock.now());
           } else if (item.type === 'reasoning_delta') {
             reasoningContent += item.delta;
+            if (!reasoningStarted) {
+              reasoningStarted = true;
+              yield createModelThinkingStarted(input, clock.now());
+            }
+            yield createModelThinkingDelta(input, item.delta, clock.now());
           } else if (item.type === 'tool_call_delta') {
-            appendToolCallDelta(toolCalls, item);
+            const toolCall = appendToolCallDelta(toolCalls, item);
+            if (isDetectableToolCall(toolCall) && !detectedToolUseIds.has(toolCall.id)) {
+              detectedToolUseIds.add(toolCall.id);
+              if (reasoningContent.length > 0) {
+                pendingDetectedToolCalls.push(toolCall);
+              } else {
+                yield createModelToolUseDetected(input, toolCall, clock.now());
+              }
+            }
           } else if (item.type === 'finish') {
             finishReason = item.finishReason;
           } else if (item.type === 'usage') {
@@ -82,8 +102,16 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
           }
         }
 
+        if (reasoningStarted) {
+          yield createModelThinkingCompleted(input, clock.now());
+        }
+
         if (reasoningContent.length > 0) {
           yield createModelStepProviderStateRecorded(input, reasoningContent, clock.now());
+        }
+
+        for (const toolCall of pendingDetectedToolCalls) {
+          yield createModelToolUseDetected(input, toolCall, clock.now());
         }
 
         for (const toolCall of [...toolCalls.entries()].sort(([left], [right]) => left - right).map(([, value]) => value)) {
@@ -330,15 +358,23 @@ interface OpenAICompatibleToolCallAccumulator {
 function appendToolCallDelta(
   toolCalls: Map<number, OpenAICompatibleToolCallAccumulator>,
   delta: OpenAICompatibleToolCallDelta,
-): void {
+): OpenAICompatibleToolCallAccumulator {
   const current = toolCalls.get(delta.index) ?? { argumentsText: '' };
-
-  toolCalls.set(delta.index, {
+  const next = {
     id: delta.id ?? current.id,
     toolType: delta.toolType ?? current.toolType,
     name: delta.name ?? current.name,
     argumentsText: current.argumentsText + (delta.argumentsDelta ?? ''),
-  });
+  };
+
+  toolCalls.set(delta.index, next);
+  return next;
+}
+
+function isDetectableToolCall(
+  toolCall: OpenAICompatibleToolCallAccumulator,
+): toolCall is OpenAICompatibleToolCallAccumulator & { id: string; name: string } {
+  return Boolean(toolCall.id && toolCall.name);
 }
 
 function isCompleteToolCall(
@@ -397,6 +433,77 @@ function createModelOutputDelta(
   });
 }
 
+function createModelThinkingStarted(
+  input: AiModelStepAdapterRequest,
+  createdAt: string,
+): RuntimeEvent {
+  return createModelThinkingStartedEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'model.thinking.started',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'system',
+    persist: 'transient',
+    payload: {
+      modelStepId: modelStepIdFor(input),
+    },
+  });
+}
+
+function createModelThinkingDelta(
+  input: AiModelStepAdapterRequest,
+  delta: string,
+  createdAt: string,
+): RuntimeEvent {
+  return createModelThinkingDeltaEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'model.thinking.delta',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'system',
+    persist: 'transient',
+    payload: {
+      modelStepId: modelStepIdFor(input),
+      delta,
+    },
+  });
+}
+
+function createModelThinkingCompleted(
+  input: AiModelStepAdapterRequest,
+  createdAt: string,
+): RuntimeEvent {
+  return createModelThinkingCompletedEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'model.thinking.completed',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'system',
+    persist: 'transient',
+    payload: {
+      modelStepId: modelStepIdFor(input),
+    },
+  });
+}
+
 function createModelStepToolUseCreated(
   input: AiModelStepAdapterRequest,
   toolCall: OpenAICompatibleToolCallAccumulator & { id: string; name: string },
@@ -421,6 +528,33 @@ function createModelStepToolUseCreated(
       providerToolUseId: toolCall.id,
       toolName: toolCall.name,
       input: parseToolArguments(toolCall.argumentsText),
+    },
+  });
+}
+
+function createModelToolUseDetected(
+  input: AiModelStepAdapterRequest,
+  toolCall: OpenAICompatibleToolCallAccumulator & { id: string; name: string },
+  createdAt: string,
+): RuntimeEvent {
+  return createModelToolUseDetectedEvent({
+    eventId: input.eventIdFactory(),
+    eventType: 'model.tool_use.detected',
+    runId: input.runId,
+    sessionId: input.request.sessionId,
+    stepId: input.stepId,
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.nextSequence(),
+    createdAt,
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      modelStepId: modelStepIdFor(input),
+      toolUseId: toolCall.id,
+      providerToolUseId: toolCall.id,
+      toolName: toolCall.name,
     },
   });
 }
