@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
-import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
@@ -22,7 +22,7 @@ function runtimeEvent(
     runId: 'run-1',
     sessionId: 'session-1',
     sequence,
-    createdAt: `2026-05-17T00:00:0${sequence}.000Z`,
+    createdAt: `2026-05-17T00:00:${sequence.toString().padStart(2, '0')}.000Z`,
     source: 'core',
     visibility: 'user',
     persist: 'required',
@@ -31,22 +31,12 @@ function runtimeEvent(
   } as RuntimeEvent;
 }
 
-function waitForStreamFlush(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 40));
-}
-
 describe('runtime event dispatcher', () => {
   beforeEach(() => {
     vi.useRealTimers();
-    useChatStore.setState({
-      messages: [],
-      streamingText: '',
-      isStreaming: false,
-      pendingToolCalls: [],
-      completedToolActivities: [],
+    useChatUiStore.setState({
       agentStatus: 'idle',
       lastError: null,
-      sessionSnapshots: {},
     });
     useRunStore.getState().resetRuns();
     useToolCallStore.getState().reset();
@@ -62,308 +52,7 @@ describe('runtime event dispatcher', () => {
     vi.useRealTimers();
   });
 
-  it('keeps text deltas out of run event state and commits completed assistant content', () => {
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, {
-      providerId: 'deepseek',
-      modelId: 'deepseek-v4-flash',
-      runKind: 'chat',
-    }));
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 2, { delta: 'Hello ' }));
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'Megumi' }));
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.completed', 4, { content: 'Hello Megumi.' }));
-    dispatchRuntimeEvent(runtimeEvent('run.completed', 5));
-
-    expect(useRunStore.getState().runs['run-1']).toMatchObject({
-      runId: 'run-1',
-      sessionId: 'session-1',
-      status: 'completed',
-      updatedAt: '2026-05-17T00:00:05.000Z',
-    });
-    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.sequence)).toEqual([1, 4, 5]);
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-      lastError: null,
-    });
-    expect(useChatStore.getState().messages).toEqual([
-      expect.objectContaining({
-        role: 'assistant',
-        content: 'Hello Megumi.',
-      }),
-    ]);
-  });
-
-  it('commits streaming text and does not synthesize Done when a run completes without assistant output', () => {
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 1, { delta: 'Streamed answer' }));
-    dispatchRuntimeEvent(runtimeEvent('run.completed', 2));
-    dispatchRuntimeEvent(runtimeEvent('run.completed', 3, {}, { runId: 'run-2' }));
-
-    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
-      'Streamed answer',
-    ]);
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-    });
-  });
-
-  it('commits model output deltas for agent runs', () => {
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Docs ' }, {
-      source: 'provider',
-    }));
-    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 3, { modelStepId: 'model-step-1', delta: 'summary.' }, {
-      source: 'provider',
-    }));
-    dispatchRuntimeEvent(runtimeEvent('model.step.completed', 4, { modelStepId: 'model-step-1', finishReason: 'stop' }, {
-      source: 'provider',
-    }));
-    dispatchRuntimeEvent(runtimeEvent('run.completed', 5));
-
-    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
-      'Docs summary.',
-    ]);
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-    });
-  });
-
-  it('buffers model output deltas before flushing them to chat state', async () => {
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-
-    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Docs ' }, {
-      source: 'provider',
-    }));
-    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 3, { modelStepId: 'model-step-1', delta: 'summary.' }, {
-      source: 'provider',
-    }));
-
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'running',
-    });
-
-    dispatchRuntimeEvent(runtimeEvent('model.step.completed', 4, { modelStepId: 'model-step-1', finishReason: 'stop' }, {
-      source: 'provider',
-    }));
-
-    await waitForStreamFlush();
-
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: 'Docs summary.',
-      isStreaming: true,
-      agentStatus: 'running',
-    });
-  });
-
-  it('keeps assistant text hidden while tool work is still active and reveals it after tools complete', async () => {
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 2, {
-      toolCall: {
-        toolCallId: 'tool-call-1',
-        toolUseId: 'tool-use-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        toolName: 'read_file',
-        input: { path: 'README.md' },
-        inputPreview: {
-          summary: 'Read README.md',
-          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
-          redactionState: 'none',
-        },
-        capabilities: ['project_read'],
-        riskLevel: 'low',
-        sideEffect: 'none',
-        status: 'running',
-        requestedAt: '2026-05-20T00:00:00.000Z',
-      },
-    }));
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'Final answer starts.' }));
-
-    await waitForStreamFlush();
-
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'running',
-    });
-
-    dispatchRuntimeEvent(runtimeEvent('tool.call.completed', 4, {
-      toolCallId: 'tool-call-1',
-      toolName: 'read_file',
-      completedAt: '2026-05-20T00:00:02.000Z',
-    }));
-
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: 'Final answer starts.',
-      isStreaming: true,
-      agentStatus: 'running',
-    });
-  });
-
-  it('writes live stream deltas to the owning session snapshot when another session is active', async () => {
-    useSessionStore.setState({
-      sessions: [
-        {
-          id: 'session-1',
-          projectId: 'project-1',
-          title: 'Original session',
-          agentType: 'free',
-          createdAt: '2026-05-17T00:00:00.000Z',
-          updatedAt: '2026-05-17T00:00:00.000Z',
-        },
-        {
-          id: 'session-2',
-          projectId: 'project-1',
-          title: 'Visible session',
-          agentType: 'free',
-          createdAt: '2026-05-17T00:00:00.000Z',
-          updatedAt: '2026-05-17T00:00:00.000Z',
-        },
-      ],
-      activeSessionId: 'session-2',
-      activeAgentType: 'free',
-    });
-    useChatStore.setState({
-      messages: [],
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-      sessionSnapshots: {
-        'session-1': {
-          messages: [
-            {
-              id: 'message-user',
-              role: 'user',
-              content: 'Explain Verilog',
-              timestamp: '2026-05-17T00:00:00.000Z',
-            },
-          ],
-          streamingText: '',
-          isStreaming: false,
-          pendingToolCalls: [],
-          completedToolActivities: [],
-          agentStatus: 'running',
-          lastError: null,
-        },
-      },
-    });
-
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }, { sessionId: 'session-1' }));
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 2, { delta: 'Verilog is ' }, { sessionId: 'session-1' }));
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'an HDL.' }, { sessionId: 'session-1' }));
-
-    await waitForStreamFlush();
-
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-    });
-    expect(useChatStore.getState().sessionSnapshots['session-1']).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'running',
-    });
-  });
-
-  it('commits completed assistant content to the owning session snapshot when another session is active', () => {
-    useSessionStore.setState({
-      sessions: [],
-      activeSessionId: 'session-2',
-      activeAgentType: 'free',
-    });
-    useChatStore.setState({
-      messages: [],
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-      sessionSnapshots: {
-        'session-1': {
-          messages: [],
-          streamingText: 'Draft answer',
-          isStreaming: true,
-          pendingToolCalls: [],
-          completedToolActivities: [],
-          agentStatus: 'running',
-          lastError: null,
-        },
-      },
-    });
-
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }, { sessionId: 'session-1' }));
-    dispatchRuntimeEvent(runtimeEvent('assistant.output.completed', 2, { content: 'Final answer.' }, { sessionId: 'session-1' }));
-    dispatchRuntimeEvent(runtimeEvent('run.completed', 3, {}, { sessionId: 'session-1' }));
-
-    expect(useChatStore.getState().messages).toEqual([]);
-    expect(useChatStore.getState().sessionSnapshots['session-1']).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-    });
-    expect(useChatStore.getState().sessionSnapshots['session-1'].messages).toEqual([
-      expect.objectContaining({
-        role: 'assistant',
-        content: 'Final answer.',
-      }),
-    ]);
-  });
-
-  it('flushes buffered model output before completing a run', async () => {
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Final answer.' }, {
-      source: 'provider',
-    }));
-
-    dispatchRuntimeEvent(runtimeEvent('run.completed', 3));
-
-    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
-      'Final answer.',
-    ]);
-    expect(useChatStore.getState()).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'idle',
-    });
-
-    await waitForStreamFlush();
-
-    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
-      'Final answer.',
-    ]);
-    expect(useChatStore.getState().streamingText).toBe('');
-  });
-
-  it('adds failed and cancelled assistant messages and uses the default cancellation reason', () => {
-    dispatchRuntimeEvent(runtimeEvent('run.failed', 1, {
-      error: {
-        code: 'provider_disabled',
-        message: 'Provider is disabled.',
-        severity: 'error',
-        retryable: false,
-        source: 'provider',
-      },
-    }));
-    dispatchRuntimeEvent(runtimeEvent('run.cancelled', 2));
-
-    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual([
-      'Provider is disabled.',
-      'Session message was cancelled.',
-    ]);
-    expect(useChatStore.getState()).toMatchObject({
-      agentStatus: 'idle',
-      lastError: 'Session message was cancelled.',
-      streamingText: '',
-    });
-    expect(useRunStore.getState().lastError).toBe('Provider is disabled.');
-  });
-
-  it('does not store text delta runtime events in the run event timeline', async () => {
+  it('ignores text deltas for run state and chat UI state', () => {
     dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Docs ' }, {
       source: 'provider',
@@ -374,34 +63,69 @@ describe('runtime event dispatcher', () => {
       source: 'provider',
     }));
 
-    await waitForStreamFlush();
-
     expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventType)).toEqual([
       'run.started',
       'context.effective.updated',
       'model.step.completed',
     ]);
-    expect(useChatStore.getState().streamingText).toBe('Docs answer.');
+    expect(useChatUiStore.getState()).toMatchObject({
+      agentStatus: 'running',
+      lastError: null,
+    });
   });
 
-  it('does not apply duplicate runtime events to chat timeline state', () => {
-    const delta = runtimeEvent('assistant.output.delta', 1, { delta: 'Hello' });
-    const completed = runtimeEvent('assistant.output.completed', 2, { content: 'Hello.' });
-    const runCompleted = runtimeEvent('run.completed', 3);
+  it('projects terminal run status and errors without synthesizing assistant messages', () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
+    dispatchRuntimeEvent(runtimeEvent('assistant.output.completed', 2, { content: 'Final answer.' }));
+    dispatchRuntimeEvent(runtimeEvent('run.completed', 3));
 
-    dispatchRuntimeEvent(delta);
-    dispatchRuntimeEvent(delta);
-    dispatchRuntimeEvent(completed);
-    dispatchRuntimeEvent(completed);
-    dispatchRuntimeEvent(runCompleted);
-    dispatchRuntimeEvent(runCompleted);
+    expect(useRunStore.getState().runs['run-1']).toMatchObject({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      status: 'completed',
+      updatedAt: '2026-05-17T00:00:03.000Z',
+    });
+    expect(useChatUiStore.getState()).toMatchObject({
+      agentStatus: 'idle',
+      lastError: null,
+    });
 
-    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual(['Hello.']);
-    expect(useChatStore.getState().streamingText).toBe('');
-    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.sequence)).toEqual([2, 3]);
+    dispatchRuntimeEvent(runtimeEvent('run.failed', 4, {
+      error: {
+        code: 'provider_disabled',
+        message: 'Provider is disabled.',
+        severity: 'error',
+        retryable: false,
+        source: 'provider',
+      },
+    }, { runId: 'run-2', sessionId: 'session-1' }));
+
+    expect(useChatUiStore.getState()).toMatchObject({
+      agentStatus: 'error',
+      lastError: 'Provider is disabled.',
+    });
   });
 
-  it('ignores events without run ids for run and chat state', () => {
+  it('does not project UI status for inactive session runtime events', () => {
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: 'session-2',
+      activeAgentType: 'free',
+    });
+
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }, { sessionId: 'session-1' }));
+
+    expect(useRunStore.getState().runs['run-1']).toMatchObject({
+      status: 'running',
+      sessionId: 'session-1',
+    });
+    expect(useChatUiStore.getState()).toMatchObject({
+      agentStatus: 'idle',
+      lastError: null,
+    });
+  });
+
+  it('ignores events without run ids for run and chat UI state', () => {
     dispatchRuntimeEvent(runtimeEvent('run.started', 1, {}, { runId: undefined }));
 
     expect(useRunStore.getState()).toMatchObject({
@@ -409,32 +133,7 @@ describe('runtime event dispatcher', () => {
       runs: {},
       eventsByRun: {},
     });
-    expect(useChatStore.getState().agentStatus).toBe('idle');
-  });
-
-  it('stores non-output runtime events for renderer processing disclosure without changing chat messages', () => {
-    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    dispatchRuntimeEvent(runtimeEvent('context.effective.updated', 2, { sourceCount: 2 }));
-    dispatchRuntimeEvent(runtimeEvent('tool.call.completed', 3, {
-      toolCallId: 'tool-call-1',
-      toolName: 'workspace.read',
-      resultPreview: { files: 2 },
-      durationMs: 800,
-    }));
-    dispatchRuntimeEvent(runtimeEvent('artifact.created', 4, {
-      artifactId: 'artifact-1',
-      kind: 'report',
-      title: 'UI report',
-      status: 'draft',
-    }));
-
-    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventType)).toEqual([
-      'run.started',
-      'context.effective.updated',
-      'tool.call.completed',
-      'artifact.created',
-    ]);
-    expect(useChatStore.getState().messages).toEqual([]);
+    expect(useChatUiStore.getState().agentStatus).toBe('idle');
   });
 
   it('projects tool call events into the renderer tool-call store', () => {
@@ -469,7 +168,7 @@ describe('runtime event dispatcher', () => {
       status: 'running',
       startedAt: '2026-05-20T00:00:01.000Z',
     });
-    expect(useChatStore.getState().agentStatus).toBe('running');
+    expect(useChatUiStore.getState().agentStatus).toBe('running');
   });
 
   it('stores denied tool calls with a shared-schema-valid runtime error', () => {
@@ -549,107 +248,7 @@ describe('runtime event dispatcher', () => {
       status: 'approved',
       resolvedAt: '2026-05-20T00:00:02.000Z',
     });
-    expect(useChatStore.getState().agentStatus).toBe('running');
-  });
-
-  it('projects tool-call approval request events into tool and approval stores', () => {
-    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 1, {
-      toolCall: {
-        toolCallId: 'tool-call-1',
-        toolUseId: 'tool-use-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        toolName: 'edit_file',
-        input: { path: 'src/app.ts' },
-        inputPreview: {
-          summary: 'Edit src/app.ts',
-          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
-          redactionState: 'none',
-        },
-        capabilities: ['project_write'],
-        riskLevel: 'medium',
-        sideEffect: 'project_file_operation',
-        status: 'requested',
-        requestedAt: '2026-05-20T00:00:00.000Z',
-      },
-    }));
-    dispatchRuntimeEvent(runtimeEvent('tool.call.approval_requested', 2, {
-      toolCallId: 'tool-call-1',
-      toolName: 'edit_file',
-      approvalRequest: {
-        approvalRequestId: 'approval-1',
-        toolUseId: 'tool-use-1',
-        toolCallId: 'tool-call-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        toolName: 'edit_file',
-        capabilities: ['project_write'],
-        riskLevel: 'medium',
-        title: 'Edit file',
-        summary: 'Edit src/app.ts',
-        preview: {
-          action: 'Edit file',
-          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
-        },
-        requestedScope: 'once',
-        status: 'pending',
-        createdAt: '2026-05-20T00:00:01.000Z',
-      },
-    }));
-
-    expect(useApprovalStore.getState().approvalRequestsById['approval-1']).toMatchObject({
-      approvalRequestId: 'approval-1',
-      status: 'pending',
-    });
-    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
-      approvalRequestId: 'approval-1',
-      status: 'waiting_for_approval',
-    });
-  });
-
-  it('projects tool result events onto existing tool calls without synthesizing missing calls', () => {
-    dispatchRuntimeEvent(runtimeEvent('tool.result.created', 1, {
-      toolResultId: 'tool-result-missing',
-      toolUseId: 'tool-use-missing',
-      toolCallId: 'tool-call-missing',
-      kind: 'success',
-      summary: 'Missing tool call result.',
-    }));
-    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 2, {
-      toolCall: {
-        toolCallId: 'tool-call-1',
-        toolUseId: 'tool-use-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        toolName: 'read_file',
-        input: { path: 'README.md' },
-        inputPreview: {
-          summary: 'Read README.md',
-          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
-          redactionState: 'none',
-        },
-        capabilities: ['project_read'],
-        riskLevel: 'low',
-        sideEffect: 'none',
-        status: 'running',
-        requestedAt: '2026-05-20T00:00:00.000Z',
-        startedAt: '2026-05-20T00:00:01.000Z',
-      },
-    }));
-    dispatchRuntimeEvent(runtimeEvent('tool.result.created', 3, {
-      toolResultId: 'tool-result-1',
-      toolUseId: 'tool-use-1',
-      toolCallId: 'tool-call-1',
-      kind: 'success',
-      summary: 'Read 12 lines from README.md.',
-    }));
-
-    expect(useToolCallStore.getState().toolCallsById['tool-call-missing']).toBeUndefined();
-    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
-      status: 'succeeded',
-      resultPreview: 'Read 12 lines from README.md.',
-      completedAt: '2026-05-17T00:00:03.000Z',
-    });
+    expect(useChatUiStore.getState().agentStatus).toBe('running');
   });
 
   it('does not project duplicate tool events twice', () => {

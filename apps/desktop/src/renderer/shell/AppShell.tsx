@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSessionStore } from '../entities/session/store';
-import { useChatStore } from '../entities/chat/store';
 import { useProjectStore } from '../entities/project/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import { ChatTimeline } from '../features/chat';
@@ -58,17 +57,7 @@ export function AppShell() {
     [projects, sessions, activeSessionId],
   );
 
-  function saveActiveChatSnapshot() {
-    if (!activeSessionId) {
-      return;
-    }
-
-    useChatStore.getState().saveCurrentSessionSnapshot(activeSessionId);
-  }
-
   function handleCreateSession() {
-    saveActiveChatSnapshot();
-
     if (!currentProject) {
       void useProjectStore.getState().useExistingProject();
       return;
@@ -80,7 +69,7 @@ export function AppShell() {
       agentType: 'free',
     });
 
-    useChatStore.getState().loadSessionSnapshot(session.id);
+    setActiveSession(session.id);
   }
 
   async function handleSelectSession(sessionId: string) {
@@ -93,7 +82,6 @@ export function AppShell() {
       return;
     }
 
-    saveActiveChatSnapshot();
     if (selectedSession.projectId !== currentProjectId) {
       await useProjectStore.getState().openProject(selectedSession.projectId);
     }

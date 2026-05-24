@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { CompletedToolActivity } from '@megumi/desktop/renderer/entities/chat/store';
 import { ToolActivityRow } from '@megumi/desktop/renderer/features/chat/components/ToolActivityRow';
 
-const activity: CompletedToolActivity = {
+const activity = {
   id: 'activity-1',
   name: 'read_workspace',
   args: {

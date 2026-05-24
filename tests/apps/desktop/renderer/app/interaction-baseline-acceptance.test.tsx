@@ -6,7 +6,7 @@ import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
-import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
@@ -296,13 +296,7 @@ function resetStores() {
     activeAgentType: 'free',
   });
 
-  useChatStore.setState({
-    messages: [],
-    streamingText: '',
-    isStreaming: false,
-    pendingToolCalls: [],
-    completedToolActivities: [],
-    sessionSnapshots: {},
+  useChatUiStore.setState({
     agentStatus: 'idle',
     lastError: null,
   });

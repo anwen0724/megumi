@@ -5,13 +5,12 @@ import userEvent from '@testing-library/user-event';
 import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
 import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
-import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useChatStreamStore } from '@megumi/desktop/renderer/features/chat-stream';
-import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
 
 const { minimize, toggleMaximize, close } = vi.hoisted(() => ({
   minimize: vi.fn(),
@@ -106,14 +105,20 @@ function installMegumiMock() {
   });
 }
 
-function createMessage(overrides: Partial<TimelineMessageData> = {}): TimelineMessageData {
+function committedUser(messageId: string, sessionId: string, text: string) {
   return {
-    id: 'message-1',
-    role: 'assistant',
-    content: 'Hello from Megumi',
-    stepNum: 1,
-    timestamp: '2026-05-10T12:00:00.000Z',
-    ...overrides,
+    messageId,
+    projectId: 'project-1',
+    sessionId,
+    role: 'user' as const,
+    createdAt: '2026-05-10T12:00:00.000Z',
+    updatedAt: '2026-05-10T12:00:00.000Z',
+    blocks: [{
+      blockId: `user-text:${messageId}`,
+      kind: 'user_text' as const,
+      text,
+      format: 'plain' as const,
+    }],
   };
 }
 
@@ -174,13 +179,7 @@ describe('AppShell', () => {
       activeAgentType: 'free',
     });
 
-    useChatStore.setState({
-      messages: [],
-      streamingText: '',
-      isStreaming: false,
-      pendingToolCalls: [],
-      completedToolActivities: [],
-      sessionSnapshots: {},
+    useChatUiStore.setState({
       agentStatus: 'idle',
       lastError: null,
     });
@@ -286,8 +285,6 @@ describe('AppShell', () => {
       activeSessionId: null,
       activeAgentType: 'free',
     });
-    useChatStore.getState().clearSessionSnapshots();
-
     renderShell();
 
     await waitFor(() => {
@@ -457,13 +454,8 @@ describe('AppShell', () => {
   });
 
   it('clears the center timeline when creating a new local session', async () => {
-    useChatStore.getState().setMessages([
-      createMessage({
-        id: 'session-1-user',
-        role: 'user',
-        content: 'Message from the first session',
-        stepNum: 1,
-      }),
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedUser('session-1-user', 'session-1', 'Message from the first session'),
     ]);
 
     renderShell();
@@ -474,20 +466,9 @@ describe('AppShell', () => {
 
     expect(screen.queryByText('Message from the first session')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
-    expect(useChatStore.getState().sessionSnapshots['session-1'].messages[0].content).toBe(
-      'Message from the first session',
-    );
   });
 
   it('restores the previous session timeline when selecting it again', async () => {
-    useChatStore.getState().setMessages([
-      createMessage({
-        id: 'session-1-user',
-        role: 'user',
-        content: 'Saved in planning session',
-        stepNum: 1,
-      }),
-    ]);
     window.megumi.session.timeline.list = vi.fn().mockImplementation((request) => Promise.resolve({
       ok: true,
       data: {
@@ -519,24 +500,12 @@ describe('AppShell', () => {
     expect(createdSession.title).toBe('New session');
     expect(screen.queryByText('Saved in planning session')).not.toBeInTheDocument();
 
-    useChatStore.getState().setMessages([
-      createMessage({
-        id: 'session-new-user',
-        role: 'user',
-        content: 'Message in new session',
-        stepNum: 1,
-      }),
-    ]);
-
     await userEvent.click(screen.getByRole('button', { name: /Planning the UI/ }));
 
     await waitFor(() => {
       expect(screen.getByText('Saved in planning session')).toBeInTheDocument();
     });
     expect(screen.queryByText('Message in new session')).not.toBeInTheDocument();
-    expect(useChatStore.getState().sessionSnapshots[createdSession.id].messages[0].content).toBe(
-      'Message in new session',
-    );
   });
 
   it('collapses and expands the right workspace panel', async () => {

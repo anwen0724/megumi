@@ -1,7 +1,4 @@
 import type {
-  AssistantOutputCompletedPayload,
-  AssistantOutputDeltaPayload,
-  ModelOutputDeltaPayload,
   RunCancelledPayload,
   RunFailedPayload,
   RuntimeEvent,
@@ -11,35 +8,13 @@ import type {
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { ApprovalRequest, ApprovalStatus, ToolCall, ToolPolicyDecision } from '@megumi/shared/tool-contracts';
 import { useApprovalStore } from '../../entities/approval';
-import { type AgentRunStatus, type ChatSnapshot, useChatStore } from '../../entities/chat/store';
-import type { TimelineMessageData } from '../../entities/chat/types';
+import { useChatUiStore, type AgentRunStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
 
-const completedContentsByRun = new Map<string, string>();
-const dispatchedTextDeltaEvents = new Set<string>();
-const STREAM_OUTPUT_FLUSH_DELAY_MS = 32;
-const bufferedStreamOutputsByRun = new Map<string, {
-  output: string;
-  sessionId: string | null;
-  flushTimer: ReturnType<typeof setTimeout> | null;
-}>();
-const activeToolCallIdsByRun = new Map<string, Set<string>>();
-const answerRevealAllowedByRun = new Set<string>();
-
 interface DispatchRuntimeEventOptions {
   sessionId?: string | null;
-}
-
-function createMessage(role: TimelineMessageData['role'], content: string): TimelineMessageData {
-  const now = new Date().toISOString();
-  return {
-    id: `message-${role}-${now}-${Math.random().toString(36).slice(2, 8)}`,
-    role,
-    content,
-    timestamp: now,
-  };
 }
 
 function hasRuntimeEventAlreadyBeenDispatched(event: RuntimeEvent): boolean {
@@ -51,272 +26,27 @@ function hasRuntimeEventAlreadyBeenDispatched(event: RuntimeEvent): boolean {
   return events.some((item) => item.eventId === event.eventId || item.sequence === event.sequence);
 }
 
-function textDeltaDispatchKey(event: RuntimeEvent): string {
-  return `${event.runId ?? 'no-run'}:${event.eventId}:${event.sequence}`;
-}
-
-function hasTextDeltaAlreadyBeenDispatched(event: RuntimeEvent): boolean {
-  const key = textDeltaDispatchKey(event);
-  if (dispatchedTextDeltaEvents.has(key)) {
-    return true;
-  }
-  dispatchedTextDeltaEvents.add(key);
-  return false;
-}
-
-function clearTextDeltaDispatchKeysForRun(runId: string): void {
-  for (const key of dispatchedTextDeltaEvents) {
-    if (key.startsWith(`${runId}:`)) {
-      dispatchedTextDeltaEvents.delete(key);
-    }
-  }
-}
-
-function emptyChatSnapshot(): ChatSnapshot {
-  return {
-    messages: [],
-    streamingText: '',
-    isStreaming: false,
-    pendingToolCalls: [],
-    completedToolActivities: [],
-    agentStatus: 'idle',
-    lastError: null,
-  };
-}
-
-function snapshotFromCurrentState(state: ReturnType<typeof useChatStore.getState>): ChatSnapshot {
-  return {
-    messages: state.messages,
-    streamingText: state.streamingText,
-    isStreaming: state.isStreaming,
-    pendingToolCalls: state.pendingToolCalls,
-    completedToolActivities: state.completedToolActivities,
-    agentStatus: state.agentStatus,
-    lastError: state.lastError,
-  };
-}
-
 function resolveEventSessionId(event: RuntimeEvent, options?: DispatchRuntimeEventOptions): string | null {
   return options?.sessionId ?? event.sessionId ?? useSessionStore.getState().activeSessionId;
 }
 
-function updateChatForSession(
-  sessionId: string | null,
-  updater: (snapshot: ChatSnapshot) => ChatSnapshot,
-): void {
-  const activeSessionId = useSessionStore.getState().activeSessionId;
-
-  useChatStore.setState((state) => {
-    if (!sessionId || sessionId === activeSessionId) {
-      const updated = updater(snapshotFromCurrentState(state));
-      return {
-        messages: updated.messages,
-        streamingText: updated.streamingText,
-        isStreaming: updated.isStreaming,
-        pendingToolCalls: updated.pendingToolCalls,
-        completedToolActivities: updated.completedToolActivities,
-        agentStatus: updated.agentStatus,
-        lastError: updated.lastError,
-      };
-    }
-
-    const currentSnapshot = state.sessionSnapshots[sessionId] ?? emptyChatSnapshot();
-    return {
-      sessionSnapshots: {
-        ...state.sessionSnapshots,
-        [sessionId]: updater(currentSnapshot),
-      },
-    };
-  });
-}
-
-function appendStreamTokenForSession(sessionId: string | null, token: string): void {
-  updateChatForSession(sessionId, (snapshot) => ({
-    ...snapshot,
-    streamingText: snapshot.streamingText + token,
-    isStreaming: true,
-    agentStatus: 'running',
-  }));
-}
-
-function commitStreamForSession(sessionId: string | null, message: TimelineMessageData): void {
-  updateChatForSession(sessionId, (snapshot) => ({
-    ...snapshot,
-    messages: [...snapshot.messages, message],
-    streamingText: '',
-    isStreaming: false,
-    pendingToolCalls: [],
-    agentStatus: 'idle',
-    lastError: null,
-  }));
-}
-
-function addMessageForSession(sessionId: string | null, message: TimelineMessageData): void {
-  updateChatForSession(sessionId, (snapshot) => ({
-    ...snapshot,
-    messages: [...snapshot.messages, message],
-  }));
-}
-
-function clearStreamForSession(sessionId: string | null): void {
-  updateChatForSession(sessionId, (snapshot) => ({
-    ...snapshot,
-    streamingText: '',
-    isStreaming: false,
-    pendingToolCalls: [],
-    agentStatus: 'idle',
-    lastError: null,
-  }));
+function shouldProjectUiStatus(sessionId: string | null): boolean {
+  return !sessionId || sessionId === useSessionStore.getState().activeSessionId;
 }
 
 function setAgentStatusForSession(sessionId: string | null, agentStatus: AgentRunStatus): void {
-  updateChatForSession(sessionId, (snapshot) => ({
-    ...snapshot,
-    agentStatus,
-  }));
+  if (shouldProjectUiStatus(sessionId)) {
+    useChatUiStore.getState().setAgentStatus(agentStatus);
+  }
 }
 
 function setLastErrorForSession(sessionId: string | null, lastError: string | null): void {
-  updateChatForSession(sessionId, (snapshot) => ({
-    ...snapshot,
-    lastError,
-  }));
-}
-
-function streamingTextForSession(sessionId: string | null): string {
-  const state = useChatStore.getState();
-  const activeSessionId = useSessionStore.getState().activeSessionId;
-
-  if (!sessionId || sessionId === activeSessionId) {
-    return state.streamingText;
-  }
-
-  return state.sessionSnapshots[sessionId]?.streamingText ?? '';
-}
-
-function hasActiveToolWork(runId: string): boolean {
-  return (activeToolCallIdsByRun.get(runId)?.size ?? 0) > 0;
-}
-
-function markActiveToolWork(event: RuntimeEvent): void {
-  if (!event.runId) {
-    return;
-  }
-
-  if (event.eventType === 'run.started') {
-    activeToolCallIdsByRun.set(event.runId, new Set());
-    answerRevealAllowedByRun.delete(event.runId);
-    return;
-  }
-
-  const payload = event.payload as { toolCallId?: string; toolCall?: { toolCallId?: string } };
-  const toolCallId = payload.toolCallId ?? payload.toolCall?.toolCallId;
-
-  if (!toolCallId) {
-    if (event.eventType === 'run.completed' || event.eventType === 'run.failed' || event.eventType === 'run.cancelled') {
-      activeToolCallIdsByRun.delete(event.runId);
-    }
-    return;
-  }
-
-  const activeToolCallIds = activeToolCallIdsByRun.get(event.runId) ?? new Set<string>();
-
-  if (
-    event.eventType === 'tool.call.requested' ||
-    event.eventType === 'tool.call.started' ||
-    event.eventType === 'tool.call.approval_requested'
-  ) {
-    activeToolCallIds.add(toolCallId);
-  }
-
-  if (
-    event.eventType === 'tool.call.completed' ||
-    event.eventType === 'tool.call.failed' ||
-    event.eventType === 'tool.call.denied' ||
-    event.eventType === 'tool.result.created'
-  ) {
-    activeToolCallIds.delete(toolCallId);
-  }
-
-  if (activeToolCallIds.size === 0) {
-    activeToolCallIdsByRun.delete(event.runId);
-  } else {
-    activeToolCallIdsByRun.set(event.runId, activeToolCallIds);
+  if (shouldProjectUiStatus(sessionId)) {
+    useChatUiStore.getState().setLastError(lastError);
   }
 }
 
-function allowAnswerReveal(runId: string): void {
-  answerRevealAllowedByRun.add(runId);
-  flushBufferedStreamOutput(runId);
-}
-
-function flushBufferedStreamOutput(runId: string, options: { force?: boolean } = {}): void {
-  if (!options.force && (hasActiveToolWork(runId) || !answerRevealAllowedByRun.has(runId))) {
-    return;
-  }
-
-  const buffer = bufferedStreamOutputsByRun.get(runId);
-  if (!buffer?.output) {
-    return;
-  }
-
-  const output = buffer.output;
-  bufferedStreamOutputsByRun.set(runId, {
-    ...buffer,
-    output: '',
-  });
-  appendStreamTokenForSession(buffer.sessionId, output);
-}
-
-function discardBufferedStreamOutput(runId: string): void {
-  const buffer = bufferedStreamOutputsByRun.get(runId);
-  if (!buffer) {
-    return;
-  }
-
-  if (buffer.flushTimer) {
-    const clearTimeoutFn = typeof window !== 'undefined' ? window.clearTimeout.bind(window) : clearTimeout;
-    clearTimeoutFn(buffer.flushTimer);
-  }
-  bufferedStreamOutputsByRun.delete(runId);
-}
-
-function appendBufferedStreamOutput(runId: string, sessionId: string | null, delta: string): void {
-  if (!delta) {
-    return;
-  }
-
-  const current = bufferedStreamOutputsByRun.get(runId) ?? {
-    output: '',
-    sessionId,
-    flushTimer: null,
-  };
-  const next = {
-    ...current,
-    sessionId: current.sessionId ?? sessionId,
-    output: current.output + delta,
-  };
-  bufferedStreamOutputsByRun.set(runId, next);
-
-  if (next.flushTimer) {
-    return;
-  }
-
-  const scheduleTimeout = typeof window !== 'undefined' ? window.setTimeout.bind(window) : setTimeout;
-  const flushTimer = scheduleTimeout(() => {
-    const buffer = bufferedStreamOutputsByRun.get(runId);
-    if (buffer) {
-      bufferedStreamOutputsByRun.set(runId, { ...buffer, flushTimer: null });
-    }
-    flushBufferedStreamOutput(runId);
-  }, STREAM_OUTPUT_FLUSH_DELAY_MS);
-  bufferedStreamOutputsByRun.set(runId, {
-    ...next,
-    flushTimer,
-  });
-}
-
-function applyToolEvent(event: RuntimeEvent): void {
+function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): void {
   const store = useToolCallStore.getState();
 
   if (event.eventType === 'tool.call.requested') {
@@ -368,7 +98,7 @@ function applyToolEvent(event: RuntimeEvent): void {
         startedAt: payload.startedAt ?? event.createdAt,
       });
     }
-    useChatStore.getState().setAgentStatus('running');
+    setAgentStatusForSession(targetSessionId, 'running');
   }
 
   if (event.eventType === 'tool.call.completed') {
@@ -441,7 +171,7 @@ function applyToolEvent(event: RuntimeEvent): void {
   }
 }
 
-function applyApprovalEvent(event: RuntimeEvent): void {
+function applyApprovalEvent(event: RuntimeEvent, targetSessionId: string | null): void {
   const store = useApprovalStore.getState();
 
   if (event.eventType === 'approval.requested') {
@@ -458,7 +188,7 @@ function applyApprovalEvent(event: RuntimeEvent): void {
       decidedAt?: string;
     };
     store.markResolved(payload.approvalRequestId, payload.decision, payload.decidedAt ?? event.createdAt);
-    useChatStore.getState().setAgentStatus('running');
+    setAgentStatusForSession(targetSessionId, 'running');
   }
 }
 
@@ -466,14 +196,6 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
   const targetSessionId = resolveEventSessionId(event, options);
 
   if (event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta') {
-    if (!event.runId || hasTextDeltaAlreadyBeenDispatched(event)) {
-      return;
-    }
-    const delta = event.eventType === 'assistant.output.delta'
-      ? (event.payload as AssistantOutputDeltaPayload).delta
-      : (event.payload as ModelOutputDeltaPayload).delta;
-    appendBufferedStreamOutput(event.runId, targetSessionId, delta);
-    setAgentStatusForSession(targetSessionId, 'running');
     return;
   }
 
@@ -484,13 +206,12 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     return;
   }
 
-  markActiveToolWork(event);
-  applyToolEvent(event);
-  applyApprovalEvent(event);
+  applyToolEvent(event, targetSessionId);
+  applyApprovalEvent(event, targetSessionId);
 
   if (event.eventType === 'run.started') {
-    clearTextDeltaDispatchKeysForRun(event.runId);
     setAgentStatusForSession(targetSessionId, 'running');
+    setLastErrorForSession(targetSessionId, null);
     return;
   }
 
@@ -505,76 +226,23 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     return;
   }
 
-  if (event.eventType === 'assistant.output.completed') {
-    completedContentsByRun.set(event.runId, (event.payload as AssistantOutputCompletedPayload).content);
-    return;
-  }
-
-  if (event.eventType === 'model.step.completed') {
-    allowAnswerReveal(event.runId);
-    return;
-  }
-
-  if (event.eventType === 'step.completed') {
-    const kind = (event.payload as { kind?: string }).kind;
-    if (kind === 'model') {
-      allowAnswerReveal(event.runId);
-      return;
-    }
-  }
-
-  if (
-    event.eventType === 'tool.call.completed' ||
-    event.eventType === 'tool.call.failed' ||
-    event.eventType === 'tool.call.denied' ||
-    event.eventType === 'tool.result.created'
-  ) {
-    if (!hasActiveToolWork(event.runId)) {
-      allowAnswerReveal(event.runId);
-    }
-    return;
-  }
-
   if (event.eventType === 'run.completed') {
-    answerRevealAllowedByRun.add(event.runId);
-    flushBufferedStreamOutput(event.runId, { force: true });
-    const completedContent = completedContentsByRun.get(event.runId)?.trim();
-    const assistantContent = completedContent || streamingTextForSession(targetSessionId).trim();
-    completedContentsByRun.delete(event.runId);
-    if (assistantContent) {
-      commitStreamForSession(targetSessionId, createMessage('assistant', assistantContent));
-    } else {
-      clearStreamForSession(targetSessionId);
-    }
-    bufferedStreamOutputsByRun.delete(event.runId);
-    answerRevealAllowedByRun.delete(event.runId);
-    clearTextDeltaDispatchKeysForRun(event.runId);
+    setAgentStatusForSession(targetSessionId, 'idle');
+    setLastErrorForSession(targetSessionId, null);
     return;
   }
 
   if (event.eventType === 'run.failed') {
-    discardBufferedStreamOutput(event.runId);
     const payload = event.payload as RunFailedPayload;
-    const message = payload.error.message;
-    addMessageForSession(targetSessionId, createMessage('assistant', message));
-    clearStreamForSession(targetSessionId);
     setAgentStatusForSession(targetSessionId, 'error');
-    setLastErrorForSession(targetSessionId, message);
-    completedContentsByRun.delete(event.runId);
-    answerRevealAllowedByRun.delete(event.runId);
-    clearTextDeltaDispatchKeysForRun(event.runId);
+    setLastErrorForSession(targetSessionId, payload.error.message);
     return;
   }
 
   if (event.eventType === 'run.cancelled') {
-    discardBufferedStreamOutput(event.runId);
     const payload = event.payload as RunCancelledPayload;
     const reason = payload.reason ?? payload.error?.message ?? 'Session message was cancelled.';
-    addMessageForSession(targetSessionId, createMessage('assistant', reason));
-    clearStreamForSession(targetSessionId);
+    setAgentStatusForSession(targetSessionId, 'idle');
     setLastErrorForSession(targetSessionId, reason);
-    completedContentsByRun.delete(event.runId);
-    answerRevealAllowedByRun.delete(event.runId);
-    clearTextDeltaDispatchKeysForRun(event.runId);
   }
 }

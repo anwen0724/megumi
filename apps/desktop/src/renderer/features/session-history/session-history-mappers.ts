@@ -1,19 +1,11 @@
 import type { ChatMessage } from '@megumi/shared/chat-contracts';
-import type { Run, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
+import type { Run, Session } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { AnswerTextBlock, TimelineMessage } from '@megumi/shared/timeline-message-blocks';
-import type { TimelineMessageData, TimelineMessageRole } from '../../entities/chat/types';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
 
 function sessionProjectId(session: Session): string {
   return session.workspaceId ?? session.workspacePath ?? 'local';
-}
-
-function timelineRole(role: SessionMessage['role']): TimelineMessageRole {
-  if (role === 'host') {
-    return 'system';
-  }
-  return role;
 }
 
 function isCompletedAnswerTextBlock(block: TimelineMessage['blocks'][number]): block is AnswerTextBlock {
@@ -29,16 +21,6 @@ export function localSessionFromPersistedSession(session: Session): LocalRendere
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
-}
-
-export function timelineMessagesFromPersistedMessages(messages: SessionMessage[]): TimelineMessageData[] {
-  return messages.map((message, index) => ({
-    id: message.messageId,
-    role: timelineRole(message.role),
-    content: message.content,
-    timestamp: message.createdAt,
-    stepNum: index + 1,
-  }));
 }
 
 export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): ChatMessage[] {

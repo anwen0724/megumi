@@ -7,7 +7,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline-message-blocks';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
-import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import {
@@ -205,15 +205,9 @@ describe('useSessionTimeline', () => {
     runtimeEventCallback = null;
     chatStreamEventCallback = null;
     sequence = 1;
-    useChatStore.setState({
-      messages: [],
-      streamingText: '',
-      isStreaming: false,
-      pendingToolCalls: [],
-      completedToolActivities: [],
+    useChatUiStore.setState({
       agentStatus: 'idle',
       lastError: null,
-      sessionSnapshots: {},
     });
     useSessionStore.setState({
       sessions: [],
@@ -397,7 +391,7 @@ describe('useSessionTimeline', () => {
         text: 'Hello Megumi',
       })],
     });
-    expect(useChatStore.getState().agentStatus).toBe('sending');
+    expect(useChatUiStore.getState().agentStatus).toBe('sending');
 
     act(() => {
       emitRuntimeEvent({
@@ -423,8 +417,7 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    expect(useChatStore.getState().agentStatus).toBe('running');
-    expect(useChatStore.getState().streamingText).toBe('');
+    expect(useChatUiStore.getState().agentStatus).toBe('running');
 
     act(() => {
       emitRuntimeEvent({
@@ -457,11 +450,7 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    expect(useChatStore.getState().messages.at(-1)).toMatchObject({
-      role: 'assistant',
-      content: 'Hi there',
-    });
-    expect(useChatStore.getState().agentStatus).toBe('idle');
+    expect(useChatUiStore.getState().agentStatus).toBe('idle');
   });
 
   it('does not synthesize artifact state from completed runtime chat output', async () => {
@@ -532,12 +521,11 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    expect(useChatStore.getState()).toMatchObject({
+    expect(useChatUiStore.getState()).toMatchObject({
       agentStatus: 'error',
       lastError: 'Provider API key is missing.',
     });
     const activeSessionId = useSessionStore.getState().activeSessionId;
-    expect(useChatStore.getState().messages).toEqual([]);
     expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', activeSessionId ?? '')].messages).toEqual([
       expect.objectContaining({
         role: 'user',
@@ -546,7 +534,7 @@ describe('useSessionTimeline', () => {
     ]);
   });
 
-  it('commits completed assistant output when no deltas arrived', async () => {
+  it('does not commit completed runtime output through legacy flat assistant messages', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
 
@@ -592,13 +580,11 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    expect(useChatStore.getState().messages.at(-1)).toMatchObject({
-      role: 'assistant',
-      content: 'Complete response without deltas',
-    });
+    expect(useChatUiStore.getState().agentStatus).toBe('idle');
+    expect(JSON.stringify(useChatStreamStore.getState().sessions)).not.toContain('Complete response without deltas');
   });
 
-  it('persists failed runtime stream events as assistant messages', async () => {
+  it('projects failed runtime stream events to UI error state only', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
 
@@ -636,9 +622,10 @@ describe('useSessionTimeline', () => {
         blocks: [expect.objectContaining({ kind: 'user_text', text: 'Use unsupported provider' })],
       }),
     ]);
-    expect(useChatStore.getState().messages.map((message) => [message.role, message.content])).toEqual([
-      ['assistant', 'Provider is disabled.'],
-    ]);
+    expect(useChatUiStore.getState()).toMatchObject({
+      agentStatus: 'error',
+      lastError: 'Provider is disabled.',
+    });
   });
 
   it('retries the failed message with the current model override', async () => {
@@ -689,13 +676,6 @@ describe('useSessionTimeline', () => {
       activeSessionId: 'session-1',
       activeAgentType: 'free',
     });
-    useChatStore.getState().setMessages([{
-      id: 'legacy-assistant',
-      role: 'assistant',
-      content: 'Legacy flat answer',
-      timestamp: '2026-05-23T00:00:00.000Z',
-      stepNum: 1,
-    }]);
     useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
       committedUser('message-user-history', 'Canonical user prompt'),
       committedAssistant('assistant:run-history', 'run-history', 'Canonical answer'),
@@ -854,13 +834,6 @@ describe('useSessionTimeline', () => {
       activeSessionId: 'session-1',
       activeAgentType: 'free',
     });
-    useChatStore.getState().setMessages([{
-      id: 'message-user-history',
-      role: 'user',
-      content: 'Legacy user prompt',
-      timestamp: '2026-05-23T23:59:59.000Z',
-      stepNum: 1,
-    }]);
     useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
       committedAssistant('assistant:run-history', 'run-history', 'Canonical answer'),
     ]);
@@ -918,11 +891,8 @@ describe('useSessionTimeline', () => {
         source: 'renderer',
       }),
     }));
-    expect(useChatStore.getState()).toMatchObject({
+    expect(useChatUiStore.getState()).toMatchObject({
       agentStatus: 'idle',
-      streamingText: '',
-      isStreaming: false,
-      pendingToolCalls: [],
     });
   });
 
@@ -947,13 +917,6 @@ describe('useSessionTimeline', () => {
       activeSessionId: 'session-1',
       activeAgentType: 'free',
     });
-    useChatStore.getState().setMessages([{
-      id: 'legacy-assistant',
-      role: 'assistant',
-      content: 'Legacy flat answer',
-      timestamp: '2026-05-23T00:00:00.000Z',
-      stepNum: 1,
-    }]);
     const { result } = renderHook(() => useSessionHistoryHydration());
 
     await act(async () => {
@@ -976,7 +939,6 @@ describe('useSessionTimeline', () => {
         role: 'assistant',
       }),
     ]);
-    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual(['Legacy flat answer']);
   });
 
   it('drops stale history hydration responses after the active session changes', async () => {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { useChatStore } from '../../../entities/chat/store';
+import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
@@ -130,8 +130,7 @@ function shouldProcessRuntimeEvent(
 }
 
 function failSessionMessageSend(message: string) {
-  const current = useChatStore.getState();
-  current.clearStream();
+  const current = useChatUiStore.getState();
   current.setAgentStatus('error');
   current.setLastError(message);
 }
@@ -237,7 +236,7 @@ export function useSessionTimeline() {
     activeTraceIdRef.current = request.context?.traceId ?? null;
     processedSequencesRef.current.clear();
 
-    const state = useChatStore.getState();
+    const state = useChatUiStore.getState();
     state.setAgentStatus('sending');
     state.setLastError(null);
 
@@ -275,7 +274,7 @@ export function useSessionTimeline() {
     );
 
     if (result?.ok && result.data.cancelled) {
-      useChatStore.getState().clearStream();
+      useChatUiStore.getState().setAgentStatus('idle');
       activeRequestIdRef.current = null;
       activeTraceIdRef.current = null;
       runSessionIdRef.current = null;

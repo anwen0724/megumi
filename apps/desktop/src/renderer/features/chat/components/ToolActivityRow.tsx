@@ -1,6 +1,14 @@
 import { CheckCircle2, ChevronRight } from 'lucide-react';
-import type { CompletedToolActivity } from '../../../entities/chat/store';
 import { Badge, cx } from '../../../shared/ui';
+
+interface CompletedToolActivity {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  result: string;
+  duration: string;
+  completedAt: string;
+}
 
 interface ToolActivityRowProps {
   activity: CompletedToolActivity;

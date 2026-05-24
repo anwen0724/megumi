@@ -2,8 +2,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TimelineMessageData } from '@megumi/desktop/renderer/entities/chat/types';
-import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
@@ -26,28 +25,11 @@ import type {
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let runtimeSequence = 1;
 
-function resetChatStore() {
-  useChatStore.setState({
-    messages: [],
-    streamingText: '',
-    isStreaming: false,
-    pendingToolCalls: [],
-    completedToolActivities: [],
-    sessionSnapshots: {},
+function resetChatUiStore() {
+  useChatUiStore.setState({
     agentStatus: 'idle',
     lastError: null,
   });
-}
-
-function createMessage(overrides: Partial<TimelineMessageData> = {}): TimelineMessageData {
-  return {
-    id: 'message-1',
-    role: 'assistant',
-    content: 'Hello from Megumi',
-    stepNum: 1,
-    timestamp: '2026-05-10T00:00:00.000Z',
-    ...overrides,
-  };
 }
 
 function committedUser(messageId: string, text: string): TimelineUserMessage {
@@ -262,7 +244,7 @@ describe('ChatTimeline', () => {
   beforeEach(() => {
     runtimeEventCallback = null;
     runtimeSequence = 1;
-    resetChatStore();
+    resetChatUiStore();
     useProjectStore.setState({
       projects: [],
       currentProjectId: null,
@@ -316,16 +298,6 @@ describe('ChatTimeline', () => {
     expect(composerOverlay).toHaveClass('bottom-0');
     expect(within(scrollArea).getByText('Welcome to Megumi')).toBeInTheDocument();
     expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
-  });
-
-  it('does not render existing legacy messages from chat state', () => {
-    useChatStore.getState().setMessages([
-      createMessage({ id: 'message-user', role: 'user', content: 'Can you inspect the shell?', stepNum: 1 }),
-      createMessage({ id: 'message-assistant', role: 'assistant', content: 'I can help with that.', stepNum: 2 }),
-    ]);
-    render(<ChatTimeline />);
-    expect(screen.queryByText('Can you inspect the shell?')).not.toBeInTheDocument();
-    expect(screen.queryByText('I can help with that.')).not.toBeInTheDocument();
   });
 
   it('renders pending approvals in blocking controls without the separate tool-call card section', () => {
@@ -474,7 +446,6 @@ describe('ChatTimeline', () => {
     if (!originalSessionId) {
       throw new Error('Expected an active session after sending a message.');
     }
-    useChatStore.getState().saveCurrentSessionSnapshot(originalSessionId);
     useSessionStore.setState((state) => ({
       sessions: [
         ...state.sessions,
@@ -489,7 +460,6 @@ describe('ChatTimeline', () => {
       ],
       activeSessionId: 'session-2',
     }));
-    useChatStore.getState().loadSessionSnapshot('session-2');
 
     const requestId = session.message.send.mock.calls[0][0].requestId;
 
@@ -505,10 +475,9 @@ describe('ChatTimeline', () => {
     });
 
     expect(screen.queryByText('Verilog is an HDL.')).not.toBeInTheDocument();
-    expect(useChatStore.getState().sessionSnapshots[originalSessionId]).toMatchObject({
-      streamingText: '',
-      isStreaming: false,
-      agentStatus: 'running',
+    expect(useChatUiStore.getState()).toMatchObject({
+      agentStatus: 'sending',
+      lastError: null,
     });
   });
 
@@ -525,16 +494,7 @@ describe('ChatTimeline', () => {
     });
 
     act(() => {
-      useChatStore.setState({
-        messages: [
-          createMessage({ id: 'message-user', role: 'user', content: 'please fail this run', stepNum: 1 }),
-          createMessage({
-            id: 'message-error',
-            role: 'assistant',
-            content: 'Provider API key is missing.',
-            stepNum: 2,
-          }),
-        ],
+      useChatUiStore.setState({
         agentStatus: 'error',
         lastError: 'Provider API key is missing.',
       });
@@ -551,23 +511,13 @@ describe('ChatTimeline', () => {
     expect(session.message.send).toHaveBeenCalledTimes(1);
   });
 
-  it('does not render legacy runtime processing disclosure while a run is active', () => {
-    useChatStore.getState().setMessages([
-      createMessage({
-        id: 'message-user',
-        role: 'user',
-        content: 'Check current UI',
-        stepNum: 1,
-        timestamp: '2026-05-10T12:00:00.000Z',
-      }),
-    ]);
+  it('does not render runtime-only processing disclosure without canonical blocks', () => {
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('context.effective.updated', 2, { sourceCount: 2 }));
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'Working' }));
-    useChatStore.setState({
+    useChatUiStore.setState({
       agentStatus: 'running',
-      streamingText: 'Working',
-      isStreaming: true,
+      lastError: null,
     });
 
     render(<ChatTimeline />);
@@ -577,21 +527,11 @@ describe('ChatTimeline', () => {
     expect(screen.queryByText('Working')).not.toBeInTheDocument();
   });
 
-  it('does not render legacy streamingText or pending process fallback', () => {
-    useChatStore.getState().setMessages([
-      createMessage({
-        id: 'message-user',
-        role: 'user',
-        content: 'Explain Verilog',
-        stepNum: 1,
-        timestamp: '2026-05-10T12:00:00.000Z',
-      }),
-    ]);
+  it('does not render pending process fallback without canonical blocks', () => {
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }));
-    useChatStore.setState({
+    useChatUiStore.setState({
       agentStatus: 'running',
-      streamingText: 'Verilog is an HDL.',
-      isStreaming: true,
+      lastError: null,
     });
 
     render(<ChatTimeline />);
@@ -603,25 +543,15 @@ describe('ChatTimeline', () => {
   });
 
   it('does not collapse legacy process disclosure without canonical blocks', () => {
-    useChatStore.getState().setMessages([
-      createMessage({
-        id: 'message-user',
-        role: 'user',
-        content: 'Inspect project first',
-        stepNum: 1,
-        timestamp: '2026-05-10T12:00:00.000Z',
-      }),
-    ]);
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('tool.call.completed', 2, {
       toolCallId: 'tool-call-1',
       toolName: 'read_file',
       completedAt: '2026-05-10T12:00:06.000Z',
     }));
-    useChatStore.setState({
+    useChatUiStore.setState({
       agentStatus: 'running',
-      streamingText: 'Here is the project summary.',
-      isStreaming: true,
+      lastError: null,
     });
 
     render(<ChatTimeline />);
@@ -688,7 +618,7 @@ describe('ChatTimeline', () => {
       expect(session.message.send).toHaveBeenCalledTimes(1);
     });
 
-    useChatStore.setState({ agentStatus: 'running' });
+    useChatUiStore.setState({ agentStatus: 'running' });
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'draft for later');
     fireEvent.keyDown(screen.getByLabelText('Message Megumi'), { key: 'Enter' });
@@ -855,15 +785,6 @@ describe('ChatTimeline', () => {
       activeSessionId: 'session-1',
       activeAgentType: 'free',
     });
-    useChatStore.setState({
-      messages: [{
-        id: 'legacy-user',
-        role: 'user',
-        content: 'Legacy duplicate',
-        timestamp: '2026-05-24T00:00:00.000Z',
-        stepNum: 1,
-      }],
-    });
     useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
       committedUser('message-user-1', 'Canonical prompt'),
     ]);
@@ -874,7 +795,7 @@ describe('ChatTimeline', () => {
     expect(screen.queryByText('Legacy duplicate')).not.toBeInTheDocument();
   });
 
-  it('does not render old streamingText when canonical answer text exists', () => {
+  it('renders canonical answer text from chat stream state', () => {
     installMegumiMock();
     selectMegumiProject();
     useSessionStore.setState({
@@ -889,11 +810,7 @@ describe('ChatTimeline', () => {
       activeSessionId: 'session-1',
       activeAgentType: 'free',
     });
-    useChatStore.setState({
-      streamingText: 'OLD STREAMING TEXT',
-      isStreaming: true,
-      agentStatus: 'running',
-    });
+    useChatUiStore.setState({ agentStatus: 'running' });
     useChatStreamStore.getState().setActiveSession('project-1', 'session-1');
     useChatStreamStore.setState({
       sessions: {
@@ -925,10 +842,9 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
 
     expect(screen.getByText('NEW CANONICAL ANSWER')).toBeInTheDocument();
-    expect(screen.queryByText('OLD STREAMING TEXT')).not.toBeInTheDocument();
   });
 
-  it('renders canonical live assistant blocks without legacy history fallback or streamingText', () => {
+  it('renders canonical live assistant blocks without legacy history fallback', () => {
     installMegumiMock();
     selectMegumiProject();
     useSessionStore.setState({
@@ -943,31 +859,7 @@ describe('ChatTimeline', () => {
       activeSessionId: 'session-1',
       activeAgentType: 'free',
     });
-    useChatStore.setState({
-      messages: [
-        createMessage({
-          id: 'legacy-user-history',
-          role: 'user',
-          content: 'Earlier user question',
-          timestamp: '2026-05-10T11:59:00.000Z',
-        }),
-        createMessage({
-          id: 'legacy-assistant-history',
-          role: 'assistant',
-          content: 'Earlier assistant answer',
-          timestamp: '2026-05-10T11:59:10.000Z',
-        }),
-        createMessage({
-          id: 'message-user-1',
-          role: 'user',
-          content: 'Read docs now',
-          timestamp: '2026-05-10T12:00:00.000Z',
-        }),
-      ],
-      streamingText: 'OLD STREAMING TEXT',
-      isStreaming: true,
-      agentStatus: 'running',
-    });
+    useChatUiStore.setState({ agentStatus: 'running' });
     useChatStreamStore.getState().setActiveSession('project-1', 'session-1');
     useChatStreamStore.setState({
       sessions: {
@@ -1018,6 +910,5 @@ describe('ChatTimeline', () => {
     expect(timeline).not.toHaveTextContent('Earlier assistant answer');
     expect(timeline).toHaveTextContent('CANONICAL LIVE ANSWER');
     expect(screen.getAllByText('Read docs now')).toHaveLength(1);
-    expect(timeline).not.toHaveTextContent('OLD STREAMING TEXT');
   });
 });

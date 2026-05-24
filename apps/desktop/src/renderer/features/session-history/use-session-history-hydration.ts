@@ -3,7 +3,7 @@ import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { Run } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useApprovalStore } from '../../entities/approval';
-import { useChatStore } from '../../entities/chat/store';
+import { useChatUiStore } from '../../entities/chat-ui/store';
 import { useProjectStore } from '../../entities/project/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
@@ -48,7 +48,7 @@ export function useSessionHistoryHydration() {
     );
 
     if (!result.ok) {
-      useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(result));
+      useChatUiStore.getState().setLastError(getRuntimeIpcErrorMessage(result));
       return;
     }
 
@@ -64,7 +64,6 @@ export function useSessionHistoryHydration() {
 
     if (currentActiveSessionId && !sessions.some((session) => session.id === currentActiveSessionId)) {
       useSessionStore.getState().setActiveSession(null);
-      useChatStore.getState().loadSessionSnapshot(null);
       resetHydratedRunProjection();
     }
   }, []);
@@ -93,7 +92,7 @@ export function useSessionHistoryHydration() {
     }
 
     if (!timelineResult.ok) {
-      useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(timelineResult));
+      useChatUiStore.getState().setLastError(getRuntimeIpcErrorMessage(timelineResult));
       return;
     }
 
@@ -102,7 +101,7 @@ export function useSessionHistoryHydration() {
       sessionId,
       timelineResult.data.messages,
     );
-    useChatStore.getState().setLastError(null);
+    useChatUiStore.getState().setLastError(null);
 
     const runsResult = await window.megumi.run.listBySession(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.run.listBySession, { sessionId }),
@@ -113,7 +112,7 @@ export function useSessionHistoryHydration() {
     }
 
     if (!runsResult.ok) {
-      useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(runsResult));
+      useChatUiStore.getState().setLastError(getRuntimeIpcErrorMessage(runsResult));
       return;
     }
 

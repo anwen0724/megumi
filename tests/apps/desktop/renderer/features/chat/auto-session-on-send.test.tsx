@@ -5,7 +5,7 @@ import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { Project } from '@megumi/desktop/renderer/entities/project/types';
 import type { LocalRendererSession } from '@megumi/desktop/renderer/entities/session/session-factory';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
-import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
+import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
@@ -34,13 +34,7 @@ function resetStores() {
     activeAgentType: 'free',
   });
 
-  useChatStore.setState({
-    messages: [],
-    streamingText: '',
-    isStreaming: false,
-    pendingToolCalls: [],
-    completedToolActivities: [],
-    sessionSnapshots: {},
+  useChatUiStore.setState({
     agentStatus: 'idle',
     lastError: null,
   });
@@ -148,7 +142,7 @@ describe('auto session on first send', () => {
     expect(state.sessions).toHaveLength(0);
     expect(state.activeSessionId).toBeNull();
     expect(window.megumi.session.message.send).not.toHaveBeenCalled();
-    expect(useChatStore.getState().lastError).toBe('Select a project before sending a message.');
+    expect(useChatUiStore.getState().lastError).toBe('Select a project before sending a message.');
   });
 
   it('does not create a duplicate session when one is already active', () => {

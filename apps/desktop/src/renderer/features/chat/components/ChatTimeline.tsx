@@ -4,7 +4,7 @@ import type { ApprovalResolvePayload } from '@megumi/shared/ipc-schemas';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import { ApprovalCard, type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
-import { useChatStore } from '../../../entities/chat/store';
+import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
@@ -17,7 +17,7 @@ import { useSessionTimeline } from '../hooks/use-session-timeline';
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
 
 export function ChatTimeline() {
-  const agentStatus = useChatStore((state) => state.agentStatus);
+  const agentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const projects = useProjectStore((state) => state.projects);
