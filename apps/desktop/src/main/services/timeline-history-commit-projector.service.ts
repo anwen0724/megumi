@@ -50,10 +50,15 @@ export class TimelineHistoryCommitProjectorService implements ChatStreamEventSin
   constructor(private readonly options: TimelineHistoryCommitProjectorOptions) {}
 
   publish(event: ChatStreamEvent): void {
-    this.options.downstream?.publish(event);
-
     const key = streamKey(event);
-    const state = this.states.get(key) ?? {
+    const existingState = this.states.get(key);
+    this.publishDownstream(event);
+
+    if (!existingState && isTerminalEvent(event)) {
+      return;
+    }
+
+    const state = existingState ?? {
       projectId: event.projectId,
       sessionId: String(event.sessionId),
       runId: String(event.runId),
@@ -94,9 +99,17 @@ export class TimelineHistoryCommitProjectorService implements ChatStreamEventSin
         sessionId: state.sessionId,
         runId: state.runId,
         code: 'timeline_commit_failed',
-        message: errorMessage(error),
+        message: 'Timeline commit failed.',
         createdAt: terminalEvent.createdAt,
       });
+    }
+  }
+
+  private publishDownstream(event: ChatStreamEvent): void {
+    try {
+      this.options.downstream?.publish(event);
+    } catch {
+      // Downstream delivery must not block canonical history persistence.
     }
   }
 }
@@ -125,16 +138,4 @@ function previewFromMessages(messages: TimelineMessage[]): string | undefined {
   }
 
   return answer.text.slice(0, 160);
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === 'string' && error.length > 0) {
-    return error;
-  }
-
-  return 'Timeline commit failed.';
 }

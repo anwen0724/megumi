@@ -235,7 +235,7 @@ describe('TimelineHistoryCommitProjectorService', () => {
   });
 
   it('records diagnostics for persistence failure without publishing synthetic timeline events', () => {
-    const { diagnostics, repository } = createRepository({ failCommit: new Error('Disk full.') });
+    const { diagnostics, repository } = createRepository({ failCommit: new Error('failed sk-test-secret') });
     const downstream = { publish: vi.fn() };
     const service = new TimelineHistoryCommitProjectorService({
       repository,
@@ -261,14 +261,77 @@ describe('TimelineHistoryCommitProjectorService', () => {
         sessionId: 'session-1',
         runId: 'run-1',
         code: 'timeline_commit_failed',
-        message: 'Disk full.',
+        message: 'Timeline commit failed.',
         createdAt: '2026-05-24T00:00:05.000Z',
       },
     ]);
+    expect(diagnostics[0]?.message).not.toContain('sk-test-secret');
     expect(downstream.publish).toHaveBeenCalledTimes(events.length);
     expect(downstream.publish.mock.calls.map(([chatEvent]) => chatEvent)).toEqual(events);
     expect(downstream.publish.mock.calls.map(([chatEvent]) => chatEvent.eventType)).toEqual(
       events.map((chatEvent) => chatEvent.eventType),
     );
+  });
+
+  it('ignores duplicate terminal events after a stream has already been committed', () => {
+    const { commits, repository } = createRepository();
+    const service = new TimelineHistoryCommitProjectorService({
+      repository,
+      ids: { diagnosticId: () => 'diagnostic-1' },
+    });
+    const events = [
+      event({ eventType: 'turn.started', seq: 1, userMessageId: 'message-user-1' }),
+      event({
+        eventType: 'user.message.committed',
+        seq: 2,
+        clientMessageId: 'client-message-1',
+        messageId: 'message-user-1',
+        text: 'Hello Megumi',
+      }),
+      event({ eventType: 'assistant.text.started', seq: 3, textId: 'answer-1', phase: 'answer' }),
+      event({ eventType: 'assistant.text.delta', seq: 4, textId: 'answer-1', phase: 'answer', delta: 'First answer.' }),
+      event({ eventType: 'assistant.text.completed', seq: 5, textId: 'answer-1', phase: 'answer' }),
+      event({ eventType: 'turn.completed', seq: 6 }),
+    ];
+
+    events.forEach((chatEvent) => service.publish(chatEvent));
+    const committedMessages = commits[0]?.messages;
+    service.publish(events.at(-1) as ChatStreamEvent);
+
+    expect(repository.commitRunTimeline).toHaveBeenCalledTimes(1);
+    expect(commits[0]?.messages).toEqual(committedMessages);
+    expect(commits[0]?.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(answerBlock(assistantMessage(commits[0]?.messages ?? []))).toMatchObject({
+      status: 'completed',
+      text: 'First answer.',
+    });
+  });
+
+  it('still commits terminal history when downstream publication throws', () => {
+    const { commits, repository } = createRepository();
+    const service = new TimelineHistoryCommitProjectorService({
+      repository,
+      downstream: {
+        publish: vi.fn(() => {
+          throw new Error('renderer closed');
+        }),
+      },
+      ids: { diagnosticId: () => 'diagnostic-1' },
+    });
+    const events = [
+      event({ eventType: 'turn.started', seq: 1, userMessageId: 'message-user-1' }),
+      event({ eventType: 'assistant.text.started', seq: 2, textId: 'answer-1', phase: 'answer' }),
+      event({ eventType: 'assistant.text.delta', seq: 3, textId: 'answer-1', phase: 'answer', delta: 'Committed anyway.' }),
+      event({ eventType: 'assistant.text.completed', seq: 4, textId: 'answer-1', phase: 'answer' }),
+      event({ eventType: 'turn.completed', seq: 5 }),
+    ];
+
+    events.forEach((chatEvent) => expect(() => service.publish(chatEvent)).not.toThrow());
+
+    expect(repository.commitRunTimeline).toHaveBeenCalledTimes(1);
+    expect(answerBlock(assistantMessage(commits[0]?.messages ?? []))).toMatchObject({
+      status: 'completed',
+      text: 'Committed anyway.',
+    });
   });
 });
