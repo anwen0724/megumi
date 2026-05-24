@@ -164,16 +164,66 @@ describe('createChatStreamEventAdapter', () => {
         input: { path: 'README.md' },
       },
     }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.step.completed',
+      sequence: 4,
+      payload: { modelStepId: 'model-step-1', finishReason: 'tool_calls' },
+    }));
 
     expect(events.map((event) => event.eventType)).toEqual([
       'turn.started',
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
-      'assistant.text.completed',
       'tool.started',
+      'assistant.text.completed',
     ]);
     expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'prelude' });
+  });
+
+  it('keeps prelude text open for later same-step deltas until tool-call step completion', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1', delta: "I'll " },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.tool_use.detected',
+      sequence: 2,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-1',
+        providerToolUseId: 'tool-use-1',
+        toolName: 'read_file',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 3,
+      payload: { modelStepId: 'model-step-1', delta: 'check that.' },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.step.completed',
+      sequence: 4,
+      payload: { modelStepId: 'model-step-1', finishReason: 'tool_calls' },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.delta',
+      'assistant.text.completed',
+    ]);
+    expect(events.filter((event) => event.eventType === 'assistant.text.delta')).toEqual([
+      expect.objectContaining({ phase: 'prelude', delta: "I'll " }),
+      expect.objectContaining({ phase: 'prelude', delta: 'check that.' }),
+    ]);
+    expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
   });
 
   it('does not let a stale phase gate timer flush a later model step early', () => {
@@ -196,23 +246,33 @@ describe('createChatStreamEventAdapter', () => {
         toolName: 'read_file',
       },
     }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.step.completed',
+      sequence: 3,
+      payload: { modelStepId: 'model-step-1', finishReason: 'tool_calls' },
+    }));
 
     vi.advanceTimersByTime(49);
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.output.delta',
-      sequence: 3,
+      sequence: 4,
       payload: { modelStepId: 'model-step-2', delta: 'Second step prelude.' },
     }));
     vi.advanceTimersByTime(1);
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.tool_use.detected',
-      sequence: 4,
+      sequence: 5,
       payload: {
         modelStepId: 'model-step-2',
         toolUseId: 'tool-use-2',
         providerToolUseId: 'tool-use-2',
         toolName: 'search_text',
       },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.step.completed',
+      sequence: 6,
+      payload: { modelStepId: 'model-step-2', finishReason: 'tool_calls' },
     }));
 
     expect(events.map((event) => event.eventType)).toEqual([

@@ -663,9 +663,6 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
 
     if (!state.phase && state.bufferedDeltas.length > 0) {
       this.releaseText(state, 'prelude');
-      if (state.text && !state.text.terminal) {
-        this.completeText(state.text);
-      }
       return;
     }
 
