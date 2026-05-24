@@ -191,23 +191,6 @@ export function ChatTimeline() {
                 message={message}
               />
             ))}
-
-            {pendingApprovals.length > 0 ? (
-              <section aria-label="Pending approvals" className="space-y-2">
-                <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-                  Pending approvals
-                </h2>
-                {pendingApprovals.map((request) => (
-                  <ApprovalCard
-                    key={request.approvalRequestId}
-                    request={request}
-                    onResolve={(payload) => {
-                      void resolveApproval(payload);
-                    }}
-                  />
-                ))}
-              </section>
-            ) : null}
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">
@@ -245,6 +228,24 @@ export function ChatTimeline() {
       </div>
 
       <div data-testid="chat-composer-overlay" className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+        {pendingApprovals.length > 0 ? (
+          <section
+            aria-label="Blocking approval controls"
+            aria-live="polite"
+            aria-atomic="true"
+            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
+          >
+            {pendingApprovals.map((request) => (
+              <ApprovalCard
+                key={request.approvalRequestId}
+                request={request}
+                onResolve={(payload) => {
+                  void resolveApproval(payload);
+                }}
+              />
+            ))}
+          </section>
+        ) : null}
         <Composer
           status={composerStatus}
           onSubmit={handleSubmit}

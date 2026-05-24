@@ -268,7 +268,7 @@ describe('ChatTimeline', () => {
     expect(screen.getByText('I can help with that.')).toBeInTheDocument();
   });
 
-  it('renders pending approvals without the separate tool-call card section', () => {
+  it('renders pending approvals in blocking controls without the separate tool-call card section', () => {
     installMegumiMock();
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useToolCallStore.getState().upsertToolCall(createToolCall());
@@ -277,11 +277,13 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    expect(timeline).toHaveTextContent('run_command');
-    expect(timeline).toHaveTextContent('Run npm test');
+    const approvalControls = screen.getByRole('region', { name: 'Blocking approval controls' });
+    expect(approvalControls).toHaveTextContent('run_command');
+    expect(approvalControls).toHaveTextContent('Run npm test');
     expect(screen.queryByRole('heading', { name: 'Tool calls' })).not.toBeInTheDocument();
     expect(screen.queryByText('Policy: ask - Command execution requires approval in default mode.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Approve run_command' })).toBeInTheDocument();
+    expect(within(timeline).queryByRole('button', { name: 'Approve run_command' })).not.toBeInTheDocument();
+    expect(within(approvalControls).getByRole('button', { name: 'Approve run_command' })).toBeInTheDocument();
   });
 
   it('resolves pending approvals through the approval preload API', async () => {
@@ -308,6 +310,31 @@ describe('ChatTimeline', () => {
       context: expect.objectContaining({
         operationName: 'approval.resolve',
         source: 'renderer',
+      }),
+    }));
+  });
+
+  it('keeps approval controls outside the timeline log while retaining resolve actions', async () => {
+    const megumi = installMegumiMock();
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
+
+    render(<ChatTimeline />);
+
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
+    expect(within(timeline).queryByRole('button', { name: 'Approve run_command' })).not.toBeInTheDocument();
+    const approvalControls = screen.getByRole('region', { name: 'Blocking approval controls' });
+    expect(approvalControls).toHaveAttribute('aria-live', 'polite');
+    expect(approvalControls).toHaveAttribute('aria-atomic', 'true');
+
+    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'run');
+    await userEvent.click(screen.getByRole('button', { name: 'Approve run_command' }));
+
+    expect(megumi.approval.resolve).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        approvalRequestId: 'approval-1',
+        decision: 'approved',
+        scope: 'run',
       }),
     }));
   });

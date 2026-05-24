@@ -164,6 +164,73 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.queryByText('Streaming')).not.toBeInTheDocument();
   });
 
+  it('does not reset a manually collapsed running process disclosure on answer text rerender', () => {
+    const { rerender } = render(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'running',
+          startedAt: '2026-05-24T12:00:00.000Z',
+          items: [{
+            itemId: 'tool:tool-use-1',
+            kind: 'tool_activity',
+            toolUseId: 'tool-use-1',
+            toolName: 'read_file',
+            inputSummary: 'docs/README.md',
+            status: 'running',
+          }],
+        },
+        {
+          blockId: 'answer:run-1',
+          kind: 'answer_text',
+          runId: 'run-1',
+          textId: 'text-answer-1',
+          status: 'streaming',
+          text: 'First chunk',
+          format: 'markdown',
+        },
+      ],
+    })} />);
+
+    const disclosure = screen.getByRole('button', { name: /Collapse process disclosure/ });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(disclosure);
+    expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toHaveAttribute('aria-expanded', 'false');
+
+    rerender(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'running',
+          startedAt: '2026-05-24T12:00:00.000Z',
+          items: [{
+            itemId: 'tool:tool-use-1',
+            kind: 'tool_activity',
+            toolUseId: 'tool-use-1',
+            toolName: 'read_file',
+            inputSummary: 'docs/README.md',
+            status: 'running',
+          }],
+        },
+        {
+          blockId: 'answer:run-1',
+          kind: 'answer_text',
+          runId: 'run-1',
+          textId: 'text-answer-1',
+          status: 'streaming',
+          text: 'First chunk plus second chunk',
+          format: 'markdown',
+        },
+      ],
+    })} />);
+
+    expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('renders italic markdown in answer text without literal delimiters', () => {
     render(<TimelineMessage message={assistantMessage({
       blocks: [
