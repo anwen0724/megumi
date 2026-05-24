@@ -1,6 +1,6 @@
 // @vitest-environment node
-import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createDatabase, type MegumiDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import {
   TimelineMessageRepository,
@@ -11,10 +11,10 @@ import type {
   TimelineUserMessage,
 } from '@megumi/shared/timeline-message-blocks';
 
-let db: Database.Database | null = null;
+let db: MegumiDatabase | null = null;
 
 function createRepo(): TimelineMessageRepository {
-  db = new Database(':memory:');
+  db = createDatabase(':memory:');
   migrateDatabase(db);
   return new TimelineMessageRepository(db);
 }
@@ -45,6 +45,11 @@ function seedSessionAndRun(runId = 'run-1'): void {
     'completed',
     '2026-05-24T00:00:01.000Z',
   );
+}
+
+function countRows(tableName: string): number {
+  const row = db!.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number };
+  return row.count;
 }
 
 afterEach(() => {
@@ -225,5 +230,54 @@ describe('TimelineMessageRepository', () => {
     expect(repo.listCommitDiagnostics('run-1')).toEqual([
       expect.objectContaining({ diagnosticId: 'diagnostic-1', code: 'timeline_commit_failed' }),
     ] satisfies Partial<TimelineCommitDiagnostic>[]);
+  });
+
+  it('rejects messages outside the run commit ownership before persisting rows', () => {
+    const repo = createRepo();
+    seedSessionAndRun();
+
+    for (const messages of [
+      [{ ...userMessage, projectId: 'project-other' }, assistantMessage],
+      [{ ...userMessage, sessionId: 'session-other' }, assistantMessage],
+      [userMessage, { ...assistantMessage, runId: 'run-other' }],
+    ] as Array<[TimelineUserMessage, TimelineAssistantMessage]>) {
+      expect(() =>
+        repo.commitRunTimeline({
+          projectId: 'project-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          committedAt: '2026-05-24T00:00:04.000Z',
+          messages,
+        }),
+      ).toThrow(/Timeline commit message ownership mismatch/);
+
+      expect(countRows('timeline_messages')).toBe(0);
+      expect(countRows('timeline_run_commits')).toBe(0);
+    }
+  });
+
+  it('uses production database foreign key behavior in repository tests', () => {
+    createRepo();
+
+    expect(() =>
+      db!.prepare(`
+        INSERT INTO timeline_messages (
+          message_id, project_id, session_id, run_id, role, status,
+          created_at, updated_at, sort_time, blocks_json, message_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'assistant:orphan',
+        'project-1',
+        'missing-session',
+        null,
+        'assistant',
+        'completed',
+        '2026-05-24T00:00:01.000Z',
+        '2026-05-24T00:00:01.000Z',
+        '2026-05-24T00:00:01.000Z',
+        JSON.stringify(assistantMessage.blocks),
+        JSON.stringify(assistantMessage),
+      ),
+    ).toThrow(/FOREIGN KEY constraint failed/);
   });
 });

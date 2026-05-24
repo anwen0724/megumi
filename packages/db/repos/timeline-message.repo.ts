@@ -83,6 +83,7 @@ export class TimelineMessageRepository {
 
   commitRunTimeline(input: TimelineCommitInput): TimelineMessage[] {
     const messages = sortMessages(input.messages.map((message) => validateTimelineMessage(message)));
+    validateCommitOwnership(input, messages);
 
     const commit = this.database.transaction(() => {
       for (const message of messages) {
@@ -245,6 +246,18 @@ export class TimelineMessageRepository {
 
 function validateTimelineMessage(message: TimelineMessage): TimelineMessage {
   return TimelineMessageSchema.parse(message);
+}
+
+function validateCommitOwnership(input: TimelineCommitInput, messages: TimelineMessage[]): void {
+  for (const message of messages) {
+    if (
+      message.projectId !== input.projectId ||
+      String(message.sessionId) !== input.sessionId ||
+      (message.role === 'assistant' && String(message.runId) !== input.runId)
+    ) {
+      throw new Error('Timeline commit message ownership mismatch.');
+    }
+  }
 }
 
 function sortMessages(messages: TimelineMessage[]): TimelineMessage[] {
