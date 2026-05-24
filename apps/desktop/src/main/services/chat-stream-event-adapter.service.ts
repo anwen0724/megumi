@@ -91,6 +91,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private readonly thinkingByStep = new Map<string, ThinkingState>();
   private readonly toolsByUseId = new Map<string, ToolActivityState>();
   private readonly toolsByCallId = new Map<string, ToolActivityState>();
+  private readonly terminalToolUseIds = new Set<string>();
   private readonly approvalLinksById = new Map<string, ApprovalLinkState>();
   private seq = 0;
   private started = false;
@@ -403,6 +404,9 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     if (typeof payload.toolUseId !== 'string') {
       return;
     }
+    if (this.hasToolTerminal(payload.toolUseId)) {
+      return;
+    }
 
     const tool = this.toolsByUseId.get(payload.toolUseId) ?? {
       toolUseId: payload.toolUseId,
@@ -420,6 +424,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     const summary = typeof payload.summary === 'string' ? payload.summary : undefined;
 
     if (payload.kind === 'success') {
+      this.markToolTerminal(tool);
       this.publish(createChatStreamEvent({
         ...common,
         eventType: 'tool.completed',
@@ -429,6 +434,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }
 
     if (payload.kind === 'policy_denied' || payload.kind === 'user_rejected') {
+      this.markToolTerminal(tool);
       this.publish(createChatStreamEvent({
         ...common,
         eventType: 'tool.denied',
@@ -437,6 +443,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       return;
     }
 
+    this.markToolTerminal(tool);
     this.publish(createChatStreamEvent({
       ...common,
       eventType: 'tool.failed',
@@ -474,7 +481,11 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     if (!tool) {
       return;
     }
+    if (this.hasToolTerminal(tool.toolUseId)) {
+      return;
+    }
 
+    this.markToolTerminal(tool);
     this.publish(createChatStreamEvent({
       ...this.toolEventBase(tool),
       eventType: 'tool.completed',
@@ -487,8 +498,12 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     if (!tool) {
       return;
     }
+    if (this.hasToolTerminal(tool.toolUseId)) {
+      return;
+    }
 
     const error = isRuntimeError(payload.error) ? payload.error : undefined;
+    this.markToolTerminal(tool);
     this.publish(createChatStreamEvent({
       ...this.toolEventBase(tool),
       eventType: 'tool.failed',
@@ -503,7 +518,11 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     if (!tool) {
       return;
     }
+    if (this.hasToolTerminal(tool.toolUseId)) {
+      return;
+    }
 
+    this.markToolTerminal(tool);
     this.publish(createChatStreamEvent({
       ...this.toolEventBase(tool),
       eventType: 'tool.denied',
@@ -816,6 +835,14 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }
 
     return this.toolsByCallId.get(payload.toolCallId);
+  }
+
+  private hasToolTerminal(toolUseId: string): boolean {
+    return this.terminalToolUseIds.has(toolUseId);
+  }
+
+  private markToolTerminal(tool: ToolActivityState): void {
+    this.terminalToolUseIds.add(tool.toolUseId);
   }
 
   private toolEventBase(tool: ToolActivityState) {

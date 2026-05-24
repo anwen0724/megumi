@@ -481,6 +481,170 @@ describe('createChatStreamEventAdapter', () => {
     });
   });
 
+  it('collapses call and result terminal facts into one tool lifecycle terminal event', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.use.created',
+      sequence: 1,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-success',
+        providerToolUseId: 'tool-use-success',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.requested',
+      sequence: 2,
+      payload: {
+        toolCall: {
+          toolCallId: 'tool-call-success',
+          toolUseId: 'tool-use-success',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'read_file',
+          input: { path: 'README.md' },
+          inputPreview: {
+            summary: 'Read README.md',
+            targets: [],
+            redactionState: 'none',
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          status: 'requested',
+          requestedAt: '2026-05-24T00:00:01.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.completed',
+      sequence: 3,
+      payload: {
+        toolCallId: 'tool-call-success',
+        completedAt: '2026-05-24T00:00:02.000Z',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.result.created',
+      sequence: 4,
+      payload: {
+        toolResultId: 'tool-result-success',
+        toolUseId: 'tool-use-success',
+        toolCallId: 'tool-call-success',
+        kind: 'success',
+        summary: 'Read README.md',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.requested',
+      sequence: 5,
+      payload: {
+        toolCall: {
+          toolCallId: 'tool-call-failed',
+          toolUseId: 'tool-use-failed',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'run_command',
+          input: { command: 'npm test' },
+          inputPreview: {
+            summary: 'npm test',
+            targets: [],
+            redactionState: 'none',
+          },
+          capabilities: ['command_run'],
+          riskLevel: 'high',
+          sideEffect: 'runs_command',
+          status: 'requested',
+          requestedAt: '2026-05-24T00:00:03.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.failed',
+      sequence: 6,
+      payload: {
+        toolCallId: 'tool-call-failed',
+        error: {
+          code: 'runtime_unknown',
+          message: 'Command failed.',
+          severity: 'error',
+          retryable: false,
+          source: 'tool',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.result.created',
+      sequence: 7,
+      payload: {
+        toolResultId: 'tool-result-failed',
+        toolUseId: 'tool-use-failed',
+        toolCallId: 'tool-call-failed',
+        kind: 'tool_error',
+        summary: 'Command failed.',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.requested',
+      sequence: 8,
+      payload: {
+        toolCall: {
+          toolCallId: 'tool-call-denied',
+          toolUseId: 'tool-use-denied',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'write_file',
+          input: { path: 'src/app.ts' },
+          inputPreview: {
+            summary: 'Write src/app.ts',
+            targets: [],
+            redactionState: 'none',
+          },
+          capabilities: ['project_write'],
+          riskLevel: 'medium',
+          sideEffect: 'writes_project',
+          status: 'requested',
+          requestedAt: '2026-05-24T00:00:04.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.call.denied',
+      sequence: 9,
+      payload: {
+        toolCallId: 'tool-call-denied',
+        reason: 'Plan mode blocks writes.',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.result.created',
+      sequence: 10,
+      payload: {
+        toolResultId: 'tool-result-denied',
+        toolUseId: 'tool-use-denied',
+        toolCallId: 'tool-call-denied',
+        kind: 'policy_denied',
+        summary: 'Plan mode blocks writes.',
+      },
+    }));
+
+    expect(events.filter((event) => event.eventType === 'tool.completed')).toHaveLength(1);
+    expect(events.filter((event) => event.eventType === 'tool.failed')).toHaveLength(1);
+    expect(events.filter((event) => event.eventType === 'tool.denied')).toHaveLength(1);
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'tool.started',
+      'tool.completed',
+      'tool.failed',
+      'tool.denied',
+    ]);
+  });
+
   it('preserves approval linkage when resolved runtime event only has approval id', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
