@@ -7,6 +7,10 @@ import {
   ToolCompletedEventSchema,
 } from '@megumi/shared/chat-stream-event-schemas';
 import {
+  createAssistantTextDeltaChatStreamEvent,
+  createChatStreamEvent,
+} from '@megumi/shared/chat-stream-event-factory';
+import {
   ASSISTANT_TEXT_PHASES,
   CHAT_STREAM_EVENT_TYPES,
   type ChatStreamEvent,
@@ -211,5 +215,38 @@ describe('chat stream event contract', () => {
       resultSummary: 'Read file.',
       displayText: 'Megumi read docs/README.md',
     })).toThrow();
+  });
+});
+
+describe('chat stream event factory', () => {
+  it('creates typed chat stream events without runtime event envelope fields', () => {
+    const event = createChatStreamEvent({
+      ...base,
+      eventType: 'tool.started',
+      toolUseId: 'tool-use-1',
+      toolName: 'read_file',
+      inputSummary: 'docs/README.md',
+    });
+
+    expect(event.eventType).toBe('tool.started');
+    expect(ChatStreamEventSchema.parse(event)).toEqual(event);
+    expect(event).not.toHaveProperty('schemaVersion');
+    expect(event).not.toHaveProperty('payload');
+  });
+
+  it('creates assistant text delta events with explicit phase', () => {
+    const event = createAssistantTextDeltaChatStreamEvent({
+      ...base,
+      textId: 'text-answer-1',
+      phase: 'answer',
+      delta: 'Streaming answer.',
+    });
+
+    expect(event).toMatchObject({
+      eventType: 'assistant.text.delta',
+      phase: 'answer',
+      delta: 'Streaming answer.',
+    });
+    expect(ChatStreamEventSchema.parse(event)).toEqual(event);
   });
 });
