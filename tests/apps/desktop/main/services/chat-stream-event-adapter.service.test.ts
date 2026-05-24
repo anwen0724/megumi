@@ -233,6 +233,45 @@ describe('createChatStreamEventAdapter', () => {
     vi.useRealTimers();
   });
 
+  it('completes open prelude text when a tool-call model step completes', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.tool_use.detected',
+      sequence: 1,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-1',
+        providerToolUseId: 'tool-use-1',
+        toolName: 'read_file',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 2,
+      payload: { modelStepId: 'model-step-1', delta: 'I will inspect the file.' },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.step.completed',
+      sequence: 3,
+      payload: { modelStepId: 'model-step-1', finishReason: 'tool_calls' },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+    ]);
+    expect(events.filter((event) => event.eventType.startsWith('assistant.text.'))).toEqual([
+      expect.objectContaining({ eventType: 'assistant.text.started', phase: 'prelude' }),
+      expect.objectContaining({ eventType: 'assistant.text.delta', phase: 'prelude' }),
+      expect.objectContaining({ eventType: 'assistant.text.completed', phase: 'prelude' }),
+    ]);
+  });
+
   it('maps thinking runtime events to assistant thinking events', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
@@ -449,6 +488,7 @@ describe('createChatStreamEventAdapter', () => {
         reason: 'Plan mode blocks writes.',
       },
     }));
+    subject.dispose();
 
     expect(events.map((event) => event.eventType)).toEqual([
       'turn.started',
@@ -635,6 +675,19 @@ describe('createChatStreamEventAdapter', () => {
     expect(events.filter((event) => event.eventType === 'tool.completed')).toHaveLength(1);
     expect(events.filter((event) => event.eventType === 'tool.failed')).toHaveLength(1);
     expect(events.filter((event) => event.eventType === 'tool.denied')).toHaveLength(1);
+    expect(events.find((event) => event.eventType === 'tool.completed')).toMatchObject({
+      toolResultId: 'tool-result-success',
+      resultSummary: 'Read README.md',
+    });
+    expect(events.find((event) => event.eventType === 'tool.failed')).toMatchObject({
+      toolResultId: 'tool-result-failed',
+      resultSummary: 'Command failed.',
+      errorMessage: 'Command failed.',
+    });
+    expect(events.find((event) => event.eventType === 'tool.denied')).toMatchObject({
+      toolResultId: 'tool-result-denied',
+      reason: 'Plan mode blocks writes.',
+    });
     expect(events.map((event) => event.eventType)).toEqual([
       'turn.started',
       'user.message.committed',

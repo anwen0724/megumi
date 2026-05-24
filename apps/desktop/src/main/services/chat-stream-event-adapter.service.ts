@@ -73,6 +73,15 @@ interface ApprovalLinkState {
   toolCallId?: string;
 }
 
+type ToolTerminalKind = 'completed' | 'failed' | 'denied';
+
+interface PendingToolTerminalState {
+  tool: ToolActivityState;
+  kind: ToolTerminalKind;
+  error?: RuntimeError;
+  reason?: string;
+}
+
 interface PhaseFlushHandle {
   cancel(): void;
 }
@@ -92,6 +101,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private readonly toolsByUseId = new Map<string, ToolActivityState>();
   private readonly toolsByCallId = new Map<string, ToolActivityState>();
   private readonly terminalToolUseIds = new Set<string>();
+  private readonly pendingToolTerminalsByUseId = new Map<string, PendingToolTerminalState>();
   private readonly approvalLinksById = new Map<string, ApprovalLinkState>();
   private seq = 0;
   private started = false;
@@ -134,6 +144,8 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     if (this.terminal) {
       return;
     }
+
+    this.flushPendingToolTerminalsBefore(event);
 
     switch (event.eventType) {
       case 'model.output.delta':
@@ -209,6 +221,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
 
   dispose(): void {
     this.cancelAllPhaseFlushes();
+    this.flushAllPendingToolTerminals();
     for (const state of this.stepText.values()) {
       if (!state.phase && state.bufferedDeltas.length > 0) {
         this.releaseText(state, 'answer');
@@ -283,6 +296,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
 
     if (payload.finishReason === 'tool_calls') {
       this.markStepPrelude(payload.modelStepId);
+      this.completeOpenTextForStep(payload.modelStepId, 'prelude');
     }
   }
 
@@ -413,6 +427,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : {}),
       toolName: 'unknown_tool',
     };
+    this.clearPendingToolTerminal(tool.toolUseId);
     const common = {
       ...this.base(),
       toolUseId: tool.toolUseId,
@@ -485,11 +500,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       return;
     }
 
-    this.markToolTerminal(tool);
-    this.publish(createChatStreamEvent({
-      ...this.toolEventBase(tool),
-      eventType: 'tool.completed',
-    }));
+    this.setPendingToolTerminal({ tool, kind: 'completed' });
   }
 
   private handleToolCallFailed(event: RuntimeEvent): void {
@@ -503,13 +514,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }
 
     const error = isRuntimeError(payload.error) ? payload.error : undefined;
-    this.markToolTerminal(tool);
-    this.publish(createChatStreamEvent({
-      ...this.toolEventBase(tool),
-      eventType: 'tool.failed',
-      ...(error?.code ? { errorCode: error.code } : {}),
-      ...(error?.message ? { errorMessage: error.message, resultSummary: error.message } : {}),
-    }));
+    this.setPendingToolTerminal({ tool, kind: 'failed', ...(error ? { error } : {}) });
   }
 
   private handleToolCallDenied(event: RuntimeEvent): void {
@@ -522,12 +527,11 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       return;
     }
 
-    this.markToolTerminal(tool);
-    this.publish(createChatStreamEvent({
-      ...this.toolEventBase(tool),
-      eventType: 'tool.denied',
+    this.setPendingToolTerminal({
+      tool,
+      kind: 'denied',
       ...(typeof payload.reason === 'string' ? { reason: payload.reason } : {}),
-    }));
+    });
   }
 
   private handleApprovalRequested(event: RuntimeEvent): void {
@@ -609,6 +613,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   }
 
   private handleRunCompleted(_event: RuntimeEvent): void {
+    this.flushAllPendingToolTerminals();
     this.flushPhaseGate();
     this.completeOpenTextByPhase('answer');
     this.publish(createChatStreamEvent({
@@ -621,6 +626,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private handleRunFailed(event: RuntimeEvent): void {
     const error = (event.payload as { error?: unknown }).error;
     const runtimeError = isRuntimeError(error) ? error : undefined;
+    this.flushAllPendingToolTerminals();
     this.flushPhaseGate();
     this.failOpenTextByPhase('answer', runtimeError);
     this.publish(createChatStreamEvent({
@@ -636,6 +642,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private handleRunCancelled(event: RuntimeEvent): void {
     const payload = event.payload as { reason?: unknown };
     const reason = typeof payload.reason === 'string' ? payload.reason : undefined;
+    this.flushAllPendingToolTerminals();
     this.flushPhaseGate();
     this.cancelOpenTextByPhase('answer', reason);
     this.publish(createChatStreamEvent({
@@ -713,6 +720,13 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       if (state.text?.phase === phase && !state.text.terminal) {
         this.completeText(state.text);
       }
+    }
+  }
+
+  private completeOpenTextForStep(modelStepId: string, phase: AssistantTextPhase): void {
+    const state = this.stepText.get(modelStepId);
+    if (state?.text?.phase === phase && !state.text.terminal) {
+      this.completeText(state.text);
     }
   }
 
@@ -843,6 +857,96 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
 
   private markToolTerminal(tool: ToolActivityState): void {
     this.terminalToolUseIds.add(tool.toolUseId);
+    this.clearPendingToolTerminal(tool.toolUseId);
+  }
+
+  private setPendingToolTerminal(pending: PendingToolTerminalState): void {
+    this.pendingToolTerminalsByUseId.set(pending.tool.toolUseId, pending);
+  }
+
+  private clearPendingToolTerminal(toolUseId: string): void {
+    this.pendingToolTerminalsByUseId.delete(toolUseId);
+  }
+
+  private flushPendingToolTerminalsBefore(event: RuntimeEvent): void {
+    const relatedToolUseId = this.relatedToolUseIdForEvent(event);
+    for (const [toolUseId, pending] of [...this.pendingToolTerminalsByUseId]) {
+      if (toolUseId === relatedToolUseId) {
+        continue;
+      }
+
+      this.emitPendingToolTerminal(pending);
+    }
+  }
+
+  private flushAllPendingToolTerminals(): void {
+    for (const pending of [...this.pendingToolTerminalsByUseId.values()]) {
+      this.emitPendingToolTerminal(pending);
+    }
+  }
+
+  private emitPendingToolTerminal(pending: PendingToolTerminalState): void {
+    if (this.hasToolTerminal(pending.tool.toolUseId)) {
+      this.clearPendingToolTerminal(pending.tool.toolUseId);
+      return;
+    }
+
+    this.markToolTerminal(pending.tool);
+    if (pending.kind === 'completed') {
+      this.publish(createChatStreamEvent({
+        ...this.toolEventBase(pending.tool),
+        eventType: 'tool.completed',
+      }));
+      return;
+    }
+
+    if (pending.kind === 'denied') {
+      this.publish(createChatStreamEvent({
+        ...this.toolEventBase(pending.tool),
+        eventType: 'tool.denied',
+        ...(pending.reason ? { reason: pending.reason } : {}),
+      }));
+      return;
+    }
+
+    this.publish(createChatStreamEvent({
+      ...this.toolEventBase(pending.tool),
+      eventType: 'tool.failed',
+      ...(pending.error?.code ? { errorCode: pending.error.code } : {}),
+      ...(pending.error?.message ? { errorMessage: pending.error.message, resultSummary: pending.error.message } : {}),
+    }));
+  }
+
+  private relatedToolUseIdForEvent(event: RuntimeEvent): string | undefined {
+    if (event.eventType === 'tool.result.created') {
+      const payload = event.payload as { toolUseId?: unknown };
+      return typeof payload.toolUseId === 'string' ? payload.toolUseId : undefined;
+    }
+
+    if (event.eventType === 'tool.use.created') {
+      const payload = event.payload as { toolUseId?: unknown };
+      return typeof payload.toolUseId === 'string' ? payload.toolUseId : undefined;
+    }
+
+    if (event.eventType === 'tool.call.requested') {
+      const toolCall = (event.payload as { toolCall?: unknown }).toolCall;
+      if (!isRecord(toolCall)) {
+        return undefined;
+      }
+      return stringValue(toolCall.toolUseId);
+    }
+
+    if (event.eventType === 'tool.call.completed'
+      || event.eventType === 'tool.call.failed'
+      || event.eventType === 'tool.call.denied') {
+      const payload = event.payload as { toolCallId?: unknown };
+      if (typeof payload.toolCallId !== 'string') {
+        return undefined;
+      }
+      return this.toolsByCallId.get(payload.toolCallId)?.toolUseId;
+    }
+
+    return undefined;
   }
 
   private toolEventBase(tool: ToolActivityState) {
