@@ -361,6 +361,37 @@ describe('chat stream store', () => {
     });
   });
 
+  it('does not overwrite a pre-answer live assistant message for an active run', () => {
+    const store = useChatStreamStore.getState();
+
+    store.dispatch(event({
+      eventType: 'turn.started',
+      sessionId: 'session-1',
+      streamId: 'stream-live',
+      seq: 1,
+      runId: 'run-live',
+      userMessageId: 'message-user-live',
+    }));
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [
+      committedAssistant('assistant:run-live', 'run-live', 'Committed stale answer'),
+    ]);
+
+    const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+    expect(messages).toEqual([
+      expect.objectContaining({
+        messageId: 'assistant:run-live',
+        blocks: [
+          expect.objectContaining({
+            kind: 'process_disclosure',
+            status: 'running',
+          }),
+        ],
+      }),
+    ]);
+    expect(JSON.stringify(messages)).not.toContain('Committed stale answer');
+  });
+
   it('does not dedupe committed messages by answer text content', () => {
     useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
       committedAssistant('assistant:run-a', 'run-a', 'Same answer'),

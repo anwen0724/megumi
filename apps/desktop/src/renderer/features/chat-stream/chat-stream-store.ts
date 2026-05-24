@@ -42,12 +42,37 @@ export function chatStreamSessionKey(projectId: string, sessionId: string): stri
   return `${projectId}:${sessionId}`;
 }
 
-function isLiveStreamingMessage(message: TimelineMessage): boolean {
+function isActiveProcessItemStatus(status: string | undefined): boolean {
+  return status === 'running' || status === 'streaming' || status === 'pending';
+}
+
+function isLiveStreamingMessage(
+  message: TimelineMessage,
+  streamsById: Record<string, ChatStreamState>,
+): boolean {
   if (message.role !== 'assistant') {
     return false;
   }
 
-  return message.blocks.some((block) => block.kind === 'answer_text' && block.status === 'streaming');
+  if (Object.values(streamsById).some((stream) =>
+    stream.runId === message.runId && (stream.status === 'running' || stream.status === 'needs_replay')
+  )) {
+    return true;
+  }
+
+  return message.blocks.some((block) => {
+    if (block.kind === 'answer_text') {
+      return block.status === 'streaming';
+    }
+
+    if (block.status === 'running') {
+      return true;
+    }
+
+    return block.items.some((item) =>
+      'status' in item && isActiveProcessItemStatus(item.status)
+    );
+  });
 }
 
 function messageIdentity(message: TimelineMessage): string {
@@ -58,7 +83,11 @@ function messageIdentity(message: TimelineMessage): string {
   return `message:${message.messageId}`;
 }
 
-function mergeCommittedMessages(current: TimelineMessage[], committed: TimelineMessage[]): TimelineMessage[] {
+function mergeCommittedMessages(
+  current: TimelineMessage[],
+  committed: TimelineMessage[],
+  streamsById: Record<string, ChatStreamState>,
+): TimelineMessage[] {
   const byIdentity = new Map<string, TimelineMessage>();
 
   for (const message of committed) {
@@ -67,7 +96,7 @@ function mergeCommittedMessages(current: TimelineMessage[], committed: TimelineM
 
   for (const message of current) {
     const identity = messageIdentity(message);
-    if (isLiveStreamingMessage(message)) {
+    if (isLiveStreamingMessage(message, streamsById)) {
       byIdentity.set(identity, message);
       continue;
     }
@@ -236,7 +265,7 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
             ...state.sessions,
             [key]: {
               ...session,
-              messages: mergeCommittedMessages(session.messages, messages),
+              messages: mergeCommittedMessages(session.messages, messages, session.streamsById),
             },
           },
         };

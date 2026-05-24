@@ -4,6 +4,7 @@ import type { Run } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatStore } from '../../entities/chat/store';
+import { useProjectStore } from '../../entities/project/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
@@ -29,6 +30,15 @@ function resetHydratedRunProjection(): void {
   useRunStore.getState().resetRuns();
   useToolCallStore.getState().reset();
   useApprovalStore.getState().reset();
+}
+
+function activeHydrationTarget(sessionId: string, projectId: string): boolean {
+  const sessionState = useSessionStore.getState();
+  const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
+
+  return sessionState.activeSessionId === sessionId
+    && activeSession?.projectId === projectId
+    && useProjectStore.getState().currentProjectId === projectId;
 }
 
 export function useSessionHistoryHydration() {
@@ -69,13 +79,18 @@ export function useSessionHistoryHydration() {
     if (!activeSession?.projectId) {
       return;
     }
+    const projectId = activeSession.projectId;
 
     const timelineResult = await window.megumi.session.timeline.list(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.session.timeline.list, {
-        projectId: activeSession.projectId,
+        projectId,
         sessionId,
       }),
     );
+
+    if (!activeHydrationTarget(sessionId, projectId)) {
+      return;
+    }
 
     if (!timelineResult.ok) {
       useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(timelineResult));
@@ -83,16 +98,19 @@ export function useSessionHistoryHydration() {
     }
 
     useChatStreamStore.getState().hydrateCommittedMessages(
-      activeSession.projectId,
+      projectId,
       sessionId,
       timelineResult.data.messages,
     );
     useChatStore.getState().setLastError(null);
-    resetHydratedRunProjection();
 
     const runsResult = await window.megumi.run.listBySession(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.run.listBySession, { sessionId }),
     );
+
+    if (!activeHydrationTarget(sessionId, projectId)) {
+      return;
+    }
 
     if (!runsResult.ok) {
       useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(runsResult));
@@ -100,6 +118,11 @@ export function useSessionHistoryHydration() {
     }
 
     const eventsByRun = await listRuntimeEventsByRun(runsResult.data.runs);
+    if (!activeHydrationTarget(sessionId, projectId)) {
+      return;
+    }
+
+    resetHydratedRunProjection();
     for (const event of hydratedRuntimeEventsForRuns(runsResult.data.runs, eventsByRun)) {
       useRunStore.getState().applyRuntimeEvent(event);
     }

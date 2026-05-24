@@ -90,6 +90,23 @@ function toRuntimeMessage(message: TimelineMessageData): ChatMessage {
   };
 }
 
+function mergeCanonicalWithMissingLegacyUsers(
+  canonicalMessages: ChatMessage[],
+  legacyMessages: ChatMessage[],
+): ChatMessage[] {
+  const canonicalIds = new Set(canonicalMessages.map((message) => String(message.id)));
+  const missingLegacyUsers = legacyMessages.filter((message) =>
+    message.role === 'user' && !canonicalIds.has(String(message.id))
+  );
+
+  return [...canonicalMessages, ...missingLegacyUsers].sort((left, right) => {
+    const createdOrder = left.createdAt.localeCompare(right.createdAt);
+    return createdOrder === 0
+      ? String(left.id).localeCompare(String(right.id))
+      : createdOrder;
+  });
+}
+
 function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
   userMessage: TimelineMessageData,
@@ -105,9 +122,10 @@ function createSessionMessageSendPayload(
   const canonicalMessages = activeSessionKey
     ? useChatStreamStore.getState().sessions[activeSessionKey]?.messages ?? []
     : [];
+  const legacyMessages = useChatStore.getState().messages.map(toRuntimeMessage);
   const historyMessages = canonicalMessages.length > 0
-    ? chatMessagesFromTimelineMessages(canonicalMessages)
-    : useChatStore.getState().messages.map(toRuntimeMessage);
+    ? mergeCanonicalWithMissingLegacyUsers(chatMessagesFromTimelineMessages(canonicalMessages), legacyMessages)
+    : legacyMessages;
   const messages = [...historyMessages, toRuntimeMessage(userMessage)];
 
   return {

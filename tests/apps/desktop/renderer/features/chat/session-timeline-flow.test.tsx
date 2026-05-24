@@ -21,6 +21,17 @@ let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let chatStreamEventCallback: ((event: ChatStreamEvent) => void) | null = null;
 let sequence = 1;
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
+}
+
 function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' | 'sequence' | 'createdAt' | 'source' | 'visibility' | 'persist'> & {
   source?: RuntimeEvent['source'];
   visibility?: RuntimeEvent['visibility'];
@@ -36,6 +47,20 @@ function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' 
     persist: event.persist ?? 'required',
     ...event,
   } as RuntimeEvent);
+}
+
+function runtimeEvent(overrides: Partial<RuntimeEvent> & Pick<RuntimeEvent, 'eventType' | 'runId'>): RuntimeEvent {
+  return {
+    eventId: `runtime-event-${sequence}`,
+    schemaVersion: 1,
+    sequence: sequence++,
+    createdAt: '2026-05-24T00:00:00.000Z',
+    source: 'core',
+    visibility: 'system',
+    persist: 'required',
+    payload: {},
+    ...overrides,
+  } as RuntimeEvent;
 }
 
 function installMegumiMock() {
@@ -673,6 +698,52 @@ describe('useSessionTimeline', () => {
     ]);
   });
 
+  it('keeps legacy user context when canonical timeline only has assistant history', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'Partial canonical session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStore.getState().setMessages([{
+      id: 'message-user-history',
+      role: 'user',
+      content: 'Legacy user prompt',
+      timestamp: '2026-05-23T23:59:59.000Z',
+      stepNum: 1,
+    }]);
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedAssistant('assistant:run-history', 'run-history', 'Canonical answer'),
+    ]);
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'Next prompt',
+        permissionMode: 'plan',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    const sentMessages = session.message.send.mock.calls[0][0].payload.messages as Array<{
+      role: string;
+      content: string;
+    }>;
+
+    expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'Legacy user prompt'],
+      ['assistant', 'Canonical answer'],
+      ['user', 'Next prompt'],
+    ]);
+  });
+
   it('cancels session messages using a runtime ipc cancel request envelope', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
@@ -765,6 +836,68 @@ describe('useSessionTimeline', () => {
       }),
     ]);
     expect(useChatStore.getState().messages.map((message) => message.content)).toEqual(['Legacy flat answer']);
+  });
+
+  it('drops stale history hydration responses after the active session changes', async () => {
+    const { session, run } = installMegumiMock();
+    const timelineDeferred = deferred<{
+      ok: true;
+      data: {
+        messages: TimelineAssistantMessage[];
+        diagnostics: [];
+      };
+    }>();
+    session.timeline.list.mockReturnValueOnce(timelineDeferred.promise);
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'First session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'Second session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent({
+      eventType: 'run.started',
+      runId: 'run-current',
+      sessionId: 'session-2',
+    }));
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    const hydratePromise = result.current.hydrateSessionTimeline('session-1');
+    await waitFor(() => expect(session.timeline.list).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      useSessionStore.getState().setActiveSession('session-2');
+    });
+    timelineDeferred.resolve({
+      ok: true,
+      data: {
+        messages: [committedAssistant('assistant:run-stale', 'run-stale', 'Stale answer')],
+        diagnostics: [],
+      },
+    });
+
+    await act(async () => {
+      await hydratePromise;
+    });
+
+    expect(run.listBySession).not.toHaveBeenCalled();
+    expect(useRunStore.getState().runs).toHaveProperty('run-current');
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')]).toBeUndefined();
   });
 
   it('keeps an in-flight streaming assistant message when history hydration returns a committed snapshot for the same run', async () => {
