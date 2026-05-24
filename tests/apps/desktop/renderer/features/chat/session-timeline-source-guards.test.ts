@@ -4,6 +4,11 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
+const oldWindowChatNamespace = new RegExp([
+  String.raw`\bwindow`,
+  'megumi',
+  String.raw`chat(?!Stream)\b`,
+].join(String.raw`\.`));
 
 function readProjectFile(relativePath: string): string {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -62,8 +67,10 @@ describe('session timeline source guards', () => {
     expect(hookSource).toContain('window.megumi.session.message.send');
     expect(hookSource).not.toContain('beginRuntimeChat');
     expect(hookSource).not.toContain(['IPC_CHANNELS', 'chat', 'start'].join('.'));
-    expect(hookSource).not.toContain(['window', 'megumi', 'chat'].join('.'));
+    expect(hookSource).not.toMatch(oldWindowChatNamespace);
     expect(hookSource).not.toContain(['useRuntime', 'Chat'].join(''));
+    expect(hookSource).toContain('window.megumi.chatStream.onEvent');
+    expect(hookSource).toContain('dispatchChatStreamEvent');
     expect(existsSync(path.join(root, 'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts'))).toBe(false);
   });
 

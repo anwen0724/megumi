@@ -35,10 +35,12 @@ describe('09 session run integration final source guards', () => {
     const preload = source('apps/desktop/src/preload/api.ts');
     const globalTypes = source('apps/desktop/src/renderer/shared/types/global.d.ts');
 
-    expect(preload).not.toContain('IPC_CHANNELS.chat');
+    expect(preload).not.toMatch(/\bIPC_CHANNELS\.chat(?!Stream)\b/);
     expect(preload).not.toContain('IPC_CHANNELS.agent');
     expect(preload).not.toMatch(/\bchat:\s*\{/);
     expect(preload).not.toMatch(/\bagent:\s*\{/);
+    expect(preload).toContain('IPC_CHANNELS.chatStream.event');
+    expect(preload).toMatch(/\bchatStream:\s*\{/);
     expect(globalTypes).not.toContain('chat:');
     expect(globalTypes).not.toContain('agent:');
   });
@@ -49,7 +51,8 @@ describe('09 session run integration final source guards', () => {
     expect(hook).toContain('IPC_CHANNELS.session.message.send');
     expect(hook).toContain('window.megumi.session.message.send');
     expect(hook).not.toContain('IPC_CHANNELS.chat.start');
-    expect(hook).not.toContain('window.megumi.chat');
+    expect(hook).not.toMatch(/\bwindow\.megumi\.chat(?!Stream)\b/);
+    expect(hook).toContain('window.megumi.chatStream.onEvent');
     expect(existing([
       'apps/desktop/src/renderer/features/chat/hooks/use-runtime-chat.ts',
     ])).toEqual([]);
@@ -104,7 +107,7 @@ describe('09 session run integration final source guards', () => {
       if (path === 'tests/architecture/session-run-integration-final-source-guards.test.ts') {
         return false;
       }
-      return /window\.megumi\.chat|window\.megumi\.agent|IPC_CHANNELS\.chat|IPC_CHANNELS\.agent|useRuntimeChat|chat:start|chat\.start|agent_(sessions|runs|steps|actions|observations|context|run_mode|checkpoints|resume|cancel|retry)|apps\/desktop\/src\/main\/(services|ipc\/handlers)\/agent-|agent-(lifecycle|context|run-mode|recovery)|agent[.:](session|run|context|plan|tool|approval|recovery|artifact|artifacts|memory)/.test(text);
+      return /window\.megumi\.chat(?!Stream)\b|window\.megumi\.agent|IPC_CHANNELS\.chat(?!Stream)\b|IPC_CHANNELS\.agent|useRuntimeChat|chat:start|chat\.start|agent_(sessions|runs|steps|actions|observations|context|run_mode|checkpoints|resume|cancel|retry)|apps\/desktop\/src\/main\/(services|ipc\/handlers)\/agent-|agent-(lifecycle|context|run-mode|recovery)|agent[.:](session|run|context|plan|tool|approval|recovery|artifact|artifacts|memory)/.test(text);
     });
 
     expect(offenders).toEqual([]);
