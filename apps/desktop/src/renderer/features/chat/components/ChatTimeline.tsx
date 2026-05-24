@@ -65,6 +65,10 @@ export function ChatTimeline() {
       : EMPTY_CANONICAL_MESSAGES
   ));
   const timelineMessages = useMemo<TimelineRenderableMessage[]>(() => {
+    if (canonicalMessages.length > 0 && agentStatus === 'idle') {
+      return canonicalMessages;
+    }
+
     const canonicalMessageIds = new Set(canonicalMessages.map((message) => message.messageId));
     const legacyMessages = messages.filter((message) => !canonicalMessageIds.has(message.id));
 
@@ -73,7 +77,7 @@ export function ChatTimeline() {
       const rightTimestamp = 'messageId' in right ? right.createdAt : right.timestamp;
       return new Date(leftTimestamp).getTime() - new Date(rightTimestamp).getTime();
     });
-  }, [canonicalMessages, messages]);
+  }, [agentStatus, canonicalMessages, messages]);
 
   const activeRunCandidate = activeRunId ? runs[activeRunId] : null;
   const activeRun = activeRunCandidate && (!activeSessionId || !activeRunCandidate.sessionId || activeRunCandidate.sessionId === activeSessionId)

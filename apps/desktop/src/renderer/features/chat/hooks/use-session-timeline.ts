@@ -10,6 +10,7 @@ import { createSessionTitleFromPrompt } from '../../../entities/session/session-
 import { useSessionStore } from '../../../entities/session/store';
 import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
+import { chatMessagesFromTimelineMessages } from '../../session-history/session-history-mappers';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
@@ -89,6 +90,23 @@ function toRuntimeMessage(message: TimelineMessageData): ChatMessage {
   };
 }
 
+function mergeCanonicalWithMissingLegacyUsers(
+  canonicalMessages: ChatMessage[],
+  legacyMessages: ChatMessage[],
+): ChatMessage[] {
+  const canonicalIds = new Set(canonicalMessages.map((message) => String(message.id)));
+  const missingLegacyUsers = legacyMessages.filter((message) =>
+    message.role === 'user' && !canonicalIds.has(String(message.id))
+  );
+
+  return [...canonicalMessages, ...missingLegacyUsers].sort((left, right) => {
+    const createdOrder = left.createdAt.localeCompare(right.createdAt);
+    return createdOrder === 0
+      ? String(left.id).localeCompare(String(right.id))
+      : createdOrder;
+  });
+}
+
 function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
   userMessage: TimelineMessageData,
@@ -98,7 +116,17 @@ function createSessionMessageSendPayload(
   const providerId = getProviderIdForModel(payload.model);
   const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
   const activeProject = projectState.projects.find((project) => project.id === projectState.currentProjectId);
-  const messages = [...useChatStore.getState().messages, userMessage].map(toRuntimeMessage);
+  const activeSessionKey = activeSession && activeProject
+    ? `${activeSession.projectId}:${activeSession.id}`
+    : null;
+  const canonicalMessages = activeSessionKey
+    ? useChatStreamStore.getState().sessions[activeSessionKey]?.messages ?? []
+    : [];
+  const legacyMessages = useChatStore.getState().messages.map(toRuntimeMessage);
+  const historyMessages = canonicalMessages.length > 0
+    ? mergeCanonicalWithMissingLegacyUsers(chatMessagesFromTimelineMessages(canonicalMessages), legacyMessages)
+    : legacyMessages;
+  const messages = [...historyMessages, toRuntimeMessage(userMessage)];
 
   return {
     sessionId: sessionState.activeSessionId ?? undefined,

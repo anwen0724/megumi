@@ -18,6 +18,9 @@ export const IPC_CHANNELS = {
       send: 'session:message:send',
       cancel: 'session:message:cancel',
     },
+    timeline: {
+      list: 'session:timeline:list',
+    },
   },
   run: {
     listBySession: 'run:list-by-session',
@@ -113,6 +116,7 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.session.message.list,
   IPC_CHANNELS.session.message.send,
   IPC_CHANNELS.session.message.cancel,
+  IPC_CHANNELS.session.timeline.list,
   IPC_CHANNELS.run.listBySession,
   IPC_CHANNELS.run.events.list,
   IPC_CHANNELS.runContext.baselineGet,

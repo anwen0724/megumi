@@ -6,6 +6,7 @@ import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
+import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
@@ -33,6 +34,7 @@ import { ArtifactContentStore } from './services/artifact-content-store.service'
 import { ArtifactService } from './services/artifact.service';
 import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
+import { TimelineHistoryCommitProjectorService } from './services/timeline-history-commit-projector.service';
 import fs from 'fs-extra';
 import { BrowserWindow, dialog } from 'electron';
 import { ProjectRepository } from '@megumi/db/repos/project.repo';
@@ -85,6 +87,20 @@ const providerRuntimeService = new ProviderRuntimeService({
   configCredentials,
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
+const timelineMessageRepository = new TimelineMessageRepository(database);
+const chatStreamSink = new TimelineHistoryCommitProjectorService({
+  repository: timelineMessageRepository,
+  downstream: {
+    publish(event) {
+      for (const window of BrowserWindow.getAllWindows()) {
+        forwardChatStreamEvent(window.webContents, event, { logger: runtimeLogger });
+      }
+    },
+  },
+  ids: {
+    diagnosticId: () => `timeline-diagnostic:${crypto.randomUUID()}`,
+  },
+});
 const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
   async create({ projectRoot, permissionMode }) {
     return createToolUseHandlerService({
@@ -104,13 +120,8 @@ const sessionRunService = new SessionRunService({
   modelStepProvider: modelStepProviderService,
   toolRuntimeFactory,
   toolDefinitionProvider: toolRegistry,
-  chatStreamEventSink: {
-    publish(event) {
-      for (const window of BrowserWindow.getAllWindows()) {
-        forwardChatStreamEvent(window.webContents, event, { logger: runtimeLogger });
-      }
-    },
-  },
+  chatStreamEventSink: chatStreamSink,
+  timelineMessageRepository,
 });
 const toolService = new ToolService({
   repository: toolRepository,

@@ -84,6 +84,8 @@ describe('session timeline source guards', () => {
   it('renders live assistant answers from canonical chat stream blocks instead of legacy streamingText', () => {
     const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
 
+    expect(source).toContain('CanonicalTimelineMessage');
+    expect(source).toContain('TimelineRenderableMessage');
     expect(source).toContain('useChatStreamStore');
     expect(source).toContain('chatStreamSessionKey');
     expect(source).toContain('canonicalMessages');

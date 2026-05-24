@@ -1,5 +1,7 @@
+import type { ChatMessage } from '@megumi/shared/chat-contracts';
 import type { Run, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import type { TimelineMessageData, TimelineMessageRole } from '../../entities/chat/types';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
 
@@ -33,6 +35,32 @@ export function timelineMessagesFromPersistedMessages(messages: SessionMessage[]
     timestamp: message.createdAt,
     stepNum: index + 1,
   }));
+}
+
+export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): ChatMessage[] {
+  return messages.flatMap((message): ChatMessage[] => {
+    if (message.role === 'user') {
+      const text = message.blocks
+        .filter((block) => block.kind === 'user_text')
+        .map((block) => block.text)
+        .join('\n');
+
+      return text ? [{
+        id: String(message.messageId),
+        role: 'user',
+        content: text,
+        createdAt: message.createdAt,
+      }] : [];
+    }
+
+    const answer = message.blocks.find((block) => block.kind === 'answer_text');
+    return answer?.text ? [{
+      id: String(message.messageId),
+      role: 'assistant',
+      content: answer.text,
+      createdAt: message.createdAt,
+    }] : [];
+  });
 }
 
 export function hydratedRuntimeEventsForRuns(

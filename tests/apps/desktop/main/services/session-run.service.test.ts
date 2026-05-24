@@ -324,6 +324,21 @@ function createServiceWithChatStreamSink(
   });
 }
 
+function createServiceWithChatStreamSinkAndRepository(
+  events: RuntimeEvent[] | ((request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[]),
+  chatEvents: ChatStreamEvent[],
+  options?: Parameters<typeof createServiceWithChatStreamSink>[2],
+) {
+  const service = createServiceWithChatStreamSink(events, chatEvents, options);
+  if (!db) {
+    throw new Error('Expected test database to be initialized.');
+  }
+  return {
+    service,
+    repository: new SessionRunRepository(db),
+  };
+}
+
 function toolUseCreatedEvent(sequence: number): RuntimeEvent {
   return toolUseCreatedEventFor({
     sequence,
@@ -778,10 +793,9 @@ describe('SessionRunService', () => {
     });
     expect(streamed.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toContain('assistant.output.completed');
-    expect(service.listMessagesBySession('session-1')).toEqual(expect.arrayContaining([
+    expect(service.listMessagesBySession('session-1')).toEqual([
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
-      expect.objectContaining({ role: 'assistant', content: 'Hello', runId: 'run-1' }),
-    ]));
+    ]);
   });
 
   it('passes available project tool definitions to the provider request when a session has a workspace', async () => {
@@ -991,11 +1005,13 @@ describe('SessionRunService', () => {
     ]);
     expect(streamed.at(-1)?.eventType).toBe('run.completed');
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toContain('tool.result.created');
-    expect(service.listMessagesBySession('session-1').at(-1)).toMatchObject({
-      role: 'assistant',
-      content: 'Final answer after tool result.',
-      runId: 'run-1',
-    });
+    expect(service.listMessagesBySession('session-1')).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: 'Read package.json',
+        runId: 'run-1',
+      }),
+    ]);
   });
 
   it('persists model step records before tool handlers persist model tool uses', async () => {
@@ -1347,13 +1363,13 @@ describe('SessionRunService', () => {
     expect(streamed.find((event) => event.eventType === 'model.output.delta')?.payload).toMatchObject({
       delta: 'Hello Megumi.',
     });
-    expect(service.listMessagesBySession('session-1')).toEqual(expect.arrayContaining([
+    expect(service.listMessagesBySession('session-1')).toEqual([
       expect.objectContaining({
-        role: 'assistant',
-        content: 'Hello Megumi.',
+        role: 'user',
+        content: 'Hello',
         runId: 'run-1',
       }),
-    ]));
+    ]);
   });
 
   it('publishes chat stream events through the injected sink while keeping runtime events unchanged', async () => {
@@ -1430,6 +1446,55 @@ describe('SessionRunService', () => {
     expect(chatEvents.every((event) => event.streamId === 'stream-main-1')).toBe(true);
     expect(chatEvents.every((event) => event.streamId !== 'run-1')).toBe(true);
     expect(chatEvents.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('publishes terminal chat stream events without saving old flat assistant history', async () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const { service, repository } = createServiceWithChatStreamSinkAndRepository([
+      {
+        eventId: 'event-assistant-completed',
+        schemaVersion: 1,
+        eventType: 'assistant.output.completed',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 1,
+        createdAt: '2026-05-24T00:00:01.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'required',
+        payload: { content: 'Hello' },
+      },
+    ], chatEvents);
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: '2026-05-24T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-24T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain the stream so terminal chat events are published.
+    }
+
+    expect(chatEvents.map((event) => event.eventType)).toContain('turn.completed');
+    expect(repository.listMessagesBySession('session-1')).toEqual([
+      expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
+    ]);
   });
 
   it('keeps the same chat stream across approval resume', async () => {

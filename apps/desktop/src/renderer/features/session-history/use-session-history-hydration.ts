@@ -4,14 +4,15 @@ import type { Run } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatStore } from '../../entities/chat/store';
+import { useProjectStore } from '../../entities/project/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
+import { useChatStreamStore } from '../chat-stream';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import {
   hydratedRuntimeEventsForRuns,
   localSessionFromPersistedSession,
-  timelineMessagesFromPersistedMessages,
 } from './session-history-mappers';
 
 async function listRuntimeEventsByRun(runs: Run[]): Promise<Record<string, RuntimeEvent[]>> {
@@ -29,6 +30,15 @@ function resetHydratedRunProjection(): void {
   useRunStore.getState().resetRuns();
   useToolCallStore.getState().reset();
   useApprovalStore.getState().reset();
+}
+
+function activeHydrationTarget(sessionId: string, projectId: string): boolean {
+  const sessionState = useSessionStore.getState();
+  const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
+
+  return sessionState.activeSessionId === sessionId
+    && activeSession?.projectId === projectId
+    && useProjectStore.getState().currentProjectId === projectId;
 }
 
 export function useSessionHistoryHydration() {
@@ -60,34 +70,47 @@ export function useSessionHistoryHydration() {
   }, []);
 
   const hydrateSessionTimeline = useCallback(async (sessionId: string) => {
-    const messageResult = await window.megumi.session.message.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.list, { sessionId }),
+    const sessionState = useSessionStore.getState();
+    if (sessionState.activeSessionId !== sessionId) {
+      return;
+    }
+
+    const activeSession = sessionState.sessions.find((session) => session.id === sessionId);
+    if (!activeSession?.projectId) {
+      return;
+    }
+    const projectId = activeSession.projectId;
+
+    const timelineResult = await window.megumi.session.timeline.list(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.timeline.list, {
+        projectId,
+        sessionId,
+      }),
     );
 
-    if (!messageResult.ok) {
-      useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(messageResult));
+    if (!activeHydrationTarget(sessionId, projectId)) {
       return;
     }
 
-    const chatStore = useChatStore.getState();
-    const localSnapshot = chatStore.sessionSnapshots[sessionId];
-    if (messageResult.data.messages.length === 0 && localSnapshot) {
-      chatStore.loadSessionSnapshot(sessionId);
-      resetHydratedRunProjection();
+    if (!timelineResult.ok) {
+      useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(timelineResult));
       return;
     }
 
-    const messages = timelineMessagesFromPersistedMessages(messageResult.data.messages);
-    chatStore.setMessages(messages);
-    chatStore.clearStream();
-    chatStore.clearToolCalls();
-    chatStore.clearCompletedToolActivities();
-    chatStore.setLastError(null);
-    resetHydratedRunProjection();
+    useChatStreamStore.getState().hydrateCommittedMessages(
+      projectId,
+      sessionId,
+      timelineResult.data.messages,
+    );
+    useChatStore.getState().setLastError(null);
 
     const runsResult = await window.megumi.run.listBySession(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.run.listBySession, { sessionId }),
     );
+
+    if (!activeHydrationTarget(sessionId, projectId)) {
+      return;
+    }
 
     if (!runsResult.ok) {
       useChatStore.getState().setLastError(getRuntimeIpcErrorMessage(runsResult));
@@ -95,6 +118,11 @@ export function useSessionHistoryHydration() {
     }
 
     const eventsByRun = await listRuntimeEventsByRun(runsResult.data.runs);
+    if (!activeHydrationTarget(sessionId, projectId)) {
+      return;
+    }
+
+    resetHydratedRunProjection();
     for (const event of hydratedRuntimeEventsForRuns(runsResult.data.runs, eventsByRun)) {
       useRunStore.getState().applyRuntimeEvent(event);
     }

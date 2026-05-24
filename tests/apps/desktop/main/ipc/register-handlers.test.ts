@@ -76,6 +76,7 @@ describe('registerAllHandlers', () => {
       createSession: vi.fn(),
       listSessions: vi.fn(),
       listMessagesBySession: vi.fn(),
+      listTimelineMessagesBySession: vi.fn(),
       sendSessionMessage: vi.fn(),
       cancelSessionMessage: vi.fn(),
       listRunsBySession: vi.fn(),

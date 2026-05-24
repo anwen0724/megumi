@@ -67,4 +67,12 @@ describe('renderer chat stream source guards', () => {
     expect(source).not.toContain('bufferedStreamOutputsByRun');
     expect(source).not.toContain('answerRevealAllowedByRun');
   });
+
+  it('keeps timeline history hydration out of old useChatStore message snapshots', () => {
+    const source = read('apps/desktop/src/renderer/features/session-history/use-session-history-hydration.ts');
+
+    expect(source).toContain('useChatStreamStore');
+    expect(source).toContain('hydrateCommittedMessages');
+    expect(source).not.toContain('timelineMessagesFromPersistedMessages');
+  });
 });

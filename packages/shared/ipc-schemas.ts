@@ -68,6 +68,7 @@ import {
   WorkspaceFilesListDataSchema,
   WorkspaceFilesListPayloadSchema,
 } from './workspace-file-contracts';
+import { TimelineMessageSchema } from './timeline-message-block-schemas';
 import { RuntimeEventSchema } from './runtime-event-schemas';
 import { IPC_CHANNELS } from './ipc-channels';
 import { PROVIDER_IDS, type ProviderId } from './provider-contracts';
@@ -192,6 +193,28 @@ export const SessionMessageListPayloadSchema = z
 export const SessionMessageListDataSchema = z
   .object({
     messages: z.array(SessionMessageSchema),
+  })
+  .strict();
+
+export const SessionTimelineListPayloadSchema = z
+  .object({
+    projectId: z.string().min(1),
+    sessionId: z.string().min(1),
+  })
+  .strict();
+
+export const SessionTimelineHydrationDiagnosticSchema = z
+  .object({
+    messageId: z.string().min(1),
+    code: z.literal('timeline_message_parse_failed'),
+    message: z.string().min(1),
+  })
+  .strict();
+
+export const SessionTimelineListDataSchema = z
+  .object({
+    messages: z.array(TimelineMessageSchema),
+    diagnostics: z.array(SessionTimelineHydrationDiagnosticSchema),
   })
   .strict();
 
@@ -662,6 +685,11 @@ export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(
   SessionMessageListPayloadSchema,
 );
 
+export const SessionTimelineListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.timeline.list,
+  SessionTimelineListPayloadSchema,
+);
+
 export const SessionCreateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.create,
   SessionCreatePayloadSchema,
@@ -890,6 +918,11 @@ export const SessionMessageCancelResultSchema = createRuntimeIpcResultSchema(
 export const SessionMessageListResultSchema = createRuntimeIpcResultSchema(
   SessionMessageListDataSchema,
   IPC_CHANNELS.session.message.list,
+);
+
+export const SessionTimelineListResultSchema = createRuntimeIpcResultSchema(
+  SessionTimelineListDataSchema,
+  IPC_CHANNELS.session.timeline.list,
 );
 
 export const SessionCreateResultSchema = createRuntimeIpcResultSchema(
@@ -1153,6 +1186,8 @@ export type SessionMessageCancelPayload = z.infer<typeof SessionMessageCancelPay
 export type SessionMessageCancelData = z.infer<typeof SessionMessageCancelDataSchema>;
 export type SessionMessageListPayload = z.infer<typeof SessionMessageListPayloadSchema>;
 export type SessionMessageListData = z.infer<typeof SessionMessageListDataSchema>;
+export type SessionTimelineListPayload = z.infer<typeof SessionTimelineListPayloadSchema>;
+export type SessionTimelineListData = z.infer<typeof SessionTimelineListDataSchema>;
 export type SessionCreatePayload = z.infer<typeof SessionCreatePayloadSchema>;
 export type SessionCreateData = z.infer<typeof SessionCreateDataSchema>;
 export type SessionListPayload = z.infer<typeof SessionListPayloadSchema>;

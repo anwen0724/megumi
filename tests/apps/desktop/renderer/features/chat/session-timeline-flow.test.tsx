@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline-message-blocks';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatStore } from '@megumi/desktop/renderer/entities/chat/store';
@@ -14,10 +15,22 @@ import {
   useChatStreamStore,
 } from '@megumi/desktop/renderer/features/chat-stream';
 import { useSessionTimeline } from '@megumi/desktop/renderer/features/chat/hooks/use-session-timeline';
+import { useSessionHistoryHydration } from '@megumi/desktop/renderer/features/session-history/use-session-history-hydration';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let chatStreamEventCallback: ((event: ChatStreamEvent) => void) | null = null;
 let sequence = 1;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
+}
 
 function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' | 'sequence' | 'createdAt' | 'source' | 'visibility' | 'persist'> & {
   source?: RuntimeEvent['source'];
@@ -34,6 +47,20 @@ function emitRuntimeEvent(event: Omit<RuntimeEvent, 'eventId' | 'schemaVersion' 
     persist: event.persist ?? 'required',
     ...event,
   } as RuntimeEvent);
+}
+
+function runtimeEvent(overrides: Partial<RuntimeEvent> & Pick<RuntimeEvent, 'eventType' | 'runId'>): RuntimeEvent {
+  return {
+    eventId: `runtime-event-${sequence}`,
+    schemaVersion: 1,
+    sequence: sequence++,
+    createdAt: '2026-05-24T00:00:00.000Z',
+    source: 'core',
+    visibility: 'system',
+    persist: 'required',
+    payload: {},
+    ...overrides,
+  } as RuntimeEvent;
 }
 
 function installMegumiMock() {
@@ -66,6 +93,28 @@ function installMegumiMock() {
           handledAt: '2026-05-12T00:00:00.100Z',
         },
       }),
+      list: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { messages: [] },
+      }),
+    },
+    timeline: {
+      list: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { messages: [], diagnostics: [] },
+      }),
+    },
+  };
+  const run = {
+    listBySession: vi.fn().mockResolvedValue({
+      ok: true,
+      data: { runs: [] },
+    }),
+    events: {
+      list: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { events: [] },
+      }),
     },
   };
   const runtime = {
@@ -95,10 +144,49 @@ function installMegumiMock() {
       },
       runtime,
       chatStream,
+      run,
     },
   });
 
-  return { session, runtime, chatStream, unsubscribeChatStream };
+  return { session, runtime, chatStream, run, unsubscribeChatStream };
+}
+
+function committedAssistant(messageId: string, runId: string, text: string): TimelineAssistantMessage {
+  return {
+    messageId,
+    role: 'assistant',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    runId,
+    createdAt: '2026-05-24T00:00:00.000Z',
+    updatedAt: '2026-05-24T00:00:00.000Z',
+    blocks: [{
+      blockId: `answer:${runId}`,
+      kind: 'answer_text',
+      runId,
+      textId: `text:${runId}`,
+      status: 'completed',
+      text,
+      format: 'markdown',
+    }],
+  };
+}
+
+function committedUser(messageId: string, text: string): TimelineUserMessage {
+  return {
+    messageId,
+    role: 'user',
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    createdAt: '2026-05-23T23:59:59.000Z',
+    updatedAt: '2026-05-23T23:59:59.000Z',
+    blocks: [{
+      blockId: `user-text:${messageId}`,
+      kind: 'user_text',
+      text,
+      format: 'plain',
+    }],
+  };
 }
 
 describe('useSessionTimeline', () => {
@@ -563,6 +651,99 @@ describe('useSessionTimeline', () => {
     });
   });
 
+  it('uses canonical chat stream messages as model request context when they are available', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'Canonical session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStore.getState().setMessages([{
+      id: 'legacy-assistant',
+      role: 'assistant',
+      content: 'Legacy flat answer',
+      timestamp: '2026-05-23T00:00:00.000Z',
+      stepNum: 1,
+    }]);
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedUser('message-user-history', 'Canonical user prompt'),
+      committedAssistant('assistant:run-history', 'run-history', 'Canonical answer'),
+    ]);
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'Next prompt',
+        permissionMode: 'plan',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    const sentMessages = session.message.send.mock.calls[0][0].payload.messages as Array<{
+      role: string;
+      content: string;
+    }>;
+
+    expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'Canonical user prompt'],
+      ['assistant', 'Canonical answer'],
+      ['user', 'Next prompt'],
+    ]);
+  });
+
+  it('keeps legacy user context when canonical timeline only has assistant history', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'Partial canonical session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStore.getState().setMessages([{
+      id: 'message-user-history',
+      role: 'user',
+      content: 'Legacy user prompt',
+      timestamp: '2026-05-23T23:59:59.000Z',
+      stepNum: 1,
+    }]);
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedAssistant('assistant:run-history', 'run-history', 'Canonical answer'),
+    ]);
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'Next prompt',
+        permissionMode: 'plan',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    const sentMessages = session.message.send.mock.calls[0][0].payload.messages as Array<{
+      role: string;
+      content: string;
+    }>;
+
+    expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'Legacy user prompt'],
+      ['assistant', 'Canonical answer'],
+      ['user', 'Next prompt'],
+    ]);
+  });
+
   it('cancels session messages using a runtime ipc cancel request envelope', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
@@ -602,5 +783,204 @@ describe('useSessionTimeline', () => {
       isStreaming: false,
       pendingToolCalls: [],
     });
+  });
+
+  it('hydrates canonical timeline messages into chat stream state instead of old flat chat messages', async () => {
+    const { session } = installMegumiMock();
+    session.timeline.list.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        messages: [committedAssistant('assistant:run-history', 'run-history', 'Canonical answer')],
+        diagnostics: [],
+      },
+    });
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'History',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStore.getState().setMessages([{
+      id: 'legacy-assistant',
+      role: 'assistant',
+      content: 'Legacy flat answer',
+      timestamp: '2026-05-23T00:00:00.000Z',
+      stepNum: 1,
+    }]);
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    await act(async () => {
+      await result.current.hydrateSessionTimeline('session-1');
+    });
+
+    expect(session.timeline.list).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        projectId: 'project-1',
+        sessionId: 'session-1',
+      },
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.session.timeline.list,
+      }),
+    }));
+    expect(session.message.list).not.toHaveBeenCalled();
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages).toEqual([
+      expect.objectContaining({
+        messageId: 'assistant:run-history',
+        role: 'assistant',
+      }),
+    ]);
+    expect(useChatStore.getState().messages.map((message) => message.content)).toEqual(['Legacy flat answer']);
+  });
+
+  it('drops stale history hydration responses after the active session changes', async () => {
+    const { session, run } = installMegumiMock();
+    const timelineDeferred = deferred<{
+      ok: true;
+      data: {
+        messages: TimelineAssistantMessage[];
+        diagnostics: [];
+      };
+    }>();
+    session.timeline.list.mockReturnValueOnce(timelineDeferred.promise);
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'First session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'Second session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent({
+      eventType: 'run.started',
+      runId: 'run-current',
+      sessionId: 'session-2',
+    }));
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    const hydratePromise = result.current.hydrateSessionTimeline('session-1');
+    await waitFor(() => expect(session.timeline.list).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      useSessionStore.getState().setActiveSession('session-2');
+    });
+    timelineDeferred.resolve({
+      ok: true,
+      data: {
+        messages: [committedAssistant('assistant:run-stale', 'run-stale', 'Stale answer')],
+        diagnostics: [],
+      },
+    });
+
+    await act(async () => {
+      await hydratePromise;
+    });
+
+    expect(run.listBySession).not.toHaveBeenCalled();
+    expect(useRunStore.getState().runs).toHaveProperty('run-current');
+    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')]).toBeUndefined();
+  });
+
+  it('keeps an in-flight streaming assistant message when history hydration returns a committed snapshot for the same run', async () => {
+    const { session } = installMegumiMock();
+    session.timeline.list.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        messages: [committedAssistant('assistant:run-live', 'run-live', 'Committed stale text')],
+        diagnostics: [],
+      },
+    });
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'History',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    useChatStreamStore.getState().dispatch({
+      eventId: 'event-live-1',
+      eventType: 'turn.started',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-live',
+      streamId: 'stream-live',
+      streamKind: 'main',
+      seq: 1,
+      createdAt: '2026-05-24T00:00:01.000Z',
+      userMessageId: 'message-user-live',
+    });
+    useChatStreamStore.getState().dispatch({
+      eventId: 'event-live-2',
+      eventType: 'assistant.text.started',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-live',
+      streamId: 'stream-live',
+      streamKind: 'main',
+      seq: 2,
+      createdAt: '2026-05-24T00:00:02.000Z',
+      textId: 'text-live',
+      phase: 'answer',
+    });
+    useChatStreamStore.getState().dispatch({
+      eventId: 'event-live-3',
+      eventType: 'assistant.text.delta',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-live',
+      streamId: 'stream-live',
+      streamKind: 'main',
+      seq: 3,
+      createdAt: '2026-05-24T00:00:03.000Z',
+      textId: 'text-live',
+      phase: 'answer',
+      delta: 'Streaming live text',
+    });
+    useChatStreamStore.getState().flushStream('project-1', 'session-1', 'stream-live');
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    await act(async () => {
+      await result.current.hydrateSessionTimeline('session-1');
+    });
+
+    const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+    expect(messages).toEqual([
+      expect.objectContaining({
+        messageId: 'assistant:run-live',
+        blocks: [
+          expect.objectContaining({ kind: 'process_disclosure' }),
+          expect.objectContaining({
+            kind: 'answer_text',
+            status: 'streaming',
+            text: 'Streaming live text',
+          }),
+        ],
+      }),
+    ]);
+    expect(JSON.stringify(messages)).not.toContain('Committed stale text');
   });
 });
