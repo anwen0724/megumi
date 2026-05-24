@@ -176,6 +176,63 @@ describe('createChatStreamEventAdapter', () => {
     expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'prelude' });
   });
 
+  it('does not let a stale phase gate timer flush a later model step early', () => {
+    vi.useFakeTimers();
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1', delta: 'First step prelude.' },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.tool_use.detected',
+      sequence: 2,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-1',
+        providerToolUseId: 'tool-use-1',
+        toolName: 'read_file',
+      },
+    }));
+
+    vi.advanceTimersByTime(49);
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 3,
+      payload: { modelStepId: 'model-step-2', delta: 'Second step prelude.' },
+    }));
+    vi.advanceTimersByTime(1);
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.tool_use.detected',
+      sequence: 4,
+      payload: {
+        modelStepId: 'model-step-2',
+        toolUseId: 'tool-use-2',
+        providerToolUseId: 'tool-use-2',
+        toolName: 'search_text',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+    ]);
+    expect(events.filter((event) => event.eventType === 'assistant.text.delta').map((event) => event.phase)).toEqual([
+      'prelude',
+      'prelude',
+    ]);
+    expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
+    vi.useRealTimers();
+  });
+
   it('maps thinking runtime events to assistant thinking events', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
@@ -272,6 +329,53 @@ describe('createChatStreamEventAdapter', () => {
       'approval.resolved',
       'tool.completed',
     ]);
+  });
+
+  it('preserves approval linkage when resolved runtime event only has approval id', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'approval.requested',
+      sequence: 1,
+      payload: {
+        approvalRequest: {
+          approvalRequestId: 'approval-request-1',
+          toolUseId: 'tool-use-1',
+          toolCallId: 'tool-call-1',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'write_file',
+          capabilities: ['project_write'],
+          riskLevel: 'medium',
+          title: 'Approve write_file',
+          summary: 'Writing project file requires approval.',
+          preview: { action: 'write_file', targets: [] },
+          requestedScope: 'project',
+          status: 'pending',
+          createdAt: '2026-05-24T00:00:01.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'approval.resolved',
+      sequence: 2,
+      payload: {
+        approvalRequestId: 'approval-request-1',
+        decision: 'denied',
+        scope: 'project',
+        decidedAt: '2026-05-24T00:00:02.000Z',
+      },
+    }));
+
+    expect(events.at(-1)).toMatchObject({
+      eventType: 'approval.resolved',
+      approvalId: 'approval-request-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      status: 'rejected',
+      decision: 'rejected',
+    });
   });
 
   it('terminates partial answer before turn failed', () => {

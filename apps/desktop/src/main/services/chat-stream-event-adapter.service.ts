@@ -68,6 +68,11 @@ interface ToolActivityState {
   inputSummary?: string;
 }
 
+interface ApprovalLinkState {
+  toolUseId?: string;
+  toolCallId?: string;
+}
+
 interface PhaseFlushHandle {
   cancel(): void;
 }
@@ -85,10 +90,11 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private readonly stepText = new Map<string, ModelStepTextState>();
   private readonly thinkingByStep = new Map<string, ThinkingState>();
   private readonly toolsByUseId = new Map<string, ToolActivityState>();
+  private readonly approvalLinksById = new Map<string, ApprovalLinkState>();
   private seq = 0;
   private started = false;
   private terminal = false;
-  private phaseFlushHandle: PhaseFlushHandle | undefined;
+  private readonly phaseFlushHandlesByStep = new Map<string, PhaseFlushHandle>();
 
   constructor(options: ChatStreamEventAdapterOptions) {
     this.options = options;
@@ -176,7 +182,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   }
 
   flushPhaseGate(): void {
-    this.cancelPhaseFlush();
+    this.cancelAllPhaseFlushes();
     for (const state of this.stepText.values()) {
       if (!state.phase && state.bufferedDeltas.length > 0) {
         this.releaseText(state, 'answer');
@@ -185,7 +191,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   }
 
   dispose(): void {
-    this.cancelPhaseFlush();
+    this.cancelAllPhaseFlushes();
     for (const state of this.stepText.values()) {
       if (!state.phase && state.bufferedDeltas.length > 0) {
         this.releaseText(state, 'answer');
@@ -205,7 +211,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     const state = this.textState(payload.modelStepId);
     if (!state.phase) {
       state.bufferedDeltas.push(payload.delta);
-      this.ensurePhaseFlushScheduled();
+      this.ensurePhaseFlushScheduled(payload.modelStepId);
       return;
     }
 
@@ -430,13 +436,17 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     if (!approvalId || !title) {
       return;
     }
+    const link = {
+      ...(stringValue(approvalRequest.toolUseId) ? { toolUseId: stringValue(approvalRequest.toolUseId) } : {}),
+      ...(stringValue(approvalRequest.toolCallId) ? { toolCallId: stringValue(approvalRequest.toolCallId) } : {}),
+    };
+    this.approvalLinksById.set(approvalId, link);
 
     this.publish(createChatStreamEvent({
       ...this.base(),
       eventType: 'approval.requested',
       approvalId,
-      ...(stringValue(approvalRequest.toolUseId) ? { toolUseId: stringValue(approvalRequest.toolUseId) } : {}),
-      ...(stringValue(approvalRequest.toolCallId) ? { toolCallId: stringValue(approvalRequest.toolCallId) } : {}),
+      ...link,
       scope: stringValue(approvalRequest.requestedScope) ?? 'project',
       status: 'pending',
       title,
@@ -458,12 +468,13 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }
 
     const decision = approvalResolutionStatus(payload.decision);
+    const link = this.approvalLinksById.get(payload.approvalRequestId);
     this.publish(createChatStreamEvent({
       ...this.base(),
       eventType: 'approval.resolved',
       approvalId: payload.approvalRequestId,
-      ...(typeof payload.toolUseId === 'string' ? { toolUseId: payload.toolUseId } : {}),
-      ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : {}),
+      ...(typeof payload.toolUseId === 'string' ? { toolUseId: payload.toolUseId } : link?.toolUseId ? { toolUseId: link.toolUseId } : {}),
+      ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : link?.toolCallId ? { toolCallId: link.toolCallId } : {}),
       scope: typeof payload.scope === 'string' ? payload.scope : 'project',
       status: decision,
       decision,
@@ -510,6 +521,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
 
   private markStepPrelude(modelStepId: string): void {
     const state = this.textState(modelStepId);
+    this.cancelPhaseFlush(modelStepId);
     if (state.phase === 'answer' && state.text && !state.text.terminal) {
       this.failProviderSequenceConflict(state.text);
       return;
@@ -695,24 +707,42 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     return typeof payload.modelStepId === 'string' ? payload.modelStepId : undefined;
   }
 
-  private ensurePhaseFlushScheduled(): void {
-    if (this.phaseFlushHandle) {
+  private ensurePhaseFlushScheduled(modelStepId: string): void {
+    if (this.phaseFlushHandlesByStep.has(modelStepId)) {
       return;
     }
 
-    this.phaseFlushHandle = this.schedulePhaseFlush(() => {
-      this.phaseFlushHandle = undefined;
-      this.flushPhaseGate();
+    const handle = this.schedulePhaseFlush(() => {
+      if (this.phaseFlushHandlesByStep.get(modelStepId) !== handle) {
+        return;
+      }
+      this.phaseFlushHandlesByStep.delete(modelStepId);
+      this.flushPhaseGateForStep(modelStepId);
     }, this.phaseDecisionDelayMs);
+    this.phaseFlushHandlesByStep.set(modelStepId, handle);
   }
 
-  private cancelPhaseFlush(): void {
-    this.phaseFlushHandle?.cancel();
-    this.phaseFlushHandle = undefined;
+  private flushPhaseGateForStep(modelStepId: string): void {
+    const state = this.stepText.get(modelStepId);
+    if (!state?.phase && state?.bufferedDeltas.length) {
+      this.releaseText(state, 'answer');
+    }
+  }
+
+  private cancelPhaseFlush(modelStepId: string): void {
+    this.phaseFlushHandlesByStep.get(modelStepId)?.cancel();
+    this.phaseFlushHandlesByStep.delete(modelStepId);
+  }
+
+  private cancelAllPhaseFlushes(): void {
+    for (const handle of this.phaseFlushHandlesByStep.values()) {
+      handle.cancel();
+    }
+    this.phaseFlushHandlesByStep.clear();
   }
 
   private finishTurn(): void {
-    this.cancelPhaseFlush();
+    this.cancelAllPhaseFlushes();
     this.terminal = true;
   }
 
