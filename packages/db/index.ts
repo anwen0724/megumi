@@ -9,3 +9,4 @@ export * from './repos/recovery.repo';
 export * from './repos/artifact.repo';
 export * from './repos/memory.repo';
 export * from './repos/project.repo';
+export * from './repos/timeline-message.repo';

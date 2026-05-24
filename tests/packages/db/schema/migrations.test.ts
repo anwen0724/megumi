@@ -322,6 +322,9 @@ describe('provider settings migrations', () => {
       'tool_results',
       'tool_uses',
       'permission_decisions',
+      'timeline_messages',
+      'timeline_run_commits',
+      'timeline_commit_diagnostics',
     ]));
 
     const indexes = database
@@ -345,6 +348,7 @@ describe('provider settings migrations', () => {
       'idx_tool_uses_model_step_id',
       'idx_tool_uses_run_id',
       'idx_permission_decisions_tool_use_id',
+      'idx_timeline_messages_session_order',
     ]));
   });
 

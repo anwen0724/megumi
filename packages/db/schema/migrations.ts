@@ -222,6 +222,47 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(observation_id) REFERENCES run_observations(observation_id) ON DELETE SET NULL,
       FOREIGN KEY(message_id) REFERENCES session_messages(message_id) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS timeline_messages (
+      message_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      run_id TEXT,
+      role TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      sort_time TEXT NOT NULL,
+      blocks_json TEXT NOT NULL,
+      message_json TEXT NOT NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS timeline_run_commits (
+      run_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      committed_at TEXT,
+      updated_at TEXT NOT NULL,
+      error_json TEXT,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS timeline_commit_diagnostics (
+      diagnostic_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
   `);
 
   database.exec(`
@@ -818,6 +859,15 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_events_run_sequence
     ON runtime_events(run_id, sequence)
     WHERE run_id IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_timeline_messages_session_order
+    ON timeline_messages(project_id, session_id, sort_time, message_id);
+
+    CREATE INDEX IF NOT EXISTS idx_timeline_messages_run_id
+    ON timeline_messages(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_timeline_commit_diagnostics_run_id
+    ON timeline_commit_diagnostics(run_id, created_at);
 
     CREATE INDEX IF NOT EXISTS idx_run_context_baselines_run_id
     ON run_context_baselines(run_id);
