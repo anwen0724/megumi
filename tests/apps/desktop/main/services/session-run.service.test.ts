@@ -11,6 +11,7 @@ import {
   type SessionRunServiceOptions,
 } from '@megumi/desktop/main/services/session-run.service';
 import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
+import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
@@ -240,6 +241,83 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
         return () => {
           index += 1;
           return `message-${index}`;
+        };
+      })(),
+    },
+  });
+}
+
+function createServiceWithChatStreamSink(
+  events: RuntimeEvent[] | ((request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[]),
+  chatEvents: ChatStreamEvent[],
+  options?: {
+    toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
+    toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
+  },
+) {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new SessionRunRepository(db);
+  let callIndex = 0;
+  return new SessionRunService({
+    repository,
+    ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
+    ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
+    modelStepProvider: {
+      streamModelStep: async function* (request) {
+        callIndex += 1;
+        yield* (typeof events === 'function' ? events(request, callIndex) : events);
+      },
+      cancelModelStep: () => true,
+    },
+    chatStreamEventSink: {
+      publish: (event) => chatEvents.push(event),
+    },
+    clock: { now: () => '2026-05-24T00:00:00.000Z' },
+    ids: {
+      sessionId: () => 'session-1',
+      runId: () => 'run-1',
+      stepId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `step-${index}`;
+        };
+      })(),
+      eventId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `event-${index}`;
+        };
+      })(),
+      messageId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `message-${index}`;
+        };
+      })(),
+      chatStreamEventId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `chat-stream-event-${index}`;
+        };
+      })(),
+      chatStreamId: () => 'stream-main-1',
+      chatTextId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `text-${index}`;
+        };
+      })(),
+      chatThinkingId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `thinking-${index}`;
         };
       })(),
     },
@@ -1276,6 +1354,254 @@ describe('SessionRunService', () => {
         runId: 'run-1',
       }),
     ]));
+  });
+
+  it('publishes chat stream events through the injected sink while keeping runtime events unchanged', async () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const service = createServiceWithChatStreamSink([
+      modelOutputDeltaEvent({ sequence: 1, delta: 'Hel' }),
+      modelOutputDeltaEvent({ sequence: 2, delta: 'lo' }),
+      {
+        eventId: 'event-model-step-completed',
+        schemaVersion: 1,
+        eventType: 'model.step.completed',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        sequence: 3,
+        createdAt: '2026-05-24T00:00:01.000Z',
+        source: 'provider',
+        visibility: 'system',
+        persist: 'required',
+        payload: { modelStepId: 'model-step-1', finishReason: 'stop' },
+      },
+    ], chatEvents);
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: '2026-05-24T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-24T00:00:00.000Z',
+      },
+    });
+    const runtimeEvents = [];
+    for await (const event of result.events) {
+      runtimeEvents.push(event);
+    }
+
+    expect(runtimeEvents.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'model.output.delta',
+      'model.step.completed',
+      'step.status.changed',
+      'step.completed',
+      'run.status.changed',
+      'run.completed',
+    ]);
+    expect(runtimeEvents.find((event) => event.eventType === 'model.output.delta')?.payload).toMatchObject({
+      delta: 'Hello',
+    });
+    expect(chatEvents.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+      'turn.completed',
+    ]);
+    expect(chatEvents.find((event) => event.eventType === 'assistant.text.delta')).toMatchObject({
+      delta: 'Hello',
+      phase: 'answer',
+    });
+    expect(chatEvents.every((event) => event.projectId === 'project-1')).toBe(true);
+    expect(chatEvents.every((event) => event.streamId === 'stream-main-1')).toBe(true);
+    expect(chatEvents.every((event) => event.streamId !== 'run-1')).toBe(true);
+    expect(chatEvents.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('keeps the same chat stream across approval resume', async () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const toolResult = createToolResult({
+      toolCallId: 'tool-call-1',
+      toolUseId: 'tool-use-1',
+      kind: 'success',
+      textContent: 'Wrote src/app.ts',
+    });
+    let resumeCalled = false;
+    const service = createServiceWithChatStreamSink((_request, callIndex) => {
+      if (callIndex === 1) {
+        return [
+          {
+            ...toolUseCreatedEventFor({
+              sequence: 1,
+              toolUseId: 'tool-use-1',
+              providerToolUseId: 'provider-tool-use-1',
+              toolName: 'write_file',
+              input: { path: 'src/app.ts' },
+            }),
+            createdAt: '2026-05-24T00:00:00.000Z',
+          },
+          {
+            ...modelStepCompletedEvent(2),
+            createdAt: '2026-05-24T00:00:00.000Z',
+          },
+        ];
+      }
+
+      return [
+        {
+          ...assistantOutputCompletedEvent(1),
+          stepId: `step-${callIndex}`,
+          createdAt: '2026-05-24T00:00:03.000Z',
+        },
+      ];
+    }, chatEvents, {
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses(input) {
+              const toolUse = input.toolUses[0];
+              if (!toolUse) {
+                throw new Error('Expected one tool use.');
+              }
+              const toolCall: ToolCall = {
+                toolCallId: 'tool-call-1',
+                toolUseId: toolUse.toolUseId,
+                runId: toolUse.runId,
+                stepId: 'step-1',
+                toolName: toolUse.toolName,
+                input: toolUse.input,
+                inputPreview: toolUse.inputPreview,
+                capabilities: ['project_write'],
+                riskLevel: 'medium',
+                sideEffect: 'project_file_operation',
+                status: 'waiting_for_approval',
+                requestedAt: '2026-05-24T00:00:00.000Z',
+              };
+              const approvalRequest: ApprovalRequest = {
+                approvalRequestId: 'approval-request-1',
+                toolUseId: toolUse.toolUseId,
+                toolCallId: toolCall.toolCallId,
+                runId: toolUse.runId,
+                stepId: toolCall.stepId,
+                toolName: toolUse.toolName,
+                capabilities: toolCall.capabilities,
+                riskLevel: toolCall.riskLevel,
+                title: 'Approve write_file',
+                summary: 'Writing project file requires approval.',
+                preview: { action: 'write_file', targets: [] },
+                requestedScope: 'project',
+                status: 'pending',
+                createdAt: '2026-05-24T00:00:00.000Z',
+              };
+
+              return {
+                toolResults: [],
+                pendingApprovals: [{
+                  approvalRequest,
+                  toolUse,
+                  toolCall,
+                }],
+                runtimeEvents: [{
+                  eventId: 'event-approval-requested',
+                  schemaVersion: 1,
+                  eventType: 'approval.requested',
+                  runId: 'run-1',
+                  sessionId: 'session-1',
+                  stepId: 'step-1',
+                  sequence: 3,
+                  createdAt: '2026-05-24T00:00:00.000Z',
+                  source: 'approval',
+                  visibility: 'user',
+                  persist: 'required',
+                  payload: { approvalRequest },
+                }],
+              };
+            },
+            async resumeToolApproval() {
+              resumeCalled = true;
+              return { toolResult };
+            },
+          };
+        },
+      },
+      toolDefinitionProvider: {
+        listDefinitions: () => [{
+          name: 'write_file',
+          description: 'Write project file.',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: true,
+          },
+          capabilities: ['project_write'],
+          riskLevel: 'medium',
+          sideEffect: 'project_file_operation',
+          availability: { status: 'available' },
+        }],
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        context: { permissionMode: 'default' },
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Write a file',
+          createdAt: '2026-05-24T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-24T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain initial run until waiting for approval.
+    }
+    const beforeResumeCount = chatEvents.length;
+
+    const resumeEvents = service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-24T00:00:02.000Z',
+    });
+    expect(resumeEvents).toBeDefined();
+    for await (const _event of resumeEvents ?? []) {
+      // Drain resumed run.
+    }
+
+    expect(resumeCalled).toBe(true);
+    expect(chatEvents.filter((event) => event.eventType === 'turn.started')).toHaveLength(1);
+    expect(new Set(chatEvents.map((event) => event.streamId))).toEqual(new Set(['stream-main-1']));
+    expect(chatEvents.map((event) => event.seq)).toEqual(chatEvents.map((_, index) => index + 1));
+    expect(chatEvents.slice(beforeResumeCount).map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'approval.resolved',
+      'tool.completed',
+    ]));
+    expect(chatEvents.at(-1)?.eventType).toBe('turn.completed');
   });
 
   it('marks session message runs waiting and resumes live continuation after approval resolution', async () => {

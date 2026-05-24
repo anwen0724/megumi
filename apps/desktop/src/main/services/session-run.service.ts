@@ -49,6 +49,11 @@ import { createRuntimeEvent, createToolResultCreatedEvent } from '@megumi/shared
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
+import {
+  createChatStreamEventAdapter,
+  type ChatStreamEventAdapter,
+  type ChatStreamEventSink,
+} from './chat-stream-event-adapter.service';
 
 export interface SessionRunServiceClock {
   now(): string;
@@ -56,6 +61,10 @@ export interface SessionRunServiceClock {
 
 export interface SessionRunServiceIds extends RunIdFactory {
   sessionId(): string;
+  chatStreamEventId(): string;
+  chatStreamId(input: { runId: string }): string;
+  chatTextId(): string;
+  chatThinkingId(): string;
 }
 
 export interface SessionRunContextService {
@@ -99,6 +108,7 @@ interface ApprovalContinuationGroup {
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
   toolRuntime: ToolUseHandlerPort & ToolApprovalResumePort;
+  chatStreamAdapter?: ChatStreamEventAdapter;
 }
 
 export interface SessionRunServiceOptions {
@@ -116,6 +126,7 @@ export interface SessionRunServiceOptions {
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   hostBoundary?: RunHostBoundaryPort;
+  chatStreamEventSink?: ChatStreamEventSink;
   clock?: SessionRunServiceClock;
   ids?: Partial<SessionRunServiceIds>;
 }
@@ -146,6 +157,10 @@ function createDefaultIds(): SessionRunServiceIds {
     eventId: () => `event:${crypto.randomUUID()}`,
     messageId: () => `message:${crypto.randomUUID()}`,
     debugId: () => `debug:${crypto.randomUUID()}`,
+    chatStreamEventId: () => `chat-stream-event:${crypto.randomUUID()}`,
+    chatStreamId: ({ runId }) => `chat-stream:${runId}:${crypto.randomUUID()}`,
+    chatTextId: () => `text:${crypto.randomUUID()}`,
+    chatThinkingId: () => `thinking:${crypto.randomUUID()}`,
   };
 }
 
@@ -164,6 +179,7 @@ export class SessionRunService {
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly hostBoundary: RunHostBoundaryPort;
+  private readonly chatStreamEventSink?: ChatStreamEventSink;
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
@@ -172,6 +188,7 @@ export class SessionRunService {
     runId: string;
     sessionId: string;
     stepId: string;
+    chatStreamAdapter?: ChatStreamEventAdapter;
   }>();
 
   constructor(options: SessionRunServiceOptions) {
@@ -181,6 +198,7 @@ export class SessionRunService {
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
+    this.chatStreamEventSink = options.chatStreamEventSink;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
@@ -382,10 +400,32 @@ export class SessionRunService {
           permissionMode,
         })
       : undefined;
+    const chatStreamAdapter = this.chatStreamEventSink
+      ? createChatStreamEventAdapter({
+          sink: this.chatStreamEventSink,
+          projectId: String(session.workspaceId ?? session.sessionId),
+          sessionId: String(session.sessionId),
+          runId: String(runId),
+          streamId: this.ids.chatStreamId({ runId: String(runId) }),
+          streamKind: 'main',
+          userMessageId: String(userMessage.messageId),
+          clientMessageId: String(lastUserMessage.id),
+          userMessageText: userMessage.content,
+          createdAt,
+          now: () => this.clock.now(),
+          ids: {
+            eventId: this.ids.chatStreamEventId,
+            textId: this.ids.chatTextId,
+            thinkingId: this.ids.chatThinkingId,
+          },
+        })
+      : undefined;
+    chatStreamAdapter?.startTurn();
     this.activeSessionMessageRuns.set(input.requestId, {
       runId,
       sessionId: session.sessionId,
       stepId,
+      ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
     });
 
     return {
@@ -396,6 +436,7 @@ export class SessionRunService {
         step,
         userMessageId: userMessage.messageId,
         ...(toolRuntime ? { toolRuntime } : {}),
+        ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
     };
   }
@@ -433,7 +474,7 @@ export class SessionRunService {
       status: 'cancelled',
       cancelledAt,
     });
-    this.repository.appendRuntimeEvent(createRuntimeEvent({
+    const cancelledEvent = createRuntimeEvent({
       eventId: this.ids.eventId(),
       eventType: 'run.cancelled',
       runId: activeRun.runId,
@@ -450,8 +491,9 @@ export class SessionRunService {
           ? 'Provider request was cancelled.'
           : 'Session message run was cancelled by the user.',
       },
-    }));
-    this.repository.appendRuntimeEvent(createRunStatusChangedEvent({
+    });
+    this.appendRuntimeEvent(cancelledEvent, activeRun.chatStreamAdapter);
+    this.appendRuntimeEvent(createRunStatusChangedEvent({
       eventId: this.ids.eventId(),
       sessionId: activeRun.sessionId,
       runId: activeRun.runId,
@@ -459,7 +501,7 @@ export class SessionRunService {
       createdAt: cancelledAt,
       from: persistedRun.status,
       to: 'cancelled',
-    }));
+    }), activeRun.chatStreamAdapter);
     this.activeSessionMessageRuns.delete(payload.targetRequestId);
     return true;
   }
@@ -550,6 +592,7 @@ export class SessionRunService {
     step: RunStep;
     userMessageId: string;
     toolRuntime?: ToolUseHandlerPort & ToolApprovalResumePort;
+    chatStreamAdapter?: ChatStreamEventAdapter;
     startSequence?: number;
     emitRunStarted?: boolean;
   }): AsyncIterable<RuntimeEvent> {
@@ -570,7 +613,7 @@ export class SessionRunService {
         sequence: lastSequence += 1,
         createdAt: input.request.createdAt,
       }), input.request);
-      this.repository.appendRuntimeEvent(startedEvent);
+      this.appendRuntimeEvent(startedEvent, input.chatStreamAdapter);
       yield startedEvent;
     }
 
@@ -611,7 +654,7 @@ export class SessionRunService {
         const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
         lastSequence = eventWithRequest.sequence;
         this.persistModelStepRecordFromEvent(input.request, eventWithRequest, currentModelStep.stepId);
-        this.repository.appendRuntimeEvent(eventWithRequest);
+        this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
         if (eventWithRequest.eventType === 'assistant.output.delta' || eventWithRequest.eventType === 'model.output.delta') {
           assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
         }
@@ -656,7 +699,7 @@ export class SessionRunService {
         createdAt: this.clock.now(),
         error: createRuntimeErrorFromUnknown(error),
       }), input.request);
-      this.repository.appendRuntimeEvent(failedEvent);
+      this.appendRuntimeEvent(failedEvent, input.chatStreamAdapter);
       terminalEvent = failedEvent;
       yield failedEvent;
     }
@@ -685,6 +728,7 @@ export class SessionRunService {
         ])),
         resolvedResults: [],
         toolRuntime,
+        ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
       };
       this.pendingApprovalGroups.set(groupId, group);
       for (const approvalRequestId of group.pendingByApprovalId.keys()) {
@@ -699,7 +743,7 @@ export class SessionRunService {
         from: 'running',
         to: 'waiting_for_approval',
       }), input.request);
-      this.repository.appendRuntimeEvent(waitingEvent);
+      this.appendRuntimeEvent(waitingEvent, input.chatStreamAdapter);
       yield waitingEvent;
       return;
     }
@@ -750,7 +794,7 @@ export class SessionRunService {
         }),
       ]) {
         const eventWithRequest = withRequestMetadata(event, input.request);
-        this.repository.appendRuntimeEvent(eventWithRequest);
+        this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
         yield eventWithRequest;
       }
       return;
@@ -789,7 +833,7 @@ export class SessionRunService {
         }),
       ]) {
         const eventWithRequest = withRequestMetadata(event, input.request);
-        this.repository.appendRuntimeEvent(eventWithRequest);
+        this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
         yield eventWithRequest;
       }
       return;
@@ -860,8 +904,16 @@ export class SessionRunService {
       }),
     ]) {
       const eventWithRequest = withRequestMetadata(event, input.request);
-      this.repository.appendRuntimeEvent(eventWithRequest);
+      this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
       yield eventWithRequest;
+    }
+  }
+
+  private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
+    this.repository.appendRuntimeEvent(event);
+    chatStreamAdapter?.handleRuntimeEvent(event);
+    if (isRunTerminalRuntimeEvent(event)) {
+      chatStreamAdapter?.dispose();
     }
   }
 
@@ -895,6 +947,7 @@ export class SessionRunService {
       return;
     }
     const { toolResult } = resumeOutcome;
+    const chatStreamAdapter = continuation.chatStreamAdapter;
 
     let lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(continuation.request.runId));
     continuation.pendingByApprovalId.delete(input.approvalRequestId);
@@ -921,7 +974,7 @@ export class SessionRunService {
         decidedAt: input.decidedAt,
       },
     }), continuation.request);
-    this.repository.appendRuntimeEvent(approvalResolvedEvent);
+    this.appendRuntimeEvent(approvalResolvedEvent, chatStreamAdapter);
     yield approvalResolvedEvent;
 
     if (continuation.pendingByApprovalId.size > 0) {
@@ -933,6 +986,10 @@ export class SessionRunService {
       });
       lastSequence = resumeEvents.lastSequence;
       for (const event of resumeEvents.events) {
+        chatStreamAdapter?.handleRuntimeEvent(event);
+        if (isRunTerminalRuntimeEvent(event)) {
+          chatStreamAdapter?.dispose();
+        }
         yield event;
       }
       if (!resumeEvents.hasToolResultEvent) {
@@ -942,7 +999,7 @@ export class SessionRunService {
           sequence: lastSequence += 1,
           toolResult,
         });
-        this.repository.appendRuntimeEvent(toolResultEvent);
+        this.appendRuntimeEvent(toolResultEvent, chatStreamAdapter);
         yield toolResultEvent;
       }
       return;
@@ -964,7 +1021,7 @@ export class SessionRunService {
       from: 'waiting_for_approval',
       to: 'running',
     }), continuation.request);
-    this.repository.appendRuntimeEvent(runningEvent);
+    this.appendRuntimeEvent(runningEvent, chatStreamAdapter);
     yield runningEvent;
 
     const resumeEvents = this.persistResumeRuntimeEvents({
@@ -975,6 +1032,10 @@ export class SessionRunService {
     });
     lastSequence = resumeEvents.lastSequence;
     for (const event of resumeEvents.events) {
+      chatStreamAdapter?.handleRuntimeEvent(event);
+      if (isRunTerminalRuntimeEvent(event)) {
+        chatStreamAdapter?.dispose();
+      }
       yield event;
     }
 
@@ -985,7 +1046,7 @@ export class SessionRunService {
         sequence: lastSequence += 1,
         toolResult,
       });
-      this.repository.appendRuntimeEvent(toolResultEvent);
+      this.appendRuntimeEvent(toolResultEvent, chatStreamAdapter);
       yield toolResultEvent;
     }
 
@@ -1015,6 +1076,7 @@ export class SessionRunService {
       userMessageId: continuation.userMessageId,
       startSequence: lastSequence,
       toolRuntime: continuation.toolRuntime,
+      ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       emitRunStarted: false,
     });
   }
@@ -1220,6 +1282,12 @@ function isToolCallModelStepCompletion(payload: RuntimeEvent['payload']): boolea
   }
 
   return payload.finishReason === 'tool_calls';
+}
+
+function isRunTerminalRuntimeEvent(event: RuntimeEvent): boolean {
+  return event.eventType === 'run.completed'
+    || event.eventType === 'run.failed'
+    || event.eventType === 'run.cancelled';
 }
 
 function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | undefined {
