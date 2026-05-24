@@ -1,0 +1,389 @@
+// @vitest-environment node
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createChatStreamEventAdapter,
+  type ChatStreamEventSink,
+} from '@megumi/desktop/main/services/chat-stream-event-adapter.service';
+import { ChatStreamEventSchema, type ChatStreamEvent } from '@megumi/shared';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+
+function collectSink(): { sink: ChatStreamEventSink; events: ChatStreamEvent[] } {
+  const events: ChatStreamEvent[] = [];
+  return {
+    events,
+    sink: {
+      publish: (event) => {
+        events.push(ChatStreamEventSchema.parse(event));
+      },
+    },
+  };
+}
+
+function adapter(events: ChatStreamEvent[]) {
+  return createChatStreamEventAdapter({
+    sink: { publish: (event) => events.push(ChatStreamEventSchema.parse(event)) },
+    projectId: 'project-1',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    streamId: 'stream-main-1',
+    streamKind: 'main',
+    userMessageId: 'message-user-1',
+    clientMessageId: 'message-local-user',
+    userMessageText: 'Hello',
+    createdAt: '2026-05-24T00:00:00.000Z',
+    now: () => '2026-05-24T00:00:00.050Z',
+    ids: {
+      eventId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `chat-stream-event-${index}`;
+        };
+      })(),
+      textId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `text-${index}`;
+        };
+      })(),
+      thinkingId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `thinking-${index}`;
+        };
+      })(),
+    },
+  });
+}
+
+function runtimeEvent(event: Partial<RuntimeEvent> & Pick<RuntimeEvent, 'eventType' | 'payload' | 'sequence'>): RuntimeEvent {
+  return {
+    eventId: `runtime-event-${event.sequence}`,
+    schemaVersion: 1,
+    runId: 'run-1',
+    sessionId: 'session-1',
+    stepId: 'step-1',
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    createdAt: '2026-05-24T00:00:00.000Z',
+    ...event,
+  } as RuntimeEvent;
+}
+
+describe('createChatStreamEventAdapter', () => {
+  it('publishes turn and user message events on start', () => {
+    const { events } = collectSink();
+    const subject = adapter(events);
+
+    subject.startTurn();
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+    ]);
+    expect(events.map((event) => event.seq)).toEqual([1, 2]);
+    expect(events[0].streamId).toBe('stream-main-1');
+    expect(events[0].streamId).not.toBe(events[0].runId);
+  });
+
+  it('keeps tool-enabled pure text answer streaming after phase gate flush', () => {
+    vi.useFakeTimers();
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1', delta: 'Hel' },
+    }));
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+    ]);
+
+    vi.advanceTimersByTime(50);
+    subject.flushPhaseGate();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 2,
+      payload: { modelStepId: 'model-step-1', delta: 'lo' },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'run.completed',
+      sequence: 3,
+      payload: {},
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.delta',
+      'assistant.text.completed',
+      'turn.completed',
+    ]);
+    expect(events.filter((event) => event.eventType === 'assistant.text.delta').map((event) => event.phase)).toEqual([
+      'answer',
+      'answer',
+    ]);
+    vi.useRealTimers();
+  });
+
+  it('moves buffered text to prelude when tool use is detected before phase gate flush', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1', delta: 'Let me check.' },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.tool_use.detected',
+      sequence: 2,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-1',
+        providerToolUseId: 'tool-use-1',
+        toolName: 'read_file',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.use.created',
+      sequence: 3,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-1',
+        providerToolUseId: 'tool-use-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+      'tool.started',
+    ]);
+    expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'prelude' });
+  });
+
+  it('maps thinking runtime events to assistant thinking events', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.thinking.started',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1' },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.thinking.delta',
+      sequence: 2,
+      payload: { modelStepId: 'model-step-1', delta: 'I need context.' },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.thinking.completed',
+      sequence: 3,
+      payload: { modelStepId: 'model-step-1' },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.thinking.started',
+      'assistant.thinking.delta',
+      'assistant.thinking.completed',
+    ]);
+  });
+
+  it('maps tool result and approval events to chat stream activities', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.use.created',
+      sequence: 1,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-1',
+        providerToolUseId: 'tool-use-1',
+        toolName: 'write_file',
+        input: { path: 'src/app.ts' },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'approval.requested',
+      sequence: 2,
+      payload: {
+        approvalRequest: {
+          approvalRequestId: 'approval-request-1',
+          toolUseId: 'tool-use-1',
+          toolCallId: 'tool-call-1',
+          runId: 'run-1',
+          stepId: 'step-1',
+          toolName: 'write_file',
+          capabilities: ['project_write'],
+          riskLevel: 'medium',
+          title: 'Approve write_file',
+          summary: 'Writing project file requires approval.',
+          preview: { action: 'write_file', targets: [] },
+          requestedScope: 'project',
+          status: 'pending',
+          createdAt: '2026-05-24T00:00:01.000Z',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'approval.resolved',
+      sequence: 3,
+      payload: {
+        approvalRequestId: 'approval-request-1',
+        decision: 'approved',
+        scope: 'project',
+        decidedAt: '2026-05-24T00:00:02.000Z',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'tool.result.created',
+      sequence: 4,
+      payload: {
+        toolResultId: 'tool-result-1',
+        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        kind: 'success',
+        summary: 'Wrote src/app.ts',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'tool.started',
+      'approval.requested',
+      'approval.resolved',
+      'tool.completed',
+    ]);
+  });
+
+  it('terminates partial answer before turn failed', () => {
+    vi.useFakeTimers();
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1', delta: 'Partial answer' },
+    }));
+    vi.advanceTimersByTime(50);
+    subject.flushPhaseGate();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'run.failed',
+      sequence: 2,
+      payload: {
+        error: {
+          code: 'provider_network_error',
+          message: 'Provider failed.',
+          severity: 'error',
+          source: 'provider',
+        },
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.failed',
+      'turn.failed',
+    ]);
+    expect(events.at(-2)).toMatchObject({
+      eventType: 'assistant.text.failed',
+      phase: 'answer',
+      errorCode: 'provider_network_error',
+    });
+    vi.useRealTimers();
+  });
+
+  it('terminates partial answer before turn cancelled', () => {
+    vi.useFakeTimers();
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1', delta: 'Partial answer' },
+    }));
+    vi.advanceTimersByTime(50);
+    subject.flushPhaseGate();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'run.cancelled',
+      sequence: 2,
+      payload: { reason: 'User cancelled.' },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.cancelled_partial',
+      'turn.cancelled',
+    ]);
+    expect(events.at(-2)).toMatchObject({
+      eventType: 'assistant.text.cancelled_partial',
+      phase: 'answer',
+      reason: 'User cancelled.',
+    });
+    vi.useRealTimers();
+  });
+
+  it('fails the turn when a tool-use signal arrives after answer phase started in the same model step', () => {
+    vi.useFakeTimers();
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.output.delta',
+      sequence: 1,
+      payload: { modelStepId: 'model-step-1', delta: 'This is final.' },
+    }));
+    vi.advanceTimersByTime(50);
+    subject.flushPhaseGate();
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.tool_use.detected',
+      sequence: 2,
+      payload: {
+        modelStepId: 'model-step-1',
+        toolUseId: 'tool-use-late',
+        providerToolUseId: 'tool-use-late',
+        toolName: 'read_file',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.failed',
+      'turn.failed',
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      eventType: 'turn.failed',
+      errorCode: 'provider_sequence_conflict',
+    });
+    vi.useRealTimers();
+  });
+});
