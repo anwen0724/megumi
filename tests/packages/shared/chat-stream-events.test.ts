@@ -1,0 +1,215 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import {
+  ChatStreamEventSchema,
+  ChatStreamEventTypeSchema,
+  AssistantTextDeltaEventSchema,
+  ToolCompletedEventSchema,
+} from '@megumi/shared/chat-stream-event-schemas';
+import {
+  ASSISTANT_TEXT_PHASES,
+  CHAT_STREAM_EVENT_TYPES,
+  type ChatStreamEvent,
+} from '@megumi/shared/chat-stream-events';
+
+const base = {
+  eventId: 'chat-stream-event-1',
+  projectId: 'project-1',
+  sessionId: 'session-1',
+  runId: 'run-1',
+  streamId: 'stream-main-1',
+  streamKind: 'main',
+  seq: 1,
+  createdAt: '2026-05-24T00:00:00.000Z',
+} as const;
+
+describe('chat stream event contract', () => {
+  it('lists the UI-facing event types without assistant answer events', () => {
+    expect(CHAT_STREAM_EVENT_TYPES).toEqual([
+      'turn.started',
+      'turn.completed',
+      'turn.failed',
+      'turn.cancelled',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+      'assistant.text.failed',
+      'assistant.text.cancelled_partial',
+      'assistant.thinking.started',
+      'assistant.thinking.delta',
+      'assistant.thinking.completed',
+      'tool.started',
+      'tool.completed',
+      'tool.failed',
+      'tool.denied',
+      'approval.requested',
+      'approval.resolved',
+    ]);
+    expect(CHAT_STREAM_EVENT_TYPES.some((type) => type.startsWith('assistant.answer.'))).toBe(false);
+    expect(ASSISTANT_TEXT_PHASES).toEqual(['prelude', 'answer']);
+    expect(ChatStreamEventTypeSchema.parse('assistant.text.delta')).toBe('assistant.text.delta');
+    expect(() => ChatStreamEventTypeSchema.parse('assistant.answer.delta')).toThrow();
+  });
+
+  it('parses a pure text answer sequence', () => {
+    const events = [
+      {
+        ...base,
+        eventType: 'turn.started',
+        userMessageId: 'message-user-1',
+        clientMessageId: 'client-message-1',
+      },
+      {
+        ...base,
+        eventId: 'chat-stream-event-2',
+        eventType: 'user.message.committed',
+        clientMessageId: 'client-message-1',
+        messageId: 'message-user-1',
+        text: 'Hello',
+      },
+      {
+        ...base,
+        eventId: 'chat-stream-event-3',
+        eventType: 'assistant.text.started',
+        textId: 'text-answer-1',
+        phase: 'answer',
+        seq: 2,
+      },
+      {
+        ...base,
+        eventId: 'chat-stream-event-4',
+        eventType: 'assistant.text.delta',
+        textId: 'text-answer-1',
+        phase: 'answer',
+        delta: 'Hello there',
+        seq: 3,
+      },
+      {
+        ...base,
+        eventId: 'chat-stream-event-5',
+        eventType: 'assistant.text.completed',
+        textId: 'text-answer-1',
+        phase: 'answer',
+        seq: 4,
+      },
+      {
+        ...base,
+        eventId: 'chat-stream-event-6',
+        eventType: 'turn.completed',
+        elapsedMs: 1200,
+        seq: 5,
+      },
+    ] satisfies ChatStreamEvent[];
+
+    expect(events.map((event) => ChatStreamEventSchema.parse(event).eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+      'turn.completed',
+    ]);
+  });
+
+  it('keeps prelude text and final answer text separated by phase', () => {
+    const prelude = AssistantTextDeltaEventSchema.parse({
+      ...base,
+      eventType: 'assistant.text.delta',
+      textId: 'text-prelude-1',
+      phase: 'prelude',
+      delta: 'Let me check.',
+    });
+    const answer = AssistantTextDeltaEventSchema.parse({
+      ...base,
+      eventId: 'chat-stream-event-answer',
+      eventType: 'assistant.text.delta',
+      textId: 'text-answer-1',
+      phase: 'answer',
+      delta: 'The directory contains docs.',
+    });
+
+    expect(prelude.phase).toBe('prelude');
+    expect(answer.phase).toBe('answer');
+  });
+
+  it('parses thinking, tool, approval, and terminal events', () => {
+    expect(ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'assistant.thinking.started',
+      thinkingId: 'thinking-1',
+    }).eventType).toBe('assistant.thinking.started');
+
+    expect(ToolCompletedEventSchema.parse({
+      ...base,
+      eventId: 'chat-stream-event-tool',
+      eventType: 'tool.completed',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      toolResultId: 'tool-result-1',
+      toolName: 'read_file',
+      displayName: 'Read file',
+      inputSummary: 'docs/README.md',
+      resultSummary: 'Read 20 lines.',
+    }).resultSummary).toBe('Read 20 lines.');
+
+    expect(ChatStreamEventSchema.parse({
+      ...base,
+      eventId: 'chat-stream-event-approval',
+      eventType: 'approval.requested',
+      approvalId: 'approval-1',
+      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      scope: 'project',
+      status: 'pending',
+      title: 'Run command',
+      description: 'npm test',
+      subjectSummary: 'npm test',
+    }).eventType).toBe('approval.requested');
+
+    expect(ChatStreamEventSchema.parse({
+      ...base,
+      eventId: 'chat-stream-event-cancel',
+      eventType: 'assistant.text.cancelled_partial',
+      textId: 'text-answer-1',
+      phase: 'answer',
+      reason: 'user_requested',
+    }).eventType).toBe('assistant.text.cancelled_partial');
+  });
+
+  it('requires explicit stream identity and rejects runId as streamId', () => {
+    expect(() => ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'turn.started',
+      userMessageId: 'message-user-1',
+      streamId: 'run-1',
+    })).toThrow(/streamId/);
+
+    expect(() => ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'turn.started',
+      userMessageId: 'message-user-1',
+      seq: 0,
+    })).toThrow();
+  });
+
+  it('rejects raw provider bodies and final UI copy fields on payloads', () => {
+    expect(() => ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'tool.completed',
+      toolUseId: 'tool-use-1',
+      toolName: 'read_file',
+      resultSummary: 'Read file.',
+      rawProviderBody: { secret: 'sk-test' },
+    })).toThrow();
+
+    expect(() => ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'tool.completed',
+      toolUseId: 'tool-use-1',
+      toolName: 'read_file',
+      resultSummary: 'Read file.',
+      displayText: 'Megumi read docs/README.md',
+    })).toThrow();
+  });
+});

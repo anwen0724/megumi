@@ -30,3 +30,9 @@ export * from './runtime-context';
 export * from './runtime-request';
 export * from './runtime-result';
 export { IsoDateTimeSchema } from './runtime-validation';
+export * from './chat-stream-events';
+export * from './chat-stream-event-schemas';
+export {
+  ApprovalRequestedEventSchema,
+  ApprovalResolvedEventSchema,
+} from './chat-stream-event-schemas';
