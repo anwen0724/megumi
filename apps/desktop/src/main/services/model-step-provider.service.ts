@@ -186,6 +186,7 @@ function mapProviderResolutionErrorCode(code: string): RuntimeErrorCode {
     case 'provider_missing_api_key':
     case 'provider_auth_failed':
     case 'provider_rate_limited':
+    case 'provider_invalid_request':
     case 'provider_network_error':
       return code;
     default:

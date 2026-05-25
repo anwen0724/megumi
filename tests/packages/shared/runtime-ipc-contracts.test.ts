@@ -104,6 +104,7 @@ describe('runtime ipc error schemas', () => {
       'provider_missing_api_key',
       'provider_auth_failed',
       'provider_rate_limited',
+      'provider_invalid_request',
       'provider_network_error',
       'provider_unsupported',
       'database_error',

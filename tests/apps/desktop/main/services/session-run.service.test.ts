@@ -398,6 +398,31 @@ function modelStepCompletedEvent(sequence: number): RuntimeEvent {
   };
 }
 
+function modelStepProviderStateRecordedEvent(sequence: number): RuntimeEvent {
+  return {
+    eventId: `event-model-step-provider-state-${sequence}`,
+    schemaVersion: 1,
+    eventType: 'model.step.provider_state.recorded',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    sequence,
+    createdAt: '2026-05-17T00:00:02.000Z',
+    source: 'provider',
+    visibility: 'system',
+    persist: 'required',
+    payload: {
+      modelStepId: 'model-step-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      blocks: [{
+        type: 'reasoning_content',
+        text: 'Need to read package.json before answering.',
+      }],
+    },
+  };
+}
+
 function modelOutputDeltaEvent(input: {
   sequence: number;
   delta: string;
@@ -1683,7 +1708,8 @@ describe('SessionRunService', () => {
           requests.push(request);
           if (requests.length === 1) {
             yield toolUseCreatedEvent(1);
-            yield modelStepCompletedEvent(2);
+            yield modelStepProviderStateRecordedEvent(2);
+            yield modelStepCompletedEvent(3);
             return;
           }
           yield {
@@ -1818,6 +1844,7 @@ describe('SessionRunService', () => {
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
       'tool.use.created',
+      'model.step.provider_state.recorded',
       'model.step.completed',
       'run.status.changed',
     ]);
@@ -1850,7 +1877,19 @@ describe('SessionRunService', () => {
     }]);
     expect(requests).toHaveLength(2);
     expect(requests[1]).toMatchObject({
+      toolUses: [expect.objectContaining({
+        toolUseId: 'tool-use-1',
+        modelStepId: 'model-step-1',
+        toolName: 'read_file',
+      })],
       toolResults: [expect.objectContaining({ toolResultId: 'tool-result-1' })],
+      providerStates: [expect.objectContaining({
+        modelStepId: 'model-step-1',
+        blocks: [expect.objectContaining({
+          type: 'reasoning_content',
+          text: 'Need to read package.json before answering.',
+        })],
+      })],
     });
     expect(resumed.map((event) => event.eventType)).toEqual([
       'approval.resolved',

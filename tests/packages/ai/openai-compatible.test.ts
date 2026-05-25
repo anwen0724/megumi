@@ -794,7 +794,8 @@ describe('OpenAI-compatible adapter', () => {
       eventType: 'run.failed',
       payload: {
         error: {
-          code: 'provider_network_error',
+          code: 'provider_invalid_request',
+          message: 'Provider rejected the request.',
           details: {
             providerId: 'openai',
             modelId: 'gpt-4.1',

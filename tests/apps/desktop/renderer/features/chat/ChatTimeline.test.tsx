@@ -511,7 +511,7 @@ describe('ChatTimeline', () => {
     });
 
     expect(screen.queryByText('Provider API key is missing.')).not.toBeInTheDocument();
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));

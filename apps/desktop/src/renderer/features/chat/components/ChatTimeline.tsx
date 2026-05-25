@@ -183,7 +183,6 @@ export function ChatTimeline() {
           onStop={handleStop}
           onAttachFiles={() => undefined}
           onChooseContext={() => undefined}
-          onShowApproval={() => undefined}
         />
       </div>
     </main>

@@ -3,13 +3,11 @@ import {
   AtSign,
   Bot,
   Brain,
-  Clock3,
   Paperclip,
   SendHorizontal,
   Square,
-  TriangleAlert,
 } from 'lucide-react';
-import { Badge, Button, IconButton, cx } from '../../../shared/ui';
+import { Button, IconButton } from '../../../shared/ui';
 import {
   COMPOSER_MODEL_OPTIONS,
   COMPOSER_PERMISSION_MODE_OPTIONS,
@@ -32,24 +30,7 @@ interface ComposerProps {
   onStop?: () => void;
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
-  onShowApproval?: () => void;
 }
-
-const statusConfig = {
-  idle: null,
-  sending: null,
-  running: null,
-  'waiting-approval': {
-    label: 'Waiting for approval',
-    variant: 'approval',
-    icon: Clock3,
-  },
-  error: {
-    label: 'Needs attention',
-    variant: 'danger',
-    icon: TriangleAlert,
-  },
-} as const;
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -61,7 +42,6 @@ export function Composer({
   onStop,
   onChooseContext,
   onAttachFiles,
-  onShowApproval,
 }: ComposerProps) {
   const permissionModeId = useId();
   const modelId = useId();
@@ -76,8 +56,6 @@ export function Composer({
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
   const placeholder = 'Ask Megumi anything...';
-  const activeStatus = statusConfig[status];
-  const StatusIcon = activeStatus?.icon;
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -177,12 +155,6 @@ export function Composer({
               Context
             </Button>
 
-            {activeStatus && StatusIcon ? (
-              <Badge variant={activeStatus.variant} className={cx(status === 'sending' ? 'animate-pulse' : undefined)}>
-                <StatusIcon size={12} aria-hidden="true" />
-                {activeStatus.label}
-              </Badge>
-            ) : null}
           </div>
 
           <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">
@@ -228,11 +200,6 @@ export function Composer({
               </select>
             </div>
 
-            {status === 'waiting-approval' ? (
-              <Button type="button" variant="secondary" size="sm" className="shrink-0" onClick={onShowApproval}>
-                Review approval
-              </Button>
-            ) : null}
             {showStop ? (
               <Button
                 type="button"

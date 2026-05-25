@@ -337,7 +337,7 @@ describe('right workspace panel session run sync', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
     expect(screen.queryByText('Processing failed')).not.toBeInTheDocument();
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime chat failed for "please fail this run".')).not.toBeInTheDocument();
   });
 });

@@ -1064,7 +1064,7 @@ export class SessionRunService {
       startedAt: input.decidedAt,
     });
     const resumedRequest: ModelStepRuntimeRequest = {
-      ...continuation.request,
+      ...pending.request,
       stepId: resumedStep.stepId,
       modelStepId: `model-step:${crypto.randomUUID()}`,
       toolResults: [

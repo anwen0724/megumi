@@ -236,18 +236,16 @@ describe('Composer', () => {
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
   });
 
-  it('shows waiting approval status and calls the approval callback', async () => {
-    const onShowApproval = vi.fn();
+  it('locks input during approval without rendering approval status controls in the composer', () => {
+    render(<Composer status="waiting-approval" onSubmit={() => undefined} />);
 
-    render(<Composer status="waiting-approval" onSubmit={() => undefined} onShowApproval={onShowApproval} />);
-
-    expect(screen.getByText('Waiting for approval')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Review approval' }));
-
-    expect(onShowApproval).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Waiting for approval')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review approval' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Message Megumi')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
   });
 
-  it('shows error status without rendering error details inside the composer', () => {
+  it('does not render run error status inside the composer', () => {
     render(
       <Composer
         status="error"
@@ -255,7 +253,7 @@ describe('Composer', () => {
       />,
     );
 
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(screen.queryByText('The last response failed.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry last message' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();

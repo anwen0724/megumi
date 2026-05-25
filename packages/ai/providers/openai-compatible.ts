@@ -237,6 +237,10 @@ function mapHttpStatus(status: number): RuntimeErrorCode {
     return 'provider_rate_limited';
   }
 
+  if (status >= 400 && status < 500) {
+    return 'provider_invalid_request';
+  }
+
   return 'provider_network_error';
 }
 
@@ -682,6 +686,8 @@ function errorMessageForCode(code: RuntimeErrorCode): string {
       return 'Provider rejected the API key.';
     case 'provider_rate_limited':
       return 'Provider rate limit was reached.';
+    case 'provider_invalid_request':
+      return 'Provider rejected the request.';
     case 'provider_network_error':
       return 'Provider network request failed.';
     default:

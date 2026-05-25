@@ -612,7 +612,7 @@ describe('interaction baseline acceptance', () => {
     emitRuntimeFailure(latestSessionMessageSendRequest(session), 'Runtime chat failed for "please fail this run".');
 
     expect(useChatUiStore.getState().lastError).toBe('Runtime chat failed for "please fail this run".');
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
     const activeSessionId = useSessionStore.getState().activeSessionId;
     expect(useChatStreamStore.getState().sessions[
