@@ -253,7 +253,7 @@ function latestSessionMessageSendRequest(session: ReturnType<typeof installMegum
 
 function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string) {
   act(() => {
-    const currentUserMessage = request.payload.messages.at(-1);
+    const currentUserMessage = request.payload.message ?? request.payload.messages?.at(-1);
     const clientMessageId = String(currentUserMessage?.id ?? 'client-message-1');
     const userText = currentUserMessage?.content ?? '';
 
@@ -330,7 +330,7 @@ function emitRuntimeSuccess(request: SessionMessageSendRequest, content: string)
 
 function emitRuntimeFailure(request: SessionMessageSendRequest, message: string) {
   act(() => {
-    const currentUserMessage = request.payload.messages.at(-1);
+    const currentUserMessage = request.payload.message ?? request.payload.messages?.at(-1);
     const clientMessageId = String(currentUserMessage?.id ?? 'client-message-1');
     const userText = currentUserMessage?.content ?? '';
 
@@ -529,12 +529,9 @@ describe('interaction baseline acceptance', () => {
           permissionMode: 'auto',
           workspaceId: 'project-1',
         }),
-        messages: expect.arrayContaining([
-          expect.objectContaining({
-            role: 'user',
-            content: 'Finish the interaction baseline',
-          }),
-        ]),
+        message: expect.objectContaining({
+          content: 'Finish the interaction baseline',
+        }),
       }),
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.session.message.send,

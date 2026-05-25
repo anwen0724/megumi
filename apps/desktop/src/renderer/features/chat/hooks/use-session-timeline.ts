@@ -8,7 +8,6 @@ import { createSessionTitleFromPrompt } from '../../../entities/session/session-
 import { useSessionStore } from '../../../entities/session/store';
 import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
-import { chatMessagesFromTimelineMessages } from '../../session-history/session-history-mappers';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
@@ -72,33 +71,23 @@ function activeCanonicalMessageCount(projectId: string, sessionId: string): numb
 function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
   finalClientMessageId: string,
+  messageCreatedAt: string,
 ): SessionMessageSendPayload {
   const sessionState = useSessionStore.getState();
   const projectState = useProjectStore.getState();
   const providerId = getProviderIdForModel(payload.model);
   const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
   const activeProject = projectState.projects.find((project) => project.id === projectState.currentProjectId);
-  const activeSessionKey = activeSession && activeProject
-    ? `${activeSession.projectId}:${activeSession.id}`
-    : null;
-  const canonicalMessages = activeSessionKey
-    ? useChatStreamStore.getState().sessions[activeSessionKey]?.messages ?? []
-    : [];
-  const messages = chatMessagesFromTimelineMessages(canonicalMessages);
-  const finalMessageIndex = messages.findIndex((message) => String(message.id) === finalClientMessageId);
-  const orderedMessages = finalMessageIndex === -1
-    ? messages
-    : [
-        ...messages.slice(0, finalMessageIndex),
-        ...messages.slice(finalMessageIndex + 1),
-        messages[finalMessageIndex],
-      ];
 
   return {
     sessionId: sessionState.activeSessionId ?? undefined,
     providerId,
     modelId: payload.model,
-    messages: orderedMessages,
+    message: {
+      id: finalClientMessageId,
+      content: payload.message,
+      createdAt: messageCreatedAt,
+    },
     context: {
       workspaceId: projectState.currentProjectId ?? undefined,
       workspaceLabel: activeProject?.name ?? undefined,
@@ -106,7 +95,7 @@ function createSessionMessageSendPayload(
       sessionTitle: activeSession?.title ?? undefined,
       permissionMode: payload.permissionMode,
     },
-    createdAt: new Date().toISOString(),
+    createdAt: messageCreatedAt,
   };
 }
 
@@ -232,7 +221,7 @@ export function useSessionTimeline() {
     const requestId = `ipc-session-message-${createId('request')}`;
     const request = createRendererRuntimeIpcRequest(
       IPC_CHANNELS.session.message.send,
-      createSessionMessageSendPayload(payload, clientMessageId),
+      createSessionMessageSendPayload(payload, clientMessageId, createdAt),
       { requestId },
     );
     activeRequestIdRef.current = request.requestId;

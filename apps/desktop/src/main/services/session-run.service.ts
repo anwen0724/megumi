@@ -48,6 +48,12 @@ import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { createRuntimeEvent, createToolResultCreatedEvent } from '@megumi/shared/runtime-event-factory';
+import type {
+  AnswerTextBlock,
+  ProcessDisclosureBlock,
+  ProcessDisclosureItem,
+  TimelineMessage,
+} from '@megumi/shared/timeline-message-blocks';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
@@ -335,11 +341,11 @@ export class SessionRunService {
     const runId = this.ids.runId();
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
-    const lastUserMessage = findLastUserChatMessage(input.payload.messages);
+    const currentUserMessage = currentUserChatMessage(input.payload);
     const permissionMode = input.payload.context?.permissionMode ?? 'default';
     const mode = permissionMode;
 
-    if (!lastUserMessage) {
+    if (!currentUserMessage) {
       throw new Error('Session message send requires a user message.');
     }
 
@@ -348,10 +354,10 @@ export class SessionRunService {
       sessionId: session.sessionId,
       runId,
       role: 'user',
-      content: lastUserMessage.content,
+      content: currentUserMessage.content,
       status: 'completed',
-      createdAt: lastUserMessage.createdAt,
-      completedAt: lastUserMessage.createdAt,
+      createdAt: currentUserMessage.createdAt,
+      completedAt: currentUserMessage.createdAt,
     });
     const initialRun = this.repository.saveRun({
       runId,
@@ -402,7 +408,7 @@ export class SessionRunService {
       stepId,
       providerId: input.payload.providerId,
       modelId: input.payload.modelId,
-      messages: toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage),
+      messages: this.createModelContextMessages(input.payload, session, runId, userMessage),
       ...(context ? { context } : {}),
       ...(toolDefinitions && toolDefinitions.length > 0 ? { toolDefinitions } : {}),
       ...(modeSnapshot ? {
@@ -427,7 +433,7 @@ export class SessionRunService {
           streamId: this.ids.chatStreamId({ runId: String(runId) }),
           streamKind: 'main',
           userMessageId: String(userMessage.messageId),
-          clientMessageId: String(lastUserMessage.id),
+          clientMessageId: String(currentUserMessage.id),
           userMessageText: userMessage.content,
           createdAt,
           now: () => this.clock.now(),
@@ -457,6 +463,28 @@ export class SessionRunService {
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
     };
+  }
+
+  private createModelContextMessages(
+    payload: SessionMessageSendPayload,
+    session: Session,
+    runId: string,
+    persistedUserMessage: SessionMessage,
+  ): SessionMessage[] {
+    if (!this.timelineMessageRepository) {
+      return toSessionMessagesForModelStep(payload, session.sessionId, runId, persistedUserMessage);
+    }
+
+    const projectId = timelineProjectIdForSession(session);
+    const history = this.timelineMessageRepository.listCommittedMessagesBySession({
+      projectId,
+      sessionId: String(session.sessionId),
+    });
+
+    return [
+      ...timelineMessagesToModelContext(history.messages, String(session.sessionId)),
+      persistedUserMessage,
+    ];
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
@@ -1227,9 +1255,27 @@ function defaultHostBoundary(
   };
 }
 
+type SessionMessageSendHistoryMessage = NonNullable<SessionMessageSendPayload['messages']>[number];
+type SessionMessageSendCurrentMessage = NonNullable<SessionMessageSendPayload['message']>;
+
+function currentUserChatMessage(payload: SessionMessageSendPayload): SessionMessageSendCurrentMessage | undefined {
+  if (payload.message) {
+    return payload.message;
+  }
+
+  const lastUserMessage = findLastUserChatMessage(payload.messages ?? []);
+  return lastUserMessage
+    ? {
+        id: lastUserMessage.id,
+        content: lastUserMessage.content,
+        createdAt: lastUserMessage.createdAt,
+      }
+    : undefined;
+}
+
 function findLastUserChatMessage(
-  messages: SessionMessageSendPayload['messages'],
-): SessionMessageSendPayload['messages'][number] | undefined {
+  messages: SessionMessageSendHistoryMessage[],
+): SessionMessageSendHistoryMessage | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role === 'user') {
@@ -1239,15 +1285,126 @@ function findLastUserChatMessage(
   return undefined;
 }
 
+function timelineProjectIdForSession(session: Session): string {
+  return String(session.workspaceId ?? session.sessionId);
+}
+
+function timelineMessagesToModelContext(
+  messages: TimelineMessage[],
+  sessionId: string,
+): SessionMessage[] {
+  return messages.flatMap((message): SessionMessage[] => {
+    if (message.role === 'user') {
+      const text = message.blocks
+        .filter((block) => block.kind === 'user_text')
+        .map((block) => block.text)
+        .join('\n')
+        .trim();
+
+      return text ? [{
+        messageId: String(message.messageId),
+        sessionId,
+        ...(message.runId ? { runId: String(message.runId) } : {}),
+        role: 'user',
+        content: text,
+        status: 'completed',
+        createdAt: message.createdAt,
+        completedAt: message.updatedAt ?? message.createdAt,
+      }] : [];
+    }
+
+    const answerMessages = assistantAnswerContextMessages(message, sessionId);
+    const statusNote = assistantStatusNote(message);
+    return statusNote ? [
+      ...answerMessages,
+      {
+        messageId: `context-status:${message.messageId}`,
+        sessionId,
+        runId: String(message.runId),
+        role: 'assistant',
+        content: statusNote,
+        status: 'completed',
+        createdAt: message.updatedAt ?? message.createdAt,
+        completedAt: message.updatedAt ?? message.createdAt,
+      },
+    ] : answerMessages;
+  });
+}
+
+function assistantAnswerContextMessages(
+  message: Extract<TimelineMessage, { role: 'assistant' }>,
+  sessionId: string,
+): SessionMessage[] {
+  return message.blocks
+    .filter((block): block is AnswerTextBlock => block.kind === 'answer_text' && block.text.trim().length > 0)
+    .filter((block) => block.status === 'completed' || block.status === 'failed' || block.status === 'cancelled_partial')
+    .map((block) => ({
+      messageId: String(block.textId),
+      sessionId,
+      runId: String(message.runId),
+      role: 'assistant' as const,
+      content: block.text,
+      status: block.status === 'completed' ? 'completed' as const : block.status === 'failed' ? 'failed' as const : 'cancelled' as const,
+      createdAt: block.createdAt ?? message.createdAt,
+      completedAt: block.updatedAt ?? message.updatedAt ?? message.createdAt,
+    }));
+}
+
+function assistantStatusNote(message: Extract<TimelineMessage, { role: 'assistant' }>): string | undefined {
+  const process = message.blocks
+    .filter((block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure')
+    .find((block) => block.status === 'failed' || block.status === 'cancelled');
+  const partialAnswer = message.blocks
+    .filter((block): block is AnswerTextBlock => block.kind === 'answer_text')
+    .find((block) => block.status === 'failed' || block.status === 'cancelled_partial');
+
+  if (process?.status === 'failed') {
+    return formatFailedTurnStatusNote(process);
+  }
+  if (process?.status === 'cancelled') {
+    return '[Previous turn cancelled by user. Partial work should not be continued unless requested.]';
+  }
+  if (partialAnswer) {
+    return '[Previous turn interrupted. The preceding assistant answer is partial.]';
+  }
+
+  return undefined;
+}
+
+function formatFailedTurnStatusNote(process: ProcessDisclosureBlock): string {
+  const tool = firstSucceededTool(process.items);
+  const error = firstError(process.items);
+  const afterTool = tool ? ` after tool activity: ${tool}` : '';
+  const errorText = error ? ` Error: ${error}` : '';
+  return `[Previous turn failed${afterTool}. Final answer unavailable.${errorText}]`;
+}
+
+function firstSucceededTool(items: ProcessDisclosureItem[]): string | undefined {
+  const tool = items.find((item) => item.kind === 'tool_activity' && item.status === 'succeeded');
+  if (!tool || tool.kind !== 'tool_activity') {
+    return undefined;
+  }
+
+  return [tool.toolName, tool.inputSummary].filter(Boolean).join(' ');
+}
+
+function firstError(items: ProcessDisclosureItem[]): string | undefined {
+  const error = items.find((item) => item.kind === 'error_activity');
+  return error?.kind === 'error_activity' ? error.errorMessage : undefined;
+}
+
 function toSessionMessagesForModelStep(
   payload: SessionMessageSendPayload,
   sessionId: string,
   runId: string,
   persistedUserMessage: SessionMessage,
 ): SessionMessage[] {
-  const lastUserMessage = findLastUserChatMessage(payload.messages);
+  const messages = payload.messages ?? (payload.message
+    ? [{ ...payload.message, role: 'user' as const }]
+    : []);
+  const lastUserMessage = findLastUserChatMessage(messages);
 
-  return payload.messages.map((message) => {
+  return messages.map((message) => {
     if (message === lastUserMessage) {
       return persistedUserMessage;
     }
@@ -1387,7 +1544,7 @@ function toPermissionModeSnapshot(
 }
 
 function toSessionMessageRole(
-  role: SessionMessageSendPayload['messages'][number]['role'],
+  role: SessionMessageSendHistoryMessage['role'],
 ): ModelStepRuntimeRequest['messages'][number]['role'] {
   return role === 'tool' ? 'host' : role;
 }

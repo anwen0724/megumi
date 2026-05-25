@@ -15,6 +15,7 @@ import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
+import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import type { ApprovalRequest, ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -210,6 +211,7 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
   runModeService?: SessionRunServiceOptions['runModeService'];
   toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
   toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
+  timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -221,6 +223,7 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
     ...(options?.runModeService ? { runModeService: options.runModeService } : {}),
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
+    ...(options?.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         options?.onRequest?.(request);
@@ -895,6 +898,96 @@ describe('SessionRunService', () => {
 
     expect(requests).toHaveLength(1);
     expect(requests[0]?.toolDefinitions).toEqual(toolDefinitions);
+  });
+
+  it('builds model context from committed timeline history and preserves failed turns as status notes', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const failedUser: TimelineMessage = {
+      messageId: 'message-user-failed',
+      role: 'user',
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+      runId: 'run-failed',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      turnOrder: 0,
+      blocks: [{
+        blockId: 'user-text-failed',
+        kind: 'user_text',
+        text: '能为我写一个你的自我介绍文档放在根目录下面吗？',
+        format: 'plain',
+      }],
+    };
+    const failedAssistant: TimelineMessage = {
+      messageId: 'message-assistant-failed',
+      role: 'assistant',
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+      runId: 'run-failed',
+      createdAt: '2026-05-17T00:00:01.000Z',
+      turnOrder: 1,
+      blocks: [{
+        blockId: 'process-failed',
+        kind: 'process_disclosure',
+        runId: 'run-failed',
+        status: 'failed',
+        items: [{
+          itemId: 'tool-write',
+          kind: 'tool_activity',
+          toolUseId: 'tool-use-write',
+          toolName: 'write_file',
+          inputSummary: 'ABOUT_MEGUMI.md',
+          resultSummary: 'Created ABOUT_MEGUMI.md.',
+          status: 'succeeded',
+        }, {
+          itemId: 'error-provider',
+          kind: 'error_activity',
+          errorCode: 'provider_network_request_failed',
+          errorMessage: 'Provider network request failed.',
+        }],
+      }],
+    };
+    const service = createServiceWithModelStepStream([
+      assistantOutputCompletedEvent(1),
+    ], {
+      timelineMessageRepository: {
+        listCommittedMessagesBySession: () => ({
+          messages: [failedUser, failedAssistant],
+          diagnostics: [],
+        }),
+      },
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: '请再写一份你对我的印象的文档',
+          createdAt: '2026-05-17T00:00:02.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:02.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(requests[0]?.messages.map((message) => [message.role, message.content])).toEqual([
+      ['user', '能为我写一个你的自我介绍文档放在根目录下面吗？'],
+      ['assistant', '[Previous turn failed after tool activity: write_file ABOUT_MEGUMI.md. Final answer unavailable. Error: Provider network request failed.]'],
+      ['user', '请再写一份你对我的印象的文档'],
+    ]);
   });
 
   it('continues session message runs through tool results before completing with final assistant output', async () => {

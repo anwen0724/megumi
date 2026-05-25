@@ -363,12 +363,9 @@ describe('useSessionTimeline', () => {
           permissionMode: 'plan',
           sessionTitle: 'Hello Megumi',
         }),
-        messages: expect.arrayContaining([
-          expect.objectContaining({
-            role: 'user',
-            content: 'Hello Megumi',
-          }),
-        ]),
+        message: expect.objectContaining({
+          content: 'Hello Megumi',
+        }),
       }),
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.session.message.send,
@@ -657,17 +654,14 @@ describe('useSessionTimeline', () => {
       payload: expect.objectContaining({
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        messages: expect.arrayContaining([
-          expect.objectContaining({
-            role: 'user',
-            content: 'Try Claude first',
-          }),
-        ]),
+        message: expect.objectContaining({
+          content: 'Try Claude first',
+        }),
       }),
     });
   });
 
-  it('uses canonical chat stream messages as model request context when they are available', async () => {
+  it('sends only the current user message and leaves model context construction to main', async () => {
     const { session } = installMegumiMock();
     useSessionStore.setState({
       sessions: [{
@@ -695,19 +689,16 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    const sentMessages = session.message.send.mock.calls[0][0].payload.messages as Array<{
-      role: string;
-      content: string;
-    }>;
+    const payload = session.message.send.mock.calls[0][0].payload;
 
-    expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
-      ['user', 'Canonical user prompt'],
-      ['assistant', 'Canonical answer'],
-      ['user', 'Next prompt'],
-    ]);
+    expect(payload).not.toHaveProperty('messages');
+    expect(payload.message).toMatchObject({
+      content: 'Next prompt',
+      createdAt: expect.any(String),
+    });
   });
 
-  it('builds model context from canonical user text and completed final answers only', async () => {
+  it('does not send canonical history from renderer when committed timeline contains prior turns', async () => {
     const { session } = installMegumiMock();
     useSessionStore.setState({
       sessions: [{
@@ -747,19 +738,15 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    const sentMessages = session.message.send.mock.calls[0][0].payload.messages as Array<{
-      role: string;
-      content: string;
-    }>;
+    const payload = session.message.send.mock.calls[0][0].payload;
 
-    expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
-      ['user', 'Canonical user prompt'],
-      ['assistant', 'Completed answer'],
-      ['user', 'Next prompt'],
-    ]);
+    expect(payload).not.toHaveProperty('messages');
+    expect(payload.message).toMatchObject({
+      content: 'Next prompt',
+    });
   });
 
-  it('does not duplicate optimistic and committed user messages in canonical model context', async () => {
+  it('keeps each renderer send scoped to the current user message', async () => {
     const { session } = installMegumiMock();
     useSessionStore.setState({
       sessions: [{
@@ -784,7 +771,7 @@ describe('useSessionTimeline', () => {
     });
 
     const firstPayload = session.message.send.mock.calls[0][0].payload;
-    const clientMessageId = firstPayload.messages.at(-1)?.id;
+    const clientMessageId = firstPayload.message?.id;
     expect(clientMessageId).toEqual(expect.any(String));
 
     useChatStreamStore.getState().dispatch(chatEvent({
@@ -817,12 +804,9 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    const secondMessages = session.message.send.mock.calls[1][0].payload.messages as Array<{
-      role: string;
-      content: string;
-    }>;
-    expect(secondMessages.filter((message) => message.role === 'user' && message.content === 'First prompt')).toHaveLength(1);
-    expect(secondMessages.at(-1)).toMatchObject({ role: 'user', content: 'Second prompt' });
+    const secondPayload = session.message.send.mock.calls[1][0].payload;
+    expect(secondPayload).not.toHaveProperty('messages');
+    expect(secondPayload.message).toMatchObject({ content: 'Second prompt' });
   });
 
   it('does not use legacy user context when canonical timeline only has assistant history', async () => {
@@ -852,15 +836,12 @@ describe('useSessionTimeline', () => {
       });
     });
 
-    const sentMessages = session.message.send.mock.calls[0][0].payload.messages as Array<{
-      role: string;
-      content: string;
-    }>;
+    const payload = session.message.send.mock.calls[0][0].payload;
 
-    expect(sentMessages.map((message) => [message.role, message.content])).toEqual([
-      ['assistant', 'Canonical answer'],
-      ['user', 'Next prompt'],
-    ]);
+    expect(payload).not.toHaveProperty('messages');
+    expect(payload.message).toMatchObject({
+      content: 'Next prompt',
+    });
   });
 
   it('cancels session messages using a runtime ipc cancel request envelope', async () => {

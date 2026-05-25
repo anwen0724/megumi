@@ -145,6 +145,14 @@ export const SessionMessageIpcSchema = z
   })
   .strict();
 
+export const SessionCurrentMessageSchema = z
+  .object({
+    id: z.string().min(1),
+    content: z.string(),
+    createdAt: IsoDateTimeSchema,
+  })
+  .strict();
+
 export const SessionMessageRuntimeContextSchema = z
   .object({
     workspaceId: z.string().min(1).optional(),
@@ -160,11 +168,21 @@ export const SessionMessageSendPayloadSchema = z
     sessionId: z.string().min(1).optional(),
     providerId: ProviderIdSchema,
     modelId: z.string().min(1),
-    messages: z.array(SessionMessageIpcSchema).min(1),
+    message: SessionCurrentMessageSchema.optional(),
+    messages: z.array(SessionMessageIpcSchema).min(1).optional(),
     context: SessionMessageRuntimeContextSchema.optional(),
     createdAt: IsoDateTimeSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((payload, context) => {
+    if (!payload.message && !payload.messages?.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Session message send requires a current message.',
+        path: ['message'],
+      });
+    }
+  });
 
 export const SessionMessageSendDataSchema = z
   .object({

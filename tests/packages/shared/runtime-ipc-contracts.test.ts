@@ -546,14 +546,11 @@ describe('provider and chat ipc schemas', () => {
         sessionId: 'session-1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        messages: [
-          {
-            id: 'message-1',
-            role: 'user',
-            content: 'Hello Megumi',
-            createdAt: '2026-05-12T00:00:00.000Z',
-          },
-        ],
+        message: {
+          id: 'message-1',
+          content: 'Hello Megumi',
+          createdAt: '2026-05-12T00:00:00.000Z',
+        },
         context: {
           workspaceLabel: 'Megumi',
           workspacePath: 'C:/all/work/study/megumi',
@@ -577,12 +574,11 @@ describe('provider and chat ipc schemas', () => {
       payload: {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        messages: [{
+        message: {
           id: 'message-1',
-          role: 'user',
           content: 'Plan a change',
           createdAt: '2026-05-20T00:00:00.000Z',
-        }],
+        },
         context: {
           workspaceId: 'project-1',
           workspacePath: 'C:/all/work/study/megumi',
@@ -612,12 +608,11 @@ describe('provider and chat ipc schemas', () => {
     expect(() => SessionMessageSendPayloadSchema.parse({
       providerId: 'deepseek',
       modelId: 'deepseek-v4-flash',
-      messages: [{
+      message: {
         id: 'message-1',
-        role: 'user',
         content: 'Hello',
         createdAt: '2026-05-20T00:00:00.000Z',
-      }],
+      },
       context: {
         composerMode: 'execute',
       },
@@ -724,12 +719,11 @@ describe('agent context runtime IPC schemas', () => {
         sessionId: 'session-1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        messages: [{
+        message: {
           id: 'message-1',
-          role: 'user',
           content: 'Hello Megumi',
           createdAt: '2026-05-17T00:00:00.000Z',
-        }],
+        },
         context: {
           workspacePath: 'C:/all/work/study/megumi',
           permissionMode: 'default',
