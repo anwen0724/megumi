@@ -30,8 +30,6 @@ export interface ChatStreamEventAdapterOptions {
   userMessageText: string;
   createdAt: string;
   now?: () => string;
-  phaseDecisionDelayMs?: number;
-  schedulePhaseFlush?: (callback: () => void, delayMs: number) => { cancel(): void };
   ids: ChatStreamEventAdapterIds;
 }
 
@@ -84,10 +82,6 @@ interface PendingToolTerminalState {
   reason?: string;
 }
 
-interface PhaseFlushHandle {
-  cancel(): void;
-}
-
 export function createChatStreamEventAdapter(options: ChatStreamEventAdapterOptions): ChatStreamEventAdapter {
   return new ChatStreamEventAdapterImpl(options);
 }
@@ -95,8 +89,6 @@ export function createChatStreamEventAdapter(options: ChatStreamEventAdapterOpti
 class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private readonly options: ChatStreamEventAdapterOptions;
   private readonly now: () => string;
-  private readonly schedulePhaseFlush: (callback: () => void, delayMs: number) => PhaseFlushHandle;
-  private readonly phaseDecisionDelayMs: number;
   private readonly streamKind: ChatStreamKind;
   private readonly stepText = new Map<string, ModelStepTextState>();
   private readonly thinkingByStep = new Map<string, ThinkingState>();
@@ -108,17 +100,11 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private seq = 0;
   private started = false;
   private terminal = false;
-  private readonly phaseFlushHandlesByStep = new Map<string, PhaseFlushHandle>();
 
   constructor(options: ChatStreamEventAdapterOptions) {
     this.options = options;
     this.now = options.now ?? (() => new Date().toISOString());
-    this.phaseDecisionDelayMs = options.phaseDecisionDelayMs ?? 50;
     this.streamKind = options.streamKind ?? 'main';
-    this.schedulePhaseFlush = options.schedulePhaseFlush ?? ((callback, delayMs) => {
-      const timeout = setTimeout(callback, delayMs);
-      return { cancel: () => clearTimeout(timeout) };
-    });
   }
 
   startTurn(): void {
@@ -213,7 +199,6 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   }
 
   flushPhaseGate(): void {
-    this.cancelAllPhaseFlushes();
     for (const state of this.stepText.values()) {
       if (!state.phase && state.bufferedDeltas.length > 0) {
         this.releaseText(state, 'answer');
@@ -222,7 +207,6 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   }
 
   dispose(): void {
-    this.cancelAllPhaseFlushes();
     this.flushAllPendingToolTerminals();
     for (const state of this.stepText.values()) {
       if (!state.phase && state.bufferedDeltas.length > 0) {
@@ -243,7 +227,6 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     const state = this.textState(payload.modelStepId);
     if (!state.phase) {
       state.bufferedDeltas.push(payload.delta);
-      this.ensurePhaseFlushScheduled(payload.modelStepId);
       return;
     }
 
@@ -659,9 +642,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
 
   private markStepPrelude(modelStepId: string): void {
     const state = this.textState(modelStepId);
-    this.cancelPhaseFlush(modelStepId);
     if (state.phase === 'answer' && state.text && !state.text.terminal) {
-      this.failProviderSequenceConflict(state.text);
       return;
     }
 
@@ -778,26 +759,6 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       phase: text.phase,
       ...(reason ? { reason } : {}),
     }));
-  }
-
-  private failProviderSequenceConflict(text: TextState): void {
-    text.terminal = true;
-    this.publish(createChatStreamEvent({
-      ...this.base(),
-      eventType: 'assistant.text.failed',
-      textId: text.textId,
-      phase: text.phase,
-      errorCode: 'provider_sequence_conflict',
-      errorMessage: 'Provider emitted a tool-use signal after answer text started.',
-    }));
-    this.publish(createChatStreamEvent({
-      ...this.base(),
-      eventType: 'turn.failed',
-      errorCode: 'provider_sequence_conflict',
-      errorMessage: 'Provider emitted a tool-use signal after answer text started.',
-      recoverable: false,
-    }));
-    this.finishTurn();
   }
 
   private textState(modelStepId: string): ModelStepTextState {
@@ -965,42 +926,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     return typeof payload.modelStepId === 'string' ? payload.modelStepId : undefined;
   }
 
-  private ensurePhaseFlushScheduled(modelStepId: string): void {
-    if (this.phaseFlushHandlesByStep.has(modelStepId)) {
-      return;
-    }
-
-    const handle = this.schedulePhaseFlush(() => {
-      if (this.phaseFlushHandlesByStep.get(modelStepId) !== handle) {
-        return;
-      }
-      this.phaseFlushHandlesByStep.delete(modelStepId);
-      this.flushPhaseGateForStep(modelStepId);
-    }, this.phaseDecisionDelayMs);
-    this.phaseFlushHandlesByStep.set(modelStepId, handle);
-  }
-
-  private flushPhaseGateForStep(modelStepId: string): void {
-    const state = this.stepText.get(modelStepId);
-    if (!state?.phase && state?.bufferedDeltas.length) {
-      this.releaseText(state, 'answer');
-    }
-  }
-
-  private cancelPhaseFlush(modelStepId: string): void {
-    this.phaseFlushHandlesByStep.get(modelStepId)?.cancel();
-    this.phaseFlushHandlesByStep.delete(modelStepId);
-  }
-
-  private cancelAllPhaseFlushes(): void {
-    for (const handle of this.phaseFlushHandlesByStep.values()) {
-      handle.cancel();
-    }
-    this.phaseFlushHandlesByStep.clear();
-  }
-
   private finishTurn(): void {
-    this.cancelAllPhaseFlushes();
     this.terminal = true;
   }
 

@@ -89,7 +89,7 @@ describe('createChatStreamEventAdapter', () => {
     expect(events[0].streamId).not.toBe(events[0].runId);
   });
 
-  it('keeps tool-enabled pure text answer streaming after phase gate flush', () => {
+  it('buffers tool-enabled pure text until run completion confirms final answer phase', () => {
     vi.useFakeTimers();
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
@@ -106,7 +106,11 @@ describe('createChatStreamEventAdapter', () => {
     ]);
 
     vi.advanceTimersByTime(50);
-    subject.flushPhaseGate();
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+    ]);
+
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.output.delta',
       sequence: 2,
@@ -226,7 +230,7 @@ describe('createChatStreamEventAdapter', () => {
     expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
   });
 
-  it('does not let a stale phase gate timer flush a later model step early', () => {
+  it('does not let elapsed phase timing classify a later tool-use step as answer', () => {
     vi.useFakeTimers();
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
@@ -259,6 +263,13 @@ describe('createChatStreamEventAdapter', () => {
       payload: { modelStepId: 'model-step-2', delta: 'Second step prelude.' },
     }));
     vi.advanceTimersByTime(1);
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'assistant.text.completed',
+    ]);
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.tool_use.detected',
       sequence: 5,
@@ -927,7 +938,7 @@ describe('createChatStreamEventAdapter', () => {
     vi.useRealTimers();
   });
 
-  it('fails the turn when a tool-use signal arrives after answer phase started in the same model step', () => {
+  it('moves elapsed buffered text to prelude when a late tool-use signal arrives in the same model step', () => {
     vi.useFakeTimers();
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
@@ -938,7 +949,6 @@ describe('createChatStreamEventAdapter', () => {
       payload: { modelStepId: 'model-step-1', delta: 'This is final.' },
     }));
     vi.advanceTimersByTime(50);
-    subject.flushPhaseGate();
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.tool_use.detected',
       sequence: 2,
@@ -949,19 +959,21 @@ describe('createChatStreamEventAdapter', () => {
         toolName: 'read_file',
       },
     }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'model.step.completed',
+      sequence: 3,
+      payload: { modelStepId: 'model-step-1', finishReason: 'tool_calls' },
+    }));
 
     expect(events.map((event) => event.eventType)).toEqual([
       'turn.started',
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
-      'assistant.text.failed',
-      'turn.failed',
+      'assistant.text.completed',
     ]);
-    expect(events.at(-1)).toMatchObject({
-      eventType: 'turn.failed',
-      errorCode: 'provider_sequence_conflict',
-    });
+    expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'prelude' });
+    expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
     vi.useRealTimers();
   });
 });
