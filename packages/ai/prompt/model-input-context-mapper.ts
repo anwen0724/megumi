@@ -44,9 +44,13 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
   const toolUseById = new Map(toolUseParts.map((part) => [String(part.toolUseId), part]));
   const messages: OpenAICompatibleMessage[] = [];
   const consumedPartIds = new Set<string>();
+  const replayedModelStepIds = new Set<string>();
   let currentModelStepId: string | undefined;
   let currentToolCalls: ToolContinuationPart[] = [];
-  let currentToolResults: ToolContinuationPart[] = [];
+  let currentToolResults: Array<{
+    toolUse?: ToolContinuationPart;
+    toolResult: ToolContinuationPart;
+  }> = [];
 
   const flush = () => {
     if (currentToolCalls.length > 0) {
@@ -59,12 +63,15 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
         ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
         tool_calls: currentToolCalls.map(mapToolUsePartToOpenAICompatibleToolCall),
       });
+      if (currentModelStepId) {
+        replayedModelStepIds.add(currentModelStepId);
+      }
     }
 
-    for (const toolResult of currentToolResults) {
+    for (const { toolUse, toolResult } of currentToolResults) {
       messages.push({
         role: 'tool',
-        tool_call_id: String(toolResult.toolUseId),
+        tool_call_id: providerToolUseId(toolUse ?? toolResult),
         content: toolResult.toolResultContent ?? toolResult.text,
       });
     }
@@ -87,17 +94,18 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
       currentToolCalls.push(toolUse);
       consumedPartIds.add(toolUse.partId);
     }
-    currentToolResults.push(toolResultPart);
+    currentToolResults.push({ toolUse, toolResult: toolResultPart });
     consumedPartIds.add(toolResultPart.partId);
   }
 
+  flush();
+
   for (const part of toolParts) {
-    if (part.providerStateText && part.modelStepId && providerStateByModelStepId.has(part.modelStepId)) {
+    if (part.providerStateText && part.modelStepId && replayedModelStepIds.has(part.modelStepId)) {
       consumedPartIds.add(part.partId);
     }
   }
 
-  flush();
   return {
     messages,
     consumedPartIds: [...consumedPartIds],
@@ -114,13 +122,17 @@ function hasNativeToolResultFields(part: ToolContinuationPart): boolean {
 
 function mapToolUsePartToOpenAICompatibleToolCall(part: ToolContinuationPart): OpenAICompatibleToolCall {
   return {
-    id: String(part.toolUseId),
+    id: providerToolUseId(part),
     type: 'function',
     function: {
       name: String(part.toolName),
       arguments: JSON.stringify(part.toolInput ?? {}),
     },
   };
+}
+
+function providerToolUseId(part: ToolContinuationPart): string {
+  return String(part.providerToolUseId ?? part.toolUseId);
 }
 
 function mapModelInputContextPartToOpenAICompatibleMessage(

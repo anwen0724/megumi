@@ -185,7 +185,7 @@ describe('OpenAI-compatible message mapper', () => {
         content: '',
         tool_calls: [
           {
-            id: 'tool-use-1',
+            id: 'provider-tool-use-1',
             type: 'function',
             function: {
               name: 'read_file',
@@ -196,7 +196,7 @@ describe('OpenAI-compatible message mapper', () => {
       },
       {
         role: 'tool',
-        tool_call_id: 'tool-use-1',
+        tool_call_id: 'provider-tool-use-1',
         content: 'File contents',
       },
     ]);

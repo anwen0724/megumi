@@ -204,6 +204,140 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
     expect(messages.some((message) => message.role === 'tool')).toBe(false);
   });
 
+  it('uses provider tool use ids for provider-native replay messages when present', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:provider-tool-use-id',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'tool_continuation',
+      builtAt,
+      parts: [
+        basePart({
+          partId: 'part:tool-use:provider-id',
+          kind: 'tool_continuation',
+          text: 'Tool use local-tool-use-1 requested read_file.',
+          sourceRefs: [sourceRef('tool-use:local-tool-use-1', 'tool_use')],
+          toolUseId: 'local-tool-use-1',
+          providerToolUseId: 'provider-call-1',
+          modelStepId: 'model-step:provider-id',
+          toolName: 'read_file',
+          toolInput: {
+            path: 'package.json',
+          },
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:tool-result:provider-id',
+          kind: 'tool_continuation',
+          text: 'read_file returned package metadata.',
+          sourceRefs: [sourceRef('tool-result:provider-id', 'tool_result')],
+          toolUseId: 'local-tool-use-1',
+          toolResultId: 'tool-result:provider-id',
+          toolResultContent: 'read_file returned package metadata.',
+        } as Partial<ModelInputContextPart>),
+      ],
+    });
+
+    expect(mapModelInputContextToOpenAICompatibleMessages(context)).toEqual([
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'provider-call-1',
+            type: 'function',
+            function: {
+              name: 'read_file',
+              arguments: '{"path":"package.json"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'provider-call-1',
+        content: 'read_file returned package metadata.',
+      },
+    ]);
+  });
+
+  it('keeps orphan provider state as ordinary model-visible text', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:orphan-provider-state',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'tool_continuation',
+      builtAt,
+      parts: [
+        basePart({
+          partId: 'part:tool-use:matched-provider-state',
+          kind: 'tool_continuation',
+          text: 'Tool use tool-use:matched-provider-state requested read_file.',
+          sourceRefs: [sourceRef('tool-use:matched-provider-state', 'tool_use')],
+          toolUseId: 'tool-use:matched-provider-state',
+          modelStepId: 'model-step:matched',
+          toolName: 'read_file',
+          toolInput: {
+            path: 'package.json',
+          },
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:tool-result:matched-provider-state',
+          kind: 'tool_continuation',
+          text: 'read_file returned package metadata.',
+          sourceRefs: [sourceRef('tool-result:matched-provider-state', 'tool_result')],
+          toolUseId: 'tool-use:matched-provider-state',
+          toolResultId: 'tool-result:matched-provider-state',
+          toolResultContent: 'read_file returned package metadata.',
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:provider-state:matched',
+          kind: 'tool_continuation',
+          text: 'Matched reasoning text.',
+          sourceRefs: [sourceRef('provider-state:matched', 'provider_state')],
+          modelStepId: 'model-step:matched',
+          providerStateText: 'Matched reasoning text.',
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:provider-state:orphan',
+          kind: 'tool_continuation',
+          text: 'Orphan reasoning text.',
+          sourceRefs: [sourceRef('provider-state:orphan', 'provider_state')],
+          modelStepId: 'model-step:orphan',
+          providerStateText: 'Orphan reasoning text.',
+        } as Partial<ModelInputContextPart>),
+      ],
+    });
+
+    expect(mapModelInputContextToOpenAICompatibleMessages(context)).toEqual([
+      {
+        role: 'system',
+        content: 'Orphan reasoning text.',
+      },
+      {
+        role: 'assistant',
+        content: '',
+        reasoning_content: 'Matched reasoning text.',
+        tool_calls: [
+          {
+            id: 'tool-use:matched-provider-state',
+            type: 'function',
+            function: {
+              name: 'read_file',
+              arguments: '{"path":"package.json"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'tool-use:matched-provider-state',
+        content: 'read_file returned package metadata.',
+      },
+    ]);
+  });
+
   it('does not materialize trace, budget, source refs, or runtime metadata as prompt content', () => {
     const context = buildModelInputContext({
       contextId: 'model-input-context:2',
