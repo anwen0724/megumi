@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { buildModelInputContext } from '@megumi/memory';
+import { buildModelInputContext } from '@megumi/context-management';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';

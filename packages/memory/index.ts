@@ -11,8 +11,6 @@ import type {
   MemorySourceRef,
 } from '@megumi/shared/memory-contracts';
 
-export * from './model-input-context-builder';
-
 const MAX_SUMMARY_LENGTH = 500;
 const MAX_CONTENT_PREVIEW_LENGTH = 1000;
 

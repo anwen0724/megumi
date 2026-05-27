@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildModelInputContext } from '@megumi/memory';
+import { buildModelInputContext } from '@megumi/context-management';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import * as messageMapper from '@megumi/ai/prompt/message-mapper';
 import { buildSystemPrompt } from '@megumi/ai/prompt/system-prompt';

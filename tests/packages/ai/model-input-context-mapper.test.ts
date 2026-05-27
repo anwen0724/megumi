@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildModelInputContext } from '@megumi/memory';
+import { buildModelInputContext } from '@megumi/context-management';
 import { mapModelInputContextToOpenAICompatibleMessages } from '@megumi/ai/prompt/model-input-context-mapper';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 
