@@ -199,4 +199,40 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(serialized).not.toContain('debugId');
     expect(serialized).not.toContain('raw provider body');
   });
+
+  it('stores provider-native tool replay fields in tool continuation parts', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:tool-replay',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:2',
+      buildReason: 'tool_continuation',
+      builtAt,
+      toolUses: [toolUse()],
+      toolResults: [toolResult()],
+      providerStates: [providerState()],
+    });
+
+    expect(context.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolUseId: 'tool-use:1',
+        providerToolUseId: 'provider-tool-use:1',
+        modelStepId: 'model-step:1',
+        toolName: 'read_file',
+        toolInput: { path: 'package.json' },
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolUseId: 'tool-use:1',
+        toolResultId: 'tool-result:1',
+        toolResultContent: '{"name":"megumi"}',
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        modelStepId: 'model-step:1',
+        providerStateText: 'Need to read package.json before answering.',
+      }),
+    ]));
+  });
 });

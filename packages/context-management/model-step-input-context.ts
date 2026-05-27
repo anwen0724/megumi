@@ -142,6 +142,10 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     kind: 'tool_continuation',
     text: `Tool use ${toolUse.toolUseId} requested ${toolUse.toolName}. Input preview: ${toolUse.inputPreview.summary}.`,
     toolUseId: String(toolUse.toolUseId),
+    providerToolUseId: toolUse.providerToolUseId,
+    modelStepId: String(toolUse.modelStepId),
+    toolName: toolUse.toolName,
+    toolInput: toolUse.input,
     sourceRefs: [toolUseSourceRef(toolUse, input.builtAt)],
     priority: 80,
     budgetStatus: 'included_full',
@@ -157,6 +161,7 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolUseId}: ${toolResultSummary(toolResult)}.`,
     toolUseId: String(toolResult.toolUseId),
     toolResultId: String(toolResult.toolResultId),
+    toolResultContent: toolResultContent(toolResult),
     sourceRefs: [toolResultSourceRef(toolResult)],
     priority: 85,
     budgetStatus: 'included_full',
@@ -170,7 +175,9 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     partId: `part:provider-state:${index + 1}:${providerState.modelStepId}`,
     kind: 'tool_continuation',
     text: providerStateSummary(providerState),
+    modelStepId: String(providerState.modelStepId),
     providerStateIds: [`${providerState.modelStepId}:${index}`],
+    providerStateText: providerStateSummary(providerState),
     sourceRefs: [{
       sourceId: `provider-state:${providerState.modelStepId}:${index}`,
       sourceKind: 'provider_state',
@@ -245,6 +252,22 @@ function toolResultSummary(toolResult: ToolResult): string {
     return toolResult.textContent;
   }
   if (toolResult.denialReason && toolResult.denialReason.trim().length > 0) {
+    return toolResult.denialReason;
+  }
+  if (toolResult.error) {
+    return toolResult.error.message;
+  }
+  if (toolResult.structuredContent !== undefined) {
+    return stringifyJsonValue(toolResult.structuredContent);
+  }
+  return toolResult.kind;
+}
+
+function toolResultContent(toolResult: ToolResult): string {
+  if (toolResult.textContent !== undefined) {
+    return toolResult.textContent;
+  }
+  if (toolResult.denialReason !== undefined) {
     return toolResult.denialReason;
   }
   if (toolResult.error) {

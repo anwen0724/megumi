@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { IsoDateTime } from './ids';
-import { JsonObjectSchema, type JsonObject } from './json';
+import { JsonObjectSchema, JsonValueSchema, type JsonObject, type JsonValue } from './json';
 import { IsoDateTimeSchema } from './runtime-validation';
 
 const IdSchema = z.string().min(1).max(128);
@@ -150,16 +150,28 @@ export const ToolContinuationPartSchema = ModelInputContextPartBaseSchema.extend
   kind: z.literal('tool_continuation'),
   text: NonEmptyTextSchema,
   toolUseId: IdSchema.optional(),
+  providerToolUseId: IdSchema.optional(),
+  modelStepId: IdSchema.optional(),
+  toolName: z.string().min(1).max(64).optional(),
+  toolInput: JsonValueSchema.optional(),
   toolResultId: IdSchema.optional(),
+  toolResultContent: z.string().optional(),
   providerStateIds: z.array(IdSchema).optional(),
+  providerStateText: z.string().min(1).optional(),
 }).strict();
 
 export interface ToolContinuationPart extends ModelInputContextPartBase {
   kind: 'tool_continuation';
   text: string;
   toolUseId?: string;
+  providerToolUseId?: string;
+  modelStepId?: string;
+  toolName?: string;
+  toolInput?: JsonValue;
   toolResultId?: string;
+  toolResultContent?: string;
   providerStateIds?: string[];
+  providerStateText?: string;
 }
 
 export const RuntimeConstraintPartSchema = ModelInputContextPartBaseSchema.extend({

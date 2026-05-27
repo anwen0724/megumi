@@ -152,6 +152,82 @@ describe('ModelInputContext contracts', () => {
     })).toThrow();
   });
 
+  it('accepts structured tool continuation replay fields without exposing raw provider bodies', () => {
+    const context = ModelInputContextSchema.parse({
+      contextId: 'model-input-context:tool-replay',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-2',
+      parts: [
+        {
+          partId: 'part:tool-use:1',
+          kind: 'tool_continuation',
+          text: 'Tool use tool-use-1 requested read_file.',
+          sourceRefs: [{ sourceId: 'tool-use:tool-use-1', sourceKind: 'tool_use' }],
+          priority: 80,
+          budgetStatus: 'included_full',
+          toolUseId: 'tool-use-1',
+          providerToolUseId: 'provider-tool-use-1',
+          modelStepId: 'model-step-1',
+          toolName: 'read_file',
+          toolInput: { path: 'package.json' },
+        },
+        {
+          partId: 'part:tool-result:1',
+          kind: 'tool_continuation',
+          text: 'Tool result tool-result-1 for tool-use-1.',
+          sourceRefs: [{ sourceId: 'tool-result:tool-result-1', sourceKind: 'tool_result' }],
+          priority: 85,
+          budgetStatus: 'included_full',
+          toolUseId: 'tool-use-1',
+          toolResultId: 'tool-result-1',
+          toolResultContent: 'File contents',
+        },
+        {
+          partId: 'part:provider-state:1',
+          kind: 'tool_continuation',
+          text: 'I need to inspect package.json.',
+          sourceRefs: [{ sourceId: 'provider-state:model-step-1:0', sourceKind: 'provider_state' }],
+          priority: 75,
+          budgetStatus: 'included_full',
+          modelStepId: 'model-step-1',
+          providerStateIds: ['model-step-1:0'],
+          providerStateText: 'I need to inspect package.json.',
+        },
+      ],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        inputTokenEstimate: 12,
+        partBudgets: [
+          { partId: 'part:tool-use:1', tokenEstimate: 4, budgetStatus: 'included_full' },
+          { partId: 'part:tool-result:1', tokenEstimate: 4, budgetStatus: 'included_full' },
+          { partId: 'part:provider-state:1', tokenEstimate: 4, budgetStatus: 'included_full' },
+        ],
+      },
+      trace: {
+        buildReason: 'tool_continuation',
+        selectedSources: [
+          { sourceId: 'tool-use:tool-use-1', reason: 'tool_continuation' },
+          { sourceId: 'tool-result:tool-result-1', reason: 'tool_continuation' },
+          { sourceId: 'provider-state:model-step-1:0', reason: 'tool_continuation' },
+        ],
+        excludedSources: [],
+      },
+      builtAt,
+    });
+
+    expect(context.parts[0]).toMatchObject({
+      toolName: 'read_file',
+      toolInput: { path: 'package.json' },
+    });
+    expect(context.parts[1]).toMatchObject({
+      toolResultContent: 'File contents',
+    });
+    expect(JSON.stringify(context)).not.toContain('rawProviderBody');
+  });
+
   it('exports stable model input context constants', () => {
     expect(MODEL_INPUT_CONTEXT_PART_KINDS).toEqual([
       'instruction',
