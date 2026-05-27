@@ -81,13 +81,27 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
           budgetStatus: 'included_reduced',
         } as Partial<ModelInputContextPart>),
         basePart({
-          partId: 'part:tool:1',
+          partId: 'part:tool-use:1',
+          kind: 'tool_continuation',
+          text: 'Tool use tool-use:1 requested read_file.',
+          sourceRefs: [sourceRef('tool-use:1', 'tool_use')],
+          priority: 80,
+          toolUseId: 'tool-use:1',
+          modelStepId: 'model-step:1',
+          toolName: 'read_file',
+          toolInput: {
+            path: 'package.json',
+          },
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:tool-result:1',
           kind: 'tool_continuation',
           text: 'read_file returned the current provider mapper.',
           sourceRefs: [sourceRef('tool-result:1', 'tool_result')],
           priority: 80,
           toolUseId: 'tool-use:1',
           toolResultId: 'tool-result:1',
+          toolResultContent: 'read_file returned the current provider mapper.',
         } as Partial<ModelInputContextPart>),
         basePart({
           partId: 'part:runtime:1',
@@ -119,11 +133,26 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
       },
       {
         role: 'system',
-        content: 'read_file returned the current provider mapper.',
+        content: 'Permission mode is plan.',
       },
       {
-        role: 'system',
-        content: 'Permission mode is plan.',
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'tool-use:1',
+            type: 'function',
+            function: {
+              name: 'read_file',
+              arguments: '{"path":"package.json"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'tool-use:1',
+        content: 'read_file returned the current provider mapper.',
       },
     ]);
   });
