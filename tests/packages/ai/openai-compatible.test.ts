@@ -4,6 +4,7 @@ import { buildModelInputContext } from '@megumi/context-management';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
+import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
 import type { AiModelStepAdapterRequest, FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
 
@@ -44,6 +45,68 @@ function currentTurnPart(
     budgetStatus: 'included_full',
     ...overrides,
   };
+}
+
+function modelStepInputContext(request: AiModelStepAdapterRequest['request']) {
+  return buildModelInputContext({
+    contextId: `model-input-context:${request.stepId}`,
+    sessionId: request.sessionId,
+    runId: request.runId,
+    stepId: request.stepId,
+    buildReason: request.toolResults && request.toolResults.length > 0
+      ? 'tool_continuation'
+      : 'initial_model_step',
+    builtAt: request.createdAt,
+    parts: [
+      instructionPart({
+        partId: `part:instruction:${request.stepId}`,
+      }),
+      currentTurnPart({
+        partId: `part:current-turn:${request.stepId}`,
+        text: request.messages[0]?.content ?? 'Read package.json',
+        sourceRefs: [sourceRef(`message:${request.stepId}`, 'current_user_message')],
+      }),
+      ...toolContinuationParts(request.toolUses ?? [], request.toolResults ?? []),
+    ],
+  });
+}
+
+function toolContinuationParts(toolUses: ToolUse[], toolResults: ToolResult[]): ModelInputContextPart[] {
+  return [
+    ...toolUses.map((toolUse, index): ModelInputContextPart => ({
+      partId: `part:tool-use:${index + 1}:${toolUse.toolUseId}`,
+      kind: 'tool_continuation',
+      text: `Tool use ${toolUse.toolUseId} requested ${toolUse.toolName}.`,
+      toolUseId: String(toolUse.toolUseId),
+      providerToolUseId: toolUse.providerToolUseId,
+      modelStepId: String(toolUse.modelStepId),
+      toolName: toolUse.toolName,
+      toolInput: toolUse.input,
+      sourceRefs: [sourceRef(`tool-use:${toolUse.toolUseId}`, 'tool_use')],
+      priority: 80,
+      budgetStatus: 'included_full',
+    })),
+    ...toolResults.map((toolResult, index): ModelInputContextPart => ({
+      partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
+      kind: 'tool_continuation',
+      text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolUseId}.`,
+      toolUseId: String(toolResult.toolUseId),
+      toolResultId: String(toolResult.toolResultId),
+      toolResultContent: toolResultContent(toolResult),
+      sourceRefs: [sourceRef(`tool-result:${toolResult.toolResultId}`, 'tool_result')],
+      priority: 85,
+      budgetStatus: 'included_full',
+    })),
+  ];
+}
+
+function toolResultContent(toolResult: ToolResult): string {
+  return toolResult.textContent ?? JSON.stringify({
+    kind: toolResult.kind,
+    ...(toolResult.structuredContent !== undefined ? { structuredContent: toolResult.structuredContent } : {}),
+    ...(toolResult.denialReason ? { denialReason: toolResult.denialReason } : {}),
+    ...(toolResult.error ? { error: toolResult.error } : {}),
+  });
 }
 
 const request: ChatRuntimeRequest = {
@@ -114,27 +177,31 @@ describe('OpenAI-compatible adapter', () => {
 
   function modelStepInput(overrides: Partial<AiModelStepAdapterRequest['request']> = {}): AiModelStepAdapterRequest {
     let sequence = 0;
+    const request = {
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai' as const,
+      modelId: 'gpt-4.1',
+      messages: [
+        {
+          messageId: 'message-1',
+          sessionId: 'session-1',
+          role: 'user' as const,
+          content: 'Read package.json',
+          status: 'completed' as const,
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      createdAt: '2026-05-17T00:00:00.000Z',
+      ...overrides,
+    };
 
     return {
       request: {
-        requestId: 'request-1',
-        sessionId: 'session-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        providerId: 'openai' as const,
-        modelId: 'gpt-4.1',
-        messages: [
-          {
-            messageId: 'message-1',
-            sessionId: 'session-1',
-            role: 'user' as const,
-            content: 'Read package.json',
-            status: 'completed' as const,
-            createdAt: '2026-05-17T00:00:00.000Z',
-          },
-        ],
-        createdAt: '2026-05-17T00:00:00.000Z',
-        ...overrides,
+        ...request,
+        inputContext: request.inputContext ?? modelStepInputContext(request),
       },
       runId: 'run-1',
       stepId: 'step-1',
@@ -343,6 +410,24 @@ describe('OpenAI-compatible adapter', () => {
         modelStepId: 'model-step-1',
         providerId: 'openai',
         modelId: 'gpt-4.1',
+        inputContext: buildModelInputContext({
+          contextId: 'model-input-context:tool-call-stream',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          stepId: 'step-1',
+          buildReason: 'initial_model_step',
+          builtAt: '2026-05-17T00:00:00.000Z',
+          parts: [
+            instructionPart({
+              partId: 'part:instruction:tool-call-stream',
+            }),
+            currentTurnPart({
+              partId: 'part:current-turn:tool-call-stream',
+              text: 'Read package.json',
+              sourceRefs: [sourceRef('message:tool-call-stream', 'current_user_message')],
+            }),
+          ],
+        }),
         messages: [
           {
             messageId: 'message-1',
