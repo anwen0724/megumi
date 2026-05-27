@@ -37,7 +37,10 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
     providerId: options.providerId,
     async *streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent> {
       const requestBody = mapModelStepToOpenAICompatibleRequest(input.request);
-      const diagnostics = createProviderRequestDiagnostics(requestBody, input.request.toolResults?.length ? 'tool_continuation' : 'initial');
+      const diagnostics = createProviderRequestDiagnostics(
+        requestBody,
+        hasToolResultContinuation(input.request) ? 'tool_continuation' : 'initial',
+      );
       let failureStage: ProviderFailureStage = 'fetch_throw';
 
       try {
@@ -638,19 +641,14 @@ function toChatRuntimeRequest(request: ModelStepRuntimeRequest): ChatRuntimeRequ
     sessionId: request.sessionId,
     providerId: request.providerId,
     modelId: request.modelId,
-    messages: request.messages.map((message) => ({
-      id: message.messageId,
-      role: toChatRuntimeRole(message.role),
-      content: message.content,
-      createdAt: message.createdAt,
-    })),
+    messages: [],
     runtimeContext: request.runtimeContext,
     createdAt: request.createdAt,
   };
 }
 
-function toChatRuntimeRole(role: ModelStepRuntimeRequest['messages'][number]['role']): ChatRuntimeRequest['messages'][number]['role'] {
-  return role === 'host' ? 'system' : role;
+function hasToolResultContinuation(request: ModelStepRuntimeRequest): boolean {
+  return request.inputContext.parts.some((part) => part.kind === 'tool_continuation' && part.toolResultId);
 }
 
 function failedModelStepEvent(

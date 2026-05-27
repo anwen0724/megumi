@@ -12,6 +12,7 @@ import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { buildModelInputContext } from './model-input-context-builder';
 
 export interface BuildModelStepInputContextFromSourcesInput {
+  baseInputContext?: ModelInputContext;
   contextId: string;
   sessionId: string;
   runId: string;
@@ -34,12 +35,18 @@ export interface BuildModelStepInputContextFromSourcesInput {
 export function buildModelStepInputContextFromSources(
   input: BuildModelStepInputContextFromSourcesInput,
 ): ModelInputContext {
-  const parts: ModelInputContextPart[] = [
-    ...sessionParts(input.historyMessages ?? [], input.builtAt),
-    ...runtimeConstraintParts(input),
-    ...toolContinuationParts(input),
-    ...(input.currentMessage ? [currentTurnPart(input.currentMessage, input.builtAt)] : []),
-  ];
+  const toolParts = toolContinuationParts(input);
+  const parts: ModelInputContextPart[] = input.baseInputContext
+    ? [
+        ...input.baseInputContext.parts.filter((part) => part.kind !== 'tool_continuation'),
+        ...toolParts,
+      ]
+    : [
+        ...sessionParts(input.historyMessages ?? [], input.builtAt),
+        ...runtimeConstraintParts(input),
+        ...toolParts,
+        ...(input.currentMessage ? [currentTurnPart(input.currentMessage, input.builtAt)] : []),
+      ];
 
   return buildModelInputContext({
     contextId: input.contextId,
@@ -48,9 +55,15 @@ export function buildModelStepInputContextFromSources(
     stepId: input.stepId,
     buildReason: input.buildReason,
     builtAt: input.builtAt,
-    modelContextWindow: input.modelContextWindow ?? input.runContext?.budget.modelContextWindow,
-    reservedOutputTokens: input.reservedOutputTokens ?? input.runContext?.budget.reservedOutputTokens,
-    availableInputTokens: input.availableInputTokens ?? input.runContext?.budget.availableInputTokens,
+    modelContextWindow: input.modelContextWindow
+      ?? input.runContext?.budget.modelContextWindow
+      ?? input.baseInputContext?.budget.modelContextWindow,
+    reservedOutputTokens: input.reservedOutputTokens
+      ?? input.runContext?.budget.reservedOutputTokens
+      ?? input.baseInputContext?.budget.reservedOutputTokens,
+    availableInputTokens: input.availableInputTokens
+      ?? input.runContext?.budget.availableInputTokens
+      ?? input.baseInputContext?.budget.availableInputTokens,
     parts,
   });
 }

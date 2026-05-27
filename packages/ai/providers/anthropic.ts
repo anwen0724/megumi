@@ -66,17 +66,8 @@ function toChatRuntimeRequest(request: ModelStepRuntimeRequest): ChatRuntimeRequ
     sessionId: request.sessionId,
     providerId: request.providerId,
     modelId: request.modelId,
-    messages: request.messages.map((message) => ({
-      id: message.messageId,
-      role: toChatRuntimeRole(message.role),
-      content: message.content,
-      createdAt: message.createdAt,
-    })),
+    messages: [],
     runtimeContext: request.runtimeContext,
     createdAt: request.createdAt,
   };
-}
-
-function toChatRuntimeRole(role: ModelStepRuntimeRequest['messages'][number]['role']): ChatRuntimeRequest['messages'][number]['role'] {
-  return role === 'host' ? 'system' : role;
 }

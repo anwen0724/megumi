@@ -1,5 +1,6 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { buildModelStepInputContextFromSources } from '@megumi/context-management';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import {
   createModelMessageObservation,
@@ -60,8 +61,14 @@ describe('run model step foundation', () => {
         stepId: 'step-1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        messages: [
-          {
+        inputContext: buildModelStepInputContextFromSources({
+          contextId: 'model-input-context:step-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          stepId: 'step-1',
+          buildReason: 'test',
+          builtAt: '2026-05-17T00:00:00.000Z',
+          currentMessage: {
             messageId: 'message-1',
             sessionId: 'session-1',
             role: 'user',
@@ -69,7 +76,7 @@ describe('run model step foundation', () => {
             status: 'completed',
             createdAt: '2026-05-17T00:00:00.000Z',
           },
-        ],
+        }),
         createdAt: '2026-05-17T00:00:00.000Z',
       },
       aiPort: {

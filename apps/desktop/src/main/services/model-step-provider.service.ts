@@ -1,5 +1,7 @@
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
+import { buildModelInputContext } from '@megumi/context-management';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { ModelInputContextPart } from '@megumi/shared/model-input-context-contracts';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError, RuntimeErrorCode } from '@megumi/shared/runtime-errors';
@@ -100,16 +102,7 @@ export class ModelStepProviderService {
       stepId: `step:${request.requestId}`,
       providerId: request.providerId,
       modelId: request.modelId,
-      messages: request.messages.map((message) => ({
-        messageId: message.id,
-        sessionId: request.sessionId ?? `session:${request.requestId}`,
-        runId: `run:${request.requestId}`,
-        role: toSessionMessageRole(message.role),
-        content: message.content,
-        status: 'completed',
-        createdAt: message.createdAt,
-        completedAt: message.createdAt,
-      })),
+      inputContext: chatRequestInputContext(request),
       runtimeContext: request.runtimeContext,
       createdAt: request.createdAt,
     });
@@ -122,23 +115,52 @@ function toChatRuntimeRequest(request: ModelStepRuntimeRequest): ChatRuntimeRequ
     sessionId: request.sessionId,
     providerId: request.providerId,
     modelId: request.modelId,
-    messages: request.messages.map((message) => ({
-      id: message.messageId,
-      role: toChatRuntimeRole(message.role),
-      content: message.content,
-      createdAt: message.createdAt,
-    })),
+    messages: [],
     runtimeContext: request.runtimeContext,
     createdAt: request.createdAt,
   };
 }
 
-function toChatRuntimeRole(role: ModelStepRuntimeRequest['messages'][number]['role']): ChatRuntimeRequest['messages'][number]['role'] {
-  return role === 'host' ? 'system' : role;
-}
+function chatRequestInputContext(request: ChatRuntimeRequest) {
+  const sessionId = request.sessionId ?? `session:${request.requestId}`;
+  const runId = `run:${request.requestId}`;
+  const stepId = `step:${request.requestId}`;
+  const parts = request.messages.map((message, index): ModelInputContextPart => {
+    const base = {
+      partId: `part:legacy-chat:${index + 1}:${message.id}`,
+      text: message.content,
+      sourceRefs: [{
+        sourceId: `legacy-chat-message:${message.id}`,
+        sourceKind: message.role === 'user' ? 'current_user_message' as const : 'timeline_message' as const,
+        loadedAt: message.createdAt,
+      }],
+      priority: message.role === 'user' ? 95 : 50,
+      budgetStatus: 'included_full' as const,
+    };
 
-function toSessionMessageRole(role: ChatRuntimeRequest['messages'][number]['role']): ModelStepRuntimeRequest['messages'][number]['role'] {
-  return role === 'tool' ? 'host' : role;
+    if (message.role === 'user') {
+      return {
+        ...base,
+        kind: 'current_turn',
+        role: 'user',
+      };
+    }
+
+    return {
+      ...base,
+      kind: 'session',
+    };
+  });
+
+  return buildModelInputContext({
+    contextId: `model-input-context:${stepId}:legacy-chat`,
+    sessionId,
+    runId,
+    stepId,
+    buildReason: 'legacy_chat_compatibility',
+    builtAt: request.createdAt,
+    parts,
+  });
 }
 
 function toRuntimeError(error: unknown, request: ModelStepRuntimeRequest): RuntimeError {

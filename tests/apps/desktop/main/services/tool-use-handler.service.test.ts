@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { buildModelStepInputContextFromSources } from '@megumi/context-management';
 import { createToolUseHandlerService } from '@megumi/desktop/main/services/tool-use-handler.service';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
@@ -372,6 +373,7 @@ describe('ToolUseHandlerService', () => {
 });
 
 function modelRequest(): ModelStepRuntimeRequest {
+  const createdAt = '2026-05-20T00:00:00.000Z';
   return {
     requestId: 'request-1',
     sessionId: 'session-1',
@@ -379,8 +381,15 @@ function modelRequest(): ModelStepRuntimeRequest {
     stepId: 'step-1',
     providerId: 'openai',
     modelId: 'gpt-5.2',
-    messages: [],
-    createdAt: '2026-05-20T00:00:00.000Z',
+    inputContext: buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:tool-handler',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'test',
+      builtAt: createdAt,
+    }),
+    createdAt,
   };
 }
 

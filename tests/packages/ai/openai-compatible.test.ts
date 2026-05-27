@@ -10,6 +10,12 @@ import type { AiModelStepAdapterRequest, FetchLike, ProviderRuntimeConfig } from
 
 const builtAt = '2026-05-27T00:00:00.000Z';
 
+interface ModelStepRequestOverrides extends Partial<AiModelStepAdapterRequest['request']> {
+  messageText?: string;
+  toolUses?: ToolUse[];
+  toolResults?: ToolResult[];
+}
+
 function sourceRef(sourceId: string, sourceKind: ModelInputContextSourceRef['sourceKind']): ModelInputContextSourceRef {
   return {
     sourceId,
@@ -47,7 +53,12 @@ function currentTurnPart(
   };
 }
 
-function modelStepInputContext(request: AiModelStepAdapterRequest['request']) {
+function modelStepInputContext(request: ModelStepRequestOverrides & {
+  sessionId: string;
+  runId: string;
+  stepId: string;
+  createdAt: string;
+}) {
   return buildModelInputContext({
     contextId: `model-input-context:${request.stepId}`,
     sessionId: request.sessionId,
@@ -63,7 +74,7 @@ function modelStepInputContext(request: AiModelStepAdapterRequest['request']) {
       }),
       currentTurnPart({
         partId: `part:current-turn:${request.stepId}`,
-        text: request.messages[0]?.content ?? 'Read package.json',
+        text: request.messageText ?? 'Read package.json',
         sourceRefs: [sourceRef(`message:${request.stepId}`, 'current_user_message')],
       }),
       ...toolContinuationParts(request.toolUses ?? [], request.toolResults ?? []),
@@ -175,7 +186,7 @@ describe('OpenAI-compatible adapter', () => {
     };
   }
 
-  function modelStepInput(overrides: Partial<AiModelStepAdapterRequest['request']> = {}): AiModelStepAdapterRequest {
+  function modelStepInput(overrides: ModelStepRequestOverrides = {}): AiModelStepAdapterRequest {
     let sequence = 0;
     const request = {
       requestId: 'request-1',
@@ -184,23 +195,16 @@ describe('OpenAI-compatible adapter', () => {
       stepId: 'step-1',
       providerId: 'openai' as const,
       modelId: 'gpt-4.1',
-      messages: [
-        {
-          messageId: 'message-1',
-          sessionId: 'session-1',
-          role: 'user' as const,
-          content: 'Read package.json',
-          status: 'completed' as const,
-          createdAt: '2026-05-17T00:00:00.000Z',
-        },
-      ],
+      messageText: 'Read package.json',
       createdAt: '2026-05-17T00:00:00.000Z',
       ...overrides,
     };
 
+    const { messageText: _messageText, toolUses: _toolUses, toolResults: _toolResults, ...runtimeRequest } = request;
+
     return {
       request: {
-        ...request,
+        ...runtimeRequest,
         inputContext: request.inputContext ?? modelStepInputContext(request),
       },
       runId: 'run-1',
@@ -330,16 +334,6 @@ describe('OpenAI-compatible adapter', () => {
         providerId: 'openai',
         modelId: 'gpt-4.1',
         inputContext,
-        messages: [
-          {
-            messageId: 'message-1',
-            sessionId: 'session-1',
-            role: 'user',
-            content: 'Legacy message must not be sent when inputContext exists.',
-            status: 'completed',
-            createdAt: '2026-05-17T00:00:00.000Z',
-          },
-        ],
         createdAt: '2026-05-17T00:00:00.000Z',
       },
       runId: 'run-1',
@@ -428,16 +422,6 @@ describe('OpenAI-compatible adapter', () => {
             }),
           ],
         }),
-        messages: [
-          {
-            messageId: 'message-1',
-            sessionId: 'session-1',
-            role: 'user',
-            content: 'Read package.json',
-            status: 'completed',
-            createdAt: '2026-05-17T00:00:00.000Z',
-          },
-        ],
         toolDefinitions: [
           {
             name: 'read_file',

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { ApprovalRequest, ToolCall, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
@@ -18,6 +19,23 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
 }
 
 function createRequest(overrides: Partial<ModelStepRuntimeRequest> = {}): ModelStepRuntimeRequest {
+  const inputContext = buildModelStepInputContextFromSources({
+    contextId: 'model-input-context:request-1',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    buildReason: 'initial_model_step',
+    builtAt: '2026-05-17T00:00:00.000Z',
+    currentMessage: {
+      messageId: 'message-1',
+      sessionId: 'session-1',
+      role: 'user',
+      content: 'Read package.json',
+      status: 'completed',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    },
+  });
+
   return {
     requestId: 'request-1',
     sessionId: 'session-1',
@@ -26,16 +44,7 @@ function createRequest(overrides: Partial<ModelStepRuntimeRequest> = {}): ModelS
     modelStepId: 'model-step-1',
     providerId: 'openai',
     modelId: 'gpt-4.1',
-    messages: [
-      {
-        messageId: 'message-1',
-        sessionId: 'session-1',
-        role: 'user',
-        content: 'Read package.json',
-        status: 'completed',
-        createdAt: '2026-05-17T00:00:00.000Z',
-      },
-    ],
+    inputContext,
     createdAt: '2026-05-17T00:00:00.000Z',
     ...overrides,
   };
@@ -234,7 +243,12 @@ describe('run model tool loop', () => {
             return;
           }
 
-          expect(input.request.toolResults).toHaveLength(1);
+          expect(input.request.inputContext.parts).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'tool_continuation',
+              toolResultId: 'tool-result-1',
+            }),
+          ]));
           yield assistantCompletedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
@@ -282,19 +296,13 @@ describe('run model tool loop', () => {
     expect(requests[1]).toMatchObject({
       stepId: 'step-2',
       modelStepId: 'model-step-2',
-      toolUses: [
-        expect.objectContaining({
-          toolUseId: 'call-read',
-          providerToolUseId: 'call-read',
-          toolName: 'read_file',
-        }),
-      ],
-      toolResults: [expect.objectContaining({ toolResultId: 'tool-result-1' })],
     });
-    expect(requests[1]?.inputContext?.parts).toEqual(expect.arrayContaining([
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',
         toolUseId: 'call-read',
+        providerToolUseId: 'call-read',
+        toolName: 'read_file',
         text: expect.stringContaining('Tool use call-read requested read_file.'),
       }),
       expect.objectContaining({
@@ -384,20 +392,13 @@ describe('run model tool loop', () => {
     }));
 
     expect(requests).toHaveLength(2);
-    expect(requests[1]?.providerStates).toEqual([
-      {
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'tool_continuation',
         modelStepId: 'model-step-1',
-        providerId: 'deepseek',
-        modelId: 'deepseek-v4-flash',
-        blocks: [
-          {
-            type: 'reasoning_content',
-            text: 'I need to inspect docs.',
-          },
-        ],
-      },
-    ]);
-    expect(JSON.stringify(requests[1]?.inputContext?.parts)).toContain('I need to inspect docs.');
+        providerStateText: 'I need to inspect docs.',
+      }),
+    ]));
   });
 
   it('stops before requesting another model step when tool handling returns pending approvals', async () => {
@@ -470,13 +471,6 @@ describe('run model tool loop', () => {
               }),
             ]),
           }),
-          toolUses: [
-            expect.objectContaining({
-              toolUseId: 'call-read',
-              toolName: 'read_file',
-            }),
-          ],
-          toolResults: [],
         }),
         accumulatedToolUses: [
           expect.objectContaining({

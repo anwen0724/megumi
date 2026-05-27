@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { ProviderRuntimeConfig } from '@megumi/ai/types';
@@ -19,6 +20,49 @@ const runtimeContext = {
   createdAt: '2026-05-17T00:00:00.000Z',
 } as const;
 
+function inputContext(): ModelInputContext {
+  return {
+    contextId: 'model-input-context:request-1',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    parts: [
+      {
+        partId: 'part:current-turn:message-1',
+        kind: 'current_turn',
+        role: 'user',
+        text: 'Hello',
+        sourceRefs: [{
+          sourceId: 'session-message:message-1',
+          sourceKind: 'current_user_message',
+        }],
+        priority: 95,
+        budgetStatus: 'included_full',
+      },
+    ],
+    budget: {
+      modelContextWindow: 8192,
+      reservedOutputTokens: 1024,
+      availableInputTokens: 7168,
+      inputTokenEstimate: 1,
+      partBudgets: [{
+        partId: 'part:current-turn:message-1',
+        tokenEstimate: 1,
+        budgetStatus: 'included_full',
+      }],
+    },
+    trace: {
+      buildReason: 'initial_model_step',
+      selectedSources: [{
+        sourceId: 'session-message:message-1',
+        reason: 'current_turn',
+      }],
+      excludedSources: [],
+    },
+    builtAt: '2026-05-17T00:00:00.000Z',
+  };
+}
+
 const request: ModelStepRuntimeRequest = {
   requestId: 'request-1',
   sessionId: 'session-1',
@@ -28,18 +72,7 @@ const request: ModelStepRuntimeRequest = {
   modelId: 'deepseek-v4-flash',
   createdAt: '2026-05-17T00:00:00.000Z',
   runtimeContext,
-  messages: [
-    {
-      messageId: 'message-1',
-      sessionId: 'session-1',
-      runId: 'run-1',
-      role: 'user',
-      content: 'Hello',
-      status: 'completed',
-      createdAt: '2026-05-17T00:00:00.000Z',
-      completedAt: '2026-05-17T00:00:00.000Z',
-    },
-  ],
+  inputContext: inputContext(),
 };
 
 const config: ProviderRuntimeConfig = {

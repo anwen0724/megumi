@@ -983,12 +983,7 @@ describe('SessionRunService', () => {
       // drain stream
     }
 
-    expect(requests[0]?.messages.map((message) => [message.role, message.content])).toEqual([
-      ['user', '能为我写一个你的自我介绍文档放在根目录下面吗？'],
-      ['assistant', '[Previous turn failed after tool activity: write_file ABOUT_MEGUMI.md. Final answer unavailable. Error: Provider network request failed.]'],
-      ['user', '请再写一份你对我的印象的文档'],
-    ]);
-    expect(requests[0]?.inputContext?.parts).toEqual(expect.arrayContaining([
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'session',
         text: expect.stringContaining('能为我写一个你的自我介绍文档放在根目录下面吗？'),
@@ -1121,9 +1116,12 @@ describe('SessionRunService', () => {
         status: 'succeeded',
       }),
     ]));
-    expect(requests[1]?.toolResults).toEqual([
-      expect.objectContaining({ toolResultId: 'tool-result-1' }),
-    ]);
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolResultId: 'tool-result-1',
+      }),
+    ]));
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
       'tool.use.created',
@@ -1984,25 +1982,12 @@ describe('SessionRunService', () => {
       decidedAt: '2026-05-17T00:00:05.000Z',
     }]);
     expect(requests).toHaveLength(2);
-    expect(requests[1]).toMatchObject({
-      toolUses: [expect.objectContaining({
-        toolUseId: 'tool-use-1',
-        modelStepId: 'model-step-1',
-        toolName: 'read_file',
-      })],
-      toolResults: [expect.objectContaining({ toolResultId: 'tool-result-1' })],
-      providerStates: [expect.objectContaining({
-        modelStepId: 'model-step-1',
-        blocks: [expect.objectContaining({
-          type: 'reasoning_content',
-          text: 'Need to read package.json before answering.',
-        })],
-      })],
-    });
-    expect(requests[1]?.inputContext?.parts).toEqual(expect.arrayContaining([
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',
         toolUseId: 'tool-use-1',
+        modelStepId: 'model-step-1',
+        toolName: 'read_file',
       }),
       expect.objectContaining({
         kind: 'tool_continuation',
@@ -2235,13 +2220,7 @@ describe('SessionRunService', () => {
       expect.objectContaining({ approvalRequestId: 'approval-request-2' }),
     ]);
     expect(requests).toHaveLength(2);
-    expect(requests[1]).toMatchObject({
-      toolResults: [
-        expect.objectContaining({ toolResultId: 'tool-result-1' }),
-        expect.objectContaining({ toolResultId: 'tool-result-2' }),
-      ],
-    });
-    expect(requests[1]?.inputContext?.parts).toEqual(expect.arrayContaining([
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',
         toolResultId: 'tool-result-1',
@@ -2361,19 +2340,8 @@ describe('SessionRunService', () => {
         workspacePath: 'C:/all/work/study/megumi',
       }),
     ]);
-    expect(requests).toEqual([
-      expect.objectContaining({
-        context: expect.objectContaining({
-          runId: 'run-1',
-          goal: 'Use workspace context',
-          workspaceBoundary: expect.objectContaining({
-            workspaceId: 'workspace-1',
-            rootPath: 'C:/all/work/study/megumi',
-          }),
-        }),
-      }),
-    ]);
-    expect(requests[0]?.inputContext?.parts).toEqual(expect.arrayContaining([
+    expect(requests[0]).not.toHaveProperty('context');
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'runtime_constraint',
         constraintKind: 'project_boundary',
@@ -2444,17 +2412,9 @@ describe('SessionRunService', () => {
         createdAt: '2026-05-17T00:00:00.000Z',
       }),
     ]);
-    expect(requests).toEqual([
-      expect.objectContaining({
-        modeSnapshot: {
-          permissionMode: 'plan',
-          source: 'user',
-          createdAt: '2026-05-17T00:00:00.000Z',
-        },
-        modeSnapshotRef: 'mode-snapshot:1',
-      }),
-    ]);
-    expect(requests[0]?.inputContext?.parts).toEqual(expect.arrayContaining([
+    expect(requests[0]).not.toHaveProperty('modeSnapshot');
+    expect(requests[0]).not.toHaveProperty('modeSnapshotRef');
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'runtime_constraint',
         constraintKind: 'permission_mode',
@@ -2527,16 +2487,8 @@ describe('SessionRunService', () => {
       // Drain the stream so the provider request is observed.
     }
 
-    expect(requests).toEqual([
-      expect.objectContaining({
-        modeSnapshotRef: 'mode-snapshot:real-repo',
-        modeSnapshot: {
-          permissionMode: 'plan',
-          source: 'user',
-          createdAt: '2026-05-17T00:00:00.000Z',
-        },
-      }),
-    ]);
+    expect(requests[0]).not.toHaveProperty('modeSnapshot');
+    expect(requests[0]).not.toHaveProperty('modeSnapshotRef');
     expect(sessionRepository.getRun('run-1')).toMatchObject({
       mode: 'plan',
       modeSnapshotRef: 'mode-snapshot:real-repo',

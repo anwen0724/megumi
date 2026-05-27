@@ -402,7 +402,18 @@ export class SessionRunService {
           providerCapabilitySummary: { supportsToolUse: true },
         })
       : undefined;
-    const modelContextMessages = this.createModelContextMessages(input.payload, session, runId, userMessage);
+    const modelContextMessages = this.timelineMessageRepository
+      ? [
+          ...timelineMessagesToModelContext(
+            this.timelineMessageRepository.listCommittedMessagesBySession({
+              projectId: timelineProjectIdForSession(session),
+              sessionId: String(session.sessionId),
+            }).messages,
+            String(session.sessionId),
+          ),
+          userMessage,
+        ]
+      : toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage);
     const inputContext = buildModelStepInputContextFromSources({
       contextId: `model-input-context:${input.requestId}:${stepId}`,
       sessionId: String(session.sessionId),
@@ -426,13 +437,7 @@ export class SessionRunService {
       providerId: input.payload.providerId,
       modelId: input.payload.modelId,
       inputContext,
-      messages: modelContextMessages,
-      ...(context ? { context } : {}),
       ...(toolDefinitions && toolDefinitions.length > 0 ? { toolDefinitions } : {}),
-      ...(modeSnapshot ? {
-        modeSnapshot: toPermissionModeSnapshot(modeSnapshot, createdAt),
-        modeSnapshotRef: modeSnapshot.modeSnapshotId,
-      } : {}),
       runtimeContext: input.runtimeContext,
       createdAt,
     };
@@ -481,28 +486,6 @@ export class SessionRunService {
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
     };
-  }
-
-  private createModelContextMessages(
-    payload: SessionMessageSendPayload,
-    session: Session,
-    runId: string,
-    persistedUserMessage: SessionMessage,
-  ): SessionMessage[] {
-    if (!this.timelineMessageRepository) {
-      return toSessionMessagesForModelStep(payload, session.sessionId, runId, persistedUserMessage);
-    }
-
-    const projectId = timelineProjectIdForSession(session);
-    const history = this.timelineMessageRepository.listCommittedMessagesBySession({
-      projectId,
-      sessionId: String(session.sessionId),
-    });
-
-    return [
-      ...timelineMessagesToModelContext(history.messages, String(session.sessionId)),
-      persistedUserMessage,
-    ];
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
@@ -1110,33 +1093,24 @@ export class SessionRunService {
       startedAt: input.decidedAt,
     });
     const resumedToolResults = [
-      ...(pending.request.toolResults ?? []),
+      ...pending.accumulatedToolResults,
       ...continuation.resolvedResults,
     ];
-    const currentMessage = pending.request.messages.at(-1);
-    const historyMessages = currentMessage
-      ? pending.request.messages.slice(0, -1)
-      : pending.request.messages;
     const resumedRequest: ModelStepRuntimeRequest = {
       ...pending.request,
       stepId: resumedStep.stepId,
       modelStepId: `model-step:${crypto.randomUUID()}`,
-      toolResults: resumedToolResults,
       inputContext: buildModelStepInputContextFromSources({
+        baseInputContext: pending.request.inputContext,
         contextId: `model-input-context:${pending.request.requestId}:${resumedStep.stepId}`,
         sessionId: pending.request.sessionId,
         runId: String(pending.request.runId),
         stepId: String(resumedStep.stepId),
         buildReason: 'approval_resume_continuation',
         builtAt: input.decidedAt,
-        currentMessage,
-        historyMessages,
-        runContext: pending.request.context,
-        modeSnapshot: pending.request.modeSnapshot,
-        modeSnapshotRef: pending.request.modeSnapshotRef,
-        toolUses: pending.request.toolUses,
+        toolUses: pending.accumulatedToolUses,
         toolResults: resumedToolResults,
-        providerStates: pending.request.providerStates,
+        providerStates: pending.accumulatedProviderStates,
       }),
       createdAt: input.decidedAt,
     };
@@ -1584,7 +1558,7 @@ function toPermissionModeSnapshot(
 
 function toSessionMessageRole(
   role: SessionMessageSendHistoryMessage['role'],
-): ModelStepRuntimeRequest['messages'][number]['role'] {
+): SessionMessage['role'] {
   return role === 'tool' ? 'host' : role;
 }
 

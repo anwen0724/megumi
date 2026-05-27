@@ -74,9 +74,9 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
   const maxModelSteps = input.maxModelSteps ?? 8;
   let request = input.request;
   let sequenceOffset = 0;
-  let accumulatedToolUses = [...(request.toolUses ?? [])];
-  let accumulatedToolResults = [...(request.toolResults ?? [])];
-  let accumulatedProviderStates = [...(request.providerStates ?? [])];
+  let accumulatedToolUses: ToolUse[] = [];
+  let accumulatedToolResults: ToolResult[] = [];
+  let accumulatedProviderStates: ModelStepProviderState[] = [];
 
   for (let modelStepCount = 0; modelStepCount < maxModelSteps; modelStepCount += 1) {
     const toolUses: ToolUse[] = [];
@@ -230,8 +230,8 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       providerId: request.providerId,
       modelId: request.modelId,
       messages: [],
-      createdAt: request.createdAt,
       runtimeContext: request.runtimeContext,
+      createdAt: request.createdAt,
     },
     runId: request.runId,
     sequence: sequenceOffset + 1,
@@ -261,11 +261,6 @@ function createContinuationRequest(input: {
   accumulatedToolResults: ToolResult[];
   accumulatedProviderStates: ModelStepProviderState[];
 }): ModelStepRuntimeRequest {
-  const currentMessage = input.request.messages.at(-1);
-  const historyMessages = currentMessage
-    ? input.request.messages.slice(0, -1)
-    : input.request.messages;
-
   return {
     ...input.request,
     stepId: input.stepId,
@@ -277,18 +272,11 @@ function createContinuationRequest(input: {
       stepId: input.stepId,
       buildReason: 'tool_continuation',
       builtAt: input.createdAt,
-      currentMessage,
-      historyMessages,
-      runContext: input.request.context,
-      modeSnapshot: input.request.modeSnapshot,
-      modeSnapshotRef: input.request.modeSnapshotRef,
+      baseInputContext: input.request.inputContext,
       toolUses: input.accumulatedToolUses,
       toolResults: input.accumulatedToolResults,
       providerStates: input.accumulatedProviderStates,
     }),
-    toolUses: input.accumulatedToolUses,
-    toolResults: input.accumulatedToolResults,
-    providerStates: input.accumulatedProviderStates,
     createdAt: input.createdAt,
   };
 }
