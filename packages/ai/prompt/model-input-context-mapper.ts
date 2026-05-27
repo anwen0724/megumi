@@ -109,7 +109,7 @@ function hasNativeToolUseFields(part: ToolContinuationPart): boolean {
 }
 
 function hasNativeToolResultFields(part: ToolContinuationPart): boolean {
-  return Boolean(part.toolUseId && part.toolResultId);
+  return Boolean(part.toolUseId && part.toolResultId && part.toolResultContent !== undefined);
 }
 
 function mapToolUsePartToOpenAICompatibleToolCall(part: ToolContinuationPart): OpenAICompatibleToolCall {

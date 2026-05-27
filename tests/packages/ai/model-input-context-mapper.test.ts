@@ -157,6 +157,53 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
     ]);
   });
 
+  it('does not consume tool result parts without structured replay content as native tool messages', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:missing-tool-result-content',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'tool_continuation',
+      builtAt,
+      parts: [
+        basePart({
+          partId: 'part:tool-use:missing-result-content',
+          kind: 'tool_continuation',
+          text: 'Tool use tool-use:missing-result-content requested read_file.',
+          sourceRefs: [sourceRef('tool-use:missing-result-content', 'tool_use')],
+          toolUseId: 'tool-use:missing-result-content',
+          modelStepId: 'model-step:missing-result-content',
+          toolName: 'read_file',
+          toolInput: {
+            path: 'package.json',
+          },
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:tool-result:missing-content',
+          kind: 'tool_continuation',
+          text: 'Tool result text without structured replay content.',
+          sourceRefs: [sourceRef('tool-result:missing-content', 'tool_result')],
+          toolUseId: 'tool-use:missing-result-content',
+          toolResultId: 'tool-result:missing-content',
+        } as Partial<ModelInputContextPart>),
+      ],
+    });
+
+    const messages = mapModelInputContextToOpenAICompatibleMessages(context);
+
+    expect(messages).toEqual([
+      {
+        role: 'system',
+        content: 'Tool use tool-use:missing-result-content requested read_file.',
+      },
+      {
+        role: 'system',
+        content: 'Tool result text without structured replay content.',
+      },
+    ]);
+    expect(messages.some((message) => message.role === 'tool')).toBe(false);
+  });
+
   it('does not materialize trace, budget, source refs, or runtime metadata as prompt content', () => {
     const context = buildModelInputContext({
       contextId: 'model-input-context:2',
