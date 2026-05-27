@@ -16,6 +16,8 @@
       "@megumi/desktop/*": ["apps/desktop/src/*"],
       "@megumi/core": ["packages/core/index.ts"],
       "@megumi/core/*": ["packages/core/*"],
+      "@megumi/context-management": ["packages/context-management/index.ts"],
+      "@megumi/context-management/*": ["packages/context-management/*"],
       "@megumi/ai": ["packages/ai/index.ts"],
       "@megumi/ai/*": ["packages/ai/*"],
       "@megumi/tools": ["packages/tools/index.ts"],
