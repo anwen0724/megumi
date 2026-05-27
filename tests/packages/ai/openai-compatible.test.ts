@@ -1,9 +1,50 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { buildModelInputContext } from '@megumi/memory';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
+import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
 import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
 import type { AiModelStepAdapterRequest, FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
+
+const builtAt = '2026-05-27T00:00:00.000Z';
+
+function sourceRef(sourceId: string, sourceKind: ModelInputContextSourceRef['sourceKind']): ModelInputContextSourceRef {
+  return {
+    sourceId,
+    sourceKind,
+  };
+}
+
+function instructionPart(
+  overrides: Partial<Extract<ModelInputContextPart, { kind: 'instruction' }>>,
+): ModelInputContextPart {
+  return {
+    partId: 'part:instruction:1',
+    kind: 'instruction',
+    instructionKind: 'system',
+    text: 'System instruction from ModelInputContext.',
+    sourceRefs: [sourceRef('system:1', 'system_instruction')],
+    priority: 100,
+    budgetStatus: 'included_full',
+    ...overrides,
+  };
+}
+
+function currentTurnPart(
+  overrides: Partial<Extract<ModelInputContextPart, { kind: 'current_turn' }>> = {},
+): ModelInputContextPart {
+  return {
+    partId: 'part:current-turn:1',
+    kind: 'current_turn',
+    role: 'user',
+    text: 'Hello from input context.',
+    sourceRefs: [sourceRef('message:input-context', 'current_user_message')],
+    priority: 90,
+    budgetStatus: 'included_full',
+    ...overrides,
+  };
+}
 
 const request: ChatRuntimeRequest = {
   requestId: 'request-1',
@@ -182,6 +223,24 @@ describe('OpenAI-compatible adapter', () => {
   });
 
   it('streams model step requests as the primary provider path', async () => {
+    const inputContext = buildModelInputContext({
+      contextId: 'model-input-context:1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        instructionPart({
+          partId: 'part:instruction:1',
+          sourceRefs: [sourceRef('system:1', 'system_instruction')],
+        }),
+        currentTurnPart({
+          partId: 'part:current-turn:1',
+          sourceRefs: [sourceRef('message:1', 'current_user_message')],
+        }),
+      ],
+    });
     const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
       'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
       'data: {"choices":[{"delta":{"content":"lo"}}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}\n\n',
@@ -203,12 +262,13 @@ describe('OpenAI-compatible adapter', () => {
         stepId: 'step-1',
         providerId: 'openai',
         modelId: 'gpt-4.1',
+        inputContext,
         messages: [
           {
             messageId: 'message-1',
             sessionId: 'session-1',
             role: 'user',
-            content: 'Hello',
+            content: 'Legacy message must not be sent when inputContext exists.',
             status: 'completed',
             createdAt: '2026-05-17T00:00:00.000Z',
           },
@@ -224,6 +284,19 @@ describe('OpenAI-compatible adapter', () => {
       },
       eventIdFactory: () => `event-${sequence + 1}`,
     }));
+
+    const [, init] = fetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body)).messages).toEqual([
+      {
+        role: 'system',
+        content: 'System instruction from ModelInputContext.',
+      },
+      {
+        role: 'user',
+        content: 'Hello from input context.',
+      },
+    ]);
+    expect(String(init?.body)).not.toContain('Legacy');
 
     expect(events.map((event) => event.eventType)).toEqual([
       'model.step.started',
