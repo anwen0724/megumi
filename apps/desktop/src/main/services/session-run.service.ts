@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import { runTurn } from '@megumi/core/run-runtime/run-turn';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/run-runtime/types';
 import {
@@ -401,6 +402,22 @@ export class SessionRunService {
           providerCapabilitySummary: { supportsToolUse: true },
         })
       : undefined;
+    const modelContextMessages = this.createModelContextMessages(input.payload, session, runId, userMessage);
+    const inputContext = buildModelStepInputContextFromSources({
+      contextId: `model-input-context:${input.requestId}:${stepId}`,
+      sessionId: String(session.sessionId),
+      runId: String(runId),
+      stepId: String(stepId),
+      buildReason: 'initial_model_step',
+      builtAt: createdAt,
+      currentMessage: userMessage,
+      historyMessages: modelContextMessages.filter((message) => message.messageId !== userMessage.messageId),
+      ...(context ? { runContext: context } : {}),
+      ...(modeSnapshot ? {
+        modeSnapshot: toPermissionModeSnapshot(modeSnapshot, createdAt),
+        modeSnapshotRef: modeSnapshot.modeSnapshotId,
+      } : {}),
+    });
     const request: ModelStepRuntimeRequest = {
       requestId: input.requestId,
       sessionId: session.sessionId,
@@ -408,7 +425,8 @@ export class SessionRunService {
       stepId,
       providerId: input.payload.providerId,
       modelId: input.payload.modelId,
-      messages: this.createModelContextMessages(input.payload, session, runId, userMessage),
+      inputContext,
+      messages: modelContextMessages,
       ...(context ? { context } : {}),
       ...(toolDefinitions && toolDefinitions.length > 0 ? { toolDefinitions } : {}),
       ...(modeSnapshot ? {
@@ -1091,14 +1109,35 @@ export class SessionRunService {
       title: 'Model response',
       startedAt: input.decidedAt,
     });
+    const resumedToolResults = [
+      ...(pending.request.toolResults ?? []),
+      ...continuation.resolvedResults,
+    ];
+    const currentMessage = pending.request.messages.at(-1);
+    const historyMessages = currentMessage
+      ? pending.request.messages.slice(0, -1)
+      : pending.request.messages;
     const resumedRequest: ModelStepRuntimeRequest = {
       ...pending.request,
       stepId: resumedStep.stepId,
       modelStepId: `model-step:${crypto.randomUUID()}`,
-      toolResults: [
-        ...(pending.request.toolResults ?? []),
-        ...continuation.resolvedResults,
-      ],
+      toolResults: resumedToolResults,
+      inputContext: buildModelStepInputContextFromSources({
+        contextId: `model-input-context:${pending.request.requestId}:${resumedStep.stepId}`,
+        sessionId: pending.request.sessionId,
+        runId: String(pending.request.runId),
+        stepId: String(resumedStep.stepId),
+        buildReason: 'approval_resume_continuation',
+        builtAt: input.decidedAt,
+        currentMessage,
+        historyMessages,
+        runContext: pending.request.context,
+        modeSnapshot: pending.request.modeSnapshot,
+        modeSnapshotRef: pending.request.modeSnapshotRef,
+        toolUses: pending.request.toolUses,
+        toolResults: resumedToolResults,
+        providerStates: pending.request.providerStates,
+      }),
       createdAt: input.decidedAt,
     };
 

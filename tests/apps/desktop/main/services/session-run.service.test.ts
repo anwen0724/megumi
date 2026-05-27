@@ -988,6 +988,21 @@ describe('SessionRunService', () => {
       ['assistant', '[Previous turn failed after tool activity: write_file ABOUT_MEGUMI.md. Final answer unavailable. Error: Provider network request failed.]'],
       ['user', '请再写一份你对我的印象的文档'],
     ]);
+    expect(requests[0]?.inputContext?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'session',
+        text: expect.stringContaining('能为我写一个你的自我介绍文档放在根目录下面吗？'),
+      }),
+      expect.objectContaining({
+        kind: 'session',
+        text: expect.stringContaining('Previous turn failed after tool activity'),
+      }),
+      expect.objectContaining({
+        kind: 'current_turn',
+        role: 'user',
+        text: '请再写一份你对我的印象的文档',
+      }),
+    ]));
   });
 
   it('continues session message runs through tool results before completing with final assistant output', async () => {
@@ -1984,6 +1999,20 @@ describe('SessionRunService', () => {
         })],
       })],
     });
+    expect(requests[1]?.inputContext?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolUseId: 'tool-use-1',
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolResultId: 'tool-result-1',
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        text: expect.stringContaining('Need to read package.json before answering.'),
+      }),
+    ]));
     expect(resumed.map((event) => event.eventType)).toEqual([
       'approval.resolved',
       'run.status.changed',
@@ -2212,6 +2241,16 @@ describe('SessionRunService', () => {
         expect.objectContaining({ toolResultId: 'tool-result-2' }),
       ],
     });
+    expect(requests[1]?.inputContext?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolResultId: 'tool-result-1',
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolResultId: 'tool-result-2',
+      }),
+    ]));
     expect(secondResume.map((event) => event.eventType)).toEqual([
       'approval.resolved',
       'run.status.changed',
@@ -2334,6 +2373,13 @@ describe('SessionRunService', () => {
         }),
       }),
     ]);
+    expect(requests[0]?.inputContext?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'project_boundary',
+        text: expect.stringContaining('Project root: C:/all/work/study/megumi'),
+      }),
+    ]));
   });
 
   it('creates run mode snapshots and passes them to model step requests for session messages', async () => {
@@ -2408,6 +2454,13 @@ describe('SessionRunService', () => {
         modeSnapshotRef: 'mode-snapshot:1',
       }),
     ]);
+    expect(requests[0]?.inputContext?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'permission_mode',
+        text: expect.stringContaining('Permission mode is'),
+      }),
+    ]));
   });
 
   it('saves session message run mode snapshots with the real run mode repository', async () => {
