@@ -8,4 +8,3 @@ export * from './providers/openai';
 export * from './providers/openai-compatible';
 export * from './prompt/message-mapper';
 export * from './prompt/model-input-context-mapper';
-export * from './prompt/system-prompt';

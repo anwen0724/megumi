@@ -1,11 +1,8 @@
-import type { ChatRuntimeRequest, ChatTokenUsage } from '@megumi/shared/chat-contracts';
 import type { JsonObject, JsonValue } from '@megumi/shared/json';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeErrorCode } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { ChatTokenUsagePayload, RuntimeEvent } from '@megumi/shared/runtime-events';
 import {
-  createAssistantCompletedEvent,
-  createAssistantDeltaEvent,
   createModelStepProviderStateRecordedEvent,
   createModelStepStartedEvent,
   createModelThinkingCompletedEvent,
@@ -17,13 +14,9 @@ import {
   createRunFailedEvent,
   createToolUseCreatedEvent,
 } from '@megumi/shared/runtime-event-factory';
-import {
-  mapModelStepToOpenAICompatibleRequest,
-  mapToOpenAICompatibleMessages,
-} from '../prompt/message-mapper';
+import { mapModelStepToOpenAICompatibleRequest } from '../prompt/message-mapper';
 import { parseOpenAICompatibleSseStream } from '../stream';
 import {
-  type AiChatAdapterRequest,
   type AiModelStepAdapterRequest,
   type AiProviderAdapter,
   type OpenAICompatibleAdapterOptions,
@@ -65,7 +58,7 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
           return;
         }
 
-        let usage: ChatTokenUsage | undefined;
+        let usage: ChatTokenUsagePayload | undefined;
         let content = '';
         let reasoningContent = '';
         let reasoningStarted = false;
@@ -123,7 +116,7 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
         if (isAbortError(error) || input.signal?.aborted) {
           yield createRunCancelledEvent({
             eventId: input.eventIdFactory(),
-            request: toChatRuntimeRequest(input.request),
+            request: requestRef(input),
             runId: input.runId,
             sequence: input.nextSequence(),
             reason: 'Provider request was cancelled.',
@@ -133,91 +126,6 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
         }
 
         yield failedModelStepEvent(input, 'provider_network_error', clock.now(), {
-          ...diagnostics,
-          failureStage,
-          ...errorDiagnostics(error),
-        });
-      }
-    },
-    async *streamChat(input: AiChatAdapterRequest): AsyncIterable<RuntimeEvent> {
-      const requestBody = {
-        model: input.request.modelId || input.config.defaultModelId,
-        messages: mapToOpenAICompatibleMessages(input.request),
-        stream: true,
-        stream_options: {
-          include_usage: true,
-        },
-      };
-      const diagnostics = createProviderRequestDiagnostics(requestBody, 'chat');
-      let failureStage: ProviderFailureStage = 'fetch_throw';
-
-      try {
-        const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${input.config.apiKey}`,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: input.signal,
-        });
-
-        if (!response.ok) {
-          yield failedEvent(input, mapHttpStatus(response.status), clock.now(), {
-            ...diagnostics,
-            failureStage: 'http_error',
-            httpStatus: response.status,
-            httpStatusText: response.statusText,
-            ...(await providerErrorBodyPreview(response)),
-          });
-          return;
-        }
-
-        let usage: ChatTokenUsage | undefined;
-        let content = '';
-        failureStage = 'stream_parse_error';
-
-        for await (const item of parseOpenAICompatibleSseStream(response.body)) {
-          if (item.type === 'delta') {
-            content += item.delta;
-            yield createAssistantDeltaEvent({
-              eventId: input.eventIdFactory(),
-              request: input.request,
-              runId: input.runId,
-              sequence: input.nextSequence(),
-              delta: item.delta,
-              createdAt: clock.now(),
-            });
-          } else if (item.type === 'usage') {
-            usage = item.usage;
-          }
-        }
-
-        yield createAssistantCompletedEvent({
-          eventId: input.eventIdFactory(),
-          request: input.request,
-          runId: input.runId,
-          sequence: input.nextSequence(),
-          createdAt: clock.now(),
-          payload: {
-            content,
-            ...(usage ? { usage } : {}),
-          },
-        });
-      } catch (error) {
-        if (isAbortError(error) || input.signal?.aborted) {
-          yield createRunCancelledEvent({
-            eventId: input.eventIdFactory(),
-            request: input.request,
-            runId: input.runId,
-            sequence: input.nextSequence(),
-            reason: 'Provider request was cancelled.',
-            createdAt: clock.now(),
-          });
-          return;
-        }
-
-        yield failedEvent(input, 'provider_network_error', clock.now(), {
           ...diagnostics,
           failureStage,
           ...errorDiagnostics(error),
@@ -247,35 +155,8 @@ function mapHttpStatus(status: number): RuntimeErrorCode {
   return 'provider_network_error';
 }
 
-function failedEvent(
-  input: AiChatAdapterRequest,
-  code: RuntimeErrorCode,
-  createdAt: string,
-  diagnostics: JsonObject = {},
-): RuntimeEvent {
-  return createRunFailedEvent({
-    eventId: input.eventIdFactory(),
-    request: input.request,
-    runId: input.runId,
-    sequence: input.nextSequence(),
-    createdAt,
-    error: {
-      code,
-      message: errorMessageForCode(code),
-      severity: 'error',
-      retryable: code === 'provider_rate_limited' || code === 'provider_network_error',
-      source: 'provider',
-      details: {
-        providerId: input.config.providerId,
-        modelId: String(input.request.modelId || input.config.defaultModelId),
-        ...diagnostics,
-      },
-    },
-  });
-}
-
 type ProviderFailureStage = 'http_error' | 'fetch_throw' | 'stream_parse_error';
-type ProviderRequestShape = 'chat' | 'initial' | 'tool_continuation';
+type ProviderRequestShape = 'initial' | 'tool_continuation';
 
 interface OpenAICompatibleRequestDiagnosticsBody {
   messages: Array<{ role: string; tool_calls?: unknown[] }>;
@@ -591,7 +472,7 @@ function createModelStepProviderStateRecorded(
 
 function createModelStepCompleted(
   input: AiModelStepAdapterRequest,
-  payload: { content: string; finishReason?: string; usage?: ChatTokenUsage },
+  payload: { content: string; finishReason?: string; usage?: ChatTokenUsagePayload },
   createdAt: string,
 ): RuntimeEvent {
   return createRuntimeEvent({
@@ -635,15 +516,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function toChatRuntimeRequest(request: ModelStepRuntimeRequest): ChatRuntimeRequest {
+function requestRef(input: AiModelStepAdapterRequest) {
   return {
-    requestId: request.requestId,
-    sessionId: request.sessionId,
-    providerId: request.providerId,
-    modelId: request.modelId,
-    messages: [],
-    runtimeContext: request.runtimeContext,
-    createdAt: request.createdAt,
+    requestId: input.request.requestId,
+    sessionId: input.request.sessionId,
+    providerId: input.request.providerId,
+    modelId: input.request.modelId,
+    runtimeContext: input.request.runtimeContext,
   };
 }
 
@@ -659,7 +538,7 @@ function failedModelStepEvent(
 ): RuntimeEvent {
   return createRunFailedEvent({
     eventId: input.eventIdFactory(),
-    request: toChatRuntimeRequest(input.request),
+    request: requestRef(input),
     runId: input.runId,
     sequence: input.nextSequence(),
     createdAt,

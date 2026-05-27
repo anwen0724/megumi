@@ -1,8 +1,14 @@
-import type { ChatMessage } from '@megumi/shared/chat-contracts';
 import type { Run, Session } from '@megumi/shared/session-run-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { AnswerTextBlock, TimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
+
+export interface TimelineHistoryMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
 
 function sessionProjectId(session: Session): string {
   return session.workspaceId ?? session.workspacePath ?? 'local';
@@ -23,8 +29,8 @@ export function localSessionFromPersistedSession(session: Session): LocalRendere
   };
 }
 
-export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): ChatMessage[] {
-  return messages.flatMap((message): ChatMessage[] => {
+export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): TimelineHistoryMessage[] {
+  return messages.flatMap((message): TimelineHistoryMessage[] => {
     if (message.role === 'user') {
       const text = message.blocks
         .filter((block) => block.kind === 'user_text')

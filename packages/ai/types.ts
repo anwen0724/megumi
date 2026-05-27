@@ -1,4 +1,3 @@
-import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { ModelId } from '@megumi/shared/model-contracts';
 import type { ProviderId, ProviderKind } from '@megumi/shared/provider-contracts';
@@ -14,15 +13,6 @@ export interface ProviderRuntimeConfig {
   defaultModelId: ModelId | string;
 }
 
-export interface AiChatAdapterRequest {
-  request: ChatRuntimeRequest;
-  runId: RunId | string;
-  config: ProviderRuntimeConfig;
-  signal?: AbortSignal;
-  nextSequence: () => number;
-  eventIdFactory: () => string;
-}
-
 export interface AiModelStepAdapterRequest {
   request: ModelStepRuntimeRequest;
   runId: RunId | string;
@@ -36,7 +26,6 @@ export interface AiModelStepAdapterRequest {
 export interface AiProviderAdapter {
   readonly providerId: ProviderId;
   streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent>;
-  streamChat(input: AiChatAdapterRequest): AsyncIterable<RuntimeEvent>;
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;

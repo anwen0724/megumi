@@ -1,5 +1,6 @@
-import type { ChatRuntimeRequest } from './chat-contracts';
 import type { RunId } from './ids';
+import type { ModelId } from './model-contracts';
+import type { ProviderId } from './provider-contracts';
 import type { RuntimeContext } from './runtime-context';
 import type { RuntimeError } from './runtime-errors';
 import type {
@@ -24,11 +25,19 @@ import type {
   TypedRuntimeEvent,
 } from './runtime-events';
 
-export interface ChatRuntimeEventFactoryInput<TType extends RuntimeEventType> {
+export interface RuntimeEventRequestRef {
+  requestId: string;
+  sessionId?: string;
+  providerId?: ProviderId | string;
+  modelId?: ModelId | string;
+  runtimeContext?: RuntimeContext;
+}
+
+export interface RequestRuntimeEventFactoryInput<TType extends RuntimeEventType> {
   eventId: string;
   eventType: TType;
   runId: RunId | string;
-  request: ChatRuntimeRequest;
+  request: RuntimeEventRequestRef;
   runtimeContext?: RuntimeContext;
   sequence: number;
   createdAt: string;
@@ -38,8 +47,8 @@ export interface ChatRuntimeEventFactoryInput<TType extends RuntimeEventType> {
   payload: RuntimeEventPayloadByType[TType];
 }
 
-export function createChatRuntimeEvent<TType extends RuntimeEventType>(
-  input: ChatRuntimeEventFactoryInput<TType>,
+export function createRequestRuntimeEvent<TType extends RuntimeEventType>(
+  input: RequestRuntimeEventFactoryInput<TType>,
 ): RuntimeEvent<RuntimeEventPayloadByType[TType]> & { eventType: TType } {
   const context = input.runtimeContext ?? input.request.runtimeContext;
 
@@ -578,12 +587,12 @@ export function createRuntimeMemoryAccessRecordedEvent(
 
 export function createRunStartedEvent(input: {
   eventId: string;
-  request: ChatRuntimeRequest;
+  request: RuntimeEventRequestRef;
   runId: RunId | string;
   sequence: number;
   createdAt: string;
 }): RuntimeEvent<RunStartedPayload> {
-  return createChatRuntimeEvent({
+  return createRequestRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.started',
     request: input.request,
@@ -594,8 +603,8 @@ export function createRunStartedEvent(input: {
     visibility: 'system',
     persist: 'required',
     payload: {
-      providerId: input.request.providerId,
-      modelId: String(input.request.modelId),
+      ...(input.request.providerId ? { providerId: input.request.providerId } : {}),
+      ...(input.request.modelId ? { modelId: String(input.request.modelId) } : {}),
       runKind: 'agent',
     },
   });
@@ -603,13 +612,13 @@ export function createRunStartedEvent(input: {
 
 export function createRunCompletedEvent(input: {
   eventId: string;
-  request: ChatRuntimeRequest;
+  request: RuntimeEventRequestRef;
   runId: RunId | string;
   sequence: number;
   createdAt: string;
   payload?: RunCompletedPayload;
 }): RuntimeEvent<RunCompletedPayload> {
-  return createChatRuntimeEvent({
+  return createRequestRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.completed',
     request: input.request,
@@ -625,13 +634,13 @@ export function createRunCompletedEvent(input: {
 
 export function createRunFailedEvent(input: {
   eventId: string;
-  request: ChatRuntimeRequest;
+  request: RuntimeEventRequestRef;
   runId: RunId | string;
   sequence: number;
   createdAt: string;
   error: RuntimeError;
 }): RuntimeEvent<RunFailedPayload> {
-  return createChatRuntimeEvent({
+  return createRequestRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.failed',
     request: input.request,
@@ -649,13 +658,13 @@ export function createRunFailedEvent(input: {
 
 export function createRunCancelledEvent(input: {
   eventId: string;
-  request: ChatRuntimeRequest;
+  request: RuntimeEventRequestRef;
   runId: RunId | string;
   sequence: number;
   createdAt: string;
   reason: string;
 }): RuntimeEvent<RunCancelledPayload> {
-  return createChatRuntimeEvent({
+  return createRequestRuntimeEvent({
     eventId: input.eventId,
     eventType: 'run.cancelled',
     request: input.request,
@@ -673,13 +682,13 @@ export function createRunCancelledEvent(input: {
 
 export function createAssistantDeltaEvent(input: {
   eventId: string;
-  request: ChatRuntimeRequest;
+  request: RuntimeEventRequestRef;
   runId: RunId | string;
   sequence: number;
   createdAt: string;
   delta: string;
 }): RuntimeEvent<AssistantOutputDeltaPayload> {
-  return createChatRuntimeEvent({
+  return createRequestRuntimeEvent({
     eventId: input.eventId,
     eventType: 'assistant.output.delta',
     request: input.request,
@@ -697,13 +706,13 @@ export function createAssistantDeltaEvent(input: {
 
 export function createAssistantCompletedEvent(input: {
   eventId: string;
-  request: ChatRuntimeRequest;
+  request: RuntimeEventRequestRef;
   runId: RunId | string;
   sequence: number;
   createdAt: string;
   payload: AssistantOutputCompletedPayload;
 }): RuntimeEvent<AssistantOutputCompletedPayload> {
-  return createChatRuntimeEvent({
+  return createRequestRuntimeEvent({
     eventId: input.eventId,
     eventType: 'assistant.output.completed',
     request: input.request,

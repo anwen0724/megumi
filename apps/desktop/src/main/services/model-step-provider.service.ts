@@ -1,4 +1,3 @@
-import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
@@ -66,7 +65,13 @@ export class ModelStepProviderService {
     } catch (error) {
       yield createRunFailedEvent({
         eventId: `event:${crypto.randomUUID()}`,
-        request: toChatRuntimeRequest(request),
+        request: {
+          requestId: request.requestId,
+          sessionId: request.sessionId,
+          providerId: request.providerId,
+          modelId: request.modelId,
+          runtimeContext: request.runtimeContext,
+        },
         runId: request.runId,
         sequence: nextSequence(),
         createdAt: new Date().toISOString(),
@@ -87,67 +92,9 @@ export class ModelStepProviderService {
     controller.abort();
     return true;
   }
-
-  cancelChat(requestId: string): boolean {
-    return this.cancelModelStep(requestId);
-  }
-
-  async *streamChat(request: ChatRuntimeRequest): AsyncIterable<RuntimeEvent> {
-    const controller = new AbortController();
-    let sequence = 0;
-    const nextSequence = () => {
-      sequence += 1;
-      return sequence;
-    };
-    const runId = `run:${request.requestId}`;
-    this.activeRequests.set(request.requestId, controller);
-
-    try {
-      const config = await this.options.resolver.resolveProviderRuntimeConfig({
-        providerId: request.providerId,
-        modelId: String(request.modelId),
-        runtimeContext: request.runtimeContext,
-      });
-      const adapter = this.options.registry.getAdapter(config.providerId);
-
-      for await (const event of adapter.streamChat({
-        request,
-        runId,
-        config,
-        signal: controller.signal,
-        nextSequence,
-        eventIdFactory: () => `event:${crypto.randomUUID()}`,
-      })) {
-        yield event;
-      }
-    } catch (error) {
-      yield createRunFailedEvent({
-        eventId: `event:${crypto.randomUUID()}`,
-        request,
-        runId,
-        sequence: nextSequence(),
-        createdAt: new Date().toISOString(),
-        error: toRuntimeError(error, request),
-      });
-    } finally {
-      this.activeRequests.delete(request.requestId);
-    }
-  }
 }
 
-function toChatRuntimeRequest(request: ModelStepRuntimeRequest): ChatRuntimeRequest {
-  return {
-    requestId: request.requestId,
-    sessionId: request.sessionId,
-    providerId: request.providerId,
-    modelId: request.modelId,
-    messages: [],
-    runtimeContext: request.runtimeContext,
-    createdAt: request.createdAt,
-  };
-}
-
-function toRuntimeError(error: unknown, request: ChatRuntimeRequest | ModelStepRuntimeRequest): RuntimeError {
+function toRuntimeError(error: unknown, request: ModelStepRuntimeRequest): RuntimeError {
   if (error instanceof ProviderRuntimeResolutionError) {
     return {
       code: mapProviderResolutionErrorCode(error.payload.code),

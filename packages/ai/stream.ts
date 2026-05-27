@@ -1,4 +1,4 @@
-import type { ChatTokenUsage } from '@megumi/shared/chat-contracts';
+import type { ChatTokenUsagePayload } from '@megumi/shared/runtime-events';
 
 export interface OpenAICompatibleStreamChunk {
   choices?: Array<{
@@ -47,7 +47,7 @@ export type OpenAICompatibleStreamResult =
     }
   | {
       type: 'usage';
-      usage: ChatTokenUsage;
+      usage: ChatTokenUsagePayload;
     };
 
 export async function* parseOpenAICompatibleSseStream(

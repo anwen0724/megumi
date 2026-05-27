@@ -74,10 +74,9 @@ export async function* runModelStep(input: RunModelStepInput): AsyncIterable<Run
       eventId: eventIdFactory(),
       request: {
         requestId: input.request.requestId,
+        sessionId: input.request.sessionId,
         providerId: input.request.providerId,
         modelId: input.request.modelId,
-        messages: [],
-        createdAt: input.request.createdAt,
         runtimeContext: input.request.runtimeContext,
       },
       runId: input.request.runId,
@@ -104,10 +103,9 @@ export async function* runModelStep(input: RunModelStepInput): AsyncIterable<Run
       eventId: eventIdFactory(),
       request: {
         requestId: input.request.requestId,
+        sessionId: input.request.sessionId,
         providerId: input.request.providerId,
         modelId: input.request.modelId,
-        messages: [],
-        createdAt: input.request.createdAt,
         runtimeContext: input.request.runtimeContext,
       },
       runId: input.request.runId,

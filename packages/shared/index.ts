@@ -2,7 +2,6 @@ export * from './ids';
 export * from './json';
 export * from './provider-contracts';
 export * from './model-contracts';
-export * from './chat-contracts';
 export * from './agent-contracts';
 export * from './session-run-contracts';
 export * from './model-step-contracts';

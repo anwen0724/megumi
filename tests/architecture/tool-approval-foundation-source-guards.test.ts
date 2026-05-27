@@ -90,7 +90,6 @@ describe('tool approval foundation source guards', () => {
       'apps/desktop/src/renderer/features/chat/components/Composer.tsx',
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
       'packages/shared/ipc-schemas.ts',
-      'packages/shared/chat-contracts.ts',
     ];
 
     for (const file of files) {

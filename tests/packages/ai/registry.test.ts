@@ -1,22 +1,53 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import { createAiProviderRegistry } from '@megumi/ai/registry';
 import type { FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
 
-const request: ChatRuntimeRequest = {
+const request: ModelStepRuntimeRequest = {
   requestId: 'request-1',
+  sessionId: 'session-1',
+  runId: 'run-1',
+  stepId: 'step-1',
   providerId: 'anthropic',
   modelId: 'claude-sonnet-4-6',
   createdAt: '2026-05-11T00:00:00.000Z',
-  messages: [
-    {
-      id: 'message-1',
-      role: 'user',
-      content: 'Hello',
-      createdAt: '2026-05-11T00:00:00.000Z',
+  inputContext: {
+    contextId: 'model-input-context:request-1',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    parts: [
+      {
+        partId: 'part:current-turn:1',
+        kind: 'current_turn',
+        role: 'user',
+        text: 'Hello',
+        sourceRefs: [{ sourceId: 'message-1', sourceKind: 'current_user_message' }],
+        priority: 100,
+        budgetStatus: 'included_full',
+      },
+    ],
+    budget: {
+      modelContextWindow: 8192,
+      reservedOutputTokens: 1024,
+      availableInputTokens: 7168,
+      inputTokenEstimate: 1,
+      partBudgets: [
+        {
+          partId: 'part:current-turn:1',
+          tokenEstimate: 1,
+          budgetStatus: 'included_full',
+        },
+      ],
     },
-  ],
+    trace: {
+      buildReason: 'initial_model_step',
+      selectedSources: [{ sourceId: 'message-1', reason: 'current_turn' }],
+      excludedSources: [],
+    },
+    builtAt: '2026-05-11T00:00:00.000Z',
+  },
 };
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
@@ -34,6 +65,7 @@ describe('AI provider registry', () => {
     return {
       request,
       runId: 'run-1',
+      stepId: 'step-1',
       config,
       nextSequence: () => {
         sequence += 1;
@@ -68,7 +100,7 @@ describe('AI provider registry', () => {
       defaultModelId: 'claude-sonnet-4-6',
     };
 
-    const events = await collect(registry.getAdapter('anthropic').streamChat(adapterInput(config)));
+    const events = await collect(registry.getAdapter('anthropic').streamModelStep(adapterInput(config)));
 
     expect(events).toEqual([
       expect.objectContaining({

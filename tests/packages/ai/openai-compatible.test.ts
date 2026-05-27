@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
-import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
 import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
@@ -120,21 +119,6 @@ function toolResultContent(toolResult: ToolResult): string {
   });
 }
 
-const request: ChatRuntimeRequest = {
-  requestId: 'request-1',
-  providerId: 'openai',
-  modelId: 'gpt-4.1',
-  createdAt: '2026-05-11T00:00:00.000Z',
-  messages: [
-    {
-      id: 'message-1',
-      role: 'user',
-      content: 'Hello',
-      createdAt: '2026-05-11T00:00:00.000Z',
-    },
-  ],
-};
-
 const config: ProviderRuntimeConfig = {
   providerId: 'openai',
   kind: 'openai-compatible',
@@ -171,21 +155,6 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('OpenAI-compatible adapter', () => {
-  function adapterInput() {
-    let sequence = 0;
-
-    return {
-      request,
-      runId: 'run-1',
-      config,
-      nextSequence: () => {
-        sequence += 1;
-        return sequence;
-      },
-      eventIdFactory: () => `event-${sequence + 1}`,
-    };
-  }
-
   function modelStepInput(overrides: ModelStepRequestOverrides = {}): AiModelStepAdapterRequest {
     let sequence = 0;
     const request = {
@@ -217,81 +186,6 @@ describe('OpenAI-compatible adapter', () => {
       eventIdFactory: () => `event-${sequence + 1}`,
     };
   }
-
-  it('posts chat completions and maps SSE chunks to stream events', async () => {
-    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
-      'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
-      'data: {"choices":[{"delta":{"content":"lo"}}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}\n\n',
-      'data: [DONE]\n\n',
-    ]));
-
-    const adapter = createOpenAICompatibleAdapter({
-      providerId: 'openai',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      fetch,
-      clock: { now: () => '2026-05-11T00:00:01.000Z' },
-    });
-
-    const events = await collect(adapter.streamChat(adapterInput()));
-
-    expect(fetch).toHaveBeenCalledWith('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer sk-test',
-        'content-type': 'application/json',
-      },
-      body: expect.any(String),
-      signal: undefined,
-    });
-
-    const [, init] = fetch.mock.calls[0];
-    expect(JSON.parse(String(init?.body))).toEqual({
-      model: 'gpt-4.1',
-      messages: [
-        {
-          role: 'system',
-          content: expect.stringContaining('You are Megumi'),
-        },
-        {
-          role: 'user',
-          content: 'Hello',
-        },
-      ],
-      stream: true,
-      stream_options: {
-        include_usage: true,
-      },
-    });
-
-    expect(events.map((event) => event.eventType)).toEqual([
-      'assistant.output.delta',
-      'assistant.output.delta',
-      'assistant.output.completed',
-    ]);
-    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
-    expect(events[0]).toMatchObject({
-      eventType: 'assistant.output.delta',
-      sequence: 1,
-      payload: { delta: 'Hel' },
-    });
-    expect(events[1]).toMatchObject({
-      eventType: 'assistant.output.delta',
-      sequence: 2,
-      payload: { delta: 'lo' },
-    });
-    expect(events[2]).toMatchObject({
-      eventType: 'assistant.output.completed',
-      sequence: 3,
-      payload: {
-        content: 'Hello',
-        usage: {
-          inputTokens: 3,
-          outputTokens: 2,
-          totalTokens: 5,
-        },
-      },
-    });
-  });
 
   it('streams model step requests as the primary provider path', async () => {
     const inputContext = buildModelInputContext({
@@ -761,116 +655,30 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
-  it('maps auth failures to typed failed events', async () => {
+  it('maps model step auth failures to typed failed events', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response('bad key', { status: 401 }));
     const adapter = createOpenAICompatibleAdapter({
       providerId: 'openai',
       defaultBaseUrl: 'https://api.openai.com/v1',
       fetch,
-      clock: { now: () => '2026-05-11T00:00:01.000Z' },
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
     });
 
-    const events = await collect(adapter.streamChat(adapterInput()));
-
-    expect(events).toEqual([
-      expect.objectContaining({
-        eventType: 'run.failed',
-        requestId: 'request-1',
-        runId: 'run-1',
-        sequence: 1,
-        payload: expect.objectContaining({
-          error: expect.objectContaining({
-            code: 'provider_auth_failed',
-            message: 'Provider rejected the API key.',
-            retryable: false,
-            source: 'provider',
-            details: expect.objectContaining({
-              providerId: 'openai',
-              modelId: 'gpt-4.1',
-            }),
-          }),
-        }),
-      }),
-    ]);
-    expect(JSON.stringify(events)).not.toContain('HTTP 401');
-    expect(JSON.stringify(events)).not.toContain('cause');
-  });
-
-  it('maps rate limit failures to retryable typed failed events', async () => {
-    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response('rate limited', { status: 429 }));
-    const adapter = createOpenAICompatibleAdapter({
-      providerId: 'openai',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      fetch,
-      clock: { now: () => '2026-05-11T00:00:01.000Z' },
-    });
-
-    const [event] = await collect(adapter.streamChat(adapterInput()));
+    const [event] = await collect(adapter.streamModelStep(modelStepInput()));
 
     expect(event).toMatchObject({
       eventType: 'run.failed',
+      requestId: 'request-1',
+      runId: 'run-1',
+      sequence: 1,
       payload: {
         error: {
-          code: 'provider_rate_limited',
-          retryable: true,
+          code: 'provider_auth_failed',
+          retryable: false,
+          source: 'provider',
         },
       },
     });
-  });
-
-  it('maps abort signals to cancelled events', async () => {
-    const abortError = new DOMException('The operation was aborted.', 'AbortError');
-    const fetch = vi.fn<FetchLike>().mockRejectedValue(abortError);
-    const adapter = createOpenAICompatibleAdapter({
-      providerId: 'openai',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      fetch,
-      clock: { now: () => '2026-05-11T00:00:01.000Z' },
-    });
-
-    const events = await collect(adapter.streamChat(adapterInput()));
-
-    expect(events).toEqual([
-      expect.objectContaining({
-        eventType: 'run.cancelled',
-        requestId: 'request-1',
-        runId: 'run-1',
-        sequence: 1,
-        payload: {
-          reason: 'Provider request was cancelled.',
-        },
-      }),
-    ]);
-  });
-
-  it('does not include raw network error causes in failed event payloads', async () => {
-    const fetch = vi.fn<FetchLike>().mockRejectedValue(new Error('connect failed with sk-secret-raw-header'));
-    const adapter = createOpenAICompatibleAdapter({
-      providerId: 'openai',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      fetch,
-      clock: { now: () => '2026-05-11T00:00:01.000Z' },
-    });
-
-    const events = await collect(adapter.streamChat(adapterInput()));
-
-    expect(events).toEqual([
-      expect.objectContaining({
-        eventType: 'run.failed',
-        payload: expect.objectContaining({
-          error: expect.objectContaining({
-            code: 'provider_network_error',
-            message: 'Provider network request failed.',
-            details: expect.objectContaining({
-              providerId: 'openai',
-              modelId: 'gpt-4.1',
-            }),
-          }),
-        }),
-      }),
-    ]);
-    expect(JSON.stringify(events)).not.toContain('sk-secret-raw-header');
-    expect(JSON.stringify(events)).not.toContain('cause');
   });
 
   it('records provider HTTP diagnostics for failed tool continuation model steps', async () => {

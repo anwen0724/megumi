@@ -182,7 +182,7 @@ describe('runtime event contracts', () => {
     expect(event.context).toEqual(runtimeContext);
   });
 
-  it('copies runtime context from ChatRuntimeRequest when creating runtime events', () => {
+  it('copies runtime context from runtime request refs when creating run events', () => {
     const event = createRunStartedEvent({
       eventId: 'event-from-factory',
       runId: 'run-1',
@@ -192,22 +192,17 @@ describe('runtime event contracts', () => {
         requestId: 'ipc-chat-start-1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        createdAt: '2026-05-12T10:00:00.000Z',
         runtimeContext,
-        messages: [
-          {
-            id: 'message-1',
-            role: 'user',
-            content: 'Hello',
-            createdAt: '2026-05-12T10:00:00.000Z',
-          },
-        ],
       },
     });
 
     expect(event).toMatchObject({
       requestId: 'ipc-chat-start-1',
       context: runtimeContext,
+      payload: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+      },
     });
   });
 });
