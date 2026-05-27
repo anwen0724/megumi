@@ -37,4 +37,39 @@ describe('provider tool use model loop source guards', () => {
     expect(toolLoop).not.toContain('execFile');
     expect(sessionRun).not.toContain('PermissionPolicy');
   });
+
+  it('does not keep legacy chat runtime or model input fields in core provider paths', () => {
+    const files = [
+      'packages/ai/types.ts',
+      'packages/ai/prompt/message-mapper.ts',
+      'packages/ai/providers/openai-compatible.ts',
+      'packages/ai/providers/anthropic.ts',
+      'packages/core/ports/ai-port.ts',
+      'packages/core/run-runtime/tool-loop.ts',
+      'apps/desktop/src/main/services/model-step-provider.service.ts',
+      'apps/desktop/src/main/services/session-run.service.ts',
+    ];
+
+    for (const file of files) {
+      const source = read(file);
+      expect(source).not.toMatch(/\bChatRuntimeRequest\b/);
+      expect(source).not.toMatch(/\bChatRuntimeContext\b/);
+      expect(source).not.toMatch(/\bstreamChat\b/);
+      expect(source).not.toMatch(/\bmapToOpenAICompatibleMessages\b/);
+      expect(source).not.toMatch(/\bbuildSystemPrompt\b/);
+      expect(source).not.toMatch(/\bModelStepRuntimeRequest\['messages'\]/);
+    }
+  });
+
+  it('keeps ModelStepRuntimeRequest centered on inputContext', () => {
+    const source = read('packages/shared/model-step-contracts.ts');
+
+    expect(source).toContain('inputContext: ModelInputContext');
+    expect(source).not.toMatch(/\bmessages:\s*SessionMessage\[\]/);
+    expect(source).not.toMatch(/\bcontext\?:\s*RunContext/);
+    expect(source).not.toMatch(/\btoolUses\?:\s*ToolUse\[\]/);
+    expect(source).not.toMatch(/\btoolResults\?:\s*ToolResult\[\]/);
+    expect(source).not.toMatch(/\bproviderStates\?:\s*ModelStepProviderState\[\]/);
+    expect(source).not.toMatch(/\bmodeSnapshot\?:\s*PermissionModeSnapshot/);
+  });
 });
