@@ -25,7 +25,10 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
 } {
   const toolParts = parts.filter((part): part is ToolContinuationPart => part.kind === 'tool_continuation');
   const toolUseParts = toolParts.filter(hasNativeToolUseFields);
-  const toolResultParts = toolParts.filter(hasNativeToolResultFields);
+  const toolUseById = new Map(toolUseParts.map((part) => [String(part.toolUseId), part]));
+  const toolResultParts = toolParts
+    .filter(hasNativeToolResultFields)
+    .filter((part) => toolUseById.has(String(part.toolUseId)));
 
   if (toolUseParts.length === 0 || toolResultParts.length === 0) {
     return { messages: [], consumedPartIds: [] };
@@ -41,7 +44,6 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
     }
   }
 
-  const toolUseById = new Map(toolUseParts.map((part) => [String(part.toolUseId), part]));
   const messages: OpenAICompatibleMessage[] = [];
   const consumedPartIds = new Set<string>();
   const replayedModelStepIds = new Set<string>();

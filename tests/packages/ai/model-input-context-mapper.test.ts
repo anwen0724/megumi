@@ -338,6 +338,75 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
     ]);
   });
 
+  it('keeps structured tool results without matching tool uses as ordinary model-visible text', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:unmatched-tool-result',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'tool_continuation',
+      builtAt,
+      parts: [
+        basePart({
+          partId: 'part:tool-use:matched',
+          kind: 'tool_continuation',
+          text: 'Tool use tool-use:matched requested read_file.',
+          sourceRefs: [sourceRef('tool-use:matched', 'tool_use')],
+          toolUseId: 'tool-use:matched',
+          modelStepId: 'model-step:matched',
+          toolName: 'read_file',
+          toolInput: {
+            path: 'package.json',
+          },
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:tool-result:matched',
+          kind: 'tool_continuation',
+          text: 'read_file returned package metadata.',
+          sourceRefs: [sourceRef('tool-result:matched', 'tool_result')],
+          toolUseId: 'tool-use:matched',
+          toolResultId: 'tool-result:matched',
+          toolResultContent: 'read_file returned package metadata.',
+        } as Partial<ModelInputContextPart>),
+        basePart({
+          partId: 'part:tool-result:unmatched',
+          kind: 'tool_continuation',
+          text: 'Unmatched structured tool result text.',
+          sourceRefs: [sourceRef('tool-result:unmatched', 'tool_result')],
+          toolUseId: 'tool-use:unmatched',
+          toolResultId: 'tool-result:unmatched',
+          toolResultContent: 'Unmatched structured content.',
+        } as Partial<ModelInputContextPart>),
+      ],
+    });
+
+    expect(mapModelInputContextToOpenAICompatibleMessages(context)).toEqual([
+      {
+        role: 'system',
+        content: 'Unmatched structured tool result text.',
+      },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'tool-use:matched',
+            type: 'function',
+            function: {
+              name: 'read_file',
+              arguments: '{"path":"package.json"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'tool-use:matched',
+        content: 'read_file returned package metadata.',
+      },
+    ]);
+  });
+
   it('does not materialize trace, budget, source refs, or runtime metadata as prompt content', () => {
     const context = buildModelInputContext({
       contextId: 'model-input-context:2',
