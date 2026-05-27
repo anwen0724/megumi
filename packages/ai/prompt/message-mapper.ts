@@ -30,7 +30,17 @@ export function mapModelStepToOpenAICompatibleRequest(
 
 export function mapModelStepToOpenAICompatibleMessages(request: ModelStepRuntimeRequest): OpenAICompatibleMessage[] {
   if (request.inputContext) {
-    return mapModelInputContextToOpenAICompatibleMessages(request.inputContext);
+    const hasNativeToolReplay = Boolean(request.toolResults && request.toolResults.length > 0);
+    return [
+      ...mapModelInputContextToOpenAICompatibleMessages(request.inputContext, {
+        includeToolContinuationParts: !hasNativeToolReplay,
+      }),
+      ...mapPreviousToolInteractions(
+        request.toolUses ?? [],
+        request.toolResults ?? [],
+        request.providerStates ?? [],
+      ),
+    ];
   }
 
   const messages: OpenAICompatibleMessage[] = [

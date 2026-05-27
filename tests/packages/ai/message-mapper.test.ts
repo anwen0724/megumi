@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
+import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import * as messageMapper from '@megumi/ai/prompt/message-mapper';
 import { buildSystemPrompt } from '@megumi/ai/prompt/system-prompt';
@@ -428,6 +429,92 @@ describe('OpenAI-compatible message mapper', () => {
         content: 'directory README.md',
       },
     ]);
+  });
+
+  it('preserves provider-native tool replay for continuation requests with input context', () => {
+    const toolUse: ToolUse = {
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      modelStepId: 'model-step-1',
+      providerToolUseId: 'provider-tool-use-1',
+      toolName: 'read_file',
+      input: { path: 'package.json' },
+      inputPreview: {
+        summary: 'read_file package.json',
+        targets: [],
+        redactionState: 'none',
+      },
+      status: 'created',
+      createdAt: '2026-05-17T00:00:01.000Z',
+    };
+    const toolResult: ToolResult = {
+      toolResultId: 'tool-result-1',
+      toolUseId: 'tool-use-1',
+      runId: 'run-1',
+      kind: 'success',
+      textContent: 'File contents',
+      redactionState: 'none',
+      createdAt: '2026-05-17T00:00:02.000Z',
+    };
+    const inputContext = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:tool-continuation',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-2',
+      buildReason: 'tool_continuation',
+      builtAt: '2026-05-17T00:00:03.000Z',
+      currentMessage: {
+        messageId: 'message-1',
+        sessionId: 'session-1',
+        role: 'user',
+        content: 'Read package.json',
+        status: 'completed',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      toolUses: [toolUse],
+      toolResults: [toolResult],
+    });
+
+    const messages = messageMapper.mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-2',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      inputContext,
+      messages: [],
+      toolUses: [toolUse],
+      toolResults: [toolResult],
+      createdAt: '2026-05-17T00:00:03.000Z',
+    });
+
+    expect(messages).toEqual([
+      {
+        role: 'user',
+        content: 'Read package.json',
+      },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'tool-use-1',
+            type: 'function',
+            function: {
+              name: 'read_file',
+              arguments: '{"path":"package.json"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'tool-use-1',
+        content: 'File contents',
+      },
+    ]);
+    expect(JSON.stringify(messages)).not.toContain('Tool result tool-result-1 for tool-use-1');
   });
 
   it('serializes non-text tool result fallback content with result metadata', () => {

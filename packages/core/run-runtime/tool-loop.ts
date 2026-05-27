@@ -184,7 +184,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
         stepId: request.stepId,
         ...(request.modelStepId ? { modelStepId: String(request.modelStepId) } : {}),
         createdAt: request.createdAt,
-        contextIdSuffix: `${request.stepId}:pending-approval`,
+        contextKind: 'approval',
         accumulatedToolUses,
         accumulatedToolResults,
         accumulatedProviderStates,
@@ -215,7 +215,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       stepId: nextStepId,
       modelStepId: nextModelStepId,
       createdAt: nextCreatedAt,
-      contextIdSuffix: nextStepId,
+      contextKind: 'continuation',
       accumulatedToolUses,
       accumulatedToolResults,
       accumulatedProviderStates,
@@ -256,7 +256,7 @@ function createContinuationRequest(input: {
   stepId: string;
   modelStepId?: string;
   createdAt: string;
-  contextIdSuffix: string;
+  contextKind: 'approval' | 'continuation';
   accumulatedToolUses: ToolUse[];
   accumulatedToolResults: ToolResult[];
   accumulatedProviderStates: ModelStepProviderState[];
@@ -271,7 +271,7 @@ function createContinuationRequest(input: {
     stepId: input.stepId,
     ...(input.modelStepId ? { modelStepId: input.modelStepId } : {}),
     inputContext: buildModelStepInputContextFromSources({
-      contextId: `model-input-context:${input.request.requestId}:${input.contextIdSuffix}`,
+      contextId: createContinuationContextId(input.stepId, input.contextKind),
       sessionId: input.request.sessionId,
       runId: String(input.request.runId),
       stepId: input.stepId,
@@ -291,6 +291,18 @@ function createContinuationRequest(input: {
     providerStates: input.accumulatedProviderStates,
     createdAt: input.createdAt,
   };
+}
+
+function createContinuationContextId(stepId: string, contextKind: 'approval' | 'continuation'): string {
+  const contextId = `model-input-context:${stepId}:${contextKind}`;
+
+  if (contextId.length <= 128) {
+    return contextId;
+  }
+
+  const suffix = `:${contextKind}`;
+  const availableStepIdLength = 128 - 'model-input-context:'.length - suffix.length;
+  return `model-input-context:${stepId.slice(0, Math.max(1, availableStepIdLength))}${suffix}`;
 }
 
 function createToolUseFromEvent(event: TypedRuntimeEvent<'tool.use.created'>): ToolUse {

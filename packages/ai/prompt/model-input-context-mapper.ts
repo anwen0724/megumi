@@ -1,10 +1,19 @@
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model-input-context-contracts';
 import type { OpenAICompatibleMessage } from '../types';
 
+export interface MapModelInputContextToOpenAICompatibleMessagesOptions {
+  includeToolContinuationParts?: boolean;
+}
+
 export function mapModelInputContextToOpenAICompatibleMessages(
   inputContext: ModelInputContext,
+  options: MapModelInputContextToOpenAICompatibleMessagesOptions = {},
 ): OpenAICompatibleMessage[] {
-  return inputContext.parts.map(mapModelInputContextPartToOpenAICompatibleMessage);
+  const includeToolContinuationParts = options.includeToolContinuationParts ?? true;
+
+  return inputContext.parts
+    .filter((part) => includeToolContinuationParts || part.kind !== 'tool_continuation')
+    .map(mapModelInputContextPartToOpenAICompatibleMessage);
 }
 
 function mapModelInputContextPartToOpenAICompatibleMessage(

@@ -88,8 +88,8 @@ describe('package dependency boundaries', () => {
         /@megumi\/tools(\/|['"]|$)/,
         /@megumi\/security(\/|['"]|$)/,
         /from ['"]electron['"]/,
-        /from ['"]node:fs['"]/,
-        /from ['"]fs['"]/,
+        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
+        /from ['"]fs(?:\/[^'"]+)?['"]/,
         /apps\/desktop/,
       ]),
     ).toEqual([]);

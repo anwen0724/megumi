@@ -493,6 +493,60 @@ describe('run model tool loop', () => {
     ]);
   });
 
+  it('keeps pending approval continuation context ids within the shared id limit', async () => {
+    const continuations: PendingToolApprovalContinuation[] = [];
+
+    await collect(runModelToolLoop({
+      request: createRequest({
+        requestId: 'request:11111111-2222-4333-8444-555555555555',
+        stepId: 'step:11111111-2222-4333-8444-555555555555',
+        modelStepId: 'model-step:11111111-2222-4333-8444-555555555555',
+      }),
+      aiPort: {
+        async *streamModelStep(input) {
+          yield toolUseCreatedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+          yield modelStepCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+        },
+      },
+      toolUseHandler: {
+        async handleToolUses(input) {
+          const toolCall = createToolCall(input.toolUses[0]);
+          return {
+            pendingApprovals: [{
+              approvalRequest: createApprovalRequest(input.toolUses[0], toolCall),
+              toolUse: input.toolUses[0],
+              toolCall,
+            }],
+            toolResults: [],
+          };
+        },
+      },
+      ids: {
+        nextEventId: () => 'core-event-approval',
+        nextStepId: () => 'step:22222222-2222-4333-8444-555555555555',
+        nextModelStepId: () => 'model-step:22222222-2222-4333-8444-555555555555',
+      },
+      onPendingApproval: (continuation) => {
+        continuations.push(continuation);
+      },
+    }));
+
+    expect(continuations[0]?.request.inputContext?.contextId.length).toBeLessThanOrEqual(128);
+    expect(continuations[0]?.request.inputContext?.contextId).toBe(
+      'model-input-context:step:11111111-2222-4333-8444-555555555555:approval',
+    );
+  });
+
   it('emits completed tool results before stopping for pending approvals', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
