@@ -11,6 +11,25 @@ import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { buildModelInputContext } from './model-input-context-builder';
 
+const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
+
+export interface CreateModelStepInputContextIdInput {
+  stepId: string;
+  contextKind: string;
+}
+
+export function createModelStepInputContextId(input: CreateModelStepInputContextIdInput): string {
+  const suffix = `:${input.contextKind}`;
+  const contextId = `${MODEL_INPUT_CONTEXT_ID_PREFIX}${input.stepId}${suffix}`;
+
+  if (contextId.length <= 128) {
+    return contextId;
+  }
+
+  const availableStepIdLength = 128 - MODEL_INPUT_CONTEXT_ID_PREFIX.length - suffix.length;
+  return `${MODEL_INPUT_CONTEXT_ID_PREFIX}${input.stepId.slice(0, Math.max(1, availableStepIdLength))}${suffix}`;
+}
+
 export interface BuildModelStepInputContextFromSourcesInput {
   baseInputContext?: ModelInputContext;
   contextId: string;

@@ -747,6 +747,7 @@ describe('SessionRunService', () => {
   });
 
   it('sends a session message by persisting user message, run, and model step', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
     const service = createServiceWithModelStepStream([
       {
         eventId: 'event-assistant-delta',
@@ -776,14 +777,17 @@ describe('SessionRunService', () => {
         persist: 'required',
         payload: { content: 'Hello' },
       },
-    ]);
+    ], {
+      onRequest: (request) => requests.push(request),
+    });
     service.createSession({
       title: 'Session',
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
+    const longRequestId = `ipc-${'a'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: 'ipc-session-message-send-1',
+      requestId: longRequestId,
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
@@ -802,7 +806,8 @@ describe('SessionRunService', () => {
       streamed.push(event);
     }
 
-    expect(result.data).toEqual({ requestId: 'ipc-session-message-send-1' });
+    expect(result.data).toEqual({ requestId: longRequestId });
+    expect(requests[0]?.inputContext.contextId.length).toBeLessThanOrEqual(128);
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
       'assistant.output.delta',
@@ -814,7 +819,7 @@ describe('SessionRunService', () => {
     ]);
     expect(streamed[0]).toMatchObject({
       eventType: 'run.started',
-      requestId: 'ipc-session-message-send-1',
+      requestId: longRequestId,
       runId: 'run-1',
       sessionId: 'session-1',
       sequence: 1,
@@ -877,8 +882,9 @@ describe('SessionRunService', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
+    const longRequestId = `ipc-${'b'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: 'ipc-session-message-send-1',
+      requestId: longRequestId,
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
@@ -897,6 +903,7 @@ describe('SessionRunService', () => {
     }
 
     expect(requests).toHaveLength(1);
+    expect(requests[0]?.inputContext.contextId.length).toBeLessThanOrEqual(128);
     expect(requests[0]?.toolDefinitions).toEqual(toolDefinitions);
   });
 
@@ -964,8 +971,9 @@ describe('SessionRunService', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
+    const longRequestId = `ipc-${'c'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: 'ipc-session-message-send-1',
+      requestId: longRequestId,
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
@@ -1078,8 +1086,9 @@ describe('SessionRunService', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
+    const toolContinuationLongRequestId = `ipc-${'d'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: 'ipc-session-message-send-1',
+      requestId: toolContinuationLongRequestId,
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
@@ -1224,8 +1233,9 @@ describe('SessionRunService', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
+    const modelRecordLongRequestId = `ipc-${'e'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: 'ipc-session-message-send-1',
+      requestId: modelRecordLongRequestId,
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
@@ -1923,8 +1933,9 @@ describe('SessionRunService', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
+    const waitingApprovalLongRequestId = `ipc-${'f'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: 'ipc-session-message-send-1',
+      requestId: waitingApprovalLongRequestId,
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
@@ -1982,6 +1993,7 @@ describe('SessionRunService', () => {
       decidedAt: '2026-05-17T00:00:05.000Z',
     }]);
     expect(requests).toHaveLength(2);
+    expect(requests[1]?.inputContext.contextId.length).toBeLessThanOrEqual(128);
     expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',

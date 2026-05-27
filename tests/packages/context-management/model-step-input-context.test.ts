@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildModelStepInputContextFromSources } from '@megumi/context-management';
+import { buildModelStepInputContextFromSources, createModelStepInputContextId } from '@megumi/context-management';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
@@ -117,6 +117,17 @@ function providerState(): ModelStepProviderState {
 }
 
 describe('buildModelStepInputContextFromSources', () => {
+  it('creates schema-safe context ids from long step ids', () => {
+    const contextId = createModelStepInputContextId({
+      stepId: `step:${'a'.repeat(124)}`,
+      contextKind: 'approval-resume',
+    });
+
+    expect(contextId.length).toBeLessThanOrEqual(128);
+    expect(contextId).toMatch(/^model-input-context:/);
+    expect(contextId).toMatch(/:approval-resume$/);
+  });
+
   it('builds current turn, session, runtime constraint, and tool continuation parts from explicit sources', () => {
     const context = buildModelStepInputContextFromSources({
       contextId: 'model-input-context:1',

@@ -72,4 +72,11 @@ describe('provider tool use model loop source guards', () => {
     expect(source).not.toMatch(/\bproviderStates\?:\s*ModelStepProviderState\[\]/);
     expect(source).not.toMatch(/\bmodeSnapshot\?:\s*PermissionModeSnapshot/);
   });
+
+  it('requires provider request materialization to use full model step runtime requests', () => {
+    const source = read('packages/ai/prompt/message-mapper.ts');
+
+    expect(source).not.toMatch(/\bPartial<ModelStepRuntimeRequest>\b/);
+    expect(source).not.toMatch(/\bModelStepPromptRequest\b/);
+  });
 });

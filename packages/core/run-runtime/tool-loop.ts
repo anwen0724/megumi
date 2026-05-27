@@ -1,4 +1,7 @@
-import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
+import {
+  buildModelStepInputContextFromSources,
+  createModelStepInputContextId,
+} from '@megumi/context-management/model-step-input-context';
 import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime-events';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
@@ -264,7 +267,10 @@ function createContinuationRequest(input: {
     stepId: input.stepId,
     ...(input.modelStepId ? { modelStepId: input.modelStepId } : {}),
     inputContext: buildModelStepInputContextFromSources({
-      contextId: createContinuationContextId(input.stepId, input.contextKind),
+      contextId: createModelStepInputContextId({
+        stepId: input.stepId,
+        contextKind: input.contextKind,
+      }),
       sessionId: input.request.sessionId,
       runId: String(input.request.runId),
       stepId: input.stepId,
@@ -277,18 +283,6 @@ function createContinuationRequest(input: {
     }),
     createdAt: input.createdAt,
   };
-}
-
-function createContinuationContextId(stepId: string, contextKind: 'approval' | 'continuation'): string {
-  const contextId = `model-input-context:${stepId}:${contextKind}`;
-
-  if (contextId.length <= 128) {
-    return contextId;
-  }
-
-  const suffix = `:${contextKind}`;
-  const availableStepIdLength = 128 - 'model-input-context:'.length - suffix.length;
-  return `model-input-context:${stepId.slice(0, Math.max(1, availableStepIdLength))}${suffix}`;
 }
 
 function createToolUseFromEvent(event: TypedRuntimeEvent<'tool.use.created'>): ToolUse {

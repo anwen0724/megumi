@@ -1,5 +1,8 @@
 import path from 'node:path';
-import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
+import {
+  buildModelStepInputContextFromSources,
+  createModelStepInputContextId,
+} from '@megumi/context-management/model-step-input-context';
 import { runTurn } from '@megumi/core/run-runtime/run-turn';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/run-runtime/types';
 import {
@@ -415,7 +418,10 @@ export class SessionRunService {
         ]
       : toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage);
     const inputContext = buildModelStepInputContextFromSources({
-      contextId: `model-input-context:${input.requestId}:${stepId}`,
+      contextId: createModelStepInputContextId({
+        stepId: String(stepId),
+        contextKind: 'initial',
+      }),
       sessionId: String(session.sessionId),
       runId: String(runId),
       stepId: String(stepId),
@@ -1102,7 +1108,10 @@ export class SessionRunService {
       modelStepId: `model-step:${crypto.randomUUID()}`,
       inputContext: buildModelStepInputContextFromSources({
         baseInputContext: pending.request.inputContext,
-        contextId: `model-input-context:${pending.request.requestId}:${resumedStep.stepId}`,
+        contextId: createModelStepInputContextId({
+          stepId: String(resumedStep.stepId),
+          contextKind: 'approval-resume',
+        }),
         sessionId: pending.request.sessionId,
         runId: String(pending.request.runId),
         stepId: String(resumedStep.stepId),
