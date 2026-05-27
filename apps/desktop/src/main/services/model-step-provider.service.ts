@@ -1,7 +1,5 @@
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
-import { buildModelInputContext } from '@megumi/context-management';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { ModelInputContextPart } from '@megumi/shared/model-input-context-contracts';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError, RuntimeErrorCode } from '@megumi/shared/runtime-errors';
@@ -94,18 +92,46 @@ export class ModelStepProviderService {
     return this.cancelModelStep(requestId);
   }
 
-  streamChat(request: ChatRuntimeRequest): AsyncIterable<RuntimeEvent> {
-    return this.streamModelStep({
-      requestId: request.requestId,
-      sessionId: request.sessionId ?? `session:${request.requestId}`,
-      runId: `run:${request.requestId}`,
-      stepId: `step:${request.requestId}`,
-      providerId: request.providerId,
-      modelId: request.modelId,
-      inputContext: chatRequestInputContext(request),
-      runtimeContext: request.runtimeContext,
-      createdAt: request.createdAt,
-    });
+  async *streamChat(request: ChatRuntimeRequest): AsyncIterable<RuntimeEvent> {
+    const controller = new AbortController();
+    let sequence = 0;
+    const nextSequence = () => {
+      sequence += 1;
+      return sequence;
+    };
+    const runId = `run:${request.requestId}`;
+    this.activeRequests.set(request.requestId, controller);
+
+    try {
+      const config = await this.options.resolver.resolveProviderRuntimeConfig({
+        providerId: request.providerId,
+        modelId: String(request.modelId),
+        runtimeContext: request.runtimeContext,
+      });
+      const adapter = this.options.registry.getAdapter(config.providerId);
+
+      for await (const event of adapter.streamChat({
+        request,
+        runId,
+        config,
+        signal: controller.signal,
+        nextSequence,
+        eventIdFactory: () => `event:${crypto.randomUUID()}`,
+      })) {
+        yield event;
+      }
+    } catch (error) {
+      yield createRunFailedEvent({
+        eventId: `event:${crypto.randomUUID()}`,
+        request,
+        runId,
+        sequence: nextSequence(),
+        createdAt: new Date().toISOString(),
+        error: toRuntimeError(error, request),
+      });
+    } finally {
+      this.activeRequests.delete(request.requestId);
+    }
   }
 }
 
@@ -121,49 +147,7 @@ function toChatRuntimeRequest(request: ModelStepRuntimeRequest): ChatRuntimeRequ
   };
 }
 
-function chatRequestInputContext(request: ChatRuntimeRequest) {
-  const sessionId = request.sessionId ?? `session:${request.requestId}`;
-  const runId = `run:${request.requestId}`;
-  const stepId = `step:${request.requestId}`;
-  const parts = request.messages.map((message, index): ModelInputContextPart => {
-    const base = {
-      partId: `part:legacy-chat:${index + 1}:${message.id}`,
-      text: message.content,
-      sourceRefs: [{
-        sourceId: `legacy-chat-message:${message.id}`,
-        sourceKind: message.role === 'user' ? 'current_user_message' as const : 'timeline_message' as const,
-        loadedAt: message.createdAt,
-      }],
-      priority: message.role === 'user' ? 95 : 50,
-      budgetStatus: 'included_full' as const,
-    };
-
-    if (message.role === 'user') {
-      return {
-        ...base,
-        kind: 'current_turn',
-        role: 'user',
-      };
-    }
-
-    return {
-      ...base,
-      kind: 'session',
-    };
-  });
-
-  return buildModelInputContext({
-    contextId: `model-input-context:${stepId}:legacy-chat`,
-    sessionId,
-    runId,
-    stepId,
-    buildReason: 'legacy_chat_compatibility',
-    builtAt: request.createdAt,
-    parts,
-  });
-}
-
-function toRuntimeError(error: unknown, request: ModelStepRuntimeRequest): RuntimeError {
+function toRuntimeError(error: unknown, request: ChatRuntimeRequest | ModelStepRuntimeRequest): RuntimeError {
   if (error instanceof ProviderRuntimeResolutionError) {
     return {
       code: mapProviderResolutionErrorCode(error.payload.code),

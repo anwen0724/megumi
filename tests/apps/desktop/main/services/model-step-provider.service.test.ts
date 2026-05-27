@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -161,6 +162,87 @@ describe('ModelStepProviderService', () => {
       'assistant.output.completed',
     ]);
     expect(events.map((event) => event.sequence)).toEqual([1, 2]);
+  });
+
+  it('streams legacy chat requests through the selected adapter without remapping messages', async () => {
+    const chatRequest: ChatRuntimeRequest = {
+      requestId: 'chat-request-1',
+      sessionId: 'session-chat-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      runtimeContext,
+      messages: [
+        {
+          id: 'message-user-1',
+          role: 'user',
+          content: 'Run the tool.',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+        {
+          id: 'message-assistant-1',
+          role: 'assistant',
+          content: 'Calling tool.',
+          createdAt: '2026-05-17T00:00:01.000Z',
+          name: 'assistant-name',
+        },
+        {
+          id: 'message-tool-1',
+          role: 'tool',
+          content: '{"ok":true}',
+          createdAt: '2026-05-17T00:00:02.000Z',
+          toolCallId: 'tool-call-1',
+        },
+      ],
+    };
+    const resolver: ModelStepRuntimeResolverPort = {
+      resolveProviderRuntimeConfig: async (input) => {
+        expect(input).toEqual({
+          providerId: 'deepseek',
+          modelId: 'deepseek-v4-flash',
+          runtimeContext,
+        });
+        return config;
+      },
+    };
+    const registry: ModelStepProviderRegistryPort = {
+      getAdapter: () => ({
+        providerId: 'deepseek',
+        async *streamModelStep() {
+          throw new Error('Unexpected streamModelStep call.');
+        },
+        async *streamChat(input) {
+          expect(input.config).toBe(config);
+          expect(input.request).toBe(chatRequest);
+          expect(input.request.messages).toEqual(chatRequest.messages);
+          expect(input.runId).toBe('run:chat-request-1');
+
+          yield {
+            eventId: input.eventIdFactory(),
+            schemaVersion: 1,
+            eventType: 'assistant.output.delta',
+            sessionId: 'session-chat-1',
+            runId: 'run:chat-request-1',
+            requestId: 'chat-request-1',
+            context: runtimeContext,
+            sequence: input.nextSequence(),
+            createdAt: '2026-05-17T00:00:03.000Z',
+            source: 'provider',
+            visibility: 'user',
+            persist: 'transient',
+            payload: { delta: 'Done' },
+          } satisfies RuntimeEvent;
+        },
+      }),
+    };
+    const service = new ModelStepProviderService({ resolver, registry });
+
+    const events = await collect(service.streamChat(chatRequest));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'assistant.output.delta',
+    ]);
+    expect(events.map((event) => event.sequence)).toEqual([1]);
   });
 
   it('maps runtime resolution errors to failed stream events', async () => {
