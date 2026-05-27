@@ -1,3 +1,4 @@
+import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime-events';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
@@ -178,12 +179,16 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     accumulatedToolResults = [...accumulatedToolResults, ...toolResults];
 
     if (hasPendingApprovals) {
-      const continuationRequest: ModelStepRuntimeRequest = {
-        ...request,
-        toolUses: accumulatedToolUses,
-        toolResults: accumulatedToolResults,
-        providerStates: accumulatedProviderStates,
-      };
+      const continuationRequest = createContinuationRequest({
+        request,
+        stepId: request.stepId,
+        ...(request.modelStepId ? { modelStepId: String(request.modelStepId) } : {}),
+        createdAt: request.createdAt,
+        contextIdSuffix: `${request.stepId}:pending-approval`,
+        accumulatedToolUses,
+        accumulatedToolResults,
+        accumulatedProviderStates,
+      });
 
       for (const pendingApproval of outcome.pendingApprovals ?? []) {
         input.onPendingApproval?.({
@@ -201,15 +206,20 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       return;
     }
 
-    request = {
-      ...request,
-      stepId: input.ids.nextStepId(),
-      modelStepId: input.ids.nextModelStepId(),
-      toolUses: accumulatedToolUses,
-      toolResults: accumulatedToolResults,
-      providerStates: accumulatedProviderStates,
-      createdAt: new Date().toISOString(),
-    };
+    const nextStepId = input.ids.nextStepId();
+    const nextModelStepId = input.ids.nextModelStepId();
+    const nextCreatedAt = new Date().toISOString();
+
+    request = createContinuationRequest({
+      request,
+      stepId: nextStepId,
+      modelStepId: nextModelStepId,
+      createdAt: nextCreatedAt,
+      contextIdSuffix: nextStepId,
+      accumulatedToolUses,
+      accumulatedToolResults,
+      accumulatedProviderStates,
+    });
   }
 
   yield createRunFailedEvent({
@@ -239,6 +249,48 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       debugId: request.runtimeContext?.debugId ?? `debug:${request.requestId}`,
     },
   });
+}
+
+function createContinuationRequest(input: {
+  request: ModelStepRuntimeRequest;
+  stepId: string;
+  modelStepId?: string;
+  createdAt: string;
+  contextIdSuffix: string;
+  accumulatedToolUses: ToolUse[];
+  accumulatedToolResults: ToolResult[];
+  accumulatedProviderStates: ModelStepProviderState[];
+}): ModelStepRuntimeRequest {
+  const currentMessage = input.request.messages.at(-1);
+  const historyMessages = currentMessage
+    ? input.request.messages.slice(0, -1)
+    : input.request.messages;
+
+  return {
+    ...input.request,
+    stepId: input.stepId,
+    ...(input.modelStepId ? { modelStepId: input.modelStepId } : {}),
+    inputContext: buildModelStepInputContextFromSources({
+      contextId: `model-input-context:${input.request.requestId}:${input.contextIdSuffix}`,
+      sessionId: input.request.sessionId,
+      runId: String(input.request.runId),
+      stepId: input.stepId,
+      buildReason: 'tool_continuation',
+      builtAt: input.createdAt,
+      currentMessage,
+      historyMessages,
+      runContext: input.request.context,
+      modeSnapshot: input.request.modeSnapshot,
+      modeSnapshotRef: input.request.modeSnapshotRef,
+      toolUses: input.accumulatedToolUses,
+      toolResults: input.accumulatedToolResults,
+      providerStates: input.accumulatedProviderStates,
+    }),
+    toolUses: input.accumulatedToolUses,
+    toolResults: input.accumulatedToolResults,
+    providerStates: input.accumulatedProviderStates,
+    createdAt: input.createdAt,
+  };
 }
 
 function createToolUseFromEvent(event: TypedRuntimeEvent<'tool.use.created'>): ToolUse {

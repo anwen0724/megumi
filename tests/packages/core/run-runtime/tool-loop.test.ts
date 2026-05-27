@@ -291,6 +291,18 @@ describe('run model tool loop', () => {
       ],
       toolResults: [expect.objectContaining({ toolResultId: 'tool-result-1' })],
     });
+    expect(requests[1]?.inputContext?.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolUseId: 'call-read',
+        text: expect.stringContaining('Tool use call-read requested read_file.'),
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolResultId: 'tool-result-1',
+        text: expect.stringContaining('Tool result tool-result-1 for call-read'),
+      }),
+    ]));
     expect(events.map((event) => event.eventType)).toEqual([
       'tool.use.created',
       'model.step.completed',
@@ -385,6 +397,7 @@ describe('run model tool loop', () => {
         ],
       },
     ]);
+    expect(JSON.stringify(requests[1]?.inputContext?.parts)).toContain('I need to inspect docs.');
   });
 
   it('stops before requesting another model step when tool handling returns pending approvals', async () => {
@@ -449,6 +462,14 @@ describe('run model tool loop', () => {
         }),
         request: expect.objectContaining({
           stepId: 'step-1',
+          inputContext: expect.objectContaining({
+            parts: expect.arrayContaining([
+              expect.objectContaining({
+                kind: 'tool_continuation',
+                toolUseId: 'call-read',
+              }),
+            ]),
+          }),
           toolUses: [
             expect.objectContaining({
               toolUseId: 'call-read',
