@@ -9,6 +9,7 @@ import type {
   OpenAICompatibleMessage,
   OpenAICompatibleToolDefinition,
 } from '../types';
+import { mapModelInputContextToOpenAICompatibleMessages } from './model-input-context-mapper';
 import { buildSystemPrompt } from './system-prompt';
 
 export function mapModelStepToOpenAICompatibleRequest(
@@ -28,6 +29,10 @@ export function mapModelStepToOpenAICompatibleRequest(
 }
 
 export function mapModelStepToOpenAICompatibleMessages(request: ModelStepRuntimeRequest): OpenAICompatibleMessage[] {
+  if (request.inputContext) {
+    return mapModelInputContextToOpenAICompatibleMessages(request.inputContext);
+  }
+
   const messages: OpenAICompatibleMessage[] = [
     {
       role: 'system',

@@ -1,10 +1,66 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { buildModelInputContext } from '@megumi/memory';
 import type { ChatRuntimeRequest } from '@megumi/shared/chat-contracts';
 import * as messageMapper from '@megumi/ai/prompt/message-mapper';
 import { buildSystemPrompt } from '@megumi/ai/prompt/system-prompt';
 import { AI_PROVIDER_DEFAULTS } from '@megumi/ai/models';
+import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import type { ToolDefinition, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+
+const builtAt = '2026-05-27T00:00:00.000Z';
+
+function sourceRef(sourceId: string, sourceKind: ModelInputContextSourceRef['sourceKind']): ModelInputContextSourceRef {
+  return {
+    sourceId,
+    sourceKind,
+  };
+}
+
+function instructionPart(
+  overrides: Partial<Extract<ModelInputContextPart, { kind: 'instruction' }>>,
+): ModelInputContextPart {
+  return {
+    partId: 'part:instruction:1',
+    kind: 'instruction',
+    instructionKind: 'system',
+    text: 'System instruction from input context.',
+    sourceRefs: [sourceRef('system:1', 'system_instruction')],
+    priority: 100,
+    budgetStatus: 'included_full',
+    ...overrides,
+  };
+}
+
+function runtimeConstraintPart(
+  overrides: Partial<Extract<ModelInputContextPart, { kind: 'runtime_constraint' }>>,
+): ModelInputContextPart {
+  return {
+    partId: 'part:runtime:1',
+    kind: 'runtime_constraint',
+    constraintKind: 'permission_mode',
+    text: 'Permission mode is plan.',
+    sourceRefs: [sourceRef('permission-mode:1', 'permission_mode')],
+    priority: 80,
+    budgetStatus: 'included_full',
+    ...overrides,
+  };
+}
+
+function currentTurnPart(
+  overrides: Partial<Extract<ModelInputContextPart, { kind: 'current_turn' }>> = {},
+): ModelInputContextPart {
+  return {
+    partId: 'part:current-turn:1',
+    kind: 'current_turn',
+    role: 'user',
+    text: 'Input context user request.',
+    sourceRefs: [sourceRef('message:input-context', 'current_user_message')],
+    priority: 90,
+    budgetStatus: 'included_full',
+    ...overrides,
+  };
+}
 
 const request: ChatRuntimeRequest = {
   requestId: 'request-1',
@@ -431,6 +487,148 @@ describe('OpenAI-compatible message mapper', () => {
     expect(messages[0]?.content).toContain('Permission mode: plan');
     expect(messages[0]?.content).not.toContain('Task intent:');
     expect(messages[0]?.content).not.toContain('Output expectation:');
+  });
+
+  it('uses ModelStepRuntimeRequest.inputContext as the model-step prompt source when present', () => {
+    const inputContext = buildModelInputContext({
+      contextId: 'model-input-context:1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        instructionPart({
+          partId: 'part:instruction:1',
+          text: 'System instruction from input context.',
+        }),
+        runtimeConstraintPart({
+          partId: 'part:runtime:1',
+          text: 'Permission mode is plan.',
+        }),
+        currentTurnPart({
+          partId: 'part:current-turn:1',
+          text: 'Use the new context path.',
+          sourceRefs: [sourceRef('message:1', 'current_user_message')],
+        }),
+      ],
+    });
+
+    const messages = messageMapper.mapModelStepToOpenAICompatibleMessages({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      inputContext,
+      messages: [
+        {
+          messageId: 'legacy-message-1',
+          sessionId: 'session-1',
+          role: 'user',
+          content: 'Legacy message must not appear.',
+          status: 'completed',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        },
+      ],
+      modeSnapshot: {
+        permissionMode: 'default',
+        source: 'user',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      runtimeContext: {
+        requestId: 'request-1',
+        traceId: 'trace-1',
+        operationName: 'model-step',
+        source: 'core',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const serializedMessages = JSON.stringify(messages);
+
+    expect(messages).toEqual([
+      {
+        role: 'system',
+        content: 'System instruction from input context.',
+      },
+      {
+        role: 'system',
+        content: 'Permission mode is plan.',
+      },
+      {
+        role: 'user',
+        content: 'Use the new context path.',
+      },
+    ]);
+    expect(serializedMessages).not.toContain('Legacy message must not appear.');
+    expect(serializedMessages).not.toContain('trace-1');
+    expect(serializedMessages).not.toContain('Produce the requested response');
+  });
+
+  it('keeps tool definitions outside ModelInputContext while building provider tools', () => {
+    const readFileTool: ToolDefinition = {
+      name: 'read_file',
+      description: 'Read a file from the current project.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+        },
+        required: ['path'],
+      },
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      availability: { status: 'available' },
+    };
+
+    const inputContext = buildModelInputContext({
+      contextId: 'model-input-context:2',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        currentTurnPart({
+          text: 'Read package.json.',
+        }),
+      ],
+    });
+
+    const requestBody = messageMapper.mapModelStepToOpenAICompatibleRequest({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      inputContext,
+      messages: [],
+      toolDefinitions: [readFileTool],
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    expect(requestBody.messages).toEqual([
+      {
+        role: 'user',
+        content: 'Read package.json.',
+      },
+    ]);
+    expect(requestBody.tools).toEqual([
+      {
+        type: 'function',
+        function: {
+          name: 'read_file',
+          description: 'Read a file from the current project.',
+          parameters: readFileTool.inputSchema,
+        },
+      },
+    ]);
+    expect(JSON.stringify(requestBody.messages)).not.toContain('read_file');
   });
 
   it('exposes phase 1 provider defaults', () => {
