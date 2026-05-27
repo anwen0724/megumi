@@ -62,10 +62,16 @@ describe('memory foundation boundaries', () => {
     const files = [
       ...productionFilesUnder('packages', 'shared'),
       ...productionFilesUnder('packages', 'memory'),
+      ...productionFilesUnder('packages', 'context-management'),
       ...productionFilesUnder('packages', 'core'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'renderer', 'entities', 'memory'),
     ];
     expect(offenders(files, /rawFullPrompt|rawProviderBody|rawRestrictedFileContent|plaintextSecret|rawStack|rawCause/)).toEqual([]);
+  });
+
+  it('keeps packages/memory from exporting short-term context management builders', () => {
+    const files = productionFilesUnder('packages', 'memory');
+    expect(offenders(files, /ModelInputContextBuilder|buildModelInputContext|model-input-context-builder/)).toEqual([]);
   });
 });
