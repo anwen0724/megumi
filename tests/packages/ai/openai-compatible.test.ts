@@ -681,6 +681,30 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
+  it('maps aborted model step requests to cancelled events using the request ref', async () => {
+    const fetch = vi.fn<FetchLike>().mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    const [event] = await collect(adapter.streamModelStep(modelStepInput()));
+
+    expect(event).toMatchObject({
+      eventType: 'run.cancelled',
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      sequence: 1,
+      payload: {
+        reason: 'Provider request was cancelled.',
+      },
+    });
+    expect(RuntimeEventSchema.parse(event)).toEqual(event);
+  });
+
   it('records provider HTTP diagnostics for failed tool continuation model steps', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(
       '{"error":{"message":"tool message rejected","debug":"sk-provider-secret-12345678"}}',
