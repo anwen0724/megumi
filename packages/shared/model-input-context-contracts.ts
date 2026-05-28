@@ -41,6 +41,15 @@ export const MODEL_INPUT_CONTEXT_BUDGET_STATUSES = [
 ] as const;
 export type ModelInputContextBudgetStatus = (typeof MODEL_INPUT_CONTEXT_BUDGET_STATUSES)[number];
 
+export const AGENT_INSTRUCTION_SOURCE_STATUSES = [
+  'included',
+  'included_truncated',
+  'missing',
+  'unavailable',
+  'read_failed',
+] as const;
+export type AgentInstructionSourceStatus = (typeof AGENT_INSTRUCTION_SOURCE_STATUSES)[number];
+
 export const MODEL_INPUT_INSTRUCTION_KINDS = ['system', 'project', 'mode', 'developer', 'user'] as const;
 export type ModelInputInstructionKind = (typeof MODEL_INPUT_INSTRUCTION_KINDS)[number];
 
@@ -74,6 +83,101 @@ export interface ModelInputContextSourceRef {
   loadedAt?: IsoDateTime;
   metadata?: JsonObject;
 }
+
+const AgentInstructionSourceSnapshotBaseSchema = z
+  .object({
+    sourceId: IdSchema,
+    sourceKind: z.literal('project_instruction'),
+    sourceUri: z.literal('project://AGENTS.md').optional(),
+    relativePath: z.literal('AGENTS.md').optional(),
+    loadedAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const AgentInstructionSourceSnapshotSchema = z.discriminatedUnion('status', [
+  AgentInstructionSourceSnapshotBaseSchema.extend({
+    status: z.literal('included'),
+    text: z.string(),
+    sizeBytes: z.number().int().nonnegative(),
+    includedBytes: z.number().int().nonnegative(),
+    hardCapBytes: z.number().int().positive(),
+    truncated: z.literal(false),
+    reason: z.string().min(1).optional(),
+  }).strict(),
+  AgentInstructionSourceSnapshotBaseSchema.extend({
+    status: z.literal('included_truncated'),
+    text: z.string(),
+    sizeBytes: z.number().int().nonnegative(),
+    includedBytes: z.number().int().nonnegative(),
+    hardCapBytes: z.number().int().positive(),
+    truncated: z.literal(true),
+    reason: z.literal('project_instruction_hard_cap_exceeded'),
+  }).strict(),
+  AgentInstructionSourceSnapshotBaseSchema.extend({
+    status: z.literal('missing'),
+    text: z.never().optional(),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    includedBytes: z.number().int().nonnegative().optional(),
+    hardCapBytes: z.number().int().positive().optional(),
+    truncated: z.boolean().optional(),
+    reason: z.string().min(1).optional(),
+  }).strict(),
+  AgentInstructionSourceSnapshotBaseSchema.extend({
+    status: z.literal('unavailable'),
+    text: z.never().optional(),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    includedBytes: z.number().int().nonnegative().optional(),
+    hardCapBytes: z.number().int().positive().optional(),
+    truncated: z.boolean().optional(),
+    reason: z.string().min(1).optional(),
+  }).strict(),
+  AgentInstructionSourceSnapshotBaseSchema.extend({
+    status: z.literal('read_failed'),
+    text: z.never().optional(),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    includedBytes: z.number().int().nonnegative().optional(),
+    hardCapBytes: z.number().int().positive().optional(),
+    truncated: z.boolean().optional(),
+    reason: z.string().min(1).optional(),
+  }).strict(),
+]);
+
+interface AgentInstructionSourceSnapshotBase {
+  sourceId: string;
+  sourceKind: 'project_instruction';
+  sourceUri?: 'project://AGENTS.md';
+  relativePath?: 'AGENTS.md';
+  loadedAt: IsoDateTime;
+}
+
+export type AgentInstructionSourceSnapshot =
+  | (AgentInstructionSourceSnapshotBase & {
+      status: 'included';
+      text: string;
+      sizeBytes: number;
+      includedBytes: number;
+      hardCapBytes: number;
+      truncated: false;
+      reason?: string;
+    })
+  | (AgentInstructionSourceSnapshotBase & {
+      status: 'included_truncated';
+      text: string;
+      sizeBytes: number;
+      includedBytes: number;
+      hardCapBytes: number;
+      truncated: true;
+      reason: 'project_instruction_hard_cap_exceeded';
+    })
+  | (AgentInstructionSourceSnapshotBase & {
+      status: Exclude<AgentInstructionSourceStatus, 'included' | 'included_truncated'>;
+      text?: never;
+      sizeBytes?: number;
+      includedBytes?: number;
+      hardCapBytes?: number;
+      truncated?: boolean;
+      reason?: string;
+    });
 
 export const ModelInputContextTruncationSchema = z
   .object({

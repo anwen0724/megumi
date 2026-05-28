@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AgentInstructionSourceSnapshotSchema,
   MODEL_INPUT_CONTEXT_BUDGET_STATUSES,
   MODEL_INPUT_CONTEXT_PART_KINDS,
   MODEL_INPUT_CONTEXT_SOURCE_KINDS,
   ModelInputContextSchema,
+  type AgentInstructionSourceSnapshot,
   type ModelInputContext,
 } from '@megumi/shared/model-input-context-contracts';
 
@@ -243,5 +245,187 @@ describe('ModelInputContext contracts', () => {
     ]);
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('project_instruction');
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('tool_result');
+  });
+});
+
+describe('AgentInstructionSourceSnapshot contracts', () => {
+  const loadedAt = '2026-05-28T00:00:00.000Z';
+
+  it('accepts included project instruction snapshots with file-level metadata', () => {
+    const snapshot = AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'project://AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 8,
+      includedBytes: 8,
+      hardCapBytes: 65536,
+      truncated: false,
+    });
+
+    expect(snapshot).toEqual({
+      sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'project://AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 8,
+      includedBytes: 8,
+      hardCapBytes: 65536,
+      truncated: false,
+    } satisfies AgentInstructionSourceSnapshot);
+  });
+
+  it('accepts unavailable, missing, read_failed, and truncated statuses', () => {
+    const statuses = [
+      'unavailable',
+      'missing',
+      'read_failed',
+      'included_truncated',
+    ] as const;
+
+    for (const status of statuses) {
+      expect(() => AgentInstructionSourceSnapshotSchema.parse({
+        sourceId: `project-instruction:${status}`,
+        sourceKind: 'project_instruction',
+        status,
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        loadedAt,
+        reason: status === 'included_truncated'
+          ? 'project_instruction_hard_cap_exceeded'
+          : `agent_instruction_${status}`,
+        ...(status === 'included_truncated' ? {
+          text: '# AGENTS',
+          sizeBytes: 70000,
+          includedBytes: 65536,
+          hardCapBytes: 65536,
+          truncated: true,
+        } : {}),
+      })).not.toThrow();
+    }
+  });
+
+  it('rejects unknown instruction source kinds and statuses', () => {
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:bad',
+      sourceKind: 'other',
+      status: 'included',
+      loadedAt,
+      text: 'bad',
+    })).toThrow();
+
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:bad',
+      sourceKind: 'project_instruction',
+      status: 'cached',
+      loadedAt,
+      text: 'bad',
+    })).toThrow();
+  });
+
+  it('rejects included snapshots without required file payload metadata', () => {
+    const includedSnapshot = {
+      sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'project://AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 8,
+      includedBytes: 8,
+      hardCapBytes: 65536,
+      truncated: false,
+    } as const;
+
+    for (const requiredKey of ['text', 'sizeBytes', 'includedBytes', 'hardCapBytes', 'truncated'] as const) {
+      const incomplete = { ...includedSnapshot };
+      delete (incomplete as Record<string, unknown>)[requiredKey];
+
+      expect(() => AgentInstructionSourceSnapshotSchema.parse(incomplete)).toThrow();
+    }
+  });
+
+  it('rejects non-included snapshots carrying model-visible text', () => {
+    for (const status of ['missing', 'unavailable', 'read_failed'] as const) {
+      expect(() => AgentInstructionSourceSnapshotSchema.parse({
+        sourceId: `project-instruction:${status}`,
+        sourceKind: 'project_instruction',
+        status,
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: 'must not be carried on excluded sources',
+        loadedAt,
+        reason: `agent_instruction_${status}`,
+      })).toThrow();
+    }
+  });
+
+  it('rejects unsafe project instruction source identity values', () => {
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'file:///C:/project/AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 8,
+      includedBytes: 8,
+      hardCapBytes: 65536,
+      truncated: false,
+    })).toThrow();
+
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'project://AGENTS.md',
+      relativePath: '../AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 8,
+      includedBytes: 8,
+      hardCapBytes: 65536,
+      truncated: false,
+    })).toThrow();
+  });
+
+  it('rejects truncated snapshots without the hard-cap reason and truncated flag', () => {
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      status: 'included_truncated',
+      sourceUri: 'project://AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 70000,
+      includedBytes: 65536,
+      hardCapBytes: 65536,
+      truncated: false,
+      reason: 'project_instruction_hard_cap_exceeded',
+    })).toThrow();
+
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      status: 'included_truncated',
+      sourceUri: 'project://AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 70000,
+      includedBytes: 65536,
+      hardCapBytes: 65536,
+      truncated: true,
+      reason: 'agent_instruction_read_failed',
+    })).toThrow();
   });
 });
