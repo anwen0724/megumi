@@ -14,7 +14,7 @@ import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { buildModelInputContext } from './model-input-context-builder';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
-const PROJECT_INSTRUCTION_WRAPPER = 'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.';
+const AGENT_INSTRUCTION_WRAPPER = 'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.';
 
 export interface CreateModelStepInputContextIdInput {
   stepId: string;
@@ -107,7 +107,7 @@ function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInput
       partId: `part:instruction:project:${source.sourceId}`,
       kind: 'instruction',
       instructionKind: 'project',
-      text: `${PROJECT_INSTRUCTION_WRAPPER}\n\n${source.text}`,
+      text: `${AGENT_INSTRUCTION_WRAPPER}\n\n${source.text}`,
       sourceRefs: [instructionSourceRef(source)],
       priority: 100,
       budgetStatus: source.status === 'included_truncated' ? 'included_truncated' : 'included_full',
