@@ -407,6 +407,53 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
     ]);
   });
 
+  it('materializes wrapped project instruction as a provider system message', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:project-instruction-provider',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        basePart({
+          partId: 'part:instruction:project:AGENTS.md',
+          kind: 'instruction',
+          instructionKind: 'project',
+          text: [
+            'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+            '',
+            '# Project rules',
+          ].join('\n'),
+          sourceRefs: [{
+            sourceId: 'project-instruction:AGENTS.md',
+            sourceKind: 'project_instruction',
+            sourceUri: 'project://AGENTS.md',
+            loadedAt: builtAt,
+            metadata: {
+              relativePath: 'AGENTS.md',
+              sizeBytes: 15,
+              includedBytes: 15,
+              hardCapBytes: 65536,
+              truncated: false,
+            },
+          }],
+          priority: 100,
+          budgetStatus: 'included_full',
+        } as Partial<ModelInputContextPart>),
+      ],
+    });
+
+    expect(mapModelInputContextToOpenAICompatibleMessages(context)).toEqual([{
+      role: 'system',
+      content: [
+        'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+        '',
+        '# Project rules',
+      ].join('\n'),
+    }]);
+  });
+
   it('does not materialize trace, budget, source refs, or runtime metadata as prompt content', () => {
     const context = buildModelInputContext({
       contextId: 'model-input-context:2',
