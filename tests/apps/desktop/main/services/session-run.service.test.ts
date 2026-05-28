@@ -206,17 +206,21 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
   });
 }
 
-function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
+function createServiceWithModelStepStream(
+  events: RuntimeEvent[] | ((request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[]),
+  options?: {
   contextService?: SessionRunContextService;
   runModeService?: SessionRunServiceOptions['runModeService'];
   toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
   toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
   timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
+  agentInstructionSourceService?: SessionRunServiceOptions['agentInstructionSourceService'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
+  let callIndex = 0;
   return new SessionRunService({
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
@@ -224,10 +228,12 @@ function createServiceWithModelStepStream(events: RuntimeEvent[], options?: {
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
     ...(options?.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
+    ...(options?.agentInstructionSourceService ? { agentInstructionSourceService: options.agentInstructionSourceService } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
+        callIndex += 1;
         options?.onRequest?.(request);
-        yield* events;
+        yield* (typeof events === 'function' ? events(request, callIndex) : events);
       },
       cancelModelStep: () => true,
     },
@@ -2261,6 +2267,374 @@ describe('SessionRunService', () => {
     ].filter((event) => event.eventType === 'run.started')).toHaveLength(1);
     expect(service.listRuntimeEventsByRun('run-1')
       .filter((event) => event.eventType === 'run.started')).toHaveLength(1);
+  });
+
+  it('loads project instructions into the initial model step input context', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([
+      assistantOutputCompletedEvent(1),
+    ], {
+      onRequest: (request) => requests.push(request),
+      agentInstructionSourceService: {
+        async loadInstructionSources({ projectRoot, loadedAt }) {
+          return [{
+            sourceId: 'project-instruction:AGENTS.md',
+            sourceKind: 'project_instruction',
+            status: 'included',
+            sourceUri: 'project://AGENTS.md',
+            relativePath: 'AGENTS.md',
+            text: `# rules for ${projectRoot}`,
+            loadedAt,
+            sizeBytes: 20,
+            includedBytes: 20,
+            hardCapBytes: 65536,
+            truncated: false,
+          }];
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed.map((event) => event.eventType)).toContain('assistant.output.completed');
+    expect(requests[0]?.inputContext.parts[0]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'project',
+      text: expect.stringContaining('# rules for C:/project'),
+    });
+  });
+
+  it('refreshes project instructions for tool continuation model steps', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream((request, callIndex) => {
+      if (callIndex === 1) {
+        return [
+          toolUseCreatedEvent(1),
+          modelStepCompletedEvent(2),
+        ];
+      }
+
+      return [{
+        ...assistantOutputCompletedEvent(1),
+        stepId: request.stepId,
+      }];
+    }, {
+      onRequest: (request) => requests.push(request),
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses() {
+              return {
+                toolResults: [{
+                  toolResultId: 'tool-result-1',
+                  toolUseId: 'tool-use-1',
+                  runId: 'run-1',
+                  kind: 'success',
+                  textContent: 'file content',
+                  redactionState: 'none',
+                  createdAt: '2026-05-17T00:00:01.000Z',
+                }],
+              };
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
+          };
+        },
+      },
+      toolDefinitionProvider: {
+        listDefinitions: () => [{
+          name: 'read_file',
+          title: 'Read file',
+          description: 'Read a file.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          availability: { status: 'available' },
+        }],
+      },
+      agentInstructionSourceService: {
+        async loadInstructionSources({ loadedAt }) {
+          return [{
+            sourceId: 'project-instruction:AGENTS.md',
+            sourceKind: 'project_instruction',
+            status: 'included',
+            sourceUri: 'project://AGENTS.md',
+            relativePath: 'AGENTS.md',
+            text: `# rules loaded at ${loadedAt}`,
+            loadedAt,
+            sizeBytes: 20,
+            includedBytes: 20,
+            hardCapBytes: 65536,
+            truncated: false,
+          }];
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.inputContext.parts[0]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'project',
+      text: expect.stringContaining('# rules loaded at'),
+    });
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'tool_continuation' }),
+    ]));
+  });
+
+  it('registers pending approvals before yielding approval runtime events', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream((request, callIndex) => {
+      requests.push(request);
+      if (callIndex === 1) {
+        return [
+          toolUseCreatedEvent(1),
+          modelStepCompletedEvent(2),
+        ];
+      }
+
+      return [{
+        ...assistantOutputCompletedEvent(1),
+        stepId: request.stepId,
+      }];
+    }, {
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolUses(input) {
+              const toolUse = input.toolUses[0];
+              const toolCall: ToolCall = {
+                toolCallId: 'tool-call-1',
+                toolUseId: toolUse.toolUseId,
+                runId: toolUse.runId,
+                stepId: 'step-1',
+                toolName: toolUse.toolName,
+                input: toolUse.input,
+                inputPreview: toolUse.inputPreview,
+                capabilities: ['project_read'],
+                riskLevel: 'low',
+                sideEffect: 'none',
+                status: 'waiting_for_approval',
+                requestedAt: '2026-05-17T00:00:02.250Z',
+              };
+              const approvalRequest: ApprovalRequest = {
+                approvalRequestId: 'approval-request-1',
+                toolUseId: toolUse.toolUseId,
+                toolCallId: toolCall.toolCallId,
+                runId: toolUse.runId,
+                stepId: toolCall.stepId,
+                toolName: toolUse.toolName,
+                capabilities: toolCall.capabilities,
+                riskLevel: toolCall.riskLevel,
+                title: `Approve ${toolUse.toolName}`,
+                summary: 'User approval is required.',
+                preview: {
+                  action: toolUse.inputPreview.summary,
+                  targets: [],
+                },
+                requestedScope: 'once',
+                status: 'pending',
+                createdAt: '2026-05-17T00:00:02.300Z',
+              };
+
+              return {
+                pendingApprovals: [{
+                  approvalRequest,
+                  toolUse,
+                  toolCall,
+                }],
+                runtimeEvents: [{
+                  eventId: 'event-approval-requested',
+                  schemaVersion: 1,
+                  eventType: 'approval.requested',
+                  runId: 'run-1',
+                  sessionId: 'session-1',
+                  stepId: 'step-1',
+                  sequence: 3,
+                  createdAt: approvalRequest.createdAt,
+                  source: 'approval',
+                  visibility: 'user',
+                  persist: 'required',
+                  payload: { approvalRequest },
+                }],
+              };
+            },
+            async resumeToolApproval() {
+              const toolResult = createToolResult({
+                createdAt: '2026-05-17T00:00:05.000Z',
+                toolCallId: 'tool-call-1',
+              });
+              return {
+                toolResult,
+                runtimeEvents: approvalResumeRuntimeEvents(toolResult, 'success'),
+              };
+            },
+          };
+        },
+      },
+      toolDefinitionProvider: {
+        listDefinitions: () => [{
+          name: 'read_file',
+          title: 'Read file',
+          description: 'Read a file.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          availability: { status: 'available' },
+        }],
+      },
+      agentInstructionSourceService: {
+        async loadInstructionSources({ loadedAt }) {
+          return [{
+            sourceId: 'project-instruction:AGENTS.md',
+            sourceKind: 'project_instruction',
+            status: 'included',
+            sourceUri: 'project://AGENTS.md',
+            relativePath: 'AGENTS.md',
+            text: `# approval rules loaded at ${loadedAt}`,
+            loadedAt,
+            sizeBytes: 20,
+            includedBytes: 20,
+            hardCapBytes: 65536,
+            truncated: false,
+          }];
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    const iterator = result.events[Symbol.asyncIterator]();
+    const initialEvents: RuntimeEvent[] = [];
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) {
+        break;
+      }
+      initialEvents.push(next.value);
+      if (next.value.eventType === 'approval.requested') {
+        break;
+      }
+    }
+
+    const resumeEvents = service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-17T00:00:05.000Z',
+    });
+
+    expect(initialEvents.map((event) => event.eventType)).toContain('approval.requested');
+    expect(resumeEvents).not.toBeUndefined();
+
+    while (!(await iterator.next()).done) {
+      // Drain the initial stream after proving immediate resume lookup worked.
+    }
+
+    const streamedResumeEvents: RuntimeEvent[] = [];
+    for await (const event of resumeEvents ?? []) {
+      streamedResumeEvents.push(event);
+    }
+
+    expect(streamedResumeEvents.map((event) => event.eventType)).toContain('assistant.output.completed');
+    expect(requests[1]?.inputContext.parts[0]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'project',
+      text: expect.stringContaining('# approval rules loaded at 2026-05-17T00:00:05.000Z'),
+    });
   });
 
   it('passes workspace baseline context to model step requests for session messages', async () => {

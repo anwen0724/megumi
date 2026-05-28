@@ -30,6 +30,9 @@ import type {
   RunContext,
   ModelCapabilitySummary,
 } from '@megumi/shared/run-context-contracts';
+import type {
+  AgentInstructionSourceSnapshot,
+} from '@megumi/shared/model-input-context-contracts';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
 import {
   isPermissionMode,
@@ -66,6 +69,10 @@ import {
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
 } from './chat-stream-event-adapter.service';
+import {
+  AgentInstructionSourceService,
+  type LoadInstructionSourcesInput,
+} from './agent-instruction-source.service';
 
 export interface SessionRunServiceClock {
   now(): string;
@@ -111,11 +118,16 @@ export interface SessionRunToolDefinitionProvider {
   }): ToolDefinition[];
 }
 
+export interface SessionRunAgentInstructionSourceService {
+  loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
+}
+
 interface ApprovalContinuationGroup {
   groupId: string;
   request: ModelStepRuntimeRequest;
   run: Run;
   step: RunStep;
+  projectRoot?: string;
   userMessageId: string;
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
@@ -137,6 +149,7 @@ export interface SessionRunServiceOptions {
   modelStepProvider?: SessionRunModelStepProvider;
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
+  agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
   timelineMessageRepository?: {
@@ -196,6 +209,7 @@ export class SessionRunService {
   private readonly modelStepProvider?: SessionRunModelStepProvider;
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
+  private readonly agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly chatStreamEventSink?: ChatStreamEventSink;
   private readonly timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
@@ -217,6 +231,7 @@ export class SessionRunService {
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
+    this.agentInstructionSourceService = options.agentInstructionSourceService;
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.timelineMessageRepository = options.timelineMessageRepository;
     this.clock = options.clock ?? defaultClock;
@@ -417,6 +432,10 @@ export class SessionRunService {
           userMessage,
         ]
       : toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage);
+    const instructionSources = await this.loadInstructionSourcesForModelStep({
+      ...(session.workspacePath ? { projectRoot: session.workspacePath } : {}),
+      loadedAt: createdAt,
+    });
     const inputContext = buildModelStepInputContextFromSources({
       contextId: createModelStepInputContextId({
         stepId: String(stepId),
@@ -429,6 +448,7 @@ export class SessionRunService {
       builtAt: createdAt,
       currentMessage: userMessage,
       historyMessages: modelContextMessages.filter((message) => message.messageId !== userMessage.messageId),
+      instructionSources,
       ...(context ? { runContext: context } : {}),
       ...(modeSnapshot ? {
         modeSnapshot: toPermissionModeSnapshot(modeSnapshot, createdAt),
@@ -488,6 +508,7 @@ export class SessionRunService {
         run,
         step,
         userMessageId: userMessage.messageId,
+        ...(session.workspacePath ? { projectRoot: session.workspacePath } : {}),
         ...(toolRuntime ? { toolRuntime } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
@@ -646,6 +667,7 @@ export class SessionRunService {
     userMessageId: string;
     toolRuntime?: ToolUseHandlerPort & ToolApprovalResumePort;
     chatStreamAdapter?: ChatStreamEventAdapter;
+    projectRoot?: string;
     startSequence?: number;
     emitRunStarted?: boolean;
   }): AsyncIterable<RuntimeEvent> {
@@ -656,7 +678,46 @@ export class SessionRunService {
     let terminalEvent: RuntimeEvent | undefined;
     let currentModelStep = input.step;
     const pendingContinuations: PendingToolApprovalContinuation[] = [];
+    let registeredPendingGroup: ApprovalContinuationGroup | undefined;
     const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
+
+    const registerPendingApprovalGroup = (): ApprovalContinuationGroup | undefined => {
+      if (registeredPendingGroup || pendingContinuations.length === 0 || !toolRuntime) {
+        return registeredPendingGroup;
+      }
+
+      const waitingRun = this.repository.saveRun({
+        ...input.run,
+        status: 'waiting_for_approval',
+      });
+      const waitingStep = this.repository.saveStep({
+        ...currentModelStep,
+        status: 'waiting_for_approval',
+      });
+      currentModelStep = waitingStep;
+      const groupId = `${input.request.runId}:${input.request.stepId}:${this.ids.eventId()}`;
+      const group: ApprovalContinuationGroup = {
+        groupId,
+        request: input.request,
+        run: waitingRun,
+        step: waitingStep,
+        ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+        userMessageId: input.userMessageId,
+        pendingByApprovalId: new Map(pendingContinuations.map((pending) => [
+          pending.pendingApproval.approvalRequest.approvalRequestId,
+          pending,
+        ])),
+        resolvedResults: [],
+        toolRuntime,
+        ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
+      };
+      this.pendingApprovalGroups.set(groupId, group);
+      for (const approvalRequestId of group.pendingByApprovalId.keys()) {
+        this.pendingApprovals.set(approvalRequestId, group);
+      }
+      registeredPendingGroup = group;
+      return group;
+    };
 
     if (input.emitRunStarted !== false) {
       const startedEvent = withRequestMetadata(createRunStartedEvent({
@@ -699,11 +760,19 @@ export class SessionRunService {
           onPendingApproval: (pending) => {
             pendingContinuations.push(pending);
           },
+          buildContinuationInputContext: async (contextInput) => buildModelStepInputContextFromSources({
+            ...contextInput,
+            instructionSources: await this.loadInstructionSourcesForModelStep({
+              ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+              loadedAt: contextInput.builtAt,
+            }),
+          }),
         })
       : modelStepProvider.streamModelStep(input.request);
 
     try {
       for await (const event of coalesceTextDeltaRuntimeEvents(modelEvents)) {
+        registerPendingApprovalGroup();
         const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
         lastSequence = eventWithRequest.sequence;
         this.persistModelStepRecordFromEvent(input.request, eventWithRequest, currentModelStep.stepId);
@@ -759,34 +828,7 @@ export class SessionRunService {
 
     if (pendingContinuations.length > 0 && toolRuntime) {
       const waitingAt = this.clock.now();
-      const waitingRun = this.repository.saveRun({
-        ...input.run,
-        status: 'waiting_for_approval',
-      });
-      const waitingStep = this.repository.saveStep({
-        ...currentModelStep,
-        status: 'waiting_for_approval',
-      });
-      currentModelStep = waitingStep;
-      const groupId = `${input.request.runId}:${input.request.stepId}:${this.ids.eventId()}`;
-      const group: ApprovalContinuationGroup = {
-        groupId,
-        request: input.request,
-        run: waitingRun,
-        step: waitingStep,
-        userMessageId: input.userMessageId,
-        pendingByApprovalId: new Map(pendingContinuations.map((pending) => [
-          pending.pendingApproval.approvalRequest.approvalRequestId,
-          pending,
-        ])),
-        resolvedResults: [],
-        toolRuntime,
-        ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
-      };
-      this.pendingApprovalGroups.set(groupId, group);
-      for (const approvalRequestId of group.pendingByApprovalId.keys()) {
-        this.pendingApprovals.set(approvalRequestId, group);
-      }
+      registerPendingApprovalGroup();
       const waitingEvent = withRequestMetadata(createRunStatusChangedEvent({
         eventId: this.ids.eventId(),
         sessionId: input.request.sessionId,
@@ -965,6 +1007,17 @@ export class SessionRunService {
     return this.modelStepProvider;
   }
 
+  private async loadInstructionSourcesForModelStep(input: {
+    projectRoot?: string;
+    loadedAt: string;
+  }): Promise<AgentInstructionSourceSnapshot[]> {
+    if (!this.agentInstructionSourceService) {
+      return [];
+    }
+
+    return this.agentInstructionSourceService.loadInstructionSources(input);
+  }
+
   private requireRunModeService(): NonNullable<SessionRunServiceOptions['runModeService']> {
     if (!this.runModeService) {
       throw new Error('Run mode service is not configured.');
@@ -1102,6 +1155,10 @@ export class SessionRunService {
       ...pending.accumulatedToolResults,
       ...continuation.resolvedResults,
     ];
+    const resumedInstructionSources = await this.loadInstructionSourcesForModelStep({
+      ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
+      loadedAt: input.decidedAt,
+    });
     const resumedRequest: ModelStepRuntimeRequest = {
       ...pending.request,
       stepId: resumedStep.stepId,
@@ -1120,6 +1177,7 @@ export class SessionRunService {
         toolUses: pending.accumulatedToolUses,
         toolResults: resumedToolResults,
         providerStates: pending.accumulatedProviderStates,
+        instructionSources: resumedInstructionSources,
       }),
       createdAt: input.decidedAt,
     };
@@ -1131,6 +1189,7 @@ export class SessionRunService {
       userMessageId: continuation.userMessageId,
       startSequence: lastSequence,
       toolRuntime: continuation.toolRuntime,
+      ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
       ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       emitRunStarted: false,
     });
@@ -1760,6 +1819,7 @@ function createToolResultSummary(toolResult: ToolResult): string {
 export interface CreateDefaultSessionRunServiceOptions {
   contextService?: SessionRunContextService;
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
+  agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
 }
 
 export function createDefaultSessionRunService(
@@ -1775,5 +1835,6 @@ export function createDefaultSessionRunService(
     runModeService: new RunModeService({ repository: runModeRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
+    agentInstructionSourceService: options.agentInstructionSourceService ?? new AgentInstructionSourceService(),
   });
 }

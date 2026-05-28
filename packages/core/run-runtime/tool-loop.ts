@@ -2,6 +2,7 @@ import {
   buildModelStepInputContextFromSources,
   createModelStepInputContextId,
 } from '@megumi/context-management/model-step-input-context';
+import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
 import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime-events';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
@@ -63,6 +64,19 @@ export interface ModelToolLoopIds {
   nextModelStepId: () => string;
 }
 
+export interface ToolContinuationInputContextBuilderInput {
+  baseInputContext: ModelInputContext;
+  contextId: string;
+  sessionId: string;
+  runId: string;
+  stepId: string;
+  buildReason: string;
+  builtAt: string;
+  toolUses: ToolUse[];
+  toolResults: ToolResult[];
+  providerStates: ModelStepProviderState[];
+}
+
 export interface RunModelToolLoopInput {
   request: ModelStepRuntimeRequest;
   aiPort: AiModelStepPort;
@@ -71,6 +85,9 @@ export interface RunModelToolLoopInput {
   signal?: AbortSignal;
   maxModelSteps?: number;
   onPendingApproval?: (continuation: PendingToolApprovalContinuation) => void;
+  buildContinuationInputContext?: (
+    input: ToolContinuationInputContextBuilderInput
+  ) => ModelInputContext | Promise<ModelInputContext>;
 }
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {
@@ -127,10 +144,11 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     const toolResults = outcome.toolResults ?? [];
     const runtimeEvents = outcome.runtimeEvents ?? [];
     const hasPendingApprovals = Boolean(outcome.pendingApprovals && outcome.pendingApprovals.length > 0);
+    const normalizedRuntimeEvents: RuntimeEvent[] = [];
 
     for (const event of runtimeEvents) {
       sequenceOffset += 1;
-      yield {
+      normalizedRuntimeEvents.push({
         ...event,
         runId: event.runId ?? request.runId,
         sessionId: event.sessionId ?? request.sessionId,
@@ -138,11 +156,11 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
         requestId: event.requestId ?? request.requestId,
         ...(event.context ? { context: event.context } : request.runtimeContext ? { context: request.runtimeContext } : {}),
         sequence: sequenceOffset,
-      };
+      });
     }
 
     const emittedToolResultIds = new Set(
-      runtimeEvents
+      normalizedRuntimeEvents
         .filter((event) => event.eventType === 'tool.result.created')
         .map((event) => {
           const payload = event.payload as { toolResultId?: unknown };
@@ -151,12 +169,13 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
         .filter((toolResultId): toolResultId is string => Boolean(toolResultId)),
     );
 
+    const toolResultEvents: RuntimeEvent[] = [];
     for (const toolResult of toolResults) {
       if (emittedToolResultIds.has(String(toolResult.toolResultId))) {
         continue;
       }
       sequenceOffset += 1;
-      yield createToolResultCreatedEvent({
+      toolResultEvents.push(createToolResultCreatedEvent({
         eventId: input.ids.nextEventId(),
         eventType: 'tool.result.created',
         runId: request.runId,
@@ -176,13 +195,13 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
           kind: toolResult.kind,
           summary: createToolResultSummary(toolResult),
         },
-      });
+      }));
     }
 
     accumulatedToolResults = [...accumulatedToolResults, ...toolResults];
 
     if (hasPendingApprovals) {
-      const continuationRequest = createContinuationRequest({
+      const continuationRequest = await createContinuationRequest({
         request,
         stepId: request.stepId,
         ...(request.modelStepId ? { modelStepId: String(request.modelStepId) } : {}),
@@ -191,6 +210,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
         accumulatedToolUses,
         accumulatedToolResults,
         accumulatedProviderStates,
+        buildContinuationInputContext: input.buildContinuationInputContext,
       });
 
       for (const pendingApproval of outcome.pendingApprovals ?? []) {
@@ -202,7 +222,20 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
           accumulatedProviderStates,
         });
       }
+      for (const event of normalizedRuntimeEvents) {
+        yield event;
+      }
+      for (const event of toolResultEvents) {
+        yield event;
+      }
       return;
+    }
+
+    for (const event of normalizedRuntimeEvents) {
+      yield event;
+    }
+    for (const event of toolResultEvents) {
+      yield event;
     }
 
     if (toolResults.length === 0) {
@@ -213,7 +246,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     const nextModelStepId = input.ids.nextModelStepId();
     const nextCreatedAt = new Date().toISOString();
 
-    request = createContinuationRequest({
+    request = await createContinuationRequest({
       request,
       stepId: nextStepId,
       modelStepId: nextModelStepId,
@@ -222,6 +255,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       accumulatedToolUses,
       accumulatedToolResults,
       accumulatedProviderStates,
+      buildContinuationInputContext: input.buildContinuationInputContext,
     });
   }
 
@@ -252,7 +286,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
   });
 }
 
-function createContinuationRequest(input: {
+async function createContinuationRequest(input: {
   request: ModelStepRuntimeRequest;
   stepId: string;
   modelStepId?: string;
@@ -261,26 +295,33 @@ function createContinuationRequest(input: {
   accumulatedToolUses: ToolUse[];
   accumulatedToolResults: ToolResult[];
   accumulatedProviderStates: ModelStepProviderState[];
-}): ModelStepRuntimeRequest {
+  buildContinuationInputContext?: (
+    input: ToolContinuationInputContextBuilderInput
+  ) => ModelInputContext | Promise<ModelInputContext>;
+}): Promise<ModelStepRuntimeRequest> {
+  const contextInput = {
+    contextId: createModelStepInputContextId({
+      stepId: input.stepId,
+      contextKind: input.contextKind,
+    }),
+    sessionId: input.request.sessionId,
+    runId: String(input.request.runId),
+    stepId: input.stepId,
+    buildReason: 'tool_continuation',
+    builtAt: input.createdAt,
+    baseInputContext: input.request.inputContext,
+    toolUses: input.accumulatedToolUses,
+    toolResults: input.accumulatedToolResults,
+    providerStates: input.accumulatedProviderStates,
+  };
+
   return {
     ...input.request,
     stepId: input.stepId,
     ...(input.modelStepId ? { modelStepId: input.modelStepId } : {}),
-    inputContext: buildModelStepInputContextFromSources({
-      contextId: createModelStepInputContextId({
-        stepId: input.stepId,
-        contextKind: input.contextKind,
-      }),
-      sessionId: input.request.sessionId,
-      runId: String(input.request.runId),
-      stepId: input.stepId,
-      buildReason: 'tool_continuation',
-      builtAt: input.createdAt,
-      baseInputContext: input.request.inputContext,
-      toolUses: input.accumulatedToolUses,
-      toolResults: input.accumulatedToolResults,
-      providerStates: input.accumulatedProviderStates,
-    }),
+    inputContext: input.buildContinuationInputContext
+      ? await input.buildContinuationInputContext(contextInput)
+      : buildModelStepInputContextFromSources(contextInput),
     createdAt: input.createdAt,
   };
 }
