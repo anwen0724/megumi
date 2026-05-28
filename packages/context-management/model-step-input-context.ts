@@ -14,7 +14,7 @@ import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { buildModelInputContext } from './model-input-context-builder';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
-const AGENT_INSTRUCTION_WRAPPER = 'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.';
+const AGENT_INSTRUCTION_WRAPPER = 'Follow these agent instructions:';
 
 export interface CreateModelStepInputContextIdInput {
   stepId: string;

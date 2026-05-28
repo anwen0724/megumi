@@ -306,7 +306,7 @@ describe('buildModelStepInputContextFromSources', () => {
       }],
     });
     expect(context.parts[0]?.text).toBe([
-      'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+      'Follow these agent instructions:',
       '',
       '# Project Rules\nUse tests.',
     ].join('\n'));
@@ -389,7 +389,7 @@ describe('buildModelStepInputContextFromSources', () => {
       kind: 'instruction',
       instructionKind: 'project',
       text: [
-        'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+        'Follow these agent instructions:',
         '',
         '',
       ].join('\n'),

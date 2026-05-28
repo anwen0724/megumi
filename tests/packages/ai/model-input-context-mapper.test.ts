@@ -421,7 +421,7 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
           kind: 'instruction',
           instructionKind: 'project',
           text: [
-            'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+            'Follow these agent instructions:',
             '',
             '# Project rules',
           ].join('\n'),
@@ -447,7 +447,7 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
     expect(mapModelInputContextToOpenAICompatibleMessages(context)).toEqual([{
       role: 'system',
       content: [
-        'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+        'Follow these agent instructions:',
         '',
         '# Project rules',
       ].join('\n'),
