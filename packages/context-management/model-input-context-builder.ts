@@ -69,7 +69,7 @@ function selectedSourcesForParts(parts: ModelInputContextPart[]): ModelInputCont
       if (!selectedSources.has(sourceRef.sourceId)) {
         selectedSources.set(sourceRef.sourceId, {
           sourceId: sourceRef.sourceId,
-          reason: part.kind,
+          reason: part.truncation?.reason ?? part.kind,
         });
       }
     }

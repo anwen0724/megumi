@@ -35,6 +35,7 @@ import { ArtifactService } from './services/artifact.service';
 import { createMemoryService } from './services/memory.service';
 import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
 import { TimelineHistoryCommitProjectorService } from './services/timeline-history-commit-projector.service';
+import { AgentInstructionSourceService } from './services/agent-instruction-source.service';
 import fs from 'fs-extra';
 import { BrowserWindow, dialog } from 'electron';
 import { ProjectRepository } from '@megumi/db/repos/project.repo';
@@ -87,6 +88,7 @@ const providerRuntimeService = new ProviderRuntimeService({
   configCredentials,
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
+const agentInstructionSourceService = new AgentInstructionSourceService();
 const timelineMessageRepository = new TimelineMessageRepository(database);
 const chatStreamSink = new TimelineHistoryCommitProjectorService({
   repository: timelineMessageRepository,
@@ -118,6 +120,7 @@ const sessionRunService = new SessionRunService({
   runModeService: runModeService,
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
+  agentInstructionSourceService,
   toolRuntimeFactory,
   toolDefinitionProvider: toolRegistry,
   chatStreamEventSink: chatStreamSink,

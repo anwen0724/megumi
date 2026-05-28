@@ -401,6 +401,86 @@ describe('run model tool loop', () => {
     ]));
   });
 
+  it('uses continuation input-context builder before the next model step', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    let callbackCallCount = 0;
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      aiPort: {
+        async *streamModelStep({ request }) {
+          requests.push(request);
+          if (requests.length === 1) {
+            yield toolUseCreatedEvent({
+              eventId: 'event-tool-use',
+              sequence: 1,
+              stepId: request.stepId,
+              modelStepId: String(request.modelStepId),
+            });
+            yield modelStepCompletedEvent({
+              eventId: 'event-model-step-completed',
+              sequence: 2,
+              stepId: request.stepId,
+              modelStepId: String(request.modelStepId),
+            });
+            return;
+          }
+          yield assistantCompletedEvent({
+            eventId: 'event-final',
+            sequence: 1,
+            stepId: request.stepId,
+          });
+        },
+      },
+      toolUseHandler: {
+        async handleToolUses() {
+          return {
+            toolResults: [{
+              toolResultId: 'tool-result:1',
+              toolUseId: 'call-read',
+              runId: 'run-1',
+              kind: 'success',
+              textContent: 'ok',
+              redactionState: 'none',
+              createdAt: '2026-05-17T00:00:03.000Z',
+            }],
+          };
+        },
+      },
+      ids: {
+        nextEventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+      buildContinuationInputContext: async (input) => {
+        callbackCallCount += 1;
+        return buildModelStepInputContextFromSources({
+          ...input,
+          instructionSources: [{
+            sourceId: 'project-instruction:AGENTS.md',
+            sourceKind: 'project_instruction',
+            status: 'included',
+            sourceUri: 'project://AGENTS.md',
+            relativePath: 'AGENTS.md',
+            text: '# refreshed',
+            loadedAt: input.builtAt,
+            sizeBytes: 11,
+            includedBytes: 11,
+            hardCapBytes: 65536,
+            truncated: false,
+          }],
+        });
+      },
+    }));
+
+    expect(events.length).toBeGreaterThan(0);
+    expect(callbackCallCount).toBe(1);
+    expect(requests[1]?.inputContext.parts[0]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'project',
+      text: expect.stringContaining('# refreshed'),
+    });
+  });
+
   it('stops before requesting another model step when tool handling returns pending approvals', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const continuations: PendingToolApprovalContinuation[] = [];
