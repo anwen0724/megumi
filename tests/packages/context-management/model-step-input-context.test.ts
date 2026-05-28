@@ -164,10 +164,10 @@ describe('buildModelStepInputContextFromSources', () => {
     });
 
     expect(context.parts.map((part) => part.kind)).toEqual([
-      'session',
-      'session',
       'runtime_constraint',
       'runtime_constraint',
+      'session',
+      'session',
       'tool_continuation',
       'tool_continuation',
       'tool_continuation',
@@ -245,5 +245,310 @@ describe('buildModelStepInputContextFromSources', () => {
         providerStateText: 'Need to read package.json before answering.',
       }),
     ]));
+  });
+
+  it('places project instruction before runtime, session, tool, and current turn parts', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:project-instruction',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        status: 'included',
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: '# Project Rules\nUse tests.',
+        loadedAt: builtAt,
+        sizeBytes: 26,
+        includedBytes: 26,
+        hardCapBytes: 65536,
+        truncated: false,
+      }],
+      runContext: runContext(),
+      historyMessages: [message({ messageId: 'message:history', content: 'Earlier task.' })],
+      currentMessage: message({ messageId: 'message:current', content: 'Continue.' }),
+      toolUses: [toolUse()],
+      toolResults: [toolResult()],
+      providerStates: [providerState()],
+    });
+
+    expect(context.parts.map((part) => part.kind)).toEqual([
+      'instruction',
+      'runtime_constraint',
+      'session',
+      'tool_continuation',
+      'tool_continuation',
+      'tool_continuation',
+      'current_turn',
+    ]);
+    expect(context.parts[0]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'project',
+      priority: 100,
+      budgetStatus: 'included_full',
+      sourceRefs: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        sourceUri: 'project://AGENTS.md',
+        loadedAt: builtAt,
+        metadata: {
+          relativePath: 'AGENTS.md',
+          status: 'included',
+          sizeBytes: 26,
+          includedBytes: 26,
+          hardCapBytes: 65536,
+          truncated: false,
+        },
+      }],
+    });
+    expect(context.parts[0]?.text).toBe([
+      'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+      '',
+      '# Project Rules\nUse tests.',
+    ].join('\n'));
+    expect(context.trace.selectedSources).toContainEqual({
+      sourceId: 'project-instruction:AGENTS.md',
+      reason: 'instruction',
+    });
+  });
+
+  it('marks truncated project instruction parts with truncation metadata', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:project-instruction-truncated',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        status: 'included_truncated',
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: 'a'.repeat(65536),
+        loadedAt: builtAt,
+        sizeBytes: 70000,
+        includedBytes: 65536,
+        hardCapBytes: 65536,
+        truncated: true,
+        reason: 'project_instruction_hard_cap_exceeded',
+      }],
+      currentMessage: message({ messageId: 'message:current' }),
+    });
+
+    expect(context.parts[0]).toMatchObject({
+      kind: 'instruction',
+      budgetStatus: 'included_truncated',
+      truncation: {
+        reason: 'project_instruction_hard_cap_exceeded',
+      },
+    });
+    expect(context.parts[0]?.sourceRefs[0]?.metadata).toMatchObject({
+      status: 'included_truncated',
+      sizeBytes: 70000,
+      includedBytes: 65536,
+      hardCapBytes: 65536,
+      truncated: true,
+    });
+    expect(context.trace.selectedSources).toContainEqual({
+      sourceId: 'project-instruction:AGENTS.md',
+      reason: 'project_instruction_hard_cap_exceeded',
+    });
+  });
+
+  it('keeps included empty project instructions model-visible and traceable', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:project-instruction-empty',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        status: 'included',
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: '',
+        loadedAt: builtAt,
+        sizeBytes: 0,
+        includedBytes: 0,
+        hardCapBytes: 65536,
+        truncated: false,
+      }],
+    });
+
+    expect(context.parts).toHaveLength(1);
+    expect(context.parts[0]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'project',
+      text: [
+        'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.',
+        '',
+        '',
+      ].join('\n'),
+      sourceRefs: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        sourceUri: 'project://AGENTS.md',
+        loadedAt: builtAt,
+        metadata: {
+          relativePath: 'AGENTS.md',
+          status: 'included',
+          sizeBytes: 0,
+          includedBytes: 0,
+          hardCapBytes: 65536,
+          truncated: false,
+        },
+      }],
+    });
+    expect(context.trace.selectedSources).toContainEqual({
+      sourceId: 'project-instruction:AGENTS.md',
+      reason: 'instruction',
+    });
+  });
+
+  it('records missing, unavailable, and read-failed instruction sources as excluded trace only', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:project-instruction-excluded',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [
+        {
+          sourceId: 'project-instruction:no-project-root',
+          sourceKind: 'project_instruction',
+          status: 'unavailable',
+          loadedAt: builtAt,
+          reason: 'agent_instruction_no_project_root',
+        },
+        {
+          sourceId: 'project-instruction:AGENTS.md',
+          sourceKind: 'project_instruction',
+          status: 'missing',
+          sourceUri: 'project://AGENTS.md',
+          relativePath: 'AGENTS.md',
+          loadedAt: builtAt,
+          reason: 'agent_instruction_missing',
+        },
+        {
+          sourceId: 'project-instruction:AGENTS.md:read-failed',
+          sourceKind: 'project_instruction',
+          status: 'read_failed',
+          sourceUri: 'project://AGENTS.md',
+          relativePath: 'AGENTS.md',
+          loadedAt: builtAt,
+          reason: 'agent_instruction_read_failed',
+        },
+      ],
+      currentMessage: message({ messageId: 'message:current' }),
+    });
+
+    expect(context.parts.map((part) => part.kind)).toEqual(['current_turn']);
+    expect(context.trace.excludedSources).toEqual([
+      {
+        sourceRef: {
+          sourceId: 'project-instruction:no-project-root',
+          sourceKind: 'project_instruction',
+          loadedAt: builtAt,
+          metadata: {
+            status: 'unavailable',
+          },
+        },
+        reason: 'agent_instruction_no_project_root',
+      },
+      {
+        sourceRef: {
+          sourceId: 'project-instruction:AGENTS.md',
+          sourceKind: 'project_instruction',
+          sourceUri: 'project://AGENTS.md',
+          loadedAt: builtAt,
+          metadata: {
+            relativePath: 'AGENTS.md',
+            status: 'missing',
+          },
+        },
+        reason: 'agent_instruction_missing',
+      },
+      {
+        sourceRef: {
+          sourceId: 'project-instruction:AGENTS.md:read-failed',
+          sourceKind: 'project_instruction',
+          sourceUri: 'project://AGENTS.md',
+          loadedAt: builtAt,
+          metadata: {
+            relativePath: 'AGENTS.md',
+            status: 'read_failed',
+          },
+        },
+        reason: 'agent_instruction_read_failed',
+      },
+    ]);
+    expect(JSON.stringify(context)).not.toContain('raw-stack');
+  });
+
+  it('refreshes project instruction parts when rebuilding from a base input context', () => {
+    const baseInputContext = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:project-instruction-base',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        status: 'included',
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: '# Old rules',
+        loadedAt: builtAt,
+        sizeBytes: 11,
+        includedBytes: 11,
+        hardCapBytes: 65536,
+        truncated: false,
+      }],
+      currentMessage: message({ messageId: 'message:current' }),
+    });
+
+    const context = buildModelStepInputContextFromSources({
+      baseInputContext,
+      contextId: 'model-input-context:project-instruction-continuation',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:2',
+      buildReason: 'tool_continuation',
+      builtAt,
+      instructionSources: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        status: 'included',
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: '# New rules',
+        loadedAt: '2026-05-27T00:01:00.000Z',
+        sizeBytes: 11,
+        includedBytes: 11,
+        hardCapBytes: 65536,
+        truncated: false,
+      }],
+      toolUses: [toolUse()],
+    });
+
+    expect(context.parts.map((part) => part.kind)).toEqual([
+      'instruction',
+      'current_turn',
+      'tool_continuation',
+    ]);
+    expect(JSON.stringify(context.parts)).toContain('# New rules');
+    expect(JSON.stringify(context.parts)).not.toContain('# Old rules');
   });
 });

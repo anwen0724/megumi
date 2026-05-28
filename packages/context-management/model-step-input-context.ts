@@ -1,6 +1,8 @@
 import type { JsonObject, JsonValue } from '@megumi/shared/json';
 import type {
+  AgentInstructionSourceSnapshot,
   ModelInputContext,
+  ModelInputContextExcludedSource,
   ModelInputContextPart,
   ModelInputContextSourceRef,
 } from '@megumi/shared/model-input-context-contracts';
@@ -12,6 +14,7 @@ import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { buildModelInputContext } from './model-input-context-builder';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
+const PROJECT_INSTRUCTION_WRAPPER = 'The following are project-level agent instructions from the project root AGENTS.md. Follow them when working in this project.';
 
 export interface CreateModelStepInputContextIdInput {
   stepId: string;
@@ -32,6 +35,7 @@ export function createModelStepInputContextId(input: CreateModelStepInputContext
 
 export interface BuildModelStepInputContextFromSourcesInput {
   baseInputContext?: ModelInputContext;
+  instructionSources?: AgentInstructionSourceSnapshot[];
   contextId: string;
   sessionId: string;
   runId: string;
@@ -55,14 +59,22 @@ export function buildModelStepInputContextFromSources(
   input: BuildModelStepInputContextFromSourcesInput,
 ): ModelInputContext {
   const toolParts = toolContinuationParts(input);
+  const instructionSources = input.instructionSources ?? [];
+  const nextInstructionParts = instructionParts(instructionSources);
+  const excludedSources = instructionExcludedSources(instructionSources);
   const parts: ModelInputContextPart[] = input.baseInputContext
     ? [
-        ...input.baseInputContext.parts.filter((part) => part.kind !== 'tool_continuation'),
+        ...nextInstructionParts,
+        ...input.baseInputContext.parts.filter((part) => (
+          part.kind !== 'tool_continuation'
+          && !(input.instructionSources && part.kind === 'instruction' && part.instructionKind === 'project')
+        )),
         ...toolParts,
       ]
     : [
-        ...sessionParts(input.historyMessages ?? [], input.builtAt),
+        ...nextInstructionParts,
         ...runtimeConstraintParts(input),
+        ...sessionParts(input.historyMessages ?? [], input.builtAt),
         ...toolParts,
         ...(input.currentMessage ? [currentTurnPart(input.currentMessage, input.builtAt)] : []),
       ];
@@ -84,7 +96,79 @@ export function buildModelStepInputContextFromSources(
       ?? input.runContext?.budget.availableInputTokens
       ?? input.baseInputContext?.budget.availableInputTokens,
     parts,
+    excludedSources,
   });
+}
+
+function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInputContextPart[] {
+  return sources
+    .filter((source) => source.status === 'included' || source.status === 'included_truncated')
+    .map((source): ModelInputContextPart => ({
+      partId: `part:instruction:project:${source.sourceId}`,
+      kind: 'instruction',
+      instructionKind: 'project',
+      text: `${PROJECT_INSTRUCTION_WRAPPER}\n\n${source.text}`,
+      sourceRefs: [instructionSourceRef(source)],
+      priority: 100,
+      budgetStatus: source.status === 'included_truncated' ? 'included_truncated' : 'included_full',
+      ...(source.status === 'included_truncated'
+        ? {
+            truncation: {
+              reason: source.reason ?? 'project_instruction_hard_cap_exceeded',
+            },
+          }
+        : {}),
+      metadata: {
+        instructionSourceStatus: source.status,
+      },
+    }));
+}
+
+function instructionExcludedSources(sources: AgentInstructionSourceSnapshot[]): ModelInputContextExcludedSource[] {
+  return sources
+    .filter((source) => source.status !== 'included' && source.status !== 'included_truncated')
+    .map((source) => ({
+      sourceRef: instructionSourceRef(source),
+      reason: source.reason ?? reasonForInstructionSourceStatus(source.status),
+    }));
+}
+
+function instructionSourceRef(source: AgentInstructionSourceSnapshot): ModelInputContextSourceRef {
+  return {
+    sourceId: source.sourceId,
+    sourceKind: 'project_instruction',
+    ...(source.sourceUri ? { sourceUri: source.sourceUri } : {}),
+    loadedAt: source.loadedAt,
+    metadata: cleanMetadata({
+      relativePath: source.relativePath,
+      status: source.status,
+      sizeBytes: source.sizeBytes,
+      includedBytes: source.includedBytes,
+      hardCapBytes: source.hardCapBytes,
+      truncated: source.truncated,
+    }),
+  };
+}
+
+function reasonForInstructionSourceStatus(status: AgentInstructionSourceSnapshot['status']): string {
+  switch (status) {
+    case 'missing':
+      return 'agent_instruction_missing';
+    case 'unavailable':
+      return 'agent_instruction_no_project_root';
+    case 'read_failed':
+      return 'agent_instruction_read_failed';
+    case 'included_truncated':
+      return 'project_instruction_hard_cap_exceeded';
+    case 'included':
+      return 'instruction';
+  }
+}
+
+function cleanMetadata(input: Record<string, string | number | boolean | undefined>): JsonObject {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  ) as JsonObject;
 }
 
 function sessionParts(messages: SessionMessage[], builtAt: string): ModelInputContextPart[] {
