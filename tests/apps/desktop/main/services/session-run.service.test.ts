@@ -15,7 +15,6 @@ import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
-import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import type { ApprovalRequest, ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -215,6 +214,7 @@ function createServiceWithModelStepStream(
   toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
   timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   agentInstructionSourceService?: SessionRunServiceOptions['agentInstructionSourceService'];
+  sessionContextInputService?: SessionRunServiceOptions['sessionContextInputService'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -229,6 +229,7 @@ function createServiceWithModelStepStream(
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
     ...(options?.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
     ...(options?.agentInstructionSourceService ? { agentInstructionSourceService: options.agentInstructionSourceService } : {}),
+    ...(options?.sessionContextInputService ? { sessionContextInputService: options.sessionContextInputService } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         callIndex += 1;
@@ -913,84 +914,96 @@ describe('SessionRunService', () => {
     expect(requests[0]?.toolDefinitions).toEqual(toolDefinitions);
   });
 
-  it('builds model context from committed timeline history and preserves failed turns as status notes', async () => {
+  it('builds session message model input from persisted SessionContextInput', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const failedUser: TimelineMessage = {
-      messageId: 'message-user-failed',
-      role: 'user',
-      projectId: 'workspace-1',
-      sessionId: 'session-1',
-      runId: 'run-failed',
-      createdAt: '2026-05-17T00:00:00.000Z',
-      turnOrder: 0,
-      blocks: [{
-        blockId: 'user-text-failed',
-        kind: 'user_text',
-        text: '能为我写一个你的自我介绍文档放在根目录下面吗？',
-        format: 'plain',
-      }],
-    };
-    const failedAssistant: TimelineMessage = {
-      messageId: 'message-assistant-failed',
-      role: 'assistant',
-      projectId: 'workspace-1',
-      sessionId: 'session-1',
-      runId: 'run-failed',
-      createdAt: '2026-05-17T00:00:01.000Z',
-      turnOrder: 1,
-      blocks: [{
-        blockId: 'process-failed',
-        kind: 'process_disclosure',
-        runId: 'run-failed',
-        status: 'failed',
-        items: [{
-          itemId: 'tool-write',
-          kind: 'tool_activity',
-          toolUseId: 'tool-use-write',
-          toolName: 'write_file',
-          inputSummary: 'ABOUT_MEGUMI.md',
-          resultSummary: 'Created ABOUT_MEGUMI.md.',
-          status: 'succeeded',
-        }, {
-          itemId: 'error-provider',
-          kind: 'error_activity',
-          errorCode: 'provider_network_request_failed',
-          errorMessage: 'Provider network request failed.',
-        }],
-      }],
-    };
-    const service = createServiceWithModelStepStream([
-      assistantOutputCompletedEvent(1),
-    ], {
-      timelineMessageRepository: {
-        listCommittedMessagesBySession: () => ({
-          messages: [failedUser, failedAssistant],
-          diagnostics: [],
-        }),
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const service = new SessionRunService({
+      repository,
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+          yield assistantOutputCompletedEvent(1);
+        },
+        cancelModelStep: () => true,
       },
-      onRequest: (request) => requests.push(request),
+      clock: { now: () => '2026-05-28T00:01:00.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-current',
+        stepId: () => 'step-current',
+        messageId: () => 'message-current',
+      },
     });
-    service.createSession({
+
+    repository.saveSession({
+      sessionId: 'session-1',
       title: 'Session',
       workspaceId: 'workspace-1',
       workspacePath: 'C:/all/work/study/megumi',
-      createdAt: '2026-05-17T00:00:00.000Z',
+      status: 'active',
+      summary: 'Session summary should be injected as session_summary.',
+      createdAt: '2026-05-28T00:00:00.000Z',
+      updatedAt: '2026-05-28T00:00:00.000Z',
+    });
+    repository.saveMessage({
+      messageId: 'message-prev-user',
+      sessionId: 'session-1',
+      runId: 'run-prev',
+      role: 'user',
+      content: 'Previous persisted user message.',
+      status: 'completed',
+      createdAt: '2026-05-28T00:00:01.000Z',
+      completedAt: '2026-05-28T00:00:01.000Z',
+    });
+    repository.saveMessage({
+      messageId: 'message-prev-assistant',
+      sessionId: 'session-1',
+      runId: 'run-prev',
+      role: 'assistant',
+      content: 'Previous persisted assistant answer.',
+      status: 'completed',
+      createdAt: '2026-05-28T00:00:02.000Z',
+      completedAt: '2026-05-28T00:00:02.000Z',
+    });
+    repository.saveRun({
+      runId: 'run-prev',
+      sessionId: 'session-1',
+      mode: 'default',
+      goal: 'Previous turn',
+      status: 'failed',
+      createdAt: '2026-05-28T00:00:03.000Z',
+      error: {
+        code: 'runtime_unknown',
+        message: 'Previous provider failure.',
+        severity: 'error',
+        retryable: false,
+        source: 'provider',
+      },
     });
 
-    const longRequestId = `ipc-${'c'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: longRequestId,
+      requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        messages: [{
-          id: 'message-local-user',
-          role: 'user',
-          content: '请再写一份你对我的印象的文档',
-          createdAt: '2026-05-17T00:00:02.000Z',
-        }],
-        createdAt: '2026-05-17T00:00:02.000Z',
+        messages: [
+          {
+            id: 'renderer-history-should-not-be-used',
+            role: 'assistant',
+            content: 'Renderer-only timeline text must not enter model input.',
+            createdAt: '2026-05-28T00:00:30.000Z',
+          },
+          {
+            id: 'message-local-user',
+            role: 'user',
+            content: 'Continue from persisted context.',
+            createdAt: '2026-05-28T00:01:00.000Z',
+          },
+        ],
+        createdAt: '2026-05-28T00:01:00.000Z',
       },
     });
     for await (const _event of result.events) {
@@ -1000,18 +1013,31 @@ describe('SessionRunService', () => {
     expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'session',
-        text: expect.stringContaining('能为我写一个你的自我介绍文档放在根目录下面吗？'),
+        sessionKind: 'session_summary',
+        text: 'Session summary should be injected as session_summary.',
       }),
       expect.objectContaining({
         kind: 'session',
-        text: expect.stringContaining('Previous turn failed after tool activity'),
+        sessionKind: 'session_history',
+        text: '[user] Previous persisted user message.',
+      }),
+      expect.objectContaining({
+        kind: 'session',
+        sessionKind: 'session_history',
+        text: '[assistant] Previous persisted assistant answer.',
+      }),
+      expect.objectContaining({
+        kind: 'session',
+        sessionKind: 'session_runtime_fact',
+        text: '[run_failed] Previous run failed before a final answer. Error: Previous provider failure.',
       }),
       expect.objectContaining({
         kind: 'current_turn',
         role: 'user',
-        text: '请再写一份你对我的印象的文档',
+        text: 'Continue from persisted context.',
       }),
     ]));
+    expect(JSON.stringify(requests[0]?.inputContext.parts)).not.toContain('Renderer-only timeline text');
   });
 
   it('continues session message runs through tool results before completing with final assistant output', async () => {

@@ -33,6 +33,7 @@ import type {
 import type {
   AgentInstructionSourceSnapshot,
 } from '@megumi/shared/model-input-context-contracts';
+import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
 import {
   isPermissionMode,
@@ -55,12 +56,6 @@ import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { createRuntimeEvent, createToolResultCreatedEvent } from '@megumi/shared/runtime-event-factory';
-import type {
-  AnswerTextBlock,
-  ProcessDisclosureBlock,
-  ProcessDisclosureItem,
-  TimelineMessage,
-} from '@megumi/shared/timeline-message-blocks';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
@@ -73,6 +68,10 @@ import {
   AgentInstructionSourceService,
   type LoadInstructionSourcesInput,
 } from './agent-instruction-source.service';
+import {
+  SessionContextInputService,
+  type BuildSessionContextInputFromRepositoryInput,
+} from './session-context-input.service';
 
 export interface SessionRunServiceClock {
   now(): string;
@@ -122,6 +121,10 @@ export interface SessionRunAgentInstructionSourceService {
   loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
 }
 
+export interface SessionRunSessionContextInputService {
+  buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
+}
+
 interface ApprovalContinuationGroup {
   groupId: string;
   request: ModelStepRuntimeRequest;
@@ -150,6 +153,7 @@ export interface SessionRunServiceOptions {
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
+  sessionContextInputService?: SessionRunSessionContextInputService;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
   timelineMessageRepository?: {
@@ -210,6 +214,7 @@ export class SessionRunService {
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
+  private readonly sessionContextInputService: SessionRunSessionContextInputService;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly chatStreamEventSink?: ChatStreamEventSink;
   private readonly timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
@@ -232,6 +237,8 @@ export class SessionRunService {
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.agentInstructionSourceService = options.agentInstructionSourceService;
+    this.sessionContextInputService = options.sessionContextInputService
+      ?? new SessionContextInputService({ repository: this.repository });
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.timelineMessageRepository = options.timelineMessageRepository;
     this.clock = options.clock ?? defaultClock;
@@ -420,18 +427,12 @@ export class SessionRunService {
           providerCapabilitySummary: { supportsToolUse: true },
         })
       : undefined;
-    const modelContextMessages = this.timelineMessageRepository
-      ? [
-          ...timelineMessagesToModelContext(
-            this.timelineMessageRepository.listCommittedMessagesBySession({
-              projectId: timelineProjectIdForSession(session),
-              sessionId: String(session.sessionId),
-            }).messages,
-            String(session.sessionId),
-          ),
-          userMessage,
-        ]
-      : toSessionMessagesForModelStep(input.payload, session.sessionId, runId, userMessage);
+    const sessionContext = this.sessionContextInputService.buildSessionContextInput({
+      sessionId: String(session.sessionId),
+      currentRunId: String(runId),
+      currentMessageId: String(userMessage.messageId),
+      builtAt: createdAt,
+    });
     const instructionSources = await this.loadInstructionSourcesForModelStep({
       ...(session.workspacePath ? { projectRoot: session.workspacePath } : {}),
       loadedAt: createdAt,
@@ -447,7 +448,7 @@ export class SessionRunService {
       buildReason: 'initial_model_step',
       builtAt: createdAt,
       currentMessage: userMessage,
-      historyMessages: modelContextMessages.filter((message) => message.messageId !== userMessage.messageId),
+      sessionContext,
       instructionSources,
       ...(context ? { runContext: context } : {}),
       ...(modeSnapshot ? {
@@ -1366,143 +1367,6 @@ function findLastUserChatMessage(
   return undefined;
 }
 
-function timelineProjectIdForSession(session: Session): string {
-  return String(session.workspaceId ?? session.sessionId);
-}
-
-function timelineMessagesToModelContext(
-  messages: TimelineMessage[],
-  sessionId: string,
-): SessionMessage[] {
-  return messages.flatMap((message): SessionMessage[] => {
-    if (message.role === 'user') {
-      const text = message.blocks
-        .filter((block) => block.kind === 'user_text')
-        .map((block) => block.text)
-        .join('\n')
-        .trim();
-
-      return text ? [{
-        messageId: String(message.messageId),
-        sessionId,
-        ...(message.runId ? { runId: String(message.runId) } : {}),
-        role: 'user',
-        content: text,
-        status: 'completed',
-        createdAt: message.createdAt,
-        completedAt: message.updatedAt ?? message.createdAt,
-      }] : [];
-    }
-
-    const answerMessages = assistantAnswerContextMessages(message, sessionId);
-    const statusNote = assistantStatusNote(message);
-    return statusNote ? [
-      ...answerMessages,
-      {
-        messageId: `context-status:${message.messageId}`,
-        sessionId,
-        runId: String(message.runId),
-        role: 'assistant',
-        content: statusNote,
-        status: 'completed',
-        createdAt: message.updatedAt ?? message.createdAt,
-        completedAt: message.updatedAt ?? message.createdAt,
-      },
-    ] : answerMessages;
-  });
-}
-
-function assistantAnswerContextMessages(
-  message: Extract<TimelineMessage, { role: 'assistant' }>,
-  sessionId: string,
-): SessionMessage[] {
-  return message.blocks
-    .filter((block): block is AnswerTextBlock => block.kind === 'answer_text' && block.text.trim().length > 0)
-    .filter((block) => block.status === 'completed' || block.status === 'failed' || block.status === 'cancelled_partial')
-    .map((block) => ({
-      messageId: String(block.textId),
-      sessionId,
-      runId: String(message.runId),
-      role: 'assistant' as const,
-      content: block.text,
-      status: block.status === 'completed' ? 'completed' as const : block.status === 'failed' ? 'failed' as const : 'cancelled' as const,
-      createdAt: block.createdAt ?? message.createdAt,
-      completedAt: block.updatedAt ?? message.updatedAt ?? message.createdAt,
-    }));
-}
-
-function assistantStatusNote(message: Extract<TimelineMessage, { role: 'assistant' }>): string | undefined {
-  const process = message.blocks
-    .filter((block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure')
-    .find((block) => block.status === 'failed' || block.status === 'cancelled');
-  const partialAnswer = message.blocks
-    .filter((block): block is AnswerTextBlock => block.kind === 'answer_text')
-    .find((block) => block.status === 'failed' || block.status === 'cancelled_partial');
-
-  if (process?.status === 'failed') {
-    return formatFailedTurnStatusNote(process);
-  }
-  if (process?.status === 'cancelled') {
-    return '[Previous turn cancelled by user. Partial work should not be continued unless requested.]';
-  }
-  if (partialAnswer) {
-    return '[Previous turn interrupted. The preceding assistant answer is partial.]';
-  }
-
-  return undefined;
-}
-
-function formatFailedTurnStatusNote(process: ProcessDisclosureBlock): string {
-  const tool = firstSucceededTool(process.items);
-  const error = firstError(process.items);
-  const afterTool = tool ? ` after tool activity: ${tool}` : '';
-  const errorText = error ? ` Error: ${error}` : '';
-  return `[Previous turn failed${afterTool}. Final answer unavailable.${errorText}]`;
-}
-
-function firstSucceededTool(items: ProcessDisclosureItem[]): string | undefined {
-  const tool = items.find((item) => item.kind === 'tool_activity' && item.status === 'succeeded');
-  if (!tool || tool.kind !== 'tool_activity') {
-    return undefined;
-  }
-
-  return [tool.toolName, tool.inputSummary].filter(Boolean).join(' ');
-}
-
-function firstError(items: ProcessDisclosureItem[]): string | undefined {
-  const error = items.find((item) => item.kind === 'error_activity');
-  return error?.kind === 'error_activity' ? error.errorMessage : undefined;
-}
-
-function toSessionMessagesForModelStep(
-  payload: SessionMessageSendPayload,
-  sessionId: string,
-  runId: string,
-  persistedUserMessage: SessionMessage,
-): SessionMessage[] {
-  const messages = payload.messages ?? (payload.message
-    ? [{ ...payload.message, role: 'user' as const }]
-    : []);
-  const lastUserMessage = findLastUserChatMessage(messages);
-
-  return messages.map((message) => {
-    if (message === lastUserMessage) {
-      return persistedUserMessage;
-    }
-
-    return {
-      messageId: message.id,
-      sessionId,
-      runId,
-      role: toSessionMessageRole(message.role),
-      content: message.content,
-      status: 'completed',
-      createdAt: message.createdAt,
-      completedAt: message.createdAt,
-    };
-  });
-}
-
 function getAssistantCompletedContent(payload: RuntimeEvent['payload']): string {
   if (!isObjectRecord(payload)) {
     return '';
@@ -1622,12 +1486,6 @@ function toPermissionModeSnapshot(
     source: mode.source ?? 'system',
     createdAt: 'createdAt' in value ? value.createdAt : requestCreatedAt,
   };
-}
-
-function toSessionMessageRole(
-  role: SessionMessageSendHistoryMessage['role'],
-): SessionMessage['role'] {
-  return role === 'tool' ? 'host' : role;
 }
 
 function createPermissionModeRunMode(permissionMode: PermissionMode): RunMode {
