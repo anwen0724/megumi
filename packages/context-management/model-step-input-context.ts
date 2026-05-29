@@ -9,10 +9,7 @@ import type {
 import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
-import type {
-  SessionContextInput,
-  SessionHistoryEntryStatus,
-} from '@megumi/shared/session-context-contracts';
+import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { buildModelInputContext } from './model-input-context-builder';
@@ -49,7 +46,6 @@ export interface BuildModelStepInputContextFromSourcesInput {
   builtAt: string;
   currentMessage?: SessionMessage;
   sessionContext?: SessionContextInput;
-  historyMessages?: SessionMessage[];
   runContext?: RunContext;
   modeSnapshot?: PermissionModeSnapshot;
   modeSnapshotRef?: string;
@@ -69,7 +65,7 @@ export function buildModelStepInputContextFromSources(
   const nextInstructionParts = instructionParts(instructionSources);
   const instructionExcludedSources = instructionExcludedSourcesFor(input.instructionSources ?? []);
   const sessionContextResult = buildSessionContextParts({
-    input: input.sessionContext ?? sessionContextFromLegacyHistoryMessages(input.historyMessages ?? [], input.builtAt),
+    input: input.sessionContext,
     builtAt: input.builtAt,
   });
   const excludedSources = [
@@ -183,46 +179,6 @@ function cleanMetadata(input: Record<string, string | number | boolean | undefin
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
   ) as JsonObject;
-}
-
-function sessionContextFromLegacyHistoryMessages(
-  messages: SessionMessage[],
-  builtAt: string,
-): SessionContextInput | undefined {
-  const historyEntries = messages
-    .filter(isLegacyChatHistoryMessage)
-    .filter((message) => message.content.trim().length > 0)
-    .map((message) => ({
-      entryId: String(message.messageId),
-      role: message.role,
-      text: message.content,
-      status: legacyHistoryStatus(message.status),
-      sourceRef: sessionMessageSourceRef(message, builtAt),
-      createdAt: message.createdAt,
-      ...(message.completedAt ? { completedAt: message.completedAt } : {}),
-    }));
-
-  return historyEntries.length > 0 ? { historyEntries } : undefined;
-}
-
-function isLegacyChatHistoryMessage(
-  message: SessionMessage,
-): message is SessionMessage & { role: 'user' | 'assistant' } {
-  return message.role === 'user' || message.role === 'assistant';
-}
-
-function legacyHistoryStatus(status: SessionMessage['status']): SessionHistoryEntryStatus {
-  switch (status) {
-    case 'completed':
-      return 'completed';
-    case 'cancelled':
-      return 'cancelled';
-    case 'failed':
-      return 'failed';
-    case 'created':
-    case 'streaming':
-      return 'interrupted';
-  }
 }
 
 function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputContextPart {

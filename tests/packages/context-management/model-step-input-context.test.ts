@@ -234,17 +234,28 @@ describe('buildModelStepInputContextFromSources', () => {
         messageId: 'message:current',
         content: 'Summarize what changed.',
       }),
-      historyMessages: [
-        message({
-          messageId: 'message:history-user',
-          content: 'Read package.json.',
-        }),
-        message({
-          messageId: 'message:history-assistant',
-          role: 'assistant',
-          content: 'I will inspect package.json.',
-        }),
-      ],
+      sessionContext: {
+        historyEntries: [
+          {
+            entryId: 'message:history-user',
+            role: 'user',
+            text: 'Read package.json.',
+            status: 'completed',
+            sourceRef: sessionSourceRef('session-message:message:history-user'),
+            createdAt: builtAt,
+            completedAt: builtAt,
+          },
+          {
+            entryId: 'message:history-assistant',
+            role: 'assistant',
+            text: 'I will inspect package.json.',
+            status: 'completed',
+            sourceRef: sessionSourceRef('session-message:message:history-assistant'),
+            createdAt: builtAt,
+            completedAt: builtAt,
+          },
+        ],
+      },
       runContext: runContext(),
       modeSnapshot: {
         permissionMode: 'plan',
@@ -289,43 +300,6 @@ describe('buildModelStepInputContextFromSources', () => {
       'provider-state:model-step:1:0',
       'session-message:message:current',
     ]));
-  });
-
-  it('keeps legacy historyMessages shim limited to user and assistant chat history', () => {
-    const context = buildModelStepInputContextFromSources({
-      contextId: 'model-input-context:legacy-history-chat-only',
-      sessionId: 'session:1',
-      runId: 'run:1',
-      stepId: 'step:1',
-      buildReason: 'initial_model_step',
-      builtAt,
-      historyMessages: [
-        message({
-          messageId: 'message:legacy-user',
-          content: 'Keep the compatibility history narrow.',
-        }),
-        message({
-          messageId: 'message:legacy-assistant',
-          role: 'assistant',
-          content: 'Only normal assistant text should remain.',
-        }),
-        message({
-          messageId: 'message:legacy-host-tool-result',
-          role: 'host',
-          content: 'Tool result tool-result:legacy should not become session history.',
-        }),
-      ],
-    });
-
-    const sessionParts = context.parts.filter((part) => part.kind === 'session');
-
-    expect(sessionParts.map((part) => part.text)).toEqual([
-      '[user] Keep the compatibility history narrow.',
-      '[assistant] Only normal assistant text should remain.',
-    ]);
-    expect(JSON.stringify(context.parts)).not.toContain(
-      'Tool result tool-result:legacy should not become session history.',
-    );
   });
 
   it('does not include raw runtime trace metadata as model-visible text', () => {
@@ -489,7 +463,17 @@ describe('buildModelStepInputContextFromSources', () => {
         truncated: false,
       }],
       runContext: runContext(),
-      historyMessages: [message({ messageId: 'message:history', content: 'Earlier task.' })],
+      sessionContext: {
+        historyEntries: [{
+          entryId: 'message:history',
+          role: 'user',
+          text: 'Earlier task.',
+          status: 'completed',
+          sourceRef: sessionSourceRef('session-message:message:history'),
+          createdAt: builtAt,
+          completedAt: builtAt,
+        }],
+      },
       currentMessage: message({ messageId: 'message:current', content: 'Continue.' }),
       toolUses: [toolUse()],
       toolResults: [toolResult()],
