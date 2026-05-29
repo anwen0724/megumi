@@ -9,9 +9,14 @@ import type {
 import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
+import type {
+  SessionContextInput,
+  SessionHistoryEntryStatus,
+} from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
 import { buildModelInputContext } from './model-input-context-builder';
+import { buildSessionContextParts } from './session-context';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
 const AGENT_INSTRUCTION_WRAPPER = 'Follow these agent instructions:';
@@ -43,6 +48,7 @@ export interface BuildModelStepInputContextFromSourcesInput {
   buildReason: string;
   builtAt: string;
   currentMessage?: SessionMessage;
+  sessionContext?: SessionContextInput;
   historyMessages?: SessionMessage[];
   runContext?: RunContext;
   modeSnapshot?: PermissionModeSnapshot;
@@ -61,7 +67,15 @@ export function buildModelStepInputContextFromSources(
   const toolParts = toolContinuationParts(input);
   const instructionSources = input.instructionSources ?? [];
   const nextInstructionParts = instructionParts(instructionSources);
-  const excludedSources = instructionExcludedSources(instructionSources);
+  const instructionExcludedSources = instructionExcludedSourcesFor(input.instructionSources ?? []);
+  const sessionContextResult = buildSessionContextParts({
+    input: input.sessionContext ?? sessionContextFromLegacyHistoryMessages(input.historyMessages ?? [], input.builtAt),
+    builtAt: input.builtAt,
+  });
+  const excludedSources = [
+    ...instructionExcludedSources,
+    ...sessionContextResult.excludedSources,
+  ];
   const parts: ModelInputContextPart[] = input.baseInputContext
     ? [
         ...nextInstructionParts,
@@ -74,7 +88,7 @@ export function buildModelStepInputContextFromSources(
     : [
         ...nextInstructionParts,
         ...runtimeConstraintParts(input),
-        ...sessionParts(input.historyMessages ?? [], input.builtAt),
+        ...sessionContextResult.parts,
         ...toolParts,
         ...(input.currentMessage ? [currentTurnPart(input.currentMessage, input.builtAt)] : []),
       ];
@@ -124,7 +138,7 @@ function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInput
     }));
 }
 
-function instructionExcludedSources(sources: AgentInstructionSourceSnapshot[]): ModelInputContextExcludedSource[] {
+function instructionExcludedSourcesFor(sources: AgentInstructionSourceSnapshot[]): ModelInputContextExcludedSource[] {
   return sources
     .filter((source) => source.status !== 'included' && source.status !== 'included_truncated')
     .map((source) => ({
@@ -171,21 +185,44 @@ function cleanMetadata(input: Record<string, string | number | boolean | undefin
   ) as JsonObject;
 }
 
-function sessionParts(messages: SessionMessage[], builtAt: string): ModelInputContextPart[] {
-  return messages
+function sessionContextFromLegacyHistoryMessages(
+  messages: SessionMessage[],
+  builtAt: string,
+): SessionContextInput | undefined {
+  const historyEntries = messages
+    .filter(isLegacyChatHistoryMessage)
     .filter((message) => message.content.trim().length > 0)
-    .map((message, index): ModelInputContextPart => ({
-      partId: `part:session:${index + 1}:${message.messageId}`,
-      kind: 'session',
-      text: formatSessionMessage(message),
-      sourceRefs: [sessionMessageSourceRef(message, builtAt)],
-      priority: message.status === 'completed' ? 50 : 70,
-      budgetStatus: message.status === 'completed' ? 'included_reduced' : 'included_full',
-      metadata: {
-        role: message.role,
-        status: message.status,
-      },
+    .map((message) => ({
+      entryId: String(message.messageId),
+      role: message.role,
+      text: message.content,
+      status: legacyHistoryStatus(message.status),
+      sourceRef: sessionMessageSourceRef(message, builtAt),
+      createdAt: message.createdAt,
+      ...(message.completedAt ? { completedAt: message.completedAt } : {}),
     }));
+
+  return historyEntries.length > 0 ? { historyEntries } : undefined;
+}
+
+function isLegacyChatHistoryMessage(
+  message: SessionMessage,
+): message is SessionMessage & { role: 'user' | 'assistant' } {
+  return message.role === 'user' || message.role === 'assistant';
+}
+
+function legacyHistoryStatus(status: SessionMessage['status']): SessionHistoryEntryStatus {
+  switch (status) {
+    case 'completed':
+      return 'completed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'failed':
+      return 'failed';
+    case 'created':
+    case 'streaming':
+      return 'interrupted';
+  }
 }
 
 function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputContextPart {
@@ -318,7 +355,7 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
 function sessionMessageSourceRef(
   message: SessionMessage,
   builtAt: string,
-  sourceKind: ModelInputContextSourceRef['sourceKind'] = 'timeline_message',
+  sourceKind: ModelInputContextSourceRef['sourceKind'] = 'session_message',
 ): ModelInputContextSourceRef {
   return {
     sourceId: `session-message:${message.messageId}`,
@@ -356,11 +393,6 @@ function toolResultSourceRef(toolResult: ToolResult): ModelInputContextSourceRef
       redactionState: toolResult.redactionState,
     },
   };
-}
-
-function formatSessionMessage(message: SessionMessage): string {
-  const status = message.status === 'completed' ? '' : ` [status: ${message.status}]`;
-  return `[${message.role}${status}] ${message.content}`;
 }
 
 function toolResultSummary(toolResult: ToolResult): string {
