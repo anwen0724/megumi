@@ -15,7 +15,7 @@ import {
   localSessionFromPersistedSession,
 } from './session-history-mappers';
 
-async function listRuntimeEventsByRun(runs: Run[]): Promise<Record<string, RuntimeEvent[]>> {
+async function loadHydrationRuntimeEvents(runs: Run[]): Promise<Record<string, RuntimeEvent[]>> {
   const pairs = await Promise.all(runs.map(async (run) => {
     const result = await window.megumi.run.events.list(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.run.events.list, { runId: run.runId }),
@@ -116,7 +116,7 @@ export function useSessionHistoryHydration() {
       return;
     }
 
-    const eventsByRun = await listRuntimeEventsByRun(runsResult.data.runs);
+    const eventsByRun = await loadHydrationRuntimeEvents(runsResult.data.runs);
     if (!activeHydrationTarget(sessionId, projectId)) {
       return;
     }
