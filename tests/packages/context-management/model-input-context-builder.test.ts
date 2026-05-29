@@ -46,8 +46,9 @@ function sessionPart(overrides: Partial<SessionPart> = {}): SessionPart {
   return {
     partId: 'part:session:1',
     kind: 'session',
+    sessionKind: 'session_history',
     text: 'Earlier context.',
-    sourceRefs: [sourceRef('timeline-message:1', 'timeline_message')],
+    sourceRefs: [sourceRef('session-message:1', 'session_message')],
     priority: 40,
     budgetStatus: 'included_reduced',
     ...overrides,
