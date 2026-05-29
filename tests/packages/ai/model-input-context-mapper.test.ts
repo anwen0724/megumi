@@ -75,8 +75,9 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
         basePart({
           partId: 'part:session:1',
           kind: 'session',
+          sessionKind: 'session_history',
           text: 'Earlier, the user confirmed the Model Input Context contract.',
-          sourceRefs: [sourceRef('timeline-message:1', 'timeline_message')],
+          sourceRefs: [sourceRef('session-message:1', 'session_message')],
           priority: 60,
           budgetStatus: 'included_reduced',
         } as Partial<ModelInputContextPart>),
