@@ -23,8 +23,14 @@ export const MODEL_INPUT_CONTEXT_SOURCE_KINDS = [
   'current_user_message',
   'run_goal',
   'timeline_message',
+  'session_message',
+  'session_run',
+  'session_step',
+  'session_runtime_fact',
+  'session_summary',
   'tool_use',
   'tool_result',
+  'approval',
   'provider_state',
   'permission_mode',
   'project_boundary',
@@ -55,6 +61,13 @@ export type ModelInputInstructionKind = (typeof MODEL_INPUT_INSTRUCTION_KINDS)[n
 
 export const MODEL_INPUT_CURRENT_TURN_ROLES = ['user', 'host'] as const;
 export type ModelInputCurrentTurnRole = (typeof MODEL_INPUT_CURRENT_TURN_ROLES)[number];
+
+export const MODEL_INPUT_SESSION_PART_KINDS = [
+  'session_history',
+  'session_runtime_fact',
+  'session_summary',
+] as const;
+export type ModelInputSessionPartKind = (typeof MODEL_INPUT_SESSION_PART_KINDS)[number];
 
 export const MODEL_INPUT_RUNTIME_CONSTRAINT_KINDS = [
   'permission_mode',
@@ -242,11 +255,13 @@ export interface CurrentTurnPart extends ModelInputContextPartBase {
 
 export const SessionPartSchema = ModelInputContextPartBaseSchema.extend({
   kind: z.literal('session'),
+  sessionKind: z.enum(MODEL_INPUT_SESSION_PART_KINDS),
   text: NonEmptyTextSchema,
 }).strict();
 
 export interface SessionPart extends ModelInputContextPartBase {
   kind: 'session';
+  sessionKind: ModelInputSessionPartKind;
   text: string;
 }
 

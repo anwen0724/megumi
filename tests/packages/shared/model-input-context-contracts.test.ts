@@ -4,10 +4,12 @@ import {
   MODEL_INPUT_CONTEXT_BUDGET_STATUSES,
   MODEL_INPUT_CONTEXT_PART_KINDS,
   MODEL_INPUT_CONTEXT_SOURCE_KINDS,
+  MODEL_INPUT_SESSION_PART_KINDS,
   ModelInputContextSchema,
   type AgentInstructionSourceSnapshot,
   type ModelInputContext,
 } from '@megumi/shared/model-input-context-contracts';
+import { SessionContextInputSchema, type SessionContextInput } from '@megumi/shared/session-context-contracts';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
 
@@ -52,8 +54,9 @@ describe('ModelInputContext contracts', () => {
         {
           partId: 'part:session:1',
           kind: 'session',
+          sessionKind: 'session_history',
           text: 'Earlier, the user confirmed the spec order.',
-          sourceRefs: [sourceRef('timeline-message:1', 'timeline_message')],
+          sourceRefs: [sourceRef('session-message:1', 'session_message')],
           priority: 50,
           tokenEstimate: 10,
           budgetStatus: 'included_reduced',
@@ -154,6 +157,144 @@ describe('ModelInputContext contracts', () => {
     })).toThrow();
   });
 
+  it('requires session parts to declare their session kind', () => {
+    expect(() => ModelInputContextSchema.parse({
+      contextId: 'model-input-context:session-kind',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      parts: [{
+        partId: 'part:session:missing-kind',
+        kind: 'session',
+        text: 'Earlier context without a semantic session kind.',
+        sourceRefs: [sourceRef('session-message:1', 'session_message')],
+        priority: 50,
+        budgetStatus: 'included_reduced',
+      }],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        inputTokenEstimate: 0,
+        partBudgets: [],
+      },
+      trace: {
+        buildReason: 'test',
+        selectedSources: [],
+        excludedSources: [],
+      },
+      builtAt,
+    })).toThrow();
+  });
+
+  it('parses explicit session context input contracts', () => {
+    const parsed = SessionContextInputSchema.parse({
+      historyEntries: [
+        {
+          entryId: 'history:1',
+          role: 'user',
+          text: 'Do not implement long-term memory in this phase.',
+          status: 'completed',
+          sourceRef: sourceRef('session-message:history-1', 'session_message'),
+          createdAt: builtAt,
+          completedAt: builtAt,
+        },
+        {
+          entryId: 'history:2',
+          role: 'assistant',
+          text: 'We will focus on Session Context.',
+          status: 'completed',
+          sourceRef: sourceRef('session-message:history-2', 'session_message'),
+          createdAt: builtAt,
+          completedAt: builtAt,
+        },
+      ],
+      runtimeFacts: [
+        {
+          factId: 'fact:approval-denied',
+          factKind: 'approval',
+          text: 'User denied write_file for package.json.',
+          sourceRef: sourceRef('approval:1', 'approval'),
+          severity: 'warning',
+          createdAt: builtAt,
+        },
+      ],
+      summaryEntries: [
+        {
+          summaryId: 'summary:1',
+          text: 'Earlier discussion selected short-term context quality as the 07 goal.',
+          sourceRef: sourceRef('session-summary:1', 'session_summary'),
+          createdAt: builtAt,
+        },
+      ],
+      maxHistoryEntries: 8,
+    });
+
+    expect(parsed).toEqual({
+      historyEntries: [
+        {
+          entryId: 'history:1',
+          role: 'user',
+          text: 'Do not implement long-term memory in this phase.',
+          status: 'completed',
+          sourceRef: sourceRef('session-message:history-1', 'session_message'),
+          createdAt: builtAt,
+          completedAt: builtAt,
+        },
+        {
+          entryId: 'history:2',
+          role: 'assistant',
+          text: 'We will focus on Session Context.',
+          status: 'completed',
+          sourceRef: sourceRef('session-message:history-2', 'session_message'),
+          createdAt: builtAt,
+          completedAt: builtAt,
+        },
+      ],
+      runtimeFacts: [
+        {
+          factId: 'fact:approval-denied',
+          factKind: 'approval',
+          text: 'User denied write_file for package.json.',
+          sourceRef: sourceRef('approval:1', 'approval'),
+          severity: 'warning',
+          createdAt: builtAt,
+        },
+      ],
+      summaryEntries: [
+        {
+          summaryId: 'summary:1',
+          text: 'Earlier discussion selected short-term context quality as the 07 goal.',
+          sourceRef: sourceRef('session-summary:1', 'session_summary'),
+          createdAt: builtAt,
+        },
+      ],
+      maxHistoryEntries: 8,
+    } satisfies SessionContextInput);
+  });
+
+  it('rejects invalid session context input shapes', () => {
+    expect(() => SessionContextInputSchema.parse({
+      historyEntries: [{
+        entryId: 'history:bad',
+        role: 'assistant',
+        text: '',
+        status: 'completed',
+        sourceRef: sourceRef('session-message:bad', 'session_message'),
+      }],
+    })).toThrow();
+
+    expect(() => SessionContextInputSchema.parse({
+      runtimeFacts: [{
+        factId: 'fact:bad',
+        factKind: 'tool_result',
+        text: 'raw fact',
+        sourceRef: sourceRef('tool-result:1', 'tool_result'),
+        severity: 'critical',
+      }],
+    })).toThrow();
+  });
+
   it('accepts structured tool continuation replay fields without exposing raw provider bodies', () => {
     const context = ModelInputContextSchema.parse({
       contextId: 'model-input-context:tool-replay',
@@ -243,8 +384,19 @@ describe('ModelInputContext contracts', () => {
       'included_truncated',
       'included_reduced',
     ]);
+    expect(MODEL_INPUT_SESSION_PART_KINDS).toEqual([
+      'session_history',
+      'session_runtime_fact',
+      'session_summary',
+    ]);
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('project_instruction');
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('tool_result');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_message');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_run');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_step');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_runtime_fact');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('approval');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_summary');
   });
 });
 
