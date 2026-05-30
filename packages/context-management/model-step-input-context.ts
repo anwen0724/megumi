@@ -56,10 +56,6 @@ export interface BuildModelStepInputContextFromSourcesInput {
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
   budgetPolicy?: ContextBudgetPolicy;
-  modelContextWindow?: number;
-  reservedOutputTokens?: number;
-  availableInputTokens?: number;
-  keepRecentTokens?: number;
 }
 
 export function buildModelStepInputContextFromSources(
@@ -129,11 +125,9 @@ function resolveModelStepContextBudgetPolicy(
     return input.budgetPolicy;
   }
 
-  const modelContextWindow = input.modelContextWindow
-    ?? input.runContext?.budget.modelContextWindow
+  const modelContextWindow = input.runContext?.budget.modelContextWindow
     ?? input.baseInputContext?.budget.modelContextWindow;
-  const reservedOutputTokens = input.reservedOutputTokens
-    ?? input.runContext?.budget.reservedOutputTokens
+  const reservedOutputTokens = input.runContext?.budget.reservedOutputTokens
     ?? input.baseInputContext?.budget.reservedOutputTokens;
 
   if (modelContextWindow === undefined || reservedOutputTokens === undefined) {
@@ -141,9 +135,7 @@ function resolveModelStepContextBudgetPolicy(
   }
 
   const availableInputTokens = Math.max(0, modelContextWindow - reservedOutputTokens);
-  const keepRecentTokens = input.keepRecentTokens
-    ?? input.availableInputTokens
-    ?? input.baseInputContext?.budget.keepRecentTokens
+  const keepRecentTokens = input.baseInputContext?.budget.keepRecentTokens
     ?? availableInputTokens;
 
   return {

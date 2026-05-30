@@ -371,17 +371,22 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.trace.firstKeptPartId).toBe('part:session-history:new-entry');
   });
 
-  it('converts compatibility budget fields into a builder budget policy', () => {
+  it('derives budget policy from run context without accepting loose budget fields', () => {
     const context = buildModelStepInputContextFromSources({
-      contextId: 'model-input-context:step-compat-budget',
-      sessionId: 'session-1',
-      runId: 'run-1',
-      stepId: 'step-1',
-      buildReason: 'initial_step',
-      builtAt: '2026-05-30T00:00:00.000Z',
-      modelContextWindow: 120,
-      reservedOutputTokens: 20,
-      availableInputTokens: 24,
+      contextId: 'model-input-context:run-context-budget-policy',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      runContext: {
+        ...runContext(),
+        budget: {
+          ...runContext().budget,
+          modelContextWindow: 128,
+          reservedOutputTokens: 32,
+        },
+      },
       sessionContext: {
         historyEntries: [
           sessionHistoryEntry('old-entry', 'user', 'old context '.repeat(80)),
@@ -391,10 +396,10 @@ describe('buildModelStepInputContextFromSources', () => {
       currentMessage: currentUserMessage('message-current', 'current request'),
     });
 
-    expect(context.budget.modelContextWindow).toBe(120);
-    expect(context.budget.reservedOutputTokens).toBe(20);
-    expect(context.budget.availableInputTokens).toBe(100);
-    expect(context.budget.keepRecentTokens).toBe(24);
+    expect(context.budget.modelContextWindow).toBe(128);
+    expect(context.budget.reservedOutputTokens).toBe(32);
+    expect(context.budget.availableInputTokens).toBe(96);
+    expect(context.budget.keepRecentTokens).toBe(96);
     expect(context.trace.excludedSources).toContainEqual(expect.objectContaining({
       reason: 'outside_keep_recent_tokens',
     }));
