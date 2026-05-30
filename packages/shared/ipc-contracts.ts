@@ -25,7 +25,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.plan.byRunGet,
   IPC_CHANNELS.plan.statusUpdate,
   IPC_CHANNELS.tool.definitionsList,
-  IPC_CHANNELS.tool.callGet,
+  IPC_CHANNELS.tool.executionGet,
   IPC_CHANNELS.approval.resolve,
   IPC_CHANNELS.recovery.recoverableRunsList,
   IPC_CHANNELS.recovery.resume,

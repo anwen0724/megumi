@@ -19,6 +19,7 @@ describe('ipc channel contracts', () => {
     expect(IPC_CHANNELS.runContext.sourcesList).toBe('run-context:sources:list');
     expect(IPC_CHANNELS.plan.byRunGet).toBe('plan:by-run:get');
     expect(IPC_CHANNELS.tool.definitionsList).toBe('tool:definitions:list');
+    expect(IPC_CHANNELS.tool.executionGet).toBe('tool:execution:get');
     expect(IPC_CHANNELS.approval.resolve).toBe('approval:resolve');
     expect(IPC_CHANNELS.recovery.resume).toBe('recovery:resume');
     expect(IPC_CHANNELS.artifacts.get).toBe('artifacts:get');
@@ -36,6 +37,8 @@ describe('ipc channel contracts', () => {
     expect(isIpcChannel(IPC_CHANNELS.session.message.list)).toBe(true);
     expect(isIpcChannel('session:message:send')).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.run.listBySession)).toBe(true);
+    expect(isIpcChannel(IPC_CHANNELS.tool.executionGet)).toBe(true);
+    expect(isIpcChannel('tool:call:get')).toBe(false);
     expect(isIpcChannel(IPC_CHANNELS.project.list)).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.project.useExisting)).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.project.open)).toBe(true);

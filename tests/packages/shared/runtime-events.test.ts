@@ -393,7 +393,7 @@ describe('tool and approval runtime events', () => {
       capabilities: ['project_read' as const],
       riskLevel: 'low' as const,
       sideEffect: 'none' as const,
-      status: 'requested' as const,
+      status: 'pending_approval' as const,
       requestedAt: '2026-05-20T00:00:00.000Z',
     };
     const approvalRequest = {
@@ -609,7 +609,7 @@ describe('tool and approval runtime events', () => {
       capabilities: ['project_read' as const],
       riskLevel: 'low' as const,
       sideEffect: 'none' as const,
-      status: 'requested' as const,
+      status: 'pending_approval' as const,
       requestedAt: '2026-05-16T00:00:00.000Z',
     };
 

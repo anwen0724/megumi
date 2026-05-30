@@ -22,8 +22,8 @@ import {
 import {
   ApprovalScopeSchema,
   ApprovalRecordSchema,
-  ToolCallSchema,
   ToolDefinitionSchema,
+  ToolExecutionSchema,
 } from './tool-contracts';
 import { PermissionModeSchema } from './permission-mode-contracts';
 import {
@@ -337,15 +337,15 @@ export const ToolDefinitionsListDataSchema = z
   })
   .strict();
 
-export const ToolCallGetPayloadSchema = z
+export const ToolExecutionGetPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
   })
   .strict();
 
-export const ToolCallGetDataSchema = z
+export const ToolExecutionGetDataSchema = z
   .object({
-    toolCall: ToolCallSchema.optional(),
+    toolExecution: ToolExecutionSchema.optional(),
   })
   .strict();
 
@@ -753,9 +753,9 @@ export const ToolDefinitionsListRequestSchema = createRuntimeIpcRequestSchema(
   ToolDefinitionsListPayloadSchema,
 );
 
-export const ToolCallGetRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.tool.callGet,
-  ToolCallGetPayloadSchema,
+export const ToolExecutionGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.tool.executionGet,
+  ToolExecutionGetPayloadSchema,
 );
 
 export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
@@ -988,9 +988,9 @@ export const ToolDefinitionsListResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.tool.definitionsList,
 );
 
-export const ToolCallGetResultSchema = createRuntimeIpcResultSchema(
-  ToolCallGetDataSchema,
-  IPC_CHANNELS.tool.callGet,
+export const ToolExecutionGetResultSchema = createRuntimeIpcResultSchema(
+  ToolExecutionGetDataSchema,
+  IPC_CHANNELS.tool.executionGet,
 );
 
 export const ApprovalResolveResultSchema = createRuntimeIpcResultSchema(
@@ -1226,8 +1226,8 @@ export type PlanStatusUpdatePayload = z.infer<typeof PlanStatusUpdatePayloadSche
 export type PlanStatusUpdateData = z.infer<typeof PlanStatusUpdateDataSchema>;
 export type ToolDefinitionsListPayload = z.infer<typeof ToolDefinitionsListPayloadSchema>;
 export type ToolDefinitionsListData = z.infer<typeof ToolDefinitionsListDataSchema>;
-export type ToolCallGetPayload = z.infer<typeof ToolCallGetPayloadSchema>;
-export type ToolCallGetData = z.infer<typeof ToolCallGetDataSchema>;
+export type ToolExecutionGetPayload = z.infer<typeof ToolExecutionGetPayloadSchema>;
+export type ToolExecutionGetData = z.infer<typeof ToolExecutionGetDataSchema>;
 export type ApprovalResolvePayload = z.infer<typeof ApprovalResolvePayloadSchema>;
 export type ApprovalResolveData = z.infer<typeof ApprovalResolveDataSchema>;
 export type RecoverableRunListPayload = z.infer<typeof RecoverableRunListPayloadSchema>;

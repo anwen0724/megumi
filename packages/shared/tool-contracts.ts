@@ -17,13 +17,12 @@ import { RuntimeErrorSchema, type RuntimeError } from './runtime-errors';
 import { IsoDateTimeSchema } from './runtime-validation';
 
 const IdSchema = z.string().min(1).max(128);
-const ToolNameSchema = z
+export const ToolNameSchema = z
   .string()
   .min(1)
   .max(64)
   .regex(/^[a-z][a-z0-9_]{0,63}$/, 'Tool name must be Claude-compatible lowercase snake_case with letters, numbers, and underscores.');
 
-export const ToolNameSchemaForUse = ToolNameSchema;
 export type ToolName = z.infer<typeof ToolNameSchema>;
 
 export const TOOL_CAPABILITIES = [
@@ -68,14 +67,12 @@ export const TOOL_CALL_STATUSES = [
 export type ToolCallStatus = (typeof TOOL_CALL_STATUSES)[number];
 
 export const TOOL_EXECUTION_STATUSES = [
-  'requested',
-  'validating',
-  'waiting_for_approval',
-  'approved',
-  'denied',
+  'pending_approval',
   'running',
-  'succeeded',
+  'completed',
   'failed',
+  'denied',
+  'cancelled',
 ] as const;
 export type ToolExecutionStatus = (typeof TOOL_EXECUTION_STATUSES)[number];
 

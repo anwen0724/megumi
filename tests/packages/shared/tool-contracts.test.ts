@@ -70,14 +70,12 @@ describe('tool-contracts', () => {
       'failed',
     ]);
     expect(TOOL_EXECUTION_STATUSES).toEqual([
-      'requested',
-      'validating',
-      'waiting_for_approval',
-      'approved',
-      'denied',
+      'pending_approval',
       'running',
-      'succeeded',
+      'completed',
       'failed',
+      'denied',
+      'cancelled',
     ]);
     expect(PERMISSION_DECISION_SOURCES).toEqual([
       'rule',
@@ -191,7 +189,7 @@ describe('tool-contracts', () => {
       capabilities: ['project_read'],
       riskLevel: 'low',
       sideEffect: 'none',
-      status: 'requested',
+      status: 'pending_approval',
       requestedAt: '2026-05-20T00:00:01.000Z',
     });
 
@@ -201,6 +199,10 @@ describe('tool-contracts', () => {
       stepId: 'step-1',
     });
     expect(execution).not.toHaveProperty('toolUseId');
+    expect(() => ToolExecutionSchema.parse({
+      ...execution,
+      status: 'requested',
+    })).toThrow();
   });
 
   it('parses permission decisions with tool call and optional execution audit fields', () => {

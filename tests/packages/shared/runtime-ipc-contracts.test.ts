@@ -66,6 +66,9 @@ import {
   SessionMessageSendPayloadSchema,
   SessionMessageSendRequestSchema,
   ToolDefinitionsListRequestSchema,
+  ToolExecutionGetDataSchema,
+  ToolExecutionGetRequestSchema,
+  ToolExecutionGetResultSchema,
   WorkspaceFilesListRequestSchema,
   WorkspaceFilesListResultSchema,
 } from '@megumi/shared/ipc-schemas';
@@ -837,6 +840,16 @@ describe('agent context runtime IPC schemas', () => {
       },
     }).meta.channel).toBe(IPC_CHANNELS.tool.definitionsList);
 
+    expect(ToolExecutionGetRequestSchema.parse({
+      requestId: 'ipc-tool-execution-get-1',
+      payload: { toolExecutionId: 'tool-execution-1' },
+      meta: {
+        channel: IPC_CHANNELS.tool.executionGet,
+        createdAt: '2026-05-17T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }).meta.channel).toBe(IPC_CHANNELS.tool.executionGet);
+
     expect(RunResumeRequestSchema.parse({
       requestId: 'ipc-recovery-resume-1',
       payload: {
@@ -920,6 +933,56 @@ describe('agent tool approval runtime IPC schemas', () => {
 
     expect(request.meta.channel).toBe(IPC_CHANNELS.tool.definitionsList);
     expect('channel' in request).toBe(false);
+  });
+
+  it('parses tool execution get IPC data and rejects old tool call data', () => {
+    const toolExecution = {
+      toolExecutionId: 'tool-execution-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
+      inputPreview: {
+        summary: 'Read README.md',
+        targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
+        redactionState: 'none',
+      },
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      status: 'pending_approval',
+      requestedAt: '2026-05-16T00:00:00.000Z',
+    };
+
+    expect(ToolExecutionGetDataSchema.parse({ toolExecution }).toolExecution?.toolExecutionId).toBe('tool-execution-1');
+    expect(ToolExecutionGetResultSchema.parse({
+      ok: true,
+      data: { toolExecution },
+      meta: {
+        requestId: 'ipc-tool-execution-get-1',
+        channel: IPC_CHANNELS.tool.executionGet,
+        handledAt: '2026-05-16T00:00:01.000Z',
+      },
+    }).ok).toBe(true);
+
+    expect(ToolExecutionGetDataSchema.safeParse({
+      toolCall: {
+        toolCallId: 'tool-call-1',
+        runId: 'run-1',
+        modelStepId: 'model-step-1',
+        providerToolCallId: 'provider-tool-call-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+        inputPreview: {
+          summary: 'Read README.md',
+          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
+          redactionState: 'none',
+        },
+        status: 'created',
+        createdAt: '2026-05-16T00:00:00.000Z',
+      },
+    }).success).toBe(false);
   });
 });
 
