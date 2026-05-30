@@ -169,6 +169,43 @@ describe('Context budget executor', () => {
     ]);
   });
 
+  it('does not let required false demote kind-mandated required context', () => {
+    const requiredFalseInstruction = {
+      ...instructionPart(12, 'instruction:required-false'),
+      required: false,
+    };
+
+    const result = applyContextBudget({
+      buildReason: 'required_false_instruction',
+      policy: {
+        modelContextWindow: 15,
+        reservedOutputTokens: 5,
+        keepRecentTokens: 10,
+      },
+      parts: [
+        requiredFalseInstruction,
+        sessionHistoryPart(5, 'history:old', '2026-05-30T00:00:01.000Z'),
+      ],
+    });
+
+    expect(result.parts.map((part) => part.partId)).toEqual([
+      'part:instruction:required-false',
+    ]);
+    expect(result.trace.budgetWarnings).toEqual([
+      {
+        reason: 'required_context_over_budget',
+        tokenEstimate: 12,
+        availableInputTokens: 10,
+      },
+    ]);
+    expect(result.trace.excludedSources).toEqual([
+      {
+        sourceRef: sourceRef('history:old', 'session_message', '2026-05-30T00:00:01.000Z'),
+        reason: 'outside_keep_recent_tokens',
+      },
+    ]);
+  });
+
   it('keeps recent session history up to keepRecentTokens and records the first kept boundary', () => {
     const result = applyContextBudget({
       buildReason: 'history_budget',

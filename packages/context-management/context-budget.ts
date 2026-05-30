@@ -141,8 +141,8 @@ export function estimateModelInputContextTokens(value: string): number {
 }
 
 function isRequiredDraft(draft: ModelInputContextPartDraft): boolean {
-  if (draft.required !== undefined) {
-    return draft.required;
+  if (draft.required === true) {
+    return true;
   }
   if (draft.kind === 'session') {
     return draft.sessionKind === 'session_summary';
