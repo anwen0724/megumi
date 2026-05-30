@@ -59,7 +59,7 @@ describe('session context source guards', () => {
     }
   });
 
-  it('requires context-management callers to pass explicit sessionContext instead of historyMessages', () => {
+  it('requires context-management callers to pass explicit sessionContext instead of legacy history message inputs', () => {
     const source = sourceUnder('packages/context-management');
 
     for (const forbidden of forbiddenContextManagementNames) {
