@@ -8,8 +8,8 @@ import type {
   RunObservationId,
   RunStepId,
   ToolCallId,
+  ToolExecutionId,
   ToolResultId,
-  ToolUseId,
 } from './ids';
 import { JsonObjectSchema, JsonValueSchema, type JsonObject, type JsonValue } from './json';
 import { PermissionModeSchema, type PermissionMode } from './permission-mode-contracts';
@@ -57,7 +57,7 @@ export type ToolSideEffect = (typeof TOOL_SIDE_EFFECTS)[number];
 export const TOOL_AVAILABILITY_STATUSES = ['available', 'disabled', 'unavailable'] as const;
 export type ToolAvailabilityStatus = (typeof TOOL_AVAILABILITY_STATUSES)[number];
 
-export const TOOL_USE_STATUSES = [
+export const TOOL_CALL_STATUSES = [
   'created',
   'validated',
   'queued_for_execution',
@@ -65,9 +65,9 @@ export const TOOL_USE_STATUSES = [
   'denied',
   'failed',
 ] as const;
-export type ToolUseStatus = (typeof TOOL_USE_STATUSES)[number];
+export type ToolCallStatus = (typeof TOOL_CALL_STATUSES)[number];
 
-export const TOOL_CALL_STATUSES = [
+export const TOOL_EXECUTION_STATUSES = [
   'requested',
   'validating',
   'waiting_for_approval',
@@ -77,7 +77,7 @@ export const TOOL_CALL_STATUSES = [
   'succeeded',
   'failed',
 ] as const;
-export type ToolCallStatus = (typeof TOOL_CALL_STATUSES)[number];
+export type ToolExecutionStatus = (typeof TOOL_EXECUTION_STATUSES)[number];
 
 export const TOOL_OBSERVATION_STATUSES = ['succeeded', 'failed', 'denied'] as const;
 export type ToolObservationStatus = (typeof TOOL_OBSERVATION_STATUSES)[number];
@@ -236,37 +236,37 @@ export const ToolInputPreviewSchema = z
   .strict();
 export type ToolInputPreview = z.infer<typeof ToolInputPreviewSchema>;
 
-export interface ToolUse {
-  toolUseId: ToolUseId | string;
+export interface ToolCall {
+  toolCallId: ToolCallId | string;
   runId: RunId | string;
   modelStepId: ModelStepId | string;
-  providerToolUseId: string;
+  providerToolCallId: string;
   toolName: ToolName;
   input: JsonValue;
   inputPreview: ToolInputPreview;
-  status: ToolUseStatus;
+  status: ToolCallStatus;
   createdAt: IsoDateTime;
   completedAt?: IsoDateTime;
   error?: RuntimeError;
   metadata?: JsonObject;
 }
 
-export const ToolUseSchema = z
+export const ToolCallSchema = z
   .object({
-    toolUseId: IdSchema,
+    toolCallId: IdSchema,
     runId: IdSchema,
     modelStepId: IdSchema,
-    providerToolUseId: IdSchema,
+    providerToolCallId: IdSchema,
     toolName: ToolNameSchema,
     input: JsonValueSchema,
     inputPreview: ToolInputPreviewSchema,
-    status: z.enum(TOOL_USE_STATUSES),
+    status: z.enum(TOOL_CALL_STATUSES),
     createdAt: IsoDateTimeSchema,
     completedAt: IsoDateTimeSchema.optional(),
     error: RuntimeErrorSchema.optional(),
     metadata: JsonObjectSchema.optional(),
   })
-  .strict() satisfies z.ZodType<ToolUse>;
+  .strict() satisfies z.ZodType<ToolCall>;
 
 export const SandboxRequirementSchema = z
   .object({
@@ -305,8 +305,8 @@ export type PermissionMatchedRule = z.infer<typeof PermissionMatchedRuleSchema>;
 
 export interface PermissionDecision {
   permissionDecisionId: PermissionDecisionId | string;
-  toolUseId: ToolUseId | string;
-  toolCallId?: ToolCallId | string;
+  toolCallId: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   runId: RunId | string;
   decision: ToolPolicyDecisionValue;
   source: PermissionDecisionSource;
@@ -327,8 +327,8 @@ export interface PermissionDecision {
 export const PermissionDecisionSchema = z
   .object({
     permissionDecisionId: IdSchema,
-    toolUseId: IdSchema,
-    toolCallId: IdSchema.optional(),
+    toolCallId: IdSchema,
+    toolExecutionId: IdSchema.optional(),
     runId: IdSchema,
     decision: z.enum(TOOL_POLICY_DECISIONS),
     source: z.enum(PERMISSION_DECISION_SOURCES),
@@ -350,9 +350,9 @@ export const PermissionDecisionSchema = z
 export const ToolPolicyDecisionSchema = PermissionDecisionSchema;
 export type ToolPolicyDecision = PermissionDecision;
 
-export interface ToolCall {
+export interface ToolExecution {
+  toolExecutionId: ToolExecutionId | string;
   toolCallId: ToolCallId | string;
-  toolUseId: ToolUseId | string;
   runId: RunId | string;
   stepId: RunStepId | string;
   actionId?: RunActionId | string;
@@ -365,7 +365,7 @@ export interface ToolCall {
   policyDecision?: PermissionDecision;
   approvalRequestId?: string;
   sandboxRequirement?: SandboxRequirement;
-  status: ToolCallStatus;
+  status: ToolExecutionStatus;
   requestedAt: IsoDateTime;
   startedAt?: IsoDateTime;
   completedAt?: IsoDateTime;
@@ -374,10 +374,10 @@ export interface ToolCall {
   metadata?: JsonObject;
 }
 
-export const ToolCallSchema = z
+export const ToolExecutionSchema = z
   .object({
+    toolExecutionId: IdSchema,
     toolCallId: IdSchema,
-    toolUseId: IdSchema,
     runId: IdSchema,
     stepId: IdSchema,
     actionId: IdSchema.optional(),
@@ -390,7 +390,7 @@ export const ToolCallSchema = z
     policyDecision: PermissionDecisionSchema.optional(),
     approvalRequestId: IdSchema.optional(),
     sandboxRequirement: SandboxRequirementSchema.optional(),
-    status: z.enum(TOOL_CALL_STATUSES),
+    status: z.enum(TOOL_EXECUTION_STATUSES),
     requestedAt: IsoDateTimeSchema,
     startedAt: IsoDateTimeSchema.optional(),
     completedAt: IsoDateTimeSchema.optional(),
@@ -398,7 +398,7 @@ export const ToolCallSchema = z
     error: RuntimeErrorSchema.optional(),
     metadata: JsonObjectSchema.optional(),
   })
-  .strict() satisfies z.ZodType<ToolCall>;
+  .strict() satisfies z.ZodType<ToolExecution>;
 
 export const ApprovalPreviewSchema = z
   .object({
@@ -412,8 +412,8 @@ export type ApprovalPreview = z.infer<typeof ApprovalPreviewSchema>;
 export const ApprovalRequestSchema = z
   .object({
     approvalRequestId: IdSchema,
-    toolUseId: IdSchema,
     toolCallId: IdSchema,
+    toolExecutionId: IdSchema,
     permissionDecisionId: IdSchema.optional(),
     runId: IdSchema,
     stepId: IdSchema,
@@ -438,6 +438,7 @@ export const ApprovalRecordSchema = z
     approvalRecordId: IdSchema,
     approvalRequestId: IdSchema,
     toolCallId: IdSchema,
+    toolExecutionId: IdSchema,
     runId: IdSchema,
     stepId: IdSchema,
     decision: z.enum(['approved', 'denied', 'expired', 'cancelled']),
@@ -463,8 +464,8 @@ export type ToolContentRef = z.infer<typeof ToolContentRefSchema>;
 
 export interface ToolResult {
   toolResultId: ToolResultId | string;
-  toolUseId: ToolUseId | string;
-  toolCallId?: ToolCallId | string;
+  toolCallId: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   runId: RunId | string;
   kind: ToolResultKind;
   structuredContent?: JsonValue;
@@ -480,8 +481,8 @@ export interface ToolResult {
 export const ToolResultSchema = z
   .object({
     toolResultId: IdSchema,
-    toolUseId: IdSchema,
-    toolCallId: IdSchema.optional(),
+    toolCallId: IdSchema,
+    toolExecutionId: IdSchema.optional(),
     runId: IdSchema,
     kind: z.enum(TOOL_RESULT_KINDS),
     structuredContent: JsonValueSchema.optional(),
@@ -502,7 +503,7 @@ export type ToolError = z.infer<typeof ToolErrorSchema>;
 
 export interface ToolObservation {
   observationId: RunObservationId | string;
-  toolCallId: string;
+  toolExecutionId: ToolExecutionId | string;
   runId: RunId | string;
   stepId: RunStepId | string;
   status: ToolObservationStatus;
@@ -518,7 +519,7 @@ export interface ToolObservation {
 export const ToolObservationSchema = z
   .object({
     observationId: IdSchema,
-    toolCallId: IdSchema,
+    toolExecutionId: IdSchema,
     runId: IdSchema,
     stepId: IdSchema,
     status: z.enum(TOOL_OBSERVATION_STATUSES),

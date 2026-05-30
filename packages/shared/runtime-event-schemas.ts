@@ -33,7 +33,7 @@ import {
   APPROVAL_SCOPES,
   ApprovalRequestSchema,
   PermissionDecisionSchema,
-  ToolCallSchema,
+  ToolExecutionSchema,
   ToolPolicyDecisionSchema,
   type ApprovalScope,
 } from './tool-contracts';
@@ -334,11 +334,11 @@ const ModelThinkingCompletedPayloadSchema = z
   })
   .strict();
 
-const ModelToolUseDetectedPayloadSchema = z
+const ModelToolCallDetectedPayloadSchema = z
   .object({
     modelStepId: z.string().min(1),
-    toolUseId: z.string().min(1),
-    providerToolUseId: z.string().min(1),
+    toolCallId: z.string().min(1),
+    providerToolCallId: z.string().min(1),
     toolName: z.string().min(1),
   })
   .strict();
@@ -350,11 +350,11 @@ const ModelStepCompletedPayloadSchema = z
   })
   .strict();
 
-const ToolUseCreatedPayloadSchema = z
+const ToolCallCreatedPayloadSchema = z
   .object({
-    toolUseId: z.string().min(1),
+    toolCallId: z.string().min(1),
     modelStepId: z.string().min(1),
-    providerToolUseId: z.string().min(1),
+    providerToolCallId: z.string().min(1),
     toolName: z.string().min(1),
     input: JsonValueSchema,
   })
@@ -363,8 +363,8 @@ const ToolUseCreatedPayloadSchema = z
 const ToolResultCreatedPayloadSchema = z
   .object({
     toolResultId: z.string().min(1),
-    toolUseId: z.string().min(1),
-    toolCallId: z.string().min(1).optional(),
+    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1).optional(),
     kind: z.enum(['success', 'tool_error', 'policy_denied', 'user_rejected', 'redacted']),
     summary: z.string().min(1),
   })
@@ -382,8 +382,8 @@ const RunCancelledPayloadSchema = z
 const RunWaitingForApprovalPayloadSchema = z
   .object({
     approvalRequestId: z.string().min(1),
-    toolUseId: z.string().min(1),
     toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     reason: z.string().min(1),
   })
   .strict();
@@ -491,22 +491,22 @@ const RetryFailedPayloadSchema = z
   })
   .strict();
 
-const ToolCallRequestedPayloadSchema = z
+const ToolExecutionRequestedPayloadSchema = z
   .object({
-    toolCall: ToolCallSchema,
+    toolExecution: ToolExecutionSchema,
   })
   .strict();
 
-const ToolCallValidatedPayloadSchema = z
+const ToolExecutionValidatedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     toolName: z.string().min(1),
   })
   .strict();
 
-const ToolCallPolicyDecidedPayloadSchema = z
+const ToolExecutionPolicyDecidedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     toolName: z.string().min(1),
     policyDecision: ToolPolicyDecisionSchema,
   })
@@ -518,39 +518,39 @@ const PermissionDecisionCreatedPayloadSchema = z
   })
   .strict();
 
-const ToolCallApprovalRequestedPayloadSchema = z
+const ToolExecutionApprovalRequestedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     toolName: z.string().min(1),
     approvalRequest: ApprovalRequestSchema,
   })
   .strict();
 
-const ToolCallStartedPayloadSchema = z
+const ToolExecutionStartedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     startedAt: RuntimeEventIsoDateTimeSchema.optional(),
   })
   .strict();
 
-const ToolCallCompletedPayloadSchema = z
+const ToolExecutionCompletedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     completedAt: RuntimeEventIsoDateTimeSchema.optional(),
   })
   .strict();
 
-const ToolCallFailedPayloadSchema = z
+const ToolExecutionFailedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     error: RuntimeErrorSchema,
     completedAt: RuntimeEventIsoDateTimeSchema.optional(),
   })
   .strict();
 
-const ToolCallDeniedPayloadSchema = z
+const ToolExecutionDeniedPayloadSchema = z
   .object({
-    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
     reason: z.string().min(1),
   })
   .strict();
@@ -792,28 +792,31 @@ export const ModelThinkingCompletedEventSchema = eventSchema(
   'model.thinking.completed',
   ModelThinkingCompletedPayloadSchema,
 );
-export const ModelToolUseDetectedEventSchema = eventSchema('model.tool_use.detected', ModelToolUseDetectedPayloadSchema);
+export const ModelToolCallDetectedEventSchema = eventSchema('model.tool_call.detected', ModelToolCallDetectedPayloadSchema);
 export const ModelStepCompletedEventSchema = eventSchema('model.step.completed', ModelStepCompletedPayloadSchema);
-export const ToolUseCreatedEventSchema = eventSchema('tool.use.created', ToolUseCreatedPayloadSchema);
+export const ToolCallCreatedEventSchema = eventSchema('tool.call.created', ToolCallCreatedPayloadSchema);
 export const ToolResultCreatedEventSchema = eventSchema('tool.result.created', ToolResultCreatedPayloadSchema);
-export const ToolCallRequestedEventSchema = eventSchema('tool.call.requested', ToolCallRequestedPayloadSchema);
-export const ToolCallValidatedEventSchema = eventSchema('tool.call.validated', ToolCallValidatedPayloadSchema);
-export const ToolCallPolicyDecidedEventSchema = eventSchema(
-  'tool.call.policy_decided',
-  ToolCallPolicyDecidedPayloadSchema,
+export const ToolExecutionRequestedEventSchema = eventSchema(
+  'tool.execution.requested',
+  ToolExecutionRequestedPayloadSchema,
+);
+export const ToolExecutionValidatedEventSchema = eventSchema('tool.execution.validated', ToolExecutionValidatedPayloadSchema);
+export const ToolExecutionPolicyDecidedEventSchema = eventSchema(
+  'tool.execution.policy_decided',
+  ToolExecutionPolicyDecidedPayloadSchema,
 );
 export const PermissionDecisionCreatedEventSchema = eventSchema(
   'permission.decision.created',
   PermissionDecisionCreatedPayloadSchema,
 );
-export const ToolCallApprovalRequestedEventSchema = eventSchema(
-  'tool.call.approval_requested',
-  ToolCallApprovalRequestedPayloadSchema,
+export const ToolExecutionApprovalRequestedEventSchema = eventSchema(
+  'tool.execution.approval_requested',
+  ToolExecutionApprovalRequestedPayloadSchema,
 );
-export const ToolCallStartedEventSchema = eventSchema('tool.call.started', ToolCallStartedPayloadSchema);
-export const ToolCallCompletedEventSchema = eventSchema('tool.call.completed', ToolCallCompletedPayloadSchema);
-export const ToolCallFailedEventSchema = eventSchema('tool.call.failed', ToolCallFailedPayloadSchema);
-export const ToolCallDeniedEventSchema = eventSchema('tool.call.denied', ToolCallDeniedPayloadSchema);
+export const ToolExecutionStartedEventSchema = eventSchema('tool.execution.started', ToolExecutionStartedPayloadSchema);
+export const ToolExecutionCompletedEventSchema = eventSchema('tool.execution.completed', ToolExecutionCompletedPayloadSchema);
+export const ToolExecutionFailedEventSchema = eventSchema('tool.execution.failed', ToolExecutionFailedPayloadSchema);
+export const ToolExecutionDeniedEventSchema = eventSchema('tool.execution.denied', ToolExecutionDeniedPayloadSchema);
 export const ApprovalRequestedEventSchema = eventSchema('approval.requested', ApprovalRequestedPayloadSchema);
 export const ApprovalResolvedEventSchema = eventSchema('approval.resolved', ApprovalResolvedPayloadSchema);
 export const ApprovalExpiredEventSchema = eventSchema('approval.expired', ApprovalExpiredPayloadSchema);
@@ -909,19 +912,19 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ModelThinkingStartedEventSchema,
   ModelThinkingDeltaEventSchema,
   ModelThinkingCompletedEventSchema,
-  ModelToolUseDetectedEventSchema,
+  ModelToolCallDetectedEventSchema,
   ModelStepCompletedEventSchema,
-  ToolUseCreatedEventSchema,
+  ToolCallCreatedEventSchema,
   ToolResultCreatedEventSchema,
-  ToolCallRequestedEventSchema,
-  ToolCallValidatedEventSchema,
-  ToolCallPolicyDecidedEventSchema,
+  ToolExecutionRequestedEventSchema,
+  ToolExecutionValidatedEventSchema,
+  ToolExecutionPolicyDecidedEventSchema,
   PermissionDecisionCreatedEventSchema,
-  ToolCallApprovalRequestedEventSchema,
-  ToolCallStartedEventSchema,
-  ToolCallCompletedEventSchema,
-  ToolCallFailedEventSchema,
-  ToolCallDeniedEventSchema,
+  ToolExecutionApprovalRequestedEventSchema,
+  ToolExecutionStartedEventSchema,
+  ToolExecutionCompletedEventSchema,
+  ToolExecutionFailedEventSchema,
+  ToolExecutionDeniedEventSchema,
   ApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema,
   ApprovalExpiredEventSchema,

@@ -6,9 +6,9 @@ import {
   ContextPatchRequestedEventSchema,
   RuntimeEventSchema,
   RuntimeEventTypeSchema,
-  ToolCallDeniedEventSchema,
-  ToolCallPolicyDecidedEventSchema,
-  ToolCallRequestedEventSchema,
+  ToolExecutionDeniedEventSchema,
+  ToolExecutionPolicyDecidedEventSchema,
+  ToolExecutionRequestedEventSchema,
   isTerminalRuntimeEvent,
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime-event-schemas';
@@ -27,12 +27,20 @@ import {
   createModelThinkingDeltaEvent,
   createModelThinkingStartedEvent,
   createModelStepStartedEvent,
-  createModelToolUseDetectedEvent,
+  createModelToolCallDetectedEvent,
   createRunWaitingForApprovalEvent,
   createRunStartedEvent,
   createRuntimeEvent,
   createToolResultCreatedEvent,
-  createToolUseCreatedEvent,
+  createToolCallCreatedEvent,
+  createToolExecutionApprovalRequestedEvent,
+  createToolExecutionCompletedEvent,
+  createToolExecutionDeniedEvent,
+  createToolExecutionFailedEvent,
+  createToolExecutionPolicyDecidedEvent,
+  createToolExecutionRequestedEvent,
+  createToolExecutionStartedEvent,
+  createToolExecutionValidatedEvent,
 } from '@megumi/shared/runtime-event-factory';
 import { RUNTIME_EVENT_TYPES, type RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -146,7 +154,7 @@ describe('runtime event contracts', () => {
   });
 
   it('checks event type names', () => {
-    expect(RuntimeEventTypeSchema.parse('tool.call.completed')).toBe('tool.call.completed');
+    expect(RuntimeEventTypeSchema.parse('tool.execution.completed')).toBe('tool.execution.completed');
     expect(() => RuntimeEventTypeSchema.parse('completed')).toThrow();
   });
 
@@ -369,9 +377,9 @@ describe('tool and approval runtime events', () => {
       visibility: 'user' as const,
       persist: 'required' as const,
     };
-    const toolCall = {
+    const toolExecution = {
+      toolExecutionId: 'tool-execution-1',
       toolCallId: 'tool-call-1',
-      toolUseId: 'tool-use-1',
       runId: 'run-1',
       stepId: 'step-1',
       actionId: 'action-1',
@@ -390,8 +398,8 @@ describe('tool and approval runtime events', () => {
     };
     const approvalRequest = {
       approvalRequestId: 'approval-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       runId: 'run-1',
       stepId: 'step-1',
       toolName: 'edit_file',
@@ -408,10 +416,10 @@ describe('tool and approval runtime events', () => {
       createdAt: '2026-05-20T00:00:00.000Z',
     };
 
-    const toolCallRequestedEvent = {
+    const toolExecutionRequestedEvent = {
       ...base,
-      eventType: 'tool.call.requested' as const,
-      payload: { toolCall },
+      eventType: 'tool.execution.requested' as const,
+      payload: { toolExecution },
     };
     const approvalRequestedEvent = {
       ...base,
@@ -421,7 +429,7 @@ describe('tool and approval runtime events', () => {
       payload: { approvalRequest },
     };
 
-    expect(ToolCallRequestedEventSchema.parse(toolCallRequestedEvent).payload.toolCall.toolCallId).toBe('tool-call-1');
+    expect(ToolExecutionRequestedEventSchema.parse(toolExecutionRequestedEvent).payload.toolExecution.toolExecutionId).toBe('tool-execution-1');
     expect(ApprovalRequestedEventSchema.parse(approvalRequestedEvent).payload.approvalRequest.approvalRequestId).toBe('approval-1');
   });
 
@@ -441,8 +449,8 @@ describe('tool and approval runtime events', () => {
     };
     const policyDecision = {
       permissionDecisionId: 'permission-decision-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       runId: 'run-1',
       decision: 'allow' as const,
       source: 'permission_mode' as const,
@@ -454,22 +462,22 @@ describe('tool and approval runtime events', () => {
       evaluatedAt: '2026-05-16T00:00:00.000Z',
     };
 
-    expect(ToolCallPolicyDecidedEventSchema.parse({
+    expect(ToolExecutionPolicyDecidedEventSchema.parse({
       ...base,
-      eventType: 'tool.call.policy_decided',
+      eventType: 'tool.execution.policy_decided',
       payload: {
-        toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         toolName: 'read_file',
         policyDecision,
       },
     }).payload.policyDecision.decision).toBe('allow');
 
-    expect(ToolCallDeniedEventSchema.parse({
+    expect(ToolExecutionDeniedEventSchema.parse({
       ...base,
       eventId: 'event-tool-2',
-      eventType: 'tool.call.denied',
+      eventType: 'tool.execution.denied',
       payload: {
-        toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         reason: 'Plan mode blocks workspace writes.',
       },
     }).payload.reason).toContain('Plan mode');
@@ -508,8 +516,8 @@ describe('tool and approval runtime events', () => {
   it('creates typed tool events through the generic runtime event factory', () => {
     const policyDecision = {
       permissionDecisionId: 'permission-decision-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       runId: 'run-1',
       decision: 'allow' as const,
       source: 'permission_mode' as const,
@@ -522,7 +530,7 @@ describe('tool and approval runtime events', () => {
     };
     const event = createRuntimeEvent({
       eventId: 'event-tool-3',
-      eventType: 'tool.call.policy_decided',
+      eventType: 'tool.execution.policy_decided',
       runId: 'run-1',
       sessionId: 'session-1',
       stepId: 'step-1',
@@ -533,13 +541,160 @@ describe('tool and approval runtime events', () => {
       visibility: 'debug',
       persist: 'required',
       payload: {
-        toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         toolName: 'read_file',
         policyDecision,
       },
     });
 
-    expect(RuntimeEventSchema.parse(event).eventType).toBe('tool.call.policy_decided');
+    expect(RuntimeEventSchema.parse(event).eventType).toBe('tool.execution.policy_decided');
+  });
+
+  it('creates tool execution lifecycle events through factory helpers', () => {
+    const base = {
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      actionId: 'action-1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      source: 'tool' as const,
+      visibility: 'debug' as const,
+      persist: 'required' as const,
+    };
+    const policyDecision = {
+      permissionDecisionId: 'permission-decision-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
+      runId: 'run-1',
+      decision: 'allow' as const,
+      source: 'permission_mode' as const,
+      reason: 'Read-only project tool.',
+      mode: 'default' as const,
+      capability: 'project_read' as const,
+      sideEffect: 'none' as const,
+      effectiveRiskLevel: 'low' as const,
+      evaluatedAt: '2026-05-16T00:00:00.000Z',
+    };
+    const approvalRequest = {
+      approvalRequestId: 'approval-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'edit_file',
+      capabilities: ['project_write' as const],
+      riskLevel: 'medium' as const,
+      title: 'Edit file',
+      summary: 'Edit src/app.ts',
+      preview: {
+        action: 'Edit file',
+        targets: [{ kind: 'file' as const, label: 'src/app.ts', sensitivity: 'normal' as const }],
+      },
+      requestedScope: 'once' as const,
+      status: 'pending' as const,
+      createdAt: '2026-05-16T00:00:00.000Z',
+    };
+    const toolExecution = {
+      toolExecutionId: 'tool-execution-1',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
+      inputPreview: {
+        summary: 'Read README.md',
+        targets: [{ kind: 'file' as const, label: 'README.md', sensitivity: 'normal' as const }],
+        redactionState: 'none' as const,
+      },
+      capabilities: ['project_read' as const],
+      riskLevel: 'low' as const,
+      sideEffect: 'none' as const,
+      status: 'requested' as const,
+      requestedAt: '2026-05-16T00:00:00.000Z',
+    };
+
+    const events = [
+      createToolExecutionRequestedEvent({
+        ...base,
+        eventId: 'event-tool-execution-requested',
+        eventType: 'tool.execution.requested',
+        sequence: 1,
+        payload: { toolExecution },
+      }),
+      createToolExecutionValidatedEvent({
+        ...base,
+        eventId: 'event-tool-execution-validated',
+        eventType: 'tool.execution.validated',
+        sequence: 2,
+        payload: { toolExecutionId: 'tool-execution-1', toolName: 'read_file' },
+      }),
+      createToolExecutionPolicyDecidedEvent({
+        ...base,
+        eventId: 'event-tool-execution-policy-decided',
+        eventType: 'tool.execution.policy_decided',
+        sequence: 3,
+        source: 'security',
+        payload: { toolExecutionId: 'tool-execution-1', toolName: 'read_file', policyDecision },
+      }),
+      createToolExecutionApprovalRequestedEvent({
+        ...base,
+        eventId: 'event-tool-execution-approval-requested',
+        eventType: 'tool.execution.approval_requested',
+        sequence: 4,
+        source: 'approval',
+        visibility: 'user',
+        payload: { toolExecutionId: 'tool-execution-1', toolName: 'edit_file', approvalRequest },
+      }),
+      createToolExecutionStartedEvent({
+        ...base,
+        eventId: 'event-tool-execution-started',
+        eventType: 'tool.execution.started',
+        sequence: 5,
+        payload: { toolExecutionId: 'tool-execution-1', startedAt: '2026-05-16T00:00:01.000Z' },
+      }),
+      createToolExecutionCompletedEvent({
+        ...base,
+        eventId: 'event-tool-execution-completed',
+        eventType: 'tool.execution.completed',
+        sequence: 6,
+        payload: { toolExecutionId: 'tool-execution-1', completedAt: '2026-05-16T00:00:02.000Z' },
+      }),
+      createToolExecutionFailedEvent({
+        ...base,
+        eventId: 'event-tool-execution-failed',
+        eventType: 'tool.execution.failed',
+        sequence: 7,
+        payload: {
+          toolExecutionId: 'tool-execution-1',
+          error: {
+            code: 'runtime_unknown',
+            message: 'Tool execution failed.',
+            severity: 'error',
+            retryable: false,
+            source: 'tool',
+          },
+          completedAt: '2026-05-16T00:00:02.000Z',
+        },
+      }),
+      createToolExecutionDeniedEvent({
+        ...base,
+        eventId: 'event-tool-execution-denied',
+        eventType: 'tool.execution.denied',
+        sequence: 8,
+        payload: { toolExecutionId: 'tool-execution-1', reason: 'Denied by policy.' },
+      }),
+    ];
+
+    expect(events.map((event) => RuntimeEventSchema.parse(event).eventType)).toEqual([
+      'tool.execution.requested',
+      'tool.execution.validated',
+      'tool.execution.policy_decided',
+      'tool.execution.approval_requested',
+      'tool.execution.started',
+      'tool.execution.completed',
+      'tool.execution.failed',
+      'tool.execution.denied',
+    ]);
   });
 });
 
@@ -820,18 +975,26 @@ describe('memory runtime events', () => {
   });
 });
 
-describe('05 tool-use runtime events', () => {
+describe('05 tool call and execution runtime events', () => {
   it('does not expose action-centered tool or approval events as the v1 tool path', () => {
     expect(RUNTIME_EVENT_TYPES).not.toContain('action.requested');
-    expect(RUNTIME_EVENT_TYPES).toContain('tool.use.created');
-    expect(RUNTIME_EVENT_TYPES).toContain('tool.call.requested');
+    expect(RUNTIME_EVENT_TYPES).toContain('model.tool_call.detected');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.call.created');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.requested');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.validated');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.policy_decided');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.approval_requested');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.started');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.completed');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.failed');
+    expect(RUNTIME_EVENT_TYPES).toContain('tool.execution.denied');
     expect(RUNTIME_EVENT_TYPES).toContain('permission.decision.created');
     expect(RUNTIME_EVENT_TYPES).toContain('tool.result.created');
     expect(RUNTIME_EVENT_TYPES).toContain('approval.requested');
     expect(RUNTIME_EVENT_TYPES).toContain('approval.resolved');
   });
 
-  it('accepts model step and tool-use events', () => {
+  it('accepts model step and tool-call events', () => {
     expect(RuntimeEventSchema.parse({
       eventId: 'event-model-step-started',
       schemaVersion: 1,
@@ -851,9 +1014,9 @@ describe('05 tool-use runtime events', () => {
     }).eventType).toBe('model.step.started');
 
     expect(RuntimeEventSchema.parse({
-      eventId: 'event-tool-use-created',
+      eventId: 'event-tool-call-created',
       schemaVersion: 1,
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       runId: 'run-1',
       stepId: 'step-1',
       sequence: 2,
@@ -862,19 +1025,19 @@ describe('05 tool-use runtime events', () => {
       visibility: 'system',
       persist: 'required',
       payload: {
-        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
         modelStepId: 'model-step-1',
-        providerToolUseId: 'call-provider-1',
+        providerToolCallId: 'call-provider-1',
         toolName: 'read_file',
         input: { path: 'package.json' },
       },
     }).payload).toMatchObject({
-      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
       input: { path: 'package.json' },
     });
   });
 
-  it('accepts model output, detected tool-use, and completed model step events', () => {
+  it('accepts model output, detected tool call, and completed model step events', () => {
     expect(RuntimeEventSchema.parse({
       eventId: 'event-model-output-delta',
       schemaVersion: 1,
@@ -893,9 +1056,9 @@ describe('05 tool-use runtime events', () => {
     }).eventType).toBe('model.output.delta');
 
     expect(RuntimeEventSchema.parse({
-      eventId: 'event-model-tool-use-detected',
+      eventId: 'event-model-tool-call-detected',
       schemaVersion: 1,
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       runId: 'run-1',
       stepId: 'step-1',
       sequence: 2,
@@ -905,13 +1068,13 @@ describe('05 tool-use runtime events', () => {
       persist: 'required',
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-1',
-        providerToolUseId: 'call-provider-1',
+        toolCallId: 'tool-call-1',
+        providerToolCallId: 'call-provider-1',
         toolName: 'read_file',
       },
     }).payload).toMatchObject({
-      toolUseId: 'tool-use-1',
-      providerToolUseId: 'call-provider-1',
+      toolCallId: 'tool-call-1',
+      providerToolCallId: 'call-provider-1',
     });
 
     expect(RuntimeEventSchema.parse({
@@ -958,11 +1121,11 @@ describe('05 tool-use runtime events', () => {
       persist: 'required',
       payload: {
         modelStepId: 'model-step-1',
-        finishReason: 'tool_use',
+        finishReason: 'tool_call',
       },
     }).payload).toEqual({
       modelStepId: 'model-step-1',
-      finishReason: 'tool_use',
+      finishReason: 'tool_call',
     });
   });
 
@@ -986,11 +1149,11 @@ describe('05 tool-use runtime events', () => {
     })).toThrow();
   });
 
-  it('rejects extra payload fields on tool-use created events', () => {
+  it('rejects extra payload fields on tool-call created events', () => {
     expect(() => RuntimeEventSchema.parse({
-      eventId: 'event-tool-use-created-extra',
+      eventId: 'event-tool-call-created-extra',
       schemaVersion: 1,
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       runId: 'run-1',
       stepId: 'step-1',
       sequence: 4,
@@ -999,9 +1162,9 @@ describe('05 tool-use runtime events', () => {
       visibility: 'system',
       persist: 'required',
       payload: {
-        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
         modelStepId: 'model-step-1',
-        providerToolUseId: 'call-provider-1',
+        providerToolCallId: 'call-provider-1',
         toolName: 'read_file',
         input: { path: 'package.json' },
         rawProviderBody: { secret: 'sk-test' },
@@ -1022,8 +1185,8 @@ describe('05 tool-use runtime events', () => {
       persist: 'required',
       payload: {
         toolResultId: 'tool-result-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         kind: 'success',
         summary: 'Read file.',
       },
@@ -1041,8 +1204,8 @@ describe('05 tool-use runtime events', () => {
       persist: 'required',
       payload: {
         approvalRequestId: 'approval-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         reason: 'write_file requires approval.',
       },
     }).eventType).toBe('run.waiting_for_approval');
@@ -1062,8 +1225,8 @@ describe('05 tool-use runtime events', () => {
       persist: 'required',
       payload: {
         approvalRequestId: 'approval-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         reason: 'write_file requires approval.',
       },
     });
@@ -1071,7 +1234,7 @@ describe('05 tool-use runtime events', () => {
     expect(RuntimeEventSchema.parse(event)).toEqual(event);
   });
 
-  it('creates model step, tool-use, and tool-result events through factories and schemas', () => {
+  it('creates model step, tool-call, and tool-result events through factories and schemas', () => {
     const modelStepStarted = createModelStepStartedEvent({
       eventId: 'event-model-step-started-factory',
       eventType: 'model.step.started',
@@ -1092,9 +1255,9 @@ describe('05 tool-use runtime events', () => {
 
     expect(RuntimeEventSchema.parse(modelStepStarted)).toEqual(modelStepStarted);
 
-    const toolUseCreated = createToolUseCreatedEvent({
-      eventId: 'event-tool-use-created-factory',
-      eventType: 'tool.use.created',
+    const toolCallCreated = createToolCallCreatedEvent({
+      eventId: 'event-tool-call-created-factory',
+      eventType: 'tool.call.created',
       runId: 'run-1',
       sessionId: 'session-1',
       stepId: 'step-model-1',
@@ -1104,15 +1267,15 @@ describe('05 tool-use runtime events', () => {
       visibility: 'system',
       persist: 'required',
       payload: {
-        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
         modelStepId: 'model-step-1',
-        providerToolUseId: 'call-provider-1',
+        providerToolCallId: 'call-provider-1',
         toolName: 'read_file',
         input: { path: 'package.json' },
       },
     });
 
-    expect(RuntimeEventSchema.parse(toolUseCreated)).toEqual(toolUseCreated);
+    expect(RuntimeEventSchema.parse(toolCallCreated)).toEqual(toolCallCreated);
 
     const toolResultCreated = createToolResultCreatedEvent({
       eventId: 'event-tool-result-created-factory',
@@ -1127,8 +1290,8 @@ describe('05 tool-use runtime events', () => {
       persist: 'required',
       payload: {
         toolResultId: 'tool-result-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         kind: 'success',
         summary: 'Read file.',
       },
@@ -1195,10 +1358,10 @@ describe('05 tool-use runtime events', () => {
     ]));
   });
 
-  it('creates model tool-use detected events through the factory helper', () => {
-    const event = createModelToolUseDetectedEvent({
-      eventId: 'event-model-tool-use-detected-factory',
-      eventType: 'model.tool_use.detected',
+  it('creates model tool-call detected events through the factory helper', () => {
+    const event = createModelToolCallDetectedEvent({
+      eventId: 'event-model-tool-call-detected-factory',
+      eventType: 'model.tool_call.detected',
       runId: 'run-1',
       sessionId: 'session-1',
       stepId: 'step-1',
@@ -1209,8 +1372,8 @@ describe('05 tool-use runtime events', () => {
       persist: 'required',
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'call-read',
-        providerToolUseId: 'call-read',
+        toolCallId: 'tool-call-1',
+        providerToolCallId: 'call-read',
         toolName: 'read_file',
       },
     });

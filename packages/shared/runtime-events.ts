@@ -22,7 +22,7 @@ import type {
   ApprovalScope,
   ApprovalStatus,
   PermissionDecision,
-  ToolCall,
+  ToolExecution,
   ToolPolicyDecision,
 } from './tool-contracts';
 import type {
@@ -87,19 +87,19 @@ export const RUNTIME_EVENT_TYPES = [
   'model.thinking.started',
   'model.thinking.delta',
   'model.thinking.completed',
-  'model.tool_use.detected',
+  'model.tool_call.detected',
   'model.step.completed',
-  'tool.use.created',
+  'tool.call.created',
   'tool.result.created',
-  'tool.call.requested',
-  'tool.call.validated',
-  'tool.call.policy_decided',
+  'tool.execution.requested',
+  'tool.execution.validated',
+  'tool.execution.policy_decided',
   'permission.decision.created',
-  'tool.call.approval_requested',
-  'tool.call.started',
-  'tool.call.completed',
-  'tool.call.failed',
-  'tool.call.denied',
+  'tool.execution.approval_requested',
+  'tool.execution.started',
+  'tool.execution.completed',
+  'tool.execution.failed',
+  'tool.execution.denied',
   'approval.requested',
   'approval.resolved',
   'approval.expired',
@@ -140,7 +140,7 @@ export const RUNTIME_EVENT_TYPES = [
 export type RuntimeEventType = (typeof RUNTIME_EVENT_TYPES)[number];
 
 export const HOST_MAINTENANCE_RUNTIME_EVENT_TYPES = [
-  // Host maintenance only. Model tool execution must use tool.use/tool.call/tool.result events.
+  // Host maintenance only. Model tool execution must use tool.call/tool.execution/tool.result events.
   'action.requested',
 ] as const;
 
@@ -318,10 +318,10 @@ export interface ModelThinkingCompletedPayload {
   modelStepId: string;
 }
 
-export interface ModelToolUseDetectedPayload {
+export interface ModelToolCallDetectedPayload {
   modelStepId: string;
-  toolUseId: string;
-  providerToolUseId: string;
+  toolCallId: string;
+  providerToolCallId: string;
   toolName: string;
 }
 
@@ -330,18 +330,18 @@ export interface ModelStepCompletedPayload {
   finishReason?: string;
 }
 
-export interface ToolUseCreatedPayload {
-  toolUseId: string;
+export interface ToolCallCreatedPayload {
+  toolCallId: string;
   modelStepId: string;
-  providerToolUseId: string;
+  providerToolCallId: string;
   toolName: string;
   input: JsonValue;
 }
 
 export interface ToolResultCreatedPayload {
   toolResultId: string;
-  toolUseId: string;
-  toolCallId?: string;
+  toolCallId: string;
+  toolExecutionId?: string;
   kind: 'success' | 'tool_error' | 'policy_denied' | 'user_rejected' | 'redacted';
   summary: string;
 }
@@ -361,8 +361,8 @@ export interface RunCancelledPayload {
 
 export interface RunWaitingForApprovalPayload {
   approvalRequestId: string;
-  toolUseId: string;
   toolCallId: string;
+  toolExecutionId: string;
   reason: string;
 }
 
@@ -453,17 +453,17 @@ export interface RetryFailedPayload {
   error: RuntimeError;
 }
 
-export interface ToolCallRequestedPayload {
-  toolCall: ToolCall;
+export interface ToolExecutionRequestedPayload {
+  toolExecution: ToolExecution;
 }
 
-export interface ToolCallValidatedPayload {
-  toolCallId: string;
+export interface ToolExecutionValidatedPayload {
+  toolExecutionId: string;
   toolName: string;
 }
 
-export interface ToolCallPolicyDecidedPayload {
-  toolCallId: string;
+export interface ToolExecutionPolicyDecidedPayload {
+  toolExecutionId: string;
   toolName: string;
   policyDecision: ToolPolicyDecision;
 }
@@ -472,30 +472,30 @@ export interface PermissionDecisionCreatedPayload {
   permissionDecision: PermissionDecision;
 }
 
-export interface ToolCallApprovalRequestedPayload {
-  toolCallId: string;
+export interface ToolExecutionApprovalRequestedPayload {
+  toolExecutionId: string;
   toolName: string;
   approvalRequest: ApprovalRequest;
 }
 
-export interface ToolCallStartedPayload {
-  toolCallId: string;
+export interface ToolExecutionStartedPayload {
+  toolExecutionId: string;
   startedAt?: string;
 }
 
-export interface ToolCallCompletedPayload {
-  toolCallId: string;
+export interface ToolExecutionCompletedPayload {
+  toolExecutionId: string;
   completedAt?: string;
 }
 
-export interface ToolCallFailedPayload {
-  toolCallId: string;
+export interface ToolExecutionFailedPayload {
+  toolExecutionId: string;
   error: RuntimeError;
   completedAt?: string;
 }
 
-export interface ToolCallDeniedPayload {
-  toolCallId: string;
+export interface ToolExecutionDeniedPayload {
+  toolExecutionId: string;
   reason: string;
 }
 
@@ -651,19 +651,19 @@ export type RuntimeEventPayloadByType = {
   'model.thinking.started': ModelThinkingStartedPayload;
   'model.thinking.delta': ModelThinkingDeltaPayload;
   'model.thinking.completed': ModelThinkingCompletedPayload;
-  'model.tool_use.detected': ModelToolUseDetectedPayload;
+  'model.tool_call.detected': ModelToolCallDetectedPayload;
   'model.step.completed': ModelStepCompletedPayload;
-  'tool.use.created': ToolUseCreatedPayload;
+  'tool.call.created': ToolCallCreatedPayload;
   'tool.result.created': ToolResultCreatedPayload;
-  'tool.call.requested': ToolCallRequestedPayload;
-  'tool.call.validated': ToolCallValidatedPayload;
-  'tool.call.policy_decided': ToolCallPolicyDecidedPayload;
+  'tool.execution.requested': ToolExecutionRequestedPayload;
+  'tool.execution.validated': ToolExecutionValidatedPayload;
+  'tool.execution.policy_decided': ToolExecutionPolicyDecidedPayload;
   'permission.decision.created': PermissionDecisionCreatedPayload;
-  'tool.call.approval_requested': ToolCallApprovalRequestedPayload;
-  'tool.call.started': ToolCallStartedPayload;
-  'tool.call.completed': ToolCallCompletedPayload;
-  'tool.call.failed': ToolCallFailedPayload;
-  'tool.call.denied': ToolCallDeniedPayload;
+  'tool.execution.approval_requested': ToolExecutionApprovalRequestedPayload;
+  'tool.execution.started': ToolExecutionStartedPayload;
+  'tool.execution.completed': ToolExecutionCompletedPayload;
+  'tool.execution.failed': ToolExecutionFailedPayload;
+  'tool.execution.denied': ToolExecutionDeniedPayload;
   'approval.requested': ApprovalRequestedPayload;
   'approval.resolved': ApprovalResolvedPayload;
   'approval.expired': ApprovalExpiredPayload;

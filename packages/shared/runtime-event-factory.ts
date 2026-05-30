@@ -140,15 +140,15 @@ export function createModelThinkingCompletedEvent(
   return createRuntimeEvent(input);
 }
 
-export function createModelToolUseDetectedEvent(
-  input: RunRuntimeEventFactoryInput<'model.tool_use.detected'>,
-): TypedRuntimeEvent<'model.tool_use.detected'> {
+export function createModelToolCallDetectedEvent(
+  input: RunRuntimeEventFactoryInput<'model.tool_call.detected'>,
+): TypedRuntimeEvent<'model.tool_call.detected'> {
   return createRuntimeEvent(input);
 }
 
-export function createToolUseCreatedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.use.created'>,
-): TypedRuntimeEvent<'tool.use.created'> {
+export function createToolCallCreatedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.call.created'>,
+): TypedRuntimeEvent<'tool.call.created'> {
   return createRuntimeEvent(input);
 }
 
@@ -158,15 +158,21 @@ export function createToolResultCreatedEvent(
   return createRuntimeEvent(input);
 }
 
-export function createToolCallRequestedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.call.requested'>,
-): TypedRuntimeEvent<'tool.call.requested'> {
+export function createToolExecutionRequestedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.requested'>,
+): TypedRuntimeEvent<'tool.execution.requested'> {
   return createRuntimeEvent(input);
 }
 
-export function createToolCallPolicyDecidedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.call.policy_decided'>,
-): TypedRuntimeEvent<'tool.call.policy_decided'> {
+export function createToolExecutionValidatedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.validated'>,
+): TypedRuntimeEvent<'tool.execution.validated'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolExecutionPolicyDecidedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.policy_decided'>,
+): TypedRuntimeEvent<'tool.execution.policy_decided'> {
   return createRuntimeEvent(input);
 }
 
@@ -176,33 +182,33 @@ export function createPermissionDecisionCreatedEvent(
   return createRuntimeEvent(input);
 }
 
-export function createToolCallApprovalRequestedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.call.approval_requested'>,
-): TypedRuntimeEvent<'tool.call.approval_requested'> {
+export function createToolExecutionApprovalRequestedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.approval_requested'>,
+): TypedRuntimeEvent<'tool.execution.approval_requested'> {
   return createRuntimeEvent(input);
 }
 
-export function createToolCallStartedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.call.started'>,
-): TypedRuntimeEvent<'tool.call.started'> {
+export function createToolExecutionStartedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.started'>,
+): TypedRuntimeEvent<'tool.execution.started'> {
   return createRuntimeEvent(input);
 }
 
-export function createToolCallCompletedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.call.completed'>,
-): TypedRuntimeEvent<'tool.call.completed'> {
+export function createToolExecutionCompletedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.completed'>,
+): TypedRuntimeEvent<'tool.execution.completed'> {
   return createRuntimeEvent(input);
 }
 
-export function createToolCallFailedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.call.failed'>,
-): TypedRuntimeEvent<'tool.call.failed'> {
+export function createToolExecutionFailedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.failed'>,
+): TypedRuntimeEvent<'tool.execution.failed'> {
   return createRuntimeEvent(input);
 }
 
-export function createToolCallDeniedEvent(
-  input: RunRuntimeEventFactoryInput<'tool.call.denied'>,
-): TypedRuntimeEvent<'tool.call.denied'> {
+export function createToolExecutionDeniedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.denied'>,
+): TypedRuntimeEvent<'tool.execution.denied'> {
   return createRuntimeEvent(input);
 }
 
