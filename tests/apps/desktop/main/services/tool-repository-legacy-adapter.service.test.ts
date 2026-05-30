@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLegacyToolRepositoryAdapter } from '@megumi/desktop/main/services/tool-repository-legacy-adapter.service';
 import type {
+  ApprovalRecord,
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
@@ -17,6 +18,7 @@ describe('createLegacyToolRepositoryAdapter', () => {
     const toolExecution = hostToolExecution();
     const permissionDecision = toolPermissionDecision();
     const approvalRequest = toolApprovalRequest();
+    const approvalRecord = toolApprovalRecord();
     const toolResult = executionToolResult();
 
     expect(adapter.saveToolCall(toolCall)).toEqual(toolCall);
@@ -39,6 +41,12 @@ describe('createLegacyToolRepositoryAdapter', () => {
 
     expect(adapter.saveApprovalRequest(approvalRequest)).toEqual(approvalRequest);
     expect(legacyRepository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
+      toolUseId: 'tool-call-1',
+      toolCallId: 'tool-execution-1',
+    }));
+
+    expect(adapter.saveApprovalRecord(approvalRecord)).toEqual(approvalRecord);
+    expect(legacyRepository.saveApprovalRecord).toHaveBeenCalledWith(expect.objectContaining({
       toolUseId: 'tool-call-1',
       toolCallId: 'tool-execution-1',
     }));
@@ -119,6 +127,11 @@ function fakeLegacyRepository() {
       toolCallId: 'tool-execution-1',
       toolExecutionId: 'legacy-return-tool-execution-id',
     })),
+    saveApprovalRecord: vi.fn((value: unknown) => ({
+      ...value as Record<string, unknown>,
+      toolUseId: 'legacy-return-tool-use-id',
+      toolCallId: 'legacy-return-tool-execution-id',
+    })),
     saveToolResult: vi.fn((value: unknown) => ({
       ...value as Record<string, unknown>,
       toolUseId: 'legacy-return-tool-use-id',
@@ -195,6 +208,21 @@ function toolApprovalRequest(): ApprovalRequest {
     requestedScope: 'once',
     status: 'pending',
     createdAt: '2026-05-20T00:00:01.000Z',
+  };
+}
+
+function toolApprovalRecord(): ApprovalRecord {
+  return {
+    approvalRecordId: 'approval-record-1',
+    approvalRequestId: 'approval-request-1',
+    toolCallId: 'tool-call-1',
+    toolExecutionId: 'tool-execution-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    decision: 'approved',
+    scope: 'once',
+    decidedBy: 'user',
+    decidedAt: '2026-05-20T00:00:02.000Z',
   };
 }
 

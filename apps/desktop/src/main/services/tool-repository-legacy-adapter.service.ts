@@ -1,4 +1,5 @@
 import type {
+  ApprovalRecord,
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
@@ -27,6 +28,11 @@ type LegacyApprovalRequestWrite = Omit<ApprovalRequest, 'toolCallId' | 'toolExec
   toolCallId: ApprovalRequest['toolExecutionId'];
 };
 
+type LegacyApprovalRecordWrite = Omit<ApprovalRecord, 'toolCallId' | 'toolExecutionId'> & {
+  toolUseId: ApprovalRecord['toolCallId'];
+  toolCallId: ApprovalRecord['toolExecutionId'];
+};
+
 type LegacyToolResultWrite = Omit<ToolResult, 'toolCallId' | 'toolExecutionId'> & {
   toolUseId: ToolResult['toolCallId'];
   toolCallId?: ToolResult['toolExecutionId'];
@@ -47,6 +53,10 @@ type LegacyApprovalRequestRow = Partial<ApprovalRequest> & {
   toolCallId?: ApprovalRequest['toolExecutionId'];
 };
 
+export interface LegacyToolRepositoryAdapter extends ToolCallHandlerRepositoryPort {
+  saveApprovalRecord(approvalRecord: ApprovalRecord): ApprovalRecord;
+}
+
 export interface LegacyToolRepositoryPort {
   saveToolUse(toolUse: unknown): unknown;
   getToolUse(toolUseId: string): unknown;
@@ -55,12 +65,13 @@ export interface LegacyToolRepositoryPort {
   savePermissionDecision(permissionDecision: unknown): unknown;
   saveApprovalRequest(approvalRequest: unknown): unknown;
   getApprovalRequest(approvalRequestId: string): unknown;
+  saveApprovalRecord(approvalRecord: unknown): unknown;
   saveToolResult(toolResult: unknown): unknown;
 }
 
 export function createLegacyToolRepositoryAdapter(
   legacyRepository: LegacyToolRepositoryPort,
-): ToolCallHandlerRepositoryPort {
+): LegacyToolRepositoryAdapter {
   return {
     saveToolCall(toolCall) {
       legacyRepository.saveToolUse(toLegacyToolUseWrite(toolCall));
@@ -89,6 +100,10 @@ export function createLegacyToolRepositoryAdapter(
     getApprovalRequest(approvalRequestId) {
       const row = legacyRepository.getApprovalRequest(approvalRequestId);
       return isRecord(row) ? fromLegacyApprovalRequestRow(row as LegacyApprovalRequestRow) : undefined;
+    },
+    saveApprovalRecord(approvalRecord) {
+      legacyRepository.saveApprovalRecord(toLegacyApprovalRecordWrite(approvalRecord));
+      return approvalRecord;
     },
     saveToolResult(toolResult) {
       legacyRepository.saveToolResult(toLegacyToolResultWrite(toolResult));
@@ -185,6 +200,20 @@ function fromLegacyApprovalRequestRow(row: LegacyApprovalRequestRow): ApprovalRe
     toolCallId: toolUseId ?? approvalRequest.toolCallId,
     toolExecutionId: approvalRequest.toolCallId ?? approvalRequest.toolExecutionId,
   } as ApprovalRequest;
+}
+
+function toLegacyApprovalRecordWrite(approvalRecord: ApprovalRecord): LegacyApprovalRecordWrite {
+  const {
+    toolCallId,
+    toolExecutionId,
+    ...rest
+  } = approvalRecord;
+
+  return {
+    ...rest,
+    toolUseId: toolCallId,
+    toolCallId: toolExecutionId,
+  };
 }
 
 function toLegacyToolResultWrite(toolResult: ToolResult): LegacyToolResultWrite {

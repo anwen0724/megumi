@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { ToolService } from '@megumi/desktop/main/services/tool.service';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { createRuntimeEvent } from '@megumi/shared/runtime-event-factory';
-import type { ApprovalRequest } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 describe('ToolService', () => {
@@ -32,13 +31,45 @@ describe('ToolService', () => {
     expect(repository.saveApprovalRecord).not.toHaveBeenCalled();
   });
 
+  it('maps legacy repository tool call rows to new-domain tool executions', () => {
+    const repository = {
+      getToolCall: vi.fn(() => createLegacyToolExecutionRow()),
+      getApprovalRequest: vi.fn(),
+      saveApprovalRecord: vi.fn(),
+    };
+    const service = new ToolService({
+      registry: createBuiltInToolRegistry(),
+      repository: repository as never,
+    });
+
+    const toolExecution = service.getToolExecution('tool-execution-1');
+
+    expect(repository.getToolCall).toHaveBeenCalledWith('tool-execution-1');
+    expect(toolExecution).toEqual(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
+      toolCallId: 'tool-call-1',
+      stepId: 'step-1',
+    }));
+    expect(toolExecution).not.toHaveProperty('toolUseId');
+  });
+
   it('resolves approvals, updates request status, and exposes resumed runtime events', async () => {
-    const approvalRequest = createApprovalRequest();
+    const approvalRequest = createLegacyApprovalRequestRow();
     const repository = {
       getToolCall: vi.fn(),
       getApprovalRequest: vi.fn(() => approvalRequest),
-      saveApprovalRecord: vi.fn((value) => value),
-      saveApprovalRequest: vi.fn((value) => value),
+      saveApprovalRecord: vi.fn((value) => ({
+        ...value,
+        toolUseId: 'legacy-return-tool-call-id',
+        toolCallId: 'legacy-return-tool-execution-id',
+        toolExecutionId: 'legacy-return-poison-execution-id',
+      })),
+      saveApprovalRequest: vi.fn((value) => ({
+        ...value,
+        toolUseId: 'legacy-return-tool-call-id',
+        toolCallId: 'legacy-return-tool-execution-id',
+        toolExecutionId: 'legacy-return-poison-execution-id',
+      })),
     };
     const resumedEvent = createRuntimeEvent({
       eventId: 'event-approval-resolved',
@@ -84,12 +115,20 @@ describe('ToolService', () => {
       approvalRecordId: 'approval-record-1',
       approvalRequestId: 'approval-request-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       decision: 'approved',
       scope: 'once',
       reason: 'Looks fine',
     });
+    expect(repository.saveApprovalRecord).toHaveBeenCalledWith(expect.objectContaining({
+      approvalRecordId: 'approval-record-1',
+      toolUseId: 'tool-call-1',
+      toolCallId: 'tool-execution-1',
+    }));
     expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
       approvalRequestId: 'approval-request-1',
+      toolUseId: 'tool-call-1',
+      toolCallId: 'tool-execution-1',
       status: 'approved',
       resolvedAt: '2026-05-20T00:00:03.000Z',
     }));
@@ -109,13 +148,13 @@ describe('ToolService', () => {
   });
 
   it('rejects a second resolve for an already resolved approval request without overwriting state or resuming again', () => {
-    const approvalRequest = createApprovalRequest();
+    const approvalRequest = createNewApprovalRequest();
     const approvalRequests = new Map([[approvalRequest.approvalRequestId, approvalRequest]]);
     const repository = {
       getToolCall: vi.fn(),
       getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
       saveApprovalRecord: vi.fn((value) => value),
-      saveApprovalRequest: vi.fn((value: ApprovalRequest) => {
+      saveApprovalRequest: vi.fn((value: ReturnType<typeof createNewApprovalRequest>) => {
         approvalRequests.set(value.approvalRequestId, value);
         return value;
       }),
@@ -167,11 +206,34 @@ async function* asyncEvents(events: RuntimeEvent[]): AsyncIterable<RuntimeEvent>
   yield* events;
 }
 
-function createApprovalRequest(): ApprovalRequest {
+function createLegacyToolExecutionRow() {
+  return {
+    toolUseId: 'tool-call-1',
+    toolCallId: 'tool-execution-1',
+    toolExecutionId: 'legacy-poison-execution-id',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName: 'read_file',
+    input: { path: 'README.md' },
+    inputPreview: {
+      summary: 'read_file README.md',
+      targets: [{ kind: 'file', label: 'README.md' }],
+      redactionState: 'none',
+    },
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    sideEffect: 'none',
+    status: 'pending_approval',
+    requestedAt: '2026-05-20T00:00:01.000Z',
+  };
+}
+
+function createLegacyApprovalRequestRow() {
   return {
     approvalRequestId: 'approval-request-1',
-    toolUseId: 'tool-use-1',
-    toolCallId: 'tool-call-1',
+    toolUseId: 'tool-call-1',
+    toolCallId: 'tool-execution-1',
+    toolExecutionId: 'legacy-poison-execution-id',
     runId: 'run-1',
     stepId: 'step-1',
     toolName: 'read_file',
@@ -187,4 +249,26 @@ function createApprovalRequest(): ApprovalRequest {
     status: 'pending',
     createdAt: '2026-05-20T00:00:02.000Z',
   };
+}
+
+function createNewApprovalRequest() {
+  return {
+    approvalRequestId: 'approval-request-1',
+    toolCallId: 'tool-call-1',
+    toolExecutionId: 'tool-execution-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    toolName: 'read_file',
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    title: 'Approve read_file',
+    summary: 'User approval is required.',
+    preview: {
+      action: 'read_file',
+      targets: [],
+    },
+    requestedScope: 'once',
+    status: 'pending',
+    createdAt: '2026-05-20T00:00:02.000Z',
+  } as const;
 }
