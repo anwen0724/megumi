@@ -5,6 +5,7 @@ import {
   type ModelInputContextPart,
   type ModelInputContextSelectedSource,
 } from '@megumi/shared/model-input-context-contracts';
+import { estimateModelInputContextTokens } from './context-budget';
 
 export interface BuildModelInputContextInput {
   contextId: string;
@@ -60,10 +61,6 @@ export function buildModelInputContext(input: BuildModelInputContextInput): Mode
     },
     builtAt: input.builtAt,
   });
-}
-
-export function estimateModelInputContextTokens(value: string): number {
-  return Math.ceil(value.length / 4);
 }
 
 function selectedSourcesForParts(parts: ModelInputContextPart[]): ModelInputContextSelectedSource[] {
