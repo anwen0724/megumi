@@ -161,8 +161,8 @@ export const AssistantThinkingCompletedEventSchema = chatStreamEventSchema(
 );
 
 const ToolActivityBaseShape = {
-  toolUseId: z.string().min(1),
-  toolCallId: z.string().min(1).optional(),
+  toolCallId: z.string().min(1),
+  toolExecutionId: z.string().min(1).optional(),
   toolName: z.string().min(1),
   displayName: z.string().min(1).optional(),
   inputSummary: OptionalTextSchema,
@@ -192,8 +192,8 @@ export const ToolDeniedEventSchema = chatStreamEventSchema('tool.denied', {
 
 export const ApprovalRequestedEventSchema = chatStreamEventSchema('approval.requested', {
   approvalId: z.string().min(1),
-  toolUseId: z.string().min(1).optional(),
   toolCallId: z.string().min(1).optional(),
+  toolExecutionId: z.string().min(1).optional(),
   scope: z.string().min(1),
   status: ApprovalRequestStatusSchema,
   title: z.string().min(1),
@@ -203,8 +203,8 @@ export const ApprovalRequestedEventSchema = chatStreamEventSchema('approval.requ
 
 export const ApprovalResolvedEventSchema = chatStreamEventSchema('approval.resolved', {
   approvalId: z.string().min(1),
-  toolUseId: z.string().min(1).optional(),
   toolCallId: z.string().min(1).optional(),
+  toolExecutionId: z.string().min(1).optional(),
   scope: z.string().min(1),
   status: ApprovalResolutionStatusSchema,
   decision: ApprovalResolutionStatusSchema.optional(),

@@ -29,7 +29,7 @@ export const MODEL_INPUT_CONTEXT_SOURCE_KINDS = [
   'session_step',
   'session_runtime_fact',
   'session_summary',
-  'tool_use',
+  'tool_call',
   'tool_result',
   'approval',
   'provider_state',
@@ -269,8 +269,8 @@ export interface SessionPart extends ModelInputContextPartBase {
 export const ToolContinuationPartSchema = ModelInputContextPartBaseSchema.extend({
   kind: z.literal('tool_continuation'),
   text: NonEmptyTextSchema,
-  toolUseId: IdSchema.optional(),
-  providerToolUseId: IdSchema.optional(),
+  toolCallId: IdSchema.optional(),
+  providerToolCallId: IdSchema.optional(),
   modelStepId: IdSchema.optional(),
   toolName: z.string().min(1).max(64).optional(),
   toolInput: JsonValueSchema.optional(),
@@ -283,8 +283,8 @@ export const ToolContinuationPartSchema = ModelInputContextPartBaseSchema.extend
 export interface ToolContinuationPart extends ModelInputContextPartBase {
   kind: 'tool_continuation';
   text: string;
-  toolUseId?: string;
-  providerToolUseId?: string;
+  toolCallId?: string;
+  providerToolCallId?: string;
   modelStepId?: string;
   toolName?: string;
   toolInput?: JsonValue;

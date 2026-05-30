@@ -109,6 +109,7 @@ export function reduceChatStreamEvent(
       const item = ensureToolItem(process, event);
 
       item.toolCallId = event.toolCallId;
+      item.toolExecutionId = event.toolExecutionId;
       item.toolName = event.toolName;
       item.displayName = event.displayName;
       item.inputSummary = event.inputSummary;
@@ -140,8 +141,8 @@ export function reduceChatStreamEvent(
       const process = ensureProcessBlock(assistant, event);
       const item = ensureApprovalItem(process, event);
 
-      item.toolUseId = event.toolUseId;
       item.toolCallId = event.toolCallId;
+      item.toolExecutionId = event.toolExecutionId;
       item.scope = event.scope;
       item.status = event.status;
 
@@ -444,7 +445,7 @@ function ensureToolItem(
     { eventType: 'tool.started' | 'tool.completed' | 'tool.failed' | 'tool.denied' }
   >,
 ): ToolActivityItem {
-  const itemId = `tool:${event.toolUseId}`;
+  const itemId = `tool:${event.toolCallId}`;
   const existing = process.items.find(
     (item): item is ToolActivityItem => item.kind === 'tool_activity' && item.itemId === itemId,
   );
@@ -456,8 +457,8 @@ function ensureToolItem(
   const item: ToolActivityItem = {
     itemId,
     kind: 'tool_activity',
-    toolUseId: event.toolUseId,
     toolCallId: event.toolCallId,
+    toolExecutionId: event.toolExecutionId,
     toolName: event.toolName,
     displayName: event.displayName,
     inputSummary: event.inputSummary,
@@ -487,8 +488,8 @@ function ensureApprovalItem(
     itemId,
     kind: 'approval_activity',
     approvalId: event.approvalId,
-    toolUseId: event.toolUseId,
     toolCallId: event.toolCallId,
+    toolExecutionId: event.toolExecutionId,
     scope: event.scope,
     status: event.status,
     title: event.eventType === 'approval.requested' ? event.title : event.approvalId,

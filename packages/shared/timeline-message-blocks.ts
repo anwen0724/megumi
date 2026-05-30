@@ -3,8 +3,8 @@ import type {
   RunId,
   SessionId,
   ToolCallId,
+  ToolExecutionId,
   ToolResultId,
-  ToolUseId,
 } from './ids';
 
 export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant'] as const;
@@ -130,8 +130,8 @@ export interface AssistantTextItem extends ProcessDisclosureItemBase {
 
 export interface ToolActivityItem extends ProcessDisclosureItemBase {
   kind: 'tool_activity';
-  toolUseId: ToolUseId | string;
-  toolCallId?: ToolCallId | string;
+  toolCallId: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   toolResultId?: ToolResultId | string;
   toolName: string;
   displayName?: string;
@@ -143,8 +143,8 @@ export interface ToolActivityItem extends ProcessDisclosureItemBase {
 export interface ApprovalActivityItem extends ProcessDisclosureItemBase {
   kind: 'approval_activity';
   approvalId: string;
-  toolUseId?: ToolUseId | string;
   toolCallId?: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   scope: string;
   status: ApprovalActivityStatus;
   title: string;

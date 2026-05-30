@@ -3,8 +3,8 @@ import type {
   RunId,
   SessionId,
   ToolCallId,
+  ToolExecutionId,
   ToolResultId,
-  ToolUseId,
 } from './ids';
 
 export const CHAT_STREAM_EVENT_TYPES = [
@@ -143,8 +143,8 @@ export interface AssistantThinkingCompletedEvent extends ChatStreamEventBase {
 
 export interface ToolStartedEvent extends ChatStreamEventBase {
   eventType: 'tool.started';
-  toolUseId: ToolUseId | string;
-  toolCallId?: ToolCallId | string;
+  toolCallId: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   toolName: string;
   displayName?: string;
   inputSummary?: string;
@@ -152,8 +152,8 @@ export interface ToolStartedEvent extends ChatStreamEventBase {
 
 export interface ToolCompletedEvent extends ChatStreamEventBase {
   eventType: 'tool.completed';
-  toolUseId: ToolUseId | string;
-  toolCallId?: ToolCallId | string;
+  toolCallId: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   toolResultId?: ToolResultId | string;
   toolName: string;
   displayName?: string;
@@ -163,8 +163,8 @@ export interface ToolCompletedEvent extends ChatStreamEventBase {
 
 export interface ToolFailedEvent extends ChatStreamEventBase {
   eventType: 'tool.failed';
-  toolUseId: ToolUseId | string;
-  toolCallId?: ToolCallId | string;
+  toolCallId: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   toolResultId?: ToolResultId | string;
   toolName: string;
   displayName?: string;
@@ -176,8 +176,8 @@ export interface ToolFailedEvent extends ChatStreamEventBase {
 
 export interface ToolDeniedEvent extends ChatStreamEventBase {
   eventType: 'tool.denied';
-  toolUseId: ToolUseId | string;
-  toolCallId?: ToolCallId | string;
+  toolCallId: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   toolResultId?: ToolResultId | string;
   toolName: string;
   displayName?: string;
@@ -188,8 +188,8 @@ export interface ToolDeniedEvent extends ChatStreamEventBase {
 export interface ApprovalRequestedEvent extends ChatStreamEventBase {
   eventType: 'approval.requested';
   approvalId: string;
-  toolUseId?: ToolUseId | string;
   toolCallId?: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   scope: ChatStreamApprovalScope;
   status: 'pending';
   title: string;
@@ -200,8 +200,8 @@ export interface ApprovalRequestedEvent extends ChatStreamEventBase {
 export interface ApprovalResolvedEvent extends ChatStreamEventBase {
   eventType: 'approval.resolved';
   approvalId: string;
-  toolUseId?: ToolUseId | string;
   toolCallId?: ToolCallId | string;
+  toolExecutionId?: ToolExecutionId | string;
   scope: ChatStreamApprovalScope;
   status: ApprovalResolutionStatus;
   decision?: ApprovalResolutionStatus;

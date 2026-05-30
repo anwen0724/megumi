@@ -70,7 +70,7 @@ describe('ModelInputContext contracts', () => {
           priority: 80,
           tokenEstimate: 8,
           budgetStatus: 'included_full',
-          toolUseId: 'tool-use:1',
+          toolCallId: 'tool-call:1',
           toolResultId: 'tool-result:1',
         },
         {
@@ -377,14 +377,14 @@ describe('ModelInputContext contracts', () => {
       stepId: 'step-2',
       parts: [
         {
-          partId: 'part:tool-use:1',
+          partId: 'part:tool-call:1',
           kind: 'tool_continuation',
-          text: 'Tool use tool-use-1 requested read_file.',
-          sourceRefs: [{ sourceId: 'tool-use:tool-use-1', sourceKind: 'tool_use' }],
+          text: 'Tool call tool-call-1 requested read_file.',
+          sourceRefs: [{ sourceId: 'tool-call:tool-call-1', sourceKind: 'tool_call' }],
           priority: 80,
           budgetStatus: 'included_full',
-          toolUseId: 'tool-use-1',
-          providerToolUseId: 'provider-tool-use-1',
+          toolCallId: 'tool-call-1',
+          providerToolCallId: 'provider-tool-call-1',
           modelStepId: 'model-step-1',
           toolName: 'read_file',
           toolInput: { path: 'package.json' },
@@ -392,11 +392,11 @@ describe('ModelInputContext contracts', () => {
         {
           partId: 'part:tool-result:1',
           kind: 'tool_continuation',
-          text: 'Tool result tool-result-1 for tool-use-1.',
+          text: 'Tool result tool-result-1 for tool-call-1.',
           sourceRefs: [{ sourceId: 'tool-result:tool-result-1', sourceKind: 'tool_result' }],
           priority: 85,
           budgetStatus: 'included_full',
-          toolUseId: 'tool-use-1',
+          toolCallId: 'tool-call-1',
           toolResultId: 'tool-result-1',
           toolResultContent: 'File contents',
         },
@@ -419,7 +419,7 @@ describe('ModelInputContext contracts', () => {
         keepRecentTokens: 4096,
         inputTokenEstimate: 12,
         partBudgets: [
-          { partId: 'part:tool-use:1', tokenEstimate: 4, budgetStatus: 'included_full' },
+          { partId: 'part:tool-call:1', tokenEstimate: 4, budgetStatus: 'included_full' },
           { partId: 'part:tool-result:1', tokenEstimate: 4, budgetStatus: 'included_full' },
           { partId: 'part:provider-state:1', tokenEstimate: 4, budgetStatus: 'included_full' },
         ],
@@ -427,7 +427,7 @@ describe('ModelInputContext contracts', () => {
       trace: {
         buildReason: 'tool_continuation',
         selectedSources: [
-          { sourceId: 'tool-use:tool-use-1', reason: 'tool_continuation' },
+          { sourceId: 'tool-call:tool-call-1', reason: 'tool_continuation' },
           { sourceId: 'tool-result:tool-result-1', reason: 'tool_continuation' },
           { sourceId: 'provider-state:model-step-1:0', reason: 'tool_continuation' },
         ],
@@ -437,6 +437,8 @@ describe('ModelInputContext contracts', () => {
     });
 
     expect(context.parts[0]).toMatchObject({
+      toolCallId: 'tool-call-1',
+      providerToolCallId: 'provider-tool-call-1',
       toolName: 'read_file',
       toolInput: { path: 'package.json' },
     });
@@ -465,6 +467,7 @@ describe('ModelInputContext contracts', () => {
       'session_summary',
     ]);
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('project_instruction');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('tool_call');
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('tool_result');
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_message');
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_run');
@@ -472,6 +475,41 @@ describe('ModelInputContext contracts', () => {
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_runtime_fact');
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('approval');
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_summary');
+  });
+
+  it('rejects legacy tool use continuation fields', () => {
+    expect(() => ModelInputContextSchema.parse({
+      contextId: 'model-input-context:legacy-tool-use',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      parts: [
+        {
+          partId: 'part:legacy-tool-use',
+          kind: 'tool_continuation',
+          text: 'Legacy tool use continuation.',
+          sourceRefs: [{ sourceId: 'tool-use:legacy', sourceKind: 'tool_use' }],
+          priority: 80,
+          budgetStatus: 'included_full',
+          toolUseId: 'tool-use-legacy',
+          providerToolUseId: 'provider-tool-use-legacy',
+        },
+      ],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        keepRecentTokens: 4096,
+        inputTokenEstimate: 4,
+        partBudgets: [{ partId: 'part:legacy-tool-use', tokenEstimate: 4, budgetStatus: 'included_full' }],
+      },
+      trace: {
+        buildReason: 'tool_continuation',
+        selectedSources: [],
+        excludedSources: [],
+      },
+      builtAt,
+    })).toThrow();
   });
 });
 

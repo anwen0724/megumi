@@ -150,8 +150,8 @@ describe('chat stream event contract', () => {
       ...base,
       eventId: 'chat-stream-event-tool',
       eventType: 'tool.completed',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       toolResultId: 'tool-result-1',
       toolName: 'read_file',
       displayName: 'Read file',
@@ -164,8 +164,8 @@ describe('chat stream event contract', () => {
       eventId: 'chat-stream-event-approval',
       eventType: 'approval.requested',
       approvalId: 'approval-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       scope: 'project',
       status: 'pending',
       title: 'Run command',
@@ -205,8 +205,8 @@ describe('chat stream event contract', () => {
       eventId: 'chat-stream-event-tool-invalid-stream',
       eventType: 'tool.completed',
       streamId: base.runId,
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       toolResultId: 'tool-result-1',
       toolName: 'read_file',
       displayName: 'Read file',
@@ -219,7 +219,7 @@ describe('chat stream event contract', () => {
     expect(() => ChatStreamEventSchema.parse({
       ...base,
       eventType: 'tool.completed',
-      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
       toolName: 'read_file',
       resultSummary: 'Read file.',
       rawProviderBody: { secret: 'sk-test' },
@@ -228,10 +228,29 @@ describe('chat stream event contract', () => {
     expect(() => ChatStreamEventSchema.parse({
       ...base,
       eventType: 'tool.completed',
-      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
       toolName: 'read_file',
       resultSummary: 'Read file.',
       displayText: 'Megumi read docs/README.md',
+    })).toThrow();
+  });
+
+  it('rejects legacy toolUseId fields on tool and approval events', () => {
+    expect(() => ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'tool.started',
+      toolUseId: 'tool-use-1',
+      toolName: 'read_file',
+    })).toThrow();
+
+    expect(() => ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'approval.requested',
+      approvalId: 'approval-1',
+      toolUseId: 'tool-use-1',
+      scope: 'project',
+      status: 'pending',
+      title: 'Run command',
     })).toThrow();
   });
 });
@@ -241,7 +260,7 @@ describe('chat stream event factory', () => {
     const event = createChatStreamEvent({
       ...base,
       eventType: 'tool.started',
-      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
       toolName: 'read_file',
       inputSummary: 'docs/README.md',
     });
@@ -273,8 +292,8 @@ describe('root shared exports', () => {
   it('keeps approval event schema root exports on runtime event envelopes', () => {
     const approvalRequest = {
       approvalRequestId: 'approval-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       runId: 'run-1',
       stepId: 'step-1',
       toolName: 'edit_file',

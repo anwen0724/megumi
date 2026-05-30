@@ -97,10 +97,10 @@ describe('timeline message and block contracts', () => {
               format: 'plain',
             },
             {
-              itemId: 'tool:tool-use-1',
+              itemId: 'tool:tool-call-1',
               kind: 'tool_activity',
-              toolUseId: 'tool-use-1',
               toolCallId: 'tool-call-1',
+              toolExecutionId: 'tool-execution-1',
               toolResultId: 'tool-result-1',
               toolName: 'read_file',
               displayName: 'Read file',
@@ -112,8 +112,8 @@ describe('timeline message and block contracts', () => {
               itemId: 'approval:approval-1',
               kind: 'approval_activity',
               approvalId: 'approval-1',
-              toolUseId: 'tool-use-1',
               toolCallId: 'tool-call-1',
+              toolExecutionId: 'tool-execution-1',
               scope: 'project',
               status: 'approved',
               title: 'Run command',
@@ -295,9 +295,9 @@ describe('timeline message and block contracts', () => {
 
   it('rejects final UI copy, ordering fields, raw tool input, and raw provider bodies', () => {
     expect(() => ToolActivityItemSchema.parse({
-      itemId: 'tool:tool-use-raw',
+      itemId: 'tool:tool-call-raw',
       kind: 'tool_activity',
-      toolUseId: 'tool-use-raw',
+      toolCallId: 'tool-call-raw',
       toolName: 'read_file',
       status: 'succeeded',
       displayText: 'Megumi read docs/README.md',
@@ -315,9 +315,9 @@ describe('timeline message and block contracts', () => {
     })).toThrow();
 
     expect(() => ToolActivityItemSchema.parse({
-      itemId: 'tool:tool-use-input',
+      itemId: 'tool:tool-call-input',
       kind: 'tool_activity',
-      toolUseId: 'tool-use-input',
+      toolCallId: 'tool-call-input',
       toolName: 'read_file',
       status: 'succeeded',
       input: { path: 'docs/README.md' },
@@ -334,6 +334,34 @@ describe('timeline message and block contracts', () => {
           kind: 'error_activity',
           errorMessage: 'Provider failed.',
           rawProviderBody: { secret: 'sk-test' },
+        },
+      ],
+    })).toThrow();
+  });
+
+  it('rejects legacy toolUseId on process disclosure tool and approval items', () => {
+    expect(() => ToolActivityItemSchema.parse({
+      itemId: 'tool:tool-use-legacy',
+      kind: 'tool_activity',
+      toolUseId: 'tool-use-legacy',
+      toolName: 'read_file',
+      status: 'running',
+    })).toThrow();
+
+    expect(() => ProcessDisclosureBlockSchema.parse({
+      blockId: 'process-run-legacy',
+      kind: 'process_disclosure',
+      runId: 'run-legacy',
+      status: 'running',
+      items: [
+        {
+          itemId: 'approval:legacy',
+          kind: 'approval_activity',
+          approvalId: 'approval-legacy',
+          toolUseId: 'tool-use-legacy',
+          scope: 'project',
+          status: 'pending',
+          title: 'Run command',
         },
       ],
     })).toThrow();
