@@ -9,6 +9,7 @@ import {
   type AgentInstructionSourceSnapshot,
   type ModelInputContext,
 } from '@megumi/shared/model-input-context-contracts';
+import type { ContextBudgetWarning } from '@megumi/shared/context-budget-contracts';
 import { SessionContextInputSchema, type SessionContextInput } from '@megumi/shared/session-context-contracts';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
@@ -87,6 +88,7 @@ describe('ModelInputContext contracts', () => {
         modelContextWindow: 8192,
         reservedOutputTokens: 1024,
         availableInputTokens: 7168,
+        keepRecentTokens: 4096,
         inputTokenEstimate: 33,
         partBudgets: [
           { partId: 'part:instruction:1', tokenEstimate: 4, budgetStatus: 'included_full' },
@@ -108,6 +110,15 @@ describe('ModelInputContext contracts', () => {
             reason: 'outside_recent_window',
           },
         ],
+        firstKeptPartId: 'part:session:1',
+        firstKeptSourceId: 'session-message:1',
+        budgetWarnings: [
+          {
+            reason: 'required_context_over_budget',
+            tokenEstimate: 9000,
+            availableInputTokens: 7168,
+          },
+        ],
       },
       builtAt,
     });
@@ -121,6 +132,16 @@ describe('ModelInputContext contracts', () => {
     ]);
     expect(parsed.parts[0]?.sourceRefs[0]?.sourceKind).toBe('system_instruction');
     expect(parsed.parts[2]?.budgetStatus).toBe('included_reduced');
+    expect(parsed.budget.keepRecentTokens).toBe(4096);
+    expect(parsed.trace.firstKeptPartId).toBe('part:session:1');
+    expect(parsed.trace.firstKeptSourceId).toBe('session-message:1');
+    expect(parsed.trace.budgetWarnings).toEqual([
+      {
+        reason: 'required_context_over_budget',
+        tokenEstimate: 9000,
+        availableInputTokens: 7168,
+      } satisfies ContextBudgetWarning,
+    ]);
     expect(parsed.trace.excludedSources[0]?.reason).toBe('outside_recent_window');
     expect(JSON.stringify(parsed)).not.toContain('sk-test');
   });
@@ -144,6 +165,7 @@ describe('ModelInputContext contracts', () => {
         modelContextWindow: 8192,
         reservedOutputTokens: 1024,
         availableInputTokens: 7168,
+        keepRecentTokens: 4096,
         inputTokenEstimate: 0,
         partBudgets: [],
       },
@@ -154,6 +176,57 @@ describe('ModelInputContext contracts', () => {
       },
       builtAt,
       rawPrompt: 'must not be accepted',
+    })).toThrow();
+  });
+
+  it('rejects budget policy fields on trace warnings and requires keepRecentTokens', () => {
+    expect(() => ModelInputContextSchema.parse({
+      contextId: 'model-input-context:missing-keep-recent',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      parts: [],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        inputTokenEstimate: 0,
+        partBudgets: [],
+      },
+      trace: {
+        buildReason: 'test',
+        selectedSources: [],
+        excludedSources: [],
+      },
+      builtAt,
+    })).toThrow();
+
+    expect(() => ModelInputContextSchema.parse({
+      contextId: 'model-input-context:warning-extra',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      parts: [],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        keepRecentTokens: 4096,
+        inputTokenEstimate: 0,
+        partBudgets: [],
+      },
+      trace: {
+        buildReason: 'test',
+        selectedSources: [],
+        excludedSources: [],
+        budgetWarnings: [{
+          reason: 'required_context_over_budget',
+          tokenEstimate: 9000,
+          availableInputTokens: 7168,
+          rawPrompt: 'must not be accepted',
+        }],
+      },
+      builtAt,
     })).toThrow();
   });
 
@@ -175,6 +248,7 @@ describe('ModelInputContext contracts', () => {
         modelContextWindow: 8192,
         reservedOutputTokens: 1024,
         availableInputTokens: 7168,
+        keepRecentTokens: 4096,
         inputTokenEstimate: 0,
         partBudgets: [],
       },
@@ -342,6 +416,7 @@ describe('ModelInputContext contracts', () => {
         modelContextWindow: 8192,
         reservedOutputTokens: 1024,
         availableInputTokens: 7168,
+        keepRecentTokens: 4096,
         inputTokenEstimate: 12,
         partBudgets: [
           { partId: 'part:tool-use:1', tokenEstimate: 4, budgetStatus: 'included_full' },

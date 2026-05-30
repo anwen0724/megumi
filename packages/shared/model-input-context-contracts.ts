@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ContextBudgetWarningSchema, type ContextBudgetWarning } from './context-budget-contracts';
 import type { IsoDateTime } from './ids';
 import { JsonObjectSchema, JsonValueSchema, type JsonObject, type JsonValue } from './json';
 import { IsoDateTimeSchema } from './runtime-validation';
@@ -339,6 +340,7 @@ export const ModelInputContextBudgetSchema = z
     modelContextWindow: z.number().int().positive(),
     reservedOutputTokens: z.number().int().nonnegative(),
     availableInputTokens: z.number().int().nonnegative(),
+    keepRecentTokens: z.number().int().nonnegative(),
     inputTokenEstimate: z.number().int().nonnegative(),
     partBudgets: z.array(ModelInputContextPartBudgetSchema),
   })
@@ -348,6 +350,7 @@ export interface ModelInputContextBudget {
   modelContextWindow: number;
   reservedOutputTokens: number;
   availableInputTokens: number;
+  keepRecentTokens: number;
   inputTokenEstimate: number;
   partBudgets: ModelInputContextPartBudget[];
 }
@@ -381,6 +384,9 @@ export const ModelInputContextTraceSchema = z
     buildReason: z.string().min(1),
     selectedSources: z.array(ModelInputContextSelectedSourceSchema),
     excludedSources: z.array(ModelInputContextExcludedSourceSchema),
+    firstKeptPartId: IdSchema.optional(),
+    firstKeptSourceId: IdSchema.optional(),
+    budgetWarnings: z.array(ContextBudgetWarningSchema).optional(),
     metadata: OptionalJsonObjectSchema,
   })
   .strict();
@@ -389,6 +395,9 @@ export interface ModelInputContextTrace {
   buildReason: string;
   selectedSources: ModelInputContextSelectedSource[];
   excludedSources: ModelInputContextExcludedSource[];
+  firstKeptPartId?: string;
+  firstKeptSourceId?: string;
+  budgetWarnings?: ContextBudgetWarning[];
   metadata?: JsonObject;
 }
 

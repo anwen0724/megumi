@@ -67,6 +67,7 @@ describe('ModelInputContextBuilder', () => {
       modelContextWindow: 8192,
       reservedOutputTokens: 1024,
       availableInputTokens: 7168,
+      keepRecentTokens: 4096,
       parts: [
         instructionPart(),
         currentTurnPart(),
@@ -83,6 +84,7 @@ describe('ModelInputContextBuilder', () => {
     expect(context.budget.inputTokenEstimate).toBe(
       context.budget.partBudgets.reduce((sum, item) => sum + item.tokenEstimate, 0),
     );
+    expect(context.budget.keepRecentTokens).toBe(4096);
     expect(context.trace.selectedSources.map((source) => source.sourceId)).toEqual([
       'source:system',
       'message:1',
@@ -110,5 +112,24 @@ describe('ModelInputContextBuilder', () => {
     expect(context.budget.partBudgets).toEqual([
       { partId: 'part:session:1', tokenEstimate: 3, budgetStatus: 'included_reduced' },
     ]);
+  });
+
+  it('derives keepRecentTokens from available input tokens when omitted', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:default-keep-recent',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:3',
+      buildReason: 'initial_model_step',
+      builtAt,
+      modelContextWindow: 100,
+      reservedOutputTokens: 25,
+      parts: [
+        instructionPart(),
+      ],
+    });
+
+    expect(context.budget.availableInputTokens).toBe(75);
+    expect(context.budget.keepRecentTokens).toBe(75);
   });
 });

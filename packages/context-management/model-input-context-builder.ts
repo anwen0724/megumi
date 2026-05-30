@@ -16,6 +16,7 @@ export interface BuildModelInputContextInput {
   modelContextWindow?: number;
   reservedOutputTokens?: number;
   availableInputTokens?: number;
+  keepRecentTokens?: number;
   parts: ModelInputContextPart[];
   excludedSources?: ModelInputContextExcludedSource[];
 }
@@ -35,6 +36,8 @@ export function buildModelInputContext(input: BuildModelInputContextInput): Mode
   }));
   const modelContextWindow = input.modelContextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
   const reservedOutputTokens = input.reservedOutputTokens ?? DEFAULT_RESERVED_OUTPUT_TOKENS;
+  const availableInputTokens = input.availableInputTokens ?? Math.max(0, modelContextWindow - reservedOutputTokens);
+  const keepRecentTokens = input.keepRecentTokens ?? availableInputTokens;
 
   return ModelInputContextSchema.parse({
     contextId: input.contextId,
@@ -45,7 +48,8 @@ export function buildModelInputContext(input: BuildModelInputContextInput): Mode
     budget: {
       modelContextWindow,
       reservedOutputTokens,
-      availableInputTokens: input.availableInputTokens ?? Math.max(0, modelContextWindow - reservedOutputTokens),
+      availableInputTokens,
+      keepRecentTokens,
       inputTokenEstimate: partBudgets.reduce((sum, partBudget) => sum + partBudget.tokenEstimate, 0),
       partBudgets,
     },
