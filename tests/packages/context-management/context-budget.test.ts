@@ -237,6 +237,40 @@ describe('Context budget executor', () => {
     expect(result.trace.firstKeptSourceId).toBe('history:middle');
   });
 
+  it('keeps a contiguous recent session history suffix when an oversized middle part exceeds budget', () => {
+    const result = applyContextBudget({
+      buildReason: 'history_contiguous_suffix',
+      policy: {
+        modelContextWindow: 20,
+        reservedOutputTokens: 5,
+        keepRecentTokens: 10,
+      },
+      parts: [
+        currentTurnPart(1),
+        sessionHistoryPart(5, 'history:old', '2026-05-30T00:00:01.000Z'),
+        sessionHistoryPart(50, 'history:middle', '2026-05-30T00:00:02.000Z'),
+        sessionHistoryPart(5, 'history:new', '2026-05-30T00:00:03.000Z'),
+      ],
+    });
+
+    expect(result.parts.map((part) => part.partId)).toEqual([
+      'part:current:1',
+      'part:history:new',
+    ]);
+    expect(result.trace.excludedSources).toEqual([
+      {
+        sourceRef: sourceRef('history:old', 'session_message', '2026-05-30T00:00:01.000Z'),
+        reason: 'outside_keep_recent_tokens',
+      },
+      {
+        sourceRef: sourceRef('history:middle', 'session_message', '2026-05-30T00:00:02.000Z'),
+        reason: 'outside_keep_recent_tokens',
+      },
+    ]);
+    expect(result.trace.firstKeptPartId).toBe('part:history:new');
+    expect(result.trace.firstKeptSourceId).toBe('history:new');
+  });
+
   it('prunes runtime facts by severity and recency after required context', () => {
     const result = applyContextBudget({
       buildReason: 'runtime_fact_budget',

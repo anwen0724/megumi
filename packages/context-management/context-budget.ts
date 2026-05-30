@@ -170,10 +170,12 @@ function selectRecentSessionHistory(
   let usedTokens = 0;
 
   for (const part of [...historyParts].sort((left, right) => right.index - left.index)) {
-    if (usedTokens + part.tokenEstimate <= tokenBudget) {
-      kept.add(part.index);
-      usedTokens += part.tokenEstimate;
+    if (usedTokens + part.tokenEstimate > tokenBudget) {
+      break;
     }
+
+    kept.add(part.index);
+    usedTokens += part.tokenEstimate;
   }
 
   return {
