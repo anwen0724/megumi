@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
-import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
+import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
+import type { ModelInputContextPartDraft } from '../../../packages/context-management/context-budget';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
-type CurrentTurnPart = Extract<ModelInputContextPart, { kind: 'current_turn' }>;
-type InstructionPart = Extract<ModelInputContextPart, { kind: 'instruction' }>;
-type SessionPart = Extract<ModelInputContextPart, { kind: 'session' }>;
+type CurrentTurnDraft = Extract<ModelInputContextPartDraft, { kind: 'current_turn' }>;
+type InstructionDraft = Extract<ModelInputContextPartDraft, { kind: 'instruction' }>;
+type SessionDraft = Extract<ModelInputContextPartDraft, { kind: 'session' }>;
 
 function sourceRef(sourceId: string, sourceKind: ModelInputContextSourceRef['sourceKind']): ModelInputContextSourceRef {
   return {
@@ -16,7 +17,7 @@ function sourceRef(sourceId: string, sourceKind: ModelInputContextSourceRef['sou
   };
 }
 
-function currentTurnPart(overrides: Partial<CurrentTurnPart> = {}): CurrentTurnPart {
+function currentTurnPart(overrides: Partial<CurrentTurnDraft> = {}): CurrentTurnDraft {
   return {
     partId: 'part:current-turn:1',
     kind: 'current_turn',
@@ -24,12 +25,11 @@ function currentTurnPart(overrides: Partial<CurrentTurnPart> = {}): CurrentTurnP
     text: 'Review the current spec.',
     sourceRefs: [sourceRef('message:1', 'current_user_message')],
     priority: 90,
-    budgetStatus: 'included_full',
     ...overrides,
   };
 }
 
-function instructionPart(overrides: Partial<InstructionPart> = {}): InstructionPart {
+function instructionPart(overrides: Partial<InstructionDraft> = {}): InstructionDraft {
   return {
     partId: 'part:instruction:1',
     kind: 'instruction',
@@ -37,12 +37,11 @@ function instructionPart(overrides: Partial<InstructionPart> = {}): InstructionP
     text: 'You are Megumi.',
     sourceRefs: [sourceRef('source:system', 'system_instruction')],
     priority: 100,
-    budgetStatus: 'included_full',
     ...overrides,
   };
 }
 
-function sessionPart(overrides: Partial<SessionPart> = {}): SessionPart {
+function sessionPart(overrides: Partial<SessionDraft> = {}): SessionDraft {
   return {
     partId: 'part:session:1',
     kind: 'session',
@@ -50,8 +49,28 @@ function sessionPart(overrides: Partial<SessionPart> = {}): SessionPart {
     text: 'Earlier context.',
     sourceRefs: [sourceRef('session-message:1', 'session_message')],
     priority: 40,
-    budgetStatus: 'included_reduced',
     ...overrides,
+  };
+}
+
+function sessionHistoryDraft(input: {
+  partId: string;
+  sourceId: string;
+  text: string;
+  loadedAt: string;
+}): ModelInputContextPartDraft {
+  return {
+    partId: input.partId,
+    kind: 'session',
+    sessionKind: 'session_history',
+    text: input.text,
+    sourceRefs: [{
+      sourceId: input.sourceId,
+      sourceKind: 'session_message',
+      sourceUri: `session-message://${input.sourceId}`,
+      loadedAt: input.loadedAt,
+    }],
+    priority: 55,
   };
 }
 
@@ -93,7 +112,7 @@ describe('ModelInputContextBuilder', () => {
     expect(JSON.stringify(context)).not.toContain('raw full prompt');
   });
 
-  it('preserves explicit token estimates and rejects invalid contexts through the shared schema', () => {
+  it('computes token estimates and final budget status through the budget executor', () => {
     const context = buildModelInputContext({
       contextId: 'model-input-context:2',
       sessionId: 'session:1',
@@ -102,15 +121,17 @@ describe('ModelInputContextBuilder', () => {
       buildReason: 'continuation',
       builtAt,
       parts: [
-        sessionPart({
-          tokenEstimate: 3,
-        }),
+        sessionPart(),
       ],
     });
 
-    expect(context.parts[0]?.tokenEstimate).toBe(3);
+    expect(context.parts[0]?.tokenEstimate).toBeGreaterThan(0);
     expect(context.budget.partBudgets).toEqual([
-      { partId: 'part:session:1', tokenEstimate: 3, budgetStatus: 'included_reduced' },
+      {
+        partId: 'part:session:1',
+        tokenEstimate: context.parts[0]?.tokenEstimate,
+        budgetStatus: 'included_full',
+      },
     ]);
   });
 
@@ -131,5 +152,85 @@ describe('ModelInputContextBuilder', () => {
 
     expect(context.budget.availableInputTokens).toBe(75);
     expect(context.budget.keepRecentTokens).toBe(75);
+  });
+
+  it('applies context budget to draft parts before building the final context', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:builder-budget',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'unit-test',
+      builtAt: '2026-05-30T00:00:00.000Z',
+      budgetPolicy: {
+        modelContextWindow: 80,
+        reservedOutputTokens: 20,
+        keepRecentTokens: 20,
+      },
+      parts: [
+        sessionHistoryDraft({
+          partId: 'part:session-history:old',
+          sourceId: 'session-message:old',
+          text: 'old '.repeat(80),
+          loadedAt: '2026-05-30T00:00:00.000Z',
+        }),
+        sessionHistoryDraft({
+          partId: 'part:session-history:new',
+          sourceId: 'session-message:new',
+          text: 'new reply',
+          loadedAt: '2026-05-30T00:01:00.000Z',
+        }),
+      ],
+    });
+
+    expect(context.parts.map((part) => part.partId)).toEqual(['part:session-history:new']);
+    expect(context.trace.excludedSources).toContainEqual(expect.objectContaining({
+      reason: 'outside_keep_recent_tokens',
+    }));
+    expect(context.trace.firstKeptPartId).toBe('part:session-history:new');
+    expect(context.budget.keepRecentTokens).toBe(20);
+  });
+
+  it('turns source truncation hints into final truncated budget status', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:builder-truncation',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'unit-test',
+      builtAt: '2026-05-30T00:00:00.000Z',
+      budgetPolicy: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        keepRecentTokens: 4096,
+      },
+      parts: [{
+        partId: 'part:instruction:project:root',
+        kind: 'instruction',
+        instructionKind: 'project',
+        text: 'Follow these agent instructions:\n\nUse the repo rules.',
+        sourceRefs: [{
+          sourceId: 'agent-instruction:root',
+          sourceKind: 'project_instruction',
+          sourceUri: 'file:///repo/AGENTS.md',
+          loadedAt: '2026-05-30T00:00:00.000Z',
+        }],
+        priority: 100,
+        truncationHint: {
+          reason: 'project_instruction_hard_cap_exceeded',
+        },
+      }],
+    });
+
+    expect(context.parts[0]).toMatchObject({
+      budgetStatus: 'included_truncated',
+      truncation: {
+        reason: 'project_instruction_hard_cap_exceeded',
+      },
+    });
+    expect(context.trace.selectedSources[0]).toMatchObject({
+      sourceId: 'agent-instruction:root',
+      reason: 'project_instruction_hard_cap_exceeded',
+    });
   });
 });
