@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { buildModelStepInputContextFromSources, createModelStepInputContextId } from '@megumi/context-management';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
-import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
 
@@ -191,12 +191,12 @@ function runContext(): RunContext {
   };
 }
 
-function toolUse(): ToolUse {
+function toolCall(): ToolCall {
   return {
-    toolUseId: 'tool-use:1',
+    toolCallId: 'tool-call:1',
     runId: 'run:1',
     modelStepId: 'model-step:1',
-    providerToolUseId: 'provider-tool-use:1',
+    providerToolCallId: 'provider-tool-call:1',
     toolName: 'read_file',
     input: { path: 'package.json' },
     inputPreview: {
@@ -212,7 +212,8 @@ function toolUse(): ToolUse {
 function toolResult(): ToolResult {
   return {
     toolResultId: 'tool-result:1',
-    toolUseId: 'tool-use:1',
+    toolCallId: 'tool-call:1',
+    toolExecutionId: 'tool-execution:1',
     runId: 'run:1',
     kind: 'success',
     textContent: '{"name":"megumi"}',
@@ -286,7 +287,7 @@ describe('buildModelStepInputContextFromSources', () => {
         createdAt: builtAt,
       },
       modeSnapshotRef: 'mode-snapshot:1',
-      toolUses: [toolUse()],
+      toolCalls: [toolCall()],
       toolResults: [toolResult()],
       providerStates: [providerState()],
     });
@@ -308,7 +309,7 @@ describe('buildModelStepInputContextFromSources', () => {
     });
     expect(JSON.stringify(context.parts)).toContain('Permission mode is plan.');
     expect(JSON.stringify(context.parts)).toContain('Project root: C:/all/work/study/megumi');
-    expect(JSON.stringify(context.parts)).toContain('Tool result tool-result:1 for tool-use:1');
+    expect(JSON.stringify(context.parts)).toContain('Tool result tool-result:1 for tool-call:1');
     expect(JSON.stringify(context.parts)).toContain('Need to read package.json before answering.');
     expect(context.parts.filter((part) => part.kind === 'session').map((part) => part.sessionKind)).toEqual([
       'session_history',
@@ -318,7 +319,7 @@ describe('buildModelStepInputContextFromSources', () => {
       'session-message:message:history-user',
       'run-context:run-context:1:project-boundary',
       'permission-mode:mode-snapshot:1',
-      'tool-use:tool-use:1',
+      'tool-call:tool-call:1',
       'tool-result:tool-result:1',
       'provider-state:model-step:1:0',
       'session-message:message:current',
@@ -431,7 +432,7 @@ describe('buildModelStepInputContextFromSources', () => {
       stepId: 'step:2',
       buildReason: 'tool_continuation',
       builtAt,
-      toolUses: [toolUse()],
+      toolCalls: [toolCall()],
       toolResults: [toolResult()],
       providerStates: [providerState()],
     });
@@ -439,15 +440,16 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',
-        toolUseId: 'tool-use:1',
-        providerToolUseId: 'provider-tool-use:1',
+        toolCallId: 'tool-call:1',
+        providerToolCallId: 'provider-tool-call:1',
         modelStepId: 'model-step:1',
         toolName: 'read_file',
         toolInput: { path: 'package.json' },
       }),
       expect.objectContaining({
         kind: 'tool_continuation',
-        toolUseId: 'tool-use:1',
+        toolCallId: 'tool-call:1',
+        toolExecutionId: 'tool-execution:1',
         toolResultId: 'tool-result:1',
         toolResultContent: '{"name":"megumi"}',
       }),
@@ -469,7 +471,7 @@ describe('buildModelStepInputContextFromSources', () => {
       builtAt,
       runContext: runContext(),
       sessionContext: sessionContextInput(),
-      toolUses: [toolUse()],
+      toolCalls: [toolCall()],
       toolResults: [toolResult()],
       providerStates: [providerState()],
       currentMessage: message({
@@ -518,7 +520,7 @@ describe('buildModelStepInputContextFromSources', () => {
       buildReason: 'tool_continuation',
       builtAt,
       sessionContext: sessionContextInput(),
-      toolUses: [toolUse()],
+      toolCalls: [toolCall()],
       toolResults: [toolResult()],
       providerStates: [providerState()],
     });
@@ -526,21 +528,22 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',
-        toolUseId: 'tool-use:1',
-        providerToolUseId: 'provider-tool-use:1',
+        toolCallId: 'tool-call:1',
+        providerToolCallId: 'provider-tool-call:1',
         toolName: 'read_file',
         toolInput: { path: 'package.json' },
       }),
       expect.objectContaining({
         kind: 'tool_continuation',
-        toolUseId: 'tool-use:1',
+        toolCallId: 'tool-call:1',
+        toolExecutionId: 'tool-execution:1',
         toolResultId: 'tool-result:1',
         toolResultContent: '{"name":"megumi"}',
       }),
     ]));
     expect(context.parts.some((part) => (
       part.kind === 'session'
-      && part.text.includes('Tool result tool-result:1 for tool-use:1')
+      && part.text.includes('Tool result tool-result:1 for tool-call:1')
     ))).toBe(false);
   });
 
@@ -562,12 +565,12 @@ describe('buildModelStepInputContextFromSources', () => {
           sessionHistoryEntry('old-entry', 'user', 'old context '.repeat(20)),
         ],
       },
-      toolUses: [toolUse()],
+      toolCalls: [toolCall()],
       toolResults: [toolResult()],
     });
 
     expect(context.parts.filter((part) => part.kind === 'tool_continuation')).toHaveLength(2);
-    expect(context.trace.excludedSources.every((source) => source.sourceRef.sourceKind !== 'tool_use')).toBe(true);
+    expect(context.trace.excludedSources.every((source) => source.sourceRef.sourceKind !== 'tool_call')).toBe(true);
     expect(context.trace.excludedSources.every((source) => source.sourceRef.sourceKind !== 'tool_result')).toBe(true);
   });
 
@@ -605,7 +608,7 @@ describe('buildModelStepInputContextFromSources', () => {
         }],
       },
       currentMessage: message({ messageId: 'message:current', content: 'Continue.' }),
-      toolUses: [toolUse()],
+      toolCalls: [toolCall()],
       toolResults: [toolResult()],
       providerStates: [providerState()],
     });
@@ -874,7 +877,7 @@ describe('buildModelStepInputContextFromSources', () => {
         hardCapBytes: 65536,
         truncated: false,
       }],
-      toolUses: [toolUse()],
+      toolCalls: [toolCall()],
     });
 
     expect(context.parts.map((part) => part.kind)).toEqual([

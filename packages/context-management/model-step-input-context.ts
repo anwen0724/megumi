@@ -13,7 +13,7 @@ import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-cont
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
-import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
 import type { ModelInputContextPartDraft } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
 import { buildSessionContextParts } from './session-context';
@@ -52,7 +52,7 @@ export interface BuildModelStepInputContextFromSourcesInput {
   runContext?: RunContext;
   modeSnapshot?: PermissionModeSnapshot;
   modeSnapshotRef?: string;
-  toolUses?: ToolUse[];
+  toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
   budgetPolicy?: ContextBudgetPolicy;
@@ -277,34 +277,35 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
 }
 
 function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPartDraft[] {
-  const toolUseParts = (input.toolUses ?? []).map((toolUse, index): ModelInputContextPartDraft => ({
-    partId: `part:tool-use:${index + 1}:${toolUse.toolUseId}`,
+  const toolCallParts = (input.toolCalls ?? []).map((toolCall, index): ModelInputContextPartDraft => ({
+    partId: `part:tool-call:${index + 1}:${toolCall.toolCallId}`,
     kind: 'tool_continuation',
-    text: `Tool use ${toolUse.toolUseId} requested ${toolUse.toolName}. Input preview: ${toolUse.inputPreview.summary}.`,
-    toolUseId: String(toolUse.toolUseId),
-    providerToolUseId: toolUse.providerToolUseId,
-    modelStepId: String(toolUse.modelStepId),
-    toolName: toolUse.toolName,
-    toolInput: toolUse.input,
-    sourceRefs: [toolUseSourceRef(toolUse, input.builtAt)],
+    text: `Tool call ${toolCall.toolCallId} requested ${toolCall.toolName}. Input preview: ${toolCall.inputPreview.summary}.`,
+    toolCallId: String(toolCall.toolCallId),
+    providerToolCallId: toolCall.providerToolCallId,
+    modelStepId: String(toolCall.modelStepId),
+    toolName: toolCall.toolName,
+    toolInput: toolCall.input,
+    sourceRefs: [toolCallSourceRef(toolCall, input.builtAt)],
     priority: 80,
-    retentionGroupId: `tool-continuation:${toolUse.toolUseId}`,
+    retentionGroupId: `tool-continuation:${toolCall.toolCallId}`,
     metadata: {
-      toolName: toolUse.toolName,
-      status: toolUse.status,
+      toolName: toolCall.toolName,
+      status: toolCall.status,
     },
   }));
 
   const toolResultParts = (input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => ({
     partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
     kind: 'tool_continuation',
-    text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolUseId}: ${toolResultSummary(toolResult)}.`,
-    toolUseId: String(toolResult.toolUseId),
+    text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}: ${toolResultSummary(toolResult)}.`,
+    toolCallId: String(toolResult.toolCallId),
+    ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
     toolResultId: String(toolResult.toolResultId),
     toolResultContent: toolResultContent(toolResult),
     sourceRefs: [toolResultSourceRef(toolResult)],
     priority: 85,
-    retentionGroupId: `tool-continuation:${toolResult.toolUseId}`,
+    retentionGroupId: `tool-continuation:${toolResult.toolCallId}`,
     metadata: {
       kind: toolResult.kind,
       redactionState: toolResult.redactionState,
@@ -333,7 +334,7 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
   }));
 
   return [
-    ...toolUseParts,
+    ...toolCallParts,
     ...toolResultParts,
     ...providerStateParts,
   ];
@@ -356,15 +357,15 @@ function sessionMessageSourceRef(
   };
 }
 
-function toolUseSourceRef(toolUse: ToolUse, loadedAt: string): ModelInputContextSourceRef {
+function toolCallSourceRef(toolCall: ToolCall, loadedAt: string): ModelInputContextSourceRef {
   return {
-    sourceId: `tool-use:${toolUse.toolUseId}`,
-    sourceKind: 'tool_use',
-    sourceUri: `tool-use://${toolUse.toolUseId}`,
-    loadedAt: toolUse.createdAt ?? loadedAt,
+    sourceId: `tool-call:${toolCall.toolCallId}`,
+    sourceKind: 'tool_call',
+    sourceUri: `tool-call://${toolCall.toolCallId}`,
+    loadedAt: toolCall.createdAt ?? loadedAt,
     metadata: {
-      toolName: toolUse.toolName,
-      status: toolUse.status,
+      toolName: toolCall.toolName,
+      status: toolCall.status,
     },
   };
 }

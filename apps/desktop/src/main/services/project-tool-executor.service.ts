@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import { normalizeToolError } from '@megumi/tools/normalization';
-import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import {
   createEditFileExecutor,
   createGlobExecutor,
@@ -17,7 +17,7 @@ import {
 export type { ProjectToolFileSystem, ProjectToolExecutorOptions } from './tool-executors';
 
 export interface ProjectToolExecutor {
-  executeToolCall(toolCall: ToolCall): Promise<ToolResult>;
+  executeToolExecution(toolExecution: ToolExecution): Promise<ToolResult>;
 }
 
 export function createProjectToolExecutor(options: ProjectToolExecutorOptions): ProjectToolExecutor {
@@ -36,23 +36,23 @@ export function createProjectToolExecutor(options: ProjectToolExecutorOptions): 
   };
 
   return {
-    async executeToolCall(toolCall) {
+    async executeToolExecution(toolExecution) {
       try {
-        const executor = executors[toolCall.toolName];
+        const executor = executors[toolExecution.toolName];
         if (executor) {
-          return await executor.execute(toolCall);
+          return await executor.execute(toolExecution);
         }
-        throw new Error(`Unsupported project tool: ${toolCall.toolName}`);
+        throw new Error(`Unsupported project tool: ${toolExecution.toolName}`);
       } catch (error) {
         return {
           toolResultId: ids.toolResultId(),
-          toolUseId: toolCall.toolUseId,
-          toolCallId: toolCall.toolCallId,
-          runId: toolCall.runId,
+          toolCallId: toolExecution.toolCallId,
+          toolExecutionId: toolExecution.toolExecutionId,
+          runId: toolExecution.runId,
           kind: 'tool_error',
           textContent: error instanceof Error ? error.message : 'Tool execution failed.',
           error: normalizeToolError(error, {
-            debugId: `tool-error:${toolCall.toolCallId}`,
+            debugId: `tool-error:${toolExecution.toolExecutionId}`,
             fallbackMessage: 'Tool execution failed.',
           }),
           redactionState: 'none',

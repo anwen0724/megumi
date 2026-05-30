@@ -11,7 +11,7 @@ import {
   type ToolApprovalResumeInput,
   type ToolApprovalResumeOutcome,
   type ToolApprovalResumePort,
-  type ToolUseHandlerPort,
+  type ToolCallHandlerPort,
 } from '@megumi/core/run-runtime/tool-loop';
 import {
   createRunCompletedEvent,
@@ -104,7 +104,7 @@ export interface SessionRunToolRuntimeFactory {
   create(input: {
     projectRoot: string;
     permissionMode: PermissionMode;
-  }): Promise<ToolUseHandlerPort & ToolApprovalResumePort>;
+  }): Promise<ToolCallHandlerPort & ToolApprovalResumePort>;
 }
 
 export interface SessionRunToolDefinitionProvider {
@@ -112,7 +112,7 @@ export interface SessionRunToolDefinitionProvider {
     runId: string;
     permissionMode: PermissionMode;
     providerCapabilitySummary?: {
-      supportsToolUse?: boolean;
+      supportsToolCall?: boolean;
     };
   }): ToolDefinition[];
 }
@@ -134,7 +134,7 @@ interface ApprovalContinuationGroup {
   userMessageId: string;
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
-  toolRuntime: ToolUseHandlerPort & ToolApprovalResumePort;
+  toolRuntime: ToolCallHandlerPort & ToolApprovalResumePort;
   chatStreamAdapter?: ChatStreamEventAdapter;
 }
 
@@ -424,7 +424,7 @@ export class SessionRunService {
       ? this.toolDefinitionProvider.listDefinitions({
           runId,
           permissionMode,
-          providerCapabilitySummary: { supportsToolUse: true },
+          providerCapabilitySummary: { supportsToolCall: true },
         })
       : undefined;
     const sessionContext = this.sessionContextInputService.buildSessionContextInput({
@@ -666,7 +666,7 @@ export class SessionRunService {
     run: Run;
     step: RunStep;
     userMessageId: string;
-    toolRuntime?: ToolUseHandlerPort & ToolApprovalResumePort;
+    toolRuntime?: ToolCallHandlerPort & ToolApprovalResumePort;
     chatStreamAdapter?: ChatStreamEventAdapter;
     projectRoot?: string;
     startSequence?: number;
@@ -740,7 +740,7 @@ export class SessionRunService {
           aiPort: {
             streamModelStep: ({ request }) => modelStepProvider.streamModelStep(request),
           },
-          toolUseHandler: toolRuntime,
+          toolCallHandler: toolRuntime,
           ids: {
             nextEventId: this.ids.eventId,
             nextStepId: () => {
@@ -1175,7 +1175,7 @@ export class SessionRunService {
         stepId: String(resumedStep.stepId),
         buildReason: 'approval_resume_continuation',
         builtAt: input.decidedAt,
-        toolUses: pending.accumulatedToolUses,
+        toolCalls: pending.accumulatedToolCalls,
         toolResults: resumedToolResults,
         providerStates: pending.accumulatedProviderStates,
         instructionSources: resumedInstructionSources,
@@ -1247,8 +1247,8 @@ export class SessionRunService {
       persist: 'required',
       payload: {
         toolResultId: String(input.toolResult.toolResultId),
-        toolUseId: String(input.toolResult.toolUseId),
-        ...(input.toolResult.toolCallId ? { toolCallId: String(input.toolResult.toolCallId) } : {}),
+        toolCallId: String(input.toolResult.toolCallId),
+        ...(input.toolResult.toolExecutionId ? { toolExecutionId: String(input.toolResult.toolExecutionId) } : {}),
         kind: input.toolResult.kind,
         summary: createToolResultSummary(input.toolResult),
       },
@@ -1268,7 +1268,7 @@ export class SessionRunService {
     if (
       event.eventType !== 'model.step.started' &&
       event.eventType !== 'model.step.completed' &&
-      event.eventType !== 'tool.use.created'
+      event.eventType !== 'tool.call.created'
     ) {
       return;
     }

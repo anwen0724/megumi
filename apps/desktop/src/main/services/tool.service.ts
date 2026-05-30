@@ -4,8 +4,8 @@ import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type {
   ApprovalRecord,
-  ToolCall,
   ToolDefinition,
+  ToolExecution,
 } from '@megumi/shared/tool-contracts';
 import type {
   ApprovalResolvePayload,
@@ -51,12 +51,12 @@ export class ToolService {
     return this.options.registry.listDefinitions({
       runId: payload.runId,
       permissionMode: 'default',
-      providerCapabilitySummary: { supportsToolUse: true },
+      providerCapabilitySummary: { supportsToolCall: true },
     });
   }
 
-  getToolCall(toolCallId: string): ToolCall | undefined {
-    return this.options.repository.getToolCall(toolCallId);
+  getToolExecution(toolExecutionId: string): ToolExecution | undefined {
+    return this.options.repository.getToolCall(toolExecutionId) as never;
   }
 
   resolveApproval(payload: ApprovalResolvePayload): ApprovalResolveServiceResult {
@@ -72,6 +72,7 @@ export class ToolService {
       approvalRecordId: this.idFactory.approvalRecordId(),
       approvalRequestId: request.approvalRequestId,
       toolCallId: request.toolCallId,
+      toolExecutionId: request.toolExecutionId,
       runId: request.runId,
       stepId: request.stepId,
       decision: payload.decision,

@@ -1,26 +1,26 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management';
-import { createToolUseHandlerService } from '@megumi/desktop/main/services/tool-use-handler.service';
+import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool-call-handler.service';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
+  ToolExecution,
   ToolResult,
-  ToolUse,
 } from '@megumi/shared/tool-contracts';
 
-describe('ToolUseHandlerService', () => {
+describe('ToolCallHandlerService', () => {
   it('persists policy decisions, executes allowed tools, and returns saved ToolResult records', async () => {
     const repository = fakeRepository();
     const executor = {
-      executeToolCall: vi.fn(async (toolCall: ToolCall): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
         toolResultId: 'tool-result-1',
-        toolUseId: toolCall.toolUseId,
-        toolCallId: toolCall.toolCallId,
-        runId: toolCall.runId,
+        toolCallId: toolExecution.toolCallId,
+        toolExecutionId: toolExecution.toolExecutionId,
+        runId: toolExecution.runId,
         kind: 'success',
         structuredContent: { content: 'hello' },
         textContent: 'hello',
@@ -28,7 +28,7 @@ describe('ToolUseHandlerService', () => {
         createdAt: '2026-05-20T00:00:02.000Z',
       })),
     };
-    const handler = createToolUseHandlerService({
+    const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
       permissionMode: 'default',
@@ -39,57 +39,63 @@ describe('ToolUseHandlerService', () => {
       ids: fixedIds(),
     });
 
-    const outcome = await handler.handleToolUses({
+    const outcome = await handler.handleToolCalls({
       request: modelRequest(),
-      toolUses: [toolUse('read_file', { path: 'README.md' })],
+      toolCalls: [toolCall('read_file', { path: 'README.md' })],
     });
 
-    expect(repository.saveToolUse).toHaveBeenCalledWith(expect.objectContaining({
-      toolUseId: 'tool-use-1',
-      toolName: 'read_file',
-    }));
     expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
       toolCallId: 'tool-call-1',
-      toolUseId: 'tool-use-1',
       toolName: 'read_file',
-      status: 'requested',
+    }));
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
+      toolCallId: 'tool-call-1',
+      toolName: 'read_file',
+      status: 'pending_approval',
     }));
     expect(repository.savePermissionDecision).toHaveBeenCalledWith(expect.objectContaining({
       permissionDecisionId: 'permission-decision-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       decision: 'allow',
       mode: 'default',
     }));
-    expect(executor.executeToolCall).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executor.executeToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
       toolName: 'read_file',
       status: 'running',
     }));
-    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
-      status: 'succeeded',
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
+      status: 'completed',
     }));
     expect(outcome.toolResults).toEqual([expect.objectContaining({
       kind: 'success',
       textContent: 'hello',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
     })]);
     expect(outcome.pendingApprovals).toEqual([]);
     expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
-      'tool.call.requested',
-      'tool.call.policy_decided',
+      'tool.execution.requested',
+      'tool.execution.policy_decided',
       'permission.decision.created',
-      'tool.call.started',
-      'tool.call.completed',
+      'tool.execution.started',
+      'tool.execution.completed',
       'tool.result.created',
     ]);
     expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'success',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
     }));
   });
 
   it('does not execute denied tools and returns a saved policy_denied ToolResult', async () => {
     const repository = fakeRepository();
-    const executor = { executeToolCall: vi.fn() };
-    const handler = createToolUseHandlerService({
+    const executor = { executeToolExecution: vi.fn() };
+    const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
       permissionMode: 'plan',
@@ -100,43 +106,47 @@ describe('ToolUseHandlerService', () => {
       ids: fixedIds(),
     });
 
-    const outcome = await handler.handleToolUses({
+    const outcome = await handler.handleToolCalls({
       request: modelRequest(),
-      toolUses: [toolUse('write_file', { path: 'src/index.ts', content: 'export {}' })],
+      toolCalls: [toolCall('write_file', { path: 'src/index.ts', content: 'export {}' })],
     });
 
-    expect(executor.executeToolCall).not.toHaveBeenCalled();
+    expect(executor.executeToolExecution).not.toHaveBeenCalled();
     expect(repository.savePermissionDecision).toHaveBeenCalledWith(expect.objectContaining({
       permissionDecisionId: 'permission-decision-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       decision: 'deny',
       mode: 'plan',
     }));
-    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
       status: 'denied',
     }));
     expect(outcome.toolResults).toEqual([expect.objectContaining({
       kind: 'policy_denied',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
     })]);
     expect(outcome.pendingApprovals).toEqual([]);
     expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
-      'tool.call.requested',
-      'tool.call.policy_decided',
+      'tool.execution.requested',
+      'tool.execution.policy_decided',
       'permission.decision.created',
-      'tool.call.denied',
+      'tool.execution.denied',
       'tool.result.created',
     ]);
     expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'policy_denied',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
     }));
   });
 
   it('creates ApprovalRequest for ask decisions without executing the tool', async () => {
     const repository = fakeRepository();
-    const executor = { executeToolCall: vi.fn() };
-    const handler = createToolUseHandlerService({
+    const executor = { executeToolExecution: vi.fn() };
+    const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
       permissionMode: 'default',
@@ -147,66 +157,68 @@ describe('ToolUseHandlerService', () => {
       ids: fixedIds(),
     });
 
-    const outcome = await handler.handleToolUses({
+    const outcome = await handler.handleToolCalls({
       request: modelRequest(),
-      toolUses: [toolUse('run_command', { command: 'npm install lodash' })],
+      toolCalls: [toolCall('run_command', { command: 'npm install lodash' })],
     });
 
     expect(outcome.toolResults).toEqual([]);
     expect(outcome.pendingApprovals).toEqual([expect.objectContaining({
       approvalRequest: expect.objectContaining({
         approvalRequestId: 'approval-request-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         permissionDecisionId: 'permission-decision-1',
         status: 'pending',
       }),
-      toolUse: expect.objectContaining({ toolUseId: 'tool-use-1' }),
-      toolCall: expect.objectContaining({
-        toolCallId: 'tool-call-1',
-        status: 'waiting_for_approval',
+      toolCall: expect.objectContaining({ toolCallId: 'tool-call-1' }),
+      toolExecution: expect.objectContaining({
+        toolExecutionId: 'tool-execution-1',
+        status: 'pending_approval',
       }),
     })]);
     expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
-      'tool.call.requested',
-      'tool.call.policy_decided',
+      'tool.execution.requested',
+      'tool.execution.policy_decided',
       'permission.decision.created',
-      'tool.call.approval_requested',
+      'tool.execution.approval_requested',
       'approval.requested',
     ]);
-    expect(executor.executeToolCall).not.toHaveBeenCalled();
+    expect(executor.executeToolExecution).not.toHaveBeenCalled();
     expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       permissionDecisionId: 'permission-decision-1',
       status: 'pending',
     }));
-    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
-      status: 'waiting_for_approval',
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
+      status: 'pending_approval',
     }));
   });
 
-  it('resumes approved waiting tool calls by resolving approval and executing the host adapter', async () => {
+  it('resumes approved waiting tool executions by resolving approval and executing the host adapter', async () => {
     const toolCall = waitingToolCall();
-    const approvalRequest = pendingApprovalRequest(toolCall);
+    const toolExecution = waitingToolExecution(toolCall);
+    const approvalRequest = pendingApprovalRequest(toolCall, toolExecution);
     const repository = fakeRepository({
       toolCalls: new Map([[toolCall.toolCallId, toolCall]]),
+      toolExecutions: new Map([[toolExecution.toolExecutionId, toolExecution]]),
       approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
     });
     const executor = {
-      executeToolCall: vi.fn(async (runningToolCall: ToolCall): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (runningToolExecution: ToolExecution): Promise<ToolResult> => ({
         toolResultId: 'tool-result-executed',
-        toolUseId: runningToolCall.toolUseId,
-        toolCallId: runningToolCall.toolCallId,
-        runId: runningToolCall.runId,
+        toolCallId: runningToolExecution.toolCallId,
+        toolExecutionId: runningToolExecution.toolExecutionId,
+        runId: runningToolExecution.runId,
         kind: 'success',
         textContent: 'executed',
         redactionState: 'none',
         createdAt: '2026-05-20T00:00:04.000Z',
       })),
     };
-    const handler = createToolUseHandlerService({
+    const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
       permissionMode: 'default',
@@ -228,24 +240,25 @@ describe('ToolUseHandlerService', () => {
       status: 'approved',
       resolvedAt: '2026-05-20T00:00:03.000Z',
     }));
-    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
       status: 'running',
       startedAt: '2026-05-20T00:00:03.000Z',
     }));
-    expect(executor.executeToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
+    expect(executor.executeToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
       status: 'running',
     }));
-    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
-      status: 'succeeded',
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
+      status: 'completed',
       completedAt: '2026-05-20T00:00:04.000Z',
       resultPreview: 'executed',
     }));
     expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
       toolResultId: 'tool-result-executed',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       kind: 'success',
     }));
     expect(result?.toolResult).toMatchObject({
@@ -253,25 +266,27 @@ describe('ToolUseHandlerService', () => {
       kind: 'success',
     });
     expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
-      'tool.call.started',
-      'tool.call.completed',
+      'tool.execution.started',
+      'tool.execution.completed',
       'tool.result.created',
     ]);
   });
 
-  it('resumes approved waiting tool calls with failed tool status runtime events', async () => {
+  it('resumes approved waiting tool executions with failed tool status runtime events', async () => {
     const toolCall = waitingToolCall();
-    const approvalRequest = pendingApprovalRequest(toolCall);
+    const toolExecution = waitingToolExecution(toolCall);
+    const approvalRequest = pendingApprovalRequest(toolCall, toolExecution);
     const repository = fakeRepository({
       toolCalls: new Map([[toolCall.toolCallId, toolCall]]),
+      toolExecutions: new Map([[toolExecution.toolExecutionId, toolExecution]]),
       approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
     });
     const executor = {
-      executeToolCall: vi.fn(async (runningToolCall: ToolCall): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (runningToolExecution: ToolExecution): Promise<ToolResult> => ({
         toolResultId: 'tool-result-failed',
-        toolUseId: runningToolCall.toolUseId,
-        toolCallId: runningToolCall.toolCallId,
-        runId: runningToolCall.runId,
+        toolCallId: runningToolExecution.toolCallId,
+        toolExecutionId: runningToolExecution.toolExecutionId,
+        runId: runningToolExecution.runId,
         kind: 'tool_error',
         textContent: 'failed',
         error: {
@@ -285,7 +300,7 @@ describe('ToolUseHandlerService', () => {
         createdAt: '2026-05-20T00:00:04.000Z',
       })),
     };
-    const handler = createToolUseHandlerService({
+    const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
       permissionMode: 'default',
@@ -302,8 +317,8 @@ describe('ToolUseHandlerService', () => {
       decidedAt: '2026-05-20T00:00:03.000Z',
     });
 
-    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
       status: 'failed',
       completedAt: '2026-05-20T00:00:04.000Z',
     }));
@@ -312,21 +327,23 @@ describe('ToolUseHandlerService', () => {
       kind: 'tool_error',
     });
     expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
-      'tool.call.started',
-      'tool.call.failed',
+      'tool.execution.started',
+      'tool.execution.failed',
       'tool.result.created',
     ]);
   });
 
-  it('resumes denied waiting tool calls by saving a user_rejected ToolResult without execution', async () => {
+  it('resumes denied waiting tool executions by saving a user_rejected ToolResult without execution', async () => {
     const toolCall = waitingToolCall();
-    const approvalRequest = pendingApprovalRequest(toolCall);
+    const toolExecution = waitingToolExecution(toolCall);
+    const approvalRequest = pendingApprovalRequest(toolCall, toolExecution);
     const repository = fakeRepository({
       toolCalls: new Map([[toolCall.toolCallId, toolCall]]),
+      toolExecutions: new Map([[toolExecution.toolExecutionId, toolExecution]]),
       approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
     });
-    const executor = { executeToolCall: vi.fn() };
-    const handler = createToolUseHandlerService({
+    const executor = { executeToolExecution: vi.fn() };
+    const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
       permissionMode: 'default',
@@ -344,20 +361,21 @@ describe('ToolUseHandlerService', () => {
       reason: 'Not now',
     });
 
-    expect(executor.executeToolCall).not.toHaveBeenCalled();
+    expect(executor.executeToolExecution).not.toHaveBeenCalled();
     expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
       approvalRequestId: 'approval-request-1',
       status: 'denied',
       resolvedAt: '2026-05-20T00:00:03.000Z',
     }));
-    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
-      toolCallId: 'tool-call-1',
+    expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
       status: 'denied',
       completedAt: '2026-05-20T00:00:03.000Z',
     }));
     expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
       toolResultId: 'tool-result-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       kind: 'user_rejected',
       denialReason: 'Not now',
     }));
@@ -366,7 +384,7 @@ describe('ToolUseHandlerService', () => {
       textContent: 'Not now',
     });
     expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
-      'tool.call.denied',
+      'tool.execution.denied',
       'tool.result.created',
     ]);
   });
@@ -393,12 +411,12 @@ function modelRequest(): ModelStepRuntimeRequest {
   };
 }
 
-function toolUse(toolName: ToolUse['toolName'], input: ToolUse['input']): ToolUse {
+function toolCall(toolName: ToolCall['toolName'], input: ToolCall['input']): ToolCall {
   return {
-    toolUseId: 'tool-use-1',
+    toolCallId: 'tool-call-1',
     runId: 'run-1',
     modelStepId: 'model-step-1',
-    providerToolUseId: 'provider-tool-use-1',
+    providerToolCallId: 'provider-tool-call-1',
     toolName,
     input,
     inputPreview: {
@@ -413,7 +431,7 @@ function toolUse(toolName: ToolUse['toolName'], input: ToolUse['input']): ToolUs
 
 function fixedIds() {
   return {
-    toolCallId: () => 'tool-call-1',
+    toolExecutionId: () => 'tool-execution-1',
     toolResultId: () => 'tool-result-1',
     permissionDecisionId: () => 'permission-decision-1',
     approvalRequestId: () => 'approval-request-1',
@@ -423,9 +441,9 @@ function fixedIds() {
 function waitingToolCall(): ToolCall {
   return {
     toolCallId: 'tool-call-1',
-    toolUseId: 'tool-use-1',
     runId: 'run-1',
-    stepId: 'step-1',
+    modelStepId: 'model-step-1',
+    providerToolCallId: 'provider-tool-call-1',
     toolName: 'read_file',
     input: { path: 'README.md' },
     inputPreview: {
@@ -433,25 +451,39 @@ function waitingToolCall(): ToolCall {
       targets: [],
       redactionState: 'none',
     },
+    status: 'created',
+    createdAt: '2026-05-20T00:00:00.000Z',
+  };
+}
+
+function waitingToolExecution(toolCall: ToolCall): ToolExecution {
+  return {
+    toolExecutionId: 'tool-execution-1',
+    toolCallId: toolCall.toolCallId,
+    runId: toolCall.runId,
+    stepId: 'step-1',
+    toolName: toolCall.toolName,
+    input: toolCall.input,
+    inputPreview: toolCall.inputPreview,
     capabilities: ['project_read'],
     riskLevel: 'low',
     sideEffect: 'none',
-    status: 'waiting_for_approval',
+    status: 'pending_approval',
     requestedAt: '2026-05-20T00:00:01.000Z',
     approvalRequestId: 'approval-request-1',
   };
 }
 
-function pendingApprovalRequest(toolCall: ToolCall): ApprovalRequest {
+function pendingApprovalRequest(toolCall: ToolCall, toolExecution: ToolExecution): ApprovalRequest {
   return {
     approvalRequestId: 'approval-request-1',
-    toolUseId: toolCall.toolUseId,
     toolCallId: toolCall.toolCallId,
+    toolExecutionId: toolExecution.toolExecutionId,
     runId: toolCall.runId,
-    stepId: String(toolCall.stepId),
+    stepId: String(toolExecution.stepId),
     toolName: toolCall.toolName,
-    capabilities: toolCall.capabilities,
-    riskLevel: toolCall.riskLevel,
+    capabilities: toolExecution.capabilities,
+    riskLevel: toolExecution.riskLevel,
     title: 'Approve read_file',
     summary: 'User approval is required.',
     preview: {
@@ -466,24 +498,30 @@ function pendingApprovalRequest(toolCall: ToolCall): ApprovalRequest {
 
 function fakeRepository(initial?: {
   toolCalls?: Map<string, ToolCall>;
+  toolExecutions?: Map<string, ToolExecution>;
   approvalRequests?: Map<string, ApprovalRequest>;
 }) {
   const toolCalls = initial?.toolCalls ?? new Map<string, ToolCall>();
+  const toolExecutions = initial?.toolExecutions ?? new Map<string, ToolExecution>();
   const approvalRequests = initial?.approvalRequests ?? new Map<string, ApprovalRequest>();
 
   return {
-    saveToolUse: vi.fn((value) => value),
     saveToolCall: vi.fn((value: ToolCall) => {
-      toolCalls.set(value.toolCallId, value);
+      toolCalls.set(String(value.toolCallId), value);
       return value;
     }),
     getToolCall: vi.fn((toolCallId: string) => toolCalls.get(toolCallId)),
+    saveToolExecution: vi.fn((value: ToolExecution) => {
+      toolExecutions.set(String(value.toolExecutionId), value);
+      return value;
+    }),
+    getToolExecution: vi.fn((toolExecutionId: string) => toolExecutions.get(toolExecutionId)),
     savePermissionDecision: vi.fn((value: PermissionDecision) => value),
     saveApprovalRequest: vi.fn((value: ApprovalRequest) => {
       approvalRequests.set(value.approvalRequestId, value);
       return value;
     }),
     getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
-    saveToolResult: vi.fn((value) => value),
+    saveToolResult: vi.fn((value: ToolResult) => value),
   };
 }

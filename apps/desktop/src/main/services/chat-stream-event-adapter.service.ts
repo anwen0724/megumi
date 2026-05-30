@@ -61,15 +61,15 @@ interface ThinkingState {
 }
 
 interface ToolActivityState {
-  toolUseId: string;
-  toolCallId?: string;
+  toolCallId: string;
+  toolExecutionId?: string;
   toolName: string;
   inputSummary?: string;
 }
 
 interface ApprovalLinkState {
-  toolUseId?: string;
   toolCallId?: string;
+  toolExecutionId?: string;
   scope: ChatStreamApprovalScope;
 }
 
@@ -92,10 +92,10 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private readonly streamKind: ChatStreamKind;
   private readonly stepText = new Map<string, ModelStepTextState>();
   private readonly thinkingByStep = new Map<string, ThinkingState>();
-  private readonly toolsByUseId = new Map<string, ToolActivityState>();
   private readonly toolsByCallId = new Map<string, ToolActivityState>();
-  private readonly terminalToolUseIds = new Set<string>();
-  private readonly pendingToolTerminalsByUseId = new Map<string, PendingToolTerminalState>();
+  private readonly toolsByExecutionId = new Map<string, ToolActivityState>();
+  private readonly terminalToolCallIds = new Set<string>();
+  private readonly pendingToolTerminalsByCallId = new Map<string, PendingToolTerminalState>();
   private readonly approvalLinksById = new Map<string, ApprovalLinkState>();
   private seq = 0;
   private started = false;
@@ -139,11 +139,11 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       case 'model.output.delta':
         this.handleModelOutputDelta(event);
         return;
-      case 'model.tool_use.detected':
-        this.handleToolUseSignal(event);
+      case 'model.tool_call.detected':
+        this.handleToolCallSignal(event);
         return;
-      case 'tool.use.created':
-        this.handleToolUseCreated(event);
+      case 'tool.call.created':
+        this.handleToolCallCreated(event);
         return;
       case 'model.step.completed':
         this.handleModelStepCompleted(event);
@@ -163,17 +163,20 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       case 'tool.result.created':
         this.handleToolResultCreated(event);
         return;
-      case 'tool.call.requested':
-        this.handleToolCallRequested(event);
+      case 'tool.execution.requested':
+        this.handleToolExecutionRequested(event);
         return;
-      case 'tool.call.completed':
-        this.handleToolCallCompleted(event);
+      case 'tool.execution.started':
+        this.handleToolExecutionStarted(event);
         return;
-      case 'tool.call.failed':
-        this.handleToolCallFailed(event);
+      case 'tool.execution.completed':
+        this.handleToolExecutionCompleted(event);
         return;
-      case 'tool.call.denied':
-        this.handleToolCallDenied(event);
+      case 'tool.execution.failed':
+        this.handleToolExecutionFailed(event);
+        return;
+      case 'tool.execution.denied':
+        this.handleToolExecutionDenied(event);
         return;
       case 'approval.requested':
         this.handleApprovalRequested(event);
@@ -234,7 +237,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     this.publishTextDelta(state.text, payload.delta);
   }
 
-  private handleToolUseSignal(event: RuntimeEvent): void {
+  private handleToolCallSignal(event: RuntimeEvent): void {
     const payload = event.payload as { modelStepId?: unknown };
     if (typeof payload.modelStepId !== 'string') {
       return;
@@ -243,31 +246,27 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     this.markStepPrelude(payload.modelStepId);
   }
 
-  private handleToolUseCreated(event: RuntimeEvent): void {
+  private handleToolCallCreated(event: RuntimeEvent): void {
     const payload = event.payload as {
       modelStepId?: unknown;
-      toolUseId?: unknown;
-      providerToolUseId?: unknown;
+      toolCallId?: unknown;
+      providerToolCallId?: unknown;
       toolName?: unknown;
       input?: unknown;
     };
     if (typeof payload.modelStepId === 'string') {
       this.markStepPrelude(payload.modelStepId);
     }
-    if (typeof payload.toolUseId !== 'string' || typeof payload.toolName !== 'string') {
+    if (typeof payload.toolCallId !== 'string' || typeof payload.toolName !== 'string') {
       return;
     }
 
     const tool = this.toolStateFromPayload(payload);
-    this.toolsByUseId.set(tool.toolUseId, tool);
-    if (tool.toolCallId) {
-      this.toolsByCallId.set(tool.toolCallId, tool);
-    }
+    this.toolsByCallId.set(tool.toolCallId, tool);
     this.publish(createChatStreamEvent({
       ...this.base(),
       eventType: 'tool.started',
-      toolUseId: tool.toolUseId,
-      ...(tool.toolCallId ? { toolCallId: tool.toolCallId } : {}),
+      toolCallId: tool.toolCallId,
       toolName: tool.toolName,
       ...(tool.inputSummary ? { inputSummary: tool.inputSummary } : {}),
     }));
@@ -395,28 +394,28 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private handleToolResultCreated(event: RuntimeEvent): void {
     const payload = event.payload as {
       toolResultId?: unknown;
-      toolUseId?: unknown;
       toolCallId?: unknown;
+      toolExecutionId?: unknown;
       kind?: unknown;
       summary?: unknown;
     };
-    if (typeof payload.toolUseId !== 'string') {
+    if (typeof payload.toolCallId !== 'string') {
       return;
     }
-    if (this.hasToolTerminal(payload.toolUseId)) {
+    if (this.hasToolTerminal(payload.toolCallId)) {
       return;
     }
 
-    const tool = this.toolsByUseId.get(payload.toolUseId) ?? {
-      toolUseId: payload.toolUseId,
-      ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : {}),
+    const tool = this.toolsByCallId.get(payload.toolCallId) ?? {
+      toolCallId: payload.toolCallId,
+      ...(typeof payload.toolExecutionId === 'string' ? { toolExecutionId: payload.toolExecutionId } : {}),
       toolName: 'unknown_tool',
     };
-    this.clearPendingToolTerminal(tool.toolUseId);
+    this.clearPendingToolTerminal(tool.toolCallId);
     const common = {
       ...this.base(),
-      toolUseId: tool.toolUseId,
-      ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : tool.toolCallId ? { toolCallId: tool.toolCallId } : {}),
+      toolCallId: tool.toolCallId,
+      ...(typeof payload.toolExecutionId === 'string' ? { toolExecutionId: payload.toolExecutionId } : tool.toolExecutionId ? { toolExecutionId: tool.toolExecutionId } : {}),
       ...(typeof payload.toolResultId === 'string' ? { toolResultId: payload.toolResultId } : {}),
       toolName: tool.toolName,
       ...(tool.inputSummary ? { inputSummary: tool.inputSummary } : {}),
@@ -451,50 +450,59 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }));
   }
 
-  private handleToolCallRequested(event: RuntimeEvent): void {
-    const toolCall = (event.payload as { toolCall?: unknown }).toolCall;
-    if (!isRecord(toolCall)) {
+  private handleToolExecutionRequested(event: RuntimeEvent): void {
+    const toolExecution = (event.payload as { toolExecution?: unknown }).toolExecution;
+    if (!isRecord(toolExecution)) {
       return;
     }
 
-    const toolCallId = stringValue(toolCall.toolCallId);
-    const toolUseId = stringValue(toolCall.toolUseId);
-    const toolName = stringValue(toolCall.toolName);
-    if (!toolCallId || !toolUseId || !toolName) {
+    const toolCallId = stringValue(toolExecution.toolCallId);
+    const toolExecutionId = stringValue(toolExecution.toolExecutionId);
+    const toolName = stringValue(toolExecution.toolName);
+    if (!toolCallId || !toolExecutionId || !toolName) {
       return;
     }
 
-    const existing = this.toolsByUseId.get(toolUseId);
+    const existing = this.toolsByCallId.get(toolCallId);
     const tool: ToolActivityState = {
-      toolUseId,
       toolCallId,
+      toolExecutionId,
       toolName,
-      inputSummary: existing?.inputSummary ?? inputSummary(toolCall.input, toolName),
+      inputSummary: existing?.inputSummary ?? inputSummary(toolExecution.input, toolName),
     };
-    this.toolsByUseId.set(toolUseId, tool);
     this.toolsByCallId.set(toolCallId, tool);
+    this.toolsByExecutionId.set(toolExecutionId, tool);
   }
 
-  private handleToolCallCompleted(event: RuntimeEvent): void {
-    const payload = event.payload as { toolCallId?: unknown };
-    const tool = this.toolFromCallPayload(payload);
+  private handleToolExecutionStarted(event: RuntimeEvent): void {
+    const payload = event.payload as { toolExecutionId?: unknown };
+    const tool = this.toolFromExecutionPayload(payload);
     if (!tool) {
       return;
     }
-    if (this.hasToolTerminal(tool.toolUseId)) {
+    this.toolsByCallId.set(tool.toolCallId, tool);
+  }
+
+  private handleToolExecutionCompleted(event: RuntimeEvent): void {
+    const payload = event.payload as { toolExecutionId?: unknown };
+    const tool = this.toolFromExecutionPayload(payload);
+    if (!tool) {
+      return;
+    }
+    if (this.hasToolTerminal(tool.toolCallId)) {
       return;
     }
 
     this.setPendingToolTerminal({ tool, kind: 'completed' });
   }
 
-  private handleToolCallFailed(event: RuntimeEvent): void {
-    const payload = event.payload as { toolCallId?: unknown; error?: unknown };
-    const tool = this.toolFromCallPayload(payload);
+  private handleToolExecutionFailed(event: RuntimeEvent): void {
+    const payload = event.payload as { toolExecutionId?: unknown; error?: unknown };
+    const tool = this.toolFromExecutionPayload(payload);
     if (!tool) {
       return;
     }
-    if (this.hasToolTerminal(tool.toolUseId)) {
+    if (this.hasToolTerminal(tool.toolCallId)) {
       return;
     }
 
@@ -502,13 +510,13 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     this.setPendingToolTerminal({ tool, kind: 'failed', ...(error ? { error } : {}) });
   }
 
-  private handleToolCallDenied(event: RuntimeEvent): void {
-    const payload = event.payload as { toolCallId?: unknown; reason?: unknown };
-    const tool = this.toolFromCallPayload(payload);
+  private handleToolExecutionDenied(event: RuntimeEvent): void {
+    const payload = event.payload as { toolExecutionId?: unknown; reason?: unknown };
+    const tool = this.toolFromExecutionPayload(payload);
     if (!tool) {
       return;
     }
-    if (this.hasToolTerminal(tool.toolUseId)) {
+    if (this.hasToolTerminal(tool.toolCallId)) {
       return;
     }
 
@@ -532,8 +540,8 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }
     const requestedScope = stringValue(approvalRequest.requestedScope) ?? 'project';
     const link: ApprovalLinkState = {
-      ...(stringValue(approvalRequest.toolUseId) ? { toolUseId: stringValue(approvalRequest.toolUseId) } : {}),
       ...(stringValue(approvalRequest.toolCallId) ? { toolCallId: stringValue(approvalRequest.toolCallId) } : {}),
+      ...(stringValue(approvalRequest.toolExecutionId) ? { toolExecutionId: stringValue(approvalRequest.toolExecutionId) } : {}),
       scope: requestedScope,
     };
     this.approvalLinksById.set(approvalId, link);
@@ -554,8 +562,8 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private handleApprovalResolved(event: RuntimeEvent): void {
     const payload = event.payload as {
       approvalRequestId?: unknown;
-      toolUseId?: unknown;
       toolCallId?: unknown;
+      toolExecutionId?: unknown;
       scope?: unknown;
       decision?: unknown;
     };
@@ -569,8 +577,8 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       ...this.base(),
       eventType: 'approval.resolved',
       approvalId: payload.approvalRequestId,
-      ...(typeof payload.toolUseId === 'string' ? { toolUseId: payload.toolUseId } : link?.toolUseId ? { toolUseId: link.toolUseId } : {}),
       ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : link?.toolCallId ? { toolCallId: link.toolCallId } : {}),
+      ...(typeof payload.toolExecutionId === 'string' ? { toolExecutionId: payload.toolExecutionId } : link?.toolExecutionId ? { toolExecutionId: link.toolExecutionId } : {}),
       scope: typeof payload.scope === 'string' ? payload.scope : link?.scope ?? 'project',
       status: decision,
       decision,
@@ -591,8 +599,8 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       ...this.base(),
       eventType: 'approval.resolved',
       approvalId: payload.approvalRequestId,
-      ...(link?.toolUseId ? { toolUseId: link.toolUseId } : {}),
       ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : link?.toolCallId ? { toolCallId: link.toolCallId } : {}),
+      ...(link?.toolExecutionId ? { toolExecutionId: link.toolExecutionId } : {}),
       scope: link?.scope ?? 'project',
       status: 'expired',
       decision: 'expired',
@@ -791,49 +799,47 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   }
 
   private toolStateFromPayload(payload: {
-    toolUseId?: unknown;
     toolCallId?: unknown;
     toolName?: unknown;
     input?: unknown;
   }): ToolActivityState {
     const toolName = typeof payload.toolName === 'string' ? payload.toolName : 'unknown_tool';
     return {
-      toolUseId: String(payload.toolUseId),
-      ...(typeof payload.toolCallId === 'string' ? { toolCallId: payload.toolCallId } : {}),
+      toolCallId: String(payload.toolCallId),
       toolName,
       inputSummary: inputSummary(payload.input, toolName),
     };
   }
 
-  private toolFromCallPayload(payload: { toolCallId?: unknown }): ToolActivityState | undefined {
-    if (typeof payload.toolCallId !== 'string') {
+  private toolFromExecutionPayload(payload: { toolExecutionId?: unknown }): ToolActivityState | undefined {
+    if (typeof payload.toolExecutionId !== 'string') {
       return undefined;
     }
 
-    return this.toolsByCallId.get(payload.toolCallId);
+    return this.toolsByExecutionId.get(payload.toolExecutionId);
   }
 
-  private hasToolTerminal(toolUseId: string): boolean {
-    return this.terminalToolUseIds.has(toolUseId);
+  private hasToolTerminal(toolCallId: string): boolean {
+    return this.terminalToolCallIds.has(toolCallId);
   }
 
   private markToolTerminal(tool: ToolActivityState): void {
-    this.terminalToolUseIds.add(tool.toolUseId);
-    this.clearPendingToolTerminal(tool.toolUseId);
+    this.terminalToolCallIds.add(tool.toolCallId);
+    this.clearPendingToolTerminal(tool.toolCallId);
   }
 
   private setPendingToolTerminal(pending: PendingToolTerminalState): void {
-    this.pendingToolTerminalsByUseId.set(pending.tool.toolUseId, pending);
+    this.pendingToolTerminalsByCallId.set(pending.tool.toolCallId, pending);
   }
 
-  private clearPendingToolTerminal(toolUseId: string): void {
-    this.pendingToolTerminalsByUseId.delete(toolUseId);
+  private clearPendingToolTerminal(toolCallId: string): void {
+    this.pendingToolTerminalsByCallId.delete(toolCallId);
   }
 
   private flushPendingToolTerminalsBefore(event: RuntimeEvent): void {
-    const relatedToolUseId = this.relatedToolUseIdForEvent(event);
-    for (const [toolUseId, pending] of [...this.pendingToolTerminalsByUseId]) {
-      if (toolUseId === relatedToolUseId) {
+    const relatedToolCallId = this.relatedToolCallIdForEvent(event);
+    for (const [toolCallId, pending] of [...this.pendingToolTerminalsByCallId]) {
+      if (toolCallId === relatedToolCallId) {
         continue;
       }
 
@@ -842,14 +848,14 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   }
 
   private flushAllPendingToolTerminals(): void {
-    for (const pending of [...this.pendingToolTerminalsByUseId.values()]) {
+    for (const pending of [...this.pendingToolTerminalsByCallId.values()]) {
       this.emitPendingToolTerminal(pending);
     }
   }
 
   private emitPendingToolTerminal(pending: PendingToolTerminalState): void {
-    if (this.hasToolTerminal(pending.tool.toolUseId)) {
-      this.clearPendingToolTerminal(pending.tool.toolUseId);
+    if (this.hasToolTerminal(pending.tool.toolCallId)) {
+      this.clearPendingToolTerminal(pending.tool.toolCallId);
       return;
     }
 
@@ -879,33 +885,33 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }));
   }
 
-  private relatedToolUseIdForEvent(event: RuntimeEvent): string | undefined {
+  private relatedToolCallIdForEvent(event: RuntimeEvent): string | undefined {
     if (event.eventType === 'tool.result.created') {
-      const payload = event.payload as { toolUseId?: unknown };
-      return typeof payload.toolUseId === 'string' ? payload.toolUseId : undefined;
-    }
-
-    if (event.eventType === 'tool.use.created') {
-      const payload = event.payload as { toolUseId?: unknown };
-      return typeof payload.toolUseId === 'string' ? payload.toolUseId : undefined;
-    }
-
-    if (event.eventType === 'tool.call.requested') {
-      const toolCall = (event.payload as { toolCall?: unknown }).toolCall;
-      if (!isRecord(toolCall)) {
-        return undefined;
-      }
-      return stringValue(toolCall.toolUseId);
-    }
-
-    if (event.eventType === 'tool.call.completed'
-      || event.eventType === 'tool.call.failed'
-      || event.eventType === 'tool.call.denied') {
       const payload = event.payload as { toolCallId?: unknown };
-      if (typeof payload.toolCallId !== 'string') {
+      return typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined;
+    }
+
+    if (event.eventType === 'tool.call.created') {
+      const payload = event.payload as { toolCallId?: unknown };
+      return typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined;
+    }
+
+    if (event.eventType === 'tool.execution.requested') {
+      const toolExecution = (event.payload as { toolExecution?: unknown }).toolExecution;
+      if (!isRecord(toolExecution)) {
         return undefined;
       }
-      return this.toolsByCallId.get(payload.toolCallId)?.toolUseId;
+      return stringValue(toolExecution.toolCallId);
+    }
+
+    if (event.eventType === 'tool.execution.completed'
+      || event.eventType === 'tool.execution.failed'
+      || event.eventType === 'tool.execution.denied') {
+      const payload = event.payload as { toolExecutionId?: unknown };
+      if (typeof payload.toolExecutionId !== 'string') {
+        return undefined;
+      }
+      return this.toolsByExecutionId.get(payload.toolExecutionId)?.toolCallId;
     }
 
     return undefined;
@@ -914,8 +920,8 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private toolEventBase(tool: ToolActivityState) {
     return {
       ...this.base(),
-      toolUseId: tool.toolUseId,
-      ...(tool.toolCallId ? { toolCallId: tool.toolCallId } : {}),
+      toolCallId: tool.toolCallId,
+      ...(tool.toolExecutionId ? { toolExecutionId: tool.toolExecutionId } : {}),
       toolName: tool.toolName,
       ...(tool.inputSummary ? { inputSummary: tool.inputSummary } : {}),
     };

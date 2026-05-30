@@ -1,9 +1,9 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
-import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
 import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
 import type { AiModelStepAdapterRequest, FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
 
@@ -11,7 +11,7 @@ const builtAt = '2026-05-27T00:00:00.000Z';
 
 interface ModelStepRequestOverrides extends Partial<AiModelStepAdapterRequest['request']> {
   messageText?: string;
-  toolUses?: ToolUse[];
+  toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
 }
 
@@ -76,31 +76,32 @@ function modelStepInputContext(request: ModelStepRequestOverrides & {
         text: request.messageText ?? 'Read package.json',
         sourceRefs: [sourceRef(`message:${request.stepId}`, 'current_user_message')],
       }),
-      ...toolContinuationParts(request.toolUses ?? [], request.toolResults ?? []),
+      ...toolContinuationParts(request.toolCalls ?? [], request.toolResults ?? []),
     ],
   });
 }
 
-function toolContinuationParts(toolUses: ToolUse[], toolResults: ToolResult[]): ModelInputContextPart[] {
+function toolContinuationParts(toolCalls: ToolCall[], toolResults: ToolResult[]): ModelInputContextPart[] {
   return [
-    ...toolUses.map((toolUse, index): ModelInputContextPart => ({
-      partId: `part:tool-use:${index + 1}:${toolUse.toolUseId}`,
+    ...toolCalls.map((toolCall, index): ModelInputContextPart => ({
+      partId: `part:tool-call:${index + 1}:${toolCall.toolCallId}`,
       kind: 'tool_continuation',
-      text: `Tool use ${toolUse.toolUseId} requested ${toolUse.toolName}.`,
-      toolUseId: String(toolUse.toolUseId),
-      providerToolUseId: toolUse.providerToolUseId,
-      modelStepId: String(toolUse.modelStepId),
-      toolName: toolUse.toolName,
-      toolInput: toolUse.input,
-      sourceRefs: [sourceRef(`tool-use:${toolUse.toolUseId}`, 'tool_use')],
+      text: `Tool call ${toolCall.toolCallId} requested ${toolCall.toolName}.`,
+      toolCallId: String(toolCall.toolCallId),
+      providerToolCallId: toolCall.providerToolCallId,
+      modelStepId: String(toolCall.modelStepId),
+      toolName: toolCall.toolName,
+      toolInput: toolCall.input,
+      sourceRefs: [sourceRef(`tool-call:${toolCall.toolCallId}`, 'tool_call')],
       priority: 80,
       budgetStatus: 'included_full',
     })),
     ...toolResults.map((toolResult, index): ModelInputContextPart => ({
       partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
       kind: 'tool_continuation',
-      text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolUseId}.`,
-      toolUseId: String(toolResult.toolUseId),
+      text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}.`,
+      toolCallId: String(toolResult.toolCallId),
+      ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
       toolResultId: String(toolResult.toolResultId),
       toolResultContent: toolResultContent(toolResult),
       sourceRefs: [sourceRef(`tool-result:${toolResult.toolResultId}`, 'tool_result')],
@@ -169,7 +170,7 @@ describe('OpenAI-compatible adapter', () => {
       ...overrides,
     };
 
-    const { messageText: _messageText, toolUses: _toolUses, toolResults: _toolResults, ...runtimeRequest } = request;
+    const { messageText: _messageText, toolCalls: _toolCalls, toolResults: _toolResults, ...runtimeRequest } = request;
 
     return {
       request: {
@@ -275,7 +276,7 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
-  it('streams model step tool calls as tool use created events', async () => {
+  it('streams model step tool calls as tool call created events', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-read","type":"function","function":{"name":"read_file","arguments":"{\\"path\\":"}}]}}]}\n\n',
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
@@ -370,28 +371,28 @@ describe('OpenAI-compatible adapter', () => {
 
     expect(events.map((event) => event.eventType)).toEqual([
       'model.step.started',
-      'model.tool_use.detected',
-      'tool.use.created',
+      'model.tool_call.detected',
+      'tool.call.created',
       'model.step.completed',
     ]);
     expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4]);
     expect(events.map((event) => RuntimeEventSchema.parse(event))).toEqual(events);
     expect(events[1]).toMatchObject({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'call-read',
-        providerToolUseId: 'call-read',
+        toolCallId: 'call-read',
+        providerToolCallId: 'call-read',
         toolName: 'read_file',
       },
     });
     expect(events[2]).toMatchObject({
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       stepId: 'step-1',
       payload: {
-        toolUseId: 'call-read',
+        toolCallId: 'call-read',
         modelStepId: 'model-step-1',
-        providerToolUseId: 'call-read',
+        providerToolCallId: 'call-read',
         toolName: 'read_file',
         input: { path: 'package.json' },
       },
@@ -405,7 +406,7 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
-  it('detects tool use before the completed tool-use event', async () => {
+  it('detects tool call before the completed tool call event', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
       'data: {"choices":[{"delta":{"content":"I will check."}}]}\n\n',
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-read","type":"function","function":{"name":"read_file","arguments":"{\\"path\\":"}}]}}]}\n\n',
@@ -442,12 +443,12 @@ describe('OpenAI-compatible adapter', () => {
     expect(events.map((event) => event.eventType)).toEqual([
       'model.step.started',
       'model.output.delta',
-      'model.tool_use.detected',
-      'tool.use.created',
+      'model.tool_call.detected',
+      'tool.call.created',
       'model.step.completed',
     ]);
-    expect(events.findIndex((event) => event.eventType === 'model.tool_use.detected'))
-      .toBeLessThan(events.findIndex((event) => event.eventType === 'tool.use.created'));
+    expect(events.findIndex((event) => event.eventType === 'model.tool_call.detected'))
+      .toBeLessThan(events.findIndex((event) => event.eventType === 'tool.call.created'));
   });
 
   it('keeps one thinking lifecycle when reasoning continues after tool detection', async () => {
@@ -502,11 +503,11 @@ describe('OpenAI-compatible adapter', () => {
       'model.thinking.started',
       'model.thinking.delta',
       'model.output.delta',
-      'model.tool_use.detected',
+      'model.tool_call.detected',
       'model.thinking.delta',
       'model.thinking.completed',
       'model.step.provider_state.recorded',
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
     ]);
     expect(events.filter((event) => event.eventType === 'model.thinking.started')).toHaveLength(1);
@@ -518,9 +519,9 @@ describe('OpenAI-compatible adapter', () => {
       },
     });
     expect(events[4]).toMatchObject({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       payload: {
-        toolUseId: 'call-list',
+        toolCallId: 'call-list',
         toolName: 'list_directory',
       },
     });
@@ -533,12 +534,12 @@ describe('OpenAI-compatible adapter', () => {
     const eventTypes = events.map((event) => event.eventType);
     expect(eventTypes.indexOf('model.thinking.completed'))
       .toBeGreaterThan(eventTypes.lastIndexOf('model.thinking.delta'));
-    expect(eventTypes.indexOf('model.tool_use.detected'))
+    expect(eventTypes.indexOf('model.tool_call.detected'))
       .toBeLessThan(eventTypes.indexOf('model.thinking.completed'));
     expect(eventTypes.indexOf('model.thinking.completed'))
       .toBeLessThan(events.findIndex((event) => event.eventType === 'model.step.provider_state.recorded'));
-    expect(eventTypes.indexOf('model.tool_use.detected'))
-      .toBeLessThan(eventTypes.indexOf('tool.use.created'));
+    expect(eventTypes.indexOf('model.tool_call.detected'))
+      .toBeLessThan(eventTypes.indexOf('tool.call.created'));
   });
 
   it('records provider reasoning state without exposing it as visible model output', async () => {
@@ -591,10 +592,10 @@ describe('OpenAI-compatible adapter', () => {
       'model.step.started',
       'model.thinking.started',
       'model.thinking.delta',
-      'model.tool_use.detected',
+      'model.tool_call.detected',
       'model.thinking.completed',
       'model.step.provider_state.recorded',
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
     ]);
     expect(events.map((event) => RuntimeEventSchema.parse(event))).toEqual(events);
@@ -615,11 +616,11 @@ describe('OpenAI-compatible adapter', () => {
       },
     });
     expect(events[3]).toMatchObject({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'call-list',
-        providerToolUseId: 'call-list',
+        toolCallId: 'call-list',
+        providerToolCallId: 'call-list',
         toolName: 'list_directory',
       },
     });
@@ -647,7 +648,7 @@ describe('OpenAI-compatible adapter', () => {
       },
     });
     expect(events[6]).toMatchObject({
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       payload: {
         toolName: 'list_directory',
         input: { path: 'docs' },
@@ -734,12 +735,12 @@ describe('OpenAI-compatible adapter', () => {
           availability: { status: 'available' },
         },
       ],
-      toolUses: [
+      toolCalls: [
         {
-          toolUseId: 'tool-use-1',
+          toolCallId: 'tool-call-1',
           runId: 'run-1',
           modelStepId: 'step-1',
-          providerToolUseId: 'tool-use-1',
+          providerToolCallId: 'tool-call-1',
           toolName: 'read_file',
           input: { path: 'package.json' },
           inputPreview: {
@@ -754,7 +755,8 @@ describe('OpenAI-compatible adapter', () => {
       toolResults: [
         {
           toolResultId: 'tool-result-1',
-          toolUseId: 'tool-use-1',
+          toolCallId: 'tool-call-1',
+          toolExecutionId: 'tool-execution-1',
           runId: 'run-1',
           kind: 'success',
           textContent: 'File contents',
@@ -782,7 +784,7 @@ describe('OpenAI-compatible adapter', () => {
             requestShape: 'tool_continuation',
             messageRoles: ['system', 'user', 'assistant', 'tool'],
             toolDefinitionCount: 1,
-            toolUseCount: 1,
+            toolCallCount: 1,
             toolResultCount: 1,
           },
         },
@@ -818,7 +820,7 @@ describe('OpenAI-compatible adapter', () => {
             requestShape: 'initial',
             messageRoles: ['system', 'user'],
             toolDefinitionCount: 0,
-            toolUseCount: 0,
+            toolCallCount: 0,
             toolResultCount: 0,
           },
         },

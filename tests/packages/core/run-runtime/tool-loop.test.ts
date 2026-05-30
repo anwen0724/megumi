@@ -1,9 +1,9 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { ApprovalRequest, ToolCall, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import { runModelToolLoop } from '@megumi/core/run-runtime/tool-loop';
 import type {
   PendingToolApproval,
@@ -50,7 +50,7 @@ function createRequest(overrides: Partial<ModelStepRuntimeRequest> = {}): ModelS
   };
 }
 
-function toolUseCreatedEvent(input: {
+function toolCallCreatedEvent(input: {
   eventId: string;
   sequence: number;
   stepId: string;
@@ -59,7 +59,7 @@ function toolUseCreatedEvent(input: {
   return {
     eventId: input.eventId,
     schemaVersion: 1,
-    eventType: 'tool.use.created',
+    eventType: 'tool.call.created',
     sessionId: 'session-1',
     runId: 'run-1',
     stepId: input.stepId,
@@ -68,10 +68,10 @@ function toolUseCreatedEvent(input: {
     source: 'provider',
     visibility: 'system',
     persist: 'required',
-    payload: {
-      toolUseId: 'call-read',
+      payload: {
+      toolCallId: 'call-read',
       modelStepId: input.modelStepId,
-      providerToolUseId: 'call-read',
+      providerToolCallId: 'call-read',
       toolName: 'read_file',
       input: { path: 'package.json' },
     },
@@ -161,7 +161,8 @@ function assistantCompletedEvent(input: {
 function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   return {
     toolResultId: 'tool-result-1',
-    toolUseId: 'call-read',
+    toolCallId: 'call-read',
+    toolExecutionId: 'tool-execution-1',
     runId: 'run-1',
     kind: 'success',
     structuredContent: { text: '{}' },
@@ -172,38 +173,38 @@ function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   };
 }
 
-function createToolCall(toolUse: ToolUse, overrides: Partial<ToolCall> = {}): ToolCall {
+function createToolExecution(toolCall: ToolCall, overrides: Partial<ToolExecution> = {}): ToolExecution {
   return {
-    toolCallId: 'tool-call-1',
-    toolUseId: toolUse.toolUseId,
-    runId: toolUse.runId,
+    toolExecutionId: 'tool-execution-1',
+    toolCallId: toolCall.toolCallId,
+    runId: toolCall.runId,
     stepId: 'step-1',
-    toolName: toolUse.toolName,
-    input: toolUse.input,
-    inputPreview: toolUse.inputPreview,
+    toolName: toolCall.toolName,
+    input: toolCall.input,
+    inputPreview: toolCall.inputPreview,
     capabilities: ['project_read'],
     riskLevel: 'low',
     sideEffect: 'none',
-    status: 'waiting_for_approval',
+    status: 'pending_approval',
     requestedAt: '2026-05-17T00:00:02.250Z',
     ...overrides,
   };
 }
 
 function createApprovalRequest(
-  toolUse: ToolUse,
   toolCall: ToolCall,
+  toolExecution: ToolExecution,
   overrides: Partial<ApprovalRequest> = {},
 ): ApprovalRequest {
   return {
     approvalRequestId: 'approval-1',
-    toolUseId: toolUse.toolUseId,
     toolCallId: toolCall.toolCallId,
-    runId: toolUse.runId,
-    stepId: String(toolCall.stepId),
-    toolName: toolUse.toolName,
-    capabilities: toolCall.capabilities,
-    riskLevel: toolCall.riskLevel,
+    toolExecutionId: toolExecution.toolExecutionId,
+    runId: toolCall.runId,
+    stepId: String(toolExecution.stepId),
+    toolName: toolCall.toolName,
+    capabilities: toolExecution.capabilities,
+    riskLevel: toolExecution.riskLevel,
     title: 'Approve read_file',
     summary: 'User approval is required.',
     preview: {
@@ -218,7 +219,7 @@ function createApprovalRequest(
 }
 
 describe('run model tool loop', () => {
-  it('feeds tool results into the next model step after handling tool uses', async () => {
+  it('feeds tool results into the next model step after handling tool calls', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
     const events = await collect(runModelToolLoop({
@@ -228,7 +229,7 @@ describe('run model tool loop', () => {
           requests.push(input.request);
 
           if (requests.length === 1) {
-            yield toolUseCreatedEvent({
+            yield toolCallCreatedEvent({
               eventId: input.eventIdFactory(),
               sequence: input.nextSequence(),
               stepId: input.request.stepId,
@@ -256,13 +257,13 @@ describe('run model tool loop', () => {
           });
         },
       },
-      toolUseHandler: {
-        async handleToolUses(input) {
-          expect(input.toolUses).toEqual([
+      toolCallHandler: {
+        async handleToolCalls(input) {
+          expect(input.toolCalls).toEqual([
             expect.objectContaining({
-              toolUseId: 'call-read',
+              toolCallId: 'call-read',
               modelStepId: 'model-step-1',
-              providerToolUseId: 'call-read',
+              providerToolCallId: 'call-read',
               toolName: 'read_file',
               input: { path: 'package.json' },
               inputPreview: {
@@ -300,10 +301,10 @@ describe('run model tool loop', () => {
     expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',
-        toolUseId: 'call-read',
-        providerToolUseId: 'call-read',
+        toolCallId: 'call-read',
+        providerToolCallId: 'call-read',
         toolName: 'read_file',
-        text: expect.stringContaining('Tool use call-read requested read_file.'),
+        text: expect.stringContaining('Tool call call-read requested read_file.'),
       }),
       expect.objectContaining({
         kind: 'tool_continuation',
@@ -312,7 +313,7 @@ describe('run model tool loop', () => {
       }),
     ]));
     expect(events.map((event) => event.eventType)).toEqual([
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
       'tool.result.created',
       'assistant.output.completed',
@@ -322,7 +323,8 @@ describe('run model tool loop', () => {
       sequence: 3,
       payload: {
         toolResultId: 'tool-result-1',
-        toolUseId: 'call-read',
+        toolCallId: 'call-read',
+        toolExecutionId: 'tool-execution-1',
         kind: 'success',
         summary: '{}',
       },
@@ -349,7 +351,7 @@ describe('run model tool loop', () => {
               stepId: input.request.stepId,
               modelStepId: String(input.request.modelStepId),
             });
-            yield toolUseCreatedEvent({
+            yield toolCallCreatedEvent({
               eventId: input.eventIdFactory(),
               sequence: input.nextSequence(),
               stepId: input.request.stepId,
@@ -371,8 +373,8 @@ describe('run model tool loop', () => {
           });
         },
       },
-      toolUseHandler: {
-        async handleToolUses() {
+      toolCallHandler: {
+        async handleToolCalls() {
           return {
             toolResults: [createToolResult()],
           };
@@ -410,8 +412,8 @@ describe('run model tool loop', () => {
         async *streamModelStep({ request }) {
           requests.push(request);
           if (requests.length === 1) {
-            yield toolUseCreatedEvent({
-              eventId: 'event-tool-use',
+            yield toolCallCreatedEvent({
+              eventId: 'event-tool-call',
               sequence: 1,
               stepId: request.stepId,
               modelStepId: String(request.modelStepId),
@@ -431,12 +433,13 @@ describe('run model tool loop', () => {
           });
         },
       },
-      toolUseHandler: {
-        async handleToolUses() {
+      toolCallHandler: {
+        async handleToolCalls() {
           return {
             toolResults: [{
               toolResultId: 'tool-result:1',
-              toolUseId: 'call-read',
+              toolCallId: 'call-read',
+              toolExecutionId: 'tool-execution-1',
               runId: 'run-1',
               kind: 'success',
               textContent: 'ok',
@@ -490,7 +493,7 @@ describe('run model tool loop', () => {
       aiPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
-          yield toolUseCreatedEvent({
+          yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
             stepId: input.request.stepId,
@@ -504,13 +507,14 @@ describe('run model tool loop', () => {
           });
         },
       },
-      toolUseHandler: {
-        async handleToolUses(input) {
-          const toolCall = createToolCall(input.toolUses[0]);
+      toolCallHandler: {
+        async handleToolCalls(input) {
+          const toolCall = input.toolCalls[0];
+          const toolExecution = createToolExecution(toolCall);
           const pendingApproval: PendingToolApproval = {
-            approvalRequest: createApprovalRequest(input.toolUses[0], toolCall),
-            toolUse: input.toolUses[0],
+            approvalRequest: createApprovalRequest(toolCall, toolExecution),
             toolCall,
+            toolExecution,
           };
 
           return {
@@ -537,8 +541,13 @@ describe('run model tool loop', () => {
             approvalRequestId: 'approval-1',
           }),
           toolCall: expect.objectContaining({
-            toolCallId: 'tool-call-1',
-            status: 'waiting_for_approval',
+            toolCallId: 'call-read',
+            status: 'created',
+          }),
+          toolExecution: expect.objectContaining({
+            toolExecutionId: 'tool-execution-1',
+            toolCallId: 'call-read',
+            status: 'pending_approval',
           }),
         }),
         request: expect.objectContaining({
@@ -547,14 +556,14 @@ describe('run model tool loop', () => {
             parts: expect.arrayContaining([
               expect.objectContaining({
                 kind: 'tool_continuation',
-                toolUseId: 'call-read',
+                toolCallId: 'call-read',
               }),
             ]),
           }),
         }),
-        accumulatedToolUses: [
+        accumulatedToolCalls: [
           expect.objectContaining({
-            toolUseId: 'call-read',
+            toolCallId: 'call-read',
             toolName: 'read_file',
           }),
         ],
@@ -562,7 +571,7 @@ describe('run model tool loop', () => {
       }),
     ]);
     expect(events.map((event) => event.eventType)).toEqual([
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
     ]);
   });
@@ -578,7 +587,7 @@ describe('run model tool loop', () => {
       }),
       aiPort: {
         async *streamModelStep(input) {
-          yield toolUseCreatedEvent({
+          yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
             stepId: input.request.stepId,
@@ -592,14 +601,15 @@ describe('run model tool loop', () => {
           });
         },
       },
-      toolUseHandler: {
-        async handleToolUses(input) {
-          const toolCall = createToolCall(input.toolUses[0]);
+      toolCallHandler: {
+        async handleToolCalls(input) {
+          const toolCall = input.toolCalls[0];
+          const toolExecution = createToolExecution(toolCall);
           return {
             pendingApprovals: [{
-              approvalRequest: createApprovalRequest(input.toolUses[0], toolCall),
-              toolUse: input.toolUses[0],
+              approvalRequest: createApprovalRequest(toolCall, toolExecution),
               toolCall,
+              toolExecution,
             }],
             toolResults: [],
           };
@@ -629,7 +639,7 @@ describe('run model tool loop', () => {
       aiPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
-          yield toolUseCreatedEvent({
+          yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
             stepId: input.request.stepId,
@@ -643,13 +653,14 @@ describe('run model tool loop', () => {
           });
         },
       },
-      toolUseHandler: {
-        async handleToolUses(input) {
-          const toolCall = createToolCall(input.toolUses[0]);
+      toolCallHandler: {
+        async handleToolCalls(input) {
+          const toolCall = input.toolCalls[0];
+          const toolExecution = createToolExecution(toolCall);
           const pendingApproval: PendingToolApproval = {
-            approvalRequest: createApprovalRequest(input.toolUses[0], toolCall),
-            toolUse: input.toolUses[0],
+            approvalRequest: createApprovalRequest(toolCall, toolExecution),
             toolCall,
+            toolExecution,
           };
 
           return {
@@ -673,7 +684,7 @@ describe('run model tool loop', () => {
 
     expect(requests).toHaveLength(1);
     expect(events.map((event) => event.eventType)).toEqual([
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
       'tool.result.created',
     ]);
@@ -681,18 +692,19 @@ describe('run model tool loop', () => {
       eventType: 'tool.result.created',
       payload: {
         toolResultId: 'tool-result-1',
-        toolUseId: 'call-read',
+        toolCallId: 'call-read',
+        toolExecutionId: 'tool-execution-1',
       },
     });
   });
 
-  it('yields but ignores malformed tool use events before tool handling', async () => {
-    let handleToolUsesCallCount = 0;
+  it('yields but ignores malformed tool call events before tool handling', async () => {
+    let handleToolCallsCallCount = 0;
 
-    const malformedToolUseEvent: RuntimeEvent = {
+    const malformedToolCallEvent: RuntimeEvent = {
       eventId: 'malformed-event-1',
       schemaVersion: 1,
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       sessionId: 'session-1',
       runId: 'run-1',
       stepId: 'step-1',
@@ -702,7 +714,7 @@ describe('run model tool loop', () => {
       visibility: 'system',
       persist: 'required',
       payload: {
-        toolUseId: 'call-read',
+        toolCallId: 'call-read',
       },
     };
 
@@ -710,12 +722,12 @@ describe('run model tool loop', () => {
       request: createRequest(),
       aiPort: {
         async *streamModelStep() {
-          yield malformedToolUseEvent;
+          yield malformedToolCallEvent;
         },
       },
-      toolUseHandler: {
-        async handleToolUses() {
-          handleToolUsesCallCount += 1;
+      toolCallHandler: {
+        async handleToolCalls() {
+          handleToolCallsCallCount += 1;
           return {
             toolResults: [createToolResult()],
           };
@@ -728,8 +740,8 @@ describe('run model tool loop', () => {
       },
     }));
 
-    expect(events).toEqual([malformedToolUseEvent]);
-    expect(handleToolUsesCallCount).toBe(0);
+    expect(events).toEqual([malformedToolCallEvent]);
+    expect(handleToolCallsCallCount).toBe(0);
   });
 
   it('emits run failed instead of throwing when model step limit is exhausted', async () => {
@@ -738,7 +750,7 @@ describe('run model tool loop', () => {
       maxModelSteps: 1,
       aiPort: {
         async *streamModelStep(input) {
-          yield toolUseCreatedEvent({
+          yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
             stepId: input.request.stepId,
@@ -752,8 +764,8 @@ describe('run model tool loop', () => {
           });
         },
       },
-      toolUseHandler: {
-        async handleToolUses() {
+      toolCallHandler: {
+        async handleToolCalls() {
           return {
             toolResults: [createToolResult()],
           };
@@ -773,7 +785,7 @@ describe('run model tool loop', () => {
     }));
 
     expect(events.map((event) => event.eventType)).toEqual([
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
       'tool.result.created',
       'run.failed',

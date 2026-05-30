@@ -35,8 +35,8 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'plan.status.update';
     case IPC_CHANNELS.tool.definitionsList:
       return 'tool.definitions.list';
-    case IPC_CHANNELS.tool.callGet:
-      return 'tool.call.get';
+    case IPC_CHANNELS.tool.executionGet:
+      return 'tool.execution.get';
     case IPC_CHANNELS.approval.resolve:
       return 'approval.resolve';
     case IPC_CHANNELS.recovery.recoverableRunsList:

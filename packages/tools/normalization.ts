@@ -1,6 +1,6 @@
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type {
-  ToolCall,
+  ToolExecution,
   ToolError,
   ToolResult,
 } from '@megumi/shared/tool-contracts';
@@ -16,14 +16,14 @@ export interface NormalizeToolResultInput {
 }
 
 export function normalizeToolResult(
-  toolCall: Pick<ToolCall, 'toolCallId' | 'toolUseId' | 'runId'>,
+  toolExecution: Pick<ToolExecution, 'toolCallId' | 'toolExecutionId' | 'runId'>,
   input: NormalizeToolResultInput,
 ): ToolResult {
   return {
     toolResultId: input.toolResultId,
-    toolUseId: toolCall.toolUseId,
-    toolCallId: toolCall.toolCallId,
-    runId: toolCall.runId,
+    toolCallId: toolExecution.toolCallId,
+    toolExecutionId: toolExecution.toolExecutionId,
+    runId: toolExecution.runId,
     kind: 'success',
     ...(input.structuredContent !== undefined ? { structuredContent: input.structuredContent } : {}),
     ...(input.textContent !== undefined ? { textContent: input.textContent } : {}),

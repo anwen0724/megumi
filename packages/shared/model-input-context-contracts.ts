@@ -271,6 +271,7 @@ export const ToolContinuationPartSchema = ModelInputContextPartBaseSchema.extend
   text: NonEmptyTextSchema,
   toolCallId: IdSchema.optional(),
   providerToolCallId: IdSchema.optional(),
+  toolExecutionId: IdSchema.optional(),
   modelStepId: IdSchema.optional(),
   toolName: z.string().min(1).max(64).optional(),
   toolInput: JsonValueSchema.optional(),
@@ -285,6 +286,7 @@ export interface ToolContinuationPart extends ModelInputContextPartBase {
   text: string;
   toolCallId?: string;
   providerToolCallId?: string;
+  toolExecutionId?: string;
   modelStepId?: string;
   toolName?: string;
   toolInput?: JsonValue;

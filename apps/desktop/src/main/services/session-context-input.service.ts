@@ -220,7 +220,7 @@ function runtimeFactForEvent(event: RuntimeEvent, builtAt: string): SessionRunti
     }
   }
 
-  if (event.eventType === 'tool.call.denied') {
+  if (event.eventType === 'tool.execution.denied') {
     const reason = stringPayloadField(event, 'reason')?.trim();
     if (reason) {
       return runtimeFact({

@@ -6,7 +6,7 @@ export interface ToolRegistryListInput {
   projectId?: string;
   permissionMode: PermissionMode;
   providerCapabilitySummary?: {
-    supportsToolUse?: boolean;
+    supportsToolCall?: boolean;
   };
 }
 
@@ -40,7 +40,7 @@ export function createStaticToolRegistry(definitions: readonly ToolDefinition[])
   }
 
   function listVisibleDefinitions(input: ToolRegistryListInput): ToolDefinition[] {
-    if (input.providerCapabilitySummary?.supportsToolUse === false) {
+    if (input.providerCapabilitySummary?.supportsToolCall === false) {
       return [];
     }
 

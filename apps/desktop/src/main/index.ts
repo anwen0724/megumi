@@ -26,7 +26,7 @@ import { createElectronSecretStoreService } from './services/secret-store.servic
 import { RunModeService } from './services/run-mode.service';
 import { createDefaultRunContextService } from './services/run-context.service';
 import { ToolService } from './services/tool.service';
-import { createToolUseHandlerService } from './services/tool-use-handler.service';
+import { createToolCallHandlerService } from './services/tool-call-handler.service';
 import { createProjectToolExecutor } from './services/project-tool-executor.service';
 import { createPermissionSettingsService } from './services/permission-settings.service';
 import { createRecoveryService } from './services/recovery.service';
@@ -105,9 +105,38 @@ const chatStreamSink = new TimelineHistoryCommitProjectorService({
 });
 const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
   async create({ projectRoot, permissionMode }) {
-    return createToolUseHandlerService({
+    return createToolCallHandlerService({
       registry: toolRegistry,
-      repository: toolRepository,
+      repository: {
+        saveToolCall: (toolCall) => toolRepository.saveToolUse({
+          ...toolCall,
+          toolUseId: toolCall.toolCallId,
+          providerToolUseId: toolCall.providerToolCallId,
+        } as never) as never,
+        getToolCall: (toolCallId) => toolRepository.getToolUse(toolCallId) as never,
+        saveToolExecution: (toolExecution) => toolRepository.saveToolCall({
+          ...toolExecution,
+          toolCallId: toolExecution.toolExecutionId,
+          toolUseId: toolExecution.toolCallId,
+        } as never) as never,
+        getToolExecution: (toolExecutionId) => toolRepository.getToolCall(toolExecutionId) as never,
+        savePermissionDecision: (permissionDecision) => toolRepository.savePermissionDecision({
+          ...permissionDecision,
+          toolUseId: permissionDecision.toolCallId,
+          toolCallId: permissionDecision.toolExecutionId,
+        } as never) as never,
+        saveApprovalRequest: (approvalRequest) => toolRepository.saveApprovalRequest({
+          ...approvalRequest,
+          toolUseId: approvalRequest.toolCallId,
+          toolCallId: approvalRequest.toolExecutionId,
+        } as never) as never,
+        getApprovalRequest: (approvalRequestId) => toolRepository.getApprovalRequest(approvalRequestId) as never,
+        saveToolResult: (toolResult) => toolRepository.saveToolResult({
+          ...toolResult,
+          toolUseId: toolResult.toolCallId,
+          toolCallId: toolResult.toolExecutionId,
+        } as never) as never,
+      },
       permissionMode,
       projectRoot,
       settings: await permissionSettingsService.loadForProject(projectRoot),

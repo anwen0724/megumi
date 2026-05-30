@@ -96,8 +96,8 @@ import type {
   SessionMessageSendPayload,
   SessionTimelineListData,
   SessionTimelineListPayload,
-  ToolCallGetData,
-  ToolCallGetPayload,
+  ToolExecutionGetData,
+  ToolExecutionGetPayload,
   ToolDefinitionsListData,
   ToolDefinitionsListPayload,
   WorkspaceFilesListData,
@@ -241,10 +241,10 @@ export const api = {
       request: BusinessRequest<ToolDefinitionsListPayload, typeof IPC_CHANNELS.tool.definitionsList>,
     ): Promise<RuntimeIpcResult<ToolDefinitionsListData, typeof IPC_CHANNELS.tool.definitionsList>> =>
       invokeRuntimeIpc(IPC_CHANNELS.tool.definitionsList, request),
-    callGet: (
-      request: BusinessRequest<ToolCallGetPayload, typeof IPC_CHANNELS.tool.callGet>,
-    ): Promise<RuntimeIpcResult<ToolCallGetData, typeof IPC_CHANNELS.tool.callGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.tool.callGet, request),
+    executionGet: (
+      request: BusinessRequest<ToolExecutionGetPayload, typeof IPC_CHANNELS.tool.executionGet>,
+    ): Promise<RuntimeIpcResult<ToolExecutionGetData, typeof IPC_CHANNELS.tool.executionGet>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.tool.executionGet, request),
   },
   approval: {
     resolve: (

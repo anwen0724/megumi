@@ -6,8 +6,8 @@ import type {
   PermissionMatchedRule,
   PermissionClassifierLabel,
   SandboxRequirement,
-  ToolCall,
   ToolDefinition,
+  ToolExecution,
   ToolPolicyDecision,
   ToolPolicyDecisionValue,
   ToolRiskLevel,
@@ -26,7 +26,7 @@ import { matchPermissionRule } from './permission-rule-matcher';
 
 export interface EvaluatePermissionPolicyInput {
   definition: ToolDefinition;
-  toolCall: ToolCall;
+  toolExecution: ToolExecution;
   permissionMode: PermissionMode;
   projectRoot: string;
   protectedPathHints?: readonly string[];
@@ -147,16 +147,16 @@ function normalizeEvaluateToolPolicyInput(input: EvaluateToolPolicyInput): Evalu
 }
 
 function classifyToolCommand(input: EvaluatePermissionPolicyInput) {
-  if (input.definition.name !== 'run_command' || !isRecord(input.toolCall.input)) {
+  if (input.definition.name !== 'run_command' || !isRecord(input.toolExecution.input)) {
     return undefined;
   }
 
-  const command = input.toolCall.input.command;
+  const command = input.toolExecution.input.command;
   return classifyCommand(typeof command === 'string' ? command : '');
 }
 
 function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPathClassification | undefined {
-  if (!isRecord(input.toolCall.input)) {
+  if (!isRecord(input.toolExecution.input)) {
     return undefined;
   }
 
@@ -166,7 +166,7 @@ function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPa
       return commandPath;
     }
 
-    const cwd = input.toolCall.input.cwd;
+    const cwd = input.toolExecution.input.cwd;
     return classifyProjectPath({
       projectRoot: input.projectRoot,
       targetPath: typeof cwd === 'string' ? cwd : '.',
@@ -174,9 +174,9 @@ function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPa
     });
   }
 
-  const targetPath = input.toolCall.input.path
-    ?? input.toolCall.input.targetPath
-    ?? input.toolCall.input.pattern;
+  const targetPath = input.toolExecution.input.path
+    ?? input.toolExecution.input.targetPath
+    ?? input.toolExecution.input.pattern;
   if (typeof targetPath !== 'string') {
     return undefined;
   }
@@ -191,11 +191,11 @@ function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPa
 function classifyCommandReferencedProjectPath(
   input: EvaluatePermissionPolicyInput,
 ): ProjectPathClassification | undefined {
-  if (!isRecord(input.toolCall.input)) {
+  if (!isRecord(input.toolExecution.input)) {
     return undefined;
   }
 
-  const command = input.toolCall.input.command;
+  const command = input.toolExecution.input.command;
   if (typeof command !== 'string') {
     return undefined;
   }
@@ -345,7 +345,7 @@ function findMatchedRule(
   return (input.settings?.[bucket] ?? []).find((rule) =>
     matchPermissionRule(rule.pattern, {
       toolName: input.definition.name,
-      input: input.toolCall.input,
+      input: input.toolExecution.input,
     }).matched,
   );
 }
@@ -469,10 +469,10 @@ function createPermissionDecision(
   } = {},
 ): PermissionDecision {
   return {
-    permissionDecisionId: `permission-decision:${input.toolCall.toolCallId}`,
-    toolUseId: input.toolCall.toolUseId,
-    toolCallId: input.toolCall.toolCallId,
-    runId: input.toolCall.runId,
+    permissionDecisionId: `permission-decision:${input.toolExecution.toolExecutionId}`,
+    toolCallId: input.toolExecution.toolCallId,
+    toolExecutionId: input.toolExecution.toolExecutionId,
+    runId: input.toolExecution.runId,
     decision,
     source,
     reason,

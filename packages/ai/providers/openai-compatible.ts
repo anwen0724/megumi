@@ -8,11 +8,11 @@ import {
   createModelThinkingCompletedEvent,
   createModelThinkingDeltaEvent,
   createModelThinkingStartedEvent,
-  createModelToolUseDetectedEvent,
+  createModelToolCallDetectedEvent,
   createRuntimeEvent,
   createRunCancelledEvent,
   createRunFailedEvent,
-  createToolUseCreatedEvent,
+  createToolCallCreatedEvent,
 } from '@megumi/shared/runtime-event-factory';
 import { mapModelStepToOpenAICompatibleRequest } from '../prompt/message-mapper';
 import { parseOpenAICompatibleSseStream } from '../stream';
@@ -64,7 +64,7 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
         let reasoningStarted = false;
         let finishReason: string | undefined;
         const toolCalls = new Map<number, OpenAICompatibleToolCallAccumulator>();
-        const detectedToolUseIds = new Set<string>();
+        const detectedToolCallIds = new Set<string>();
 
         yield createModelStepStarted(input, clock.now());
         failureStage = 'stream_parse_error';
@@ -82,9 +82,9 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
             yield createModelThinkingDelta(input, item.delta, clock.now());
           } else if (item.type === 'tool_call_delta') {
             const toolCall = appendToolCallDelta(toolCalls, item);
-            if (isDetectableToolCall(toolCall) && !detectedToolUseIds.has(toolCall.id)) {
-              detectedToolUseIds.add(toolCall.id);
-              yield createModelToolUseDetected(input, toolCall, clock.now());
+            if (isDetectableToolCall(toolCall) && !detectedToolCallIds.has(toolCall.id)) {
+              detectedToolCallIds.add(toolCall.id);
+              yield createModelToolCallDetected(input, toolCall, clock.now());
             }
           } else if (item.type === 'finish') {
             finishReason = item.finishReason;
@@ -103,7 +103,7 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
 
         for (const toolCall of [...toolCalls.entries()].sort(([left], [right]) => left - right).map(([, value]) => value)) {
           if (isCompleteToolCall(toolCall)) {
-            yield createModelStepToolUseCreated(input, toolCall, clock.now());
+            yield createModelStepToolCallCreated(input, toolCall, clock.now());
           }
         }
 
@@ -173,7 +173,7 @@ function createProviderRequestDiagnostics(
     requestShape,
     messageRoles: body.messages.map((message) => message.role),
     toolDefinitionCount: body.tools?.length ?? 0,
-    toolUseCount: body.messages.reduce((count, message) => count + (message.tool_calls?.length ?? 0), 0),
+    toolCallCount: body.messages.reduce((count, message) => count + (message.tool_calls?.length ?? 0), 0),
     toolResultCount: body.messages.filter((message) => message.role === 'tool').length,
   };
 }
@@ -383,14 +383,14 @@ function createModelThinkingCompleted(
   });
 }
 
-function createModelStepToolUseCreated(
+function createModelStepToolCallCreated(
   input: AiModelStepAdapterRequest,
   toolCall: OpenAICompatibleToolCallAccumulator & { id: string; name: string },
   createdAt: string,
 ): RuntimeEvent {
-  return createToolUseCreatedEvent({
+  return createToolCallCreatedEvent({
     eventId: input.eventIdFactory(),
-    eventType: 'tool.use.created',
+    eventType: 'tool.call.created',
     runId: input.runId,
     sessionId: input.request.sessionId,
     stepId: input.stepId,
@@ -402,23 +402,23 @@ function createModelStepToolUseCreated(
     visibility: 'system',
     persist: 'required',
     payload: {
-      toolUseId: toolCall.id,
+      toolCallId: toolCall.id,
       modelStepId: modelStepIdFor(input),
-      providerToolUseId: toolCall.id,
+      providerToolCallId: toolCall.id,
       toolName: toolCall.name,
       input: parseToolArguments(toolCall.argumentsText),
     },
   });
 }
 
-function createModelToolUseDetected(
+function createModelToolCallDetected(
   input: AiModelStepAdapterRequest,
   toolCall: OpenAICompatibleToolCallAccumulator & { id: string; name: string },
   createdAt: string,
 ): RuntimeEvent {
-  return createModelToolUseDetectedEvent({
+  return createModelToolCallDetectedEvent({
     eventId: input.eventIdFactory(),
-    eventType: 'model.tool_use.detected',
+    eventType: 'model.tool_call.detected',
     runId: input.runId,
     sessionId: input.request.sessionId,
     stepId: input.stepId,
@@ -431,8 +431,8 @@ function createModelToolUseDetected(
     persist: 'required',
     payload: {
       modelStepId: modelStepIdFor(input),
-      toolUseId: toolCall.id,
-      providerToolUseId: toolCall.id,
+      toolCallId: toolCall.id,
+      providerToolCallId: toolCall.id,
       toolName: toolCall.name,
     },
   });

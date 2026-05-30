@@ -5,14 +5,14 @@ import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import type {
   ApprovalResolveData,
   ApprovalResolvePayload,
-  ToolCallGetData,
-  ToolCallGetPayload,
+  ToolExecutionGetData,
+  ToolExecutionGetPayload,
   ToolDefinitionsListData,
   ToolDefinitionsListPayload,
 } from '@megumi/shared/ipc-schemas';
 import {
   ApprovalResolveRequestSchema,
-  ToolCallGetRequestSchema,
+  ToolExecutionGetRequestSchema,
   ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc-schemas';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
@@ -22,7 +22,7 @@ import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type ToolHandlersService = Pick<
   ToolService,
-  'listDefinitions' | 'getToolCall' | 'resolveApproval'
+  'listDefinitions' | 'getToolExecution' | 'resolveApproval'
 >;
 
 export interface RegisterToolHandlersOptions {
@@ -49,15 +49,15 @@ export function registerToolHandlers(
   );
 
   ipcMain.handle(
-    IPC_CHANNELS.tool.callGet,
+    IPC_CHANNELS.tool.executionGet,
     createRuntimeIpcHandler({
-      channel: IPC_CHANNELS.tool.callGet,
-      requestSchema: ToolCallGetRequestSchema,
+      channel: IPC_CHANNELS.tool.executionGet,
+      requestSchema: ToolExecutionGetRequestSchema,
       logger: options.logger,
       handle: (
-        request: RuntimeIpcRequest<ToolCallGetPayload, typeof IPC_CHANNELS.tool.callGet>,
-      ): ToolCallGetData => ({
-        toolCall: service.getToolCall(request.payload.toolCallId),
+        request: RuntimeIpcRequest<ToolExecutionGetPayload, typeof IPC_CHANNELS.tool.executionGet>,
+      ): ToolExecutionGetData => ({
+        toolExecution: service.getToolExecution(request.payload.toolExecutionId),
       }),
       mapError: mapToolIpcError,
     }),

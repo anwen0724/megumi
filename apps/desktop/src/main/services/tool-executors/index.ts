@@ -6,7 +6,7 @@ import {
 } from '@megumi/security/project-boundary-policy';
 import { redactRuntimeMessage } from '@megumi/security/redaction';
 import { normalizeToolResult } from '@megumi/tools/normalization';
-import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import type { SpawnLike } from './run-command.executor';
 
 export interface ProjectToolFileSystem {
@@ -42,7 +42,7 @@ export interface ProjectToolExecutorContext {
 }
 
 export interface SingleProjectToolExecutor {
-  execute(toolCall: ToolCall): Promise<ToolResult>;
+  execute(toolExecution: ToolExecution): Promise<ToolResult>;
 }
 
 export interface ProjectFileEntry {
@@ -52,7 +52,7 @@ export interface ProjectFileEntry {
 
 export function successResult(
   context: ProjectToolExecutorContext,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
   input: {
     structuredContent?: ToolResult['structuredContent'];
     textContent?: string;
@@ -60,7 +60,7 @@ export function successResult(
     metadata?: ToolResult['metadata'];
   },
 ): ToolResult {
-  return normalizeToolResult(toolCall, {
+  return normalizeToolResult(toolExecution, {
     toolResultId: context.ids.toolResultId(),
     structuredContent: input.structuredContent,
     textContent: input.textContent,
@@ -108,11 +108,11 @@ export function assertOrdinaryProjectPath(
   return resolved;
 }
 
-export function inputRecord(toolCall: ToolCall): Record<string, unknown> {
-  if (!toolCall.input || typeof toolCall.input !== 'object' || Array.isArray(toolCall.input)) {
-    throw new Error(`Tool input must be an object: ${toolCall.toolName}`);
+export function inputRecord(toolExecution: ToolExecution): Record<string, unknown> {
+  if (!toolExecution.input || typeof toolExecution.input !== 'object' || Array.isArray(toolExecution.input)) {
+    throw new Error(`Tool input must be an object: ${toolExecution.toolName}`);
   }
-  return toolCall.input as Record<string, unknown>;
+  return toolExecution.input as Record<string, unknown>;
 }
 
 export function requireString(input: Record<string, unknown>, key: string): string {

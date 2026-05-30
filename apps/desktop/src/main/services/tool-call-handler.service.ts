@@ -6,7 +6,7 @@ import type {
   ToolApprovalResumeInput,
   ToolApprovalResumeOutcome,
   ToolApprovalResumePort,
-  ToolUseHandlerPort,
+  ToolCallHandlerPort,
 } from '@megumi/core/run-runtime/tool-loop';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { MergedPermissionSettings } from '@megumi/shared/permission-settings-contracts';
@@ -14,13 +14,13 @@ import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
 import {
   createApprovalRequestedEvent,
   createPermissionDecisionCreatedEvent,
-  createToolCallApprovalRequestedEvent,
-  createToolCallCompletedEvent,
-  createToolCallDeniedEvent,
-  createToolCallFailedEvent,
-  createToolCallPolicyDecidedEvent,
-  createToolCallRequestedEvent,
-  createToolCallStartedEvent,
+  createToolExecutionApprovalRequestedEvent,
+  createToolExecutionCompletedEvent,
+  createToolExecutionDeniedEvent,
+  createToolExecutionFailedEvent,
+  createToolExecutionPolicyDecidedEvent,
+  createToolExecutionRequestedEvent,
+  createToolExecutionStartedEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime-event-factory';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
@@ -29,56 +29,57 @@ import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
+  ToolExecution,
   ToolResult,
-  ToolUse,
 } from '@megumi/shared/tool-contracts';
-import type { ToolRepository } from '@megumi/db/repos/tool.repo';
 import type { ProjectToolExecutor } from './project-tool-executor.service';
 
-export interface ToolUseHandlerRepositoryPort extends Pick<
-  ToolRepository,
-  | 'saveToolUse'
-  | 'saveToolCall'
-  | 'getToolCall'
-  | 'savePermissionDecision'
-  | 'saveApprovalRequest'
-  | 'getApprovalRequest'
-  | 'saveToolResult'
-> {}
+export interface ToolCallHandlerRepositoryPort {
+  saveToolCall(toolCall: ToolCall): ToolCall;
+  getToolCall(toolCallId: string): ToolCall | undefined;
+  saveToolExecution(toolExecution: ToolExecution): ToolExecution;
+  getToolExecution(toolExecutionId: string): ToolExecution | undefined;
+  savePermissionDecision(permissionDecision: PermissionDecision): PermissionDecision;
+  saveApprovalRequest(approvalRequest: ApprovalRequest): ApprovalRequest;
+  getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined;
+  saveToolResult(toolResult: ToolResult): ToolResult;
+}
 
-export interface ToolUseHandlerServiceOptions {
+export interface ToolCallHandlerServiceOptions {
   registry: ToolRegistry;
-  repository: ToolUseHandlerRepositoryPort;
+  repository: ToolCallHandlerRepositoryPort;
   permissionMode: PermissionMode;
   projectRoot: string;
   settings: MergedPermissionSettings;
   projectExecutor: ProjectToolExecutor;
   now?: () => string;
   ids?: {
-    toolCallId(): string;
+    toolExecutionId(): string;
     toolResultId(): string;
     permissionDecisionId(): string;
     approvalRequestId(): string;
   };
 }
 
-interface ResolvedToolUseHandlerServiceOptions extends ToolUseHandlerServiceOptions {
+interface ResolvedToolCallHandlerServiceOptions extends ToolCallHandlerServiceOptions {
   now: () => string;
-  ids: NonNullable<ToolUseHandlerServiceOptions['ids']>;
+  ids: NonNullable<ToolCallHandlerServiceOptions['ids']>;
 }
 
-interface SingleToolUseOutcome {
+interface SingleToolCallOutcome {
   toolResult?: ToolResult;
   pendingApproval?: PendingToolApproval;
   runtimeEvents?: RuntimeEvent[];
 }
 
-export function createToolUseHandlerService(options: ToolUseHandlerServiceOptions): ToolUseHandlerPort & ToolApprovalResumePort {
-  const resolvedOptions: ResolvedToolUseHandlerServiceOptions = {
+export function createToolCallHandlerService(
+  options: ToolCallHandlerServiceOptions,
+): ToolCallHandlerPort & ToolApprovalResumePort {
+  const resolvedOptions: ResolvedToolCallHandlerServiceOptions = {
     ...options,
     now: options.now ?? (() => new Date().toISOString()),
     ids: options.ids ?? {
-      toolCallId: () => `tool-call:${crypto.randomUUID()}`,
+      toolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
       toolResultId: () => `tool-result:${crypto.randomUUID()}`,
       permissionDecisionId: () => `permission-decision:${crypto.randomUUID()}`,
       approvalRequestId: () => `approval-request:${crypto.randomUUID()}`,
@@ -86,14 +87,14 @@ export function createToolUseHandlerService(options: ToolUseHandlerServiceOption
   };
 
   return {
-    async handleToolUses(input) {
+    async handleToolCalls(input) {
       const toolResults: ToolResult[] = [];
       const pendingApprovals: PendingToolApproval[] = [];
       const runtimeEvents: RuntimeEvent[] = [];
 
-      for (const toolUse of input.toolUses) {
-        resolvedOptions.repository.saveToolUse(toolUse);
-        const outcome = await handleSingleToolUse(resolvedOptions, input.request, toolUse);
+      for (const toolCall of input.toolCalls) {
+        resolvedOptions.repository.saveToolCall(toolCall);
+        const outcome = await handleSingleToolCall(resolvedOptions, input.request, toolCall);
         if (outcome.toolResult) {
           toolResults.push(outcome.toolResult);
         }
@@ -112,7 +113,7 @@ export function createToolUseHandlerService(options: ToolUseHandlerServiceOption
 }
 
 async function resumeToolApproval(
-  options: ResolvedToolUseHandlerServiceOptions,
+  options: ResolvedToolCallHandlerServiceOptions,
   input: ToolApprovalResumeInput,
 ): Promise<ToolApprovalResumeOutcome | undefined> {
   const approvalRequest = options.repository.getApprovalRequest(input.approvalRequestId);
@@ -120,8 +121,8 @@ async function resumeToolApproval(
     return undefined;
   }
 
-  const toolCall = options.repository.getToolCall(approvalRequest.toolCallId);
-  if (!toolCall) {
+  const toolExecution = options.repository.getToolExecution(approvalRequest.toolExecutionId);
+  if (!toolExecution) {
     return undefined;
   }
 
@@ -132,42 +133,45 @@ async function resumeToolApproval(
   });
 
   if (input.decision === 'denied') {
-    const deniedToolCall = options.repository.saveToolCall({
-      ...toolCall,
+    const deniedToolExecution = options.repository.saveToolExecution({
+      ...toolExecution,
       status: 'denied',
       completedAt: input.decidedAt,
     });
 
     const toolResult = options.repository.saveToolResult({
       toolResultId: options.ids.toolResultId(),
-      toolUseId: toolCall.toolUseId,
-      toolCallId: toolCall.toolCallId,
-      runId: toolCall.runId,
+      toolCallId: deniedToolExecution.toolCallId,
+      toolExecutionId: deniedToolExecution.toolExecutionId,
+      runId: deniedToolExecution.runId,
       kind: 'user_rejected',
-      textContent: input.reason ?? 'User rejected the requested tool call.',
-      denialReason: input.reason ?? 'User rejected the requested tool call.',
+      textContent: input.reason ?? 'User rejected the requested tool execution.',
+      denialReason: input.reason ?? 'User rejected the requested tool execution.',
       redactionState: 'none',
       createdAt: input.decidedAt,
     });
     return {
       toolResult,
       runtimeEvents: [
-        createToolCallDeniedRuntimeEventFromToolCall(deniedToolCall, toolResult.denialReason ?? toolResult.textContent ?? 'User rejected the requested tool call.'),
+        createToolExecutionDeniedRuntimeEventFromToolExecution(
+          deniedToolExecution,
+          toolResult.denialReason ?? toolResult.textContent ?? 'User rejected the requested tool execution.',
+        ),
         createToolResultCreatedRuntimeEventFromToolResult(toolResult),
       ],
     };
   }
 
-  const runningToolCall = options.repository.saveToolCall({
-    ...toolCall,
+  const runningToolExecution = options.repository.saveToolExecution({
+    ...toolExecution,
     status: 'running',
     startedAt: input.decidedAt,
   });
-  const toolResult = await options.projectExecutor.executeToolCall(runningToolCall);
+  const toolResult = await options.projectExecutor.executeToolExecution(runningToolExecution);
 
-  const completedToolCall = options.repository.saveToolCall({
-    ...runningToolCall,
-    status: toolResult.kind === 'success' ? 'succeeded' : 'failed',
+  const completedToolExecution = options.repository.saveToolExecution({
+    ...runningToolExecution,
+    status: toolResult.kind === 'success' ? 'completed' : 'failed',
     completedAt: toolResult.createdAt,
     resultPreview: toolResult.textContent,
     ...(toolResult.error ? { error: toolResult.error } : {}),
@@ -177,60 +181,60 @@ async function resumeToolApproval(
   return {
     toolResult: savedToolResult,
     runtimeEvents: [
-      createToolCallStartedRuntimeEventFromToolCall(runningToolCall),
+      createToolExecutionStartedRuntimeEventFromToolExecution(runningToolExecution),
       toolResult.kind === 'success'
-        ? createToolCallCompletedRuntimeEventFromToolCall(completedToolCall)
-        : createToolCallFailedRuntimeEventFromToolCall(completedToolCall, toolResult.error),
+        ? createToolExecutionCompletedRuntimeEventFromToolExecution(completedToolExecution)
+        : createToolExecutionFailedRuntimeEventFromToolExecution(completedToolExecution, toolResult.error),
       createToolResultCreatedRuntimeEventFromToolResult(savedToolResult),
     ],
   };
 }
 
-async function handleSingleToolUse(
-  options: ResolvedToolUseHandlerServiceOptions,
+async function handleSingleToolCall(
+  options: ResolvedToolCallHandlerServiceOptions,
   request: ModelStepRuntimeRequest,
-  toolUse: ToolUse,
-): Promise<SingleToolUseOutcome> {
-  const definition = options.registry.getDefinition(toolUse.toolName, {
+  toolCall: ToolCall,
+): Promise<SingleToolCallOutcome> {
+  const definition = options.registry.getDefinition(toolCall.toolName, {
     runId: String(request.runId),
     permissionMode: options.permissionMode,
-    providerCapabilitySummary: { supportsToolUse: true },
+    providerCapabilitySummary: { supportsToolCall: true },
   });
 
   if (!definition) {
     return {
-      toolResult: saveImmediateToolError(options, toolUse, `Unknown tool: ${toolUse.toolName}`),
+      toolResult: saveImmediateToolError(options, toolCall, `Unknown tool: ${toolCall.toolName}`),
     };
   }
 
-  const validation = validateToolInput(definition, toolUse.input);
+  const validation = validateToolInput(definition, toolCall.input);
   if (!validation.ok) {
     return {
-      toolResult: saveImmediateToolError(options, toolUse, validation.errorMessage),
+      toolResult: saveImmediateToolError(options, toolCall, validation.errorMessage),
     };
   }
 
-  const requestedToolCall = options.repository.saveToolCall({
-    toolCallId: options.ids.toolCallId(),
-    toolUseId: toolUse.toolUseId,
-    runId: toolUse.runId,
+  const requestedToolExecution = options.repository.saveToolExecution({
+    toolExecutionId: options.ids.toolExecutionId(),
+    toolCallId: toolCall.toolCallId,
+    runId: toolCall.runId,
     stepId: request.stepId,
     toolName: definition.name,
-    input: toolUse.input,
-    inputPreview: toolUse.inputPreview,
+    input: toolCall.input,
+    inputPreview: toolCall.inputPreview,
     capabilities: definition.capabilities,
     riskLevel: definition.riskLevel,
     sideEffect: definition.sideEffect,
-    status: 'requested',
+    status: 'pending_approval',
     requestedAt: options.now(),
   });
   const runtimeEvents: RuntimeEvent[] = [
-    createToolCallRequestedRuntimeEvent(request, requestedToolCall),
+    createToolExecutionRequestedRuntimeEvent(request, requestedToolExecution),
   ];
 
   const evaluatedDecision = evaluatePermissionPolicy({
     definition,
-    toolCall: requestedToolCall,
+    toolExecution: requestedToolExecution,
     permissionMode: options.permissionMode,
     projectRoot: options.projectRoot,
     settings: options.settings,
@@ -241,14 +245,14 @@ async function handleSingleToolUse(
     permissionDecisionId: options.ids.permissionDecisionId(),
   });
   runtimeEvents.push(
-    createToolCallPolicyDecidedRuntimeEvent(request, requestedToolCall, decision),
-    createPermissionDecisionCreatedRuntimeEvent(request, requestedToolCall, decision),
+    createToolExecutionPolicyDecidedRuntimeEvent(request, requestedToolExecution, decision),
+    createPermissionDecisionCreatedRuntimeEvent(request, decision),
   );
 
   if (decision.decision === 'deny') {
-    const toolResult = saveDeniedResult(options, toolUse, requestedToolCall, decision);
+    const toolResult = saveDeniedResult(options, requestedToolExecution, decision);
     runtimeEvents.push(
-      createToolCallDeniedRuntimeEvent(request, requestedToolCall, decision.reason),
+      createToolExecutionDeniedRuntimeEvent(request, requestedToolExecution, decision.reason),
       createToolResultCreatedRuntimeEvent(request, toolResult),
     );
     return {
@@ -259,44 +263,44 @@ async function handleSingleToolUse(
 
   if (decision.decision === 'ask') {
     const approvalRequest = options.repository.saveApprovalRequest(
-      createApprovalRequest(options, request, toolUse, requestedToolCall, decision),
+      createApprovalRequest(options, request, toolCall, requestedToolExecution, decision),
     );
-    const waitingToolCall = options.repository.saveToolCall({
-      ...requestedToolCall,
+    const waitingToolExecution = options.repository.saveToolExecution({
+      ...requestedToolExecution,
       policyDecision: decision,
       approvalRequestId: approvalRequest.approvalRequestId,
-      status: 'waiting_for_approval',
+      status: 'pending_approval',
     });
     runtimeEvents.push(
-      createToolCallApprovalRequestedRuntimeEvent(request, waitingToolCall, approvalRequest),
+      createToolExecutionApprovalRequestedRuntimeEvent(request, waitingToolExecution, approvalRequest),
       createApprovalRequestedRuntimeEvent(request, approvalRequest),
     );
     return {
-      pendingApproval: { approvalRequest, toolUse, toolCall: waitingToolCall },
+      pendingApproval: { approvalRequest, toolCall, toolExecution: waitingToolExecution },
       runtimeEvents,
     };
   }
 
-  const runningToolCall = options.repository.saveToolCall({
-    ...requestedToolCall,
+  const runningToolExecution = options.repository.saveToolExecution({
+    ...requestedToolExecution,
     policyDecision: decision,
     sandboxRequirement: decision.requiredSandbox,
     status: 'running',
     startedAt: options.now(),
   });
-  runtimeEvents.push(createToolCallStartedRuntimeEvent(request, runningToolCall));
-  const result = await options.projectExecutor.executeToolCall(runningToolCall);
-  const completedToolCall = options.repository.saveToolCall({
-    ...runningToolCall,
-    status: result.kind === 'success' ? 'succeeded' : 'failed',
+  runtimeEvents.push(createToolExecutionStartedRuntimeEvent(request, runningToolExecution));
+  const result = await options.projectExecutor.executeToolExecution(runningToolExecution);
+  const completedToolExecution = options.repository.saveToolExecution({
+    ...runningToolExecution,
+    status: result.kind === 'success' ? 'completed' : 'failed',
     completedAt: result.createdAt,
     resultPreview: result.textContent,
     ...(result.error ? { error: result.error } : {}),
   });
   runtimeEvents.push(
     result.kind === 'success'
-      ? createToolCallCompletedRuntimeEvent(request, completedToolCall)
-      : createToolCallFailedRuntimeEvent(request, completedToolCall, result.error),
+      ? createToolExecutionCompletedRuntimeEvent(request, completedToolExecution)
+      : createToolExecutionFailedRuntimeEvent(request, completedToolExecution, result.error),
     createToolResultCreatedRuntimeEvent(request, result),
   );
 
@@ -319,11 +323,11 @@ function runtimeEventBase(request: ModelStepRuntimeRequest, eventId: string, cre
   };
 }
 
-function runtimeEventBaseForToolCall(toolCall: ToolCall, eventId: string, createdAt: string) {
+function runtimeEventBaseForToolExecution(toolExecution: ToolExecution, eventId: string, createdAt: string) {
   return {
     eventId,
-    runId: toolCall.runId,
-    stepId: String(toolCall.stepId),
+    runId: toolExecution.runId,
+    stepId: String(toolExecution.stepId),
     sequence: 1,
     createdAt,
   };
@@ -338,34 +342,34 @@ function runtimeEventBaseForToolResult(toolResult: ToolResult, eventId: string) 
   };
 }
 
-function createToolCallRequestedRuntimeEvent(
+function createToolExecutionRequestedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
 ): RuntimeEvent {
-  return createToolCallRequestedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:requested`, toolCall.requestedAt),
-    eventType: 'tool.call.requested',
+  return createToolExecutionRequestedEvent({
+    ...runtimeEventBase(request, `event:${toolExecution.toolExecutionId}:requested`, toolExecution.requestedAt),
+    eventType: 'tool.execution.requested',
     source: 'tool',
     visibility: 'user',
     persist: 'required',
-    payload: { toolCall },
+    payload: { toolExecution },
   });
 }
 
-function createToolCallPolicyDecidedRuntimeEvent(
+function createToolExecutionPolicyDecidedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
   decision: PermissionDecision,
 ): RuntimeEvent {
-  return createToolCallPolicyDecidedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:policy-decided`, decision.evaluatedAt),
-    eventType: 'tool.call.policy_decided',
+  return createToolExecutionPolicyDecidedEvent({
+    ...runtimeEventBase(request, `event:${toolExecution.toolExecutionId}:policy-decided`, decision.evaluatedAt),
+    eventType: 'tool.execution.policy_decided',
     source: 'security',
     visibility: 'debug',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
-      toolName: toolCall.toolName,
+      toolExecutionId: toolExecution.toolExecutionId,
+      toolName: toolExecution.toolName,
       policyDecision: decision,
     },
   });
@@ -373,11 +377,10 @@ function createToolCallPolicyDecidedRuntimeEvent(
 
 function createPermissionDecisionCreatedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
   decision: PermissionDecision,
 ): RuntimeEvent {
   return createPermissionDecisionCreatedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:permission-decision-created`, decision.evaluatedAt),
+    ...runtimeEventBase(request, `event:${decision.permissionDecisionId}:permission-decision-created`, decision.evaluatedAt),
     eventType: 'permission.decision.created',
     source: 'security',
     visibility: 'debug',
@@ -388,20 +391,20 @@ function createPermissionDecisionCreatedRuntimeEvent(
   });
 }
 
-function createToolCallApprovalRequestedRuntimeEvent(
+function createToolExecutionApprovalRequestedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
   approvalRequest: ApprovalRequest,
 ): RuntimeEvent {
-  return createToolCallApprovalRequestedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:approval-requested`, approvalRequest.createdAt),
-    eventType: 'tool.call.approval_requested',
+  return createToolExecutionApprovalRequestedEvent({
+    ...runtimeEventBase(request, `event:${toolExecution.toolExecutionId}:approval-requested`, approvalRequest.createdAt),
+    eventType: 'tool.execution.approval_requested',
     source: 'approval',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
-      toolName: toolCall.toolName,
+      toolExecutionId: toolExecution.toolExecutionId,
+      toolName: toolExecution.toolName,
       approvalRequest,
     },
   });
@@ -421,135 +424,151 @@ function createApprovalRequestedRuntimeEvent(
   });
 }
 
-function createToolCallStartedRuntimeEvent(
+function createToolExecutionStartedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
 ): RuntimeEvent {
-  return createToolCallStartedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:started`, toolCall.startedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.started',
+  return createToolExecutionStartedEvent({
+    ...runtimeEventBase(request, `event:${toolExecution.toolExecutionId}:started`, toolExecution.startedAt ?? toolExecution.requestedAt),
+    eventType: 'tool.execution.started',
     source: 'tool',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
-      ...(toolCall.startedAt ? { startedAt: toolCall.startedAt } : {}),
+      toolExecutionId: toolExecution.toolExecutionId,
+      ...(toolExecution.startedAt ? { startedAt: toolExecution.startedAt } : {}),
     },
   });
 }
 
-function createToolCallStartedRuntimeEventFromToolCall(toolCall: ToolCall): RuntimeEvent {
-  return createToolCallStartedEvent({
-    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:started`, toolCall.startedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.started',
+function createToolExecutionStartedRuntimeEventFromToolExecution(toolExecution: ToolExecution): RuntimeEvent {
+  return createToolExecutionStartedEvent({
+    ...runtimeEventBaseForToolExecution(
+      toolExecution,
+      `event:${toolExecution.toolExecutionId}:started`,
+      toolExecution.startedAt ?? toolExecution.requestedAt,
+    ),
+    eventType: 'tool.execution.started',
     source: 'tool',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
-      ...(toolCall.startedAt ? { startedAt: toolCall.startedAt } : {}),
+      toolExecutionId: toolExecution.toolExecutionId,
+      ...(toolExecution.startedAt ? { startedAt: toolExecution.startedAt } : {}),
     },
   });
 }
 
-function createToolCallCompletedRuntimeEvent(
+function createToolExecutionCompletedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
 ): RuntimeEvent {
-  return createToolCallCompletedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:completed`, toolCall.completedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.completed',
+  return createToolExecutionCompletedEvent({
+    ...runtimeEventBase(request, `event:${toolExecution.toolExecutionId}:completed`, toolExecution.completedAt ?? toolExecution.requestedAt),
+    eventType: 'tool.execution.completed',
     source: 'tool',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
-      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+      toolExecutionId: toolExecution.toolExecutionId,
+      ...(toolExecution.completedAt ? { completedAt: toolExecution.completedAt } : {}),
     },
   });
 }
 
-function createToolCallCompletedRuntimeEventFromToolCall(toolCall: ToolCall): RuntimeEvent {
-  return createToolCallCompletedEvent({
-    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:completed`, toolCall.completedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.completed',
+function createToolExecutionCompletedRuntimeEventFromToolExecution(toolExecution: ToolExecution): RuntimeEvent {
+  return createToolExecutionCompletedEvent({
+    ...runtimeEventBaseForToolExecution(
+      toolExecution,
+      `event:${toolExecution.toolExecutionId}:completed`,
+      toolExecution.completedAt ?? toolExecution.requestedAt,
+    ),
+    eventType: 'tool.execution.completed',
     source: 'tool',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
-      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+      toolExecutionId: toolExecution.toolExecutionId,
+      ...(toolExecution.completedAt ? { completedAt: toolExecution.completedAt } : {}),
     },
   });
 }
 
-function createToolCallFailedRuntimeEvent(
+function createToolExecutionFailedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
   error: RuntimeError | undefined,
 ): RuntimeEvent {
-  return createToolCallFailedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:failed`, toolCall.completedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.failed',
+  return createToolExecutionFailedEvent({
+    ...runtimeEventBase(request, `event:${toolExecution.toolExecutionId}:failed`, toolExecution.completedAt ?? toolExecution.requestedAt),
+    eventType: 'tool.execution.failed',
     source: 'tool',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
+      toolExecutionId: toolExecution.toolExecutionId,
       error: error ?? createToolRuntimeError('Tool execution failed.'),
-      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+      ...(toolExecution.completedAt ? { completedAt: toolExecution.completedAt } : {}),
     },
   });
 }
 
-function createToolCallFailedRuntimeEventFromToolCall(
-  toolCall: ToolCall,
+function createToolExecutionFailedRuntimeEventFromToolExecution(
+  toolExecution: ToolExecution,
   error: RuntimeError | undefined,
 ): RuntimeEvent {
-  return createToolCallFailedEvent({
-    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:failed`, toolCall.completedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.failed',
+  return createToolExecutionFailedEvent({
+    ...runtimeEventBaseForToolExecution(
+      toolExecution,
+      `event:${toolExecution.toolExecutionId}:failed`,
+      toolExecution.completedAt ?? toolExecution.requestedAt,
+    ),
+    eventType: 'tool.execution.failed',
     source: 'tool',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
+      toolExecutionId: toolExecution.toolExecutionId,
       error: error ?? createToolRuntimeError('Tool execution failed.'),
-      ...(toolCall.completedAt ? { completedAt: toolCall.completedAt } : {}),
+      ...(toolExecution.completedAt ? { completedAt: toolExecution.completedAt } : {}),
     },
   });
 }
 
-function createToolCallDeniedRuntimeEvent(
+function createToolExecutionDeniedRuntimeEvent(
   request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
+  toolExecution: ToolExecution,
   reason: string,
 ): RuntimeEvent {
-  return createToolCallDeniedEvent({
-    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:denied`, toolCall.completedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.denied',
+  return createToolExecutionDeniedEvent({
+    ...runtimeEventBase(request, `event:${toolExecution.toolExecutionId}:denied`, toolExecution.completedAt ?? toolExecution.requestedAt),
+    eventType: 'tool.execution.denied',
     source: 'security',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
+      toolExecutionId: toolExecution.toolExecutionId,
       reason,
     },
   });
 }
 
-function createToolCallDeniedRuntimeEventFromToolCall(
-  toolCall: ToolCall,
+function createToolExecutionDeniedRuntimeEventFromToolExecution(
+  toolExecution: ToolExecution,
   reason: string,
 ): RuntimeEvent {
-  return createToolCallDeniedEvent({
-    ...runtimeEventBaseForToolCall(toolCall, `event:${toolCall.toolCallId}:denied`, toolCall.completedAt ?? toolCall.requestedAt),
-    eventType: 'tool.call.denied',
+  return createToolExecutionDeniedEvent({
+    ...runtimeEventBaseForToolExecution(
+      toolExecution,
+      `event:${toolExecution.toolExecutionId}:denied`,
+      toolExecution.completedAt ?? toolExecution.requestedAt,
+    ),
+    eventType: 'tool.execution.denied',
     source: 'security',
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId: toolCall.toolCallId,
+      toolExecutionId: toolExecution.toolExecutionId,
       reason,
     },
   });
@@ -567,8 +586,8 @@ function createToolResultCreatedRuntimeEvent(
     persist: 'required',
     payload: {
       toolResultId: toolResult.toolResultId,
-      toolUseId: toolResult.toolUseId,
-      ...(toolResult.toolCallId ? { toolCallId: toolResult.toolCallId } : {}),
+      toolCallId: toolResult.toolCallId,
+      ...(toolResult.toolExecutionId ? { toolExecutionId: toolResult.toolExecutionId } : {}),
       kind: toolResult.kind,
       summary: createToolResultSummary(toolResult),
     },
@@ -584,8 +603,8 @@ function createToolResultCreatedRuntimeEventFromToolResult(toolResult: ToolResul
     persist: 'required',
     payload: {
       toolResultId: toolResult.toolResultId,
-      toolUseId: toolResult.toolUseId,
-      ...(toolResult.toolCallId ? { toolCallId: toolResult.toolCallId } : {}),
+      toolCallId: toolResult.toolCallId,
+      ...(toolResult.toolExecutionId ? { toolExecutionId: toolResult.toolExecutionId } : {}),
       kind: toolResult.kind,
       summary: createToolResultSummary(toolResult),
     },
@@ -603,28 +622,28 @@ function createToolRuntimeError(message: string): RuntimeError {
 }
 
 function createApprovalRequest(
-  options: Pick<ResolvedToolUseHandlerServiceOptions, 'ids' | 'now'>,
+  options: Pick<ResolvedToolCallHandlerServiceOptions, 'ids' | 'now'>,
   request: ModelStepRuntimeRequest,
-  toolUse: ToolUse,
   toolCall: ToolCall,
+  toolExecution: ToolExecution,
   decision: PermissionDecision,
 ): ApprovalRequest {
   return {
     approvalRequestId: options.ids.approvalRequestId(),
-    toolUseId: toolUse.toolUseId,
     toolCallId: toolCall.toolCallId,
+    toolExecutionId: toolExecution.toolExecutionId,
     permissionDecisionId: decision.permissionDecisionId,
-    runId: toolCall.runId,
+    runId: toolExecution.runId,
     stepId: request.stepId,
-    toolName: toolCall.toolName,
-    capabilities: toolCall.capabilities,
+    toolName: toolExecution.toolName,
+    capabilities: toolExecution.capabilities,
     riskLevel: decision.effectiveRiskLevel,
-    title: `Approve ${toolCall.toolName}`,
+    title: `Approve ${toolExecution.toolName}`,
     summary: decision.reason,
     preview: {
-      action: toolUse.inputPreview.summary,
-      targets: toolUse.inputPreview.targets,
-      ...(toolUse.inputPreview.warnings ? { warnings: toolUse.inputPreview.warnings } : {}),
+      action: toolCall.inputPreview.summary,
+      targets: toolCall.inputPreview.targets,
+      ...(toolCall.inputPreview.warnings ? { warnings: toolCall.inputPreview.warnings } : {}),
     },
     requestedScope: decision.requiredApproval?.scope ?? 'once',
     status: 'pending',
@@ -653,13 +672,12 @@ function createToolResultSummary(toolResult: ToolResult): string {
 }
 
 function saveDeniedResult(
-  options: Pick<ResolvedToolUseHandlerServiceOptions, 'repository' | 'ids' | 'now'>,
-  toolUse: ToolUse,
-  toolCall: ToolCall,
+  options: Pick<ResolvedToolCallHandlerServiceOptions, 'repository' | 'ids' | 'now'>,
+  toolExecution: ToolExecution,
   decision: PermissionDecision,
 ): ToolResult {
-  options.repository.saveToolCall({
-    ...toolCall,
+  options.repository.saveToolExecution({
+    ...toolExecution,
     policyDecision: decision,
     status: 'denied',
     completedAt: options.now(),
@@ -667,9 +685,9 @@ function saveDeniedResult(
 
   return options.repository.saveToolResult({
     toolResultId: options.ids.toolResultId(),
-    toolUseId: toolUse.toolUseId,
-    toolCallId: toolCall.toolCallId,
-    runId: toolUse.runId,
+    toolCallId: toolExecution.toolCallId,
+    toolExecutionId: toolExecution.toolExecutionId,
+    runId: toolExecution.runId,
     kind: 'policy_denied',
     textContent: decision.reason,
     denialReason: decision.reason,
@@ -679,14 +697,14 @@ function saveDeniedResult(
 }
 
 function saveImmediateToolError(
-  options: Pick<ResolvedToolUseHandlerServiceOptions, 'repository' | 'ids' | 'now'>,
-  toolUse: ToolUse,
+  options: Pick<ResolvedToolCallHandlerServiceOptions, 'repository' | 'ids' | 'now'>,
+  toolCall: ToolCall,
   message: string,
 ): ToolResult {
   return options.repository.saveToolResult({
     toolResultId: options.ids.toolResultId(),
-    toolUseId: toolUse.toolUseId,
-    runId: toolUse.runId,
+    toolCallId: toolCall.toolCallId,
+    runId: toolCall.runId,
     kind: 'tool_error',
     textContent: message,
     denialReason: message,
