@@ -78,7 +78,7 @@ describe('agent action permission tools v1 final source guards', () => {
     }
   });
 
-  it('keeps model tool execution centered on ToolUse instead of RunAction tool actions', () => {
+  it('keeps model tool execution centered on ToolCall instead of RunAction tool actions', () => {
     const forbidden = [
       "'call_tool'",
       '"call_tool"',

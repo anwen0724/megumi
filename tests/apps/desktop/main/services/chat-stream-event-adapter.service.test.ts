@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
   createChatStreamEventAdapter,
@@ -148,22 +148,21 @@ describe('createChatStreamEventAdapter', () => {
       payload: { modelStepId: 'model-step-1', delta: 'Let me check.' },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       sequence: 2,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-1',
-        providerToolUseId: 'tool-use-1',
+        providerToolCallId: 'tool-use-1',
         toolName: 'read_file',
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       sequence: 3,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-1',
-        providerToolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        providerToolCallId: 'tool-use-1',
         toolName: 'read_file',
         input: { path: 'README.md' },
       },
@@ -195,12 +194,11 @@ describe('createChatStreamEventAdapter', () => {
       payload: { modelStepId: 'model-step-1', delta: "I'll " },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       sequence: 2,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-1',
-        providerToolUseId: 'tool-use-1',
+        providerToolCallId: 'tool-use-1',
         toolName: 'read_file',
       },
     }));
@@ -241,12 +239,11 @@ describe('createChatStreamEventAdapter', () => {
       payload: { modelStepId: 'model-step-1', delta: 'First step prelude.' },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       sequence: 2,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-1',
-        providerToolUseId: 'tool-use-1',
+        providerToolCallId: 'tool-use-1',
         toolName: 'read_file',
       },
     }));
@@ -271,12 +268,11 @@ describe('createChatStreamEventAdapter', () => {
       'assistant.text.completed',
     ]);
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       sequence: 5,
       payload: {
         modelStepId: 'model-step-2',
-        toolUseId: 'tool-use-2',
-        providerToolUseId: 'tool-use-2',
+        providerToolCallId: 'tool-use-2',
         toolName: 'search_text',
       },
     }));
@@ -309,12 +305,11 @@ describe('createChatStreamEventAdapter', () => {
     const subject = adapter(events);
     subject.startTurn();
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       sequence: 1,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-1',
-        providerToolUseId: 'tool-use-1',
+        providerToolCallId: 'tool-use-1',
         toolName: 'read_file',
       },
     }));
@@ -377,12 +372,12 @@ describe('createChatStreamEventAdapter', () => {
     const subject = adapter(events);
     subject.startTurn();
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       sequence: 1,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-1',
-        providerToolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
+        providerToolCallId: 'tool-use-1',
         toolName: 'write_file',
         input: { path: 'src/app.ts' },
       },
@@ -393,8 +388,9 @@ describe('createChatStreamEventAdapter', () => {
       payload: {
         approvalRequest: {
           approvalRequestId: 'approval-request-1',
-          toolUseId: 'tool-use-1',
           toolCallId: 'tool-call-1',
+
+          toolExecutionId: 'tool-execution-1',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'write_file',
@@ -424,8 +420,9 @@ describe('createChatStreamEventAdapter', () => {
       sequence: 4,
       payload: {
         toolResultId: 'tool-result-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+
+        toolExecutionId: 'tool-execution-1',
         kind: 'success',
         summary: 'Wrote src/app.ts',
       },
@@ -446,23 +443,24 @@ describe('createChatStreamEventAdapter', () => {
     const subject = adapter(events);
     subject.startTurn();
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       sequence: 1,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-completed',
-        providerToolUseId: 'tool-use-completed',
+        toolCallId: 'tool-call-completed',
+        providerToolCallId: 'tool-use-completed',
         toolName: 'read_file',
         input: { path: 'README.md' },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.requested',
+      eventType: 'tool.execution.requested',
       sequence: 2,
       payload: {
-        toolCall: {
+        toolExecution: {
           toolCallId: 'tool-call-completed',
-          toolUseId: 'tool-use-completed',
+
+          toolExecutionId: 'tool-execution-completed',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'read_file',
@@ -475,26 +473,29 @@ describe('createChatStreamEventAdapter', () => {
           capabilities: ['project_read'],
           riskLevel: 'low',
           sideEffect: 'none',
-          status: 'requested',
+          status: 'running',
           requestedAt: '2026-05-24T00:00:01.000Z',
         },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.completed',
+      eventType: 'tool.execution.completed',
       sequence: 3,
       payload: {
         toolCallId: 'tool-call-completed',
+
+        toolExecutionId: 'tool-execution-completed',
         completedAt: '2026-05-24T00:00:02.000Z',
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.requested',
+      eventType: 'tool.execution.requested',
       sequence: 4,
       payload: {
-        toolCall: {
+        toolExecution: {
           toolCallId: 'tool-call-failed',
-          toolUseId: 'tool-use-failed',
+
+          toolExecutionId: 'tool-execution-failed',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'run_command',
@@ -507,16 +508,18 @@ describe('createChatStreamEventAdapter', () => {
           capabilities: ['command_run'],
           riskLevel: 'high',
           sideEffect: 'runs_command',
-          status: 'requested',
+          status: 'running',
           requestedAt: '2026-05-24T00:00:03.000Z',
         },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.failed',
+      eventType: 'tool.execution.failed',
       sequence: 5,
       payload: {
         toolCallId: 'tool-call-failed',
+
+        toolExecutionId: 'tool-execution-failed',
         error: {
           code: 'runtime_unknown',
           message: 'Command failed.',
@@ -528,12 +531,13 @@ describe('createChatStreamEventAdapter', () => {
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.requested',
+      eventType: 'tool.execution.requested',
       sequence: 6,
       payload: {
-        toolCall: {
+        toolExecution: {
           toolCallId: 'tool-call-denied',
-          toolUseId: 'tool-use-denied',
+
+          toolExecutionId: 'tool-execution-denied',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'write_file',
@@ -546,16 +550,18 @@ describe('createChatStreamEventAdapter', () => {
           capabilities: ['project_write'],
           riskLevel: 'medium',
           sideEffect: 'writes_project',
-          status: 'requested',
+          status: 'running',
           requestedAt: '2026-05-24T00:00:05.000Z',
         },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.denied',
+      eventType: 'tool.execution.denied',
       sequence: 7,
       payload: {
         toolCallId: 'tool-call-denied',
+
+        toolExecutionId: 'tool-execution-denied',
         reason: 'Plan mode blocks writes.',
       },
     }));
@@ -571,22 +577,25 @@ describe('createChatStreamEventAdapter', () => {
     ]);
     expect(events.at(-3)).toMatchObject({
       eventType: 'tool.completed',
-      toolUseId: 'tool-use-completed',
       toolCallId: 'tool-call-completed',
+
+      toolExecutionId: 'tool-execution-completed',
       toolName: 'read_file',
     });
     expect(events.at(-2)).toMatchObject({
       eventType: 'tool.failed',
-      toolUseId: 'tool-use-failed',
       toolCallId: 'tool-call-failed',
+
+      toolExecutionId: 'tool-execution-failed',
       toolName: 'run_command',
       errorCode: 'runtime_unknown',
       errorMessage: 'Command failed.',
     });
     expect(events.at(-1)).toMatchObject({
       eventType: 'tool.denied',
-      toolUseId: 'tool-use-denied',
       toolCallId: 'tool-call-denied',
+
+      toolExecutionId: 'tool-execution-denied',
       toolName: 'write_file',
       reason: 'Plan mode blocks writes.',
     });
@@ -597,23 +606,24 @@ describe('createChatStreamEventAdapter', () => {
     const subject = adapter(events);
     subject.startTurn();
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.use.created',
+      eventType: 'tool.call.created',
       sequence: 1,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-success',
-        providerToolUseId: 'tool-use-success',
+        toolCallId: 'tool-call-success',
+        providerToolCallId: 'tool-use-success',
         toolName: 'read_file',
         input: { path: 'README.md' },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.requested',
+      eventType: 'tool.execution.requested',
       sequence: 2,
       payload: {
-        toolCall: {
+        toolExecution: {
           toolCallId: 'tool-call-success',
-          toolUseId: 'tool-use-success',
+
+          toolExecutionId: 'tool-execution-success',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'read_file',
@@ -626,16 +636,18 @@ describe('createChatStreamEventAdapter', () => {
           capabilities: ['project_read'],
           riskLevel: 'low',
           sideEffect: 'none',
-          status: 'requested',
+          status: 'running',
           requestedAt: '2026-05-24T00:00:01.000Z',
         },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.completed',
+      eventType: 'tool.execution.completed',
       sequence: 3,
       payload: {
         toolCallId: 'tool-call-success',
+
+        toolExecutionId: 'tool-execution-success',
         completedAt: '2026-05-24T00:00:02.000Z',
       },
     }));
@@ -644,19 +656,21 @@ describe('createChatStreamEventAdapter', () => {
       sequence: 4,
       payload: {
         toolResultId: 'tool-result-success',
-        toolUseId: 'tool-use-success',
         toolCallId: 'tool-call-success',
+
+        toolExecutionId: 'tool-execution-success',
         kind: 'success',
         summary: 'Read README.md',
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.requested',
+      eventType: 'tool.execution.requested',
       sequence: 5,
       payload: {
-        toolCall: {
+        toolExecution: {
           toolCallId: 'tool-call-failed',
-          toolUseId: 'tool-use-failed',
+
+          toolExecutionId: 'tool-execution-failed',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'run_command',
@@ -669,16 +683,18 @@ describe('createChatStreamEventAdapter', () => {
           capabilities: ['command_run'],
           riskLevel: 'high',
           sideEffect: 'runs_command',
-          status: 'requested',
+          status: 'running',
           requestedAt: '2026-05-24T00:00:03.000Z',
         },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.failed',
+      eventType: 'tool.execution.failed',
       sequence: 6,
       payload: {
         toolCallId: 'tool-call-failed',
+
+        toolExecutionId: 'tool-execution-failed',
         error: {
           code: 'runtime_unknown',
           message: 'Command failed.',
@@ -693,19 +709,21 @@ describe('createChatStreamEventAdapter', () => {
       sequence: 7,
       payload: {
         toolResultId: 'tool-result-failed',
-        toolUseId: 'tool-use-failed',
         toolCallId: 'tool-call-failed',
+
+        toolExecutionId: 'tool-execution-failed',
         kind: 'tool_error',
         summary: 'Command failed.',
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.requested',
+      eventType: 'tool.execution.requested',
       sequence: 8,
       payload: {
-        toolCall: {
+        toolExecution: {
           toolCallId: 'tool-call-denied',
-          toolUseId: 'tool-use-denied',
+
+          toolExecutionId: 'tool-execution-denied',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'write_file',
@@ -718,16 +736,18 @@ describe('createChatStreamEventAdapter', () => {
           capabilities: ['project_write'],
           riskLevel: 'medium',
           sideEffect: 'writes_project',
-          status: 'requested',
+          status: 'running',
           requestedAt: '2026-05-24T00:00:04.000Z',
         },
       },
     }));
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'tool.call.denied',
+      eventType: 'tool.execution.denied',
       sequence: 9,
       payload: {
         toolCallId: 'tool-call-denied',
+
+        toolExecutionId: 'tool-execution-denied',
         reason: 'Plan mode blocks writes.',
       },
     }));
@@ -736,8 +756,9 @@ describe('createChatStreamEventAdapter', () => {
       sequence: 10,
       payload: {
         toolResultId: 'tool-result-denied',
-        toolUseId: 'tool-use-denied',
         toolCallId: 'tool-call-denied',
+
+        toolExecutionId: 'tool-execution-denied',
         kind: 'policy_denied',
         summary: 'Plan mode blocks writes.',
       },
@@ -779,8 +800,9 @@ describe('createChatStreamEventAdapter', () => {
       payload: {
         approvalRequest: {
           approvalRequestId: 'approval-request-1',
-          toolUseId: 'tool-use-1',
           toolCallId: 'tool-call-1',
+
+          toolExecutionId: 'tool-execution-1',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'write_file',
@@ -809,8 +831,9 @@ describe('createChatStreamEventAdapter', () => {
     expect(events.at(-1)).toMatchObject({
       eventType: 'approval.resolved',
       approvalId: 'approval-request-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+
+      toolExecutionId: 'tool-execution-1',
       status: 'rejected',
       decision: 'rejected',
     });
@@ -826,8 +849,9 @@ describe('createChatStreamEventAdapter', () => {
       payload: {
         approvalRequest: {
           approvalRequestId: 'approval-request-1',
-          toolUseId: 'tool-use-1',
           toolCallId: 'tool-call-1',
+
+          toolExecutionId: 'tool-execution-1',
           runId: 'run-1',
           stepId: 'step-1',
           toolName: 'write_file',
@@ -848,6 +872,8 @@ describe('createChatStreamEventAdapter', () => {
       payload: {
         approvalRequestId: 'approval-request-1',
         toolCallId: 'tool-call-1',
+
+        toolExecutionId: 'tool-execution-1',
         expiredAt: '2026-05-24T00:05:01.000Z',
       },
     }));
@@ -855,8 +881,9 @@ describe('createChatStreamEventAdapter', () => {
     expect(events.at(-1)).toMatchObject({
       eventType: 'approval.resolved',
       approvalId: 'approval-request-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+
+      toolExecutionId: 'tool-execution-1',
       scope: 'local',
       status: 'expired',
       decision: 'expired',
@@ -950,12 +977,11 @@ describe('createChatStreamEventAdapter', () => {
     }));
     vi.advanceTimersByTime(50);
     subject.handleRuntimeEvent(runtimeEvent({
-      eventType: 'model.tool_use.detected',
+      eventType: 'model.tool_call.detected',
       sequence: 2,
       payload: {
         modelStepId: 'model-step-1',
-        toolUseId: 'tool-use-late',
-        providerToolUseId: 'tool-use-late',
+        providerToolCallId: 'tool-use-late',
         toolName: 'read_file',
       },
     }));

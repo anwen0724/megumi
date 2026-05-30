@@ -7,7 +7,7 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { ToolCallSchema } from '@megumi/shared/tool-contracts';
+import { ToolExecutionSchema } from '@megumi/shared/tool-contracts';
 
 function runtimeEvent(
   eventType: RuntimeEvent['eventType'],
@@ -145,10 +145,10 @@ describe('runtime event dispatcher', () => {
   });
 
   it('projects tool call events into the renderer tool-call store', () => {
-    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 1, {
-      toolCall: {
+    dispatchRuntimeEvent(runtimeEvent('tool.execution.requested', 1, {
+      toolExecution: {
+        toolExecutionId: 'tool-execution-1',
         toolCallId: 'tool-call-1',
-        toolUseId: 'tool-use-1',
         runId: 'run-1',
         stepId: 'step-1',
         actionId: 'action-1',
@@ -162,16 +162,16 @@ describe('runtime event dispatcher', () => {
         capabilities: ['project_read'],
         riskLevel: 'low',
         sideEffect: 'none',
-        status: 'requested',
+        status: 'running',
         requestedAt: '2026-05-20T00:00:00.000Z',
       },
     }));
-    dispatchRuntimeEvent(runtimeEvent('tool.call.started', 2, {
-      toolCallId: 'tool-call-1',
+    dispatchRuntimeEvent(runtimeEvent('tool.execution.started', 2, {
+      toolExecutionId: 'tool-execution-1',
       startedAt: '2026-05-20T00:00:01.000Z',
     }));
 
-    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
+    expect(useToolCallStore.getState().toolCallsById['tool-execution-1']).toMatchObject({
       toolCallId: 'tool-call-1',
       status: 'running',
       startedAt: '2026-05-20T00:00:01.000Z',
@@ -180,10 +180,10 @@ describe('runtime event dispatcher', () => {
   });
 
   it('stores denied tool calls with a shared-schema-valid runtime error', () => {
-    dispatchRuntimeEvent(runtimeEvent('tool.call.requested', 1, {
-      toolCall: {
+    dispatchRuntimeEvent(runtimeEvent('tool.execution.requested', 1, {
+      toolExecution: {
+        toolExecutionId: 'tool-execution-1',
         toolCallId: 'tool-call-1',
-        toolUseId: 'tool-use-1',
         runId: 'run-1',
         stepId: 'step-1',
         toolName: 'edit_file',
@@ -196,17 +196,17 @@ describe('runtime event dispatcher', () => {
         capabilities: ['project_write'],
         riskLevel: 'medium',
         sideEffect: 'project_file_operation',
-        status: 'requested',
+        status: 'running',
         requestedAt: '2026-05-20T00:00:00.000Z',
       },
     }));
-    dispatchRuntimeEvent(runtimeEvent('tool.call.denied', 2, {
-      toolCallId: 'tool-call-1',
+    dispatchRuntimeEvent(runtimeEvent('tool.execution.denied', 2, {
+      toolExecutionId: 'tool-execution-1',
       reason: 'User denied the requested tool call.',
     }));
 
-    const storedToolCall = useToolCallStore.getState().toolCallsById['tool-call-1'];
-    expect(ToolCallSchema.parse(storedToolCall)).toEqual(storedToolCall);
+    const storedToolCall = useToolCallStore.getState().toolCallsById['tool-execution-1'];
+    expect(ToolExecutionSchema.parse(storedToolCall)).toEqual(storedToolCall);
     expect(storedToolCall).toMatchObject({
       status: 'denied',
       error: {
@@ -223,8 +223,8 @@ describe('runtime event dispatcher', () => {
     dispatchRuntimeEvent(runtimeEvent('approval.requested', 1, {
       approvalRequest: {
         approvalRequestId: 'approval-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         runId: 'run-1',
         stepId: 'step-1',
         toolName: 'edit_file',
@@ -260,10 +260,10 @@ describe('runtime event dispatcher', () => {
   });
 
   it('does not project duplicate tool events twice', () => {
-    const requested = runtimeEvent('tool.call.requested', 1, {
-      toolCall: {
+    const requested = runtimeEvent('tool.execution.requested', 1, {
+      toolExecution: {
+        toolExecutionId: 'tool-execution-1',
         toolCallId: 'tool-call-1',
-        toolUseId: 'tool-use-1',
         runId: 'run-1',
         stepId: 'step-1',
         toolName: 'read_file',
@@ -276,19 +276,19 @@ describe('runtime event dispatcher', () => {
         capabilities: ['project_read'],
         riskLevel: 'low',
         sideEffect: 'none',
-        status: 'requested',
+        status: 'running',
         requestedAt: '2026-05-20T00:00:00.000Z',
       },
     });
-    const started = runtimeEvent('tool.call.started', 2, {
-      toolCallId: 'tool-call-1',
+    const started = runtimeEvent('tool.execution.started', 2, {
+      toolExecutionId: 'tool-execution-1',
       startedAt: '2026-05-20T00:00:01.000Z',
     });
     const duplicateStartedWithDifferentCreatedAt = {
       ...started,
       createdAt: '2026-05-20T00:00:09.000Z',
       payload: {
-        toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
       },
     } as RuntimeEvent;
 
@@ -297,7 +297,7 @@ describe('runtime event dispatcher', () => {
     dispatchRuntimeEvent(started);
     dispatchRuntimeEvent(duplicateStartedWithDifferentCreatedAt);
 
-    expect(useToolCallStore.getState().toolCallsById['tool-call-1']).toMatchObject({
+    expect(useToolCallStore.getState().toolCallsById['tool-execution-1']).toMatchObject({
       status: 'running',
       startedAt: '2026-05-20T00:00:01.000Z',
     });

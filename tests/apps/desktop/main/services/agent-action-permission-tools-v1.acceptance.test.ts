@@ -2,15 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { evaluatePermissionPolicy } from '@megumi/security/tool-policy';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
-import type { ToolCall } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool-contracts';
 
 const registry = createBuiltInToolRegistry();
 const projectRoot = 'C:/all/work/study/megumi';
 
-function toolCall(input: Partial<ToolCall> & Pick<ToolCall, 'toolName' | 'input'>): ToolCall {
+function toolExecution(input: Partial<ToolExecution> & Pick<ToolExecution, 'toolName' | 'input'>): ToolExecution {
   return {
+    toolExecutionId: input.toolExecutionId ?? `tool-execution-${input.toolName}`,
     toolCallId: input.toolCallId ?? `tool-call-${input.toolName}`,
-    toolUseId: input.toolUseId ?? `tool-use-${input.toolName}`,
     runId: 'run-1',
     stepId: 'step-1',
     toolName: input.toolName,
@@ -23,7 +23,7 @@ function toolCall(input: Partial<ToolCall> & Pick<ToolCall, 'toolName' | 'input'
     capabilities: input.capabilities ?? ['project_read'],
     riskLevel: input.riskLevel ?? 'low',
     sideEffect: input.sideEffect ?? 'none',
-    status: 'requested',
+    status: 'running',
     requestedAt: '2026-05-20T00:00:00.000Z',
   };
 }
@@ -33,7 +33,7 @@ function definition(name: string) {
     runId: 'run-1',
     projectId: 'project-1',
     permissionMode: 'default',
-    providerCapabilitySummary: { supportsToolUse: true },
+    providerCapabilitySummary: { supportsToolCall: true },
   });
   if (!item) throw new Error(`Missing tool definition: ${name}`);
   return item;
@@ -43,7 +43,7 @@ describe('agent action permission tools v1 acceptance', () => {
   it('allows read tools in default mode', () => {
     const decision = evaluatePermissionPolicy({
       definition: definition('read_file'),
-      toolCall: toolCall({ toolName: 'read_file', input: { path: 'README.md' } }),
+      toolExecution: toolExecution({ toolName: 'read_file', input: { path: 'README.md' } }),
       permissionMode: 'default',
       projectRoot,
       settings: { allow: [], ask: [], deny: [] },
@@ -56,7 +56,7 @@ describe('agent action permission tools v1 acceptance', () => {
   it('asks before ordinary writes in default mode', () => {
     const decision = evaluatePermissionPolicy({
       definition: definition('edit_file'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'edit_file',
         input: { path: 'src/index.ts', oldText: 'a', newText: 'b' },
         capabilities: ['project_write'],
@@ -75,7 +75,7 @@ describe('agent action permission tools v1 acceptance', () => {
   it('denies writes and unknown commands in plan mode while asking for verification commands', () => {
     const writeDecision = evaluatePermissionPolicy({
       definition: definition('write_file'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'write_file',
         input: { path: 'src/index.ts', content: 'export {}' },
         capabilities: ['project_write'],
@@ -90,7 +90,7 @@ describe('agent action permission tools v1 acceptance', () => {
 
     const verificationDecision = evaluatePermissionPolicy({
       definition: definition('run_command'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'run_command',
         input: { command: 'npm test' },
         capabilities: ['command_run'],
@@ -105,7 +105,7 @@ describe('agent action permission tools v1 acceptance', () => {
 
     const unknownDecision = evaluatePermissionPolicy({
       definition: definition('run_command'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'run_command',
         input: { command: 'custom-mutator --apply' },
         capabilities: ['command_run'],
@@ -126,7 +126,7 @@ describe('agent action permission tools v1 acceptance', () => {
   it('allows ordinary project edits and verification commands in accept_edits mode', () => {
     const editDecision = evaluatePermissionPolicy({
       definition: definition('edit_file'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'edit_file',
         input: { path: 'src/index.ts', oldText: 'a', newText: 'b' },
         capabilities: ['project_write'],
@@ -141,7 +141,7 @@ describe('agent action permission tools v1 acceptance', () => {
 
     const testDecision = evaluatePermissionPolicy({
       definition: definition('run_command'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'run_command',
         input: { command: 'npm test' },
         capabilities: ['command_run'],
@@ -161,7 +161,7 @@ describe('agent action permission tools v1 acceptance', () => {
   it('keeps auto auditable and denies protected path writes', () => {
     const autoEditDecision = evaluatePermissionPolicy({
       definition: definition('edit_file'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'edit_file',
         input: { path: 'src/index.ts', oldText: 'a', newText: 'b' },
         capabilities: ['project_write'],
@@ -176,7 +176,7 @@ describe('agent action permission tools v1 acceptance', () => {
 
     const protectedPathDecision = evaluatePermissionPolicy({
       definition: definition('write_file'),
-      toolCall: toolCall({
+      toolExecution: toolExecution({
         toolName: 'write_file',
         input: { path: '.git/config', content: '[core]' },
         capabilities: ['project_write'],

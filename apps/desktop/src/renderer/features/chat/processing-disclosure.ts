@@ -99,8 +99,8 @@ function describeCurrentAction(events: RuntimeEvent[]): string | undefined {
   for (const event of [...events].reverse()) {
     if (event.eventType === 'assistant.output.completed') return '正在整理最终回复...';
     if (event.eventType === 'approval.requested') return `等待审批：${payloadText(event, 'title') ?? '用户确认'}`;
-    if (event.eventType === 'tool.call.started') return `正在执行工具：${payloadText(event, 'toolName') ?? '工具调用'}`;
-    if (event.eventType === 'tool.call.requested') return `正在准备工具：${payloadText(event, 'toolName') ?? '工具调用'}`;
+    if (event.eventType === 'tool.execution.started') return `正在执行工具：${payloadText(event, 'toolName') ?? '工具调用'}`;
+    if (event.eventType === 'tool.execution.requested') return `正在准备工具：${payloadText(event, 'toolName') ?? '工具调用'}`;
     if (event.eventType === 'memory.recall.requested') return '正在召回相关记忆...';
     if (event.eventType === 'context.patch.requested') return '正在准备上下文更新...';
     if (event.eventType === 'context.effective.updated') return '正在整理上下文...';
@@ -131,7 +131,7 @@ function describeCompletedEvent(event: RuntimeEvent): Omit<ProcessingDisclosureE
     return { label: `步骤失败：${nestedErrorMessage(event) ?? stepLabel(event)}`, tone: 'danger' };
   }
 
-  if (event.eventType === 'tool.call.completed') {
+  if (event.eventType === 'tool.execution.completed') {
     const durationMs = payloadNumber(event, 'durationMs');
     return {
       label: `已完成工具：${payloadText(event, 'toolName') ?? '工具调用'}`,
@@ -140,7 +140,7 @@ function describeCompletedEvent(event: RuntimeEvent): Omit<ProcessingDisclosureE
     };
   }
 
-  if (event.eventType === 'tool.call.failed') {
+  if (event.eventType === 'tool.execution.failed') {
     return {
       label: `工具失败：${payloadText(event, 'toolName') ?? '工具调用'}`,
       detail: nestedErrorMessage(event),
@@ -148,7 +148,7 @@ function describeCompletedEvent(event: RuntimeEvent): Omit<ProcessingDisclosureE
     };
   }
 
-  if (event.eventType === 'tool.call.denied') {
+  if (event.eventType === 'tool.execution.denied') {
     return {
       label: `工具被拒绝：${payloadText(event, 'toolName') ?? '工具调用'}`,
       detail: payloadText(event, 'reason'),

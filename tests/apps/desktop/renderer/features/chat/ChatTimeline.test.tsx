@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,7 @@ import {
   chatStreamSessionKey,
   useChatStreamStore,
 } from '@megumi/desktop/renderer/features/chat-stream';
-import type { ApprovalRequest, ToolCall } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ToolExecution } from '@megumi/shared/tool-contracts';
 import type {
   TimelineAssistantMessage,
   TimelineMessage,
@@ -89,10 +89,10 @@ function activateCanonicalSession(messages: TimelineMessage[]) {
   useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', messages);
 }
 
-function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
+function createToolCall(overrides: Partial<ToolExecution> = {}): ToolExecution {
   return {
+    toolExecutionId: 'tool-execution-1',
     toolCallId: 'tool-call-1',
-    toolUseId: 'tool-use-1',
     runId: 'run-1',
     stepId: 'step-1',
     toolName: 'run_command',
@@ -107,8 +107,8 @@ function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
     sideEffect: 'execute_command',
     policyDecision: {
       permissionDecisionId: 'permission-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       runId: 'run-1',
       decision: 'ask',
       source: 'permission_mode',
@@ -123,7 +123,7 @@ function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
       },
       evaluatedAt: '2026-05-20T00:00:01.000Z',
     },
-    status: 'waiting_for_approval',
+    status: 'pending_approval',
     requestedAt: '2026-05-20T00:00:00.000Z',
     ...overrides,
   };
@@ -132,8 +132,8 @@ function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
 function createApprovalRequest(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
   return {
     approvalRequestId: 'approval-1',
-    toolUseId: 'tool-use-1',
     toolCallId: 'tool-call-1',
+    toolExecutionId: 'tool-execution-1',
     permissionDecisionId: 'permission-1',
     runId: 'run-1',
     stepId: 'step-1',
@@ -554,7 +554,7 @@ describe('ChatTimeline', () => {
 
   it('does not collapse legacy process disclosure without canonical blocks', () => {
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    useRunStore.getState().applyRuntimeEvent(runtimeEvent('tool.call.completed', 2, {
+    useRunStore.getState().applyRuntimeEvent(runtimeEvent('tool.execution.completed', 2, {
       toolCallId: 'tool-call-1',
       toolName: 'read_file',
       completedAt: '2026-05-10T12:00:06.000Z',
@@ -745,9 +745,9 @@ describe('ChatTimeline', () => {
                   startedAt: '2026-05-10T12:00:01.000Z',
                   endedAt: '2026-05-10T12:00:04.000Z',
                   items: [{
-                    itemId: 'tool:tool-use-1',
+                    itemId: 'tool:tool-call-1',
                     kind: 'tool_activity',
-                    toolUseId: 'tool-use-1',
+                    toolCallId: 'tool-call-1',
                     toolName: 'list_directory',
                     inputSummary: 'docs',
                     status: 'succeeded',

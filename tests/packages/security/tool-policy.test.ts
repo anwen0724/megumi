@@ -11,7 +11,7 @@ import type {
   PermissionClassifier,
   PermissionClassifierResult,
 } from '@megumi/security/permission-classifier';
-import type { ToolCall, ToolDefinition } from '@megumi/shared/tool-contracts';
+import type { ToolExecution, ToolDefinition } from '@megumi/shared/tool-contracts';
 
 const projectRoot = 'C:/all/work/study/megumi';
 const evaluatedAt = '2026-05-20T00:00:00.000Z';
@@ -71,12 +71,12 @@ const commandDefinition: ToolDefinition = {
   availability: { status: 'available' },
 };
 
-function callFor(definition: ToolDefinition, input: JsonObject): ToolCall {
+function callFor(definition: ToolDefinition, input: JsonObject): ToolExecution {
   const target = String(input.path ?? input.targetPath ?? input.pattern ?? input.cwd ?? input.command ?? '.');
 
   return {
+    toolExecutionId: 'tool-execution-1',
     toolCallId: 'tool-call-1',
-    toolUseId: 'tool-use-1',
     runId: 'run-1',
     stepId: 'step-1',
     toolName: definition.name,
@@ -89,7 +89,7 @@ function callFor(definition: ToolDefinition, input: JsonObject): ToolCall {
     capabilities: definition.capabilities,
     riskLevel: definition.riskLevel,
     sideEffect: definition.sideEffect,
-    status: 'requested',
+    status: 'running',
     requestedAt: evaluatedAt,
   };
 }
@@ -103,7 +103,7 @@ function evaluate(input: {
 }) {
   return evaluatePermissionPolicy({
     definition: input.definition,
-    toolCall: callFor(input.definition, input.toolInput),
+    toolExecution: callFor(input.definition, input.toolInput),
     permissionMode: input.permissionMode,
     projectRoot,
     settings: input.settings,
@@ -116,7 +116,7 @@ describe('evaluatePermissionPolicy', () => {
   it('keeps evaluateToolPolicy compatible with old workspaceRoot inputs', () => {
     const decision = evaluateToolPolicy({
       definition: readDefinition,
-      toolCall: callFor(readDefinition, { path: '.megumi/settings.json' }),
+      toolExecution: callFor(readDefinition, { path: '.megumi/settings.json' }),
       permissionMode: 'default',
       workspaceRoot: projectRoot,
       protectedPathHints: ['.megumi'],
@@ -631,7 +631,7 @@ describe('evaluatePermissionPolicy', () => {
   it('uses the target evaluate input contract', () => {
     const input = {
       definition: readDefinition,
-      toolCall: callFor(readDefinition, { path: 'README.md' }),
+      toolExecution: callFor(readDefinition, { path: 'README.md' }),
       permissionMode: 'default',
       projectRoot,
       evaluatedAt,

@@ -7,8 +7,8 @@ import type { ApprovalRequest } from '@megumi/shared/tool-contracts';
 
 const request: ApprovalRequest = {
   approvalRequestId: 'approval-1',
-  toolUseId: 'tool-use-1',
-  toolCallId: 'approval-1',
+  toolCallId: 'tool-call-1',
+  toolExecutionId: 'tool-execution-1',
   permissionDecisionId: 'permission-1',
   runId: 'run-1',
   stepId: 'step-1',

@@ -59,7 +59,7 @@ function assistantMessage(overrides: Partial<TimelineAssistantMessage> = {}): Ti
           {
             itemId: 'tool:tool-use-1',
             kind: 'tool_activity',
-            toolUseId: 'tool-use-1',
+            toolCallId: 'tool-use-1',
             toolName: 'read_file',
             inputSummary: 'docs/README.md',
             resultSummary: '读取成功',
@@ -176,7 +176,7 @@ describe('TimelineMessage canonical block rendering', () => {
           items: [{
             itemId: 'tool:tool-use-1',
             kind: 'tool_activity',
-            toolUseId: 'tool-use-1',
+            toolCallId: 'tool-use-1',
             toolName: 'read_file',
             inputSummary: 'docs/README.md',
             status: 'running',
@@ -210,7 +210,7 @@ describe('TimelineMessage canonical block rendering', () => {
           items: [{
             itemId: 'tool:tool-use-1',
             kind: 'tool_activity',
-            toolUseId: 'tool-use-1',
+            toolCallId: 'tool-use-1',
             toolName: 'read_file',
             inputSummary: 'docs/README.md',
             status: 'running',
@@ -294,7 +294,7 @@ describe('TimelineMessage canonical block rendering', () => {
             {
               itemId: 'tool:tool-use-denied',
               kind: 'tool_activity',
-              toolUseId: 'tool-use-denied',
+              toolCallId: 'tool-use-denied',
               toolName: 'read_file',
               inputSummary: 'C:/secret.txt',
               status: 'denied',

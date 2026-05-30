@@ -34,8 +34,8 @@ describe('agent action permission tools v1 renderer acceptance', () => {
 
   it('renders policy decision reason for auto audit on tool calls', () => {
     render(<ToolCallStatusCard toolCall={{
+      toolExecutionId: 'tool-execution-1',
       toolCallId: 'tool-call-1',
-      toolUseId: 'tool-use-1',
       runId: 'run-1',
       stepId: 'step-1',
       toolName: 'edit_file',
@@ -50,7 +50,6 @@ describe('agent action permission tools v1 renderer acceptance', () => {
       sideEffect: 'project_file_operation',
       policyDecision: {
         permissionDecisionId: 'permission-decision-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
         runId: 'run-1',
         decision: 'allow',
@@ -64,7 +63,7 @@ describe('agent action permission tools v1 renderer acceptance', () => {
         effectiveRiskLevel: 'medium',
         evaluatedAt: '2026-05-20T00:00:00.000Z',
       },
-      status: 'succeeded',
+      status: 'completed',
       requestedAt: '2026-05-20T00:00:00.000Z',
       completedAt: '2026-05-20T00:00:01.000Z',
     }} />);
@@ -78,8 +77,8 @@ describe('agent action permission tools v1 renderer acceptance', () => {
     const onResolve = vi.fn();
     render(<ApprovalCard request={{
       approvalRequestId: 'approval-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       permissionDecisionId: 'permission-decision-1',
       runId: 'run-1',
       stepId: 'step-1',

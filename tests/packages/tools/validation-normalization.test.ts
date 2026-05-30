@@ -5,7 +5,7 @@ import {
   normalizeToolResult,
   validateToolInput,
 } from '@megumi/tools';
-import type { ToolDefinition, ToolCall } from '@megumi/shared/tool-contracts';
+import type { ToolDefinition, ToolExecution } from '@megumi/shared/tool-contracts';
 
 const definition: ToolDefinition = {
   name: 'read_file',
@@ -25,9 +25,9 @@ const definition: ToolDefinition = {
   availability: { status: 'available' },
 };
 
-const call: ToolCall = {
+const call: ToolExecution = {
+  toolExecutionId: 'tool-execution-1',
   toolCallId: 'tool-call-1',
-  toolUseId: 'tool-use-1',
   runId: 'run-1',
   stepId: 'step-1',
   actionId: 'action-1',
@@ -41,7 +41,7 @@ const call: ToolCall = {
   capabilities: ['project_read'],
   riskLevel: 'low',
   sideEffect: 'none',
-  status: 'requested',
+  status: 'running',
   requestedAt: '2026-05-16T00:00:00.000Z',
 };
 
@@ -60,8 +60,8 @@ describe('tool validation and normalization', () => {
       metadata: { lineCount: 1 },
     })).toEqual({
       toolResultId: 'tool-result-1',
-      toolUseId: 'tool-use-1',
       toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       runId: 'run-1',
       kind: 'success',
       structuredContent: { content: 'hello' },

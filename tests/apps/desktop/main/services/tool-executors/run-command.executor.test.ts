@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolCall } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool-contracts';
 import {
   createRunCommandExecutor,
   type SpawnLike,
@@ -69,8 +69,8 @@ describe('RunCommandExecutor', () => {
     await expect(executor.execute(toolCall({ command: 'npm test' })))
       .resolves.toMatchObject({
         toolResultId: 'tool-result-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         runId: 'run-1',
         kind: 'success',
         structuredContent: {
@@ -241,14 +241,14 @@ describe('RunCommandExecutor', () => {
   });
 });
 
-function toolCall(input: Record<string, unknown>): ToolCall {
+function toolCall(input: Record<string, unknown>): ToolExecution {
   return {
+    toolExecutionId: 'tool-execution-1',
     toolCallId: 'tool-call-1',
-    toolUseId: 'tool-use-1',
     runId: 'run-1',
     stepId: 'step-1',
     toolName: 'run_command',
-    input: input as ToolCall['input'],
+    input: input as ToolExecution['input'],
     inputPreview: {
       summary: 'run_command',
       targets: [{ kind: 'command', label: String(input.command ?? 'command') }],

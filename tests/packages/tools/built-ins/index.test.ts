@@ -49,14 +49,14 @@ describe('built-in tool definitions', () => {
       runId: 'run-1',
       projectId: 'project-1',
       permissionMode: 'default',
-      providerCapabilitySummary: { supportsToolUse: true },
+      providerCapabilitySummary: { supportsToolCall: true },
     }).map((tool) => tool.name)).toEqual(BUILT_IN_TOOL_NAMES);
 
     expect(registry.listDefinitions({
       runId: 'run-1',
       projectId: 'project-1',
       permissionMode: 'default',
-      providerCapabilitySummary: { supportsToolUse: false },
+      providerCapabilitySummary: { supportsToolCall: false },
     })).toEqual([]);
   });
 
@@ -81,7 +81,7 @@ describe('built-in tool definitions', () => {
       runId: 'run-1',
       projectId: 'project-1',
       permissionMode: 'default',
-      providerCapabilitySummary: { supportsToolUse: true },
+      providerCapabilitySummary: { supportsToolCall: true },
     }).map((tool) => tool.name)).toEqual(BUILT_IN_TOOL_NAMES);
     expect(createBuiltInToolRegistry().getDefinition('read_file')?.capabilities).toEqual(['project_read']);
   });

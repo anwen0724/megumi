@@ -5,7 +5,7 @@ import { buildModelStepInputContextFromSources } from '@megumi/context-managemen
 import * as messageMapper from '@megumi/ai/prompt/message-mapper';
 import { AI_PROVIDER_DEFAULTS } from '@megumi/ai/models';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
-import type { ToolDefinition, ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+import type { ToolDefinition, ToolResult, ToolCall } from '@megumi/shared/tool-contracts';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
 
@@ -120,11 +120,11 @@ describe('OpenAI-compatible message mapper', () => {
   });
 
   it('preserves provider-native tool replay for continuation requests with input context', () => {
-    const toolUse: ToolUse = {
-      toolUseId: 'tool-use-1',
+    const toolUse: ToolCall = {
+      toolCallId: 'tool-use-1',
       runId: 'run-1',
       modelStepId: 'model-step-1',
-      providerToolUseId: 'provider-tool-use-1',
+      providerToolCallId: 'provider-tool-use-1',
       toolName: 'read_file',
       input: { path: 'package.json' },
       inputPreview: {
@@ -137,7 +137,7 @@ describe('OpenAI-compatible message mapper', () => {
     };
     const toolResult: ToolResult = {
       toolResultId: 'tool-result-1',
-      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-use-1',
       runId: 'run-1',
       kind: 'success',
       textContent: 'File contents',
@@ -159,7 +159,7 @@ describe('OpenAI-compatible message mapper', () => {
         status: 'completed',
         createdAt: '2026-05-17T00:00:00.000Z',
       },
-      toolUses: [toolUse],
+      toolCalls: [toolUse],
       toolResults: [toolResult],
     });
 

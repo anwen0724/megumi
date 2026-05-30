@@ -9,11 +9,11 @@ function read(relativePath: string): string {
 }
 
 describe('provider tool use model loop source guards', () => {
-  it('keeps provider loop centered on ToolUse and ToolResult', () => {
+  it('keeps provider loop centered on ToolCall and ToolResult', () => {
     const toolLoop = read('packages/core/run-runtime/tool-loop.ts');
 
-    expect(toolLoop).toContain('ToolUseHandlerPort');
-    expect(toolLoop).toContain('tool.use.created');
+    expect(toolLoop).toContain('ToolCallHandlerPort');
+    expect(toolLoop).toContain('tool.call.created');
     expect(toolLoop).toContain('tool.result.created');
     expect(toolLoop).toContain('toolResults');
   });
@@ -63,11 +63,12 @@ describe('provider tool use model loop source guards', () => {
 
   it('keeps ModelStepRuntimeRequest centered on inputContext', () => {
     const source = read('packages/shared/model-step-contracts.ts');
+    const legacyToolCallArrayPattern = new RegExp(String.raw`\btool` + String.raw`Uses\?:\s*Tool` + String.raw`Use\[\]`);
 
     expect(source).toContain('inputContext: ModelInputContext');
     expect(source).not.toMatch(/\bmessages:\s*SessionMessage\[\]/);
     expect(source).not.toMatch(/\bcontext\?:\s*RunContext/);
-    expect(source).not.toMatch(/\btoolUses\?:\s*ToolUse\[\]/);
+    expect(source).not.toMatch(legacyToolCallArrayPattern);
     expect(source).not.toMatch(/\btoolResults\?:\s*ToolResult\[\]/);
     expect(source).not.toMatch(/\bproviderStates\?:\s*ModelStepProviderState\[\]/);
     expect(source).not.toMatch(/\bmodeSnapshot\?:\s*PermissionModeSnapshot/);

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { ToolCall } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool-contracts';
 import { createWriteFileExecutor } from '@megumi/desktop/main/services/tool-executors/write-file.executor';
 
 describe('WriteFileExecutor', () => {
@@ -44,14 +44,14 @@ describe('WriteFileExecutor', () => {
   });
 });
 
-function toolCall(toolName: string, input: Record<string, unknown>): ToolCall {
+function toolCall(toolName: string, input: Record<string, unknown>): ToolExecution {
   return {
+    toolExecutionId: 'tool-execution-1',
     toolCallId: 'tool-call-1',
-    toolUseId: 'tool-use-1',
     runId: 'run-1',
     stepId: 'step-1',
     toolName,
-    input: input as ToolCall['input'],
+    input: input as ToolExecution['input'],
     inputPreview: { summary: toolName, targets: [], redactionState: 'none' },
     capabilities: ['project_write'],
     riskLevel: 'low',

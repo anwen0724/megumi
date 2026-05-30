@@ -73,15 +73,15 @@ function runtimeFactPart(
   };
 }
 
-function toolContinuationPart(tokens: number, sourceId: string, toolUseId: string): ModelInputContextPartDraft {
+function toolContinuationPart(tokens: number, sourceId: string, toolCallId: string): ModelInputContextPartDraft {
   return {
     partId: `part:${sourceId}`,
     kind: 'tool_continuation',
     text: textForTokens(tokens),
-    toolUseId,
-    sourceRefs: [sourceRef(sourceId, sourceId.startsWith('tool-result') ? 'tool_result' : 'tool_use')],
+    toolCallId,
+    sourceRefs: [sourceRef(sourceId, sourceId.startsWith('tool-result') ? 'tool_result' : 'tool_call')],
     priority: 85,
-    retentionGroupId: `tool:${toolUseId}`,
+    retentionGroupId: `tool:${toolCallId}`,
   };
 }
 

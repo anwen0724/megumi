@@ -50,13 +50,13 @@ describe('createStaticToolRegistry', () => {
       runId: 'run-1',
       projectId: 'project-1',
       permissionMode: 'default',
-      providerCapabilitySummary: { supportsToolUse: false },
+      providerCapabilitySummary: { supportsToolCall: false },
     })).toEqual([]);
     expect(registry.getDefinition('read_file', {
       runId: 'run-1',
       projectId: 'project-1',
       permissionMode: 'default',
-      providerCapabilitySummary: { supportsToolUse: false },
+      providerCapabilitySummary: { supportsToolCall: false },
     })).toBeUndefined();
   });
 

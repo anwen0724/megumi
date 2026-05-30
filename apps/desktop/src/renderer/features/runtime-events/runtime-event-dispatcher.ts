@@ -2,11 +2,11 @@ import type {
   RunCancelledPayload,
   RunFailedPayload,
   RuntimeEvent,
-  ToolCallApprovalRequestedPayload,
+  ToolExecutionApprovalRequestedPayload,
   ToolResultCreatedPayload,
 } from '@megumi/shared/runtime-events';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { ApprovalRequest, ApprovalStatus, ToolCall, ToolPolicyDecision } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ApprovalStatus, ToolExecution, ToolPolicyDecision } from '@megumi/shared/tool-contracts';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore, type AgentRunStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
@@ -49,38 +49,38 @@ function setLastErrorForSession(sessionId: string | null, lastError: string | nu
 function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): void {
   const store = useToolCallStore.getState();
 
-  if (event.eventType === 'tool.call.requested') {
-    const toolCall = (event.payload as { toolCall?: ToolCall }).toolCall;
-    if (toolCall) {
-      store.upsertToolCall(toolCall);
+  if (event.eventType === 'tool.execution.requested') {
+    const toolExecution = (event.payload as { toolExecution?: ToolExecution }).toolExecution;
+    if (toolExecution) {
+      store.upsertToolCall(toolExecution);
     }
   }
 
-  if (event.eventType === 'tool.call.policy_decided') {
-    const payload = event.payload as { toolCallId: string; policyDecision: ToolPolicyDecision };
-    const current = store.toolCallsById[payload.toolCallId];
+  if (event.eventType === 'tool.execution.policy_decided') {
+    const payload = event.payload as { toolExecutionId: string; policyDecision: ToolPolicyDecision };
+    const current = store.toolCallsById[payload.toolExecutionId];
     if (current) {
       store.upsertToolCall({ ...current, policyDecision: payload.policyDecision });
     }
   }
 
-  if (event.eventType === 'tool.call.approval_requested') {
-    const payload = event.payload as ToolCallApprovalRequestedPayload & { toolCall?: ToolCall };
+  if (event.eventType === 'tool.execution.approval_requested') {
+    const payload = event.payload as ToolExecutionApprovalRequestedPayload & { toolExecution?: ToolExecution };
     const approvalRequestId = payload.approvalRequest.approvalRequestId;
 
-    if (payload.toolCall) {
+    if (payload.toolExecution) {
       store.upsertToolCall({
-        ...payload.toolCall,
+        ...payload.toolExecution,
         approvalRequestId,
-        status: 'waiting_for_approval',
+        status: 'pending_approval',
       });
     } else {
-      const current = store.toolCallsById[payload.toolCallId];
+      const current = store.toolCallsById[payload.toolExecutionId];
       if (current) {
         store.upsertToolCall({
           ...current,
           approvalRequestId,
-          status: 'waiting_for_approval',
+          status: 'pending_approval',
         });
       }
     }
@@ -88,9 +88,9 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     useApprovalStore.getState().upsertApprovalRequest(payload.approvalRequest);
   }
 
-  if (event.eventType === 'tool.call.started') {
-    const payload = event.payload as { toolCallId: string; startedAt?: string };
-    const current = store.toolCallsById[payload.toolCallId];
+  if (event.eventType === 'tool.execution.started') {
+    const payload = event.payload as { toolExecutionId: string; startedAt?: string };
+    const current = store.toolCallsById[payload.toolExecutionId];
     if (current) {
       store.upsertToolCall({
         ...current,
@@ -101,21 +101,21 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     setAgentStatusForSession(targetSessionId, 'running');
   }
 
-  if (event.eventType === 'tool.call.completed') {
-    const payload = event.payload as { toolCallId: string; completedAt?: string };
-    const current = store.toolCallsById[payload.toolCallId];
+  if (event.eventType === 'tool.execution.completed') {
+    const payload = event.payload as { toolExecutionId: string; completedAt?: string };
+    const current = store.toolCallsById[payload.toolExecutionId];
     if (current) {
       store.upsertToolCall({
         ...current,
-        status: 'succeeded',
+        status: 'completed',
         completedAt: payload.completedAt ?? event.createdAt,
       });
     }
   }
 
-  if (event.eventType === 'tool.call.failed') {
-    const payload = event.payload as { toolCallId: string; error?: RuntimeError; completedAt?: string };
-    const current = store.toolCallsById[payload.toolCallId];
+  if (event.eventType === 'tool.execution.failed') {
+    const payload = event.payload as { toolExecutionId: string; error?: RuntimeError; completedAt?: string };
+    const current = store.toolCallsById[payload.toolExecutionId];
     if (current) {
       store.upsertToolCall({
         ...current,
@@ -126,9 +126,9 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     }
   }
 
-  if (event.eventType === 'tool.call.denied') {
-    const payload = event.payload as { toolCallId: string; reason?: string };
-    const current = store.toolCallsById[payload.toolCallId];
+  if (event.eventType === 'tool.execution.denied') {
+    const payload = event.payload as { toolExecutionId: string; reason?: string };
+    const current = store.toolCallsById[payload.toolExecutionId];
     if (current) {
       store.upsertToolCall({
         ...current,
@@ -151,7 +151,9 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
       return;
     }
 
-    const current = store.toolCallsById[payload.toolCallId];
+    const current = payload.toolExecutionId
+      ? store.toolCallsById[payload.toolExecutionId]
+      : store.findByToolCallId(payload.toolCallId);
     if (!current) {
       return;
     }
@@ -160,7 +162,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
       ? 'failed'
       : payload.kind === 'policy_denied' || payload.kind === 'user_rejected'
         ? 'denied'
-        : 'succeeded';
+        : 'completed';
 
     store.upsertToolCall({
       ...current,

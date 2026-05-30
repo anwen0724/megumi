@@ -1,48 +1,28 @@
 import { AlertCircle, CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react';
-import type { ToolCall, ToolCallStatus } from '@megumi/shared/tool-contracts';
+import type { ToolExecution, ToolExecutionStatus } from '@megumi/shared/tool-contracts';
 import { Badge, Panel, cx } from '../../shared/ui';
 
 interface ToolCallStatusCardProps {
-  toolCall: ToolCall;
+  toolCall: ToolExecution;
 }
 
-const statusConfig: Record<ToolCallStatus, {
+const statusConfig: Record<ToolExecutionStatus, {
   label: string;
   badge: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'approval';
   icon: typeof Clock;
 }> = {
-  requested: {
-    label: 'Requested',
-    badge: 'neutral',
-    icon: Clock,
-  },
-  validating: {
-    label: 'Validating',
-    badge: 'accent',
-    icon: Loader2,
-  },
-  waiting_for_approval: {
+  pending_approval: {
     label: 'Waiting for approval',
     badge: 'approval',
     icon: ShieldCheck,
-  },
-  approved: {
-    label: 'Approved',
-    badge: 'success',
-    icon: CheckCircle2,
-  },
-  denied: {
-    label: 'Denied',
-    badge: 'danger',
-    icon: XCircle,
   },
   running: {
     label: 'Running',
     badge: 'accent',
     icon: Loader2,
   },
-  succeeded: {
-    label: 'Succeeded',
+  completed: {
+    label: 'Completed',
     badge: 'success',
     icon: CheckCircle2,
   },
@@ -51,16 +31,26 @@ const statusConfig: Record<ToolCallStatus, {
     badge: 'danger',
     icon: AlertCircle,
   },
+  denied: {
+    label: 'Denied',
+    badge: 'danger',
+    icon: XCircle,
+  },
+  cancelled: {
+    label: 'Cancelled',
+    badge: 'warning',
+    icon: XCircle,
+  },
 };
 
-function iconTone(status: ToolCallStatus): string {
-  if (status === 'failed' || status === 'denied') {
+function iconTone(status: ToolExecutionStatus): string {
+  if (status === 'failed' || status === 'denied' || status === 'cancelled') {
     return 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]';
   }
-  if (status === 'succeeded' || status === 'approved') {
+  if (status === 'completed') {
     return 'bg-[var(--color-success-soft)] text-[var(--color-success)]';
   }
-  if (status === 'waiting_for_approval') {
+  if (status === 'pending_approval') {
     return 'bg-[var(--color-approval-soft)] text-[var(--color-approval)]';
   }
   return 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]';
@@ -69,7 +59,7 @@ function iconTone(status: ToolCallStatus): string {
 export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
   const config = statusConfig[toolCall.status];
   const StatusIcon = config.icon;
-  const spinning = toolCall.status === 'validating' || toolCall.status === 'running';
+  const spinning = toolCall.status === 'running';
 
   return (
     <Panel className="overflow-hidden">
