@@ -64,7 +64,10 @@ describe('buildSessionContextParts', () => {
 
     const result = buildSessionContextParts({ input, builtAt });
 
-    expect(result.parts.map((part) => [part.kind, part.sessionKind])).toEqual([
+    expect(result.parts.map((part) => [
+      part.kind,
+      part.kind === 'session' ? part.sessionKind : undefined,
+    ])).toEqual([
       ['session', 'session_summary'],
       ['session', 'session_history'],
       ['session', 'session_history'],
@@ -77,7 +80,6 @@ describe('buildSessionContextParts', () => {
       text: 'Earlier discussion selected short-term context quality as the stage goal.',
       sourceRefs: [sourceRef('session-summary:explicit-1', 'session_summary')],
       priority: 45,
-      budgetStatus: 'included_reduced',
       metadata: {
         summaryKind: 'explicit',
       },
@@ -89,7 +91,6 @@ describe('buildSessionContextParts', () => {
       text: '[user] Do not implement long-term memory in this phase.',
       sourceRefs: [sourceRef('session-message:user-correction', 'session_message')],
       priority: 60,
-      budgetStatus: 'included_reduced',
       metadata: {
         role: 'user',
         status: 'completed',
@@ -102,12 +103,13 @@ describe('buildSessionContextParts', () => {
       text: '[approval] User denied write_file for package.json.',
       sourceRefs: [sourceRef('approval:denied-1', 'approval')],
       priority: 75,
-      budgetStatus: 'included_reduced',
       metadata: {
         factKind: 'approval',
         severity: 'warning',
       },
     });
+    expect(result.parts[0]).not.toHaveProperty('budgetStatus');
+    expect(result.parts[0]).not.toHaveProperty('tokenEstimate');
     expect(result.excludedSources).toEqual([]);
   });
 
@@ -147,7 +149,7 @@ describe('buildSessionContextParts', () => {
 
     const result = buildSessionContextParts({ input, builtAt });
 
-    expect(result.parts.map((part) => part.sessionKind)).toEqual([
+    expect(result.parts.map((part) => (part.kind === 'session' ? part.sessionKind : undefined))).toEqual([
       'session_history',
       'session_runtime_fact',
     ]);
@@ -179,53 +181,38 @@ describe('buildSessionContextParts', () => {
     ]);
   });
 
-  it('keeps only the most recent completed history entries when maxHistoryEntries is set', () => {
+  it('does not pre-prune completed history before context budget is applied', () => {
     const input: SessionContextInput = {
       historyEntries: [
         {
-          entryId: 'history:old',
-          role: 'assistant',
-          text: 'This older completed answer should be dropped.',
-          status: 'completed',
-          sourceRef: sourceRef('session-message:old', 'session_message'),
-          createdAt: builtAt,
-          completedAt: builtAt,
-        },
-        {
-          entryId: 'history:recent-user',
+          entryId: 'old-message',
           role: 'user',
-          text: 'Keep the recent user correction.',
+          text: 'old request',
           status: 'completed',
-          sourceRef: sourceRef('session-message:recent-user', 'session_message'),
+          sourceRef: sourceRef('session-message:old-message', 'session_message'),
           createdAt: builtAt,
           completedAt: builtAt,
         },
         {
-          entryId: 'history:recent-assistant',
+          entryId: 'new-message',
           role: 'assistant',
-          text: 'Keep the recent assistant conclusion.',
+          text: 'new response',
           status: 'completed',
-          sourceRef: sourceRef('session-message:recent-assistant', 'session_message'),
+          sourceRef: sourceRef('session-message:new-message', 'session_message'),
           createdAt: builtAt,
           completedAt: builtAt,
         },
       ],
-      maxHistoryEntries: 2,
+      maxHistoryEntries: 1,
     };
 
     const result = buildSessionContextParts({ input, builtAt });
 
     expect(result.parts.map((part) => part.partId)).toEqual([
-      'part:session-history:history:recent-user',
-      'part:session-history:history:recent-assistant',
+      'part:session-history:old-message',
+      'part:session-history:new-message',
     ]);
-    expect(JSON.stringify(result.parts)).not.toContain('This older completed answer should be dropped.');
-    expect(result.excludedSources).toEqual([
-      {
-        sourceRef: sourceRef('session-message:old', 'session_message'),
-        reason: 'outside_recent_session_window',
-      },
-    ]);
+    expect(result.excludedSources).toEqual([]);
   });
 
   it('keeps generated part IDs within the model input part ID limit for valid long source IDs', () => {

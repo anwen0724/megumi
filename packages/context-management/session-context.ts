@@ -1,6 +1,5 @@
 import type {
   ModelInputContextExcludedSource,
-  SessionPart,
 } from '@megumi/shared/model-input-context-contracts';
 import type {
   SessionContextInput,
@@ -8,6 +7,7 @@ import type {
   SessionRuntimeFact,
   SessionSummaryEntry,
 } from '@megumi/shared/session-context-contracts';
+import type { ModelInputContextPartDraft } from './context-budget';
 
 export interface BuildSessionContextPartsInput {
   input?: SessionContextInput;
@@ -15,7 +15,7 @@ export interface BuildSessionContextPartsInput {
 }
 
 export interface BuildSessionContextPartsResult {
-  parts: SessionPart[];
+  parts: ModelInputContextPartDraft[];
   excludedSources: ModelInputContextExcludedSource[];
 }
 
@@ -43,43 +43,17 @@ export function buildSessionContextParts(input: BuildSessionContextPartsInput): 
     }
   }
 
-  const retainedHistoryEntries = retainRecentHistoryEntries(
-    completedHistoryEntries,
-    input.input.maxHistoryEntries,
-    excludedSources,
-  );
-
   return {
     parts: [
       ...(input.input.summaryEntries ?? []).map(summaryPart),
-      ...retainedHistoryEntries.map(historyPart),
+      ...completedHistoryEntries.map(historyPart),
       ...(input.input.runtimeFacts ?? []).map(runtimeFactPart),
     ],
     excludedSources,
   };
 }
 
-function retainRecentHistoryEntries(
-  entries: SessionHistoryEntry[],
-  maxHistoryEntries: number | undefined,
-  excludedSources: ModelInputContextExcludedSource[],
-): SessionHistoryEntry[] {
-  if (!maxHistoryEntries || entries.length <= maxHistoryEntries) {
-    return entries;
-  }
-
-  const dropCount = entries.length - maxHistoryEntries;
-  for (const entry of entries.slice(0, dropCount)) {
-    excludedSources.push({
-      sourceRef: entry.sourceRef,
-      reason: 'outside_recent_session_window',
-    });
-  }
-
-  return entries.slice(dropCount);
-}
-
-function summaryPart(entry: SessionSummaryEntry): SessionPart {
+function summaryPart(entry: SessionSummaryEntry): ModelInputContextPartDraft {
   return {
     partId: sessionPartId('part:session-summary:', entry.summaryId),
     kind: 'session',
@@ -87,14 +61,13 @@ function summaryPart(entry: SessionSummaryEntry): SessionPart {
     text: entry.text,
     sourceRefs: [entry.sourceRef],
     priority: 45,
-    budgetStatus: 'included_reduced',
     metadata: {
       summaryKind: entry.summaryKind ?? 'explicit',
     },
   };
 }
 
-function historyPart(entry: SessionHistoryEntry): SessionPart {
+function historyPart(entry: SessionHistoryEntry): ModelInputContextPartDraft {
   return {
     partId: sessionPartId('part:session-history:', entry.entryId),
     kind: 'session',
@@ -102,7 +75,6 @@ function historyPart(entry: SessionHistoryEntry): SessionPart {
     text: `[${entry.role}] ${entry.text}`,
     sourceRefs: [entry.sourceRef],
     priority: entry.role === 'user' ? 60 : 55,
-    budgetStatus: 'included_reduced',
     metadata: {
       role: entry.role,
       status: entry.status,
@@ -110,7 +82,7 @@ function historyPart(entry: SessionHistoryEntry): SessionPart {
   };
 }
 
-function runtimeFactPart(fact: SessionRuntimeFact): SessionPart {
+function runtimeFactPart(fact: SessionRuntimeFact): ModelInputContextPartDraft {
   return {
     partId: sessionPartId('part:session-runtime-fact:', fact.factId),
     kind: 'session',
@@ -118,7 +90,6 @@ function runtimeFactPart(fact: SessionRuntimeFact): SessionPart {
     text: `[${fact.factKind}] ${fact.text}`,
     sourceRefs: [fact.sourceRef],
     priority: priorityForRuntimeFact(fact),
-    budgetStatus: 'included_reduced',
     metadata: {
       factKind: fact.factKind,
       ...(fact.severity ? { severity: fact.severity } : {}),

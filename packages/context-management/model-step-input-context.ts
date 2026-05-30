@@ -12,6 +12,7 @@ import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ToolResult, ToolUse } from '@megumi/shared/tool-contracts';
+import type { ModelInputContextPartDraft } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
 import { buildSessionContextParts } from './session-context';
 
@@ -72,7 +73,7 @@ export function buildModelStepInputContextFromSources(
     ...instructionExcludedSources,
     ...sessionContextResult.excludedSources,
   ];
-  const parts: ModelInputContextPart[] = input.baseInputContext
+  const parts: ModelInputContextPartDraft[] = input.baseInputContext
     ? [
         ...nextInstructionParts,
         ...input.baseInputContext.parts.filter((part) => (
