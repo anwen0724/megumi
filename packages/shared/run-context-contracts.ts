@@ -216,7 +216,7 @@ export const ModelCapabilitySummarySchema = z
     providerId: z.string().min(1),
     modelId: z.string().min(1),
     modelContextWindow: z.number().int().positive(),
-    supportsToolUse: z.boolean().optional(),
+    supportsToolCall: z.boolean().optional(),
     supportsStructuredOutput: z.boolean().optional(),
     supportsVision: z.boolean().optional(),
     supportsLongContext: z.boolean().optional(),
@@ -229,7 +229,7 @@ export interface ModelCapabilitySummary {
   providerId: string;
   modelId: string;
   modelContextWindow: number;
-  supportsToolUse?: boolean;
+  supportsToolCall?: boolean;
   supportsStructuredOutput?: boolean;
   supportsVision?: boolean;
   supportsLongContext?: boolean;

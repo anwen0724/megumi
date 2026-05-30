@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ContextPatchSchema,
+  ModelCapabilitySummarySchema,
   RunContextBuildSchema,
   RunContextSchema,
   RunContextSourceSchema,
@@ -116,6 +117,26 @@ describe('run context contracts', () => {
 
     expect(context.workspaceBoundary.rootPath).toBe('C:/all/work/study/megumi');
     expect(context.inlineContents[0]?.text).toContain('export const');
+  });
+
+  it('parses model capability summaries with tool call support naming', () => {
+    const capabilitySummary = ModelCapabilitySummarySchema.parse({
+      providerId: 'deepseek',
+      modelId: 'deepseek-chat',
+      modelContextWindow: 64000,
+      supportsToolCall: true,
+      supportsStructuredOutput: false,
+      supportsVision: false,
+      supportsLongContext: true,
+      reservedOutputTokens: 4096,
+      availableInputTokens: 59904,
+    });
+
+    expect(capabilitySummary.supportsToolCall).toBe(true);
+    expect(() => ModelCapabilitySummarySchema.parse({
+      ...capabilitySummary,
+      supportsToolUse: true,
+    })).toThrow();
   });
 
   it('parses ContextPatch without deleting durable source facts', () => {
