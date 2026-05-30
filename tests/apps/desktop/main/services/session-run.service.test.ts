@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
@@ -15,7 +15,7 @@ import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
-import type { ApprovalRequest, ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 let db: Database.Database | null = null;
@@ -352,24 +352,24 @@ function createServiceWithChatStreamSinkAndRepository(
 function toolUseCreatedEvent(sequence: number): RuntimeEvent {
   return toolUseCreatedEventFor({
     sequence,
-    toolUseId: 'tool-use-1',
-    providerToolUseId: 'provider-tool-use-1',
+    toolCallId: 'tool-call-1',
+    providerToolCallId: 'provider-tool-call-1',
     input: { path: 'package.json' },
   });
 }
 
 function toolUseCreatedEventFor(input: {
   sequence: number;
-  toolUseId: string;
-  providerToolUseId: string;
+  toolCallId: string;
+  providerToolCallId: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;
   input?: Record<string, unknown>;
 }): RuntimeEvent {
   return {
-    eventId: `event-tool-use-${input.sequence}`,
+    eventId: `event-tool-call-${input.sequence}`,
     schemaVersion: 1,
-    eventType: 'tool.use.created',
+    eventType: 'tool.call.created',
     sessionId: 'session-1',
     runId: 'run-1',
     stepId: 'step-1',
@@ -379,9 +379,9 @@ function toolUseCreatedEventFor(input: {
     visibility: 'system',
     persist: 'required',
     payload: {
-      toolUseId: input.toolUseId,
+      toolCallId: input.toolCallId,
       modelStepId: 'model-step-1',
-      providerToolUseId: input.providerToolUseId,
+      providerToolCallId: input.providerToolCallId,
       toolName: input.toolName ?? 'read_file',
       input: input.input ?? input.toolInput ?? { path: 'package.json' },
     },
@@ -481,7 +481,7 @@ function toolCallRequestedRuntimeEvent(): RuntimeEvent {
   return {
     eventId: 'event-tool-call-requested',
     schemaVersion: 1,
-    eventType: 'tool.call.requested',
+    eventType: 'tool.execution.requested',
     runId: 'run-1',
     sessionId: 'session-1',
     stepId: 'step-1',
@@ -491,9 +491,9 @@ function toolCallRequestedRuntimeEvent(): RuntimeEvent {
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCall: {
+      toolExecution: {
+        toolExecutionId: 'tool-execution-1',
         toolCallId: 'tool-call-1',
-        toolUseId: 'tool-use-1',
         runId: 'run-1',
         stepId: 'step-1',
         toolName: 'read_file',
@@ -506,7 +506,7 @@ function toolCallRequestedRuntimeEvent(): RuntimeEvent {
         capabilities: ['project_read'],
         riskLevel: 'low',
         sideEffect: 'none',
-        status: 'requested',
+        status: 'running',
         requestedAt: '2026-05-20T00:00:01.000Z',
       },
     },
@@ -515,10 +515,11 @@ function toolCallRequestedRuntimeEvent(): RuntimeEvent {
 
 function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' | 'failure' | 'denied'): RuntimeEvent[] {
   const toolCallId = String(toolResult.toolCallId ?? 'tool-call-1');
+  const toolExecutionId = String(toolResult.toolExecutionId ?? 'tool-execution-1');
   const started: RuntimeEvent = {
-    eventId: `event-${toolCallId}-started`,
+    eventId: `event-${toolExecutionId}-started`,
     schemaVersion: 1,
-    eventType: 'tool.call.started',
+    eventType: 'tool.execution.started',
     runId: 'run-1',
     sessionId: 'session-1',
     stepId: 'step-1',
@@ -528,15 +529,15 @@ function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' |
     visibility: 'user',
     persist: 'required',
     payload: {
-      toolCallId,
+      toolExecutionId,
       startedAt: '2026-05-17T00:00:05.000Z',
     },
   };
   const terminal: RuntimeEvent = status === 'denied'
     ? {
-        eventId: `event-${toolCallId}-denied`,
+        eventId: `event-${toolExecutionId}-denied`,
         schemaVersion: 1,
-        eventType: 'tool.call.denied',
+        eventType: 'tool.execution.denied',
         runId: 'run-1',
         sessionId: 'session-1',
         stepId: 'step-1',
@@ -546,15 +547,15 @@ function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' |
         visibility: 'user',
         persist: 'required',
         payload: {
-          toolCallId,
+          toolExecutionId,
           reason: toolResult.denialReason ?? 'User rejected the requested tool call.',
         },
       }
     : status === 'failure'
       ? {
-          eventId: `event-${toolCallId}-failed`,
+          eventId: `event-${toolExecutionId}-failed`,
           schemaVersion: 1,
-          eventType: 'tool.call.failed',
+          eventType: 'tool.execution.failed',
           runId: 'run-1',
           sessionId: 'session-1',
           stepId: 'step-1',
@@ -564,7 +565,7 @@ function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' |
           visibility: 'user',
           persist: 'required',
           payload: {
-            toolCallId,
+            toolExecutionId,
             error: toolResult.error ?? {
               code: 'runtime_unknown',
               message: 'Tool failed.',
@@ -576,9 +577,9 @@ function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' |
           },
         }
       : {
-          eventId: `event-${toolCallId}-completed`,
+          eventId: `event-${toolExecutionId}-completed`,
           schemaVersion: 1,
-          eventType: 'tool.call.completed',
+          eventType: 'tool.execution.completed',
           runId: 'run-1',
           sessionId: 'session-1',
           stepId: 'step-1',
@@ -588,7 +589,7 @@ function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' |
           visibility: 'user',
           persist: 'required',
           payload: {
-            toolCallId,
+            toolExecutionId,
             completedAt: toolResult.createdAt,
           },
         };
@@ -606,8 +607,8 @@ function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' |
     persist: 'required',
     payload: {
       toolResultId: String(toolResult.toolResultId),
-      toolUseId: String(toolResult.toolUseId),
-      ...(toolResult.toolCallId ? { toolCallId: String(toolResult.toolCallId) } : {}),
+      toolCallId,
+      ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
       kind: toolResult.kind,
       summary: toolResult.textContent ?? toolResult.denialReason ?? toolResult.kind,
     },
@@ -619,7 +620,7 @@ function approvalResumeRuntimeEvents(toolResult: ToolResult, status: 'success' |
 function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   return {
     toolResultId: 'tool-result-1',
-    toolUseId: 'tool-use-1',
+    toolCallId: 'tool-call-1',
     runId: 'run-1',
     kind: 'success',
     structuredContent: { text: 'package contents' },
@@ -862,7 +863,7 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses() {
+            async handleToolCalls() {
               return { toolResults: [], runtimeEvents: [] };
             },
             async resumeToolApproval() {
@@ -876,7 +877,7 @@ describe('SessionRunService', () => {
           expect(input).toEqual({
             runId: 'run-1',
             permissionMode: 'default',
-            providerCapabilitySummary: { supportsToolUse: true },
+            providerCapabilitySummary: { supportsToolCall: true },
           });
           return toolDefinitions;
         },
@@ -1073,7 +1074,7 @@ describe('SessionRunService', () => {
             permissionMode: 'default',
           });
           return {
-            async handleToolUses() {
+            async handleToolCalls() {
               return {
                 toolResults: [toolResult],
                 runtimeEvents: [toolCallRequestedRuntimeEvent()],
@@ -1165,9 +1166,9 @@ describe('SessionRunService', () => {
     ]));
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
-      'tool.call.requested',
+      'tool.execution.requested',
       'tool.result.created',
       'assistant.output.completed',
       'step.status.changed',
@@ -1215,15 +1216,15 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses(input) {
-              const [toolUse] = input.toolUses;
+            async handleToolCalls(input) {
+              const [toolUse] = input.toolCalls;
               expect(toolUse).toMatchObject({
-                toolUseId: 'tool-use-1',
+                toolCallId: 'tool-call-1',
                 modelStepId: 'model-step-1',
               });
-              toolRepository.saveToolUse(toolUse);
+              toolRepository.saveToolCall(toolUse);
               return {
-                toolResults: [createToolResult({ toolUseId: toolUse.toolUseId })],
+                toolResults: [createToolResult({ toolCallId: toolUse.toolCallId })],
               };
             },
             async resumeToolApproval() {
@@ -1287,9 +1288,9 @@ describe('SessionRunService', () => {
       streamed.push(event);
     }
 
-    expect(toolRepository.listToolUsesByRun('run-1')).toEqual([
+    expect(toolRepository.listToolCallsByRun('run-1')).toEqual([
       expect.objectContaining({
-        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
         modelStepId: 'model-step-1',
       }),
     ]);
@@ -1304,7 +1305,7 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses() {
+            async handleToolCalls() {
               throw new Error('tool persistence failed');
             },
             async resumeToolApproval() {
@@ -1343,7 +1344,7 @@ describe('SessionRunService', () => {
 
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
       'run.failed',
       'step.status.changed',
@@ -1352,7 +1353,7 @@ describe('SessionRunService', () => {
     ]);
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toEqual([
       'run.started',
-      'tool.use.created',
+      'tool.call.created',
       'model.step.completed',
       'run.failed',
       'step.status.changed',
@@ -1392,7 +1393,7 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses() {
+            async handleToolCalls() {
               return {
                 toolResults: [toolResult],
                 runtimeEvents: [toolCallRequestedRuntimeEvent()],
@@ -1462,8 +1463,8 @@ describe('SessionRunService', () => {
     }
     const eventTypes = events.map((event) => event.eventType);
 
-    expect(eventTypes).toContain('tool.use.created');
-    expect(eventTypes).toContain('tool.call.requested');
+    expect(eventTypes).toContain('tool.call.created');
+    expect(eventTypes).toContain('tool.execution.requested');
     expect(eventTypes).toContain('tool.result.created');
     expect(eventTypes).not.toContain('action.requested');
   });
@@ -1673,8 +1674,7 @@ describe('SessionRunService', () => {
   it('keeps the same chat stream across approval resume', async () => {
     const chatEvents: ChatStreamEvent[] = [];
     const toolResult = createToolResult({
-      toolCallId: 'tool-call-1',
-      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-use-1',
       kind: 'success',
       textContent: 'Wrote src/app.ts',
     });
@@ -1685,8 +1685,8 @@ describe('SessionRunService', () => {
           {
             ...toolUseCreatedEventFor({
               sequence: 1,
-              toolUseId: 'tool-use-1',
-              providerToolUseId: 'provider-tool-use-1',
+              toolCallId: 'tool-use-1',
+              providerToolCallId: 'provider-tool-use-1',
               toolName: 'write_file',
               input: { path: 'src/app.ts' },
             }),
@@ -1710,14 +1710,14 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses(input) {
-              const toolUse = input.toolUses[0];
+            async handleToolCalls(input) {
+              const toolUse = input.toolCalls[0];
               if (!toolUse) {
                 throw new Error('Expected one tool use.');
               }
-              const toolCall: ToolCall = {
-                toolCallId: 'tool-call-1',
-                toolUseId: toolUse.toolUseId,
+              const toolExecution: ToolExecution = {
+                toolExecutionId: 'tool-execution-1',
+                toolCallId: toolUse.toolCallId,
                 runId: toolUse.runId,
                 stepId: 'step-1',
                 toolName: toolUse.toolName,
@@ -1726,18 +1726,18 @@ describe('SessionRunService', () => {
                 capabilities: ['project_write'],
                 riskLevel: 'medium',
                 sideEffect: 'project_file_operation',
-                status: 'waiting_for_approval',
+                status: 'pending_approval',
                 requestedAt: '2026-05-24T00:00:00.000Z',
               };
               const approvalRequest: ApprovalRequest = {
                 approvalRequestId: 'approval-request-1',
-                toolUseId: toolUse.toolUseId,
-                toolCallId: toolCall.toolCallId,
+                toolCallId: toolUse.toolCallId,
+                toolExecutionId: toolExecution.toolExecutionId,
                 runId: toolUse.runId,
-                stepId: toolCall.stepId,
+                stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolCall.capabilities,
-                riskLevel: toolCall.riskLevel,
+                capabilities: toolExecution.capabilities,
+                riskLevel: toolExecution.riskLevel,
                 title: 'Approve write_file',
                 summary: 'Writing project file requires approval.',
                 preview: { action: 'write_file', targets: [] },
@@ -1750,8 +1750,8 @@ describe('SessionRunService', () => {
                 toolResults: [],
                 pendingApprovals: [{
                   approvalRequest,
-                  toolUse,
-                  toolCall,
+                  toolCall: toolUse,
+                  toolExecution,
                 }],
                 runtimeEvents: [{
                   eventId: 'event-approval-requested',
@@ -1875,15 +1875,15 @@ describe('SessionRunService', () => {
           });
 
           return {
-            async handleToolUses(handleInput) {
-              const toolUse = handleInput.toolUses[0];
+            async handleToolCalls(handleInput) {
+              const toolUse = handleInput.toolCalls[0];
               if (!toolUse) {
                 throw new Error('Expected one tool use.');
               }
 
-              const toolCall: ToolCall = {
-                toolCallId: 'tool-call-1',
-                toolUseId: toolUse.toolUseId,
+              const toolExecution: ToolExecution = {
+                toolExecutionId: 'tool-execution-1',
+                toolCallId: toolUse.toolCallId,
                 runId: toolUse.runId,
                 stepId: 'step-1',
                 toolName: toolUse.toolName,
@@ -1892,18 +1892,18 @@ describe('SessionRunService', () => {
                 capabilities: ['project_read'],
                 riskLevel: 'low',
                 sideEffect: 'none',
-                status: 'waiting_for_approval',
+                status: 'pending_approval',
                 requestedAt: '2026-05-17T00:00:02.250Z',
               };
               const approvalRequest: ApprovalRequest = {
                 approvalRequestId: 'approval-request-1',
-                toolUseId: toolUse.toolUseId,
-                toolCallId: toolCall.toolCallId,
+                toolCallId: toolUse.toolCallId,
+                toolExecutionId: toolExecution.toolExecutionId,
                 runId: toolUse.runId,
-                stepId: toolCall.stepId,
+                stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolCall.capabilities,
-                riskLevel: toolCall.riskLevel,
+                capabilities: toolExecution.capabilities,
+                riskLevel: toolExecution.riskLevel,
                 title: 'Approve read_file',
                 summary: 'User approval is required.',
                 preview: {
@@ -1923,8 +1923,8 @@ describe('SessionRunService', () => {
                 toolResults: [],
                 pendingApprovals: [{
                   approvalRequest,
-                  toolUse,
-                  toolCall,
+                  toolCall: toolUse,
+                  toolExecution,
                 }],
               };
             },
@@ -1992,7 +1992,7 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(1);
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
-      'tool.use.created',
+      'tool.call.created',
       'model.step.provider_state.recorded',
       'model.step.completed',
       'run.status.changed',
@@ -2029,7 +2029,7 @@ describe('SessionRunService', () => {
     expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',
-        toolUseId: 'tool-use-1',
+        toolCallId: 'tool-call-1',
         modelStepId: 'model-step-1',
         toolName: 'read_file',
       }),
@@ -2045,8 +2045,8 @@ describe('SessionRunService', () => {
     expect(resumed.map((event) => event.eventType)).toEqual([
       'approval.resolved',
       'run.status.changed',
-      'tool.call.started',
-      'tool.call.completed',
+      'tool.execution.started',
+      'tool.execution.completed',
       'tool.result.created',
       'assistant.output.completed',
       'step.status.changed',
@@ -2072,14 +2072,14 @@ describe('SessionRunService', () => {
     const toolResultsByApproval = new Map([
       ['approval-request-1', createToolResult({
         toolResultId: 'tool-result-1',
-        toolUseId: 'tool-use-1',
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         textContent: 'first result',
       })],
       ['approval-request-2', createToolResult({
         toolResultId: 'tool-result-2',
-        toolUseId: 'tool-use-2',
         toolCallId: 'tool-call-2',
+        toolExecutionId: 'tool-execution-2',
         textContent: 'second result',
       })],
     ]);
@@ -2094,14 +2094,14 @@ describe('SessionRunService', () => {
           if (requests.length === 1) {
             yield toolUseCreatedEventFor({
               sequence: 1,
-              toolUseId: 'tool-use-1',
-              providerToolUseId: 'provider-tool-use-1',
+              toolCallId: 'tool-use-1',
+              providerToolCallId: 'provider-tool-use-1',
               input: { path: 'package.json' },
             });
             yield toolUseCreatedEventFor({
               sequence: 2,
-              toolUseId: 'tool-use-2',
-              providerToolUseId: 'provider-tool-use-2',
+              toolCallId: 'tool-use-2',
+              providerToolCallId: 'provider-tool-use-2',
               input: { path: 'README.md' },
             });
             yield modelStepCompletedEvent(3);
@@ -2118,14 +2118,14 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses(input) {
+            async handleToolCalls(input) {
               return {
                 toolResults: [],
-                pendingApprovals: input.toolUses.map((toolUse, index) => {
+                pendingApprovals: input.toolCalls.map((toolUse, index) => {
                   const ordinal = index + 1;
-                  const toolCall: ToolCall = {
-                    toolCallId: `tool-call-${ordinal}`,
-                    toolUseId: toolUse.toolUseId,
+                  const toolExecution: ToolExecution = {
+                    toolExecutionId: `tool-execution-${ordinal}`,
+                    toolCallId: toolUse.toolCallId,
                     runId: toolUse.runId,
                     stepId: 'step-1',
                     toolName: toolUse.toolName,
@@ -2134,18 +2134,18 @@ describe('SessionRunService', () => {
                     capabilities: ['project_read'],
                     riskLevel: 'low',
                     sideEffect: 'none',
-                    status: 'waiting_for_approval',
+                    status: 'pending_approval',
                     requestedAt: '2026-05-17T00:00:02.250Z',
                   };
                   const approvalRequest: ApprovalRequest = {
                     approvalRequestId: `approval-request-${ordinal}`,
-                    toolUseId: toolUse.toolUseId,
-                    toolCallId: toolCall.toolCallId,
+                    toolCallId: toolUse.toolCallId,
+                    toolExecutionId: toolExecution.toolExecutionId,
                     runId: toolUse.runId,
-                    stepId: toolCall.stepId,
+                    stepId: toolExecution.stepId,
                     toolName: toolUse.toolName,
-                    capabilities: toolCall.capabilities,
-                    riskLevel: toolCall.riskLevel,
+                    capabilities: toolExecution.capabilities,
+                    riskLevel: toolExecution.riskLevel,
                     title: `Approve ${toolUse.toolName}`,
                     summary: 'User approval is required.',
                     preview: {
@@ -2159,8 +2159,8 @@ describe('SessionRunService', () => {
 
                   return {
                     approvalRequest,
-                    toolUse,
-                    toolCall,
+                    toolCall: toolUse,
+                    toolExecution,
                   };
                 }),
               };
@@ -2244,8 +2244,8 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(1);
     expect(firstResume.map((event) => event.eventType)).toEqual([
       'approval.resolved',
-      'tool.call.started',
-      'tool.call.completed',
+      'tool.execution.started',
+      'tool.execution.completed',
       'tool.result.created',
     ]);
     expect(repository.getRun('run-1')).toMatchObject({ status: 'waiting_for_approval' });
@@ -2277,8 +2277,8 @@ describe('SessionRunService', () => {
     expect(secondResume.map((event) => event.eventType)).toEqual([
       'approval.resolved',
       'run.status.changed',
-      'tool.call.started',
-      'tool.call.completed',
+      'tool.execution.started',
+      'tool.execution.completed',
       'tool.result.created',
       'assistant.output.completed',
       'step.status.changed',
@@ -2378,11 +2378,11 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses() {
+            async handleToolCalls() {
               return {
                 toolResults: [{
                   toolResultId: 'tool-result-1',
-                  toolUseId: 'tool-use-1',
+                  toolCallId: 'tool-use-1',
                   runId: 'run-1',
                   kind: 'success',
                   textContent: 'file content',
@@ -2493,11 +2493,11 @@ describe('SessionRunService', () => {
       toolRuntimeFactory: {
         async create() {
           return {
-            async handleToolUses(input) {
-              const toolUse = input.toolUses[0];
-              const toolCall: ToolCall = {
-                toolCallId: 'tool-call-1',
-                toolUseId: toolUse.toolUseId,
+            async handleToolCalls(input) {
+              const toolUse = input.toolCalls[0];
+              const toolExecution: ToolExecution = {
+                toolExecutionId: 'tool-execution-1',
+                toolCallId: toolUse.toolCallId,
                 runId: toolUse.runId,
                 stepId: 'step-1',
                 toolName: toolUse.toolName,
@@ -2506,18 +2506,18 @@ describe('SessionRunService', () => {
                 capabilities: ['project_read'],
                 riskLevel: 'low',
                 sideEffect: 'none',
-                status: 'waiting_for_approval',
+                status: 'pending_approval',
                 requestedAt: '2026-05-17T00:00:02.250Z',
               };
               const approvalRequest: ApprovalRequest = {
                 approvalRequestId: 'approval-request-1',
-                toolUseId: toolUse.toolUseId,
-                toolCallId: toolCall.toolCallId,
+                toolCallId: toolUse.toolCallId,
+                toolExecutionId: toolExecution.toolExecutionId,
                 runId: toolUse.runId,
-                stepId: toolCall.stepId,
+                stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolCall.capabilities,
-                riskLevel: toolCall.riskLevel,
+                capabilities: toolExecution.capabilities,
+                riskLevel: toolExecution.riskLevel,
                 title: `Approve ${toolUse.toolName}`,
                 summary: 'User approval is required.',
                 preview: {
@@ -2532,8 +2532,8 @@ describe('SessionRunService', () => {
               return {
                 pendingApprovals: [{
                   approvalRequest,
-                  toolUse,
-                  toolCall,
+                  toolCall: toolUse,
+                  toolExecution,
                 }],
                 runtimeEvents: [{
                   eventId: 'event-approval-requested',

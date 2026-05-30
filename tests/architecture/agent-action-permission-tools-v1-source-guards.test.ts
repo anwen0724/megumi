@@ -25,10 +25,11 @@ describe('agent action permission tools v1 source guards', () => {
     expect(source).not.toContain("'review'");
   });
 
-  it('keeps tool calls linked to ToolUse with optional Host maintenance action ids', () => {
+  it('keeps tool executions linked to model-side ToolCall with optional Host maintenance action ids', () => {
     const source = readProjectFile('packages/shared/tool-contracts.ts');
 
-    expect(source).toContain('toolUseId: ToolUseId | string');
+    expect(source).toContain('toolCallId: ToolCallId | string');
+    expect(source).toContain('toolExecutionId: ToolExecutionId | string');
     expect(source).toContain('actionId?: RunActionId | string');
     expect(source).not.toContain('actionKind: RunActionKindSchema');
     expect(source).not.toContain('bypassPermissions');
@@ -46,14 +47,14 @@ describe('agent action permission tools v1 source guards', () => {
     expect(migrations).toContain('classifier_label TEXT');
     expect(migrations).toContain('side_effect TEXT NOT NULL');
     expect(repository).toContain('savePermissionDecision');
-    expect(repository).toContain('listPermissionDecisionsByToolUse');
+    expect(repository).toContain('listPermissionDecisionsByToolCall');
 
     for (const marker of [
       'CREATE TABLE IF NOT EXISTS permission_decisions',
       'classifier_label TEXT',
       'side_effect TEXT NOT NULL',
       'savePermissionDecision',
-      'listPermissionDecisionsByToolUse',
+      'listPermissionDecisionsByToolCall',
     ]) {
       expect(persistenceSources).toContain(marker);
     }

@@ -16,12 +16,13 @@ describe('registerToolHandlers', () => {
   it('registers primary tool/approval IPC channels and deprecated agent bridges', () => {
     registerToolHandlers({
       listDefinitions: () => [],
-      getToolCall: () => undefined,
+      getToolExecution: () => undefined,
       resolveApproval: (payload) => ({
         approval: {
           approvalRecordId: 'approval-record-1',
           approvalRequestId: payload.approvalRequestId,
           toolCallId: 'tool-call-1',
+          toolExecutionId: 'tool-execution-1',
           runId: 'run-1',
           stepId: 'step-1',
           decision: payload.decision,
@@ -37,7 +38,7 @@ describe('registerToolHandlers', () => {
       expect.any(Function),
     );
     expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.tool.callGet,
+      IPC_CHANNELS.tool.executionGet,
       expect.any(Function),
     );
     expect(ipcMain.handle).toHaveBeenCalledWith(
@@ -49,7 +50,7 @@ describe('registerToolHandlers', () => {
       expect.any(Function),
     );
     expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.tool.callGet,
+      IPC_CHANNELS.tool.executionGet,
       expect.any(Function),
     );
     expect(ipcMain.handle).toHaveBeenCalledWith(
@@ -81,12 +82,13 @@ describe('registerToolHandlers', () => {
     };
     registerToolHandlers({
       listDefinitions: () => [],
-      getToolCall: () => undefined,
+      getToolExecution: () => undefined,
       resolveApproval: (payload) => ({
         approval: {
           approvalRecordId: 'approval-record-1',
           approvalRequestId: payload.approvalRequestId,
           toolCallId: 'tool-call-1',
+          toolExecutionId: 'tool-execution-1',
           runId: 'run-1',
           stepId: 'step-1',
           decision: payload.decision,

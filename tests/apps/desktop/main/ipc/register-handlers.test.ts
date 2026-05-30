@@ -118,7 +118,7 @@ describe('registerAllHandlers', () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
     const toolService = {
       listDefinitions: vi.fn(),
-      getToolCall: vi.fn(),
+      getToolExecution: vi.fn(),
       resolveApproval: vi.fn(),
     };
 

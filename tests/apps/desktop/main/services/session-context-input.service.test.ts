@@ -34,7 +34,8 @@ function runtimeEvent(overrides: Partial<RuntimeEvent>): RuntimeEvent {
     persist: 'required',
     payload: {
       toolResultId: 'tool-result-1',
-      toolUseId: 'tool-use-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
       kind: 'success',
       summary: 'Read package.json and found package name megumi.',
     },
@@ -189,7 +190,8 @@ describe('SessionContextInputService', () => {
       sequence: 2,
       payload: {
         toolResultId: 'tool-result-error',
-        toolUseId: 'tool-use-error',
+        toolCallId: 'tool-call-error',
+        toolExecutionId: 'tool-execution-error',
         kind: 'tool_error',
         summary: 'run_command failed with exit code 1.',
       },
@@ -200,7 +202,8 @@ describe('SessionContextInputService', () => {
       sequence: 3,
       payload: {
         toolResultId: 'tool-result-denied',
-        toolUseId: 'tool-use-denied',
+        toolCallId: 'tool-call-denied',
+        toolExecutionId: 'tool-execution-denied',
         kind: 'policy_denied',
         summary: 'write_file was blocked by policy.',
       },
@@ -211,14 +214,15 @@ describe('SessionContextInputService', () => {
       sequence: 4,
       payload: {
         toolResultId: 'tool-result-redacted',
-        toolUseId: 'tool-use-redacted',
+        toolCallId: 'tool-call-redacted',
+        toolExecutionId: 'tool-execution-redacted',
         kind: 'redacted',
         summary: 'Tool output was redacted.',
       },
     }));
     repository.appendRuntimeEvent(runtimeEvent({
       eventId: 'event-tool-denied',
-      eventType: 'tool.call.denied',
+      eventType: 'tool.execution.denied',
       runId: 'run-old',
       stepId: 'step-tool',
       sequence: 5,
@@ -226,6 +230,7 @@ describe('SessionContextInputService', () => {
       visibility: 'user',
       payload: {
         toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
         reason: 'User denied write_file.',
       },
     }));

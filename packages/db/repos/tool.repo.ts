@@ -4,13 +4,13 @@ import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
+  ToolExecution,
   ToolObservation,
   ToolResult,
-  ToolUse,
 } from '@megumi/shared/tool-contracts';
 
-interface ToolUseRow { tool_use_json: string }
 interface ToolCallRow { tool_call_json: string }
+interface ToolExecutionRow { tool_execution_json: string }
 interface PermissionDecisionRow { decision_json: string }
 interface ApprovalRequestRow { request_json: string }
 interface ToolResultRow { result_json: string }
@@ -19,21 +19,21 @@ interface ToolObservationRow { observation_json: string }
 export class ToolRepository {
   constructor(private readonly database: MegumiDatabase) {}
 
-  saveToolUse(toolUse: ToolUse): ToolUse {
+  saveToolCall(toolCall: ToolCall): ToolCall {
     this.database.prepare(`
-      INSERT INTO tool_uses (
-        tool_use_id, run_id, model_step_id, provider_tool_use_id, tool_name,
+      INSERT INTO tool_calls (
+        tool_call_id, run_id, model_step_id, provider_tool_call_id, tool_name,
         input_json, input_preview_json, status, created_at, completed_at,
-        error_json, metadata_json, tool_use_json
+        error_json, metadata_json, tool_call_json
       ) VALUES (
-        @tool_use_id, @run_id, @model_step_id, @provider_tool_use_id, @tool_name,
+        @tool_call_id, @run_id, @model_step_id, @provider_tool_call_id, @tool_name,
         @input_json, @input_preview_json, @status, @created_at, @completed_at,
-        @error_json, @metadata_json, @tool_use_json
+        @error_json, @metadata_json, @tool_call_json
       )
-      ON CONFLICT(tool_use_id) DO UPDATE SET
+      ON CONFLICT(tool_call_id) DO UPDATE SET
         run_id = excluded.run_id,
         model_step_id = excluded.model_step_id,
-        provider_tool_use_id = excluded.provider_tool_use_id,
+        provider_tool_call_id = excluded.provider_tool_call_id,
         tool_name = excluded.tool_name,
         input_json = excluded.input_json,
         input_preview_json = excluded.input_preview_json,
@@ -42,79 +42,17 @@ export class ToolRepository {
         completed_at = excluded.completed_at,
         error_json = excluded.error_json,
         metadata_json = excluded.metadata_json,
-        tool_use_json = excluded.tool_use_json
-    `).run({
-      tool_use_id: toolUse.toolUseId,
-      run_id: toolUse.runId,
-      model_step_id: toolUse.modelStepId,
-      provider_tool_use_id: toolUse.providerToolUseId,
-      tool_name: toolUse.toolName,
-      input_json: stringifyJson(toolUse.input),
-      input_preview_json: stringifyJson(toolUse.inputPreview),
-      status: toolUse.status,
-      created_at: toolUse.createdAt,
-      completed_at: toolUse.completedAt ?? null,
-      error_json: toolUse.error ? stringifyJson(toolUse.error) : null,
-      metadata_json: toolUse.metadata ? stringifyJson(toolUse.metadata) : null,
-      tool_use_json: stringifyJson(toolUse),
-    });
-    return toolUse;
-  }
-
-  getToolUse(toolUseId: string): ToolUse | undefined {
-    const row = this.database.prepare('SELECT tool_use_json FROM tool_uses WHERE tool_use_id = ?').get(toolUseId) as ToolUseRow | undefined;
-    return row ? JSON.parse(row.tool_use_json) as ToolUse : undefined;
-  }
-
-  listToolUsesByRun(runId: string): ToolUse[] {
-    return (this.database.prepare('SELECT tool_use_json FROM tool_uses WHERE run_id = ? ORDER BY created_at ASC').all(runId) as ToolUseRow[])
-      .map((row) => JSON.parse(row.tool_use_json) as ToolUse);
-  }
-
-  saveToolCall(toolCall: ToolCall): ToolCall {
-    this.database.prepare(`
-      INSERT INTO tool_calls (
-        tool_call_id, tool_use_id, run_id, step_id, action_id, tool_name, input_preview_json,
-        capabilities_json, risk_level, side_effect, result_preview, status, requested_at,
-        started_at, completed_at, error_json, metadata_json, tool_call_json
-      ) VALUES (
-        @tool_call_id, @tool_use_id, @run_id, @step_id, @action_id, @tool_name, @input_preview_json,
-        @capabilities_json, @risk_level, @side_effect, @result_preview, @status, @requested_at,
-        @started_at, @completed_at, @error_json, @metadata_json, @tool_call_json
-      )
-      ON CONFLICT(tool_call_id) DO UPDATE SET
-        tool_use_id = excluded.tool_use_id,
-        run_id = excluded.run_id,
-        step_id = excluded.step_id,
-        action_id = excluded.action_id,
-        tool_name = excluded.tool_name,
-        input_preview_json = excluded.input_preview_json,
-        capabilities_json = excluded.capabilities_json,
-        risk_level = excluded.risk_level,
-        side_effect = excluded.side_effect,
-        result_preview = excluded.result_preview,
-        status = excluded.status,
-        requested_at = excluded.requested_at,
-        started_at = excluded.started_at,
-        completed_at = excluded.completed_at,
-        error_json = excluded.error_json,
-        metadata_json = excluded.metadata_json,
         tool_call_json = excluded.tool_call_json
     `).run({
       tool_call_id: toolCall.toolCallId,
-      tool_use_id: toolCall.toolUseId,
       run_id: toolCall.runId,
-      step_id: toolCall.stepId,
-      action_id: toolCall.actionId ?? null,
+      model_step_id: toolCall.modelStepId,
+      provider_tool_call_id: toolCall.providerToolCallId,
       tool_name: toolCall.toolName,
+      input_json: stringifyJson(toolCall.input),
       input_preview_json: stringifyJson(toolCall.inputPreview),
-      capabilities_json: stringifyJson(toolCall.capabilities),
-      risk_level: toolCall.riskLevel,
-      side_effect: toolCall.sideEffect,
-      result_preview: toolCall.resultPreview ?? null,
       status: toolCall.status,
-      requested_at: toolCall.requestedAt,
-      started_at: toolCall.startedAt ?? null,
+      created_at: toolCall.createdAt,
       completed_at: toolCall.completedAt ?? null,
       error_json: toolCall.error ? stringifyJson(toolCall.error) : null,
       metadata_json: toolCall.metadata ? stringifyJson(toolCall.metadata) : null,
@@ -129,26 +67,92 @@ export class ToolRepository {
   }
 
   listToolCallsByRun(runId: string): ToolCall[] {
-    return (this.database.prepare('SELECT tool_call_json FROM tool_calls WHERE run_id = ? ORDER BY requested_at ASC').all(runId) as ToolCallRow[])
+    return (this.database.prepare('SELECT tool_call_json FROM tool_calls WHERE run_id = ? ORDER BY created_at ASC').all(runId) as ToolCallRow[])
       .map((row) => JSON.parse(row.tool_call_json) as ToolCall);
+  }
+
+  saveToolExecution(toolExecution: ToolExecution): ToolExecution {
+    this.database.prepare(`
+      INSERT INTO tool_executions (
+        tool_execution_id, tool_call_id, run_id, step_id, action_id, tool_name,
+        input_json, input_preview_json, capabilities_json, risk_level, side_effect,
+        result_preview, status, requested_at, started_at, completed_at,
+        error_json, metadata_json, tool_execution_json
+      ) VALUES (
+        @tool_execution_id, @tool_call_id, @run_id, @step_id, @action_id, @tool_name,
+        @input_json, @input_preview_json, @capabilities_json, @risk_level, @side_effect,
+        @result_preview, @status, @requested_at, @started_at, @completed_at,
+        @error_json, @metadata_json, @tool_execution_json
+      )
+      ON CONFLICT(tool_execution_id) DO UPDATE SET
+        tool_call_id = excluded.tool_call_id,
+        run_id = excluded.run_id,
+        step_id = excluded.step_id,
+        action_id = excluded.action_id,
+        tool_name = excluded.tool_name,
+        input_json = excluded.input_json,
+        input_preview_json = excluded.input_preview_json,
+        capabilities_json = excluded.capabilities_json,
+        risk_level = excluded.risk_level,
+        side_effect = excluded.side_effect,
+        result_preview = excluded.result_preview,
+        status = excluded.status,
+        requested_at = excluded.requested_at,
+        started_at = excluded.started_at,
+        completed_at = excluded.completed_at,
+        error_json = excluded.error_json,
+        metadata_json = excluded.metadata_json,
+        tool_execution_json = excluded.tool_execution_json
+    `).run({
+      tool_execution_id: toolExecution.toolExecutionId,
+      tool_call_id: toolExecution.toolCallId,
+      run_id: toolExecution.runId,
+      step_id: toolExecution.stepId,
+      action_id: toolExecution.actionId ?? null,
+      tool_name: toolExecution.toolName,
+      input_json: stringifyJson(toolExecution.input),
+      input_preview_json: stringifyJson(toolExecution.inputPreview),
+      capabilities_json: stringifyJson(toolExecution.capabilities),
+      risk_level: toolExecution.riskLevel,
+      side_effect: toolExecution.sideEffect,
+      result_preview: toolExecution.resultPreview ?? null,
+      status: toolExecution.status,
+      requested_at: toolExecution.requestedAt,
+      started_at: toolExecution.startedAt ?? null,
+      completed_at: toolExecution.completedAt ?? null,
+      error_json: toolExecution.error ? stringifyJson(toolExecution.error) : null,
+      metadata_json: toolExecution.metadata ? stringifyJson(toolExecution.metadata) : null,
+      tool_execution_json: stringifyJson(toolExecution),
+    });
+    return toolExecution;
+  }
+
+  getToolExecution(toolExecutionId: string): ToolExecution | undefined {
+    const row = this.database.prepare('SELECT tool_execution_json FROM tool_executions WHERE tool_execution_id = ?').get(toolExecutionId) as ToolExecutionRow | undefined;
+    return row ? JSON.parse(row.tool_execution_json) as ToolExecution : undefined;
+  }
+
+  listToolExecutionsByRun(runId: string): ToolExecution[] {
+    return (this.database.prepare('SELECT tool_execution_json FROM tool_executions WHERE run_id = ? ORDER BY requested_at ASC').all(runId) as ToolExecutionRow[])
+      .map((row) => JSON.parse(row.tool_execution_json) as ToolExecution);
   }
 
   savePermissionDecision(decision: PermissionDecision): PermissionDecision {
     this.database.prepare(`
       INSERT INTO permission_decisions (
-        permission_decision_id, tool_use_id, tool_call_id, run_id, decision,
+        permission_decision_id, tool_call_id, tool_execution_id, run_id, decision,
         source, mode, reason, classifier_label, capability, side_effect,
         matched_rule_json, target, effective_risk_level, required_approval_json,
         required_sandbox_json, evaluated_at, metadata_json, decision_json
       ) VALUES (
-        @permission_decision_id, @tool_use_id, @tool_call_id, @run_id, @decision,
+        @permission_decision_id, @tool_call_id, @tool_execution_id, @run_id, @decision,
         @source, @mode, @reason, @classifier_label, @capability, @side_effect,
         @matched_rule_json, @target, @effective_risk_level, @required_approval_json,
         @required_sandbox_json, @evaluated_at, @metadata_json, @decision_json
       )
       ON CONFLICT(permission_decision_id) DO UPDATE SET
-        tool_use_id = excluded.tool_use_id,
         tool_call_id = excluded.tool_call_id,
+        tool_execution_id = excluded.tool_execution_id,
         run_id = excluded.run_id,
         decision = excluded.decision,
         source = excluded.source,
@@ -167,8 +171,8 @@ export class ToolRepository {
         decision_json = excluded.decision_json
     `).run({
       permission_decision_id: decision.permissionDecisionId,
-      tool_use_id: decision.toolUseId,
-      tool_call_id: decision.toolCallId ?? null,
+      tool_call_id: decision.toolCallId,
+      tool_execution_id: decision.toolExecutionId ?? null,
       run_id: decision.runId,
       decision: decision.decision,
       source: decision.source,
@@ -189,54 +193,54 @@ export class ToolRepository {
     return decision;
   }
 
-  listPermissionDecisionsByToolUse(toolUseId: string): PermissionDecision[] {
-    return (this.database.prepare('SELECT decision_json FROM permission_decisions WHERE tool_use_id = ? ORDER BY evaluated_at ASC').all(toolUseId) as PermissionDecisionRow[])
+  listPermissionDecisionsByToolCall(toolCallId: string): PermissionDecision[] {
+    return (this.database.prepare('SELECT decision_json FROM permission_decisions WHERE tool_call_id = ? ORDER BY evaluated_at ASC').all(toolCallId) as PermissionDecisionRow[])
       .map((row) => JSON.parse(row.decision_json) as PermissionDecision);
   }
 
   saveApprovalRequest(request: ApprovalRequest): ApprovalRequest {
-    const toolCall = this.getToolCall(request.toolCallId);
-    if (!toolCall) {
-      throw new Error(`Cannot save approval request without tool call: ${request.toolCallId}`);
+    const toolExecution = this.getToolExecution(request.toolExecutionId);
+    if (!toolExecution) {
+      throw new Error(`Cannot save approval request without tool execution: ${request.toolExecutionId}`);
     }
-    if (request.toolUseId !== toolCall.toolUseId) {
-      throw new Error(`Approval request toolUseId ${request.toolUseId} does not match tool call toolUseId ${toolCall.toolUseId}`);
+    if (request.toolCallId !== toolExecution.toolCallId) {
+      throw new Error(`Approval request toolCallId ${request.toolCallId} does not match tool execution toolCallId ${toolExecution.toolCallId}`);
     }
-    if (request.runId !== toolCall.runId) {
-      throw new Error(`Approval request runId ${request.runId} does not match tool call runId ${toolCall.runId}`);
+    if (request.runId !== toolExecution.runId) {
+      throw new Error(`Approval request runId ${request.runId} does not match tool execution runId ${toolExecution.runId}`);
     }
-    if (request.stepId !== toolCall.stepId) {
-      throw new Error(`Approval request stepId ${request.stepId} does not match tool call stepId ${toolCall.stepId}`);
+    if (request.stepId !== toolExecution.stepId) {
+      throw new Error(`Approval request stepId ${request.stepId} does not match tool execution stepId ${toolExecution.stepId}`);
     }
     if (request.permissionDecisionId) {
       const permissionDecision = this.getPermissionDecision(request.permissionDecisionId);
       if (!permissionDecision) {
         throw new Error(`Cannot save approval request without permission decision: ${request.permissionDecisionId}`);
       }
-      if (permissionDecision.toolUseId !== request.toolUseId) {
-        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to toolUseId ${permissionDecision.toolUseId}, not ${request.toolUseId}`);
+      if (permissionDecision.toolCallId !== request.toolCallId) {
+        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to toolCallId ${permissionDecision.toolCallId}, not ${request.toolCallId}`);
+      }
+      if (permissionDecision.toolExecutionId && permissionDecision.toolExecutionId !== request.toolExecutionId) {
+        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to toolExecutionId ${permissionDecision.toolExecutionId}, not ${request.toolExecutionId}`);
       }
       if (permissionDecision.runId !== request.runId) {
         throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to runId ${permissionDecision.runId}, not ${request.runId}`);
-      }
-      if (permissionDecision.toolCallId && permissionDecision.toolCallId !== request.toolCallId) {
-        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to toolCallId ${permissionDecision.toolCallId}, not ${request.toolCallId}`);
       }
     }
 
     this.database.prepare(`
       INSERT INTO approval_requests (
-        approval_request_id, tool_use_id, tool_call_id, permission_decision_id,
+        approval_request_id, tool_call_id, tool_execution_id, permission_decision_id,
         run_id, step_id, tool_name, status, requested_scope, risk_level,
         created_at, expires_at, resolved_at, request_json
       ) VALUES (
-        @approval_request_id, @tool_use_id, @tool_call_id, @permission_decision_id,
+        @approval_request_id, @tool_call_id, @tool_execution_id, @permission_decision_id,
         @run_id, @step_id, @tool_name, @status, @requested_scope, @risk_level,
         @created_at, @expires_at, @resolved_at, @request_json
       )
       ON CONFLICT(approval_request_id) DO UPDATE SET
-        tool_use_id = excluded.tool_use_id,
         tool_call_id = excluded.tool_call_id,
+        tool_execution_id = excluded.tool_execution_id,
         permission_decision_id = excluded.permission_decision_id,
         run_id = excluded.run_id,
         step_id = excluded.step_id,
@@ -250,8 +254,8 @@ export class ToolRepository {
         request_json = excluded.request_json
     `).run({
       approval_request_id: request.approvalRequestId,
-      tool_use_id: request.toolUseId,
       tool_call_id: request.toolCallId,
+      tool_execution_id: request.toolExecutionId,
       permission_decision_id: request.permissionDecisionId ?? null,
       run_id: request.runId,
       step_id: request.stepId,
@@ -282,6 +286,9 @@ export class ToolRepository {
     if (!request) {
       throw new Error(`Cannot save approval record without approval request: ${record.approvalRequestId}`);
     }
+    if (record.toolExecutionId !== request.toolExecutionId) {
+      throw new Error(`Approval record toolExecutionId ${record.toolExecutionId} does not match approval request toolExecutionId ${request.toolExecutionId}`);
+    }
     if (record.toolCallId !== request.toolCallId) {
       throw new Error(`Approval record toolCallId ${record.toolCallId} does not match approval request toolCallId ${request.toolCallId}`);
     }
@@ -294,17 +301,17 @@ export class ToolRepository {
 
     this.database.prepare(`
       INSERT INTO approval_records (
-        approval_record_id, approval_request_id, tool_use_id, tool_call_id, run_id, step_id,
+        approval_record_id, approval_request_id, tool_call_id, tool_execution_id, run_id, step_id,
         decision, scope, decided_by, decided_at, record_json
       ) VALUES (
-        @approval_record_id, @approval_request_id, @tool_use_id, @tool_call_id, @run_id, @step_id,
+        @approval_record_id, @approval_request_id, @tool_call_id, @tool_execution_id, @run_id, @step_id,
         @decision, @scope, @decided_by, @decided_at, @record_json
       )
     `).run({
       approval_record_id: record.approvalRecordId,
       approval_request_id: record.approvalRequestId,
-      tool_use_id: request.toolUseId,
       tool_call_id: record.toolCallId,
+      tool_execution_id: record.toolExecutionId,
       run_id: record.runId,
       step_id: record.stepId,
       decision: record.decision,
@@ -319,17 +326,17 @@ export class ToolRepository {
   saveToolResult(result: ToolResult): ToolResult {
     this.database.prepare(`
       INSERT INTO tool_results (
-        tool_result_id, tool_use_id, tool_call_id, run_id, kind, text_content,
+        tool_result_id, tool_call_id, tool_execution_id, run_id, kind, text_content,
         structured_content_json, content_refs_json, redaction_state, error_json,
         denial_reason, created_at, metadata_json, result_json
       ) VALUES (
-        @tool_result_id, @tool_use_id, @tool_call_id, @run_id, @kind, @text_content,
+        @tool_result_id, @tool_call_id, @tool_execution_id, @run_id, @kind, @text_content,
         @structured_content_json, @content_refs_json, @redaction_state, @error_json,
         @denial_reason, @created_at, @metadata_json, @result_json
       )
       ON CONFLICT(tool_result_id) DO UPDATE SET
-        tool_use_id = excluded.tool_use_id,
         tool_call_id = excluded.tool_call_id,
+        tool_execution_id = excluded.tool_execution_id,
         run_id = excluded.run_id,
         kind = excluded.kind,
         text_content = excluded.text_content,
@@ -343,8 +350,8 @@ export class ToolRepository {
         result_json = excluded.result_json
     `).run({
       tool_result_id: result.toolResultId,
-      tool_use_id: result.toolUseId,
-      tool_call_id: result.toolCallId ?? null,
+      tool_call_id: result.toolCallId,
+      tool_execution_id: result.toolExecutionId ?? null,
       run_id: result.runId,
       kind: result.kind,
       text_content: result.textContent ?? null,
@@ -360,22 +367,22 @@ export class ToolRepository {
     return result;
   }
 
-  listToolResultsByToolUse(toolUseId: string): ToolResult[] {
-    return (this.database.prepare('SELECT result_json FROM tool_results WHERE tool_use_id = ? ORDER BY created_at ASC').all(toolUseId) as ToolResultRow[])
+  listToolResultsByToolCall(toolCallId: string): ToolResult[] {
+    return (this.database.prepare('SELECT result_json FROM tool_results WHERE tool_call_id = ? ORDER BY created_at ASC').all(toolCallId) as ToolResultRow[])
       .map((row) => JSON.parse(row.result_json) as ToolResult);
   }
 
   saveToolObservation(observation: ToolObservation): ToolObservation {
     this.database.prepare(`
       INSERT INTO tool_observations (
-        observation_id, tool_call_id, run_id, step_id, status, summary,
+        observation_id, tool_execution_id, run_id, step_id, status, summary,
         text_preview, content_refs_json, error_json, created_at, observation_json
       ) VALUES (
-        @observation_id, @tool_call_id, @run_id, @step_id, @status, @summary,
+        @observation_id, @tool_execution_id, @run_id, @step_id, @status, @summary,
         @text_preview, @content_refs_json, @error_json, @created_at, @observation_json
       )
       ON CONFLICT(observation_id) DO UPDATE SET
-        tool_call_id = excluded.tool_call_id,
+        tool_execution_id = excluded.tool_execution_id,
         run_id = excluded.run_id,
         step_id = excluded.step_id,
         status = excluded.status,
@@ -387,7 +394,7 @@ export class ToolRepository {
         observation_json = excluded.observation_json
     `).run({
       observation_id: observation.observationId,
-      tool_call_id: observation.toolCallId,
+      tool_execution_id: observation.toolExecutionId,
       run_id: observation.runId,
       step_id: observation.stepId,
       status: observation.status,
@@ -401,8 +408,8 @@ export class ToolRepository {
     return observation;
   }
 
-  listToolObservationsByToolCall(toolCallId: string): ToolObservation[] {
-    return (this.database.prepare('SELECT observation_json FROM tool_observations WHERE tool_call_id = ? ORDER BY created_at ASC').all(toolCallId) as ToolObservationRow[])
+  listToolObservationsByToolExecution(toolExecutionId: string): ToolObservation[] {
+    return (this.database.prepare('SELECT observation_json FROM tool_observations WHERE tool_execution_id = ? ORDER BY created_at ASC').all(toolExecutionId) as ToolObservationRow[])
       .map((row) => JSON.parse(row.observation_json) as ToolObservation);
   }
 }

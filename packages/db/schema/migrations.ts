@@ -45,31 +45,37 @@ function addColumnIfMissing(
 }
 
 function archiveLegacyToolPersistenceTables(database: MegumiDatabase): void {
-  if (!tableExists(database, 'tool_calls')) {
-    return;
-  }
-
-  const toolCallColumns = tableColumns(database, 'tool_calls');
-  const hasToolUseId = toolCallColumns.some((column) => column.name === 'tool_use_id');
-  const actionIdColumn = toolCallColumns.find((column) => column.name === 'action_id');
-  const hasRequiredActionId = actionIdColumn?.notnull === 1;
-
-  if (hasToolUseId && !hasRequiredActionId) {
-    return;
-  }
-
   database.exec(`
+    DROP INDEX IF EXISTS idx_tool_uses_run_id;
+    DROP INDEX IF EXISTS idx_tool_uses_model_step_id;
     DROP INDEX IF EXISTS idx_tool_calls_run_id;
     DROP INDEX IF EXISTS idx_tool_calls_status;
+    DROP INDEX IF EXISTS idx_tool_calls_tool_use_id;
+    DROP INDEX IF EXISTS idx_tool_results_tool_use_id;
+    DROP INDEX IF EXISTS idx_permission_decisions_tool_use_id;
     DROP INDEX IF EXISTS idx_approval_requests_tool_call_id;
     DROP INDEX IF EXISTS idx_tool_observations_tool_call_id;
   `);
 
-  archiveTableIfNeeded(database, 'tool_calls', 'tool_calls_legacy_05');
+  const toolCallColumns = tableExists(database, 'tool_calls')
+    ? tableColumns(database, 'tool_calls')
+    : [];
+  const hasCanonicalToolCalls = toolCallColumns.some((column) => column.name === 'provider_tool_call_id')
+    && toolCallColumns.some((column) => column.name === 'model_step_id')
+    && !toolCallColumns.some((column) => column.name === 'tool_use_id');
+
+  archiveTableIfNeeded(database, 'tool_uses', 'tool_uses_legacy_08');
+  if (!hasCanonicalToolCalls) {
+    archiveTableIfNeeded(database, 'tool_calls', 'tool_calls_legacy_08');
+  }
   archiveTableIfNeeded(database, 'tool_policy_decisions', 'tool_policy_decisions_legacy_05');
-  archiveTableIfNeeded(database, 'approval_requests', 'approval_requests_legacy_05');
-  archiveTableIfNeeded(database, 'approval_records', 'approval_records_legacy_05');
-  archiveTableIfNeeded(database, 'tool_observations', 'tool_observations_legacy_05');
+  if (!hasCanonicalToolCalls) {
+    archiveTableIfNeeded(database, 'approval_requests', 'approval_requests_legacy_08');
+    archiveTableIfNeeded(database, 'approval_records', 'approval_records_legacy_08');
+    archiveTableIfNeeded(database, 'tool_observations', 'tool_observations_legacy_08');
+    archiveTableIfNeeded(database, 'permission_decisions', 'permission_decisions_legacy_08');
+    archiveTableIfNeeded(database, 'tool_results', 'tool_results_legacy_08');
+  }
 }
 
 export function migrateDatabase(database: MegumiDatabase): void {
@@ -403,11 +409,11 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL
     );
 
-    CREATE TABLE IF NOT EXISTS tool_uses (
-      tool_use_id TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS tool_calls (
+      tool_call_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       model_step_id TEXT NOT NULL,
-      provider_tool_use_id TEXT NOT NULL,
+      provider_tool_call_id TEXT NOT NULL,
       tool_name TEXT NOT NULL,
       input_json TEXT NOT NULL,
       input_preview_json TEXT NOT NULL,
@@ -416,18 +422,19 @@ export function migrateDatabase(database: MegumiDatabase): void {
       completed_at TEXT,
       error_json TEXT,
       metadata_json TEXT,
-      tool_use_json TEXT NOT NULL,
+      tool_call_json TEXT NOT NULL,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(model_step_id) REFERENCES model_steps(model_step_id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS tool_calls (
-      tool_call_id TEXT PRIMARY KEY,
-      tool_use_id TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS tool_executions (
+      tool_execution_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
       action_id TEXT,
       tool_name TEXT NOT NULL,
+      input_json TEXT NOT NULL,
       input_preview_json TEXT NOT NULL,
       capabilities_json TEXT NOT NULL,
       risk_level TEXT NOT NULL,
@@ -439,8 +446,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       completed_at TEXT,
       error_json TEXT,
       metadata_json TEXT,
-      tool_call_json TEXT NOT NULL,
-      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
+      tool_execution_json TEXT NOT NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE,
       FOREIGN KEY(action_id) REFERENCES run_actions(action_id) ON DELETE SET NULL
@@ -448,8 +455,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
     CREATE TABLE IF NOT EXISTS tool_results (
       tool_result_id TEXT PRIMARY KEY,
-      tool_use_id TEXT NOT NULL,
-      tool_call_id TEXT,
+      tool_call_id TEXT NOT NULL,
+      tool_execution_id TEXT,
       run_id TEXT NOT NULL,
       kind TEXT NOT NULL,
       text_content TEXT,
@@ -461,15 +468,15 @@ export function migrateDatabase(database: MegumiDatabase): void {
       created_at TEXT NOT NULL,
       metadata_json TEXT,
       result_json TEXT NOT NULL,
-      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
-      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE SET NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_execution_id) REFERENCES tool_executions(tool_execution_id) ON DELETE SET NULL,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS permission_decisions (
       permission_decision_id TEXT PRIMARY KEY,
-      tool_use_id TEXT NOT NULL,
-      tool_call_id TEXT,
+      tool_call_id TEXT NOT NULL,
+      tool_execution_id TEXT,
       run_id TEXT NOT NULL,
       decision TEXT NOT NULL,
       source TEXT NOT NULL,
@@ -486,15 +493,15 @@ export function migrateDatabase(database: MegumiDatabase): void {
       evaluated_at TEXT NOT NULL,
       metadata_json TEXT,
       decision_json TEXT NOT NULL,
-      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
-      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE SET NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_execution_id) REFERENCES tool_executions(tool_execution_id) ON DELETE SET NULL,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS approval_requests (
       approval_request_id TEXT PRIMARY KEY,
-      tool_use_id TEXT NOT NULL,
       tool_call_id TEXT NOT NULL,
+      tool_execution_id TEXT NOT NULL,
       permission_decision_id TEXT,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
@@ -506,8 +513,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       expires_at TEXT,
       resolved_at TEXT,
       request_json TEXT NOT NULL,
-      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_execution_id) REFERENCES tool_executions(tool_execution_id) ON DELETE CASCADE,
       FOREIGN KEY(permission_decision_id) REFERENCES permission_decisions(permission_decision_id) ON DELETE SET NULL,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
@@ -516,8 +523,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE TABLE IF NOT EXISTS approval_records (
       approval_record_id TEXT PRIMARY KEY,
       approval_request_id TEXT NOT NULL,
-      tool_use_id TEXT NOT NULL,
       tool_call_id TEXT NOT NULL,
+      tool_execution_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
       decision TEXT NOT NULL,
@@ -526,15 +533,15 @@ export function migrateDatabase(database: MegumiDatabase): void {
       decided_at TEXT NOT NULL,
       record_json TEXT NOT NULL,
       FOREIGN KEY(approval_request_id) REFERENCES approval_requests(approval_request_id) ON DELETE CASCADE,
-      FOREIGN KEY(tool_use_id) REFERENCES tool_uses(tool_use_id) ON DELETE CASCADE,
       FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_execution_id) REFERENCES tool_executions(tool_execution_id) ON DELETE CASCADE,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS tool_observations (
       observation_id TEXT PRIMARY KEY,
-      tool_call_id TEXT NOT NULL,
+      tool_execution_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -544,7 +551,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       error_json TEXT,
       created_at TEXT NOT NULL,
       observation_json TEXT NOT NULL,
-      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+      FOREIGN KEY(tool_execution_id) REFERENCES tool_executions(tool_execution_id) ON DELETE CASCADE,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
@@ -919,32 +926,32 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_model_steps_run_id
     ON model_steps(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_tool_uses_run_id
-    ON tool_uses(run_id);
-
-    CREATE INDEX IF NOT EXISTS idx_tool_uses_model_step_id
-    ON tool_uses(model_step_id);
-
     CREATE INDEX IF NOT EXISTS idx_tool_calls_run_id
     ON tool_calls(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_tool_calls_status
-    ON tool_calls(status);
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_model_step_id
+    ON tool_calls(model_step_id);
 
-    CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_use_id
-    ON tool_calls(tool_use_id);
+    CREATE INDEX IF NOT EXISTS idx_tool_executions_run_id
+    ON tool_executions(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_tool_results_tool_use_id
-    ON tool_results(tool_use_id);
+    CREATE INDEX IF NOT EXISTS idx_tool_executions_status
+    ON tool_executions(status);
 
-    CREATE INDEX IF NOT EXISTS idx_permission_decisions_tool_use_id
-    ON permission_decisions(tool_use_id);
+    CREATE INDEX IF NOT EXISTS idx_tool_executions_tool_call_id
+    ON tool_executions(tool_call_id);
 
-    CREATE INDEX IF NOT EXISTS idx_approval_requests_tool_call_id
-    ON approval_requests(tool_call_id);
+    CREATE INDEX IF NOT EXISTS idx_tool_results_tool_call_id
+    ON tool_results(tool_call_id);
 
-    CREATE INDEX IF NOT EXISTS idx_tool_observations_tool_call_id
-    ON tool_observations(tool_call_id);
+    CREATE INDEX IF NOT EXISTS idx_permission_decisions_tool_call_id
+    ON permission_decisions(tool_call_id);
+
+    CREATE INDEX IF NOT EXISTS idx_approval_requests_tool_execution_id
+    ON approval_requests(tool_execution_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_observations_tool_execution_id
+    ON tool_observations(tool_execution_id);
 
     CREATE INDEX IF NOT EXISTS idx_artifacts_session_id
     ON artifacts(session_id);

@@ -27,7 +27,6 @@ import { RunModeService } from './services/run-mode.service';
 import { createDefaultRunContextService } from './services/run-context.service';
 import { ToolService } from './services/tool.service';
 import { createToolCallHandlerService } from './services/tool-call-handler.service';
-import { createLegacyToolRepositoryAdapter } from './services/tool-repository-legacy-adapter.service';
 import { createProjectToolExecutor } from './services/project-tool-executor.service';
 import { createPermissionSettingsService } from './services/permission-settings.service';
 import { createRecoveryService } from './services/recovery.service';
@@ -108,7 +107,7 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
   async create({ projectRoot, permissionMode }) {
     return createToolCallHandlerService({
       registry: toolRegistry,
-      repository: createLegacyToolRepositoryAdapter(toolRepository),
+      repository: toolRepository,
       permissionMode,
       projectRoot,
       settings: await permissionSettingsService.loadForProject(projectRoot),
