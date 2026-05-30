@@ -15,6 +15,13 @@ const forbiddenPatterns = [
   /tool\.use\.created/,
   /model\.tool_use\.detected/,
   /\btool_uses\b/,
+  /\bgetToolUse\b/,
+  /\blistPermissionDecisionsByToolUse\b/,
+  /\blistToolResultsByToolUse\b/,
+  /\blistToolObservationsByToolCall\b/,
+  /tool_use_id/,
+  /provider_tool_use_id/,
+  /tool_use_json/,
   /\bsaveToolUse\b/,
   /\blistToolUsesByRun\b/,
 ] as const;
@@ -56,6 +63,10 @@ function isAllowedLegacyArchiveLine(file: string, line: string): boolean {
   }
 
   return line.includes('DROP INDEX IF EXISTS idx_tool_uses')
+    || line.includes('DROP INDEX IF EXISTS idx_tool_calls_tool_use_id')
+    || line.includes('DROP INDEX IF EXISTS idx_tool_results_tool_use_id')
+    || line.includes('DROP INDEX IF EXISTS idx_permission_decisions_tool_use_id')
+    || line.includes("column.name === 'tool_use_id'")
     || line.includes("archiveTableIfNeeded(database, 'tool_uses', 'tool_uses_legacy_08')");
 }
 
