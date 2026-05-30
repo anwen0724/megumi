@@ -32,6 +32,7 @@ const request: ModelStepRuntimeRequest = {
       modelContextWindow: 8192,
       reservedOutputTokens: 1024,
       availableInputTokens: 7168,
+      keepRecentTokens: 4096,
       inputTokenEstimate: 1,
       partBudgets: [
         {
