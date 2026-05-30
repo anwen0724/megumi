@@ -22,12 +22,35 @@ function message(overrides: Partial<SessionMessage>): SessionMessage {
   };
 }
 
+function currentUserMessage(messageId: string, content: string): SessionMessage {
+  return message({
+    messageId,
+    content,
+  });
+}
+
 function sessionSourceRef(sourceId: string) {
   return {
     sourceId,
     sourceKind: 'session_message' as const,
     sourceUri: `session-message://${sourceId}`,
     loadedAt: builtAt,
+  };
+}
+
+function sessionHistoryEntry(
+  entryId: string,
+  role: 'user' | 'assistant',
+  text: string,
+) {
+  return {
+    entryId,
+    role,
+    text,
+    status: 'completed' as const,
+    sourceRef: sessionSourceRef(`session-message:${entryId}`),
+    createdAt: builtAt,
+    completedAt: builtAt,
   };
 }
 
@@ -302,6 +325,52 @@ describe('buildModelStepInputContextFromSources', () => {
     ]));
   });
 
+  it('applies context budget after assembling model step source drafts', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:step-budget',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_step',
+      builtAt: '2026-05-30T00:00:00.000Z',
+      budgetPolicy: {
+        modelContextWindow: 120,
+        reservedOutputTokens: 20,
+        keepRecentTokens: 16,
+      },
+      instructionSources: [{
+        sourceId: 'agent-instruction:root',
+        sourceKind: 'project_instruction',
+        relativePath: 'AGENTS.md',
+        sourceUri: 'project://AGENTS.md',
+        status: 'included',
+        text: 'Always follow the repo instructions.',
+        loadedAt: '2026-05-30T00:00:00.000Z',
+        sizeBytes: 36,
+        includedBytes: 36,
+        hardCapBytes: 65536,
+        truncated: false,
+      }],
+      sessionContext: {
+        historyEntries: [
+          sessionHistoryEntry('old-entry', 'user', 'old context '.repeat(80)),
+          sessionHistoryEntry('new-entry', 'assistant', 'new context'),
+        ],
+      },
+      currentMessage: currentUserMessage('message-current', 'current request'),
+    });
+
+    expect(context.parts.map((part) => part.partId)).toEqual([
+      'part:instruction:project:agent-instruction:root',
+      'part:session-history:new-entry',
+      'part:current-turn:message-current',
+    ]);
+    expect(context.trace.excludedSources).toContainEqual(expect.objectContaining({
+      reason: 'outside_keep_recent_tokens',
+    }));
+    expect(context.trace.firstKeptPartId).toBe('part:session-history:new-entry');
+  });
+
   it('does not include raw runtime trace metadata as model-visible text', () => {
     const context = buildModelStepInputContextFromSources({
       contextId: 'model-input-context:2',
@@ -439,6 +508,33 @@ describe('buildModelStepInputContextFromSources', () => {
       part.kind === 'session'
       && part.text.includes('Tool result tool-result:1 for tool-use:1')
     ))).toBe(false);
+  });
+
+  it('keeps tool continuation required under a tight context budget', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:tool-tight-budget',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:2',
+      buildReason: 'tool_continuation',
+      builtAt,
+      budgetPolicy: {
+        modelContextWindow: 30,
+        reservedOutputTokens: 10,
+        keepRecentTokens: 1,
+      },
+      sessionContext: {
+        historyEntries: [
+          sessionHistoryEntry('old-entry', 'user', 'old context '.repeat(20)),
+        ],
+      },
+      toolUses: [toolUse()],
+      toolResults: [toolResult()],
+    });
+
+    expect(context.parts.filter((part) => part.kind === 'tool_continuation')).toHaveLength(2);
+    expect(context.trace.excludedSources.every((source) => source.sourceRef.sourceKind !== 'tool_use')).toBe(true);
+    expect(context.trace.excludedSources.every((source) => source.sourceRef.sourceKind !== 'tool_result')).toBe(true);
   });
 
   it('places project instruction before runtime, session, tool, and current turn parts', () => {

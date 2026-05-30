@@ -1,10 +1,12 @@
 import type { JsonObject, JsonValue } from '@megumi/shared/json';
+import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,
   ModelInputContextExcludedSource,
   ModelInputContextPart,
   ModelInputContextSourceRef,
+  ModelInputContextTruncation,
 } from '@megumi/shared/model-input-context-contracts';
 import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
@@ -53,9 +55,11 @@ export interface BuildModelStepInputContextFromSourcesInput {
   toolUses?: ToolUse[];
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
+  budgetPolicy?: ContextBudgetPolicy;
   modelContextWindow?: number;
   reservedOutputTokens?: number;
   availableInputTokens?: number;
+  keepRecentTokens?: number;
 }
 
 export function buildModelStepInputContextFromSources(
@@ -79,7 +83,7 @@ export function buildModelStepInputContextFromSources(
         ...input.baseInputContext.parts.filter((part) => (
           part.kind !== 'tool_continuation'
           && !(input.instructionSources && part.kind === 'instruction' && part.instructionKind === 'project')
-        )),
+        )).map(draftFromFinalPart),
         ...toolParts,
       ]
     : [
@@ -97,6 +101,7 @@ export function buildModelStepInputContextFromSources(
     stepId: input.stepId,
     buildReason: input.buildReason,
     builtAt: input.builtAt,
+    budgetPolicy: input.budgetPolicy,
     modelContextWindow: input.modelContextWindow
       ?? input.runContext?.budget.modelContextWindow
       ?? input.baseInputContext?.budget.modelContextWindow,
@@ -106,27 +111,41 @@ export function buildModelStepInputContextFromSources(
     availableInputTokens: input.availableInputTokens
       ?? input.runContext?.budget.availableInputTokens
       ?? input.baseInputContext?.budget.availableInputTokens,
+    keepRecentTokens: input.keepRecentTokens
+      ?? input.baseInputContext?.budget.keepRecentTokens,
     parts,
     excludedSources,
   });
 }
 
-function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInputContextPart[] {
+function draftFromFinalPart(part: ModelInputContextPart): ModelInputContextPartDraft {
+  const {
+    tokenEstimate: _tokenEstimate,
+    budgetStatus: _budgetStatus,
+    truncation,
+    ...draft
+  } = part;
+  return {
+    ...draft,
+    ...(truncation ? { truncationHint: truncation } : {}),
+  } as ModelInputContextPartDraft;
+}
+
+function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInputContextPartDraft[] {
   return sources
     .filter((source) => source.status === 'included' || source.status === 'included_truncated')
-    .map((source): ModelInputContextPart => ({
+    .map((source): ModelInputContextPartDraft => ({
       partId: `part:instruction:project:${source.sourceId}`,
       kind: 'instruction',
       instructionKind: 'project',
       text: `${AGENT_INSTRUCTION_WRAPPER}\n\n${source.text}`,
       sourceRefs: [instructionSourceRef(source)],
       priority: 100,
-      budgetStatus: source.status === 'included_truncated' ? 'included_truncated' : 'included_full',
       ...(source.status === 'included_truncated'
         ? {
-            truncation: {
+            truncationHint: {
               reason: source.reason ?? 'project_instruction_hard_cap_exceeded',
-            },
+            } satisfies ModelInputContextTruncation,
           }
         : {}),
       metadata: {
@@ -182,7 +201,7 @@ function cleanMetadata(input: Record<string, string | number | boolean | undefin
   ) as JsonObject;
 }
 
-function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputContextPart {
+function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputContextPartDraft {
   return {
     partId: `part:current-turn:${message.messageId}`,
     kind: 'current_turn',
@@ -190,7 +209,6 @@ function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputCo
     text: message.content,
     sourceRefs: [sessionMessageSourceRef(message, builtAt, 'current_user_message')],
     priority: 95,
-    budgetStatus: 'included_full',
     metadata: {
       role: message.role,
       status: message.status,
@@ -198,8 +216,8 @@ function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputCo
   };
 }
 
-function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPart[] {
-  const parts: ModelInputContextPart[] = [];
+function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPartDraft[] {
+  const parts: ModelInputContextPartDraft[] = [];
 
   if (input.runContext) {
     parts.push({
@@ -219,7 +237,6 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
         loadedAt: input.builtAt,
       }],
       priority: 85,
-      budgetStatus: 'included_full',
     });
   }
 
@@ -236,7 +253,6 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
         loadedAt: input.modeSnapshot.createdAt,
       }],
       priority: 90,
-      budgetStatus: 'included_full',
       metadata: {
         source: input.modeSnapshot.source,
       },
@@ -246,8 +262,8 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
   return parts;
 }
 
-function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPart[] {
-  const toolUseParts = (input.toolUses ?? []).map((toolUse, index): ModelInputContextPart => ({
+function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPartDraft[] {
+  const toolUseParts = (input.toolUses ?? []).map((toolUse, index): ModelInputContextPartDraft => ({
     partId: `part:tool-use:${index + 1}:${toolUse.toolUseId}`,
     kind: 'tool_continuation',
     text: `Tool use ${toolUse.toolUseId} requested ${toolUse.toolName}. Input preview: ${toolUse.inputPreview.summary}.`,
@@ -258,14 +274,14 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     toolInput: toolUse.input,
     sourceRefs: [toolUseSourceRef(toolUse, input.builtAt)],
     priority: 80,
-    budgetStatus: 'included_full',
+    retentionGroupId: `tool-continuation:${toolUse.toolUseId}`,
     metadata: {
       toolName: toolUse.toolName,
       status: toolUse.status,
     },
   }));
 
-  const toolResultParts = (input.toolResults ?? []).map((toolResult, index): ModelInputContextPart => ({
+  const toolResultParts = (input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => ({
     partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
     kind: 'tool_continuation',
     text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolUseId}: ${toolResultSummary(toolResult)}.`,
@@ -274,14 +290,14 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     toolResultContent: toolResultContent(toolResult),
     sourceRefs: [toolResultSourceRef(toolResult)],
     priority: 85,
-    budgetStatus: 'included_full',
+    retentionGroupId: `tool-continuation:${toolResult.toolUseId}`,
     metadata: {
       kind: toolResult.kind,
       redactionState: toolResult.redactionState,
     },
   }));
 
-  const providerStateParts = (input.providerStates ?? []).map((providerState, index): ModelInputContextPart => ({
+  const providerStateParts = (input.providerStates ?? []).map((providerState, index): ModelInputContextPartDraft => ({
     partId: `part:provider-state:${index + 1}:${providerState.modelStepId}`,
     kind: 'tool_continuation',
     text: providerStateSummary(providerState),
@@ -299,7 +315,7 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
       },
     }],
     priority: 75,
-    budgetStatus: 'included_full',
+    retentionGroupId: `provider-state:${providerState.modelStepId}`,
   }));
 
   return [
