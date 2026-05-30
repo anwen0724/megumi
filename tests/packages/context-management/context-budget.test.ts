@@ -134,6 +134,38 @@ describe('Context budget executor', () => {
     expect(result.trace.budgetWarnings).toBeUndefined();
   });
 
+  it('includes all session history when total estimate fits even if history exceeds keepRecentTokens', () => {
+    const result = applyContextBudget({
+      buildReason: 'fits_despite_keep_recent_window',
+      policy: {
+        modelContextWindow: 100,
+        reservedOutputTokens: 10,
+        keepRecentTokens: 10,
+      },
+      parts: [
+        currentTurnPart(5),
+        sessionHistoryPart(10, 'history:old', '2026-05-30T00:00:01.000Z'),
+        sessionHistoryPart(10, 'history:middle', '2026-05-30T00:00:02.000Z'),
+        sessionHistoryPart(10, 'history:new', '2026-05-30T00:00:03.000Z'),
+      ],
+    });
+
+    expect(result.parts.map((part) => part.partId)).toEqual([
+      'part:current:1',
+      'part:history:old',
+      'part:history:middle',
+      'part:history:new',
+    ]);
+    expect(result.budget).toMatchObject({
+      availableInputTokens: 90,
+      keepRecentTokens: 10,
+      inputTokenEstimate: 35,
+    });
+    expect(result.trace.excludedSources).toEqual([]);
+    expect(result.trace.firstKeptPartId).toBeUndefined();
+    expect(result.trace.firstKeptSourceId).toBeUndefined();
+  });
+
   it('counts instruction in budget statistics but never prunes it as session context', () => {
     const result = applyContextBudget({
       buildReason: 'required_over_budget',
@@ -210,8 +242,8 @@ describe('Context budget executor', () => {
     const result = applyContextBudget({
       buildReason: 'history_budget',
       policy: {
-        modelContextWindow: 80,
-        reservedOutputTokens: 10,
+        modelContextWindow: 30,
+        reservedOutputTokens: 5,
         keepRecentTokens: 20,
       },
       parts: [

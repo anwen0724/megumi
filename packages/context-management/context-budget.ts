@@ -64,6 +64,7 @@ export function applyContextBudget(input: ApplyContextBudgetInput): ApplyContext
 
   const requiredParts = estimatedParts.filter((part) => part.required);
   const requiredTokenEstimate = sumTokens(requiredParts);
+  const totalTokenEstimate = sumTokens(estimatedParts);
   const keepIndexes = new Set(requiredParts.map((part) => part.index));
   const excludedSources: ModelInputContextExcludedSource[] = [...(input.preExcludedSources ?? [])];
   const budgetWarnings: ContextBudgetWarning[] = [];
@@ -71,7 +72,11 @@ export function applyContextBudget(input: ApplyContextBudgetInput): ApplyContext
   let firstKeptPartId: string | undefined;
   let firstKeptSourceId: string | undefined;
 
-  if (requiredTokenEstimate > availableInputTokens) {
+  if (totalTokenEstimate <= availableInputTokens) {
+    for (const part of estimatedParts) {
+      keepIndexes.add(part.index);
+    }
+  } else if (requiredTokenEstimate > availableInputTokens) {
     budgetWarnings.push({
       reason: 'required_context_over_budget',
       tokenEstimate: requiredTokenEstimate,
