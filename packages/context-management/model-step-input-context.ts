@@ -121,10 +121,12 @@ export function buildModelStepInputContextFromSources(
 function draftFromFinalPart(part: ModelInputContextPart): ModelInputContextPartDraft {
   const {
     tokenEstimate: _tokenEstimate,
-    budgetStatus: _budgetStatus,
     truncation,
-    ...draft
+    ...draftWithBudgetStatus
   } = part;
+  const draft = { ...draftWithBudgetStatus } as Record<string, unknown>;
+  delete draft.budgetStatus;
+
   return {
     ...draft,
     ...(truncation ? { truncationHint: truncation } : {}),
