@@ -83,10 +83,11 @@ describe('ModelInputContextBuilder', () => {
       stepId: 'step:1',
       buildReason: 'initial_model_step',
       builtAt,
-      modelContextWindow: 8192,
-      reservedOutputTokens: 1024,
-      availableInputTokens: 7168,
-      keepRecentTokens: 4096,
+      budgetPolicy: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        keepRecentTokens: 4096,
+      },
       parts: [
         instructionPart(),
         currentTurnPart(),
@@ -135,23 +136,39 @@ describe('ModelInputContextBuilder', () => {
     ]);
   });
 
-  it('derives keepRecentTokens from available input tokens when omitted', () => {
+  it('uses the default context budget policy when no policy is provided', () => {
     const context = buildModelInputContext({
-      contextId: 'model-input-context:default-keep-recent',
+      contextId: 'model-input-context:default-budget-policy',
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:3',
       buildReason: 'initial_model_step',
       builtAt,
-      modelContextWindow: 100,
-      reservedOutputTokens: 25,
       parts: [
         instructionPart(),
       ],
     });
 
-    expect(context.budget.availableInputTokens).toBe(75);
-    expect(context.budget.keepRecentTokens).toBe(75);
+    expect(context.budget.modelContextWindow).toBe(8192);
+    expect(context.budget.reservedOutputTokens).toBe(1024);
+    expect(context.budget.availableInputTokens).toBe(7168);
+    expect(context.budget.keepRecentTokens).toBe(7168);
+  });
+
+  it('rejects loose budget input fields at compile time', () => {
+    buildModelInputContext({
+      contextId: 'model-input-context:loose-budget-fields',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:4',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        instructionPart(),
+      ],
+      // @ts-expect-error loose budget fields must not be accepted by the builder API
+      availableInputTokens: 7168,
+    });
   });
 
   it('applies context budget to draft parts before building the final context', () => {

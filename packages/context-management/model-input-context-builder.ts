@@ -17,16 +17,17 @@ export interface BuildModelInputContextInput {
   buildReason: string;
   builtAt: string;
   budgetPolicy?: ContextBudgetPolicy;
-  modelContextWindow?: number;
-  reservedOutputTokens?: number;
-  availableInputTokens?: number;
-  keepRecentTokens?: number;
   parts: ModelInputContextPartDraft[];
   excludedSources?: ModelInputContextExcludedSource[];
 }
 
 export const DEFAULT_MODEL_CONTEXT_WINDOW = 8192;
 export const DEFAULT_RESERVED_OUTPUT_TOKENS = 1024;
+export const DEFAULT_CONTEXT_BUDGET_POLICY = {
+  modelContextWindow: DEFAULT_MODEL_CONTEXT_WINDOW,
+  reservedOutputTokens: DEFAULT_RESERVED_OUTPUT_TOKENS,
+  keepRecentTokens: DEFAULT_MODEL_CONTEXT_WINDOW - DEFAULT_RESERVED_OUTPUT_TOKENS,
+} satisfies ContextBudgetPolicy;
 
 export function buildModelInputContext(input: BuildModelInputContextInput): ModelInputContext {
   const budgetedContext = applyContextBudget({
@@ -49,21 +50,5 @@ export function buildModelInputContext(input: BuildModelInputContextInput): Mode
 }
 
 function resolveContextBudgetPolicy(input: BuildModelInputContextInput): ContextBudgetPolicy {
-  const modelContextWindow = input.budgetPolicy?.modelContextWindow
-    ?? input.modelContextWindow
-    ?? DEFAULT_MODEL_CONTEXT_WINDOW;
-  const reservedOutputTokens = input.budgetPolicy?.reservedOutputTokens
-    ?? input.reservedOutputTokens
-    ?? DEFAULT_RESERVED_OUTPUT_TOKENS;
-  const availableInputTokens = Math.max(0, modelContextWindow - reservedOutputTokens);
-  const keepRecentTokens = input.budgetPolicy?.keepRecentTokens
-    ?? input.keepRecentTokens
-    ?? input.availableInputTokens
-    ?? availableInputTokens;
-
-  return {
-    modelContextWindow,
-    reservedOutputTokens,
-    keepRecentTokens: Math.min(keepRecentTokens, availableInputTokens),
-  };
+  return input.budgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
 }

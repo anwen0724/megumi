@@ -101,18 +101,7 @@ export function buildModelStepInputContextFromSources(
     stepId: input.stepId,
     buildReason: input.buildReason,
     builtAt: input.builtAt,
-    budgetPolicy: input.budgetPolicy,
-    modelContextWindow: input.modelContextWindow
-      ?? input.runContext?.budget.modelContextWindow
-      ?? input.baseInputContext?.budget.modelContextWindow,
-    reservedOutputTokens: input.reservedOutputTokens
-      ?? input.runContext?.budget.reservedOutputTokens
-      ?? input.baseInputContext?.budget.reservedOutputTokens,
-    availableInputTokens: input.availableInputTokens
-      ?? input.runContext?.budget.availableInputTokens
-      ?? input.baseInputContext?.budget.availableInputTokens,
-    keepRecentTokens: input.keepRecentTokens
-      ?? input.baseInputContext?.budget.keepRecentTokens,
+    budgetPolicy: resolveModelStepContextBudgetPolicy(input),
     parts,
     excludedSources,
   });
@@ -131,6 +120,37 @@ function draftFromFinalPart(part: ModelInputContextPart): ModelInputContextPartD
     ...draft,
     ...(truncation ? { truncationHint: truncation } : {}),
   } as ModelInputContextPartDraft;
+}
+
+function resolveModelStepContextBudgetPolicy(
+  input: BuildModelStepInputContextFromSourcesInput,
+): ContextBudgetPolicy | undefined {
+  if (input.budgetPolicy) {
+    return input.budgetPolicy;
+  }
+
+  const modelContextWindow = input.modelContextWindow
+    ?? input.runContext?.budget.modelContextWindow
+    ?? input.baseInputContext?.budget.modelContextWindow;
+  const reservedOutputTokens = input.reservedOutputTokens
+    ?? input.runContext?.budget.reservedOutputTokens
+    ?? input.baseInputContext?.budget.reservedOutputTokens;
+
+  if (modelContextWindow === undefined || reservedOutputTokens === undefined) {
+    return undefined;
+  }
+
+  const availableInputTokens = Math.max(0, modelContextWindow - reservedOutputTokens);
+  const keepRecentTokens = input.keepRecentTokens
+    ?? input.availableInputTokens
+    ?? input.baseInputContext?.budget.keepRecentTokens
+    ?? availableInputTokens;
+
+  return {
+    modelContextWindow,
+    reservedOutputTokens,
+    keepRecentTokens: Math.min(keepRecentTokens, availableInputTokens),
+  };
 }
 
 function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInputContextPartDraft[] {
