@@ -10,7 +10,6 @@ import type {
 } from '@megumi/shared/model-input-context-contracts';
 import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
-import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
@@ -24,6 +23,15 @@ const AGENT_INSTRUCTION_WRAPPER = 'Follow these agent instructions:';
 export interface CreateModelStepInputContextIdInput {
   stepId: string;
   contextKind: string;
+}
+
+export interface ModelStepRuntimeConstraintInput {
+  constraintId: string;
+  projectRoot?: string;
+  workspaceAccess?: string;
+  sandboxSummary?: string;
+  approvalSummary?: string;
+  loadedAt?: string;
 }
 
 export function createModelStepInputContextId(input: CreateModelStepInputContextIdInput): string {
@@ -49,7 +57,7 @@ export interface BuildModelStepInputContextFromSourcesInput {
   builtAt: string;
   currentMessage?: SessionMessage;
   sessionContext?: SessionContextInput;
-  runContext?: RunContext;
+  runtimeConstraints?: ModelStepRuntimeConstraintInput[];
   modeSnapshot?: PermissionModeSnapshot;
   modeSnapshotRef?: string;
   toolCalls?: ToolCall[];
@@ -125,23 +133,18 @@ function resolveModelStepContextBudgetPolicy(
     return input.budgetPolicy;
   }
 
-  const modelContextWindow = input.runContext?.budget.modelContextWindow
-    ?? input.baseInputContext?.budget.modelContextWindow;
-  const reservedOutputTokens = input.runContext?.budget.reservedOutputTokens
-    ?? input.baseInputContext?.budget.reservedOutputTokens;
-
-  if (modelContextWindow === undefined || reservedOutputTokens === undefined) {
+  const baseBudget = input.baseInputContext?.budget;
+  if (!baseBudget) {
     return undefined;
   }
 
-  const availableInputTokens = Math.max(0, modelContextWindow - reservedOutputTokens);
-  const keepRecentTokens = input.baseInputContext?.budget.keepRecentTokens
-    ?? availableInputTokens;
-
   return {
-    modelContextWindow,
-    reservedOutputTokens,
-    keepRecentTokens: Math.min(keepRecentTokens, availableInputTokens),
+    modelContextWindow: baseBudget.modelContextWindow,
+    reservedOutputTokens: baseBudget.reservedOutputTokens,
+    keepRecentTokens: Math.min(
+      baseBudget.keepRecentTokens,
+      Math.max(0, baseBudget.modelContextWindow - baseBudget.reservedOutputTokens),
+    ),
   };
 }
 
@@ -233,25 +236,29 @@ function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputCo
 function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPartDraft[] {
   const parts: ModelInputContextPartDraft[] = [];
 
-  if (input.runContext) {
-    parts.push({
-      partId: `part:runtime:project-boundary:${input.runContext.contextId}`,
-      kind: 'runtime_constraint',
-      constraintKind: 'project_boundary',
-      text: [
-        `Project root: ${input.runContext.workspaceBoundary.rootPath}`,
-        `Workspace access: ${input.runContext.policySummary.workspaceAccess}`,
-        `Sandbox: ${input.runContext.policySummary.sandboxSummary}`,
-        `Approval: ${input.runContext.policySummary.approvalSummary}`,
-      ].join('\n'),
-      sourceRefs: [{
-        sourceId: `run-context:${input.runContext.contextId}:project-boundary`,
-        sourceKind: 'project_boundary',
-        sourceUri: `run-context://${input.runContext.contextId}`,
-        loadedAt: input.builtAt,
-      }],
-      priority: 85,
-    });
+  for (const constraint of input.runtimeConstraints ?? []) {
+    const lines = [
+      constraint.projectRoot ? `Project root: ${constraint.projectRoot}` : undefined,
+      constraint.workspaceAccess ? `Workspace access: ${constraint.workspaceAccess}` : undefined,
+      constraint.sandboxSummary ? `Sandbox: ${constraint.sandboxSummary}` : undefined,
+      constraint.approvalSummary ? `Approval: ${constraint.approvalSummary}` : undefined,
+    ].filter((line): line is string => Boolean(line));
+
+    if (lines.length > 0) {
+      parts.push({
+        partId: `part:runtime:project-boundary:${constraint.constraintId}`,
+        kind: 'runtime_constraint',
+        constraintKind: 'project_boundary',
+        text: lines.join('\n'),
+        sourceRefs: [{
+          sourceId: `runtime-constraint:${constraint.constraintId}`,
+          sourceKind: 'project_boundary',
+          sourceUri: `runtime-constraint://${constraint.constraintId}`,
+          loadedAt: constraint.loadedAt ?? input.builtAt,
+        }],
+        priority: 85,
+      });
+    }
   }
 
   if (input.modeSnapshot) {

@@ -1,6 +1,7 @@
-﻿import { describe, expect, it } from 'vitest';
+﻿import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { buildModelStepInputContextFromSources, createModelStepInputContextId } from '@megumi/context-management';
-import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
@@ -138,56 +139,22 @@ function sessionContextInput(): SessionContextInput {
   };
 }
 
-function runContext(): RunContext {
+function projectBoundaryConstraint() {
   return {
-    contextId: 'run-context:1',
-    runId: 'run:1',
-    workspaceBoundary: {
-      workspaceId: 'workspace:1',
-      rootPath: 'C:/all/work/study/megumi',
-      symlinkPolicy: 'deny_outside_workspace',
-      outsideWorkspacePolicy: 'deny',
-      secretPolicySummary: 'No secrets.',
-      createdAt: builtAt,
-    },
-    goal: 'Review context management.',
-    constraints: [],
-    inlineContents: [],
-    resourceRefs: [],
-    conversationRefs: [],
-    messageSummaries: [],
-    workspaceSources: [],
-    toolObservationRefs: [],
-    memoryRecallRefs: [],
-    policySummary: {
-      workspaceAccess: 'workspace-read',
-      restrictedResources: [],
-      approvalSummary: 'Approval required for writes.',
-      sandboxSummary: 'Workspace sandbox.',
-    },
-    modelCapabilitySummary: {
-      providerId: 'deepseek',
-      modelId: 'deepseek-v4-flash',
-      modelContextWindow: 8192,
-      reservedOutputTokens: 1024,
-      availableInputTokens: 7168,
-    },
-    budget: {
-      modelContextWindow: 8192,
-      reservedOutputTokens: 1024,
-      availableInputTokens: 7168,
-      budgetPolicy: 'balanced',
-      packingStrategy: 'priority_then_recent',
-      truncationRecords: [],
-    },
-    buildMetadata: {
-      buildReason: 'run_baseline',
-      builtAt,
-      selectionRecordIds: [],
-      redactionRecordIds: [],
-      truncationRecordIds: [],
-    },
-    createdAt: builtAt,
+    constraintId: 'run-context:1:project-boundary',
+    projectRoot: 'C:/all/work/study/megumi',
+    workspaceAccess: 'workspace-read',
+    sandboxSummary: 'Workspace sandbox.',
+    approvalSummary: 'Approval required for writes.',
+    loadedAt: builtAt,
+  };
+}
+
+function budgetPolicy() {
+  return {
+    modelContextWindow: 8192,
+    reservedOutputTokens: 1024,
+    keepRecentTokens: 7168,
   };
 }
 
@@ -280,7 +247,8 @@ describe('buildModelStepInputContextFromSources', () => {
           },
         ],
       },
-      runContext: runContext(),
+      runtimeConstraints: [projectBoundaryConstraint()],
+      budgetPolicy: budgetPolicy(),
       modeSnapshot: {
         permissionMode: 'plan',
         source: 'user',
@@ -317,7 +285,7 @@ describe('buildModelStepInputContextFromSources', () => {
     ]);
     expect(context.trace.selectedSources.map((source) => source.sourceId)).toEqual(expect.arrayContaining([
       'session-message:message:history-user',
-      'run-context:run-context:1:project-boundary',
+      'runtime-constraint:run-context:1:project-boundary',
       'permission-mode:mode-snapshot:1',
       'tool-call:tool-call:1',
       'tool-result:tool-result:1',
@@ -372,21 +340,18 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.trace.firstKeptPartId).toBe('part:session-history:new-entry');
   });
 
-  it('derives budget policy from run context without accepting loose budget fields', () => {
+  it('uses explicit context budget policy without accepting run context', () => {
     const context = buildModelStepInputContextFromSources({
-      contextId: 'model-input-context:run-context-budget-policy',
+      contextId: 'model-input-context:explicit-budget-policy',
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:1',
       buildReason: 'initial_model_step',
       builtAt,
-      runContext: {
-        ...runContext(),
-        budget: {
-          ...runContext().budget,
-          modelContextWindow: 128,
-          reservedOutputTokens: 32,
-        },
+      budgetPolicy: {
+        modelContextWindow: 128,
+        reservedOutputTokens: 32,
+        keepRecentTokens: 96,
       },
       sessionContext: {
         historyEntries: [
@@ -404,6 +369,10 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.trace.excludedSources).toContainEqual(expect.objectContaining({
       reason: 'outside_keep_recent_tokens',
     }));
+
+    const source = fs.readFileSync(path.join(process.cwd(), 'packages/context-management/model-step-input-context.ts'), 'utf8');
+    expect(source).not.toContain('RunContext');
+    expect(source).not.toContain('runContext?:');
   });
 
   it('does not include raw runtime trace metadata as model-visible text', () => {
@@ -469,7 +438,8 @@ describe('buildModelStepInputContextFromSources', () => {
       stepId: 'step:1',
       buildReason: 'initial_model_step',
       builtAt,
-      runContext: runContext(),
+      runtimeConstraints: [projectBoundaryConstraint()],
+      budgetPolicy: budgetPolicy(),
       sessionContext: sessionContextInput(),
       toolCalls: [toolCall()],
       toolResults: [toolResult()],
@@ -595,7 +565,8 @@ describe('buildModelStepInputContextFromSources', () => {
         hardCapBytes: 65536,
         truncated: false,
       }],
-      runContext: runContext(),
+      runtimeConstraints: [projectBoundaryConstraint()],
+      budgetPolicy: budgetPolicy(),
       sessionContext: {
         historyEntries: [{
           entryId: 'message:history',
