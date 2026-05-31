@@ -340,6 +340,84 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.trace.firstKeptPartId).toBe('part:session-history:new-entry');
   });
 
+  it('keeps compaction session_summary as required context while pruning older session history', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:step-1:initial',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt: '2026-05-31T12:00:00.000Z',
+      currentMessage: message({
+        messageId: 'message-current',
+        content: 'Continue.',
+      }),
+      sessionContext: {
+        summaryEntries: [{
+          summaryId: 'session-compaction:compaction-1',
+          summaryKind: 'compaction',
+          text: 'Compaction summary survives budget pruning.',
+          sourceRef: {
+            sourceId: 'session-compaction:compaction-1',
+            sourceKind: 'session_summary',
+            sourceUri: 'session-compaction://compaction-1',
+            loadedAt: '2026-05-31T12:00:00.000Z',
+          },
+          createdAt: '2026-05-31T11:59:00.000Z',
+        }],
+        historyEntries: [{
+          entryId: 'history-old',
+          role: 'user',
+          text: 'x'.repeat(240),
+          status: 'completed',
+          sourceRef: {
+            sourceId: 'session-message:history-old',
+            sourceKind: 'session_message',
+            sourceUri: 'session-message://history-old',
+            loadedAt: '2026-05-31T11:00:00.000Z',
+          },
+        }, {
+          entryId: 'history-new',
+          role: 'assistant',
+          text: 'Recent kept history.',
+          status: 'completed',
+          sourceRef: {
+            sourceId: 'session-message:history-new',
+            sourceKind: 'session_message',
+            sourceUri: 'session-message://history-new',
+            loadedAt: '2026-05-31T11:58:00.000Z',
+          },
+        }],
+      },
+      budgetPolicy: {
+        modelContextWindow: 80,
+        reservedOutputTokens: 10,
+        keepRecentTokens: 10,
+      },
+    });
+
+    expect(context.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'session',
+        sessionKind: 'session_summary',
+        text: 'Compaction summary survives budget pruning.',
+      }),
+      expect.objectContaining({
+        kind: 'session',
+        sessionKind: 'session_history',
+        text: '[assistant] Recent kept history.',
+      }),
+    ]));
+    expect(JSON.stringify(context.parts)).not.toContain('x'.repeat(120));
+    expect(context.trace.excludedSources).toContainEqual(expect.objectContaining({
+      sourceRef: expect.objectContaining({
+        sourceId: 'session-message:history-old',
+        sourceKind: 'session_message',
+      }),
+      reason: 'outside_keep_recent_tokens',
+    }));
+  });
+
   it('uses explicit context budget policy without accepting run context', () => {
     const context = buildModelStepInputContextFromSources({
       contextId: 'model-input-context:explicit-budget-policy',

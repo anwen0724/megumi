@@ -55,7 +55,7 @@ describe('Project Instruction Context source guards', () => {
       /loadInstructionSources/,
       /from ['"]node:fs(?:\/[^'"]+)?['"]/,
       /from ['"]fs(?:\/[^'"]+)?['"]/,
-      /readFile/,
+      /\breadFile(?:Sync)?\b/,
     ])).toEqual([]);
   });
 

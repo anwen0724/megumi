@@ -1026,6 +1026,127 @@ describe('SessionRunService', () => {
     expect(streamed.find((event) => event.eventType === 'context.compaction.started')?.sequence).toBe(2);
   });
 
+  it('uses the latest completed compaction when building the normal model step after maintenance compaction', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const service = new SessionRunService({
+      repository,
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          repository.saveSessionCompaction({
+            compactionId: 'compaction-1',
+            sessionId: input.sessionId,
+            summary: 'Compacted context summary from prior turns.',
+            summaryKind: 'compaction',
+            firstKeptSourceRef: {
+              sourceId: 'session-message:message-kept',
+              sourceKind: 'session_message',
+              sourceUri: 'session-message://message-kept',
+              loadedAt: '2026-05-31T11:02:00.000Z',
+            },
+            tokensBefore: 9000,
+            triggerReason: 'context_budget_pressure',
+            status: 'completed',
+            createdAt: '2026-05-31T11:04:00.000Z',
+          });
+          return { status: 'completed', events: [], compaction: repository.getSessionCompaction('compaction-1')! };
+        },
+      },
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+          yield assistantOutputCompletedEvent(1);
+        },
+        cancelModelStep: () => true,
+      },
+      clock: { now: () => '2026-05-31T11:05:00.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: () => 'step-1',
+        actionId: () => 'action-1',
+        observationId: () => 'observation-1',
+        checkpointId: () => 'checkpoint-1',
+        resumeRequestId: () => 'resume-request-1',
+        cancelRequestId: () => 'cancel-request-1',
+        retryRequestId: () => 'retry-request-1',
+        compactionId: () => 'compaction-1',
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return index === 1 ? 'message-current' : `message-generated-${index}`;
+          };
+        })(),
+        debugId: () => 'debug-1',
+        chatStreamEventId: () => 'chat-stream-event-1',
+        chatStreamId: () => 'chat-stream-1',
+        chatTextId: () => 'text-1',
+        chatThinkingId: () => 'thinking-1',
+      },
+    });
+    repository.saveSession({
+      sessionId: 'session-1',
+      title: 'Session',
+      status: 'active',
+      createdAt: '2026-05-31T11:00:00.000Z',
+      updatedAt: '2026-05-31T11:00:00.000Z',
+    });
+    repository.saveMessage({
+      messageId: 'message-old',
+      sessionId: 'session-1',
+      runId: 'run-old',
+      role: 'user',
+      content: 'Old context before compaction.',
+      status: 'completed',
+      createdAt: '2026-05-31T11:01:00.000Z',
+      completedAt: '2026-05-31T11:01:00.000Z',
+    });
+    repository.saveMessage({
+      messageId: 'message-kept',
+      sessionId: 'session-1',
+      runId: 'run-old',
+      role: 'assistant',
+      content: 'Kept context after compaction boundary.',
+      status: 'completed',
+      createdAt: '2026-05-31T11:02:00.000Z',
+      completedAt: '2026-05-31T11:02:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue after compaction.',
+          createdAt: '2026-05-31T11:05:00.000Z',
+        }],
+        createdAt: '2026-05-31T11:05:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the async iterable so the normal model request is built.
+    }
+
+    expect(requests).toHaveLength(1);
+    const sessionParts = requests[0]!.inputContext.parts.filter((part) => part.kind === 'session');
+    expect(sessionParts.map((part) => part.sessionKind)).toEqual([
+      'session_summary',
+      'session_history',
+    ]);
+    expect(JSON.stringify(sessionParts)).toContain('Compacted context summary from prior turns.');
+    expect(JSON.stringify(sessionParts)).toContain('Kept context after compaction boundary.');
+    expect(JSON.stringify(sessionParts)).not.toContain('Old context before compaction.');
+  });
+
   it('fails the run and does not call the normal model step when compaction fails', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {

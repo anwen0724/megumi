@@ -390,4 +390,215 @@ describe('SessionContextInputService', () => {
       'Previous run failed before a final answer. Error: Failure 5',
     ]);
   });
+
+  it('uses latest completed compaction as session summary and keeps history from firstKeptSourceRef', () => {
+    const repository = createRepository();
+    repository.saveSession({
+      sessionId: 'session-1',
+      title: 'Session',
+      status: 'active',
+      summary: 'Legacy explicit summary must not be the 09 compaction main path.',
+      createdAt: '2026-05-31T09:00:00.000Z',
+      updatedAt: '2026-05-31T09:00:00.000Z',
+    });
+    for (const message of [
+      ['message-1', 'user', 'Old user context before compaction.', '2026-05-31T09:01:00.000Z'],
+      ['message-2', 'assistant', 'Old assistant context before compaction.', '2026-05-31T09:02:00.000Z'],
+      ['message-3', 'user', 'First kept user request.', '2026-05-31T09:03:00.000Z'],
+      ['message-4', 'assistant', 'Kept assistant answer.', '2026-05-31T09:04:00.000Z'],
+      ['message-streaming-after-boundary', 'assistant', 'Interrupted draft after boundary must not be kept.', '2026-05-31T09:04:30.000Z'],
+      ['message-current', 'user', 'Current request.', '2026-05-31T09:05:00.000Z'],
+    ] as const) {
+      repository.saveMessage({
+        messageId: message[0],
+        sessionId: 'session-1',
+        runId: message[0] === 'message-current' ? 'run-current' : 'run-old',
+        role: message[1],
+        content: message[2],
+        status: message[0] === 'message-streaming-after-boundary' ? 'streaming' : 'completed',
+        createdAt: message[3],
+        ...(message[0] === 'message-streaming-after-boundary' ? {} : { completedAt: message[3] }),
+      });
+    }
+    repository.saveRun({
+      runId: 'run-old-runtime-fact',
+      sessionId: 'session-1',
+      mode: 'default',
+      goal: 'Old failed run before boundary',
+      status: 'failed',
+      createdAt: '2026-05-31T09:02:30.000Z',
+      completedAt: '2026-05-31T09:02:40.000Z',
+      error: {
+        code: 'runtime_unknown',
+        message: 'Old failure before boundary.',
+        severity: 'error',
+        retryable: false,
+        source: 'provider',
+      },
+    });
+    repository.saveRun({
+      runId: 'run-new-runtime-fact',
+      sessionId: 'session-1',
+      mode: 'default',
+      goal: 'New failed run after boundary',
+      status: 'failed',
+      createdAt: '2026-05-31T09:03:30.000Z',
+      completedAt: '2026-05-31T09:03:40.000Z',
+      error: {
+        code: 'runtime_unknown',
+        message: 'New failure after boundary.',
+        severity: 'error',
+        retryable: false,
+        source: 'provider',
+      },
+    });
+    repository.saveSessionCompaction({
+      compactionId: 'compaction-old',
+      sessionId: 'session-1',
+      summary: 'Older compaction summary must not be stacked.',
+      summaryKind: 'compaction',
+      firstKeptSourceRef: {
+        sourceId: 'session-message:message-1',
+        sourceKind: 'session_message',
+        sourceUri: 'session-message://message-1',
+        loadedAt: '2026-05-31T09:01:00.000Z',
+      },
+      tokensBefore: 8000,
+      triggerReason: 'context_budget_pressure',
+      status: 'completed',
+      createdAt: '2026-05-31T09:04:30.000Z',
+    });
+    repository.saveSessionCompaction({
+      compactionId: 'compaction-latest',
+      sessionId: 'session-1',
+      summary: 'Latest compaction summary for the old context.',
+      summaryKind: 'compaction',
+      firstKeptSourceRef: {
+        sourceId: 'alternate-boundary-source-id',
+        sourceKind: 'session_message',
+        sourceUri: 'session-message://message-3',
+        loadedAt: '2026-05-31T09:03:00.000Z',
+      },
+      tokensBefore: 9000,
+      triggerReason: 'context_budget_pressure',
+      status: 'completed',
+      createdAt: '2026-05-31T09:05:30.000Z',
+      metadata: {
+        previousCompactionId: 'compaction-old',
+        summarizedSourceCount: 2,
+      },
+    });
+
+    const input = new SessionContextInputService({ repository }).buildSessionContextInput({
+      sessionId: 'session-1',
+      currentRunId: 'run-current',
+      currentMessageId: 'message-current',
+      builtAt: '2026-05-31T09:06:00.000Z',
+      maxHistoryEntries: 12,
+      maxRuntimeFacts: 12,
+    });
+
+    expect(input.summaryEntries).toEqual([{
+      summaryId: 'session-compaction:compaction-latest',
+      summaryKind: 'compaction',
+      text: 'Latest compaction summary for the old context.',
+      sourceRef: {
+        sourceId: 'session-compaction:compaction-latest',
+        sourceKind: 'session_summary',
+        sourceUri: 'session-compaction://compaction-latest',
+        loadedAt: '2026-05-31T09:06:00.000Z',
+        metadata: {
+          compactionId: 'compaction-latest',
+          previousCompactionId: 'compaction-old',
+          summarizedSourceCount: 2,
+        },
+      },
+      createdAt: '2026-05-31T09:05:30.000Z',
+    }]);
+    expect(input.historyEntries?.map((entry) => entry.entryId)).toEqual([
+      'message-3',
+      'message-4',
+    ]);
+    expect(JSON.stringify(input.historyEntries)).not.toContain('Old user context before compaction.');
+    expect(JSON.stringify(input.historyEntries)).not.toContain('Old assistant context before compaction.');
+    expect(JSON.stringify(input.historyEntries)).not.toContain('Interrupted draft after boundary');
+    expect(JSON.stringify(input.summaryEntries)).not.toContain('Legacy explicit summary');
+    expect(JSON.stringify(input.summaryEntries)).not.toContain('Older compaction summary');
+    expect(input.runtimeFacts?.map((fact) => fact.text)).toEqual([
+      'Previous run failed before a final answer. Error: New failure after boundary.',
+    ]);
+  });
+
+  it('fails closed when compaction firstKeptSourceRef no longer resolves', () => {
+    const repository = createRepository();
+    repository.saveSession({
+      sessionId: 'session-1',
+      title: 'Session',
+      status: 'active',
+      createdAt: '2026-05-31T10:00:00.000Z',
+      updatedAt: '2026-05-31T10:00:00.000Z',
+    });
+    for (let index = 1; index <= 6; index += 1) {
+      repository.saveMessage({
+        messageId: `message-${index}`,
+        sessionId: 'session-1',
+        role: index % 2 === 0 ? 'assistant' : 'user',
+        content: `Message ${index}`,
+        status: 'completed',
+        createdAt: `2026-05-31T10:00:0${index}.000Z`,
+        completedAt: `2026-05-31T10:00:0${index}.000Z`,
+      });
+    }
+    repository.saveSessionCompaction({
+      compactionId: 'compaction-missing-boundary',
+      sessionId: 'session-1',
+      summary: 'Summary should still be retained when the boundary is missing.',
+      summaryKind: 'compaction',
+      firstKeptSourceRef: {
+        sourceId: 'session-message:deleted-message',
+        sourceKind: 'session_message',
+        sourceUri: 'session-message://deleted-message',
+        loadedAt: '2026-05-31T10:00:00.000Z',
+      },
+      tokensBefore: 12000,
+      triggerReason: 'context_budget_pressure',
+      status: 'completed',
+      createdAt: '2026-05-31T10:01:00.000Z',
+    });
+
+    const input = new SessionContextInputService({ repository }).buildSessionContextInput({
+      sessionId: 'session-1',
+      builtAt: '2026-05-31T10:02:00.000Z',
+      maxHistoryEntries: 10,
+      maxRuntimeFacts: 10,
+    });
+
+    expect(input.summaryEntries?.map((entry) => [entry.summaryId, entry.summaryKind, entry.text])).toEqual([
+      [
+        'session-compaction:compaction-missing-boundary',
+        'compaction',
+        'Summary should still be retained when the boundary is missing.',
+      ],
+    ]);
+    expect(input.historyEntries?.map((entry) => entry.entryId)).toEqual([
+      'message-3',
+      'message-4',
+      'message-5',
+      'message-6',
+    ]);
+    expect(input.runtimeFacts).toEqual([
+      expect.objectContaining({
+        factId: 'session-compaction:compaction-missing-boundary:boundary-unresolved',
+        factKind: 'other',
+        severity: 'warning',
+        text: 'Compaction boundary could not be resolved; retained latest compaction summary and a small recent history window.',
+        sourceRef: expect.objectContaining({
+          sourceId: 'session-compaction:compaction-missing-boundary:boundary-unresolved',
+          sourceKind: 'session_summary',
+          sourceUri: 'session-compaction://compaction-missing-boundary/boundary-unresolved',
+          loadedAt: '2026-05-31T10:02:00.000Z',
+        }),
+      }),
+    ]);
+  });
 });

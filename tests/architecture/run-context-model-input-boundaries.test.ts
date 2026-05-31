@@ -46,6 +46,6 @@ describe('run context and model input boundaries', () => {
 
     expect(contextManagement).toContain('runtimeConstraints?: ModelStepRuntimeConstraintInput[]');
     expect(sessionRun).toContain('runtimeConstraintsFromRunContext');
-    expect(sessionRun).toContain('context.contextBudgetPolicy');
+    expect(sessionRun).toMatch(/context\??\.contextBudgetPolicy/);
   });
 });
