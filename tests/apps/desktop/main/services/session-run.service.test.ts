@@ -1,5 +1,7 @@
 ﻿// @vitest-environment node
 import Database from 'better-sqlite3';
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
@@ -75,14 +77,7 @@ function createServiceWithContextRecorder(records: unknown[]) {
             sandboxSummary: 'Read-only.',
           },
           modelCapabilitySummary: input.modelCapabilitySummary,
-          budget: {
-            modelContextWindow: input.modelCapabilitySummary.modelContextWindow,
-            reservedOutputTokens: input.modelCapabilitySummary.reservedOutputTokens,
-            availableInputTokens: input.modelCapabilitySummary.availableInputTokens,
-            budgetPolicy: 'balanced',
-            packingStrategy: 'priority_then_recent',
-            truncationRecords: [],
-          },
+          contextBudgetPolicy: input.contextBudgetPolicy,
           buildMetadata: {
             buildReason: 'run_baseline',
             builtAt: '2026-05-15T00:00:00.000Z',
@@ -2697,14 +2692,7 @@ describe('SessionRunService', () => {
               sandboxSummary: 'Read-only.',
             },
             modelCapabilitySummary: input.modelCapabilitySummary,
-            budget: {
-              modelContextWindow: input.modelCapabilitySummary.modelContextWindow,
-              reservedOutputTokens: input.modelCapabilitySummary.reservedOutputTokens,
-              availableInputTokens: input.modelCapabilitySummary.availableInputTokens,
-              budgetPolicy: 'balanced',
-              packingStrategy: 'priority_then_recent',
-              truncationRecords: [],
-            },
+            contextBudgetPolicy: input.contextBudgetPolicy,
             buildMetadata: {
               buildReason: 'run_baseline',
               builtAt: '2026-05-17T00:00:00.000Z',
@@ -2750,9 +2738,20 @@ describe('SessionRunService', () => {
         goal: 'Use workspace context',
         workspaceId: 'workspace-1',
         workspacePath: 'C:/all/work/study/megumi',
+        contextBudgetPolicy: {
+          modelContextWindow: 8192,
+          reservedOutputTokens: 1024,
+          keepRecentTokens: 7168,
+        },
       }),
     ]);
     expect(requests[0]).not.toHaveProperty('context');
+    expect(requests[0]?.inputContext.budget).toMatchObject({
+      modelContextWindow: 8192,
+      reservedOutputTokens: 1024,
+      availableInputTokens: 7168,
+      keepRecentTokens: 7168,
+    });
     expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'runtime_constraint',
@@ -2760,6 +2759,9 @@ describe('SessionRunService', () => {
         text: expect.stringContaining('Project root: C:/all/work/study/megumi'),
       }),
     ]));
+    const source = fs.readFileSync(path.join(process.cwd(), 'apps/desktop/src/main/services/session-run.service.ts'), 'utf8');
+    expect(source).not.toContain('runContext: context');
+    expect(source).not.toContain('runContext:');
   });
 
   it('creates run mode snapshots and passes them to model step requests for session messages', async () => {

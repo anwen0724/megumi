@@ -1,6 +1,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
+import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
 import type {
   RunContext,
   RunContextSource,
@@ -25,6 +26,7 @@ export interface CreateBaselineContextInput {
   workspaceId: string;
   workspacePath: string;
   modelCapabilitySummary: ModelCapabilitySummary;
+  contextBudgetPolicy: ContextBudgetPolicy;
 }
 
 export interface ListWorkspaceSourcesInput {
@@ -83,14 +85,7 @@ export class RunContextService {
         sandboxSummary: 'Context acquisition is read-only and Host-controlled.',
       },
       modelCapabilitySummary: input.modelCapabilitySummary,
-      budget: {
-        modelContextWindow: input.modelCapabilitySummary.modelContextWindow,
-        reservedOutputTokens: input.modelCapabilitySummary.reservedOutputTokens,
-        availableInputTokens: input.modelCapabilitySummary.availableInputTokens,
-        budgetPolicy: 'balanced',
-        packingStrategy: 'priority_then_recent',
-        truncationRecords: [],
-      },
+      contextBudgetPolicy: input.contextBudgetPolicy,
       buildMetadata: {
         buildReason: 'run_baseline',
         builtAt: now,

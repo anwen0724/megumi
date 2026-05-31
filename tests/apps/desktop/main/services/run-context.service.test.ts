@@ -58,8 +58,11 @@ describe('RunContextService', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-chat',
         modelContextWindow: 64000,
+      },
+      contextBudgetPolicy: {
+        modelContextWindow: 64000,
         reservedOutputTokens: 4096,
-        availableInputTokens: 59904,
+        keepRecentTokens: 59904,
       },
     });
 
@@ -68,6 +71,12 @@ describe('RunContextService', () => {
       rootPath: 'C:/all/work/study/megumi',
       outsideWorkspacePolicy: 'deny',
     });
+    expect(context.contextBudgetPolicy).toEqual({
+      modelContextWindow: 64000,
+      reservedOutputTokens: 4096,
+      keepRecentTokens: 59904,
+    });
+    expect(context).not.toHaveProperty('budget');
     expect(JSON.stringify(context)).not.toContain('sk-test');
   });
 
@@ -86,8 +95,11 @@ describe('RunContextService', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-chat',
         modelContextWindow: 64000,
+      },
+      contextBudgetPolicy: {
+        modelContextWindow: 64000,
         reservedOutputTokens: 4096,
-        availableInputTokens: 59904,
+        keepRecentTokens: 59904,
       },
     });
 

@@ -26,6 +26,8 @@ import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
+import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
+import type { ModelStepRuntimeConstraintInput } from '@megumi/context-management/model-step-input-context';
 import type {
   RunContext,
   ModelCapabilitySummary,
@@ -92,6 +94,7 @@ export interface SessionRunContextService {
     workspaceId: string;
     workspacePath: string;
     modelCapabilitySummary: ModelCapabilitySummary;
+    contextBudgetPolicy: ContextBudgetPolicy;
   }): RunContext;
 }
 
@@ -174,8 +177,12 @@ const DEFAULT_MODEL_CAPABILITY_SUMMARY: ModelCapabilitySummary = {
   providerId: 'unknown',
   modelId: 'unknown',
   modelContextWindow: 8192,
+};
+
+const DEFAULT_CONTEXT_BUDGET_POLICY: ContextBudgetPolicy = {
+  modelContextWindow: 8192,
   reservedOutputTokens: 1024,
-  availableInputTokens: 7168,
+  keepRecentTokens: 7168,
 };
 
 function createDefaultIds(): SessionRunServiceIds {
@@ -450,7 +457,10 @@ export class SessionRunService {
       currentMessage: userMessage,
       sessionContext,
       instructionSources,
-      ...(context ? { runContext: context } : {}),
+      ...(context ? {
+        runtimeConstraints: runtimeConstraintsFromRunContext(context, createdAt),
+        budgetPolicy: context.contextBudgetPolicy,
+      } : { budgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY }),
       ...(modeSnapshot ? {
         modeSnapshot: toPermissionModeSnapshot(modeSnapshot, createdAt),
         modeSnapshotRef: modeSnapshot.modeSnapshotId,
@@ -605,6 +615,7 @@ export class SessionRunService {
       workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
       workspacePath: input.session.workspacePath,
       modelCapabilitySummary: DEFAULT_MODEL_CAPABILITY_SUMMARY,
+      contextBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
     });
   }
 
@@ -623,6 +634,7 @@ export class SessionRunService {
       workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
       workspacePath: input.session.workspacePath,
       modelCapabilitySummary: DEFAULT_MODEL_CAPABILITY_SUMMARY,
+      contextBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
     });
   }
 
@@ -1335,6 +1347,20 @@ function defaultHostBoundary(
       summary: 'Session run run completed without tool execution.',
     }),
   };
+}
+
+function runtimeConstraintsFromRunContext(
+  context: RunContext,
+  loadedAt: string,
+): ModelStepRuntimeConstraintInput[] {
+  return [{
+    constraintId: `${context.contextId}:project-boundary`,
+    projectRoot: context.workspaceBoundary.rootPath,
+    workspaceAccess: context.policySummary.workspaceAccess,
+    sandboxSummary: context.policySummary.sandboxSummary,
+    approvalSummary: context.policySummary.approvalSummary,
+    loadedAt,
+  }];
 }
 
 type SessionMessageSendHistoryMessage = NonNullable<SessionMessageSendPayload['messages']>[number];
