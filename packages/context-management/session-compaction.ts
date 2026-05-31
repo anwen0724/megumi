@@ -1,3 +1,5 @@
+import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
+import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import type {
   SessionContextInput,
@@ -6,8 +8,44 @@ import type {
   SessionSummaryEntry,
 } from '@megumi/shared/session-context-contracts';
 import { estimateModelInputContextTokens } from './context-budget';
+import { buildModelInputContext } from './model-input-context-builder';
 
 export const RUNTIME_FACT_MAX_CHARS = 1200;
+
+export const SESSION_COMPACTION_SUMMARY_SYSTEM_PROMPT = [
+  'You are a context summarization assistant.',
+  'Read the serialized conversation and produce a structured summary.',
+  'Do not continue the conversation.',
+  'Do not answer questions from the conversation.',
+  'Only output the structured summary.',
+].join(' ');
+
+const SESSION_COMPACTION_SUMMARY_PROMPT = [
+  'Create a structured context checkpoint summary that another LLM will use to continue the work.',
+  '',
+  'Use this exact format:',
+  '',
+  '## Goal',
+  '',
+  '## Constraints & Preferences',
+  '',
+  '## Progress',
+  '### Done',
+  '### In Progress',
+  '### Blocked',
+  '',
+  '## Key Decisions',
+  '',
+  '## Next Steps',
+  '',
+  '## Critical Context',
+  '',
+  '<read-files>',
+  '</read-files>',
+  '',
+  '<modified-files>',
+  '</modified-files>',
+].join('\n');
 
 export interface PrepareSessionCompactionInputOptions {
   sessionId: string;
@@ -26,6 +64,99 @@ export interface PreparedSessionCompactionInput {
   historyEntriesToSummarize: SessionHistoryEntry[];
   runtimeFactsToSummarize: SessionRuntimeFact[];
   keptHistoryEntries: SessionHistoryEntry[];
+}
+
+export interface SessionCompactionBudgetPressureResult {
+  shouldCompact: boolean;
+  triggerReason: 'context_budget_pressure';
+  tokensBefore: number;
+  availableInputTokens: number;
+}
+
+export interface BuildSessionCompactionSummaryInputContextInput {
+  contextId: string;
+  sessionId: string;
+  runId: string;
+  stepId: string;
+  builtAt: string;
+  prepared: PreparedSessionCompactionInput;
+  budgetPolicy: ContextBudgetPolicy;
+}
+
+export function shouldRunSessionCompaction(input: {
+  preflightInputContext: ModelInputContext;
+  budgetPolicy: ContextBudgetPolicy;
+}): SessionCompactionBudgetPressureResult {
+  const availableInputTokens = Math.max(
+    0,
+    input.budgetPolicy.modelContextWindow - input.budgetPolicy.reservedOutputTokens,
+  );
+  const tokensBefore = input.preflightInputContext.budget.inputTokenEstimate;
+
+  return {
+    shouldCompact: tokensBefore > availableInputTokens,
+    triggerReason: 'context_budget_pressure',
+    tokensBefore,
+    availableInputTokens,
+  };
+}
+
+export function buildSessionCompactionSummaryInputContext(
+  input: BuildSessionCompactionSummaryInputContextInput,
+): ModelInputContext {
+  const serialized = serializeSessionCompactionInput(input.prepared);
+  const prompt = [
+    '<conversation>',
+    serialized,
+    '</conversation>',
+    '',
+    SESSION_COMPACTION_SUMMARY_PROMPT,
+  ].join('\n');
+
+  return buildModelInputContext({
+    contextId: input.contextId,
+    sessionId: input.sessionId,
+    runId: input.runId,
+    stepId: input.stepId,
+    buildReason: 'session_compaction_summary',
+    builtAt: input.builtAt,
+    budgetPolicy: input.budgetPolicy,
+    parts: [
+      {
+        partId: `part:session-compaction:system:${input.stepId}`,
+        kind: 'instruction',
+        instructionKind: 'system',
+        text: SESSION_COMPACTION_SUMMARY_SYSTEM_PROMPT,
+        sourceRefs: [{
+          sourceId: `session-compaction-system:${input.stepId}`,
+          sourceKind: 'system_instruction',
+          sourceUri: `session-compaction-system://${input.stepId}`,
+          loadedAt: input.builtAt,
+        }],
+        priority: 100,
+        required: true,
+      },
+      {
+        partId: `part:session-compaction:input:${input.stepId}`,
+        kind: 'current_turn',
+        role: 'user',
+        text: prompt,
+        sourceRefs: [{
+          sourceId: `session-compaction-input:${input.stepId}`,
+          sourceKind: 'session_runtime_fact',
+          sourceUri: `session-compaction-input://${input.stepId}`,
+          loadedAt: input.builtAt,
+          metadata: {
+            summarizedSourceCount:
+              input.prepared.historyEntriesToSummarize.length
+              + input.prepared.runtimeFactsToSummarize.length,
+          },
+        }],
+        priority: 95,
+        required: true,
+      },
+    ],
+  });
 }
 
 export function prepareSessionCompactionInput(
@@ -108,6 +239,41 @@ export function serializeSessionCompactionInput(
   }
 
   return lines.join('\n').trim();
+}
+
+export function extractSessionCompactionFileMetadata(summary: string): {
+  readFiles?: string[];
+  modifiedFiles?: string[];
+} {
+  return {
+    ...extractTaggedLines(summary, 'read-files', 'readFiles'),
+    ...extractTaggedLines(summary, 'modified-files', 'modifiedFiles'),
+  };
+}
+
+function extractTaggedLines<TName extends 'readFiles' | 'modifiedFiles'>(
+  text: string,
+  tagName: string,
+  outputName: TName,
+): Partial<Record<TName, string[]>> {
+  const startTag = `<${tagName}>`;
+  const endTag = `</${tagName}>`;
+  const start = text.indexOf(startTag);
+  const end = text.indexOf(endTag);
+
+  if (start < 0 || end <= start) {
+    return {};
+  }
+
+  const values = text
+    .slice(start + startTag.length, end)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  return values.length > 0
+    ? { [outputName]: values } as Partial<Record<TName, string[]>>
+    : {};
 }
 
 function truncateRuntimeFactText(text: string): string {

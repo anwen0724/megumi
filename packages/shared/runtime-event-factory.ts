@@ -305,6 +305,66 @@ export function createContextEffectiveUpdatedEvent(input: {
   });
 }
 
+export function createContextCompactionStartedEvent(input: {
+  eventId: string;
+  runId: string;
+  sessionId: string;
+  stepId?: string;
+  requestId?: string;
+  sequence: number;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+  payload: RuntimeEventPayloadByType['context.compaction.started'];
+}): TypedRuntimeEvent<'context.compaction.started'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'context.compaction.started',
+    source: 'main',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
+export function createContextCompactionCompletedEvent(input: {
+  eventId: string;
+  runId: string;
+  sessionId: string;
+  stepId?: string;
+  requestId?: string;
+  sequence: number;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+  payload: RuntimeEventPayloadByType['context.compaction.completed'];
+}): TypedRuntimeEvent<'context.compaction.completed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'context.compaction.completed',
+    source: 'main',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
+export function createContextCompactionFailedEvent(input: {
+  eventId: string;
+  runId: string;
+  sessionId: string;
+  stepId?: string;
+  requestId?: string;
+  sequence: number;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+  payload: RuntimeEventPayloadByType['context.compaction.failed'];
+}): TypedRuntimeEvent<'context.compaction.failed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'context.compaction.failed',
+    source: 'main',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
 export function createRuntimeCheckpointCreatedEvent(
   input: Omit<RunRuntimeEventFactoryInput<'checkpoint.created'>, 'eventType' | 'visibility' | 'persist' | 'payload'>,
   payload: RuntimeEventPayloadByType['checkpoint.created'],

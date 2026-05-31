@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { JsonObjectSchema, JsonValueSchema } from './json';
 import { RuntimeContextSchema } from './runtime-context';
 import { RuntimeErrorSchema } from './runtime-errors';
+import { ModelInputContextSourceRefSchema } from './model-input-context-contracts';
+import { SESSION_COMPACTION_TRIGGER_REASONS } from './session-compaction-contracts';
 import {
   RunActionKindSchema,
   RunActionStatusSchema,
@@ -240,6 +242,33 @@ const ContextEffectiveUpdatedPayloadSchema = z
     sourceCount: z.number().int().nonnegative(),
     redactionCount: z.number().int().nonnegative(),
     truncationCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const SessionCompactionTriggerReasonSchema = z.enum(SESSION_COMPACTION_TRIGGER_REASONS);
+
+const ContextCompactionStartedPayloadSchema = z
+  .object({
+    compactionId: z.string().min(1).max(128),
+    triggerReason: SessionCompactionTriggerReasonSchema,
+    tokensBefore: z.number().int().nonnegative(),
+    firstKeptSourceRef: ModelInputContextSourceRefSchema,
+    summarizedSourceCount: z.number().int().nonnegative(),
+    previousCompactionId: z.string().min(1).max(128).optional(),
+  })
+  .strict();
+
+const ContextCompactionCompletedPayloadSchema = ContextCompactionStartedPayloadSchema.extend({
+  readFiles: z.array(z.string().min(1)).optional(),
+  modifiedFiles: z.array(z.string().min(1)).optional(),
+}).strict();
+
+const ContextCompactionFailedPayloadSchema = z
+  .object({
+    triggerReason: SessionCompactionTriggerReasonSchema,
+    tokensBefore: z.number().int().nonnegative(),
+    previousCompactionId: z.string().min(1).max(128).optional(),
+    error: RuntimeErrorSchema,
   })
   .strict();
 
@@ -766,6 +795,18 @@ export const ContextEffectiveUpdatedEventSchema = eventSchema(
   'context.effective.updated',
   ContextEffectiveUpdatedPayloadSchema,
 );
+export const ContextCompactionStartedEventSchema = eventSchema(
+  'context.compaction.started',
+  ContextCompactionStartedPayloadSchema,
+);
+export const ContextCompactionCompletedEventSchema = eventSchema(
+  'context.compaction.completed',
+  ContextCompactionCompletedPayloadSchema,
+);
+export const ContextCompactionFailedEventSchema = eventSchema(
+  'context.compaction.failed',
+  ContextCompactionFailedPayloadSchema,
+);
 export const MessageDeltaEventSchema = eventSchema('message.delta', MessageDeltaPayloadSchema);
 export const MessageCompletedEventSchema = eventSchema('message.completed', MessageCompletedPayloadSchema);
 export const ErrorRaisedEventSchema = eventSchema('error.raised', ErrorRaisedPayloadSchema);
@@ -901,6 +942,9 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ContextPatchAppliedEventSchema,
   ContextPatchRejectedEventSchema,
   ContextEffectiveUpdatedEventSchema,
+  ContextCompactionStartedEventSchema,
+  ContextCompactionCompletedEventSchema,
+  ContextCompactionFailedEventSchema,
   MessageDeltaEventSchema,
   MessageCompletedEventSchema,
   ErrorRaisedEventSchema,
