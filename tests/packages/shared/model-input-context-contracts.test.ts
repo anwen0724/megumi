@@ -466,15 +466,31 @@ describe('ModelInputContext contracts', () => {
       'session_runtime_fact',
       'session_summary',
     ]);
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('project_instruction');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('tool_call');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('tool_result');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_message');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_run');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_step');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_runtime_fact');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('approval');
-    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toContain('session_summary');
+    expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toEqual([
+      'system_instruction',
+      'project_instruction',
+      'mode_instruction',
+      'current_user_message',
+      'run_goal',
+      'timeline_message',
+      'session_message',
+      'session_run',
+      'session_step',
+      'session_runtime_fact',
+      'session_summary',
+      'branch_marker',
+      'retry_attempt',
+      'interrupted_run_marker',
+      'tool_call',
+      'tool_result',
+      'approval',
+      'provider_state',
+      'permission_mode',
+      'project_boundary',
+      'runtime_constraint',
+      'external_resource',
+      'other',
+    ]);
   });
 
   it('rejects legacy tool use continuation fields', () => {
