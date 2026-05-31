@@ -12,6 +12,7 @@ import {
   type SessionRunContextService,
   type SessionRunServiceOptions,
 } from '@megumi/desktop/main/services/session-run.service';
+import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session-compaction-orchestrator.service';
 import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
@@ -210,6 +211,7 @@ function createServiceWithModelStepStream(
   timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   agentInstructionSourceService?: SessionRunServiceOptions['agentInstructionSourceService'];
   sessionContextInputService?: SessionRunServiceOptions['sessionContextInputService'];
+  sessionCompactionOrchestrator?: SessionRunServiceOptions['sessionCompactionOrchestrator'];
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -225,6 +227,9 @@ function createServiceWithModelStepStream(
     ...(options?.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
     ...(options?.agentInstructionSourceService ? { agentInstructionSourceService: options.agentInstructionSourceService } : {}),
     ...(options?.sessionContextInputService ? { sessionContextInputService: options.sessionContextInputService } : {}),
+    ...(options?.sessionCompactionOrchestrator ? {
+      sessionCompactionOrchestrator: options.sessionCompactionOrchestrator,
+    } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         callIndex += 1;
@@ -831,6 +836,371 @@ describe('SessionRunService', () => {
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toContain('assistant.output.completed');
     expect(service.listMessagesBySession('session-1')).toEqual([
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
+    ]);
+  });
+
+  it('runs compaction before the normal initial model step when budget pressure is reported', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const compactionCalls: unknown[] = [];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      sessionContextInputService: {
+        buildSessionContextInput: () => ({
+          historyEntries: [{
+            entryId: 'message-old',
+            role: 'user',
+            text: 'old context',
+            status: 'completed',
+            sourceRef: {
+              sourceId: 'session-message:message-old',
+              sourceKind: 'session_message',
+            },
+          }, {
+            entryId: 'message-recent',
+            role: 'assistant',
+            text: 'recent context',
+            status: 'completed',
+            sourceRef: {
+              sourceId: 'session-message:message-recent',
+              sourceKind: 'session_message',
+            },
+          }],
+        }),
+      },
+      contextService: {
+        createBaselineContext: (input) => ({
+          contextId: `context:${input.runId}`,
+          runId: input.runId,
+          workspaceBoundary: {
+            workspaceId: input.workspaceId,
+            rootPath: input.workspacePath,
+            symlinkPolicy: 'deny_outside_workspace',
+            outsideWorkspacePolicy: 'deny',
+            secretPolicySummary: 'No secrets.',
+            createdAt: '2026-05-17T00:00:00.000Z',
+          },
+          goal: input.goal,
+          constraints: [],
+          inlineContents: [],
+          resourceRefs: [],
+          conversationRefs: [],
+          messageSummaries: [],
+          workspaceSources: [],
+          toolObservationRefs: [],
+          memoryRecallRefs: [],
+          policySummary: {
+            workspaceAccess: 'workspace-read',
+            restrictedResources: [],
+            approvalSummary: 'No approval.',
+            sandboxSummary: 'Read-only.',
+          },
+          modelCapabilitySummary: input.modelCapabilitySummary,
+          contextBudgetPolicy: {
+            modelContextWindow: 40,
+            reservedOutputTokens: 10,
+            keepRecentTokens: 3,
+          },
+          buildMetadata: {
+            buildReason: 'run_baseline',
+            builtAt: '2026-05-17T00:00:00.000Z',
+            selectionRecordIds: [],
+            redactionRecordIds: [],
+            truncationRecordIds: [],
+          },
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }),
+      },
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          compactionCalls.push(input);
+          return {
+            status: 'completed',
+            events: [{
+              eventId: 'event-compaction-started',
+              schemaVersion: 1,
+              eventType: 'context.compaction.started',
+              runId: input.runId,
+              sessionId: input.sessionId,
+              stepId: input.stepId,
+              requestId: input.requestId,
+              sequence: input.startSequence + 1,
+              createdAt: '2026-05-17T00:00:00.000Z',
+              source: 'main',
+              visibility: 'system',
+              persist: 'required',
+              payload: {
+                compactionId: 'compaction-1',
+                triggerReason: 'context_budget_pressure',
+                tokensBefore: 100,
+                firstKeptSourceRef: {
+                  sourceId: 'session-message:message-recent',
+                  sourceKind: 'session_message',
+                },
+                summarizedSourceCount: 1,
+              },
+            }, {
+              eventId: 'event-compaction-completed',
+              schemaVersion: 1,
+              eventType: 'context.compaction.completed',
+              runId: input.runId,
+              sessionId: input.sessionId,
+              stepId: input.stepId,
+              requestId: input.requestId,
+              sequence: input.startSequence + 2,
+              createdAt: '2026-05-17T00:00:00.000Z',
+              source: 'main',
+              visibility: 'system',
+              persist: 'required',
+              payload: {
+                compactionId: 'compaction-1',
+                triggerReason: 'context_budget_pressure',
+                tokensBefore: 100,
+                firstKeptSourceRef: {
+                  sourceId: 'session-message:message-recent',
+                  sourceKind: 'session_message',
+                },
+                summarizedSourceCount: 1,
+              },
+            }],
+            compaction: {
+              compactionId: 'compaction-1',
+              sessionId: input.sessionId,
+              summary: 'summary',
+              summaryKind: 'compaction',
+              firstKeptSourceRef: {
+                sourceId: 'session-message:message-recent',
+                sourceKind: 'session_message',
+              },
+              tokensBefore: 100,
+              triggerReason: 'context_budget_pressure',
+              status: 'completed',
+              createdAt: '2026-05-17T00:00:00.000Z',
+            },
+          };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(compactionCalls).toHaveLength(1);
+    expect(requests).toHaveLength(1);
+    expect(streamed.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'run.started',
+      'context.compaction.started',
+      'context.compaction.completed',
+      'assistant.output.completed',
+      'run.completed',
+    ]));
+    expect(streamed.find((event) => event.eventType === 'run.started')?.sequence).toBe(1);
+    expect(streamed.find((event) => event.eventType === 'context.compaction.started')?.sequence).toBe(2);
+  });
+
+  it('fails the run and does not call the normal model step when compaction fails', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          return {
+            status: 'failed',
+            events: [{
+              eventId: 'event-compaction-failed',
+              schemaVersion: 1,
+              eventType: 'context.compaction.failed',
+              runId: input.runId,
+              sessionId: input.sessionId,
+              stepId: input.stepId,
+              requestId: input.requestId,
+              sequence: input.startSequence + 1,
+              createdAt: '2026-05-17T00:00:00.000Z',
+              source: 'main',
+              visibility: 'system',
+              persist: 'required',
+              payload: {
+                triggerReason: 'context_budget_pressure',
+                tokensBefore: 100,
+                error: {
+                  code: 'provider_network_error',
+                  message: 'Summary failed.',
+                  severity: 'error',
+                  retryable: true,
+                  source: 'provider',
+                },
+              },
+            }],
+            failure: {
+              code: 'provider_network_error',
+              message: 'Summary failed.',
+              severity: 'error',
+              retryable: true,
+              source: 'provider',
+            },
+          };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(requests).toEqual([]);
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'context.compaction.failed',
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+  });
+
+  it('allows an already-started maintenance compaction to finish after user cancellation without continuing the normal model step', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    let resolveCompaction: (() => void) | undefined;
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          await new Promise<void>((resolve) => {
+            resolveCompaction = resolve;
+          });
+          return {
+            status: 'completed',
+            events: [{
+              eventId: 'event-compaction-completed',
+              schemaVersion: 1,
+              eventType: 'context.compaction.completed',
+              runId: input.runId,
+              sessionId: input.sessionId,
+              stepId: input.stepId,
+              requestId: input.requestId,
+              sequence: input.startSequence + 1,
+              createdAt: '2026-05-17T00:00:00.000Z',
+              source: 'main',
+              visibility: 'system',
+              persist: 'required',
+              payload: {
+                compactionId: 'compaction-1',
+                triggerReason: 'context_budget_pressure',
+                tokensBefore: 100,
+                firstKeptSourceRef: {
+                  sourceId: 'session-message:message-recent',
+                  sourceKind: 'session_message',
+                },
+                summarizedSourceCount: 1,
+              },
+            }],
+            compaction: {
+              compactionId: 'compaction-1',
+              sessionId: input.sessionId,
+              summary: 'summary',
+              summaryKind: 'compaction',
+              firstKeptSourceRef: {
+                sourceId: 'session-message:message-recent',
+                sourceKind: 'session_message',
+              },
+              tokensBefore: 100,
+              triggerReason: 'context_budget_pressure',
+              status: 'completed',
+              createdAt: '2026-05-17T00:00:00.000Z',
+            },
+          };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    const iterator = result.events[Symbol.asyncIterator]();
+    expect((await iterator.next()).value.eventType).toBe('run.started');
+    expect(service.cancelSessionMessage({
+      targetRequestId: 'request-1',
+    })).toBe(true);
+    resolveCompaction?.();
+
+    const remaining: RuntimeEvent[] = [];
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) {
+        break;
+      }
+      remaining.push(next.value);
+    }
+
+    expect(requests).toEqual([]);
+    expect(remaining.map((event) => event.eventType)).toEqual([
+      'context.compaction.completed',
     ]);
   });
 

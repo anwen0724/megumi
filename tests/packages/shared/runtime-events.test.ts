@@ -31,6 +31,9 @@ import {
   createRunWaitingForApprovalEvent,
   createRunStartedEvent,
   createRuntimeEvent,
+  createContextCompactionCompletedEvent,
+  createContextCompactionFailedEvent,
+  createContextCompactionStartedEvent,
   createToolResultCreatedEvent,
   createToolCallCreatedEvent,
   createToolExecutionApprovalRequestedEvent,
@@ -212,6 +215,91 @@ describe('runtime event contracts', () => {
         modelId: 'deepseek-v4-flash',
       },
     });
+  });
+
+  it('accepts context compaction audit events without raw prompt or provider bodies', () => {
+    const started = createContextCompactionStartedEvent({
+      eventId: 'event-compaction-started',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      requestId: 'request-1',
+      sequence: 2,
+      createdAt: '2026-05-31T12:00:00.000Z',
+      runtimeContext,
+      payload: {
+        compactionId: 'compaction-1',
+        triggerReason: 'context_budget_pressure',
+        tokensBefore: 9000,
+        firstKeptSourceRef: {
+          sourceId: 'session-message:message-3',
+          sourceKind: 'session_message',
+          sourceUri: 'session-message://message-3',
+        },
+        summarizedSourceCount: 2,
+        previousCompactionId: 'compaction-0',
+      },
+    });
+
+    const completed = createContextCompactionCompletedEvent({
+      eventId: 'event-compaction-completed',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      requestId: 'request-1',
+      sequence: 3,
+      createdAt: '2026-05-31T12:00:01.000Z',
+      runtimeContext,
+      payload: {
+        compactionId: 'compaction-1',
+        triggerReason: 'context_budget_pressure',
+        tokensBefore: 9000,
+        firstKeptSourceRef: {
+          sourceId: 'session-message:message-3',
+          sourceKind: 'session_message',
+          sourceUri: 'session-message://message-3',
+        },
+        summarizedSourceCount: 2,
+        previousCompactionId: 'compaction-0',
+        readFiles: ['packages/context-management/session-compaction.ts'],
+        modifiedFiles: ['apps/desktop/src/main/services/session-run.service.ts'],
+      },
+    });
+
+    const failed = createContextCompactionFailedEvent({
+      eventId: 'event-compaction-failed',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      stepId: 'step-1',
+      requestId: 'request-1',
+      sequence: 4,
+      createdAt: '2026-05-31T12:00:02.000Z',
+      runtimeContext,
+      payload: {
+        triggerReason: 'context_budget_pressure',
+        tokensBefore: 9000,
+        previousCompactionId: 'compaction-0',
+        error: {
+          code: 'provider_network_error',
+          message: 'Summary model call failed before the normal model step.',
+          severity: 'error',
+          retryable: true,
+          source: 'provider',
+        },
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(started)).toEqual(started);
+    expect(RuntimeEventSchema.parse(completed)).toEqual(completed);
+    expect(RuntimeEventSchema.parse(failed)).toEqual(failed);
+    expect(RUNTIME_EVENT_TYPES).toEqual(expect.arrayContaining([
+      'context.compaction.started',
+      'context.compaction.completed',
+      'context.compaction.failed',
+    ]));
+    expect(JSON.stringify([started, completed, failed])).not.toContain('rawProviderBody');
+    expect(JSON.stringify([started, completed, failed])).not.toContain('summaryPrompt');
+    expect(JSON.stringify([started, completed, failed])).not.toContain('tool result raw');
   });
 });
 

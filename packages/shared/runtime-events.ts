@@ -1,6 +1,8 @@
 import type { JsonValue } from './json';
 import type { RuntimeError } from './runtime-errors';
 import type { RuntimeContext } from './runtime-context';
+import type { ModelInputContextSourceRef } from './model-input-context-contracts';
+import type { SessionCompactionTriggerReason } from './session-compaction-contracts';
 import type {
   RunActionKind,
   RunActionStatus,
@@ -76,6 +78,9 @@ export const RUNTIME_EVENT_TYPES = [
   'context.patch.applied',
   'context.patch.rejected',
   'context.effective.updated',
+  'context.compaction.started',
+  'context.compaction.completed',
+  'context.compaction.failed',
   'message.delta',
   'message.completed',
   'error.raised',
@@ -260,6 +265,27 @@ export interface ObservationReceivedPayload {
   source: RunObservationSource;
   kind: string;
   summary?: string;
+}
+
+export interface ContextCompactionStartedPayload {
+  compactionId: string;
+  triggerReason: SessionCompactionTriggerReason;
+  tokensBefore: number;
+  firstKeptSourceRef: ModelInputContextSourceRef;
+  summarizedSourceCount: number;
+  previousCompactionId?: string;
+}
+
+export interface ContextCompactionCompletedPayload extends ContextCompactionStartedPayload {
+  readFiles?: string[];
+  modifiedFiles?: string[];
+}
+
+export interface ContextCompactionFailedPayload {
+  triggerReason: SessionCompactionTriggerReason;
+  tokensBefore: number;
+  error: RuntimeError;
+  previousCompactionId?: string;
 }
 
 export interface MessageDeltaPayload {
@@ -640,6 +666,9 @@ export type RuntimeEventPayloadByType = {
   'context.patch.applied': ContextPatchAppliedPayload;
   'context.patch.rejected': ContextPatchRejectedPayload;
   'context.effective.updated': ContextEffectiveUpdatedPayload;
+  'context.compaction.started': ContextCompactionStartedPayload;
+  'context.compaction.completed': ContextCompactionCompletedPayload;
+  'context.compaction.failed': ContextCompactionFailedPayload;
   'message.delta': MessageDeltaPayload;
   'message.completed': MessageCompletedPayload;
   'error.raised': ErrorRaisedPayload;

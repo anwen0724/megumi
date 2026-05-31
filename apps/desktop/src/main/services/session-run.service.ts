@@ -74,12 +74,18 @@ import {
   SessionContextInputService,
   type BuildSessionContextInputFromRepositoryInput,
 } from './session-context-input.service';
+import {
+  SessionCompactionOrchestrator,
+  type CompactIfNeededInput,
+  type SessionCompactionOrchestrationResult,
+} from './session-compaction-orchestrator.service';
 
 export interface SessionRunServiceClock {
   now(): string;
 }
 
 export interface SessionRunServiceIds extends RunIdFactory {
+  compactionId(): string;
   sessionId(): string;
   chatStreamEventId(): string;
   chatStreamId(input: { runId: string }): string;
@@ -157,6 +163,9 @@ export interface SessionRunServiceOptions {
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   sessionContextInputService?: SessionRunSessionContextInputService;
+  sessionCompactionOrchestrator?: {
+    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
+  };
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
   timelineMessageRepository?: {
@@ -196,6 +205,7 @@ function createDefaultIds(): SessionRunServiceIds {
     resumeRequestId: () => `resume-request:${crypto.randomUUID()}`,
     cancelRequestId: () => `cancel-request:${crypto.randomUUID()}`,
     retryRequestId: () => `retry-request:${crypto.randomUUID()}`,
+    compactionId: () => `compaction:${crypto.randomUUID()}`,
     eventId: () => `event:${crypto.randomUUID()}`,
     messageId: () => `message:${crypto.randomUUID()}`,
     debugId: () => `debug:${crypto.randomUUID()}`,
@@ -222,6 +232,9 @@ export class SessionRunService {
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   private readonly sessionContextInputService: SessionRunSessionContextInputService;
+  private readonly sessionCompactionOrchestrator?: {
+    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
+  };
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly chatStreamEventSink?: ChatStreamEventSink;
   private readonly timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
@@ -250,6 +263,18 @@ export class SessionRunService {
     this.timelineMessageRepository = options.timelineMessageRepository;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
+    this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
+      ?? (options.modelStepProvider
+        ? new SessionCompactionOrchestrator({
+            repository: this.repository,
+            modelStepProvider: options.modelStepProvider,
+            clock: this.clock,
+            ids: {
+              compactionId: this.ids.compactionId,
+              eventId: this.ids.eventId,
+            },
+          })
+        : undefined);
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
   }
 
@@ -422,68 +447,6 @@ export class SessionRunService {
       title: 'Model response',
       startedAt: createdAt,
     });
-    const context = this.createInitialContextForSessionMessage({
-      runId,
-      goal: userMessage.content,
-      session,
-    });
-    const toolDefinitions = session.workspacePath && this.toolDefinitionProvider
-      ? this.toolDefinitionProvider.listDefinitions({
-          runId,
-          permissionMode,
-          providerCapabilitySummary: { supportsToolCall: true },
-        })
-      : undefined;
-    const sessionContext = this.sessionContextInputService.buildSessionContextInput({
-      sessionId: String(session.sessionId),
-      currentRunId: String(runId),
-      currentMessageId: String(userMessage.messageId),
-      builtAt: createdAt,
-    });
-    const instructionSources = await this.loadInstructionSourcesForModelStep({
-      ...(session.workspacePath ? { projectRoot: session.workspacePath } : {}),
-      loadedAt: createdAt,
-    });
-    const inputContext = buildModelStepInputContextFromSources({
-      contextId: createModelStepInputContextId({
-        stepId: String(stepId),
-        contextKind: 'initial',
-      }),
-      sessionId: String(session.sessionId),
-      runId: String(runId),
-      stepId: String(stepId),
-      buildReason: 'initial_model_step',
-      builtAt: createdAt,
-      currentMessage: userMessage,
-      sessionContext,
-      instructionSources,
-      ...(context ? {
-        runtimeConstraints: runtimeConstraintsFromRunContext(context, createdAt),
-        budgetPolicy: context.contextBudgetPolicy,
-      } : { budgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY }),
-      ...(modeSnapshot ? {
-        modeSnapshot: toPermissionModeSnapshot(modeSnapshot, createdAt),
-        modeSnapshotRef: modeSnapshot.modeSnapshotId,
-      } : {}),
-    });
-    const request: ModelStepRuntimeRequest = {
-      requestId: input.requestId,
-      sessionId: session.sessionId,
-      runId,
-      stepId,
-      providerId: input.payload.providerId,
-      modelId: input.payload.modelId,
-      inputContext,
-      ...(toolDefinitions && toolDefinitions.length > 0 ? { toolDefinitions } : {}),
-      runtimeContext: input.runtimeContext,
-      createdAt,
-    };
-    const toolRuntime = session.workspacePath
-      ? await this.toolRuntimeFactory?.create({
-          projectRoot: session.workspacePath,
-          permissionMode,
-        })
-      : undefined;
     const chatStreamAdapter = this.chatStreamEventSink
       ? createChatStreamEventAdapter({
           sink: this.chatStreamEventSink,
@@ -514,13 +477,17 @@ export class SessionRunService {
 
     return {
       data: { requestId: input.requestId },
-      events: this.trackActiveSessionMessageRun(input.requestId, this.streamAndPersistModelStep({
-        request,
+      events: this.trackActiveSessionMessageRun(input.requestId, this.runInitialSessionMessageModelStep({
+        requestId: input.requestId,
+        payload: input.payload,
+        runtimeContext: input.runtimeContext,
+        session,
         run,
         step,
-        userMessageId: userMessage.messageId,
-        ...(session.workspacePath ? { projectRoot: session.workspacePath } : {}),
-        ...(toolRuntime ? { toolRuntime } : {}),
+        userMessage,
+        currentUserMessage,
+        permissionMode,
+        ...(modeSnapshot ? { modeSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
     };
@@ -671,6 +638,265 @@ export class SessionRunService {
       createdAt,
       updatedAt: createdAt,
     });
+  }
+
+  private async *runInitialSessionMessageModelStep(input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+    session: Session;
+    run: Run;
+    step: RunStep;
+    userMessage: SessionMessage;
+    currentUserMessage: SessionMessageSendCurrentMessage;
+    permissionMode: PermissionMode;
+    modeSnapshot?: RunModeSnapshot;
+    chatStreamAdapter?: ChatStreamEventAdapter;
+  }): AsyncIterable<RuntimeEvent> {
+    let lastSequence = 0;
+    const runStarted = withSessionMessageRequestMetadata(createRunStartedEvent({
+      eventId: this.ids.eventId(),
+      sessionId: input.session.sessionId,
+      runId: input.run.runId,
+      sequence: lastSequence += 1,
+      createdAt: input.payload.createdAt,
+    }), {
+      requestId: input.requestId,
+      runtimeContext: input.runtimeContext,
+    });
+    this.appendRuntimeEvent(runStarted, input.chatStreamAdapter);
+
+    const context = this.createInitialContextForSessionMessage({
+      runId: String(input.run.runId),
+      goal: input.userMessage.content,
+      session: input.session,
+    });
+    const budgetPolicy = context?.contextBudgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
+    const toolDefinitions = input.session.workspacePath && this.toolDefinitionProvider
+      ? this.toolDefinitionProvider.listDefinitions({
+          runId: String(input.run.runId),
+          permissionMode: input.permissionMode,
+          providerCapabilitySummary: { supportsToolCall: true },
+        })
+      : undefined;
+    const sessionContext = this.sessionContextInputService.buildSessionContextInput({
+      sessionId: String(input.session.sessionId),
+      currentRunId: String(input.run.runId),
+      currentMessageId: String(input.userMessage.messageId),
+      builtAt: input.payload.createdAt,
+    });
+    const instructionSources = await this.loadInstructionSourcesForModelStep({
+      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      loadedAt: input.payload.createdAt,
+    });
+    const preflightInputContext = buildModelStepInputContextFromSources({
+      contextId: createModelStepInputContextId({
+        stepId: String(input.step.stepId),
+        contextKind: 'preflight',
+      }),
+      sessionId: String(input.session.sessionId),
+      runId: String(input.run.runId),
+      stepId: String(input.step.stepId),
+      buildReason: 'initial_model_step_preflight',
+      builtAt: input.payload.createdAt,
+      currentMessage: input.userMessage,
+      sessionContext,
+      instructionSources,
+      ...(context ? {
+        runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
+      } : {}),
+      budgetPolicy: {
+        modelContextWindow: Number.MAX_SAFE_INTEGER,
+        reservedOutputTokens: 0,
+        keepRecentTokens: Number.MAX_SAFE_INTEGER,
+      },
+      ...(input.modeSnapshot ? {
+        modeSnapshot: toPermissionModeSnapshot(input.modeSnapshot, input.payload.createdAt),
+        modeSnapshotRef: input.modeSnapshot.modeSnapshotId,
+      } : {}),
+    });
+    const compactionPromise = this.sessionCompactionOrchestrator
+      ? this.sessionCompactionOrchestrator.compactIfNeeded({
+          requestId: input.requestId,
+          sessionId: String(input.session.sessionId),
+          runId: String(input.run.runId),
+          stepId: String(input.step.stepId),
+          providerId: input.payload.providerId,
+          modelId: input.payload.modelId,
+          runtimeContext: input.runtimeContext,
+          createdAt: input.payload.createdAt,
+          sessionContext,
+          preflightInputContext,
+          budgetPolicy,
+          startSequence: lastSequence,
+        })
+      : Promise.resolve({ status: 'skipped' as const, events: [] });
+
+    yield runStarted;
+    const compaction = await compactionPromise;
+
+    for (const event of compaction.events) {
+      lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(input.run.runId))));
+      const eventWithRequest = withSessionMessageRequestMetadata(event, {
+        requestId: input.requestId,
+        runtimeContext: input.runtimeContext,
+      });
+      const sequencedEvent = withSequenceAfter(eventWithRequest, lastSequence);
+      lastSequence = sequencedEvent.sequence;
+      this.appendRuntimeEvent(sequencedEvent, input.chatStreamAdapter);
+      yield sequencedEvent;
+    }
+
+    if (compaction.status === 'failed') {
+      yield* this.failRunBeforeModelStep({
+        requestId: input.requestId,
+        runtimeContext: input.runtimeContext,
+        sessionId: String(input.session.sessionId),
+        run: input.run,
+        step: input.step,
+        error: compaction.failure,
+        startSequence: lastSequence,
+        createdAt: this.clock.now(),
+        chatStreamAdapter: input.chatStreamAdapter,
+      });
+      return;
+    }
+
+    const persistedRun = this.repository.getRun(String(input.run.runId));
+    if (persistedRun?.status === 'cancelled') {
+      return;
+    }
+
+    const finalSessionContext = this.sessionContextInputService.buildSessionContextInput({
+      sessionId: String(input.session.sessionId),
+      currentRunId: String(input.run.runId),
+      currentMessageId: String(input.userMessage.messageId),
+      builtAt: input.payload.createdAt,
+    });
+    const inputContext = buildModelStepInputContextFromSources({
+      contextId: createModelStepInputContextId({
+        stepId: String(input.step.stepId),
+        contextKind: 'initial',
+      }),
+      sessionId: String(input.session.sessionId),
+      runId: String(input.run.runId),
+      stepId: String(input.step.stepId),
+      buildReason: 'initial_model_step',
+      builtAt: input.payload.createdAt,
+      currentMessage: input.userMessage,
+      sessionContext: finalSessionContext,
+      instructionSources,
+      ...(context ? {
+        runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
+      } : {}),
+      budgetPolicy,
+      ...(input.modeSnapshot ? {
+        modeSnapshot: toPermissionModeSnapshot(input.modeSnapshot, input.payload.createdAt),
+        modeSnapshotRef: input.modeSnapshot.modeSnapshotId,
+      } : {}),
+    });
+    const request: ModelStepRuntimeRequest = {
+      requestId: input.requestId,
+      sessionId: input.session.sessionId,
+      runId: input.run.runId,
+      stepId: input.step.stepId,
+      providerId: input.payload.providerId,
+      modelId: input.payload.modelId,
+      inputContext,
+      ...(toolDefinitions && toolDefinitions.length > 0 ? { toolDefinitions } : {}),
+      runtimeContext: input.runtimeContext,
+      createdAt: input.payload.createdAt,
+    };
+    const toolRuntime = input.session.workspacePath
+      ? await this.toolRuntimeFactory?.create({
+          projectRoot: input.session.workspacePath,
+          permissionMode: input.permissionMode,
+        })
+      : undefined;
+
+    yield* this.streamAndPersistModelStep({
+      request,
+      run: input.run,
+      step: input.step,
+      userMessageId: input.userMessage.messageId,
+      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      ...(toolRuntime ? { toolRuntime } : {}),
+      ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
+      startSequence: lastSequence,
+      emitRunStarted: false,
+    });
+  }
+
+  private async *failRunBeforeModelStep(input: {
+    requestId: string;
+    runtimeContext?: RuntimeContext;
+    sessionId: string;
+    run: Run;
+    step: RunStep;
+    error: RuntimeError;
+    startSequence: number;
+    createdAt: string;
+    chatStreamAdapter?: ChatStreamEventAdapter;
+  }): AsyncIterable<RuntimeEvent> {
+    let sequence = input.startSequence;
+    const failedRun = this.repository.saveRun({
+      ...input.run,
+      status: 'failed',
+      completedAt: input.createdAt,
+      error: input.error,
+    });
+    const failedStep = this.repository.saveStep({
+      ...input.step,
+      status: 'failed',
+      completedAt: input.createdAt,
+      error: input.error,
+    });
+
+    for (const event of [
+      createRunFailedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(failedRun.runId),
+        sequence: sequence += 1,
+        createdAt: input.createdAt,
+        error: input.error,
+      }),
+      createStepStatusChangedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(failedRun.runId),
+        stepId: String(failedStep.stepId),
+        sequence: sequence += 1,
+        createdAt: input.createdAt,
+        from: 'running',
+        to: 'failed',
+      }),
+      createStepFailedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(failedRun.runId),
+        sequence: sequence += 1,
+        createdAt: input.createdAt,
+        step: failedStep,
+        error: input.error,
+      }),
+      createRunStatusChangedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(failedRun.runId),
+        sequence: sequence += 1,
+        createdAt: input.createdAt,
+        from: 'running',
+        to: 'failed',
+      }),
+    ]) {
+      const eventWithRequest = withSessionMessageRequestMetadata(event, {
+        requestId: input.requestId,
+        runtimeContext: input.runtimeContext,
+      });
+      this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
+      yield eventWithRequest;
+    }
   }
 
   private async *streamAndPersistModelStep(input: {
@@ -1483,6 +1709,20 @@ function withRequestMetadata(event: RuntimeEvent, request: ModelStepRuntimeReque
     ...event,
     requestId: event.requestId ?? request.requestId,
     ...(event.context ? { context: event.context } : request.runtimeContext ? { context: request.runtimeContext } : {}),
+  };
+}
+
+function withSessionMessageRequestMetadata(
+  event: RuntimeEvent,
+  input: {
+    requestId: string;
+    runtimeContext?: RuntimeContext;
+  },
+): RuntimeEvent {
+  return {
+    ...event,
+    requestId: event.requestId ?? input.requestId,
+    ...(event.context ? { context: event.context } : input.runtimeContext ? { context: input.runtimeContext } : {}),
   };
 }
 

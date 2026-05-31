@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
 import {
+  buildSessionCompactionSummaryInputContext,
+  extractSessionCompactionFileMetadata,
   prepareSessionCompactionInput,
   serializeSessionCompactionInput,
+  shouldRunSessionCompaction,
 } from '@megumi/context-management/session-compaction';
 import { estimateModelInputContextTokens } from '@megumi/context-management/context-budget';
+import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
 import type {
   SessionContextInput,
@@ -183,6 +188,146 @@ describe('prepareSessionCompactionInput', () => {
         tokensBefore: 190000,
       }),
     ).toThrow('keepRecentTokens must be non-negative');
+  });
+});
+
+describe('shouldRunSessionCompaction', () => {
+  it('triggers when preflight input tokens exceed the available model input budget', () => {
+    const budgetPolicy: ContextBudgetPolicy = {
+      modelContextWindow: 40,
+      reservedOutputTokens: 10,
+      keepRecentTokens: 12,
+    };
+    const preflight = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:step-1:preflight',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step_preflight',
+      builtAt,
+      sessionContext: sessionContext({
+        historyEntries: [
+          historyEntry('message-1', 'user', 'a'.repeat(80)),
+          historyEntry('message-2', 'assistant', 'b'.repeat(80)),
+          historyEntry('message-3', 'user', 'c'.repeat(80)),
+        ],
+      }),
+      budgetPolicy: {
+        modelContextWindow: 1_000_000,
+        reservedOutputTokens: 0,
+        keepRecentTokens: 1_000_000,
+      },
+    });
+
+    expect(shouldRunSessionCompaction({
+      preflightInputContext: preflight,
+      budgetPolicy,
+    })).toEqual({
+      shouldCompact: true,
+      triggerReason: 'context_budget_pressure',
+      tokensBefore: preflight.budget.inputTokenEstimate,
+      availableInputTokens: 30,
+    });
+  });
+
+  it('does not trigger when preflight input fits the budget', () => {
+    const budgetPolicy: ContextBudgetPolicy = {
+      modelContextWindow: 8192,
+      reservedOutputTokens: 1024,
+      keepRecentTokens: 4096,
+    };
+    const preflight = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:step-1:preflight',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step_preflight',
+      builtAt,
+      sessionContext: sessionContext(),
+      budgetPolicy: {
+        modelContextWindow: 1_000_000,
+        reservedOutputTokens: 0,
+        keepRecentTokens: 1_000_000,
+      },
+    });
+
+    expect(shouldRunSessionCompaction({
+      preflightInputContext: preflight,
+      budgetPolicy,
+    })).toEqual({
+      shouldCompact: false,
+      triggerReason: 'context_budget_pressure',
+      tokensBefore: preflight.budget.inputTokenEstimate,
+      availableInputTokens: 7168,
+    });
+  });
+});
+
+describe('buildSessionCompactionSummaryInputContext', () => {
+  it('builds an internal summary ModelInputContext without tool continuation replay', () => {
+    const prepared = prepareSessionCompactionInput({
+      sessionId: 'session-1',
+      builtAt,
+      sessionContext: sessionContext(),
+      keepRecentTokens: 3,
+      tokensBefore: 190000,
+    });
+
+    expect(prepared).not.toBeNull();
+
+    const inputContext = buildSessionCompactionSummaryInputContext({
+      contextId: 'model-input-context:compaction-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1:compaction',
+      builtAt,
+      prepared: prepared!,
+      budgetPolicy: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        keepRecentTokens: 4096,
+      },
+    });
+
+    expect(inputContext.trace.buildReason).toBe('session_compaction_summary');
+    expect(inputContext.parts.map((part) => part.kind)).toEqual([
+      'instruction',
+      'current_turn',
+    ]);
+    expect(inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'instruction',
+        instructionKind: 'system',
+        text: expect.stringContaining('context summarization assistant'),
+      }),
+      expect.objectContaining({
+        kind: 'current_turn',
+        role: 'user',
+        text: expect.stringContaining('<conversation>'),
+      }),
+    ]));
+    expect(inputContext.parts).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'tool_continuation' }),
+    ]));
+    expect(JSON.stringify(inputContext)).not.toContain('x'.repeat(1300));
+  });
+});
+
+describe('extractSessionCompactionFileMetadata', () => {
+  it('extracts read and modified file metadata from summary tags', () => {
+    expect(extractSessionCompactionFileMetadata([
+      '## Goal',
+      'Continue 09.',
+      '<read-files>',
+      'packages/context-management/session-compaction.ts',
+      '</read-files>',
+      '<modified-files>',
+      'apps/desktop/src/main/services/session-run.service.ts',
+      '</modified-files>',
+    ].join('\n'))).toEqual({
+      readFiles: ['packages/context-management/session-compaction.ts'],
+      modifiedFiles: ['apps/desktop/src/main/services/session-run.service.ts'],
+    });
   });
 });
 
