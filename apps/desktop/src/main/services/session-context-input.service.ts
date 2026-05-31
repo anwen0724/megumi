@@ -4,6 +4,7 @@ import type {
 } from '@megumi/shared/model-input-context-contracts';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { SessionCompactionEntry } from '@megumi/shared/session-compaction-contracts';
 import type {
   Run,
   RunStep,
@@ -26,6 +27,7 @@ export interface SessionContextInputRepository {
   listRunsBySession(sessionId: string): Run[];
   listStepsByRun(runId: string): RunStep[];
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+  getLatestCompletedSessionCompaction(sessionId: string): SessionCompactionEntry | null;
 }
 
 export interface BuildSessionContextInputFromRepositoryInput {
@@ -43,6 +45,7 @@ export interface SessionContextInputServiceOptions {
 
 const DEFAULT_MAX_HISTORY_ENTRIES = 24;
 const DEFAULT_MAX_RUNTIME_FACTS = 16;
+const DEFAULT_UNRESOLVED_COMPACTION_BOUNDARY_HISTORY_ENTRIES = 4;
 const MAX_SOURCE_ID_LENGTH = 128;
 
 export class SessionContextInputService {
@@ -52,33 +55,44 @@ export class SessionContextInputService {
     const maxHistoryEntries = input.maxHistoryEntries ?? DEFAULT_MAX_HISTORY_ENTRIES;
     const maxRuntimeFacts = input.maxRuntimeFacts ?? DEFAULT_MAX_RUNTIME_FACTS;
     const session = this.options.repository.getSession(input.sessionId);
-    const historyEntries = recent(
-      this.options.repository
-        .listMessagesBySession(input.sessionId)
-        .filter((message) => message.messageId !== input.currentMessageId)
-        .filter((message) => !input.currentRunId || String(message.runId) !== input.currentRunId)
-        .filter(isUserOrAssistantMessage)
-        .filter((message) => message.content.trim().length > 0)
-        .map((message) => historyEntry(message, input.builtAt)),
+    const latestCompletedCompaction = this.options.repository.getLatestCompletedSessionCompaction(input.sessionId);
+    const completedHistoryEntries = this.options.repository
+      .listMessagesBySession(input.sessionId)
+      .filter((message) => message.messageId !== input.currentMessageId)
+      .filter((message) => !input.currentRunId || String(message.runId) !== input.currentRunId)
+      .filter(isUserOrAssistantMessage)
+      .filter((message) => message.content.trim().length > 0)
+      .map((message) => historyEntry(message, input.builtAt));
+    const historySelection = selectHistoryForCompaction({
+      historyEntries: completedHistoryEntries,
+      compaction: latestCompletedCompaction,
       maxHistoryEntries,
-    );
-    const summaryEntries = session?.summary?.trim()
+    });
+    const summaryEntries = latestCompletedCompaction
+      ? [compactionSummaryEntry(latestCompletedCompaction, input.builtAt)]
+      : session?.summary?.trim()
       ? [summaryEntry(session, input.builtAt)]
       : [];
+    const allRuntimeFacts = this.options.repository
+      .listRunsBySession(input.sessionId)
+      .filter((run) => run.runId !== input.currentRunId)
+      .flatMap((run) => runtimeFactsForRun({
+        repository: this.options.repository,
+        run,
+        builtAt: input.builtAt,
+      }));
     const runtimeFacts = recent(
-      this.options.repository
-        .listRunsBySession(input.sessionId)
-        .filter((run) => run.runId !== input.currentRunId)
-        .flatMap((run) => runtimeFactsForRun({
-          repository: this.options.repository,
-          run,
-          builtAt: input.builtAt,
-        })),
+      [
+        ...filterRuntimeFactsForCompactionBoundary(allRuntimeFacts, historySelection),
+        ...(historySelection.status === 'unresolved' && latestCompletedCompaction
+          ? [compactionBoundaryUnresolvedFact(latestCompletedCompaction, input.builtAt)]
+          : []),
+      ],
       maxRuntimeFacts,
     );
 
     return {
-      ...(historyEntries.length > 0 ? { historyEntries } : {}),
+      ...(historySelection.historyEntries.length > 0 ? { historyEntries: historySelection.historyEntries } : {}),
       ...(runtimeFacts.length > 0 ? { runtimeFacts } : {}),
       ...(summaryEntries.length > 0 ? { summaryEntries } : {}),
       maxHistoryEntries,
@@ -141,6 +155,85 @@ function summaryEntry(session: Session, builtAt: string): SessionSummaryEntry {
   };
 }
 
+type CompactionBoundaryStatus = 'none' | 'resolved' | 'unresolved';
+
+interface HistoryCompactionSelection {
+  historyEntries: SessionHistoryEntry[];
+  status: CompactionBoundaryStatus;
+  firstKeptCreatedAt?: string;
+}
+
+function compactionSummaryEntry(compaction: SessionCompactionEntry, builtAt: string): SessionSummaryEntry {
+  const metadata: ModelInputContextSourceRef['metadata'] = {
+    compactionId: compaction.compactionId,
+    ...(compaction.metadata?.previousCompactionId
+      ? { previousCompactionId: compaction.metadata.previousCompactionId }
+      : {}),
+    ...(typeof compaction.metadata?.summarizedSourceCount === 'number'
+      ? { summarizedSourceCount: compaction.metadata.summarizedSourceCount }
+      : {}),
+  };
+
+  return {
+    summaryId: compactId(`session-compaction:${compaction.compactionId}`),
+    summaryKind: 'compaction',
+    text: compaction.summary.trim(),
+    sourceRef: sourceRef({
+      sourceId: `session-compaction:${compaction.compactionId}`,
+      sourceKind: 'session_summary',
+      sourceUri: `session-compaction://${compaction.compactionId}`,
+      builtAt,
+      metadata,
+    }),
+    createdAt: compaction.createdAt,
+  };
+}
+
+function selectHistoryForCompaction(input: {
+  historyEntries: SessionHistoryEntry[];
+  compaction: SessionCompactionEntry | null;
+  maxHistoryEntries: number;
+}): HistoryCompactionSelection {
+  if (!input.compaction) {
+    return {
+      historyEntries: recent(input.historyEntries, input.maxHistoryEntries),
+      status: 'none',
+    };
+  }
+
+  const compaction = input.compaction;
+  const completedEntries = input.historyEntries.filter((entry) => entry.status === 'completed');
+  const firstKeptIndex = completedEntries.findIndex((entry) => sourceRefsMatch(
+    entry.sourceRef,
+    compaction.firstKeptSourceRef,
+  ));
+
+  if (firstKeptIndex >= 0) {
+    const firstKeptEntry = completedEntries[firstKeptIndex];
+    return {
+      historyEntries: recent(completedEntries.slice(firstKeptIndex), input.maxHistoryEntries),
+      status: 'resolved',
+      firstKeptCreatedAt: firstKeptEntry?.createdAt,
+    };
+  }
+
+  return {
+    historyEntries: recent(
+      completedEntries,
+      Math.min(input.maxHistoryEntries, DEFAULT_UNRESOLVED_COMPACTION_BOUNDARY_HISTORY_ENTRIES),
+    ),
+    status: 'unresolved',
+  };
+}
+
+function sourceRefsMatch(left: ModelInputContextSourceRef, right: ModelInputContextSourceRef): boolean {
+  return left.sourceKind === right.sourceKind
+    && (
+      left.sourceId === compactId(right.sourceId)
+      || (!!left.sourceUri && !!right.sourceUri && left.sourceUri === right.sourceUri)
+    );
+}
+
 function runtimeFactsForRun(input: {
   repository: SessionContextInputRepository;
   run: Run;
@@ -200,6 +293,33 @@ function runtimeFactsForRun(input: {
   }
 
   return facts;
+}
+
+function filterRuntimeFactsForCompactionBoundary(
+  facts: SessionRuntimeFact[],
+  historySelection: HistoryCompactionSelection,
+): SessionRuntimeFact[] {
+  if (historySelection.status !== 'resolved' || !historySelection.firstKeptCreatedAt) {
+    return facts;
+  }
+
+  return facts.filter((fact) => !fact.createdAt || fact.createdAt >= historySelection.firstKeptCreatedAt!);
+}
+
+function compactionBoundaryUnresolvedFact(
+  compaction: SessionCompactionEntry,
+  builtAt: string,
+): SessionRuntimeFact {
+  return runtimeFact({
+    id: `session-compaction:${compaction.compactionId}:boundary-unresolved`,
+    factKind: 'other',
+    text: 'Compaction boundary could not be resolved; retained latest compaction summary and a small recent history window.',
+    sourceKind: 'session_summary',
+    sourceUri: `session-compaction://${compaction.compactionId}/boundary-unresolved`,
+    builtAt,
+    createdAt: builtAt,
+    severity: 'warning',
+  });
 }
 
 function runtimeFactForEvent(event: RuntimeEvent, builtAt: string): SessionRuntimeFact | undefined {
@@ -304,12 +424,14 @@ function sourceRef(input: {
   sourceKind: ModelInputContextSourceKind;
   sourceUri: string;
   builtAt: string;
+  metadata?: ModelInputContextSourceRef['metadata'];
 }): ModelInputContextSourceRef {
   return {
     sourceId: compactId(input.sourceId),
     sourceKind: input.sourceKind,
     sourceUri: input.sourceUri,
     loadedAt: input.builtAt,
+    ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 }
 

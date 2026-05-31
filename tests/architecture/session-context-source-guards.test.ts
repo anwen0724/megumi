@@ -47,6 +47,10 @@ const forbiddenProviderAndRendererSources = [
   'list' + 'MessagesBySession',
   'list' + 'RuntimeEventsByRun',
   'list' + 'StepsByRun',
+  'get' + 'LatestCompletedSessionCompaction',
+  'list' + 'SessionCompactionsBySession',
+  'session_' + 'compactions',
+  'Session' + 'CompactionEntry',
   'list' + 'Tool',
 ];
 
@@ -76,5 +80,20 @@ describe('session context source guards', () => {
     for (const forbidden of forbiddenProviderAndRendererSources) {
       expect(source).not.toContain(forbidden);
     }
+  });
+
+  it('keeps compaction repository reads in desktop main and db repository boundaries', () => {
+    const contextManagement = sourceUnder('packages/context-management');
+    const providerAndRenderer = [
+      sourceUnder('packages/ai'),
+      sourceUnder('apps/desktop/src/renderer'),
+    ].join('\n');
+
+    expect(contextManagement).not.toContain('get' + 'LatestCompletedSessionCompaction');
+    expect(contextManagement).not.toContain('session_' + 'compactions');
+    expect(contextManagement).not.toContain('@megumi/db');
+    expect(providerAndRenderer).not.toContain('get' + 'LatestCompletedSessionCompaction');
+    expect(providerAndRenderer).not.toContain('session_' + 'compactions');
+    expect(providerAndRenderer).not.toContain('Session' + 'CompactionEntry');
   });
 });
