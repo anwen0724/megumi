@@ -13,6 +13,7 @@ import type {
   RunStepId,
   WorkspaceId,
 } from './ids';
+import { ContextBudgetPolicySchema, type ContextBudgetPolicy } from './context-budget-contracts';
 import { JsonObjectSchema, type JsonObject } from './json';
 import { IsoDateTimeSchema } from './runtime-validation';
 
@@ -220,8 +221,6 @@ export const ModelCapabilitySummarySchema = z
     supportsStructuredOutput: z.boolean().optional(),
     supportsVision: z.boolean().optional(),
     supportsLongContext: z.boolean().optional(),
-    reservedOutputTokens: z.number().int().nonnegative(),
-    availableInputTokens: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -233,40 +232,6 @@ export interface ModelCapabilitySummary {
   supportsStructuredOutput?: boolean;
   supportsVision?: boolean;
   supportsLongContext?: boolean;
-  reservedOutputTokens: number;
-  availableInputTokens: number;
-}
-
-export const ContextTruncationRecordRefSchema = z
-  .object({
-    truncationRecordId: IdSchema,
-    sourceId: IdSchema.optional(),
-    reason: z.string().min(1),
-  })
-  .strict();
-
-export const ContextBudgetSchema = z
-  .object({
-    modelContextWindow: z.number().int().positive(),
-    reservedOutputTokens: z.number().int().nonnegative(),
-    availableInputTokens: z.number().int().nonnegative(),
-    budgetPolicy: z.string().min(1),
-    packingStrategy: z.string().min(1),
-    truncationRecords: z.array(ContextTruncationRecordRefSchema),
-  })
-  .strict();
-
-export interface ContextBudget {
-  modelContextWindow: number;
-  reservedOutputTokens: number;
-  availableInputTokens: number;
-  budgetPolicy: string;
-  packingStrategy: string;
-  truncationRecords: Array<{
-    truncationRecordId: ContextTruncationRecordId | string;
-    sourceId?: ContextSourceId | string;
-    reason: string;
-  }>;
 }
 
 export const ContextBuildMetadataSchema = z
@@ -307,7 +272,7 @@ export const RunContextSchema = z
     memoryRecallRefs: z.array(IdSchema),
     policySummary: ContextPolicySummarySchema,
     modelCapabilitySummary: ModelCapabilitySummarySchema,
-    budget: ContextBudgetSchema,
+    contextBudgetPolicy: ContextBudgetPolicySchema,
     buildMetadata: ContextBuildMetadataSchema,
     createdAt: IsoDateTimeSchema,
     updatedAt: IsoDateTimeSchema.optional(),
@@ -331,7 +296,7 @@ export interface RunContext {
   memoryRecallRefs: string[];
   policySummary: ContextPolicySummary;
   modelCapabilitySummary: ModelCapabilitySummary;
-  budget: ContextBudget;
+  contextBudgetPolicy: ContextBudgetPolicy;
   buildMetadata: ContextBuildMetadata;
   createdAt: IsoDateTime;
   updatedAt?: IsoDateTime;

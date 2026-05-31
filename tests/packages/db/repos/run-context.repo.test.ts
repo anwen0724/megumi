@@ -74,16 +74,11 @@ describe('RunContextRepository', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-chat',
         modelContextWindow: 64000,
-        reservedOutputTokens: 4096,
-        availableInputTokens: 59904,
       },
-      budget: {
+      contextBudgetPolicy: {
         modelContextWindow: 64000,
         reservedOutputTokens: 4096,
-        availableInputTokens: 59904,
-        budgetPolicy: 'balanced',
-        packingStrategy: 'priority_then_recent',
-        truncationRecords: [],
+        keepRecentTokens: 59904,
       },
       buildMetadata: {
         buildReason: 'run_baseline',
@@ -136,7 +131,14 @@ describe('RunContextRepository', () => {
       snapshotPolicy: 'metadata_only',
     });
 
-    expect(context.getBaseline('context-1')?.goal).toBe('Understand workspace context');
+    const baseline = context.getBaseline('context-1');
+    expect(baseline?.goal).toBe('Understand workspace context');
+    expect(baseline?.contextBudgetPolicy).toEqual({
+      modelContextWindow: 64000,
+      reservedOutputTokens: 4096,
+      keepRecentTokens: 59904,
+    });
+    expect(baseline).not.toHaveProperty('budget');
     expect(context.listSourcesByRun('run-1')).toHaveLength(1);
     expect(context.listPatchesByRun('run-1')[0]).toMatchObject({ status: 'applied' });
     expect(context.listEffectiveBuildsByRun('run-1')[0]).toMatchObject({ snapshotPolicy: 'metadata_only' });

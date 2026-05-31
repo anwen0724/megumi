@@ -37,16 +37,11 @@ function context(): RunContext {
       providerId: 'deepseek',
       modelId: 'deepseek-chat',
       modelContextWindow: 64000,
-      reservedOutputTokens: 4096,
-      availableInputTokens: 59904,
     },
-    budget: {
+    contextBudgetPolicy: {
       modelContextWindow: 64000,
       reservedOutputTokens: 4096,
-      availableInputTokens: 59904,
-      budgetPolicy: 'balanced',
-      packingStrategy: 'priority_then_recent',
-      truncationRecords: [],
+      keepRecentTokens: 59904,
     },
     buildMetadata: {
       buildReason: 'run_baseline',

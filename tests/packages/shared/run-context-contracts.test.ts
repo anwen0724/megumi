@@ -94,16 +94,11 @@ describe('run context contracts', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-chat',
         modelContextWindow: 64000,
-        reservedOutputTokens: 4096,
-        availableInputTokens: 59904,
       },
-      budget: {
+      contextBudgetPolicy: {
         modelContextWindow: 64000,
         reservedOutputTokens: 4096,
-        availableInputTokens: 59904,
-        budgetPolicy: 'balanced',
-        packingStrategy: 'priority_then_recent',
-        truncationRecords: [],
+        keepRecentTokens: 59904,
       },
       buildMetadata: {
         buildReason: 'run_baseline',
@@ -119,7 +114,7 @@ describe('run context contracts', () => {
     expect(context.inlineContents[0]?.text).toContain('export const');
   });
 
-  it('parses model capability summaries with tool call support naming', () => {
+  it('keeps model capability summaries free of budget results', () => {
     const capabilitySummary = ModelCapabilitySummarySchema.parse({
       providerId: 'deepseek',
       modelId: 'deepseek-chat',
@@ -128,14 +123,73 @@ describe('run context contracts', () => {
       supportsStructuredOutput: false,
       supportsVision: false,
       supportsLongContext: true,
-      reservedOutputTokens: 4096,
-      availableInputTokens: 59904,
     });
 
     expect(capabilitySummary.supportsToolCall).toBe(true);
     expect(() => ModelCapabilitySummarySchema.parse({
       ...capabilitySummary,
       supportsToolUse: true,
+    })).toThrow();
+    expect(() => ModelCapabilitySummarySchema.parse({
+      ...capabilitySummary,
+      reservedOutputTokens: 4096,
+    })).toThrow();
+    expect(() => ModelCapabilitySummarySchema.parse({
+      ...capabilitySummary,
+      availableInputTokens: 59904,
+    })).toThrow();
+  });
+
+  it('rejects legacy RunContext final budget results', () => {
+    const validRunContext = {
+      contextId: 'context-1',
+      runId: 'run-1',
+      workspaceBoundary: workspaceBoundary(),
+      goal: 'Review workspace context',
+      constraints: ['Do not read secrets'],
+      inlineContents: [],
+      resourceRefs: [],
+      conversationRefs: [],
+      messageSummaries: [],
+      workspaceSources: [],
+      toolObservationRefs: [],
+      memoryRecallRefs: [],
+      policySummary: {
+        workspaceAccess: 'workspace-read',
+        restrictedResources: ['.env'],
+        approvalSummary: 'No approval grants are implied by context.',
+        sandboxSummary: 'Context acquisition is read-only.',
+      },
+      modelCapabilitySummary: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-chat',
+        modelContextWindow: 64000,
+      },
+      contextBudgetPolicy: {
+        modelContextWindow: 64000,
+        reservedOutputTokens: 4096,
+        keepRecentTokens: 59904,
+      },
+      buildMetadata: {
+        buildReason: 'run_baseline',
+        builtAt: createdAt,
+        selectionRecordIds: [],
+        redactionRecordIds: [],
+        truncationRecordIds: [],
+      },
+      createdAt,
+    };
+
+    expect(() => RunContextSchema.parse({
+      ...validRunContext,
+      budget: {
+        modelContextWindow: 64000,
+        reservedOutputTokens: 4096,
+        availableInputTokens: 59904,
+        budgetPolicy: 'balanced',
+        packingStrategy: 'priority_then_recent',
+        truncationRecords: [],
+      },
     })).toThrow();
   });
 
