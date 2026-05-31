@@ -101,7 +101,6 @@ describe('run context workspace grounding source guards', () => {
       .filter((file) => projectPath(file) !== 'packages/core/run-runtime/tool-loop.ts');
 
     const forbiddenPatterns = [
-      /ToolCall/,
       /tool registry/i,
       /approval workflow/i,
       /policy evaluator/i,
