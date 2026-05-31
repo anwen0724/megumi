@@ -1204,6 +1204,100 @@ describe('SessionRunService', () => {
     ]);
   });
 
+  it('does not overwrite a cancelled run when an already-started maintenance compaction fails', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    let resolveCompaction: (() => void) | undefined;
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          await new Promise<void>((resolve) => {
+            resolveCompaction = resolve;
+          });
+          return {
+            status: 'failed',
+            events: [{
+              eventId: 'event-compaction-failed',
+              schemaVersion: 1,
+              eventType: 'context.compaction.failed',
+              runId: input.runId,
+              sessionId: input.sessionId,
+              stepId: input.stepId,
+              requestId: input.requestId,
+              sequence: input.startSequence + 1,
+              createdAt: '2026-05-17T00:00:00.000Z',
+              source: 'main',
+              visibility: 'system',
+              persist: 'required',
+              payload: {
+                triggerReason: 'context_budget_pressure',
+                tokensBefore: 100,
+                error: {
+                  code: 'provider_network_error',
+                  message: 'Summary failed.',
+                  severity: 'error',
+                  retryable: true,
+                  source: 'provider',
+                },
+              },
+            }],
+            failure: {
+              code: 'provider_network_error',
+              message: 'Summary failed.',
+              severity: 'error',
+              retryable: true,
+              source: 'provider',
+            },
+          };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    const iterator = result.events[Symbol.asyncIterator]();
+    expect((await iterator.next()).value.eventType).toBe('run.started');
+    expect(service.cancelSessionMessage({
+      targetRequestId: 'request-1',
+    })).toBe(true);
+    resolveCompaction?.();
+
+    const remaining: RuntimeEvent[] = [];
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) {
+        break;
+      }
+      remaining.push(next.value);
+    }
+
+    expect(requests).toEqual([]);
+    expect(remaining.map((event) => event.eventType)).toEqual([
+      'context.compaction.failed',
+    ]);
+    expect(service.listRunsBySession('session-1')).toEqual([
+      expect.objectContaining({ runId: 'run-1', status: 'cancelled' }),
+    ]);
+  });
+
   it('passes available project tool definitions to the provider request when a session has a workspace', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const toolDefinitions: ToolDefinition[] = [{

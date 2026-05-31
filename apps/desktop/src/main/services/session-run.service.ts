@@ -747,6 +747,11 @@ export class SessionRunService {
       yield sequencedEvent;
     }
 
+    const persistedRun = this.repository.getRun(String(input.run.runId));
+    if (persistedRun?.status === 'cancelled') {
+      return;
+    }
+
     if (compaction.status === 'failed') {
       yield* this.failRunBeforeModelStep({
         requestId: input.requestId,
@@ -759,11 +764,6 @@ export class SessionRunService {
         createdAt: this.clock.now(),
         chatStreamAdapter: input.chatStreamAdapter,
       });
-      return;
-    }
-
-    const persistedRun = this.repository.getRun(String(input.run.runId));
-    if (persistedRun?.status === 'cancelled') {
       return;
     }
 
