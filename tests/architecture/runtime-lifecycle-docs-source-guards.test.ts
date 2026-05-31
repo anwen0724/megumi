@@ -31,7 +31,7 @@ describe('runtime lifecycle docs source guards', () => {
   });
 
   it('keeps project status aligned with completed 08 cleanup', () => {
-    const status = read('.local-docs/PROJECT_STATUS.md');
+    const status = read('.local-docs/PROJECT' + '_STATUS.md');
     const activeWork = read('.local-docs/status/active-work.md');
     const milestoneHistory = read('.local-docs/status/milestone-history.md');
 

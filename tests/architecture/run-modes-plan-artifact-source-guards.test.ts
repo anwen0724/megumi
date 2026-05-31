@@ -85,7 +85,7 @@ describe('run modes and plan artifact source guards', () => {
   it('does not keep old 04-stage guard assumptions after 05 tool foundation is active', () => {
     const currentArchitecture = readProjectFile(join(ROOT, '.local-docs/architecture/agent-runtime-architecture.md'));
 
-    expect(currentArchitecture).toContain('tool-use-centered');
+    expect(currentArchitecture).toContain('tool-call-centered');
     expect(currentArchitecture).toContain('PermissionPolicy');
     expect(currentArchitecture).toContain('ApprovalRequest');
   });
