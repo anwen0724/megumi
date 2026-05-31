@@ -7,6 +7,10 @@ import type {
   RunStep,
   SessionMessage,
 } from '@megumi/shared/session-run-contracts';
+import {
+  SessionCompactionEntrySchema,
+  type SessionCompactionEntry,
+} from '@megumi/shared/session-compaction-contracts';
 import type { JsonObject } from '@megumi/shared/json';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -102,6 +106,18 @@ interface RuntimeEventRow {
   event_json: string;
 }
 
+interface SessionCompactionRow {
+  compaction_id: string;
+  session_id: string;
+  summary: string;
+  first_kept_source_ref_json: string;
+  tokens_before: number;
+  trigger_reason: string;
+  status: string;
+  created_at: string;
+  metadata_json: Nullable<string>;
+}
+
 interface ModelStepRow {
   model_step_id: string;
   run_id: string;
@@ -166,6 +182,87 @@ export class SessionRunRepository {
     return (this.database
       .prepare('SELECT * FROM sessions ORDER BY updated_at DESC')
       .all() as SessionRow[]).map(fromSessionRow);
+  }
+
+  saveSessionCompaction(entry: SessionCompactionEntry): void {
+    const parsed = SessionCompactionEntrySchema.parse(entry);
+
+    this.database.prepare(`
+      INSERT INTO session_compactions (
+        compaction_id,
+        session_id,
+        summary,
+        first_kept_source_ref_json,
+        tokens_before,
+        trigger_reason,
+        status,
+        created_at,
+        metadata_json
+      ) VALUES (
+        @compactionId,
+        @sessionId,
+        @summary,
+        @firstKeptSourceRefJson,
+        @tokensBefore,
+        @triggerReason,
+        @status,
+        @createdAt,
+        @metadataJson
+      )
+      ON CONFLICT(compaction_id) DO UPDATE SET
+        session_id = excluded.session_id,
+        summary = excluded.summary,
+        first_kept_source_ref_json = excluded.first_kept_source_ref_json,
+        tokens_before = excluded.tokens_before,
+        trigger_reason = excluded.trigger_reason,
+        status = excluded.status,
+        created_at = excluded.created_at,
+        metadata_json = excluded.metadata_json
+    `).run({
+      compactionId: parsed.compactionId,
+      sessionId: parsed.sessionId,
+      summary: parsed.summary,
+      firstKeptSourceRefJson: stringifyJson(parsed.firstKeptSourceRef),
+      tokensBefore: parsed.tokensBefore,
+      triggerReason: parsed.triggerReason,
+      status: parsed.status,
+      createdAt: parsed.createdAt,
+      metadataJson: parsed.metadata ? stringifyJson(parsed.metadata) : null,
+    });
+  }
+
+  getSessionCompaction(compactionId: string): SessionCompactionEntry | null {
+    const row = this.database
+      .prepare('SELECT * FROM session_compactions WHERE compaction_id = ?')
+      .get(compactionId) as SessionCompactionRow | undefined;
+
+    return row ? fromSessionCompactionRow(row) : null;
+  }
+
+  listSessionCompactionsBySession(sessionId: string): SessionCompactionEntry[] {
+    return (this.database
+      .prepare(`
+        SELECT *
+        FROM session_compactions
+        WHERE session_id = ?
+        ORDER BY created_at DESC, compaction_id DESC
+      `)
+      .all(sessionId) as SessionCompactionRow[]).map(fromSessionCompactionRow);
+  }
+
+  getLatestCompletedSessionCompaction(sessionId: string): SessionCompactionEntry | null {
+    const row = this.database
+      .prepare(`
+        SELECT *
+        FROM session_compactions
+        WHERE session_id = ?
+          AND status = 'completed'
+        ORDER BY created_at DESC, compaction_id DESC
+        LIMIT 1
+      `)
+      .get(sessionId) as SessionCompactionRow | undefined;
+
+    return row ? fromSessionCompactionRow(row) : null;
   }
 
   saveMessage(message: SessionMessage): SessionMessage {
@@ -412,6 +509,21 @@ function fromSessionRow(row: SessionRow): Session {
     ...(row.summary ? { summary: row.summary } : {}),
     ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
   };
+}
+
+function fromSessionCompactionRow(row: SessionCompactionRow): SessionCompactionEntry {
+  return SessionCompactionEntrySchema.parse({
+    compactionId: row.compaction_id,
+    sessionId: row.session_id,
+    summary: row.summary,
+    summaryKind: 'compaction',
+    firstKeptSourceRef: parseJson(row.first_kept_source_ref_json),
+    tokensBefore: row.tokens_before,
+    triggerReason: row.trigger_reason,
+    status: row.status,
+    createdAt: row.created_at,
+    metadata: row.metadata_json ? parseJson(row.metadata_json) : undefined,
+  });
 }
 
 function toSessionMessageRow(message: SessionMessage): SessionMessageRow {

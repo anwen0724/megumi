@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import type { SessionCompactionEntry } from '@megumi/shared/session-compaction-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 let db: Database.Database | null = null;
@@ -125,6 +126,67 @@ describe('SessionRunRepository', () => {
     });
 
     expect(repo.listRunsBySession('session-1').map((run) => run.runId)).toEqual(['run-1', 'run-2']);
+  });
+
+  it('saves and reads session compactions by id, session, and latest completed', () => {
+    const repo = createRepo();
+    repo.saveSession({
+      sessionId: 'session-1',
+      title: 'Compaction session',
+      status: 'active',
+      createdAt: '2026-05-31T10:00:00.000Z',
+      updatedAt: '2026-05-31T10:00:00.000Z',
+    });
+
+    const firstCompaction: SessionCompactionEntry = {
+      compactionId: 'compaction-1',
+      sessionId: 'session-1',
+      summary: '第一段摘要',
+      summaryKind: 'compaction',
+      firstKeptSourceRef: {
+        sourceId: 'message-3',
+        sourceKind: 'session_message',
+        loadedAt: '2026-05-31T10:00:00.000Z',
+      },
+      tokensBefore: 180000,
+      triggerReason: 'context_budget_pressure',
+      status: 'completed',
+      createdAt: '2026-05-31T10:05:00.000Z',
+      metadata: {
+        summarizedSourceCount: 2,
+      },
+    };
+
+    const secondCompaction: SessionCompactionEntry = {
+      ...firstCompaction,
+      compactionId: 'compaction-2',
+      summary: '第二段摘要',
+      firstKeptSourceRef: {
+        sourceId: 'message-6',
+        sourceKind: 'session_message',
+        loadedAt: '2026-05-31T10:10:00.000Z',
+      },
+      tokensBefore: 190000,
+      createdAt: '2026-05-31T10:15:00.000Z',
+      metadata: {
+        previousCompactionId: 'compaction-1',
+        summarizedSourceCount: 3,
+      },
+    };
+
+    repo.saveSessionCompaction(firstCompaction);
+    repo.saveSessionCompaction(secondCompaction);
+
+    expect(repo.getSessionCompaction('compaction-1')).toEqual(firstCompaction);
+    expect(repo.listSessionCompactionsBySession('session-1')).toEqual([
+      secondCompaction,
+      firstCompaction,
+    ]);
+    expect(repo.getLatestCompletedSessionCompaction('session-1')).toEqual(
+      secondCompaction,
+    );
+    expect(repo.getSessionCompaction('missing-compaction')).toBeNull();
+    expect(repo.getLatestCompletedSessionCompaction('missing-session')).toBeNull();
   });
 
   it('appends runtime events and rejects duplicate run sequences', () => {

@@ -4,6 +4,7 @@ export * from './provider-contracts';
 export * from './model-contracts';
 export * from './agent-contracts';
 export * from './session-run-contracts';
+export * from './session-compaction-contracts';
 export * from './model-step-contracts';
 export * from './model-input-context-contracts';
 export * from './context-budget-contracts';

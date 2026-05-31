@@ -149,6 +149,19 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS session_compactions (
+      compaction_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      first_kept_source_ref_json TEXT NOT NULL,
+      tokens_before INTEGER NOT NULL,
+      trigger_reason TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS runs (
       run_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -876,6 +889,12 @@ export function migrateDatabase(database: MegumiDatabase): void {
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_session_messages_session_id
     ON session_messages(session_id);
+
+    CREATE INDEX IF NOT EXISTS idx_session_compactions_session_created
+    ON session_compactions(session_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_session_compactions_session_status_created
+    ON session_compactions(session_id, status, created_at DESC);
 
     CREATE INDEX IF NOT EXISTS idx_runs_session_id
     ON runs(session_id);

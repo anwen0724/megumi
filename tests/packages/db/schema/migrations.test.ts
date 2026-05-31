@@ -14,26 +14,34 @@ function createTestDb(): Database.Database {
 function tableColumns(
   database: Database.Database,
   tableName: string,
-): Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }> {
+): Array<{ name: string; type: string; notnull: 0 | 1; pk: 0 | 1 }> {
   return database
     .prepare(`PRAGMA table_info(${tableName})`)
-    .all() as Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }>;
+    .all() as Array<{ name: string; type: string; notnull: 0 | 1; pk: 0 | 1 }>;
 }
 
 function columnByName(
-  columns: Array<{ name: string; notnull: 0 | 1; pk: 0 | 1 }>,
+  columns: Array<{ name: string; type: string; notnull: 0 | 1; pk: 0 | 1 }>,
   name: string,
-): { name: string; notnull: 0 | 1; pk: 0 | 1 } | undefined {
+): { name: string; type: string; notnull: 0 | 1; pk: 0 | 1 } | undefined {
   return columns.find((column) => column.name === name);
 }
 
 function foreignKeys(
   database: Database.Database,
   tableName: string,
-): Array<{ from: string; table: string; on_delete: string }> {
+): Array<{ from: string; table: string; to: string; on_delete: string }> {
   return database
     .prepare(`PRAGMA foreign_key_list(${tableName})`)
-    .all() as Array<{ from: string; table: string; on_delete: string }>;
+    .all() as Array<{ from: string; table: string; to: string; on_delete: string }>;
+}
+
+function indexNames(database: Database.Database): string[] {
+  return (
+    database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name ASC")
+      .all() as Array<{ name: string }>
+  ).map((row) => row.name);
 }
 
 function tableExists(database: Database.Database, tableName: string): boolean {
@@ -349,6 +357,79 @@ describe('provider settings migrations', () => {
       'idx_tool_results_tool_call_id',
       'idx_permission_decisions_tool_call_id',
       'idx_timeline_messages_session_order',
+    ]));
+  });
+
+  it('creates session compaction table, foreign key, and indexes', () => {
+    const database = createTestDb();
+
+    migrateDatabase(database);
+
+    expect(tableExists(database, 'session_compactions')).toBe(true);
+
+    const columns = tableColumns(database, 'session_compactions');
+    expect(columns.map((column) => column.name)).toEqual([
+      'compaction_id',
+      'session_id',
+      'summary',
+      'first_kept_source_ref_json',
+      'tokens_before',
+      'trigger_reason',
+      'status',
+      'created_at',
+      'metadata_json',
+    ]);
+
+    expect(columnByName(columns, 'compaction_id')).toMatchObject({
+      type: 'TEXT',
+      notnull: 0,
+      pk: 1,
+    });
+    expect(columnByName(columns, 'session_id')).toMatchObject({
+      type: 'TEXT',
+      notnull: 1,
+    });
+    expect(columnByName(columns, 'summary')).toMatchObject({
+      type: 'TEXT',
+      notnull: 1,
+    });
+    expect(columnByName(columns, 'first_kept_source_ref_json')).toMatchObject({
+      type: 'TEXT',
+      notnull: 1,
+    });
+    expect(columnByName(columns, 'tokens_before')).toMatchObject({
+      type: 'INTEGER',
+      notnull: 1,
+    });
+    expect(columnByName(columns, 'trigger_reason')).toMatchObject({
+      type: 'TEXT',
+      notnull: 1,
+    });
+    expect(columnByName(columns, 'status')).toMatchObject({
+      type: 'TEXT',
+      notnull: 1,
+    });
+    expect(columnByName(columns, 'created_at')).toMatchObject({
+      type: 'TEXT',
+      notnull: 1,
+    });
+    expect(columnByName(columns, 'metadata_json')).toMatchObject({
+      type: 'TEXT',
+      notnull: 0,
+    });
+
+    expect(foreignKeys(database, 'session_compactions')).toEqual([
+      expect.objectContaining({
+        table: 'sessions',
+        from: 'session_id',
+        to: 'session_id',
+        on_delete: 'CASCADE',
+      }),
+    ]);
+
+    expect(indexNames(database)).toEqual(expect.arrayContaining([
+      'idx_session_compactions_session_created',
+      'idx_session_compactions_session_status_created',
     ]));
   });
 
