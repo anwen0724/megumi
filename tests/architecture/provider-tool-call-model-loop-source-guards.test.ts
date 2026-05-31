@@ -8,11 +8,12 @@ function read(relativePath: string): string {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
-describe('provider tool use model loop source guards', () => {
-  it('keeps provider loop centered on ToolCall and ToolResult', () => {
+describe('provider tool call model loop source guards', () => {
+  it('keeps provider loop centered on ToolCall, ToolResult, and ToolExecution events', () => {
     const toolLoop = read('packages/core/run-runtime/tool-loop.ts');
 
     expect(toolLoop).toContain('ToolCallHandlerPort');
+    expect(toolLoop).toContain('ToolExecution');
     expect(toolLoop).toContain('tool.call.created');
     expect(toolLoop).toContain('tool.result.created');
     expect(toolLoop).toContain('toolResults');
