@@ -162,6 +162,82 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS session_source_entries (
+      source_entry_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      parent_source_entry_id TEXT,
+      source_kind TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_uri TEXT,
+      source_ref_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      UNIQUE(session_id, source_kind, source_id),
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(parent_source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS session_active_leaves (
+      session_id TEXT PRIMARY KEY,
+      leaf_source_entry_id TEXT,
+      updated_at TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(leaf_source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS session_branch_markers (
+      branch_marker_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      previous_leaf_source_entry_id TEXT,
+      target_leaf_source_entry_id TEXT,
+      selected_source_ref_json TEXT NOT NULL,
+      seed_source_ref_json TEXT,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      branch_marker_json TEXT NOT NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(previous_leaf_source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL,
+      FOREIGN KEY(target_leaf_source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS session_retry_attempts (
+      retry_attempt_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      base_run_id TEXT,
+      base_source_entry_id TEXT,
+      attempt_number INTEGER NOT NULL,
+      retry_kind TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL,
+      retryable INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      error_json TEXT,
+      metadata_json TEXT,
+      attempt_json TEXT NOT NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(base_run_id) REFERENCES runs(run_id) ON DELETE SET NULL,
+      FOREIGN KEY(base_source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS session_interrupted_run_markers (
+      interrupted_marker_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      previous_status TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      marked_at TEXT NOT NULL,
+      metadata_json TEXT,
+      marker_json TEXT NOT NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS runs (
       run_id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -296,6 +372,260 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
     );
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_source_entries_parent_same_session_insert
+    BEFORE INSERT ON session_source_entries
+    WHEN NEW.parent_source_entry_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM session_source_entries parent
+        WHERE parent.source_entry_id = NEW.parent_source_entry_id
+          AND parent.session_id = NEW.session_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'session_source_entries.parent_source_entry_id must belong to the same session');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_source_entries_parent_same_session_update
+    BEFORE UPDATE OF session_id, parent_source_entry_id ON session_source_entries
+    WHEN NEW.parent_source_entry_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM session_source_entries parent
+        WHERE parent.source_entry_id = NEW.parent_source_entry_id
+          AND parent.session_id = NEW.session_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'session_source_entries.parent_source_entry_id must belong to the same session');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_source_entries_references_same_session_update
+    BEFORE UPDATE OF session_id ON session_source_entries
+    WHEN NEW.session_id <> OLD.session_id
+    BEGIN
+      SELECT RAISE(ABORT, 'session_source_entries.session_id cannot move while referenced by a source child')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_source_entries child
+        WHERE child.parent_source_entry_id = OLD.source_entry_id
+          AND child.session_id <> NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'session_source_entries.session_id cannot move while referenced by an active leaf')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_active_leaves active_leaf
+        WHERE active_leaf.leaf_source_entry_id = OLD.source_entry_id
+          AND active_leaf.session_id <> NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'session_source_entries.session_id cannot move while referenced by a branch previous leaf')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_branch_markers marker
+        WHERE marker.previous_leaf_source_entry_id = OLD.source_entry_id
+          AND marker.session_id <> NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'session_source_entries.session_id cannot move while referenced by a branch target leaf')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_branch_markers marker
+        WHERE marker.target_leaf_source_entry_id = OLD.source_entry_id
+          AND marker.session_id <> NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'session_source_entries.session_id cannot move while referenced by a retry base source')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_retry_attempts attempt
+        WHERE attempt.base_source_entry_id = OLD.source_entry_id
+          AND attempt.session_id <> NEW.session_id
+      );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_active_leaves_leaf_same_session_insert
+    BEFORE INSERT ON session_active_leaves
+    WHEN NEW.leaf_source_entry_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM session_source_entries leaf
+        WHERE leaf.source_entry_id = NEW.leaf_source_entry_id
+          AND leaf.session_id = NEW.session_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'session_active_leaves.leaf_source_entry_id must belong to the same session');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_active_leaves_leaf_same_session_update
+    BEFORE UPDATE OF session_id, leaf_source_entry_id ON session_active_leaves
+    WHEN NEW.leaf_source_entry_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM session_source_entries leaf
+        WHERE leaf.source_entry_id = NEW.leaf_source_entry_id
+          AND leaf.session_id = NEW.session_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'session_active_leaves.leaf_source_entry_id must belong to the same session');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_branch_markers_sources_same_session_insert
+    BEFORE INSERT ON session_branch_markers
+    BEGIN
+      SELECT RAISE(ABORT, 'session_branch_markers.previous_leaf_source_entry_id must belong to the same session')
+      WHERE NEW.previous_leaf_source_entry_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM session_source_entries previous_leaf
+          WHERE previous_leaf.source_entry_id = NEW.previous_leaf_source_entry_id
+            AND previous_leaf.session_id = NEW.session_id
+        );
+
+      SELECT RAISE(ABORT, 'session_branch_markers.target_leaf_source_entry_id must belong to the same session')
+      WHERE NEW.target_leaf_source_entry_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM session_source_entries target_leaf
+          WHERE target_leaf.source_entry_id = NEW.target_leaf_source_entry_id
+            AND target_leaf.session_id = NEW.session_id
+        );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_branch_markers_sources_same_session_update
+    BEFORE UPDATE OF session_id, previous_leaf_source_entry_id, target_leaf_source_entry_id ON session_branch_markers
+    BEGIN
+      SELECT RAISE(ABORT, 'session_branch_markers.previous_leaf_source_entry_id must belong to the same session')
+      WHERE NEW.previous_leaf_source_entry_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM session_source_entries previous_leaf
+          WHERE previous_leaf.source_entry_id = NEW.previous_leaf_source_entry_id
+            AND previous_leaf.session_id = NEW.session_id
+        );
+
+      SELECT RAISE(ABORT, 'session_branch_markers.target_leaf_source_entry_id must belong to the same session')
+      WHERE NEW.target_leaf_source_entry_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM session_source_entries target_leaf
+          WHERE target_leaf.source_entry_id = NEW.target_leaf_source_entry_id
+            AND target_leaf.session_id = NEW.session_id
+        );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_retry_attempts_refs_same_session_insert
+    BEFORE INSERT ON session_retry_attempts
+    BEGIN
+      SELECT RAISE(ABORT, 'session_retry_attempts.run_id must belong to the same session')
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM runs run
+        WHERE run.run_id = NEW.run_id
+          AND run.session_id = NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'session_retry_attempts.base_run_id must belong to the same session')
+      WHERE NEW.base_run_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM runs base_run
+          WHERE base_run.run_id = NEW.base_run_id
+            AND base_run.session_id = NEW.session_id
+        );
+
+      SELECT RAISE(ABORT, 'session_retry_attempts.base_source_entry_id must belong to the same session')
+      WHERE NEW.base_source_entry_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM session_source_entries base_source
+          WHERE base_source.source_entry_id = NEW.base_source_entry_id
+            AND base_source.session_id = NEW.session_id
+        );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_retry_attempts_refs_same_session_update
+    BEFORE UPDATE OF session_id, run_id, base_run_id, base_source_entry_id ON session_retry_attempts
+    BEGIN
+      SELECT RAISE(ABORT, 'session_retry_attempts.run_id must belong to the same session')
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM runs run
+        WHERE run.run_id = NEW.run_id
+          AND run.session_id = NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'session_retry_attempts.base_run_id must belong to the same session')
+      WHERE NEW.base_run_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM runs base_run
+          WHERE base_run.run_id = NEW.base_run_id
+            AND base_run.session_id = NEW.session_id
+        );
+
+      SELECT RAISE(ABORT, 'session_retry_attempts.base_source_entry_id must belong to the same session')
+      WHERE NEW.base_source_entry_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM session_source_entries base_source
+          WHERE base_source.source_entry_id = NEW.base_source_entry_id
+            AND base_source.session_id = NEW.session_id
+        );
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_interrupted_run_markers_run_same_session_insert
+    BEFORE INSERT ON session_interrupted_run_markers
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM runs run
+      WHERE run.run_id = NEW.run_id
+        AND run.session_id = NEW.session_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'session_interrupted_run_markers.run_id must belong to the same session');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_session_interrupted_run_markers_run_same_session_update
+    BEFORE UPDATE OF session_id, run_id ON session_interrupted_run_markers
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM runs run
+      WHERE run.run_id = NEW.run_id
+        AND run.session_id = NEW.session_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'session_interrupted_run_markers.run_id must belong to the same session');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_runs_active_path_references_same_session_update
+    BEFORE UPDATE OF session_id ON runs
+    WHEN NEW.session_id <> OLD.session_id
+    BEGIN
+      SELECT RAISE(ABORT, 'runs.session_id cannot move while referenced by a retry attempt run')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_retry_attempts attempt
+        WHERE attempt.run_id = OLD.run_id
+          AND attempt.session_id <> NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'runs.session_id cannot move while referenced by a retry attempt base run')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_retry_attempts attempt
+        WHERE attempt.base_run_id = OLD.run_id
+          AND attempt.session_id <> NEW.session_id
+      );
+
+      SELECT RAISE(ABORT, 'runs.session_id cannot move while referenced by an interrupted run marker')
+      WHERE EXISTS (
+        SELECT 1
+        FROM session_interrupted_run_markers marker
+        WHERE marker.run_id = OLD.run_id
+          AND marker.session_id <> NEW.session_id
+      );
+    END;
   `);
 
   database.exec(`
@@ -895,6 +1225,33 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
     CREATE INDEX IF NOT EXISTS idx_session_compactions_session_status_created
     ON session_compactions(session_id, status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_session_source_entries_session_parent
+    ON session_source_entries(session_id, parent_source_entry_id);
+
+    CREATE INDEX IF NOT EXISTS idx_session_source_entries_session_ref
+    ON session_source_entries(session_id, source_kind, source_id);
+
+    CREATE INDEX IF NOT EXISTS idx_session_source_entries_parent
+    ON session_source_entries(parent_source_entry_id);
+
+    CREATE INDEX IF NOT EXISTS idx_session_active_leaves_leaf
+    ON session_active_leaves(leaf_source_entry_id);
+
+    CREATE INDEX IF NOT EXISTS idx_session_branch_markers_session_created
+    ON session_branch_markers(session_id, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_session_retry_attempts_run_attempt
+    ON session_retry_attempts(run_id, attempt_number);
+
+    CREATE INDEX IF NOT EXISTS idx_session_retry_attempts_session_created
+    ON session_retry_attempts(session_id, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_session_interrupted_run_markers_run
+    ON session_interrupted_run_markers(run_id, marked_at);
+
+    CREATE INDEX IF NOT EXISTS idx_session_interrupted_run_markers_session
+    ON session_interrupted_run_markers(session_id, marked_at);
 
     CREATE INDEX IF NOT EXISTS idx_runs_session_id
     ON runs(session_id);

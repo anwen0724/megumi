@@ -258,6 +258,60 @@ function seedLegacyToolPersistenceSchema(database: Database.Database): void {
   `);
 }
 
+function seedActivePathOwnershipBase(database: Database.Database): void {
+  database.exec(`
+    INSERT INTO sessions (
+      session_id,
+      title,
+      status,
+      created_at,
+      updated_at
+    ) VALUES
+      ('session-a', 'Session A', 'active', '2026-05-31T10:00:00.000Z', '2026-05-31T10:00:00.000Z'),
+      ('session-b', 'Session B', 'active', '2026-05-31T10:00:00.000Z', '2026-05-31T10:00:00.000Z');
+
+    INSERT INTO runs (
+      run_id,
+      session_id,
+      mode,
+      goal,
+      status,
+      created_at
+    ) VALUES
+      ('run-a', 'session-a', 'chat', 'A', 'completed', '2026-05-31T10:01:00.000Z'),
+      ('run-b', 'session-b', 'chat', 'B', 'completed', '2026-05-31T10:01:00.000Z');
+
+    INSERT INTO session_source_entries (
+      source_entry_id,
+      session_id,
+      source_kind,
+      source_id,
+      source_ref_json,
+      created_at
+    ) VALUES
+      (
+        'source-a-root',
+        'session-a',
+        'session_message',
+        'message-a-root',
+        '{"sourceKind":"session_message","sourceId":"message-a-root"}',
+        '2026-05-31T10:02:00.000Z'
+      ),
+      (
+        'source-b-root',
+        'session-b',
+        'session_message',
+        'message-b-root',
+        '{"sourceKind":"session_message","sourceId":"message-b-root"}',
+        '2026-05-31T10:02:00.000Z'
+      );
+  `);
+}
+
+function countRows(database: Database.Database, tableName: string): number {
+  return (database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number }).count;
+}
+
 afterEach(() => {
   db?.close();
   db = null;
@@ -431,6 +485,1048 @@ describe('provider settings migrations', () => {
       'idx_session_compactions_session_created',
       'idx_session_compactions_session_status_created',
     ]));
+  });
+
+  it('creates session active path tables, foreign keys, and indexes', () => {
+    const database = createTestDb();
+
+    migrateDatabase(database);
+
+    expect(tableExists(database, 'session_source_entries')).toBe(true);
+    expect(tableExists(database, 'session_active_leaves')).toBe(true);
+    expect(tableExists(database, 'session_branch_markers')).toBe(true);
+    expect(tableExists(database, 'session_retry_attempts')).toBe(true);
+    expect(tableExists(database, 'session_interrupted_run_markers')).toBe(true);
+
+    const sourceEntryColumns = tableColumns(database, 'session_source_entries');
+    expect(sourceEntryColumns.map((column) => column.name)).toEqual([
+      'source_entry_id',
+      'session_id',
+      'parent_source_entry_id',
+      'source_kind',
+      'source_id',
+      'source_uri',
+      'source_ref_json',
+      'created_at',
+      'metadata_json',
+    ]);
+    expect(columnByName(sourceEntryColumns, 'source_entry_id')).toMatchObject({
+      type: 'TEXT',
+      notnull: 0,
+      pk: 1,
+    });
+    for (const requiredColumn of [
+      'session_id',
+      'source_kind',
+      'source_id',
+      'source_ref_json',
+      'created_at',
+    ]) {
+      expect(columnByName(sourceEntryColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    for (const nullableColumn of [
+      'parent_source_entry_id',
+      'source_uri',
+      'metadata_json',
+    ]) {
+      expect(columnByName(sourceEntryColumns, nullableColumn)?.notnull).toBe(0);
+    }
+
+    const activeLeafColumns = tableColumns(database, 'session_active_leaves');
+    expect(activeLeafColumns.map((column) => column.name)).toEqual([
+      'session_id',
+      'leaf_source_entry_id',
+      'updated_at',
+      'reason',
+      'metadata_json',
+    ]);
+    expect(columnByName(activeLeafColumns, 'session_id')).toMatchObject({
+      type: 'TEXT',
+      notnull: 0,
+      pk: 1,
+    });
+    expect(columnByName(activeLeafColumns, 'leaf_source_entry_id')?.notnull).toBe(0);
+    expect(columnByName(activeLeafColumns, 'updated_at')?.notnull).toBe(1);
+    expect(columnByName(activeLeafColumns, 'reason')?.notnull).toBe(1);
+    expect(columnByName(activeLeafColumns, 'metadata_json')?.notnull).toBe(0);
+
+    const branchMarkerColumns = tableColumns(database, 'session_branch_markers');
+    expect(branchMarkerColumns.map((column) => column.name)).toEqual([
+      'branch_marker_id',
+      'session_id',
+      'previous_leaf_source_entry_id',
+      'target_leaf_source_entry_id',
+      'selected_source_ref_json',
+      'seed_source_ref_json',
+      'reason',
+      'created_at',
+      'metadata_json',
+      'branch_marker_json',
+    ]);
+    expect(columnByName(branchMarkerColumns, 'branch_marker_id')).toMatchObject({
+      type: 'TEXT',
+      notnull: 0,
+      pk: 1,
+    });
+    for (const requiredColumn of [
+      'session_id',
+      'selected_source_ref_json',
+      'reason',
+      'created_at',
+      'branch_marker_json',
+    ]) {
+      expect(columnByName(branchMarkerColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    for (const nullableColumn of [
+      'previous_leaf_source_entry_id',
+      'target_leaf_source_entry_id',
+      'seed_source_ref_json',
+      'metadata_json',
+    ]) {
+      expect(columnByName(branchMarkerColumns, nullableColumn)?.notnull).toBe(0);
+    }
+
+    const retryAttemptColumns = tableColumns(database, 'session_retry_attempts');
+    expect(retryAttemptColumns.map((column) => column.name)).toEqual([
+      'retry_attempt_id',
+      'session_id',
+      'run_id',
+      'base_run_id',
+      'base_source_entry_id',
+      'attempt_number',
+      'retry_kind',
+      'reason',
+      'status',
+      'retryable',
+      'created_at',
+      'completed_at',
+      'error_json',
+      'metadata_json',
+      'attempt_json',
+    ]);
+    expect(columnByName(retryAttemptColumns, 'retry_attempt_id')).toMatchObject({
+      type: 'TEXT',
+      notnull: 0,
+      pk: 1,
+    });
+    for (const requiredColumn of [
+      'session_id',
+      'run_id',
+      'attempt_number',
+      'retry_kind',
+      'reason',
+      'status',
+      'retryable',
+      'created_at',
+      'attempt_json',
+    ]) {
+      expect(columnByName(retryAttemptColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    for (const nullableColumn of [
+      'base_run_id',
+      'base_source_entry_id',
+      'completed_at',
+      'error_json',
+      'metadata_json',
+    ]) {
+      expect(columnByName(retryAttemptColumns, nullableColumn)?.notnull).toBe(0);
+    }
+
+    const interruptedMarkerColumns = tableColumns(database, 'session_interrupted_run_markers');
+    expect(interruptedMarkerColumns.map((column) => column.name)).toEqual([
+      'interrupted_marker_id',
+      'session_id',
+      'run_id',
+      'previous_status',
+      'reason',
+      'marked_at',
+      'metadata_json',
+      'marker_json',
+    ]);
+    expect(columnByName(interruptedMarkerColumns, 'interrupted_marker_id')).toMatchObject({
+      type: 'TEXT',
+      notnull: 0,
+      pk: 1,
+    });
+    for (const requiredColumn of [
+      'session_id',
+      'run_id',
+      'previous_status',
+      'reason',
+      'marked_at',
+      'marker_json',
+    ]) {
+      expect(columnByName(interruptedMarkerColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    expect(columnByName(interruptedMarkerColumns, 'metadata_json')?.notnull).toBe(0);
+
+    expect(foreignKeys(database, 'session_source_entries')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'session_id',
+        table: 'sessions',
+        to: 'session_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'parent_source_entry_id',
+        table: 'session_source_entries',
+        to: 'source_entry_id',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'session_active_leaves')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'session_id',
+        table: 'sessions',
+        to: 'session_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'leaf_source_entry_id',
+        table: 'session_source_entries',
+        to: 'source_entry_id',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'session_branch_markers')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'session_id',
+        table: 'sessions',
+        to: 'session_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'previous_leaf_source_entry_id',
+        table: 'session_source_entries',
+        to: 'source_entry_id',
+        on_delete: 'SET NULL',
+      }),
+      expect.objectContaining({
+        from: 'target_leaf_source_entry_id',
+        table: 'session_source_entries',
+        to: 'source_entry_id',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'session_retry_attempts')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'session_id',
+        table: 'sessions',
+        to: 'session_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'run_id',
+        table: 'runs',
+        to: 'run_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'base_run_id',
+        table: 'runs',
+        to: 'run_id',
+        on_delete: 'SET NULL',
+      }),
+      expect.objectContaining({
+        from: 'base_source_entry_id',
+        table: 'session_source_entries',
+        to: 'source_entry_id',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'session_interrupted_run_markers')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'session_id',
+        table: 'sessions',
+        to: 'session_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'run_id',
+        table: 'runs',
+        to: 'run_id',
+        on_delete: 'CASCADE',
+      }),
+    ]));
+
+    expect(indexNames(database)).toEqual(expect.arrayContaining([
+      'idx_session_source_entries_session_parent',
+      'idx_session_source_entries_session_ref',
+      'idx_session_source_entries_parent',
+      'idx_session_active_leaves_leaf',
+      'idx_session_branch_markers_session_created',
+      'idx_session_retry_attempts_run_attempt',
+      'idx_session_retry_attempts_session_created',
+      'idx_session_interrupted_run_markers_run',
+      'idx_session_interrupted_run_markers_session',
+    ]));
+  });
+
+  it('enforces session ownership for active path references', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+    seedActivePathOwnershipBase(database);
+
+    database.prepare(`
+      INSERT INTO session_source_entries (
+        source_entry_id,
+        session_id,
+        parent_source_entry_id,
+        source_kind,
+        source_id,
+        source_ref_json,
+        created_at
+      ) VALUES (
+        'source-a-child',
+        'session-a',
+        'source-a-root',
+        'session_message',
+        'message-a-child',
+        '{"sourceKind":"session_message","sourceId":"message-a-child"}',
+        '2026-05-31T10:03:00.000Z'
+      )
+    `).run();
+    expect(() => database.prepare(`
+      INSERT INTO session_source_entries (
+        source_entry_id,
+        session_id,
+        parent_source_entry_id,
+        source_kind,
+        source_id,
+        source_ref_json,
+        created_at
+      ) VALUES (
+        'source-a-cross-parent',
+        'session-a',
+        'source-b-root',
+        'session_message',
+        'message-a-cross-parent',
+        '{"sourceKind":"session_message","sourceId":"message-a-cross-parent"}',
+        '2026-05-31T10:04:00.000Z'
+      )
+    `).run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_source_entries
+        SET parent_source_entry_id = 'source-b-root'
+        WHERE source_entry_id = 'source-a-child'
+      `)
+      .run()).toThrow();
+
+    database.prepare(`
+      INSERT INTO session_active_leaves (
+        session_id,
+        leaf_source_entry_id,
+        updated_at,
+        reason
+      ) VALUES (
+        'session-a',
+        'source-a-child',
+        '2026-05-31T10:05:00.000Z',
+        'source_appended'
+      )
+    `).run();
+    expect(() => database.prepare(`
+      INSERT INTO session_active_leaves (
+        session_id,
+        leaf_source_entry_id,
+        updated_at,
+        reason
+      ) VALUES (
+        'session-b',
+        'source-a-child',
+        '2026-05-31T10:05:00.000Z',
+        'source_appended'
+      )
+    `).run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_active_leaves
+        SET leaf_source_entry_id = 'source-b-root'
+        WHERE session_id = 'session-a'
+      `)
+      .run()).toThrow();
+
+    database.prepare(`
+      INSERT INTO session_branch_markers (
+        branch_marker_id,
+        session_id,
+        previous_leaf_source_entry_id,
+        target_leaf_source_entry_id,
+        selected_source_ref_json,
+        reason,
+        created_at,
+        branch_marker_json
+      ) VALUES (
+        'branch-a-valid',
+        'session-a',
+        'source-a-child',
+        'source-a-root',
+        '{"sourceKind":"session_message","sourceId":"message-a-root"}',
+        'branch_from_user_message',
+        '2026-05-31T10:06:00.000Z',
+        '{}'
+      )
+    `).run();
+    expect(() => database.prepare(`
+      INSERT INTO session_branch_markers (
+        branch_marker_id,
+        session_id,
+        previous_leaf_source_entry_id,
+        target_leaf_source_entry_id,
+        selected_source_ref_json,
+        reason,
+        created_at,
+        branch_marker_json
+      ) VALUES (
+        'branch-a-cross-previous',
+        'session-a',
+        'source-b-root',
+        'source-a-root',
+        '{"sourceKind":"session_message","sourceId":"message-a-root"}',
+        'branch_from_user_message',
+        '2026-05-31T10:07:00.000Z',
+        '{}'
+      )
+    `).run()).toThrow();
+    expect(() => database.prepare(`
+      INSERT INTO session_branch_markers (
+        branch_marker_id,
+        session_id,
+        previous_leaf_source_entry_id,
+        target_leaf_source_entry_id,
+        selected_source_ref_json,
+        reason,
+        created_at,
+        branch_marker_json
+      ) VALUES (
+        'branch-a-cross-target',
+        'session-a',
+        'source-a-child',
+        'source-b-root',
+        '{"sourceKind":"session_message","sourceId":"message-a-root"}',
+        'branch_from_user_message',
+        '2026-05-31T10:08:00.000Z',
+        '{}'
+      )
+    `).run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_branch_markers
+        SET previous_leaf_source_entry_id = 'source-b-root'
+        WHERE branch_marker_id = 'branch-a-valid'
+      `)
+      .run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_branch_markers
+        SET target_leaf_source_entry_id = 'source-b-root'
+        WHERE branch_marker_id = 'branch-a-valid'
+      `)
+      .run()).toThrow();
+
+    database.prepare(`
+      INSERT INTO session_retry_attempts (
+        retry_attempt_id,
+        session_id,
+        run_id,
+        base_run_id,
+        base_source_entry_id,
+        attempt_number,
+        retry_kind,
+        reason,
+        status,
+        retryable,
+        created_at,
+        attempt_json
+      ) VALUES (
+        'retry-a-valid',
+        'session-a',
+        'run-a',
+        'run-a',
+        'source-a-child',
+        1,
+        'manual_retry',
+        'failed',
+        'pending',
+        1,
+        '2026-05-31T10:09:00.000Z',
+        '{}'
+      )
+    `).run();
+    expect(() => database.prepare(`
+      INSERT INTO session_retry_attempts (
+        retry_attempt_id,
+        session_id,
+        run_id,
+        attempt_number,
+        retry_kind,
+        reason,
+        status,
+        retryable,
+        created_at,
+        attempt_json
+      ) VALUES (
+        'retry-a-cross-run',
+        'session-a',
+        'run-b',
+        2,
+        'manual_retry',
+        'failed',
+        'pending',
+        1,
+        '2026-05-31T10:10:00.000Z',
+        '{}'
+      )
+    `).run()).toThrow();
+    expect(() => database.prepare(`
+      INSERT INTO session_retry_attempts (
+        retry_attempt_id,
+        session_id,
+        run_id,
+        base_run_id,
+        attempt_number,
+        retry_kind,
+        reason,
+        status,
+        retryable,
+        created_at,
+        attempt_json
+      ) VALUES (
+        'retry-a-cross-base-run',
+        'session-a',
+        'run-a',
+        'run-b',
+        3,
+        'manual_retry',
+        'failed',
+        'pending',
+        1,
+        '2026-05-31T10:11:00.000Z',
+        '{}'
+      )
+    `).run()).toThrow();
+    expect(() => database.prepare(`
+      INSERT INTO session_retry_attempts (
+        retry_attempt_id,
+        session_id,
+        run_id,
+        base_source_entry_id,
+        attempt_number,
+        retry_kind,
+        reason,
+        status,
+        retryable,
+        created_at,
+        attempt_json
+      ) VALUES (
+        'retry-a-cross-source',
+        'session-a',
+        'run-a',
+        'source-b-root',
+        4,
+        'manual_retry',
+        'failed',
+        'pending',
+        1,
+        '2026-05-31T10:12:00.000Z',
+        '{}'
+      )
+    `).run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_retry_attempts
+        SET run_id = 'run-b'
+        WHERE retry_attempt_id = 'retry-a-valid'
+      `)
+      .run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_retry_attempts
+        SET base_run_id = 'run-b'
+        WHERE retry_attempt_id = 'retry-a-valid'
+      `)
+      .run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_retry_attempts
+        SET base_source_entry_id = 'source-b-root'
+        WHERE retry_attempt_id = 'retry-a-valid'
+      `)
+      .run()).toThrow();
+
+    database.prepare(`
+      INSERT INTO session_interrupted_run_markers (
+        interrupted_marker_id,
+        session_id,
+        run_id,
+        previous_status,
+        reason,
+        marked_at,
+        marker_json
+      ) VALUES (
+        'interrupted-a-valid',
+        'session-a',
+        'run-a',
+        'running',
+        'app_restarted',
+        '2026-05-31T10:13:00.000Z',
+        '{}'
+      )
+    `).run();
+    expect(() => database.prepare(`
+      INSERT INTO session_interrupted_run_markers (
+        interrupted_marker_id,
+        session_id,
+        run_id,
+        previous_status,
+        reason,
+        marked_at,
+        marker_json
+      ) VALUES (
+        'interrupted-a-cross-run',
+        'session-a',
+        'run-b',
+        'running',
+        'app_restarted',
+        '2026-05-31T10:14:00.000Z',
+        '{}'
+      )
+    `).run()).toThrow();
+    expect(() => database
+      .prepare(`
+        UPDATE session_interrupted_run_markers
+        SET run_id = 'run-b'
+        WHERE interrupted_marker_id = 'interrupted-a-valid'
+      `)
+      .run()).toThrow();
+  });
+
+  it('rejects moving referenced active path sources and runs across sessions', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+    seedActivePathOwnershipBase(database);
+
+    database.exec(`
+      INSERT INTO session_source_entries (
+        source_entry_id,
+        session_id,
+        source_kind,
+        source_id,
+        source_ref_json,
+        created_at
+      ) VALUES
+        (
+          'source-a-parent-owner',
+          'session-a',
+          'session_message',
+          'message-a-parent-owner',
+          '{"sourceKind":"session_message","sourceId":"message-a-parent-owner"}',
+          '2026-05-31T11:00:00.000Z'
+        ),
+        (
+          'source-a-leaf-owner',
+          'session-a',
+          'session_message',
+          'message-a-leaf-owner',
+          '{"sourceKind":"session_message","sourceId":"message-a-leaf-owner"}',
+          '2026-05-31T11:01:00.000Z'
+        ),
+        (
+          'source-a-branch-previous-owner',
+          'session-a',
+          'session_message',
+          'message-a-branch-previous-owner',
+          '{"sourceKind":"session_message","sourceId":"message-a-branch-previous-owner"}',
+          '2026-05-31T11:02:00.000Z'
+        ),
+        (
+          'source-a-branch-target-owner',
+          'session-a',
+          'session_message',
+          'message-a-branch-target-owner',
+          '{"sourceKind":"session_message","sourceId":"message-a-branch-target-owner"}',
+          '2026-05-31T11:03:00.000Z'
+        ),
+        (
+          'source-a-retry-base-owner',
+          'session-a',
+          'session_message',
+          'message-a-retry-base-owner',
+          '{"sourceKind":"session_message","sourceId":"message-a-retry-base-owner"}',
+          '2026-05-31T11:04:00.000Z'
+        );
+
+      INSERT INTO session_source_entries (
+        source_entry_id,
+        session_id,
+        parent_source_entry_id,
+        source_kind,
+        source_id,
+        source_ref_json,
+        created_at
+      ) VALUES (
+        'source-a-child-owner',
+        'session-a',
+        'source-a-parent-owner',
+        'session_message',
+        'message-a-child-owner',
+        '{"sourceKind":"session_message","sourceId":"message-a-child-owner"}',
+        '2026-05-31T11:05:00.000Z'
+      );
+
+      INSERT INTO session_active_leaves (
+        session_id,
+        leaf_source_entry_id,
+        updated_at,
+        reason
+      ) VALUES (
+        'session-a',
+        'source-a-leaf-owner',
+        '2026-05-31T11:06:00.000Z',
+        'source_appended'
+      );
+
+      INSERT INTO session_branch_markers (
+        branch_marker_id,
+        session_id,
+        previous_leaf_source_entry_id,
+        target_leaf_source_entry_id,
+        selected_source_ref_json,
+        reason,
+        created_at,
+        branch_marker_json
+      ) VALUES (
+        'branch-a-owner-valid',
+        'session-a',
+        'source-a-branch-previous-owner',
+        'source-a-branch-target-owner',
+        '{"sourceKind":"session_message","sourceId":"message-a-branch-target-owner"}',
+        'branch_from_user_message',
+        '2026-05-31T11:07:00.000Z',
+        '{}'
+      );
+
+      INSERT INTO runs (
+        run_id,
+        session_id,
+        mode,
+        goal,
+        status,
+        created_at
+      ) VALUES
+        (
+          'run-a-retry-current-owner',
+          'session-a',
+          'chat',
+          'retry current',
+          'failed',
+          '2026-05-31T11:08:00.000Z'
+        ),
+        (
+          'run-a-retry-base-owner',
+          'session-a',
+          'chat',
+          'retry base',
+          'failed',
+          '2026-05-31T11:09:00.000Z'
+        ),
+        (
+          'run-a-interrupted-owner',
+          'session-a',
+          'chat',
+          'interrupted',
+          'running',
+          '2026-05-31T11:10:00.000Z'
+        );
+
+      INSERT INTO session_retry_attempts (
+        retry_attempt_id,
+        session_id,
+        run_id,
+        base_source_entry_id,
+        attempt_number,
+        retry_kind,
+        reason,
+        status,
+        retryable,
+        created_at,
+        attempt_json
+      ) VALUES (
+        'retry-a-source-owner',
+        'session-a',
+        'run-a',
+        'source-a-retry-base-owner',
+        1,
+        'manual_retry',
+        'failed',
+        'pending',
+        1,
+        '2026-05-31T11:11:00.000Z',
+        '{}'
+      );
+
+      INSERT INTO session_retry_attempts (
+        retry_attempt_id,
+        session_id,
+        run_id,
+        attempt_number,
+        retry_kind,
+        reason,
+        status,
+        retryable,
+        created_at,
+        attempt_json
+      ) VALUES (
+        'retry-a-current-run-owner',
+        'session-a',
+        'run-a-retry-current-owner',
+        2,
+        'manual_retry',
+        'failed',
+        'pending',
+        1,
+        '2026-05-31T11:12:00.000Z',
+        '{}'
+      );
+
+      INSERT INTO session_retry_attempts (
+        retry_attempt_id,
+        session_id,
+        run_id,
+        base_run_id,
+        attempt_number,
+        retry_kind,
+        reason,
+        status,
+        retryable,
+        created_at,
+        attempt_json
+      ) VALUES (
+        'retry-a-base-run-owner',
+        'session-a',
+        'run-a',
+        'run-a-retry-base-owner',
+        3,
+        'manual_retry',
+        'failed',
+        'pending',
+        1,
+        '2026-05-31T11:13:00.000Z',
+        '{}'
+      );
+
+      INSERT INTO session_interrupted_run_markers (
+        interrupted_marker_id,
+        session_id,
+        run_id,
+        previous_status,
+        reason,
+        marked_at,
+        marker_json
+      ) VALUES (
+        'interrupted-a-run-owner',
+        'session-a',
+        'run-a-interrupted-owner',
+        'running',
+        'app_restarted',
+        '2026-05-31T11:14:00.000Z',
+        '{}'
+      );
+    `);
+
+    for (const sourceEntryId of [
+      'source-a-parent-owner',
+      'source-a-leaf-owner',
+      'source-a-branch-previous-owner',
+      'source-a-branch-target-owner',
+      'source-a-retry-base-owner',
+    ]) {
+      expect(() => database
+        .prepare(`
+          UPDATE session_source_entries
+          SET session_id = 'session-b'
+          WHERE source_entry_id = ?
+        `)
+        .run(sourceEntryId)).toThrow();
+    }
+
+    for (const runId of [
+      'run-a-retry-current-owner',
+      'run-a-retry-base-owner',
+      'run-a-interrupted-owner',
+    ]) {
+      expect(() => database
+        .prepare(`
+          UPDATE runs
+          SET session_id = 'session-b'
+          WHERE run_id = ?
+        `)
+        .run(runId)).toThrow();
+    }
+  });
+
+  it('does not backfill old session records into active path tables', () => {
+    const database = createTestDb();
+
+    database.exec(`
+      CREATE TABLE sessions (
+        session_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        workspace_id TEXT,
+        workspace_path TEXT,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        archived_at TEXT,
+        summary TEXT,
+        metadata_json TEXT
+      );
+
+      CREATE TABLE session_messages (
+        message_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        run_id TEXT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        completed_at TEXT,
+        metadata_json TEXT,
+        FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE session_compactions (
+        compaction_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        first_kept_source_ref_json TEXT NOT NULL,
+        tokens_before INTEGER NOT NULL,
+        trigger_reason TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        metadata_json TEXT,
+        FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE runs (
+        run_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        trigger_message_id TEXT,
+        agent_definition_id TEXT,
+        agent_config_snapshot_ref TEXT,
+        mode TEXT NOT NULL,
+        mode_snapshot_ref TEXT,
+        goal TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT,
+        cancelled_at TEXT,
+        error_json TEXT,
+        source_plan_id TEXT,
+        policy_snapshot_ref TEXT,
+        metadata_json TEXT,
+        FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+        FOREIGN KEY(trigger_message_id) REFERENCES session_messages(message_id) ON DELETE SET NULL
+      );
+
+      INSERT INTO sessions (
+        session_id,
+        title,
+        status,
+        created_at,
+        updated_at
+      ) VALUES (
+        'session-old',
+        'Old session',
+        'active',
+        '2026-05-30T10:00:00.000Z',
+        '2026-05-30T10:00:00.000Z'
+      );
+
+      INSERT INTO session_messages (
+        message_id,
+        session_id,
+        run_id,
+        role,
+        content,
+        status,
+        created_at,
+        completed_at
+      ) VALUES (
+        'message-old',
+        'session-old',
+        'run-old',
+        'user',
+        'old message',
+        'completed',
+        '2026-05-30T10:01:00.000Z',
+        '2026-05-30T10:01:01.000Z'
+      );
+
+      INSERT INTO runs (
+        run_id,
+        session_id,
+        trigger_message_id,
+        mode,
+        goal,
+        status,
+        created_at
+      ) VALUES (
+        'run-old',
+        'session-old',
+        'message-old',
+        'chat',
+        'old goal',
+        'completed',
+        '2026-05-30T10:02:00.000Z'
+      );
+
+      INSERT INTO session_compactions (
+        compaction_id,
+        session_id,
+        summary,
+        first_kept_source_ref_json,
+        tokens_before,
+        trigger_reason,
+        status,
+        created_at
+      ) VALUES (
+        'compaction-old',
+        'session-old',
+        'old summary',
+        '{"sourceKind":"session_message","sourceId":"message-old"}',
+        1200,
+        'budget_pressure',
+        'completed',
+        '2026-05-30T10:03:00.000Z'
+      );
+    `);
+
+    migrateDatabase(database);
+
+    expect(database.prepare('SELECT session_id, title FROM sessions').get()).toEqual({
+      session_id: 'session-old',
+      title: 'Old session',
+    });
+    expect(database.prepare('SELECT message_id, content FROM session_messages').get()).toEqual({
+      message_id: 'message-old',
+      content: 'old message',
+    });
+    expect(database.prepare('SELECT run_id, goal FROM runs').get()).toEqual({
+      run_id: 'run-old',
+      goal: 'old goal',
+    });
+    expect(database.prepare('SELECT compaction_id, summary FROM session_compactions').get()).toEqual({
+      compaction_id: 'compaction-old',
+      summary: 'old summary',
+    });
+    expect(countRows(database, 'session_source_entries')).toBe(0);
+    expect(countRows(database, 'session_active_leaves')).toBe(0);
+    expect(countRows(database, 'session_branch_markers')).toBe(0);
+    expect(countRows(database, 'session_retry_attempts')).toBe(0);
+    expect(countRows(database, 'session_interrupted_run_markers')).toBe(0);
   });
 
   it('creates Plan 1 tool call and execution schema columns', () => {
