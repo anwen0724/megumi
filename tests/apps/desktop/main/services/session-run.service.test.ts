@@ -426,6 +426,112 @@ function createBranchServiceFixture() {
   return { service, repository, activePathRepo };
 }
 
+function createManualRetryFixture() {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new SessionRunRepository(db);
+  const activePathRepo = new SessionActivePathRepository(db);
+  let sourceEntryIndex = 0;
+  let branchMarkerIndex = 0;
+  let retryAttemptIndex = 0;
+  const service = new SessionRunService({
+    repository,
+    activePathRepository: activePathRepo,
+    clock: { now: () => '2026-06-01T11:00:00.000Z' },
+    ids: {
+      eventId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `event-manual-${index}`;
+        };
+      })(),
+      sourceEntryId: () => {
+        sourceEntryIndex += 1;
+        return `source-entry-manual-${sourceEntryIndex}`;
+      },
+      branchMarkerId: () => {
+        branchMarkerIndex += 1;
+        return `branch-marker-manual-${branchMarkerIndex}`;
+      },
+      retryAttemptId: () => {
+        retryAttemptIndex += 1;
+        return `retry-attempt-manual-${retryAttemptIndex}`;
+      },
+    },
+  });
+
+  repository.saveSession({
+    sessionId: 'session-1',
+    title: 'Manual retry session',
+    status: 'active',
+    createdAt: '2026-06-01T10:00:00.000Z',
+    updatedAt: '2026-06-01T10:00:00.000Z',
+  });
+  repository.saveMessage({
+    messageId: 'message-user-1',
+    sessionId: 'session-1',
+    runId: 'run-failed',
+    role: 'user',
+    content: 'Original prompt',
+    status: 'completed',
+    createdAt: '2026-06-01T10:01:00.000Z',
+    completedAt: '2026-06-01T10:01:00.000Z',
+  });
+  const userEntry = activePathRepo.appendSourceEntryAndSetActiveLeaf({
+    sourceEntryId: 'source-entry-user-1',
+    sessionId: 'session-1',
+    sourceRef: {
+      sourceKind: 'session_message',
+      sourceId: 'message-user-1',
+      sourceUri: 'session-message://message-user-1',
+      loadedAt: '2026-06-01T10:01:00.000Z',
+    },
+    createdAt: '2026-06-01T10:01:00.000Z',
+  }, {
+    sessionId: 'session-1',
+    leafSourceEntryId: 'source-entry-user-1',
+    updatedAt: '2026-06-01T10:01:00.000Z',
+    reason: 'source_appended',
+  });
+  repository.saveRun({
+    runId: 'run-failed',
+    sessionId: 'session-1',
+    triggerMessageId: 'message-user-1',
+    mode: 'default',
+    goal: 'Original prompt',
+    status: 'failed',
+    createdAt: '2026-06-01T10:01:00.000Z',
+    completedAt: '2026-06-01T10:02:00.000Z',
+    error: {
+      code: 'provider_network_error',
+      message: 'Provider failed.',
+      severity: 'error',
+      retryable: true,
+      source: 'provider',
+    },
+  });
+  activePathRepo.appendSourceEntryAndSetActiveLeaf({
+    sourceEntryId: 'source-entry-run-failed',
+    sessionId: 'session-1',
+    parentSourceEntryId: userEntry.sourceEntryId,
+    sourceRef: {
+      sourceKind: 'session_run',
+      sourceId: 'run-failed',
+      sourceUri: 'session-run://run-failed',
+      loadedAt: '2026-06-01T10:01:00.000Z',
+    },
+    createdAt: '2026-06-01T10:01:00.000Z',
+  }, {
+    sessionId: 'session-1',
+    leafSourceEntryId: 'source-entry-run-failed',
+    updatedAt: '2026-06-01T10:01:00.000Z',
+    reason: 'source_appended',
+  });
+
+  return { service, repository, activePathRepo };
+}
+
 function seedBranchHistory(
   repository: SessionRunRepository,
   activePathRepo: SessionActivePathRepository,
@@ -1521,6 +1627,51 @@ describe('SessionRunService', () => {
     expect(activePathRepo.listRetryAttemptsByRun('run-1').at(-1)).toMatchObject({
       status: 'cancelled',
     });
+  });
+
+  it('creates a manual retry attempt for a failed run without overwriting the original run', async () => {
+    const { service, repository, activePathRepo } = createManualRetryFixture();
+
+    const result = await service.createManualRetryFromRun({
+      requestId: 'retry-request-1',
+      runId: 'run-failed',
+      createdAt: '2026-06-01T11:00:00.000Z',
+    });
+
+    expect(repository.getRun('run-failed')?.status).toBe('failed');
+    expect(result.retryAttempt).toMatchObject({
+      retryKind: 'manual_retry',
+      reason: 'failed',
+      baseRunId: 'run-failed',
+      status: 'pending',
+      retryable: true,
+    });
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe(result.retryAttemptSourceEntry.sourceEntryId);
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'run.retry.requested',
+      'retry.started',
+    ]);
+  });
+
+  it('creates a manual rerun branch from a historical completed user message', () => {
+    const { service, repository, activePathRepo } = createManualRetryFixture();
+
+    const result = service.createManualRerunFromUserMessage({
+      requestId: 'rerun-request-1',
+      sessionId: 'session-1',
+      messageId: 'message-user-1',
+      createdAt: '2026-06-01T11:00:00.000Z',
+    });
+
+    expect(repository.getMessage('message-user-1')?.status).toBe('completed');
+    expect(result.branchMarker.reason).toBe('branch_from_user_message');
+    expect(result.retryAttempt).toMatchObject({
+      retryKind: 'manual_rerun',
+      reason: 'user_requested',
+      status: 'pending',
+    });
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe(result.retryAttemptSourceEntry.sourceEntryId);
+    expect(result.seedMessage.content).toBe('Original prompt');
   });
 
   it('creates a branch marker from a historical completed user message', () => {

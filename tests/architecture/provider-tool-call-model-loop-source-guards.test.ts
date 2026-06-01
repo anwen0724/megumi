@@ -89,6 +89,11 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('session_' + 'source_entries');
     expect(source).not.toContain('session_' + 'active_leaves');
     expect(source).not.toContain('session_' + 'branch_markers');
+    expect(source).not.toContain('session_' + 'retry_attempts');
+    expect(source).not.toContain('session_' + 'interrupted_run_markers');
+    expect(source).not.toContain('list' + 'RecoverableRuns(');
+    expect(source).not.toContain('mark' + 'InterruptedRuns(');
+    expect(source).not.toContain('classify' + 'AutomaticModelStepRetry(');
     expect(source).not.toContain('get' + 'ActivePath(');
     expect(source).not.toContain('get' + 'ActiveLeaf(');
   });

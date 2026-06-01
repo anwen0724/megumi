@@ -668,6 +668,157 @@ export class SessionRunService {
     };
   }
 
+  createManualRetryFromRun(input: {
+    requestId: string;
+    runId: string;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    retryAttempt: SessionRetryAttempt;
+    retryAttemptSourceEntry: SessionSourceEntry;
+    events: RuntimeEvent[];
+  } {
+    const activePathRepository = this.requireActivePathRepository();
+    const run = this.repository.getRun(input.runId);
+    if (!run || !['failed', 'cancelled', 'cancelling', 'running', 'queued'].includes(run.status)) {
+      throw new Error('Manual retry requires a failed, cancelled, interrupted, or running-like run.');
+    }
+
+    const runSourceEntry = activePathRepository.getSourceEntryBySourceRef(run.sessionId, {
+      sourceKind: 'session_run',
+      sourceId: String(run.runId),
+    });
+    const retryAttemptId = this.ids.retryAttemptId();
+    const retryAttempt = activePathRepository.saveRetryAttempt({
+      retryAttemptId,
+      sessionId: run.sessionId,
+      runId: String(run.runId),
+      baseRunId: String(run.runId),
+      ...(runSourceEntry ? { baseSourceEntryId: runSourceEntry.sourceEntryId } : {}),
+      attemptNumber: activePathRepository.listRetryAttemptsByRun(String(run.runId)).length + 1,
+      retryKind: 'manual_retry',
+      reason: manualRetryReasonForRunStatus(run.status),
+      status: 'pending',
+      retryable: true,
+      createdAt: input.createdAt,
+      metadata: {
+        requestId: input.requestId,
+        previousStatus: run.status,
+        ...(run.error?.message ? { previousErrorMessage: run.error.message } : {}),
+      },
+    });
+    const retryAttemptSourceEntry = this.appendSourceAndMoveLeaf({
+      sessionId: run.sessionId,
+      sourceRef: retryAttemptSourceRef(retryAttempt.retryAttemptId, input.createdAt),
+      createdAt: input.createdAt,
+      metadata: {
+        requestId: input.requestId,
+        baseRunId: String(run.runId),
+      },
+    });
+    if (!retryAttemptSourceEntry) {
+      throw new Error('Manual retry requires active path repository.');
+    }
+
+    const events = [
+      createRuntimeEvent({
+        eventId: this.ids.eventId(),
+        eventType: 'run.retry.requested',
+        runId: String(run.runId),
+        sessionId: run.sessionId,
+        requestId: input.requestId,
+        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+        sequence: 1,
+        createdAt: input.createdAt,
+        source: 'main',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          retryRequestId: retryAttempt.retryAttemptId,
+          requestedBy: 'user',
+          retryKind: 'manual_retry',
+          reason: retryAttempt.reason,
+        },
+      }),
+      createRuntimeEvent({
+        eventId: this.ids.eventId(),
+        eventType: 'retry.started',
+        runId: String(run.runId),
+        sessionId: run.sessionId,
+        requestId: input.requestId,
+        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+        sequence: 2,
+        createdAt: input.createdAt,
+        source: 'main',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          retryRequestId: retryAttempt.retryAttemptId,
+          retryKind: 'manual_retry',
+        },
+      }),
+    ];
+    for (const event of events) {
+      this.repository.appendRuntimeEvent(event);
+    }
+
+    return { retryAttempt, retryAttemptSourceEntry, events };
+  }
+
+  createManualRerunFromUserMessage(input: {
+    requestId: string;
+    sessionId: string;
+    messageId: string;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    branchMarker: SessionBranchMarker;
+    branchMarkerSourceEntry: SessionSourceEntry;
+    seedMessage: SessionMessage;
+    retryAttempt: SessionRetryAttempt;
+    retryAttemptSourceEntry: SessionSourceEntry;
+    events: RuntimeEvent[];
+  } {
+    const branch = this.createBranchFromUserMessage(input);
+    const retryAttemptId = this.ids.retryAttemptId();
+    const retryAttempt = this.requireActivePathRepository().saveRetryAttempt({
+      retryAttemptId,
+      sessionId: input.sessionId,
+      runId: String(branch.seedMessage.runId),
+      baseSourceEntryId: branch.branchMarkerSourceEntry.sourceEntryId,
+      attemptNumber: 1,
+      retryKind: 'manual_rerun',
+      reason: 'user_requested',
+      status: 'pending',
+      retryable: true,
+      createdAt: input.createdAt,
+      metadata: {
+        requestId: input.requestId,
+        seedMessageId: input.messageId,
+        branchMarkerId: branch.branchMarker.branchMarkerId,
+      },
+    });
+    const retryAttemptSourceEntry = this.appendSourceAndMoveLeaf({
+      sessionId: input.sessionId,
+      sourceRef: retryAttemptSourceRef(retryAttempt.retryAttemptId, input.createdAt),
+      createdAt: input.createdAt,
+      metadata: {
+        requestId: input.requestId,
+        branchMarkerId: branch.branchMarker.branchMarkerId,
+      },
+    });
+    if (!retryAttemptSourceEntry) {
+      throw new Error('Manual rerun requires active path repository.');
+    }
+
+    return {
+      ...branch,
+      retryAttempt,
+      retryAttemptSourceEntry,
+      events: branch.events,
+    };
+  }
+
   cancelBranchDraft(input: {
     requestId: string;
     sessionId: string;
@@ -2150,6 +2301,25 @@ function branchMarkerSourceRef(branchMarkerId: string, builtAt: string): ModelIn
     sourceUri: `branch-marker://${branchMarkerId}`,
     loadedAt: builtAt,
   };
+}
+
+function retryAttemptSourceRef(retryAttemptId: string, builtAt: string): ModelInputContextSourceRef {
+  return {
+    sourceKind: 'retry_attempt',
+    sourceId: retryAttemptId,
+    sourceUri: `retry-attempt://${retryAttemptId}`,
+    loadedAt: builtAt,
+  };
+}
+
+function manualRetryReasonForRunStatus(status: Run['status']): SessionRetryAttempt['reason'] {
+  if (status === 'cancelled') {
+    return 'cancelled';
+  }
+  if (status === 'running' || status === 'queued' || status === 'cancelling') {
+    return 'interrupted';
+  }
+  return 'failed';
 }
 
 type SessionMessageSendHistoryMessage = NonNullable<SessionMessageSendPayload['messages']>[number];

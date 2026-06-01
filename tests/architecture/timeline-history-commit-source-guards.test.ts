@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -7,6 +7,25 @@ const ROOT = process.cwd();
 
 function read(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), 'utf8');
+}
+
+function walk(directory: string): string[] {
+  const entries = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const fullPath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      entries.push(...walk(fullPath));
+    } else if (/\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry.name)) {
+      entries.push(fullPath);
+    }
+  }
+  return entries;
+}
+
+function sourceUnder(relativeDirectory: string): string {
+  return walk(join(ROOT, relativeDirectory))
+    .map((filePath) => readFileSync(filePath, 'utf8'))
+    .join('\n');
 }
 
 describe('timeline history commit boundaries', () => {
@@ -44,6 +63,21 @@ describe('timeline history commit boundaries', () => {
     expect(source).toContain('hydrateCommittedMessages');
     expect(source).not.toContain('timelineMessagesFromPersistedMessages');
     expect(source).not.toContain('chatStore.setMessages(messages)');
+  });
+
+  it('keeps renderer history away from active path and retry recovery persistence', () => {
+    const source = sourceUnder('apps/desktop/src/renderer');
+
+    for (const forbidden of [
+      'Session' + 'ActivePathRepository',
+      'session_' + 'source_entries',
+      'session_' + 'retry_attempts',
+      'session_' + 'interrupted_run_markers',
+      'mark' + 'InterruptedRuns(',
+      'classify' + 'AutomaticModelStepRetry(',
+    ]) {
+      expect(source).not.toContain(forbidden);
+    }
   });
 
   it('keeps persistence failure out of timeline answer/process blocks', () => {

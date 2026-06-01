@@ -40,6 +40,11 @@ const forbiddenContextManagementNames = [
   'history' + 'Messages',
   'Session' + 'ActivePathRepository',
   'session_' + 'source_entries',
+  'session_' + 'retry_attempts',
+  'session_' + 'interrupted_run_markers',
+  'list' + 'RecoverableRuns(',
+  'mark' + 'InterruptedRuns(',
+  'classify' + 'AutomaticModelStepRetry(',
   'get' + 'ActivePath(',
   'get' + 'ActiveLeaf(',
   '@megumi/db',
@@ -59,6 +64,10 @@ const forbiddenProviderAndRendererSources = [
   'session_' + 'source_entries',
   'session_' + 'active_leaves',
   'session_' + 'branch_markers',
+  'session_' + 'retry_attempts',
+  'session_' + 'interrupted_run_markers',
+  'mark' + 'InterruptedRuns(',
+  'classify' + 'AutomaticModelStepRetry(',
   'create' + 'BranchFromUserMessage',
   'cancel' + 'BranchDraft',
   'get' + 'ActivePath(',
@@ -112,6 +121,11 @@ describe('session context source guards', () => {
     expect(contextManagement).not.toContain('session_' + 'compactions');
     expect(contextManagement).not.toContain('Session' + 'ActivePathRepository');
     expect(contextManagement).not.toContain('session_' + 'source_entries');
+    expect(contextManagement).not.toContain('session_' + 'retry_attempts');
+    expect(contextManagement).not.toContain('session_' + 'interrupted_run_markers');
+    expect(contextManagement).not.toContain('list' + 'RecoverableRuns(');
+    expect(contextManagement).not.toContain('mark' + 'InterruptedRuns(');
+    expect(contextManagement).not.toContain('classify' + 'AutomaticModelStepRetry(');
     expect(contextManagement).not.toContain('get' + 'ActivePath(');
     expect(contextManagement).not.toContain('get' + 'ActiveLeaf(');
     expect(contextManagement).not.toContain('@megumi/db');
@@ -121,6 +135,10 @@ describe('session context source guards', () => {
     expect(providerAndRenderer).not.toContain('session_' + 'source_entries');
     expect(providerAndRenderer).not.toContain('session_' + 'active_leaves');
     expect(providerAndRenderer).not.toContain('session_' + 'branch_markers');
+    expect(providerAndRenderer).not.toContain('session_' + 'retry_attempts');
+    expect(providerAndRenderer).not.toContain('session_' + 'interrupted_run_markers');
+    expect(providerAndRenderer).not.toContain('mark' + 'InterruptedRuns(');
+    expect(providerAndRenderer).not.toContain('classify' + 'AutomaticModelStepRetry(');
     expect(providerAndRenderer).not.toContain('create' + 'BranchFromUserMessage');
     expect(providerAndRenderer).not.toContain('cancel' + 'BranchDraft');
     expect(providerAndRenderer).not.toContain('get' + 'ActivePath(');
