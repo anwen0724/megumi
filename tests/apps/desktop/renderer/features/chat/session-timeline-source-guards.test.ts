@@ -104,4 +104,20 @@ describe('session timeline source guards', () => {
     expect(source).not.toContain('Answer started');
     expect(source).not.toContain('Megumi is working');
   });
+
+  it('keeps branch and retry ui as renderer intents without active path persistence logic', () => {
+    const chatSources = [
+      readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx'),
+      readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts'),
+    ].join('\n');
+
+    expect(chatSources).toContain('session.branchDraft.create');
+    expect(chatSources).toContain('session.branchDraft.cancel');
+    expect(chatSources).toContain('recovery.retry');
+    expect(chatSources).not.toContain('SessionActivePathRepository');
+    expect(chatSources).not.toContain('session_active_path');
+    expect(chatSources).not.toContain('session_branch_markers');
+    expect(chatSources).not.toContain('classifyAutomaticModelStepRetry');
+    expect(chatSources).not.toContain('getLatestCompletedSessionCompaction');
+  });
 });

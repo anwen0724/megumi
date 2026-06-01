@@ -50,7 +50,7 @@ const forbiddenContextManagementNames = [
   '@megumi/db',
 ];
 
-const forbiddenProviderAndRendererSources = [
+const forbiddenProviderSources = [
   'Session' + 'RunRepository',
   'Session' + 'ActivePathRepository',
   'timeline' + 'MessageRepository',
@@ -70,6 +70,30 @@ const forbiddenProviderAndRendererSources = [
   'classify' + 'AutomaticModelStepRetry(',
   'create' + 'BranchFromUserMessage',
   'cancel' + 'BranchDraft',
+  'get' + 'ActivePath(',
+  'Session' + 'CompactionEntry',
+  'list' + 'Tool',
+];
+
+const forbiddenRendererSourceSelectionSources = [
+  'Session' + 'RunRepository',
+  'Session' + 'ActivePathRepository',
+  'timeline' + 'MessageRepository',
+  'list' + 'CommittedMessagesBySession',
+  'list' + 'MessagesBySession',
+  'list' + 'RuntimeEventsByRun',
+  'list' + 'StepsByRun',
+  'get' + 'LatestCompletedSessionCompaction',
+  'list' + 'SessionCompactionsBySession',
+  'session_' + 'compactions',
+  'session_' + 'source_entries',
+  'session_' + 'active_leaves',
+  'session_' + 'branch_markers',
+  'session_' + 'retry_attempts',
+  'session_' + 'interrupted_run_markers',
+  'mark' + 'InterruptedRuns(',
+  'classify' + 'AutomaticModelStepRetry(',
+  'create' + 'BranchFromUserMessage',
   'get' + 'ActivePath(',
   'Session' + 'CompactionEntry',
   'list' + 'Tool',
@@ -100,22 +124,22 @@ describe('session context source guards', () => {
   });
 
   it('keeps provider and renderer layers from selecting session context sources', () => {
-    const source = [
-      sourceUnder('packages/ai'),
-      sourceUnder('apps/desktop/src/renderer'),
-    ].join('\n');
+    const providerSource = sourceUnder('packages/ai');
+    const rendererSource = sourceUnder('apps/desktop/src/renderer');
 
-    for (const forbidden of forbiddenProviderAndRendererSources) {
-      expect(source).not.toContain(forbidden);
+    for (const forbidden of forbiddenProviderSources) {
+      expect(providerSource).not.toContain(forbidden);
+    }
+
+    for (const forbidden of forbiddenRendererSourceSelectionSources) {
+      expect(rendererSource).not.toContain(forbidden);
     }
   });
 
   it('keeps compaction repository reads in desktop main and db repository boundaries', () => {
     const contextManagement = sourceUnder('packages/context-management');
-    const providerAndRenderer = [
-      sourceUnder('packages/ai'),
-      sourceUnder('apps/desktop/src/renderer'),
-    ].join('\n');
+    const provider = sourceUnder('packages/ai');
+    const renderer = sourceUnder('apps/desktop/src/renderer');
 
     expect(contextManagement).not.toContain('get' + 'LatestCompletedSessionCompaction');
     expect(contextManagement).not.toContain('session_' + 'compactions');
@@ -129,20 +153,22 @@ describe('session context source guards', () => {
     expect(contextManagement).not.toContain('get' + 'ActivePath(');
     expect(contextManagement).not.toContain('get' + 'ActiveLeaf(');
     expect(contextManagement).not.toContain('@megumi/db');
-    expect(providerAndRenderer).not.toContain('get' + 'LatestCompletedSessionCompaction');
-    expect(providerAndRenderer).not.toContain('session_' + 'compactions');
-    expect(providerAndRenderer).not.toContain('Session' + 'ActivePathRepository');
-    expect(providerAndRenderer).not.toContain('session_' + 'source_entries');
-    expect(providerAndRenderer).not.toContain('session_' + 'active_leaves');
-    expect(providerAndRenderer).not.toContain('session_' + 'branch_markers');
-    expect(providerAndRenderer).not.toContain('session_' + 'retry_attempts');
-    expect(providerAndRenderer).not.toContain('session_' + 'interrupted_run_markers');
-    expect(providerAndRenderer).not.toContain('mark' + 'InterruptedRuns(');
-    expect(providerAndRenderer).not.toContain('classify' + 'AutomaticModelStepRetry(');
-    expect(providerAndRenderer).not.toContain('create' + 'BranchFromUserMessage');
-    expect(providerAndRenderer).not.toContain('cancel' + 'BranchDraft');
-    expect(providerAndRenderer).not.toContain('get' + 'ActivePath(');
-    expect(providerAndRenderer).not.toContain('Session' + 'CompactionEntry');
+    for (const source of [provider, renderer]) {
+      expect(source).not.toContain('get' + 'LatestCompletedSessionCompaction');
+      expect(source).not.toContain('session_' + 'compactions');
+      expect(source).not.toContain('Session' + 'ActivePathRepository');
+      expect(source).not.toContain('session_' + 'source_entries');
+      expect(source).not.toContain('session_' + 'active_leaves');
+      expect(source).not.toContain('session_' + 'branch_markers');
+      expect(source).not.toContain('session_' + 'retry_attempts');
+      expect(source).not.toContain('session_' + 'interrupted_run_markers');
+      expect(source).not.toContain('mark' + 'InterruptedRuns(');
+      expect(source).not.toContain('classify' + 'AutomaticModelStepRetry(');
+      expect(source).not.toContain('create' + 'BranchFromUserMessage');
+      expect(source).not.toContain('get' + 'ActivePath(');
+      expect(source).not.toContain('Session' + 'CompactionEntry');
+    }
+    expect(provider).not.toContain('cancel' + 'BranchDraft');
   });
 
   it('keeps SessionContextInputService scoped to active path source selection', () => {

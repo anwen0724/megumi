@@ -548,9 +548,9 @@ describe('interaction baseline acceptance', () => {
     expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
     expect(screen.queryByText('No workspace selected')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
 
     expect(screen.getAllByText('Megumi').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
@@ -560,10 +560,8 @@ describe('interaction baseline acceptance', () => {
 
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
-
-    expect(screen.getByText('No pending candidates.')).toBeInTheDocument();
-    expect(screen.getByText('No active memories.')).toBeInTheDocument();
+    expect(screen.queryByText('No pending candidates.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No active memories.')).not.toBeInTheDocument();
   });
 
   it('keeps right panel collapse and tab switching from clearing chat state', async () => {
@@ -582,10 +580,10 @@ describe('interaction baseline acceptance', () => {
       'Runtime response from deepseek-v4-flash for the visible conversation.',
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Collapse workspace panel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
 
@@ -632,7 +630,7 @@ describe('interaction baseline acceptance', () => {
     expect(session.message.send).toHaveBeenCalledTimes(1);
 
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
 
     expect(useChatUiStore.getState().lastError).toBe('Runtime chat failed for "please fail this run".');
   });

@@ -32,8 +32,8 @@ function timelineRoles(): string[] {
 }
 
 describe('timeline message block source guards', () => {
-  it('keeps canonical timeline roles to user and assistant', () => {
-    expect(timelineRoles()).toEqual(['user', 'assistant']);
+  it('keeps canonical timeline roles to user assistant and branch separators', () => {
+    expect(timelineRoles()).toEqual(['user', 'assistant', 'separator']);
   });
 
   it('keeps process and answer as assistant blocks without assistant answer event naming', () => {

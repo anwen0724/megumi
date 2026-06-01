@@ -221,7 +221,10 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Context' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Files' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Artifacts' })).toBeVisible();
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
   });
 
   it('hydrates historical sessions without selecting one until the user restores it', async () => {
@@ -514,9 +517,12 @@ describe('AppShell', () => {
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'Collapse workspace panel' }));
-    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
-    expect(screen.getByRole('tab', { name: 'Context' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Artifacts' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
   });
 });

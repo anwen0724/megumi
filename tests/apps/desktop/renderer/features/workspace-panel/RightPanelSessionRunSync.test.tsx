@@ -277,6 +277,8 @@ describe('right workspace panel session run sync', () => {
     expect(screen.getByRole('button', { name: 'Stop current run' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
     expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
 
@@ -291,9 +293,8 @@ describe('right workspace panel session run sync', () => {
 
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
-
-    expect(screen.getByText('No pending candidates.')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
+    expect(screen.queryByText('No pending candidates.')).not.toBeInTheDocument();
     expect(screen.queryByText('Session note')).not.toBeInTheDocument();
   });
 
@@ -312,9 +313,10 @@ describe('right workspace panel session run sync', () => {
     emitRuntimeSuccess(latestSessionMessageSendRequest(session), 'Runtime response from deepseek-v4-flash for timeline persistence.');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
 
     expect(screen.getByText('Keep my timeline')).toBeInTheDocument();
     expect(screen.queryByText('Runtime response from deepseek-v4-flash for timeline persistence.')).not.toBeInTheDocument();
@@ -334,7 +336,7 @@ describe('right workspace panel session run sync', () => {
     emitRuntimeFailure(latestSessionMessageSendRequest(session), 'Runtime chat failed for "please fail this run".');
 
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Context' }));
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
 
     expect(screen.queryByText('Processing failed')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
