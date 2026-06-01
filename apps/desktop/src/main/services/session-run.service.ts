@@ -1531,6 +1531,7 @@ export class SessionRunService {
       let retryableFailureEvent: RuntimeEvent | undefined;
       let retryableFailureError: RuntimeError | undefined;
       let shouldRetry = false;
+      let terminalAttemptStatus: SessionRetryAttempt['status'] = 'exhausted';
 
       try {
         for await (const event of input.stream(input.request)) {
@@ -1541,6 +1542,12 @@ export class SessionRunService {
               retryableFailureEvent = event;
               retryableFailureError = error;
               shouldRetry = retryAttemptNumber < this.automaticRetry.maxAttempts;
+              break;
+            }
+            if (error && currentAttempt) {
+              retryableFailureEvent = event;
+              retryableFailureError = error;
+              terminalAttemptStatus = 'failed';
               break;
             }
           }
@@ -1555,7 +1562,13 @@ export class SessionRunService {
         const runtimeError = createModelStepRuntimeErrorFromUnknown(error);
         const decision = classifyAutomaticModelStepRetry(runtimeError);
         if (!decision.retryable) {
-          throw error;
+          if (currentAttempt) {
+            this.saveRetryAttemptUpdate(currentAttempt, 'failed', {
+              completedAt: this.clock.now(),
+              error: runtimeError,
+            });
+          }
+          throw runtimeError;
         }
         retryableFailureError = runtimeError;
         shouldRetry = retryAttemptNumber < this.automaticRetry.maxAttempts;
@@ -1566,7 +1579,7 @@ export class SessionRunService {
               error: runtimeError,
             });
           }
-          throw error;
+          throw runtimeError;
         }
       }
 
@@ -1589,12 +1602,15 @@ export class SessionRunService {
 
       if (!shouldRetry) {
         if (currentAttempt) {
-          this.saveRetryAttemptUpdate(currentAttempt, 'exhausted', {
+          this.saveRetryAttemptUpdate(currentAttempt, terminalAttemptStatus, {
             completedAt: this.clock.now(),
             error: retryableFailureError,
           });
         }
         if (retryableFailureEvent) {
+          for (const event of bufferedEvents) {
+            yield event;
+          }
           yield retryableFailureEvent;
           return;
         }
@@ -2231,6 +2247,10 @@ function createFallbackRuntimeError(message: string): RuntimeError {
 }
 
 function createRuntimeErrorFromUnknown(error: unknown): RuntimeError {
+  if (isRuntimeError(error)) {
+    return error;
+  }
+
   return {
     code: 'runtime_unknown',
     message: error instanceof Error && error.message
@@ -2250,7 +2270,7 @@ function createModelStepRuntimeErrorFromUnknown(error: unknown): RuntimeError {
   const message = error instanceof Error && error.message
     ? error.message
     : 'Model step provider failed.';
-  const looksProviderTransient = /provider|rate.?limit|too many requests|429|timeout|timed out|network|overload|503|unavailable|premature|stream ended/i
+  const looksProviderTransient = /rate.?limit|too many requests|429|timeout|timed out|network|overload|503|unavailable|premature|stream ended/i
     .test(message);
 
   return {

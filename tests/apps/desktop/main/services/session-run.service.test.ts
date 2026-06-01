@@ -23,6 +23,7 @@ import type { RunAction } from '@megumi/shared/session-run-contracts';
 import type { SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
 import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeError } from '@megumi/shared/runtime-errors';
 
 let db: Database.Database | null = null;
 
@@ -768,6 +769,29 @@ function assistantOutputCompletedEvent(sequence: number): RuntimeEvent {
   };
 }
 
+function providerRunFailedEvent(input: {
+  eventId: string;
+  stepId: string;
+  error: RuntimeError;
+}): RuntimeEvent {
+  return {
+    eventId: input.eventId,
+    schemaVersion: 1,
+    eventType: 'run.failed',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: input.stepId,
+    sequence: 1,
+    createdAt: '2026-06-01T10:00:01.000Z',
+    source: 'provider',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      error: input.error,
+    },
+  };
+}
+
 function toolCallRequestedRuntimeEvent(): RuntimeEvent {
   return {
     eventId: 'event-tool-call-requested',
@@ -1196,6 +1220,234 @@ describe('SessionRunService', () => {
       attemptNumber: 2,
       status: 'exhausted',
       reason: 'network_timeout',
+    });
+  });
+
+  it('marks a retry attempt failed when the retried stream returns a non-retryable failure', async () => {
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request, callIndex) => {
+      if (callIndex === 1) {
+        return [providerRunFailedEvent({
+          eventId: 'event-provider-rate-limit',
+          stepId: request.stepId,
+          error: {
+            code: 'provider_rate_limited',
+            message: '429 rate limit',
+            severity: 'error',
+            retryable: true,
+            source: 'provider',
+          },
+        })];
+      }
+
+      return [providerRunFailedEvent({
+        eventId: 'event-provider-auth-failed',
+        stepId: request.stepId,
+        error: {
+          code: 'provider_auth_failed',
+          message: 'provider authentication failed',
+          severity: 'error',
+          retryable: false,
+          source: 'provider',
+        },
+      })];
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Retry then fail',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed.map((event) => event.eventType)).toContain('run.failed');
+    expect(streamed.map((event) => event.eventType)).not.toContain('retry.completed');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([
+      expect.objectContaining({
+        attemptNumber: 1,
+        status: 'failed',
+        reason: 'rate_limited',
+        error: expect.objectContaining({
+          code: 'provider_auth_failed',
+        }),
+      }),
+    ]);
+  });
+
+  it('marks an active retry attempt failed when the retried stream throws a non-retryable runtime error', async () => {
+    const authError: RuntimeError = {
+      code: 'provider_auth_failed',
+      message: 'provider authentication failed',
+      severity: 'error',
+      retryable: false,
+      source: 'provider',
+    };
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request, callIndex) => {
+      if (callIndex === 1) {
+        return [providerRunFailedEvent({
+          eventId: 'event-provider-rate-limit',
+          stepId: request.stepId,
+          error: {
+            code: 'provider_rate_limited',
+            message: '429 rate limit',
+            severity: 'error',
+            retryable: true,
+            source: 'provider',
+          },
+        })];
+      }
+
+      throw authError;
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Retry then throw',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([
+      expect.objectContaining({
+        attemptNumber: 1,
+        status: 'failed',
+        error: expect.objectContaining({
+          code: 'provider_auth_failed',
+        }),
+      }),
+    ]);
+    expect(streamed.find((event) => event.eventType === 'run.failed')?.payload).toMatchObject({
+      error: {
+        code: 'provider_auth_failed',
+      },
+    });
+  });
+
+  it('preserves provider runtime errors when thrown retries are exhausted', async () => {
+    const timeoutError: RuntimeError = {
+      code: 'provider_network_error',
+      message: 'request timed out',
+      severity: 'error',
+      retryable: true,
+      source: 'provider',
+    };
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream(() => {
+      throw timeoutError;
+    }, {
+      maxAutomaticModelStepRetries: 1,
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Timeout',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(activePathRepo.listRetryAttemptsByRun('run-1').at(-1)).toMatchObject({
+      status: 'exhausted',
+      error: expect.objectContaining({
+        code: 'provider_network_error',
+      }),
+    });
+    expect(streamed.find((event) => event.eventType === 'run.failed')?.payload).toMatchObject({
+      error: {
+        code: 'provider_network_error',
+      },
+    });
+  });
+
+  it('does not retry plain provider auth or config errors thrown by the stream', async () => {
+    const providerRequests: ModelStepRuntimeRequest[] = [];
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request) => {
+      providerRequests.push(request);
+      throw new Error('provider authentication failed');
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Auth error',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(providerRequests).toHaveLength(1);
+    expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([]);
+    expect(streamed.find((event) => event.eventType === 'run.failed')?.payload).toMatchObject({
+      error: {
+        code: 'runtime_unknown',
+      },
     });
   });
 
