@@ -210,6 +210,42 @@ export const ApprovalResolvedEventSchema = chatStreamEventSchema('approval.resol
   decision: ApprovalResolutionStatusSchema.optional(),
 });
 
+export const BranchSeparatorCreatedEventSchema = chatStreamEventSchema('branch.separator.created', {
+  branchMarkerId: z.string().min(1),
+  sourceMessageId: z.string().min(1),
+  label: z.string().min(1),
+});
+
+export const ProcessCompactionRecordedEventSchema = chatStreamEventSchema(
+  'process.compaction.recorded',
+  {
+    compactionId: z.string().min(1).optional(),
+    status: z.enum(['completed', 'skipped', 'boundary_unresolved']),
+    label: z.string().min(1),
+  },
+);
+
+export const ProcessRetryRecordedEventSchema = chatStreamEventSchema('process.retry.recorded', {
+  retryAttemptId: z.string().min(1),
+  attemptNumber: z.number().int().positive(),
+  status: z.enum(['started', 'failed', 'completed', 'exhausted', 'cancelled']),
+  label: z.string().min(1),
+  reason: z.string().min(1).optional(),
+});
+
+export const ProcessRecoveryRecordedEventSchema = chatStreamEventSchema(
+  'process.recovery.recorded',
+  {
+    status: z.enum([
+      'interrupted',
+      'manual_retry_requested',
+      'manual_rerun_requested',
+      'marked_cancelled',
+    ]),
+    label: z.string().min(1),
+  },
+);
+
 const ChatStreamEventUnionSchema = z.union([
   TurnStartedEventSchema,
   TurnCompletedEventSchema,
@@ -230,6 +266,10 @@ const ChatStreamEventUnionSchema = z.union([
   ToolDeniedEventSchema,
   ApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema,
+  BranchSeparatorCreatedEventSchema,
+  ProcessCompactionRecordedEventSchema,
+  ProcessRetryRecordedEventSchema,
+  ProcessRecoveryRecordedEventSchema,
 ]);
 
 export const ChatStreamEventSchema = ChatStreamEventUnionSchema satisfies z.ZodType<ChatStreamEvent>;

@@ -252,10 +252,13 @@ function validateTimelineMessage(message: TimelineMessage): TimelineMessage {
 
 function validateCommitOwnership(input: TimelineCommitInput, messages: TimelineMessage[]): void {
   for (const message of messages) {
+    const messageRunId =
+      message.role === 'assistant' || message.role === 'user' ? message.runId : undefined;
+
     if (
       message.projectId !== input.projectId ||
       String(message.sessionId) !== input.sessionId ||
-      (message.runId !== undefined && String(message.runId) !== input.runId)
+      (messageRunId !== undefined && String(messageRunId) !== input.runId)
     ) {
       throw new Error('Timeline commit message ownership mismatch.');
     }
@@ -263,11 +266,18 @@ function validateCommitOwnership(input: TimelineCommitInput, messages: TimelineM
 }
 
 function messageRunId(message: TimelineMessage): string {
-  return message.role === 'assistant' ? String(message.runId) : String(message.runId ?? '');
+  if (message.role === 'assistant' || message.role === 'user') {
+    return String(message.runId ?? '');
+  }
+
+  return '';
 }
 
 function messageTurnOrder(message: TimelineMessage): number {
-  return message.turnOrder ?? (message.role === 'user' ? 0 : 1);
+  if (message.turnOrder !== undefined) return message.turnOrder;
+  if (message.role === 'user') return 0;
+  if (message.role === 'assistant') return 1;
+  return 2;
 }
 
 function sortMessages(messages: TimelineMessage[]): TimelineMessage[] {

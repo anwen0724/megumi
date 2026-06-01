@@ -50,6 +50,10 @@ describe('chat stream event contract', () => {
       'tool.denied',
       'approval.requested',
       'approval.resolved',
+      'branch.separator.created',
+      'process.compaction.recorded',
+      'process.retry.recorded',
+      'process.recovery.recorded',
     ]);
     expect(CHAT_STREAM_EVENT_TYPES.some((type) => type.startsWith('assistant.answer.'))).toBe(false);
     expect(ASSISTANT_TEXT_PHASES).toEqual(['prelude', 'answer']);
@@ -181,6 +185,40 @@ describe('chat stream event contract', () => {
       phase: 'answer',
       reason: 'user_requested',
     }).eventType).toBe('assistant.text.cancelled_partial');
+  });
+
+  it('parses branch separator and process fact chat stream events', () => {
+    expect(createChatStreamEvent({
+      eventId: 'event-branch-1',
+      eventType: 'branch.separator.created',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      streamKind: 'main',
+      seq: 1,
+      createdAt: '2026-06-01T10:00:00.000Z',
+      branchMarkerId: 'branch-marker-1',
+      sourceMessageId: 'message-1',
+      label: 'Branch from 07:28',
+    }).eventType).toBe('branch.separator.created');
+
+    expect(createChatStreamEvent({
+      eventId: 'event-retry-1',
+      eventType: 'process.retry.recorded',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      streamKind: 'main',
+      seq: 2,
+      createdAt: '2026-06-01T10:00:01.000Z',
+      retryAttemptId: 'retry-attempt-1',
+      attemptNumber: 1,
+      status: 'failed',
+      label: 'Retry attempt 1 failed',
+      reason: 'rate_limited',
+    }).eventType).toBe('process.retry.recorded');
   });
 
   it('requires explicit stream identity and rejects runId as streamId', () => {

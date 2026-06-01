@@ -85,15 +85,26 @@ function messageIdentity(message: TimelineMessage): string {
     return `assistant:${message.runId}`;
   }
 
+  if (message.role === 'separator') {
+    return `separator:${message.messageId}`;
+  }
+
   return `user:${message.clientMessageId ?? message.messageId}`;
 }
 
 function messageRunId(message: TimelineMessage): string {
-  return message.role === 'assistant' ? String(message.runId) : String(message.runId ?? '');
+  if (message.role === 'assistant' || message.role === 'user') {
+    return String(message.runId ?? '');
+  }
+
+  return '';
 }
 
 function messageTurnOrder(message: TimelineMessage): number {
-  return message.turnOrder ?? (message.role === 'user' ? 0 : 1);
+  if (message.turnOrder !== undefined) return message.turnOrder;
+  if (message.role === 'user') return 0;
+  if (message.role === 'assistant') return 1;
+  return 2;
 }
 
 function compareTimelineMessages(left: TimelineMessage, right: TimelineMessage): number {

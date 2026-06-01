@@ -1,5 +1,6 @@
 import type {
   AnswerTextBlock,
+  BranchSeparatorBlock,
   TimelineMessage as CanonicalTimelineMessage,
   UserTimelineBlock,
 } from '@megumi/shared/timeline-message-blocks';
@@ -28,6 +29,14 @@ function AnswerTextBlockView({ block }: { block: AnswerTextBlock }) {
   );
 }
 
+function BranchSeparatorBlockView({ block }: { block: BranchSeparatorBlock }) {
+  return (
+    <div className="border-y border-[var(--color-border)] py-2 text-center text-xs text-[var(--color-text-muted)]">
+      {block.label}
+    </div>
+  );
+}
+
 interface TimelineMessageBlocksProps {
   message: CanonicalTimelineMessage;
 }
@@ -41,6 +50,10 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
     );
   }
 
+  if (message.role === 'separator') {
+    return <BranchSeparatorBlockView block={message.blocks[0]} />;
+  }
+
   return (
     <div className="space-y-4">
       {message.blocks.map((block) => {
@@ -48,7 +61,12 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
           return <ProcessDisclosureBlockView key={block.blockId} block={block} />;
         }
 
-        return <AnswerTextBlockView key={block.blockId} block={block} />;
+        if (block.kind === 'answer_text') {
+          return <AnswerTextBlockView key={block.blockId} block={block} />;
+        }
+
+        const exhaustive: never = block;
+        return exhaustive;
       })}
     </div>
   );

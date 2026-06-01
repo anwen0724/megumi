@@ -376,4 +376,51 @@ describe('chat stream to timeline projection reducer', () => {
     expect(assistantMessages.map((message) => message.messageId)).toEqual(['assistant:run-a', 'assistant:run-b']);
     expect(assistantMessages.map((message) => answerBlock(message).text)).toEqual(['Same answer.', 'Same answer.']);
   });
+
+  it('projects branch separators and process fact events into canonical timeline blocks', () => {
+    let messages = reduceChatStreamEvent([], chatEvent({
+      eventType: 'branch.separator.created',
+      seq: 1,
+      branchMarkerId: 'branch-marker-1',
+      sourceMessageId: 'message-1',
+      label: 'Branch from 07:28',
+    }));
+
+    messages = reduceChatStreamEvent(messages, chatEvent({
+      eventType: 'turn.started',
+      seq: 2,
+      userMessageId: 'message-2',
+    }));
+    messages = reduceChatStreamEvent(messages, chatEvent({
+      eventType: 'process.compaction.recorded',
+      seq: 3,
+      compactionId: 'compaction-1',
+      status: 'completed',
+      label: 'Compacted context',
+    }));
+    messages = reduceChatStreamEvent(messages, chatEvent({
+      eventType: 'process.retry.recorded',
+      seq: 4,
+      retryAttemptId: 'retry-attempt-1',
+      attemptNumber: 1,
+      status: 'failed',
+      label: 'Retry attempt 1 failed',
+      reason: 'rate_limited',
+    }));
+    messages = reduceChatStreamEvent(messages, chatEvent({
+      eventType: 'process.recovery.recorded',
+      seq: 5,
+      status: 'interrupted',
+      label: 'Previous run was interrupted',
+    }));
+
+    expect(messages[0]).toMatchObject({
+      role: 'separator',
+      blocks: [{ kind: 'branch_separator', label: 'Branch from 07:28' }],
+    });
+    const assistant = messages.find((message) => message.role === 'assistant');
+    expect(JSON.stringify(assistant)).toContain('Compacted context');
+    expect(JSON.stringify(assistant)).toContain('Retry attempt 1 failed');
+    expect(JSON.stringify(assistant)).toContain('Previous run was interrupted');
+  });
 });

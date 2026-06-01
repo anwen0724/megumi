@@ -3,7 +3,11 @@ import {
   ANSWER_TEXT_STATUSES,
   APPROVAL_ACTIVITY_STATUSES,
   ASSISTANT_TEXT_ITEM_STATUSES,
+  BRANCH_SEPARATOR_BLOCK_KINDS,
+  COMPACTION_ACTIVITY_STATUSES,
   PROCESS_DISCLOSURE_STATUSES,
+  RECOVERY_ACTIVITY_STATUSES,
+  RETRY_ACTIVITY_STATUSES,
   TEXT_FORMATS,
   THINKING_ITEM_STATUSES,
   TIMELINE_MESSAGE_ROLES,
@@ -15,11 +19,19 @@ import {
   type ApprovalActivityStatus,
   type AssistantTextItem,
   type AssistantTextItemStatus,
+  type BranchSeparatorBlock,
+  type BranchSeparatorBlockKind,
   type CancelledActivityItem,
+  type CompactionActivityItem,
+  type CompactionActivityStatus,
   type ErrorActivityItem,
   type ProcessDisclosureBlock,
   type ProcessDisclosureItem,
   type ProcessDisclosureStatus,
+  type RecoveryActivityItem,
+  type RecoveryActivityStatus,
+  type RetryActivityItem,
+  type RetryActivityStatus,
   type TextFormat,
   type ThinkingItem,
   type ThinkingItemStatus,
@@ -27,6 +39,7 @@ import {
   type TimelineBlock,
   type TimelineMessage,
   type TimelineMessageRole,
+  type TimelineSeparatorMessage,
   type TimelineUserMessage,
   type ToolActivityItem,
   type ToolActivityStatus,
@@ -68,6 +81,22 @@ const APPROVAL_ACTIVITY_STATUS_VALUES = [...APPROVAL_ACTIVITY_STATUSES] as [
   ApprovalActivityStatus,
   ...ApprovalActivityStatus[],
 ];
+const BRANCH_SEPARATOR_BLOCK_KIND_VALUES = [...BRANCH_SEPARATOR_BLOCK_KINDS] as [
+  BranchSeparatorBlockKind,
+  ...BranchSeparatorBlockKind[],
+];
+const COMPACTION_ACTIVITY_STATUS_VALUES = [...COMPACTION_ACTIVITY_STATUSES] as [
+  CompactionActivityStatus,
+  ...CompactionActivityStatus[],
+];
+const RETRY_ACTIVITY_STATUS_VALUES = [...RETRY_ACTIVITY_STATUSES] as [
+  RetryActivityStatus,
+  ...RetryActivityStatus[],
+];
+const RECOVERY_ACTIVITY_STATUS_VALUES = [...RECOVERY_ACTIVITY_STATUSES] as [
+  RecoveryActivityStatus,
+  ...RecoveryActivityStatus[],
+];
 
 export const TimelineMessageRoleSchema = z.enum(TIMELINE_MESSAGE_ROLE_VALUES);
 export const TextFormatSchema = z.enum(TEXT_FORMAT_VALUES);
@@ -78,6 +107,10 @@ export const ThinkingItemStatusSchema = z.enum(THINKING_ITEM_STATUS_VALUES);
 export const AssistantTextItemStatusSchema = z.enum(ASSISTANT_TEXT_ITEM_STATUS_VALUES);
 export const ToolActivityStatusSchema = z.enum(TOOL_ACTIVITY_STATUS_VALUES);
 export const ApprovalActivityStatusSchema = z.enum(APPROVAL_ACTIVITY_STATUS_VALUES);
+export const BranchSeparatorBlockKindSchema = z.enum(BRANCH_SEPARATOR_BLOCK_KIND_VALUES);
+export const CompactionActivityStatusSchema = z.enum(COMPACTION_ACTIVITY_STATUS_VALUES);
+export const RetryActivityStatusSchema = z.enum(RETRY_ACTIVITY_STATUS_VALUES);
+export const RecoveryActivityStatusSchema = z.enum(RECOVERY_ACTIVITY_STATUS_VALUES);
 
 export const TimelineIdSchema = z
   .string()
@@ -138,6 +171,16 @@ export const UserTimelineBlockSchema = z.discriminatedUnion('kind', [
   UserTextBlockSchema,
   UserAttachmentBlockSchema,
 ]) satisfies z.ZodType<TimelineBlock>;
+
+export const BranchSeparatorBlockSchema = z
+  .object({
+    ...TimelineBlockBaseShape,
+    kind: z.literal('branch_separator'),
+    branchMarkerId: z.string().min(1),
+    sourceMessageId: z.string().min(1),
+    label: z.string().min(1),
+  })
+  .strict() satisfies z.ZodType<BranchSeparatorBlock>;
 
 export const ThinkingItemSchema = z
   .object({
@@ -210,6 +253,37 @@ export const CancelledActivityItemSchema = z
   })
   .strict() satisfies z.ZodType<CancelledActivityItem>;
 
+export const CompactionActivityItemSchema = z
+  .object({
+    ...ProcessDisclosureItemBaseShape,
+    kind: z.literal('compaction_activity'),
+    compactionId: z.string().min(1).optional(),
+    status: CompactionActivityStatusSchema,
+    label: z.string().min(1),
+  })
+  .strict() satisfies z.ZodType<CompactionActivityItem>;
+
+export const RetryActivityItemSchema = z
+  .object({
+    ...ProcessDisclosureItemBaseShape,
+    kind: z.literal('retry_activity'),
+    retryAttemptId: z.string().min(1),
+    attemptNumber: z.number().int().positive(),
+    status: RetryActivityStatusSchema,
+    label: z.string().min(1),
+    reason: z.string().min(1).optional(),
+  })
+  .strict() satisfies z.ZodType<RetryActivityItem>;
+
+export const RecoveryActivityItemSchema = z
+  .object({
+    ...ProcessDisclosureItemBaseShape,
+    kind: z.literal('recovery_activity'),
+    status: RecoveryActivityStatusSchema,
+    label: z.string().min(1),
+  })
+  .strict() satisfies z.ZodType<RecoveryActivityItem>;
+
 export const ProcessDisclosureItemSchema = z.discriminatedUnion('kind', [
   ThinkingItemSchema,
   AssistantTextItemSchema,
@@ -217,6 +291,9 @@ export const ProcessDisclosureItemSchema = z.discriminatedUnion('kind', [
   ApprovalActivityItemSchema,
   ErrorActivityItemSchema,
   CancelledActivityItemSchema,
+  CompactionActivityItemSchema,
+  RetryActivityItemSchema,
+  RecoveryActivityItemSchema,
 ]) satisfies z.ZodType<ProcessDisclosureItem>;
 
 export const ProcessDisclosureBlockSchema = z
@@ -289,9 +366,18 @@ export const TimelineAssistantMessageSchema = z
     }
   }) satisfies z.ZodType<TimelineAssistantMessage>;
 
+export const TimelineSeparatorMessageSchema = z
+  .object({
+    ...TimelineMessageBaseShape,
+    role: z.literal('separator'),
+    blocks: z.tuple([BranchSeparatorBlockSchema]),
+  })
+  .strict() satisfies z.ZodType<TimelineSeparatorMessage>;
+
 export const TimelineMessageSchema = z.union([
   TimelineUserMessageSchema,
   TimelineAssistantMessageSchema,
+  TimelineSeparatorMessageSchema,
 ]) satisfies z.ZodType<TimelineMessage>;
 
 export type TimelineMessageFromSchema = z.infer<typeof TimelineMessageSchema>;

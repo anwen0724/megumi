@@ -4,6 +4,7 @@ import type {
   ApprovalActivityItem,
   AssistantTextItem,
   AssistantTimelineBlock,
+  BranchSeparatorBlock,
   CancelledActivityItem,
   ErrorActivityItem,
   ProcessDisclosureBlock,
@@ -23,6 +24,11 @@ export function reduceChatStreamEvent(
   const nextMessages = cloneMessages(messages);
 
   switch (event.eventType) {
+    case 'branch.separator.created': {
+      upsertBranchSeparator(nextMessages, event);
+      return nextMessages;
+    }
+
     case 'turn.started': {
       const assistant = ensureAssistantMessage(nextMessages, event);
       ensureProcessBlock(assistant, event).status = 'running';
@@ -158,6 +164,17 @@ export function reduceChatStreamEvent(
       return nextMessages;
     }
 
+    case 'process.compaction.recorded':
+    case 'process.retry.recorded':
+    case 'process.recovery.recorded': {
+      const assistant = ensureAssistantMessage(nextMessages, event);
+      const process = ensureProcessBlock(assistant, event);
+      upsertProcessFactItem(process, event);
+      process.updatedAt = event.createdAt;
+      assistant.updatedAt = event.createdAt;
+      return nextMessages;
+    }
+
     case 'turn.completed': {
       const assistant = ensureAssistantMessage(nextMessages, event);
       const process = ensureProcessBlock(assistant, event);
@@ -203,6 +220,13 @@ function cloneMessages(messages: TimelineMessage[]): TimelineMessage[] {
       };
     }
 
+    if (message.role === 'separator') {
+      return {
+        ...message,
+        blocks: message.blocks.map((block) => ({ ...block })) as [BranchSeparatorBlock],
+      };
+    }
+
     return {
       ...message,
       blocks: message.blocks.map((block) => {
@@ -216,6 +240,41 @@ function cloneMessages(messages: TimelineMessage[]): TimelineMessage[] {
         return { ...block };
       }) as AssistantTimelineBlock[],
     };
+  });
+}
+
+function upsertBranchSeparator(
+  messages: TimelineMessage[],
+  event: Extract<ChatStreamEvent, { eventType: 'branch.separator.created' }>,
+): void {
+  const messageId = `separator:${event.branchMarkerId}`;
+  const block = {
+    blockId: `branch-separator:${event.branchMarkerId}`,
+    kind: 'branch_separator' as const,
+    branchMarkerId: event.branchMarkerId,
+    sourceMessageId: event.sourceMessageId,
+    label: event.label,
+    createdAt: event.createdAt,
+    updatedAt: event.createdAt,
+  };
+  const existing = messages.find(
+    (message) => message.role === 'separator' && message.messageId === messageId,
+  );
+
+  if (existing) {
+    existing.blocks = [block];
+    existing.updatedAt = event.createdAt;
+    return;
+  }
+
+  messages.push({
+    messageId,
+    role: 'separator',
+    projectId: event.projectId,
+    sessionId: event.sessionId,
+    createdAt: event.createdAt,
+    updatedAt: event.createdAt,
+    blocks: [block],
   });
 }
 
@@ -555,4 +614,56 @@ function ensureCancelledItem(
   };
   process.items.push(item);
   return item;
+}
+
+function upsertProcessFactItem(
+  process: ProcessDisclosureBlock,
+  event: Extract<
+    ChatStreamEvent,
+    {
+      eventType:
+        | 'process.compaction.recorded'
+        | 'process.retry.recorded'
+        | 'process.recovery.recorded';
+    }
+  >,
+): void {
+  const item =
+    event.eventType === 'process.compaction.recorded'
+      ? {
+          itemId: `compaction:${event.compactionId ?? event.eventId}`,
+          kind: 'compaction_activity' as const,
+          compactionId: event.compactionId,
+          status: event.status,
+          label: event.label,
+          createdAt: event.createdAt,
+          updatedAt: event.createdAt,
+        }
+      : event.eventType === 'process.retry.recorded'
+        ? {
+            itemId: `retry:${event.retryAttemptId}`,
+            kind: 'retry_activity' as const,
+            retryAttemptId: event.retryAttemptId,
+            attemptNumber: event.attemptNumber,
+            status: event.status,
+            label: event.label,
+            reason: event.reason,
+            createdAt: event.createdAt,
+            updatedAt: event.createdAt,
+          }
+        : {
+            itemId: `recovery:${event.runId}:${event.status}`,
+            kind: 'recovery_activity' as const,
+            status: event.status,
+            label: event.label,
+            createdAt: event.createdAt,
+            updatedAt: event.createdAt,
+          };
+
+  const existingIndex = process.items.findIndex((candidate) => candidate.itemId === item.itemId);
+  if (existingIndex === -1) {
+    process.items.push(item);
+  } else {
+    process.items[existingIndex] = item;
+  }
 }

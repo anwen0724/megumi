@@ -25,12 +25,36 @@ const messageBase = {
 } as const;
 
 describe('timeline message and block contracts', () => {
-  it('limits top-level timeline message roles to user and assistant', () => {
-    expect(TIMELINE_MESSAGE_ROLES).toEqual(['user', 'assistant']);
+  it('supports user assistant and branch separator timeline records', () => {
+    expect(TIMELINE_MESSAGE_ROLES).toEqual(['user', 'assistant', 'separator']);
     expect(TimelineMessageRoleSchema.parse('user')).toBe('user');
     expect(TimelineMessageRoleSchema.parse('assistant')).toBe('assistant');
+    expect(TimelineMessageRoleSchema.parse('separator')).toBe('separator');
     expect(() => TimelineMessageRoleSchema.parse('system')).toThrow();
     expect(() => TimelineMessageRoleSchema.parse('tool')).toThrow();
+
+    const parsed = TimelineMessageSchema.parse({
+      messageId: 'separator:branch-marker-1',
+      role: 'separator',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      createdAt: '2026-06-01T10:00:00.000Z',
+      updatedAt: '2026-06-01T10:00:00.000Z',
+      blocks: [{
+        blockId: 'branch-separator:branch-marker-1',
+        kind: 'branch_separator',
+        branchMarkerId: 'branch-marker-1',
+        sourceMessageId: 'message-1',
+        label: 'Branch from 07:28',
+        createdAt: '2026-06-01T10:00:00.000Z',
+      }],
+    });
+
+    expect(parsed.role).toBe('separator');
+    expect(parsed.blocks[0]).toMatchObject({
+      kind: 'branch_separator',
+      label: 'Branch from 07:28',
+    });
   });
 
   it('parses user messages with text and attachment blocks', () => {
@@ -163,6 +187,55 @@ describe('timeline message and block contracts', () => {
 
     expect(process.status).toBe('completed');
     expect(answer.status).toBe('streaming');
+  });
+
+  it('parses compaction retry and recovery process items without raw internals', () => {
+    const parsed = TimelineMessageSchema.parse({
+      messageId: 'assistant:run-1',
+      role: 'assistant',
+      runId: 'run-1',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      createdAt: '2026-06-01T10:00:00.000Z',
+      blocks: [{
+        blockId: 'process:run-1',
+        kind: 'process_disclosure',
+        runId: 'run-1',
+        status: 'completed',
+        createdAt: '2026-06-01T10:00:00.000Z',
+        items: [
+          {
+            itemId: 'compaction:compaction-1',
+            kind: 'compaction_activity',
+            status: 'completed',
+            label: 'Compacted context',
+            createdAt: '2026-06-01T10:00:01.000Z',
+          },
+          {
+            itemId: 'retry:retry-attempt-1',
+            kind: 'retry_activity',
+            retryAttemptId: 'retry-attempt-1',
+            attemptNumber: 1,
+            status: 'failed',
+            label: 'Retry attempt 1 failed',
+            reason: 'rate_limited',
+            createdAt: '2026-06-01T10:00:02.000Z',
+          },
+          {
+            itemId: 'recovery:run-1',
+            kind: 'recovery_activity',
+            status: 'interrupted',
+            label: 'Previous run was interrupted',
+            createdAt: '2026-06-01T10:00:03.000Z',
+          },
+        ],
+      }],
+    });
+
+    const process = parsed.blocks[0];
+    expect(process.kind).toBe('process_disclosure');
+    expect(JSON.stringify(process)).not.toContain('providerBody');
+    expect(JSON.stringify(process)).not.toContain('sourceEntryId');
   });
 
   it('keeps partial answer text on failure or cancellation', () => {

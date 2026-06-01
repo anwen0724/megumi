@@ -4,9 +4,12 @@ import type {
   ApprovalActivityItem,
   AssistantTextItem,
   CancelledActivityItem,
+  CompactionActivityItem,
   ErrorActivityItem,
   ProcessDisclosureBlock,
   ProcessDisclosureItem,
+  RecoveryActivityItem,
+  RetryActivityItem,
   ThinkingItem,
   ToolActivityItem,
 } from '@megumi/shared/timeline-message-blocks';
@@ -157,13 +160,49 @@ function CancelledActivityItemView({ item }: { item: CancelledActivityItem }) {
   );
 }
 
+function CompactionActivityItemView({ item }: { item: CompactionActivityItem }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
+      <ItemIcon item={item} />
+      <span>{item.label}</span>
+    </div>
+  );
+}
+
+function RetryActivityItemView({ item }: { item: RetryActivityItem }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
+      <ItemIcon item={item} />
+      <span className="min-w-0">
+        <span className="block">{item.label}</span>
+        {item.reason ? <span className="block text-xs">{item.reason}</span> : null}
+      </span>
+    </div>
+  );
+}
+
+function RecoveryActivityItemView({ item }: { item: RecoveryActivityItem }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
+      <ItemIcon item={item} />
+      <span>{item.label}</span>
+    </div>
+  );
+}
+
 function ProcessItemView({ item }: { item: ProcessDisclosureItem }) {
   if (item.kind === 'thinking') return <ThinkingItemView item={item} />;
   if (item.kind === 'assistant_text') return <PreludeTextItemView item={item} />;
   if (item.kind === 'tool_activity') return <ToolActivityItemView item={item} />;
   if (item.kind === 'approval_activity') return <ApprovalActivityItemView item={item} />;
   if (item.kind === 'error_activity') return <ErrorActivityItemView item={item} />;
-  return <CancelledActivityItemView item={item} />;
+  if (item.kind === 'cancelled_activity') return <CancelledActivityItemView item={item} />;
+  if (item.kind === 'compaction_activity') return <CompactionActivityItemView item={item} />;
+  if (item.kind === 'retry_activity') return <RetryActivityItemView item={item} />;
+  if (item.kind === 'recovery_activity') return <RecoveryActivityItemView item={item} />;
+
+  const exhaustive: never = item;
+  return exhaustive;
 }
 
 interface ProcessDisclosureBlockViewProps {

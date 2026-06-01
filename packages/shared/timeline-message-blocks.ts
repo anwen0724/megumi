@@ -7,7 +7,7 @@ import type {
   ToolResultId,
 } from './ids';
 
-export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant'] as const;
+export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant', 'separator'] as const;
 export type TimelineMessageRole = (typeof TIMELINE_MESSAGE_ROLES)[number];
 
 export const TEXT_FORMATS = ['plain', 'markdown'] as const;
@@ -65,6 +65,29 @@ export const APPROVAL_ACTIVITY_STATUSES = [
 ] as const;
 export type ApprovalActivityStatus = (typeof APPROVAL_ACTIVITY_STATUSES)[number];
 
+export const BRANCH_SEPARATOR_BLOCK_KINDS = ['branch_separator'] as const;
+export type BranchSeparatorBlockKind = (typeof BRANCH_SEPARATOR_BLOCK_KINDS)[number];
+
+export const COMPACTION_ACTIVITY_STATUSES = ['completed', 'skipped', 'boundary_unresolved'] as const;
+export type CompactionActivityStatus = (typeof COMPACTION_ACTIVITY_STATUSES)[number];
+
+export const RETRY_ACTIVITY_STATUSES = [
+  'started',
+  'failed',
+  'completed',
+  'exhausted',
+  'cancelled',
+] as const;
+export type RetryActivityStatus = (typeof RETRY_ACTIVITY_STATUSES)[number];
+
+export const RECOVERY_ACTIVITY_STATUSES = [
+  'interrupted',
+  'manual_retry_requested',
+  'manual_rerun_requested',
+  'marked_cancelled',
+] as const;
+export type RecoveryActivityStatus = (typeof RECOVERY_ACTIVITY_STATUSES)[number];
+
 export interface TimelineMessageBase {
   messageId: MessageId | string;
   role: TimelineMessageRole;
@@ -103,6 +126,18 @@ export interface TimelineUserMessage extends TimelineMessageBase {
   runId?: RunId | string;
   clientMessageId?: string;
   blocks: UserTimelineBlock[];
+}
+
+export interface BranchSeparatorBlock extends TimelineBlockBase {
+  kind: 'branch_separator';
+  branchMarkerId: string;
+  sourceMessageId: MessageId | string;
+  label: string;
+}
+
+export interface TimelineSeparatorMessage extends TimelineMessageBase {
+  role: 'separator';
+  blocks: [BranchSeparatorBlock];
 }
 
 export interface ProcessDisclosureItemBase {
@@ -164,13 +199,38 @@ export interface CancelledActivityItem extends ProcessDisclosureItemBase {
   reason?: string;
 }
 
+export interface CompactionActivityItem extends ProcessDisclosureItemBase {
+  kind: 'compaction_activity';
+  compactionId?: string;
+  status: CompactionActivityStatus;
+  label: string;
+}
+
+export interface RetryActivityItem extends ProcessDisclosureItemBase {
+  kind: 'retry_activity';
+  retryAttemptId: string;
+  attemptNumber: number;
+  status: RetryActivityStatus;
+  label: string;
+  reason?: string;
+}
+
+export interface RecoveryActivityItem extends ProcessDisclosureItemBase {
+  kind: 'recovery_activity';
+  status: RecoveryActivityStatus;
+  label: string;
+}
+
 export type ProcessDisclosureItem =
   | ThinkingItem
   | AssistantTextItem
   | ToolActivityItem
   | ApprovalActivityItem
   | ErrorActivityItem
-  | CancelledActivityItem;
+  | CancelledActivityItem
+  | CompactionActivityItem
+  | RetryActivityItem
+  | RecoveryActivityItem;
 
 export interface ProcessDisclosureBlock extends TimelineBlockBase {
   kind: 'process_disclosure';
@@ -198,5 +258,5 @@ export interface TimelineAssistantMessage extends TimelineMessageBase {
   blocks: AssistantTimelineBlock[];
 }
 
-export type TimelineMessage = TimelineUserMessage | TimelineAssistantMessage;
-export type TimelineBlock = UserTimelineBlock | AssistantTimelineBlock;
+export type TimelineMessage = TimelineUserMessage | TimelineAssistantMessage | TimelineSeparatorMessage;
+export type TimelineBlock = UserTimelineBlock | AssistantTimelineBlock | BranchSeparatorBlock;

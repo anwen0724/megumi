@@ -27,6 +27,10 @@ export const CHAT_STREAM_EVENT_TYPES = [
   'tool.denied',
   'approval.requested',
   'approval.resolved',
+  'branch.separator.created',
+  'process.compaction.recorded',
+  'process.retry.recorded',
+  'process.recovery.recorded',
 ] as const;
 
 export type ChatStreamEventType = (typeof CHAT_STREAM_EVENT_TYPES)[number];
@@ -207,6 +211,35 @@ export interface ApprovalResolvedEvent extends ChatStreamEventBase {
   decision?: ApprovalResolutionStatus;
 }
 
+export interface BranchSeparatorCreatedEvent extends ChatStreamEventBase {
+  eventType: 'branch.separator.created';
+  branchMarkerId: string;
+  sourceMessageId: MessageId | string;
+  label: string;
+}
+
+export interface ProcessCompactionRecordedEvent extends ChatStreamEventBase {
+  eventType: 'process.compaction.recorded';
+  compactionId?: string;
+  status: 'completed' | 'skipped' | 'boundary_unresolved';
+  label: string;
+}
+
+export interface ProcessRetryRecordedEvent extends ChatStreamEventBase {
+  eventType: 'process.retry.recorded';
+  retryAttemptId: string;
+  attemptNumber: number;
+  status: 'started' | 'failed' | 'completed' | 'exhausted' | 'cancelled';
+  label: string;
+  reason?: string;
+}
+
+export interface ProcessRecoveryRecordedEvent extends ChatStreamEventBase {
+  eventType: 'process.recovery.recorded';
+  status: 'interrupted' | 'manual_retry_requested' | 'manual_rerun_requested' | 'marked_cancelled';
+  label: string;
+}
+
 export type ChatStreamEvent =
   | TurnStartedEvent
   | TurnCompletedEvent
@@ -226,7 +259,11 @@ export type ChatStreamEvent =
   | ToolFailedEvent
   | ToolDeniedEvent
   | ApprovalRequestedEvent
-  | ApprovalResolvedEvent;
+  | ApprovalResolvedEvent
+  | BranchSeparatorCreatedEvent
+  | ProcessCompactionRecordedEvent
+  | ProcessRetryRecordedEvent
+  | ProcessRecoveryRecordedEvent;
 
 export type TypedChatStreamEvent<TType extends ChatStreamEventType> = Extract<
   ChatStreamEvent,
