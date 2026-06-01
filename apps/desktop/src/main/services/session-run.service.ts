@@ -24,6 +24,7 @@ import {
 } from '@megumi/core/run-runtime/events';
 import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
@@ -34,14 +35,17 @@ import type {
 } from '@megumi/shared/run-context-contracts';
 import type {
   AgentInstructionSourceSnapshot,
+  ModelInputContextSourceRef,
 } from '@megumi/shared/model-input-context-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
+import type { SessionBranchMarker, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
 import {
   isPermissionMode,
   type PermissionMode,
   type PermissionModeSnapshot,
 } from '@megumi/shared/permission-mode-contracts';
+import type { JsonObject } from '@megumi/shared/json';
 import type {
   RunStartPayload,
   PlanStatusUpdatePayload,
@@ -57,7 +61,13 @@ import type { ImplementationPlanArtifactRecord, RunMode, RunModeSnapshot } from 
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { createRuntimeEvent, createToolResultCreatedEvent } from '@megumi/shared/runtime-event-factory';
+import {
+  createRuntimeEvent,
+  createSessionActiveLeafChangedEvent,
+  createSessionBranchDraftCancelledEvent,
+  createSessionBranchMarkerCreatedEvent,
+  createToolResultCreatedEvent,
+} from '@megumi/shared/runtime-event-factory';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
@@ -87,6 +97,8 @@ export interface SessionRunServiceClock {
 export interface SessionRunServiceIds extends RunIdFactory {
   compactionId(): string;
   sessionId(): string;
+  sourceEntryId(): string;
+  branchMarkerId(): string;
   chatStreamEventId(): string;
   chatStreamId(input: { runId: string }): string;
   chatTextId(): string;
@@ -166,6 +178,7 @@ export interface SessionRunServiceOptions {
   sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
+  activePathRepository?: SessionActivePathRepository;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
   timelineMessageRepository?: {
@@ -206,6 +219,8 @@ function createDefaultIds(): SessionRunServiceIds {
     cancelRequestId: () => `cancel-request:${crypto.randomUUID()}`,
     retryRequestId: () => `retry-request:${crypto.randomUUID()}`,
     compactionId: () => `compaction:${crypto.randomUUID()}`,
+    sourceEntryId: () => `source-entry:${crypto.randomUUID()}`,
+    branchMarkerId: () => `branch-marker:${crypto.randomUUID()}`,
     eventId: () => `event:${crypto.randomUUID()}`,
     messageId: () => `message:${crypto.randomUUID()}`,
     debugId: () => `debug:${crypto.randomUUID()}`,
@@ -218,6 +233,7 @@ function createDefaultIds(): SessionRunServiceIds {
 
 export class SessionRunService {
   private readonly repository: SessionRunRepository;
+  private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
   private readonly runModeService?: Pick<
     RunModeService,
@@ -251,6 +267,7 @@ export class SessionRunService {
 
   constructor(options: SessionRunServiceOptions) {
     this.repository = options.repository;
+    this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
     this.runModeService = options.runModeService;
     this.modelStepProvider = options.modelStepProvider;
@@ -417,6 +434,11 @@ export class SessionRunService {
       createdAt: currentUserMessage.createdAt,
       completedAt: currentUserMessage.createdAt,
     });
+    this.appendSourceAndMoveLeaf({
+      sessionId: String(session.sessionId),
+      sourceRef: sessionMessageSourceRef(String(userMessage.messageId), currentUserMessage.createdAt),
+      createdAt: currentUserMessage.createdAt,
+    });
     const initialRun = this.repository.saveRun({
       runId,
       sessionId: session.sessionId,
@@ -439,6 +461,11 @@ export class SessionRunService {
           modeSnapshotRef: modeSnapshot.modeSnapshotId,
         })
       : initialRun;
+    this.appendSourceAndMoveLeaf({
+      sessionId: String(session.sessionId),
+      sourceRef: sessionRunSourceRef(String(run.runId), createdAt),
+      createdAt,
+    });
     const step = this.repository.saveStep({
       stepId,
       runId,
@@ -491,6 +518,192 @@ export class SessionRunService {
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
     };
+  }
+
+  createBranchFromUserMessage(input: {
+    requestId: string;
+    sessionId: string;
+    messageId: string;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    branchMarker: SessionBranchMarker;
+    branchMarkerSourceEntry: SessionSourceEntry;
+    seedMessage: SessionMessage;
+    events: RuntimeEvent[];
+  } {
+    const activePathRepository = this.requireActivePathRepository();
+    const seedMessage = this.repository.getMessage(input.messageId);
+    if (
+      !seedMessage
+      || String(seedMessage.sessionId) !== input.sessionId
+      || seedMessage.role !== 'user'
+      || seedMessage.status !== 'completed'
+    ) {
+      throw new Error('Branch can only start from a completed user message.');
+    }
+
+    const selectedEntry = activePathRepository.findActivePathEntryBySourceRef(input.sessionId, {
+      sourceKind: 'session_message',
+      sourceId: input.messageId,
+    });
+    if (!selectedEntry) {
+      throw new Error('Branch source entry was not found in the active path.');
+    }
+
+    const previousLeafSourceEntryId = activePathRepository.getActiveLeaf(input.sessionId)?.leafSourceEntryId ?? undefined;
+    const targetLeafSourceEntryId = selectedEntry.parentSourceEntryId;
+    const branchMarkerId = this.ids.branchMarkerId();
+    const branchMarker: SessionBranchMarker = activePathRepository.recordBranchMarker({
+      branchMarkerId,
+      sessionId: input.sessionId,
+      ...(previousLeafSourceEntryId ? { previousLeafSourceEntryId } : {}),
+      ...(targetLeafSourceEntryId ? { targetLeafSourceEntryId } : {}),
+      selectedSourceRef: selectedEntry.sourceRef,
+      seedSourceRef: selectedEntry.sourceRef,
+      reason: 'branch_from_user_message',
+      createdAt: input.createdAt,
+    });
+    const markerSourceRef = branchMarkerSourceRef(branchMarker.branchMarkerId, input.createdAt);
+    const branchMarkerSourceEntryId = this.ids.sourceEntryId();
+    const branchMarkerSourceEntry = activePathRepository.appendSourceEntryAndSetActiveLeaf({
+      sourceEntryId: branchMarkerSourceEntryId,
+      sessionId: input.sessionId,
+      ...(targetLeafSourceEntryId ? { parentSourceEntryId: targetLeafSourceEntryId } : {}),
+      sourceRef: markerSourceRef,
+      createdAt: input.createdAt,
+      metadata: {
+        requestId: input.requestId,
+        selectedSourceEntryId: selectedEntry.sourceEntryId,
+      },
+    }, {
+      sessionId: input.sessionId,
+      leafSourceEntryId: branchMarkerSourceEntryId,
+      updatedAt: input.createdAt,
+      reason: 'branch_marker',
+    });
+
+    const events = [
+      createSessionBranchMarkerCreatedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+        sequence: 1,
+        createdAt: input.createdAt,
+        payload: {
+          branchMarkerId: branchMarker.branchMarkerId,
+          branchMarkerSourceEntryId: branchMarkerSourceEntry.sourceEntryId,
+          ...(previousLeafSourceEntryId ? { previousLeafSourceEntryId } : {}),
+          ...(targetLeafSourceEntryId ? { targetLeafSourceEntryId } : {}),
+          selectedSourceRef: selectedEntry.sourceRef,
+          seedSourceRef: selectedEntry.sourceRef,
+          reason: 'branch_from_user_message',
+        },
+      }),
+      createSessionActiveLeafChangedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+        sequence: 2,
+        createdAt: input.createdAt,
+        payload: {
+          ...(previousLeafSourceEntryId ? { previousLeafSourceEntryId } : {}),
+          leafSourceEntryId: branchMarkerSourceEntry.sourceEntryId,
+          reason: 'branch_marker',
+          sourceRef: markerSourceRef,
+        },
+      }),
+    ];
+    for (const event of events) {
+      this.repository.appendRuntimeEvent(event);
+    }
+
+    return {
+      branchMarker,
+      branchMarkerSourceEntry,
+      seedMessage,
+      events,
+    };
+  }
+
+  cancelBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    branchMarkerId: string;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    cancelled: boolean;
+    reason?: 'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found';
+    events: RuntimeEvent[];
+  } {
+    const activePathRepository = this.requireActivePathRepository();
+    const marker = activePathRepository.getBranchMarker(input.branchMarkerId);
+    if (!marker || marker.sessionId !== input.sessionId) {
+      return { cancelled: false, reason: 'branch_marker_not_found', events: [] };
+    }
+
+    const markerSourceEntry = activePathRepository.getSourceEntryBySourceRef(input.sessionId, {
+      sourceKind: 'branch_marker',
+      sourceId: input.branchMarkerId,
+    });
+    if (!markerSourceEntry) {
+      return { cancelled: false, reason: 'branch_marker_not_found', events: [] };
+    }
+
+    if (activePathRepository.listChildSourceEntries(markerSourceEntry.sourceEntryId).length > 0) {
+      return { cancelled: false, reason: 'branch_has_new_sources', events: [] };
+    }
+
+    const activeLeaf = activePathRepository.getActiveLeaf(input.sessionId);
+    if (activeLeaf?.leafSourceEntryId !== markerSourceEntry.sourceEntryId) {
+      return { cancelled: false, reason: 'branch_marker_not_active', events: [] };
+    }
+
+    activePathRepository.setActiveLeaf({
+      sessionId: input.sessionId,
+      leafSourceEntryId: marker.previousLeafSourceEntryId,
+      updatedAt: input.createdAt,
+      reason: 'branch_cancelled',
+    });
+    const markerSourceRef = branchMarkerSourceRef(marker.branchMarkerId, input.createdAt);
+    const events = [
+      createSessionBranchDraftCancelledEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+        sequence: 1,
+        createdAt: input.createdAt,
+        payload: {
+          branchMarkerId: marker.branchMarkerId,
+          branchMarkerSourceEntryId: markerSourceEntry.sourceEntryId,
+          ...(marker.previousLeafSourceEntryId ? { restoredLeafSourceEntryId: marker.previousLeafSourceEntryId } : {}),
+          reason: 'branch_cancelled',
+        },
+      }),
+      createSessionActiveLeafChangedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+        sequence: 2,
+        createdAt: input.createdAt,
+        payload: {
+          previousLeafSourceEntryId: markerSourceEntry.sourceEntryId,
+          ...(marker.previousLeafSourceEntryId ? { leafSourceEntryId: marker.previousLeafSourceEntryId } : {}),
+          reason: 'branch_cancelled',
+          sourceRef: markerSourceRef,
+        },
+      }),
+    ];
+    for (const event of events) {
+      this.repository.appendRuntimeEvent(event);
+    }
+
+    return { cancelled: true, events };
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
@@ -1177,6 +1390,22 @@ export class SessionRunService {
       return;
     }
 
+    const assistantMessage = this.repository.saveMessage({
+      messageId: this.ids.messageId(),
+      sessionId: input.request.sessionId,
+      runId: input.request.runId,
+      role: 'assistant',
+      content: assistantContent,
+      status: 'completed',
+      createdAt: completedAt,
+      completedAt,
+    });
+    this.appendSourceAndMoveLeaf({
+      sessionId: input.request.sessionId,
+      sourceRef: sessionMessageSourceRef(String(assistantMessage.messageId), completedAt),
+      createdAt: completedAt,
+    });
+
     const completedStep = this.repository.saveStep({
       ...currentModelStep,
       status: 'succeeded',
@@ -1230,6 +1459,35 @@ export class SessionRunService {
     }
   }
 
+  private appendSourceAndMoveLeaf(input: {
+    sessionId: string;
+    sourceRef: ModelInputContextSourceRef;
+    createdAt: string;
+    reason?: 'source_appended' | 'branch_marker';
+    metadata?: JsonObject;
+  }): SessionSourceEntry | undefined {
+    if (!this.activePathRepository) {
+      return undefined;
+    }
+
+    const parentSourceEntryId = this.activePathRepository.getActiveLeaf(input.sessionId)?.leafSourceEntryId ?? undefined;
+    const sourceEntryId = this.ids.sourceEntryId();
+    return this.activePathRepository.appendSourceEntryAndSetActiveLeaf({
+      sourceEntryId,
+      sessionId: input.sessionId,
+      ...(parentSourceEntryId ? { parentSourceEntryId } : {}),
+      sourceRef: input.sourceRef,
+      createdAt: input.createdAt,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
+    }, {
+      sessionId: input.sessionId,
+      leafSourceEntryId: sourceEntryId,
+      updatedAt: input.createdAt,
+      reason: input.reason ?? 'source_appended',
+      ...(input.metadata ? { metadata: input.metadata } : {}),
+    });
+  }
+
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
     this.repository.appendRuntimeEvent(event);
     chatStreamAdapter?.handleRuntimeEvent(event);
@@ -1244,6 +1502,14 @@ export class SessionRunService {
     }
 
     return this.modelStepProvider;
+  }
+
+  private requireActivePathRepository(): SessionActivePathRepository {
+    if (!this.activePathRepository) {
+      throw new Error('Active path repository is not configured.');
+    }
+
+    return this.activePathRepository;
   }
 
   private async loadInstructionSourcesForModelStep(input: {
@@ -1587,6 +1853,33 @@ function runtimeConstraintsFromRunContext(
     approvalSummary: context.policySummary.approvalSummary,
     loadedAt,
   }];
+}
+
+function sessionMessageSourceRef(messageId: string, builtAt: string): ModelInputContextSourceRef {
+  return {
+    sourceKind: 'session_message',
+    sourceId: messageId,
+    sourceUri: `session-message://${messageId}`,
+    loadedAt: builtAt,
+  };
+}
+
+function sessionRunSourceRef(runId: string, builtAt: string): ModelInputContextSourceRef {
+  return {
+    sourceKind: 'session_run',
+    sourceId: runId,
+    sourceUri: `session-run://${runId}`,
+    loadedAt: builtAt,
+  };
+}
+
+function branchMarkerSourceRef(branchMarkerId: string, builtAt: string): ModelInputContextSourceRef {
+  return {
+    sourceKind: 'branch_marker',
+    sourceId: branchMarkerId,
+    sourceUri: `branch-marker://${branchMarkerId}`,
+    loadedAt: builtAt,
+  };
 }
 
 type SessionMessageSendHistoryMessage = NonNullable<SessionMessageSendPayload['messages']>[number];
@@ -1953,9 +2246,11 @@ export function createDefaultSessionRunService(
   const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
   migrateDatabase(database);
   const runModeRepository = new RunModeRepository(database);
+  const activePathRepository = new SessionActivePathRepository(database);
 
   return new SessionRunService({
     repository: new SessionRunRepository(database),
+    activePathRepository,
     runModeService: new RunModeService({ repository: runModeRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import {
@@ -16,8 +17,10 @@ import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/
 import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { ModelInputContextSourceKind } from '@megumi/shared/model-input-context-contracts';
 import type { RunContext } from '@megumi/shared/run-context-contracts';
 import type { RunAction } from '@megumi/shared/session-run-contracts';
+import type { SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
 import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -212,6 +215,7 @@ function createServiceWithModelStepStream(
   agentInstructionSourceService?: SessionRunServiceOptions['agentInstructionSourceService'];
   sessionContextInputService?: SessionRunServiceOptions['sessionContextInputService'];
   sessionCompactionOrchestrator?: SessionRunServiceOptions['sessionCompactionOrchestrator'];
+  activePathRepository?: SessionActivePathRepository;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -230,6 +234,7 @@ function createServiceWithModelStepStream(
     ...(options?.sessionCompactionOrchestrator ? {
       sessionCompactionOrchestrator: options.sessionCompactionOrchestrator,
     } : {}),
+    ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         callIndex += 1;
@@ -253,7 +258,214 @@ function createServiceWithModelStepStream(
           return `message-${index}`;
         };
       })(),
+      sourceEntryId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `source-entry-${index}`;
+        };
+      })(),
+      branchMarkerId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `branch-marker-${index}`;
+        };
+      })(),
     },
+  });
+}
+
+function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new SessionRunRepository(db);
+  const activePathRepo = new SessionActivePathRepository(db);
+  let messageIndex = 0;
+  let sourceEntryIndex = 0;
+  let branchMarkerIndex = 0;
+  const service = new SessionRunService({
+    repository,
+    activePathRepository: activePathRepo,
+    modelStepProvider: {
+      streamModelStep: async function* () {
+        yield* events;
+      },
+      cancelModelStep: () => true,
+    },
+    clock: { now: () => '2026-06-01T08:00:00.000Z' },
+    ids: {
+      sessionId: () => 'session-1',
+      runId: () => 'run-1',
+      stepId: () => 'step-1',
+      eventId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `event-${index}`;
+        };
+      })(),
+      messageId: () => {
+        messageIndex += 1;
+        return messageIndex === 1 ? 'message-user-1' : 'message-assistant-1';
+      },
+      sourceEntryId: () => {
+        sourceEntryIndex += 1;
+        return `source-entry-${sourceEntryIndex}`;
+      },
+      branchMarkerId: () => {
+        branchMarkerIndex += 1;
+        return `branch-marker-${branchMarkerIndex}`;
+      },
+    },
+  });
+
+  return { service, repository, activePathRepo };
+}
+
+function createBranchServiceFixture() {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new SessionRunRepository(db);
+  const activePathRepo = new SessionActivePathRepository(db);
+  let branchMarkerIndex = 0;
+  const service = new SessionRunService({
+    repository,
+    activePathRepository: activePathRepo,
+    clock: { now: () => '2026-06-01T08:00:00.000Z' },
+    ids: {
+      sessionId: () => 'session-1',
+      eventId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `event-branch-${index}`;
+        };
+      })(),
+      sourceEntryId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `source-entry-branch-marker-${index}`;
+        };
+      })(),
+      branchMarkerId: () => {
+        branchMarkerIndex += 1;
+        return `branch-marker-${branchMarkerIndex}`;
+      },
+    },
+  });
+  seedBranchHistory(repository, activePathRepo);
+  return { service, repository, activePathRepo };
+}
+
+function seedBranchHistory(
+  repository: SessionRunRepository,
+  activePathRepo: SessionActivePathRepository,
+) {
+  repository.saveSession({
+    sessionId: 'session-1',
+    title: 'Branch session',
+    status: 'active',
+    createdAt: '2026-06-01T08:00:00.000Z',
+    updatedAt: '2026-06-01T08:00:00.000Z',
+  });
+  repository.saveMessage({
+    messageId: 'message-1',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    role: 'user',
+    content: 'Initial approach.',
+    status: 'completed',
+    createdAt: '2026-06-01T08:01:00.000Z',
+    completedAt: '2026-06-01T08:01:00.000Z',
+  });
+  repository.saveRun({
+    runId: 'run-1',
+    sessionId: 'session-1',
+    triggerMessageId: 'message-1',
+    mode: 'default',
+    goal: 'Initial approach.',
+    status: 'completed',
+    createdAt: '2026-06-01T08:01:00.000Z',
+    startedAt: '2026-06-01T08:01:00.000Z',
+    completedAt: '2026-06-01T08:02:00.000Z',
+  });
+  repository.saveMessage({
+    messageId: 'message-2',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    role: 'assistant',
+    content: 'Initial answer.',
+    status: 'completed',
+    createdAt: '2026-06-01T08:02:00.000Z',
+    completedAt: '2026-06-01T08:02:00.000Z',
+  });
+  repository.saveMessage({
+    messageId: 'message-3',
+    sessionId: 'session-1',
+    runId: 'run-2',
+    role: 'user',
+    content: 'Try a different approach.',
+    status: 'completed',
+    createdAt: '2026-06-01T08:03:00.000Z',
+    completedAt: '2026-06-01T08:03:00.000Z',
+  });
+  repository.saveRun({
+    runId: 'run-2',
+    sessionId: 'session-1',
+    triggerMessageId: 'message-3',
+    mode: 'default',
+    goal: 'Try a different approach.',
+    status: 'completed',
+    createdAt: '2026-06-01T08:03:00.000Z',
+    startedAt: '2026-06-01T08:03:00.000Z',
+    completedAt: '2026-06-01T08:04:00.000Z',
+  });
+  repository.saveMessage({
+    messageId: 'message-4',
+    sessionId: 'session-1',
+    runId: 'run-2',
+    role: 'assistant',
+    content: 'Different answer.',
+    status: 'completed',
+    createdAt: '2026-06-01T08:04:00.000Z',
+    completedAt: '2026-06-01T08:04:00.000Z',
+  });
+
+  appendSeedSource(activePathRepo, 'source-entry-message-1', 'session_message', 'message-1', undefined, '2026-06-01T08:01:00.000Z');
+  appendSeedSource(activePathRepo, 'source-entry-run-1', 'session_run', 'run-1', 'source-entry-message-1', '2026-06-01T08:01:30.000Z');
+  appendSeedSource(activePathRepo, 'source-entry-message-2', 'session_message', 'message-2', 'source-entry-run-1', '2026-06-01T08:02:00.000Z');
+  appendSeedSource(activePathRepo, 'source-entry-message-3', 'session_message', 'message-3', 'source-entry-message-2', '2026-06-01T08:03:00.000Z');
+  appendSeedSource(activePathRepo, 'source-entry-run-2', 'session_run', 'run-2', 'source-entry-message-3', '2026-06-01T08:03:30.000Z');
+  const leaf = appendSeedSource(activePathRepo, 'source-entry-message-4', 'session_message', 'message-4', 'source-entry-run-2', '2026-06-01T08:04:00.000Z');
+  activePathRepo.setActiveLeaf({
+    sessionId: 'session-1',
+    leafSourceEntryId: leaf.sourceEntryId,
+    updatedAt: '2026-06-01T08:04:00.000Z',
+    reason: 'source_appended',
+  });
+}
+
+function appendSeedSource(
+  activePathRepo: SessionActivePathRepository,
+  sourceEntryId: string,
+  sourceKind: ModelInputContextSourceKind,
+  sourceId: string,
+  parentSourceEntryId: string | undefined,
+  createdAt: string,
+): SessionSourceEntry {
+  return activePathRepo.appendSourceEntry({
+    sourceEntryId,
+    sessionId: 'session-1',
+    ...(parentSourceEntryId ? { parentSourceEntryId } : {}),
+    sourceRef: {
+      sourceKind,
+      sourceId,
+      sourceUri: `${sourceKind === 'session_message' ? 'session-message' : 'session-run'}://${sourceId}`,
+      loadedAt: createdAt,
+    },
+    createdAt,
   });
 }
 
@@ -653,6 +865,213 @@ describe('SessionRunService', () => {
     expect(service.listSessions()).toEqual([session]);
   });
 
+  it('attaches session message sends to the active path', async () => {
+    const { service, repository, activePathRepo } = createServiceWithActivePathModelStepStream([{
+      eventId: 'event-assistant-completed-1',
+      schemaVersion: 1,
+      eventType: 'assistant.output.completed',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-06-01T08:00:03.000Z',
+      source: 'provider',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        content: 'Assistant answer.',
+      },
+    }]);
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-06-01T08:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'User question.',
+          createdAt: '2026-06-01T08:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T08:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain stream so assistant persistence can complete.
+    }
+
+    expect(activePathRepo.getActivePath('session-1').entries.map((entry) => [
+      entry.sourceRef.sourceKind,
+      entry.sourceRef.sourceId,
+    ])).toEqual([
+      ['session_message', 'message-user-1'],
+      ['session_run', 'run-1'],
+      ['session_message', 'message-assistant-1'],
+    ]);
+    expect(repository.getMessage('message-assistant-1')).toMatchObject({
+      role: 'assistant',
+      content: 'Assistant answer.',
+      status: 'completed',
+      runId: 'run-1',
+    });
+  });
+
+  it('creates a branch marker from a historical completed user message', () => {
+    const { service, activePathRepo } = createBranchServiceFixture();
+
+    const result = service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      createdAt: '2026-06-01T08:30:00.000Z',
+    });
+
+    expect(result.seedMessage).toMatchObject({
+      messageId: 'message-3',
+      role: 'user',
+      content: 'Try a different approach.',
+    });
+    expect(result.branchMarker).toMatchObject({
+      sessionId: 'session-1',
+      previousLeafSourceEntryId: 'source-entry-message-4',
+      targetLeafSourceEntryId: 'source-entry-message-2',
+      reason: 'branch_from_user_message',
+    });
+    expect(activePathRepo.getActivePath('session-1').entries.map((entry) => entry.sourceEntryId)).toEqual([
+      'source-entry-message-1',
+      'source-entry-run-1',
+      'source-entry-message-2',
+      'source-entry-branch-marker-1',
+    ]);
+    expect(JSON.stringify(activePathRepo.getActivePath('session-1'))).not.toContain('message-4');
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'session.branch_marker.created',
+      'session.active_leaf.changed',
+    ]);
+  });
+
+  it('rejects branching from an assistant message', () => {
+    const { service } = createBranchServiceFixture();
+
+    expect(() => service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-2',
+      createdAt: '2026-06-01T08:30:00.000Z',
+    })).toThrow('Branch can only start from a completed user message.');
+  });
+
+  it('rejects branching from a non-completed user message', () => {
+    const { service, repository } = createBranchServiceFixture();
+    repository.saveMessage({
+      messageId: 'message-draft',
+      sessionId: 'session-1',
+      role: 'user',
+      content: 'Still drafting.',
+      status: 'created',
+      createdAt: '2026-06-01T08:05:00.000Z',
+    });
+
+    expect(() => service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-draft',
+      createdAt: '2026-06-01T08:30:00.000Z',
+    })).toThrow('Branch can only start from a completed user message.');
+  });
+
+  it('rejects branching when the user message is outside the active path', () => {
+    const { service, repository } = createBranchServiceFixture();
+    repository.saveMessage({
+      messageId: 'message-off-path',
+      sessionId: 'session-1',
+      role: 'user',
+      content: 'Off path.',
+      status: 'completed',
+      createdAt: '2026-06-01T08:05:00.000Z',
+      completedAt: '2026-06-01T08:05:00.000Z',
+    });
+
+    expect(() => service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-off-path',
+      createdAt: '2026-06-01T08:30:00.000Z',
+    })).toThrow('Branch source entry was not found in the active path.');
+  });
+
+  it('cancels a branch draft and restores the previous active leaf', () => {
+    const { service, activePathRepo } = createBranchServiceFixture();
+    const branch = service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      createdAt: '2026-06-01T08:30:00.000Z',
+    });
+
+    const cancelled = service.cancelBranchDraft({
+      requestId: 'request-branch-cancel-1',
+      sessionId: 'session-1',
+      branchMarkerId: branch.branchMarker.branchMarkerId,
+      createdAt: '2026-06-01T08:31:00.000Z',
+    });
+
+    expect(cancelled.cancelled).toBe(true);
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-message-4');
+    expect(cancelled.events.map((event) => event.eventType)).toEqual([
+      'session.branch_draft.cancelled',
+      'session.active_leaf.changed',
+    ]);
+  });
+
+  it('does not cancel a branch draft after new sources are appended', () => {
+    const { service, activePathRepo } = createBranchServiceFixture();
+    const branch = service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      createdAt: '2026-06-01T08:30:00.000Z',
+    });
+    activePathRepo.appendSourceEntryAndSetActiveLeaf({
+      sourceEntryId: 'source-entry-new-user',
+      sessionId: 'session-1',
+      parentSourceEntryId: branch.branchMarkerSourceEntry.sourceEntryId,
+      sourceRef: {
+        sourceKind: 'session_message',
+        sourceId: 'message-new-user',
+        sourceUri: 'session-message://message-new-user',
+        loadedAt: '2026-06-01T08:30:30.000Z',
+      },
+      createdAt: '2026-06-01T08:30:30.000Z',
+    }, {
+      sessionId: 'session-1',
+      leafSourceEntryId: 'source-entry-new-user',
+      updatedAt: '2026-06-01T08:30:30.000Z',
+      reason: 'source_appended',
+    });
+
+    const cancelled = service.cancelBranchDraft({
+      requestId: 'request-branch-cancel-1',
+      sessionId: 'session-1',
+      branchMarkerId: branch.branchMarker.branchMarkerId,
+      createdAt: '2026-06-01T08:31:00.000Z',
+    });
+
+    expect(cancelled).toEqual({
+      cancelled: false,
+      reason: 'branch_has_new_sources',
+      events: [],
+    });
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-new-user');
+  });
+
   it('starts a minimal agent run and persists lifecycle facts', async () => {
     const service = createService();
     service.createSession({
@@ -836,6 +1255,7 @@ describe('SessionRunService', () => {
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).toContain('assistant.output.completed');
     expect(service.listMessagesBySession('session-1')).toEqual([
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
+      expect.objectContaining({ role: 'assistant', content: 'Hello', runId: 'run-1', status: 'completed' }),
     ]);
   });
 
@@ -1764,6 +2184,12 @@ describe('SessionRunService', () => {
         content: 'Read package.json',
         runId: 'run-1',
       }),
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Final answer after tool result.',
+        runId: 'run-1',
+        status: 'completed',
+      }),
     ]);
   });
 
@@ -2123,6 +2549,12 @@ describe('SessionRunService', () => {
         content: 'Hello',
         runId: 'run-1',
       }),
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Hello Megumi.',
+        runId: 'run-1',
+        status: 'completed',
+      }),
     ]);
   });
 
@@ -2248,6 +2680,7 @@ describe('SessionRunService', () => {
     expect(chatEvents.map((event) => event.eventType)).toContain('turn.completed');
     expect(repository.listMessagesBySession('session-1')).toEqual([
       expect.objectContaining({ role: 'user', content: 'Hello', runId: 'run-1' }),
+      expect.objectContaining({ role: 'assistant', content: 'Hello', runId: 'run-1', status: 'completed' }),
     ]);
   });
 

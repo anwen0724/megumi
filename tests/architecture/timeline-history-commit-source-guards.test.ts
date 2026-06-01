@@ -30,11 +30,11 @@ describe('timeline history commit boundaries', () => {
     expect(source).not.toContain('apps/desktop/src/renderer');
   });
 
-  it('does not save new assistant history through old flat session message content', () => {
+  it('keeps renderer timeline history on timeline repository instead of flat session messages', () => {
     const source = read('apps/desktop/src/main/services/session-run.service.ts');
 
-    expect(source).not.toContain("role: 'assistant',\n      content: assistantContent");
-    expect(source).not.toContain('assistantContent,');
+    expect(source).toContain('timelineMessageRepository.listCommittedMessagesBySession(input)');
+    expect(source).not.toContain('timelineMessagesFromPersistedMessages');
   });
 
   it('hydrates renderer history into chat-stream canonical state instead of old flat chat messages', () => {
