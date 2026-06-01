@@ -11,6 +11,7 @@ import type {
   Session,
   SessionMessage,
 } from '@megumi/shared/session-run-contracts';
+import type { SessionActivePath } from '@megumi/shared/session-active-path-contracts';
 import type {
   SessionContextInput,
   SessionHistoryEntry,
@@ -23,11 +24,15 @@ import type {
 
 export interface SessionContextInputRepository {
   getSession(sessionId: string): Session | undefined;
-  listMessagesBySession(sessionId: string): SessionMessage[];
-  listRunsBySession(sessionId: string): Run[];
+  getMessage(messageId: string): SessionMessage | undefined;
+  getRun(runId: string): Run | undefined;
   listStepsByRun(runId: string): RunStep[];
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
-  getLatestCompletedSessionCompaction(sessionId: string): SessionCompactionEntry | null;
+  getSessionCompaction(compactionId: string): SessionCompactionEntry | null;
+}
+
+export interface SessionContextInputActivePathRepository {
+  getActivePath(sessionId: string): SessionActivePath;
 }
 
 export interface BuildSessionContextInputFromRepositoryInput {
@@ -41,6 +46,7 @@ export interface BuildSessionContextInputFromRepositoryInput {
 
 export interface SessionContextInputServiceOptions {
   repository: SessionContextInputRepository;
+  activePathRepository: SessionContextInputActivePathRepository;
 }
 
 const DEFAULT_MAX_HISTORY_ENTRIES = 24;
@@ -55,12 +61,19 @@ export class SessionContextInputService {
     const maxHistoryEntries = input.maxHistoryEntries ?? DEFAULT_MAX_HISTORY_ENTRIES;
     const maxRuntimeFacts = input.maxRuntimeFacts ?? DEFAULT_MAX_RUNTIME_FACTS;
     const session = this.options.repository.getSession(input.sessionId);
-    const latestCompletedCompaction = this.options.repository.getLatestCompletedSessionCompaction(input.sessionId);
-    const completedHistoryEntries = this.options.repository
-      .listMessagesBySession(input.sessionId)
+    const activePath = this.options.activePathRepository.getActivePath(input.sessionId);
+    const activePathEntries = activePath.entries;
+    const latestCompletedCompaction = latestCompletedCompactionFromActivePath({
+      repository: this.options.repository,
+      activePath,
+    });
+    const completedHistoryEntries = activePathEntries
+      .filter((entry) => entry.sourceRef.sourceKind === 'session_message')
+      .map((entry) => this.options.repository.getMessage(entry.sourceRef.sourceId))
+      .filter((message): message is SessionMessage => !!message)
       .filter((message) => message.messageId !== input.currentMessageId)
       .filter((message) => !input.currentRunId || String(message.runId) !== input.currentRunId)
-      .filter(isUserOrAssistantMessage)
+      .filter(isCompletedUserOrAssistantMessage)
       .filter((message) => message.content.trim().length > 0)
       .map((message) => historyEntry(message, input.builtAt));
     const historySelection = selectHistoryForCompaction({
@@ -73,8 +86,10 @@ export class SessionContextInputService {
       : session?.summary?.trim()
       ? [summaryEntry(session, input.builtAt)]
       : [];
-    const allRuntimeFacts = this.options.repository
-      .listRunsBySession(input.sessionId)
+    const allRuntimeFacts = activePathEntries
+      .filter((entry) => entry.sourceRef.sourceKind === 'session_run')
+      .map((entry) => this.options.repository.getRun(entry.sourceRef.sourceId))
+      .filter((run): run is Run => !!run)
       .filter((run) => run.runId !== input.currentRunId)
       .flatMap((run) => runtimeFactsForRun({
         repository: this.options.repository,
@@ -100,14 +115,14 @@ export class SessionContextInputService {
   }
 }
 
-function isUserOrAssistantMessage(
+function isCompletedUserOrAssistantMessage(
   message: SessionMessage,
-): message is SessionMessage & { role: 'user' | 'assistant' } {
-  return message.role === 'user' || message.role === 'assistant';
+): message is SessionMessage & { role: 'user' | 'assistant'; status: 'completed' } {
+  return (message.role === 'user' || message.role === 'assistant') && message.status === 'completed';
 }
 
 function historyEntry(
-  message: SessionMessage & { role: 'user' | 'assistant' },
+  message: SessionMessage & { role: 'user' | 'assistant'; status: 'completed' },
   builtAt: string,
 ): SessionHistoryEntry {
   return {
@@ -116,7 +131,7 @@ function historyEntry(
     text: message.content.trim(),
     status: historyStatus(message.status),
     sourceRef: sourceRef({
-      sourceId: `session-message:${message.messageId}`,
+      sourceId: String(message.messageId),
       sourceKind: 'session_message',
       sourceUri: `session-message://${message.messageId}`,
       builtAt,
@@ -179,7 +194,7 @@ function compactionSummaryEntry(compaction: SessionCompactionEntry, builtAt: str
     summaryKind: 'compaction',
     text: compaction.summary.trim(),
     sourceRef: sourceRef({
-      sourceId: `session-compaction:${compaction.compactionId}`,
+      sourceId: String(compaction.compactionId),
       sourceKind: 'session_summary',
       sourceUri: `session-compaction://${compaction.compactionId}`,
       builtAt,
@@ -187,6 +202,24 @@ function compactionSummaryEntry(compaction: SessionCompactionEntry, builtAt: str
     }),
     createdAt: compaction.createdAt,
   };
+}
+
+function latestCompletedCompactionFromActivePath(input: {
+  repository: SessionContextInputRepository;
+  activePath: SessionActivePath;
+}): SessionCompactionEntry | null {
+  for (const entry of [...input.activePath.entries].reverse()) {
+    if (entry.sourceRef.sourceKind !== 'session_summary') {
+      continue;
+    }
+
+    const compaction = input.repository.getSessionCompaction(entry.sourceRef.sourceId);
+    if (compaction?.status === 'completed') {
+      return compaction;
+    }
+  }
+
+  return null;
 }
 
 function selectHistoryForCompaction(input: {
@@ -229,7 +262,7 @@ function selectHistoryForCompaction(input: {
 function sourceRefsMatch(left: ModelInputContextSourceRef, right: ModelInputContextSourceRef): boolean {
   return left.sourceKind === right.sourceKind
     && (
-      left.sourceId === compactId(right.sourceId)
+      left.sourceId === right.sourceId
       || (!!left.sourceUri && !!right.sourceUri && left.sourceUri === right.sourceUri)
     );
 }
@@ -253,7 +286,7 @@ function runtimeFactsForRun(input: {
       id: `session-run:${input.run.runId}:run-failed`,
       factKind: 'run_failed',
       text: `Previous run failed before a final answer.${errorSuffix(input.run.error)}`,
-      sourceId: `session-run:${input.run.runId}`,
+      sourceId: String(input.run.runId),
       sourceKind: 'session_run',
       sourceUri: `session-run://${input.run.runId}`,
       builtAt: input.builtAt,
@@ -267,7 +300,7 @@ function runtimeFactsForRun(input: {
       id: `session-run:${input.run.runId}:run-cancelled`,
       factKind: 'run_cancelled',
       text: `Previous run was cancelled before a final answer.${cancelSuffix(input.run)}`,
-      sourceId: `session-run:${input.run.runId}`,
+      sourceId: String(input.run.runId),
       sourceKind: 'session_run',
       sourceUri: `session-run://${input.run.runId}`,
       builtAt: input.builtAt,
@@ -282,7 +315,7 @@ function runtimeFactsForRun(input: {
         id: `session-step:${step.stepId}:step-failed`,
         factKind: 'step_failed',
         text: `Run step failed: ${step.title ?? step.kind}.${errorSuffix(step.error)}`,
-        sourceId: `session-step:${step.stepId}`,
+        sourceId: String(step.stepId),
         sourceKind: 'session_step',
         sourceUri: `session-step://${step.stepId}`,
         builtAt: input.builtAt,
@@ -311,9 +344,10 @@ function compactionBoundaryUnresolvedFact(
   builtAt: string,
 ): SessionRuntimeFact {
   return runtimeFact({
-    id: `session-compaction:${compaction.compactionId}:boundary-unresolved`,
+    id: `${compaction.compactionId}:boundary-unresolved`,
     factKind: 'other',
     text: 'Compaction boundary could not be resolved; retained latest compaction summary and a small recent history window.',
+    sourceId: `${compaction.compactionId}:boundary-unresolved`,
     sourceKind: 'session_summary',
     sourceUri: `session-compaction://${compaction.compactionId}/boundary-unresolved`,
     builtAt,

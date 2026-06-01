@@ -39,7 +39,7 @@ import type {
 } from '@megumi/shared/model-input-context-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
-import type { SessionBranchMarker, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
+import type { SessionActivePath, SessionBranchMarker, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
 import {
   isPermissionMode,
   type PermissionMode,
@@ -207,6 +207,15 @@ const DEFAULT_CONTEXT_BUDGET_POLICY: ContextBudgetPolicy = {
   keepRecentTokens: 7168,
 };
 
+class EmptySessionActivePathRepository {
+  getActivePath(sessionId: string): SessionActivePath {
+    return {
+      sessionId,
+      entries: [],
+    };
+  }
+}
+
 function createDefaultIds(): SessionRunServiceIds {
   return {
     sessionId: () => `session:${crypto.randomUUID()}`,
@@ -275,7 +284,10 @@ export class SessionRunService {
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.agentInstructionSourceService = options.agentInstructionSourceService;
     this.sessionContextInputService = options.sessionContextInputService
-      ?? new SessionContextInputService({ repository: this.repository });
+      ?? new SessionContextInputService({
+        repository: this.repository,
+        activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
+      });
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.timelineMessageRepository = options.timelineMessageRepository;
     this.clock = options.clock ?? defaultClock;

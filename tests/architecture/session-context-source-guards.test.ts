@@ -54,6 +54,13 @@ const forbiddenProviderAndRendererSources = [
   'list' + 'Tool',
 ];
 
+const forbiddenSessionContextInputServiceCalls = [
+  'list' + 'MessagesBySession',
+  'list' + 'RunsBySession',
+  'get' + 'LatestCompletedSessionCompaction',
+  'list' + 'SessionCompactionsBySession',
+];
+
 describe('session context source guards', () => {
   it('keeps old timeline/modelContext projection out of SessionRunService model input path', () => {
     const source = read('apps/desktop/src/main/services/session-run.service.ts');
@@ -95,5 +102,13 @@ describe('session context source guards', () => {
     expect(providerAndRenderer).not.toContain('get' + 'LatestCompletedSessionCompaction');
     expect(providerAndRenderer).not.toContain('session_' + 'compactions');
     expect(providerAndRenderer).not.toContain('Session' + 'CompactionEntry');
+  });
+
+  it('keeps SessionContextInputService scoped to active path source selection', () => {
+    const source = read('apps/desktop/src/main/services/session-context-input.service.ts');
+
+    for (const forbidden of forbiddenSessionContextInputServiceCalls) {
+      expect(source).not.toContain(forbidden);
+    }
   });
 });
