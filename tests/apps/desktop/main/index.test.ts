@@ -124,6 +124,12 @@ const mocks = vi.hoisted(() => {
     ) {
       this.database = database;
     }),
+    SessionActivePathRepository: vi.fn(function SessionActivePathRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
     ArtifactRepository: vi.fn(function ArtifactRepository(
       this: { database?: unknown },
       database: unknown,
@@ -187,7 +193,7 @@ const mocks = vi.hoisted(() => {
         syncImplementationPlanArtifact: vi.fn(),
       };
     }),
-    createRecoveryService: vi.fn(() => ({
+    createRecoveryService: vi.fn((_options?: unknown) => ({
       listRecoverableRuns: vi.fn(),
       resumeRun: vi.fn(),
       cancelRun: vi.fn(),
@@ -285,6 +291,10 @@ vi.mock('@megumi/db/repos/recovery.repo', () => ({
   RecoveryRepository: mocks.RecoveryRepository,
 }));
 
+vi.mock('@megumi/db/repos/session-active-path.repo', () => ({
+  SessionActivePathRepository: mocks.SessionActivePathRepository,
+}));
+
 vi.mock('@megumi/db/repos/session-run.repo', () => ({
   SessionRunRepository: mocks.SessionRunRepository,
 }));
@@ -362,6 +372,7 @@ describe('main runtime logger composition', () => {
     mocks.createDatabase.mockClear();
     mocks.migrateDatabase.mockClear();
     mocks.RecoveryRepository.mockClear();
+    mocks.SessionActivePathRepository.mockClear();
     mocks.ArtifactRepository.mockClear();
     mocks.MemoryRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
@@ -407,6 +418,7 @@ describe('main runtime logger composition', () => {
     );
     expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.SessionRunRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.SessionActivePathRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.RunModeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.RecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
@@ -438,8 +450,10 @@ describe('main runtime logger composition', () => {
     expect(mocks.createModelStepProviderService).toHaveBeenCalledWith(
       mocks.ProviderRuntimeService.mock.results[0]?.value,
     );
+    const activePathRepository = mocks.SessionActivePathRepository.mock.results[0]?.value;
     expect(mocks.SessionRunService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
+      activePathRepository,
       runModeService,
       contextService: runContextService,
       modelStepProvider: modelStepProviderService,
@@ -469,9 +483,13 @@ describe('main runtime logger composition', () => {
         resumeRequestId: expect.any(Function),
         cancelRequestId: expect.any(Function),
         retryRequestId: expect.any(Function),
+        eventId: expect.any(Function),
+        interruptedMarkerId: expect.any(Function),
       }),
-      listRecoverableRuns: expect.any(Function),
+      appendRuntimeEvent: expect.any(Function),
+      nextRuntimeSequence: expect.any(Function),
     }));
+    expect(mocks.createRecoveryService.mock.calls[0]?.[0]).not.toHaveProperty('listRecoverableRuns');
     expect(mocks.createProjectService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       chooseDirectory: expect.any(Function),

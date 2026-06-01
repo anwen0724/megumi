@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
@@ -9,6 +10,7 @@ import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
@@ -90,6 +92,8 @@ const providerRuntimeService = new ProviderRuntimeService({
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const agentInstructionSourceService = new AgentInstructionSourceService();
 const timelineMessageRepository = new TimelineMessageRepository(database);
+const sessionRunRepository = new SessionRunRepository(database);
+const activePathRepository = new SessionActivePathRepository(database);
 const chatStreamSink = new TimelineHistoryCommitProjectorService({
   repository: timelineMessageRepository,
   downstream: {
@@ -116,7 +120,8 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
   },
 };
 const sessionRunService = new SessionRunService({
-  repository: new SessionRunRepository(database),
+  repository: sessionRunRepository,
+  activePathRepository,
   runModeService: runModeService,
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
@@ -163,8 +168,15 @@ const recoveryService = createRecoveryService({
     resumeRequestId: () => `resume-request:${crypto.randomUUID()}`,
     cancelRequestId: () => `cancel-request:${crypto.randomUUID()}`,
     retryRequestId: () => `retry-request:${crypto.randomUUID()}`,
+    eventId: () => `event:${crypto.randomUUID()}`,
+    interruptedMarkerId: (runId) => `interrupted-marker:${runId}:${crypto.randomUUID()}`,
   },
-  listRecoverableRuns: () => [],
+  appendRuntimeEvent: (event) => {
+    sessionRunRepository.appendRuntimeEvent(event);
+  },
+  nextRuntimeSequence: (runId) => nextPersistedRuntimeSequence(
+    sessionRunRepository.listRuntimeEventsByRun(runId),
+  ),
 });
 registerRuntimeProcessErrorHandlers({ logger: runtimeLogger });
 
@@ -193,3 +205,7 @@ registerAppLifecycle({
     });
   },
 });
+
+function nextPersistedRuntimeSequence(events: RuntimeEvent[]): number {
+  return events.reduce((maxSequence, event) => Math.max(maxSequence, event.sequence), 0) + 1;
+}

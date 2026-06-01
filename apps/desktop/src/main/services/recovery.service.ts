@@ -10,18 +10,23 @@ import {
   ResumeRequestSchema,
   RetryRequestSchema,
 } from '@megumi/shared/recovery-contracts';
+import { createRunInterruptedEvent } from '@megumi/shared/runtime-event-factory';
+import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
 export interface RecoveryIds {
   resumeRequestId(): string;
   cancelRequestId(): string;
   retryRequestId(): string;
+  eventId(): string;
+  interruptedMarkerId(runId: string): string;
 }
 
 export interface CreateRecoveryServiceOptions {
   repository: RecoveryRepository;
   clock: () => Date;
   ids: RecoveryIds;
-  listRecoverableRuns: () => RecoverableRunSummary[];
+  appendRuntimeEvent?: (event: RuntimeEvent) => void;
+  nextRuntimeSequence?: (runId: string) => number;
 }
 
 export interface RecoveryService {
@@ -32,8 +37,29 @@ export interface RecoveryService {
 }
 
 export function createRecoveryService(options: CreateRecoveryServiceOptions): RecoveryService {
+  const interruptedMarkers = options.repository.markInterruptedRuns({
+    markedAt: options.clock().toISOString(),
+    reason: 'app_restarted',
+    createMarkerId: options.ids.interruptedMarkerId,
+  });
+
+  for (const marker of interruptedMarkers) {
+    options.appendRuntimeEvent?.(createRunInterruptedEvent({
+      eventId: options.ids.eventId(),
+      runId: marker.runId,
+      sessionId: marker.sessionId,
+      sequence: options.nextRuntimeSequence?.(marker.runId) ?? 1,
+      createdAt: marker.markedAt,
+      payload: {
+        interruptedMarkerId: marker.interruptedMarkerId,
+        previousStatus: marker.previousStatus,
+        reason: marker.reason,
+      },
+    }));
+  }
+
   return {
-    listRecoverableRuns: () => options.listRecoverableRuns(),
+    listRecoverableRuns: () => options.repository.listRecoverableRuns(),
     resumeRun: (payload) => {
       const request = ResumeRequestSchema.parse({
         ...payload,
