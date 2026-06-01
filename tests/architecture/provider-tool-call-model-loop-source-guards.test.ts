@@ -81,4 +81,15 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toMatch(/\bPartial<ModelStepRuntimeRequest>\b/);
     expect(source).not.toMatch(/\bModelStepPromptRequest\b/);
   });
+
+  it('keeps the core tool loop free of active path persistence concerns', () => {
+    const source = read('packages/core/run-runtime/tool-loop.ts');
+
+    expect(source).not.toContain('Session' + 'ActivePathRepository');
+    expect(source).not.toContain('session_' + 'source_entries');
+    expect(source).not.toContain('session_' + 'active_leaves');
+    expect(source).not.toContain('session_' + 'branch_markers');
+    expect(source).not.toContain('get' + 'ActivePath(');
+    expect(source).not.toContain('get' + 'ActiveLeaf(');
+  });
 });

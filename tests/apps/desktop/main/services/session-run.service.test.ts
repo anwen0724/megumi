@@ -462,11 +462,24 @@ function appendSeedSource(
     sourceRef: {
       sourceKind,
       sourceId,
-      sourceUri: `${sourceKind === 'session_message' ? 'session-message' : 'session-run'}://${sourceId}`,
+      sourceUri: `${sourceUriScheme(sourceKind)}://${sourceId}`,
       loadedAt: createdAt,
     },
     createdAt,
   });
+}
+
+function sourceUriScheme(sourceKind: ModelInputContextSourceKind): string {
+  switch (sourceKind) {
+    case 'session_message':
+      return 'session-message';
+    case 'session_run':
+      return 'session-run';
+    case 'session_summary':
+      return 'session-compaction';
+    default:
+      return sourceKind;
+  }
 }
 
 function createServiceWithChatStreamSink(
@@ -1451,8 +1464,10 @@ describe('SessionRunService', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
+    const activePathRepo = new SessionActivePathRepository(db);
     const service = new SessionRunService({
       repository,
+      activePathRepository: activePathRepo,
       sessionCompactionOrchestrator: {
         async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
           repository.saveSessionCompaction({
@@ -1461,7 +1476,7 @@ describe('SessionRunService', () => {
             summary: 'Compacted context summary from prior turns.',
             summaryKind: 'compaction',
             firstKeptSourceRef: {
-              sourceId: 'session-message:message-kept',
+              sourceId: 'message-kept',
               sourceKind: 'session_message',
               sourceUri: 'session-message://message-kept',
               loadedAt: '2026-05-31T11:02:00.000Z',
@@ -1470,6 +1485,25 @@ describe('SessionRunService', () => {
             triggerReason: 'context_budget_pressure',
             status: 'completed',
             createdAt: '2026-05-31T11:04:00.000Z',
+          });
+          const parent = activePathRepo.getActiveLeaf(input.sessionId)?.leafSourceEntryId;
+          activePathRepo.appendSourceEntry({
+            sourceEntryId: 'source-entry-compaction-1',
+            sessionId: input.sessionId,
+            ...(parent ? { parentSourceEntryId: parent } : {}),
+            sourceRef: {
+              sourceKind: 'session_summary',
+              sourceId: 'compaction-1',
+              sourceUri: 'session-compaction://compaction-1',
+              loadedAt: '2026-05-31T11:04:00.000Z',
+            },
+            createdAt: '2026-05-31T11:04:00.000Z',
+          });
+          activePathRepo.setActiveLeaf({
+            sessionId: input.sessionId,
+            leafSourceEntryId: 'source-entry-compaction-1',
+            updatedAt: '2026-05-31T11:04:00.000Z',
+            reason: 'source_appended',
           });
           return { status: 'completed', events: [], compaction: repository.getSessionCompaction('compaction-1')! };
         },
@@ -1506,6 +1540,13 @@ describe('SessionRunService', () => {
         chatStreamId: () => 'chat-stream-1',
         chatTextId: () => 'text-1',
         chatThinkingId: () => 'thinking-1',
+        sourceEntryId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `source-entry-current-${index}`;
+          };
+        })(),
       },
     });
     repository.saveSession({
@@ -1534,6 +1575,14 @@ describe('SessionRunService', () => {
       status: 'completed',
       createdAt: '2026-05-31T11:02:00.000Z',
       completedAt: '2026-05-31T11:02:00.000Z',
+    });
+    appendSeedSource(activePathRepo, 'source-entry-message-old', 'session_message', 'message-old', undefined, '2026-05-31T11:01:00.000Z');
+    const keptSource = appendSeedSource(activePathRepo, 'source-entry-message-kept', 'session_message', 'message-kept', 'source-entry-message-old', '2026-05-31T11:02:00.000Z');
+    activePathRepo.setActiveLeaf({
+      sessionId: 'session-1',
+      leafSourceEntryId: keptSource.sourceEntryId,
+      updatedAt: '2026-05-31T11:02:00.000Z',
+      reason: 'source_appended',
     });
 
     const result = await service.sendSessionMessage({
@@ -1565,6 +1614,160 @@ describe('SessionRunService', () => {
     expect(JSON.stringify(sessionParts)).toContain('Compacted context summary from prior turns.');
     expect(JSON.stringify(sessionParts)).toContain('Kept context after compaction boundary.');
     expect(JSON.stringify(sessionParts)).not.toContain('Old context before compaction.');
+  });
+
+  it('excludes a compaction summary saved on the old path when the active leaf moved during maintenance compaction', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const activePathRepo = new SessionActivePathRepository(db);
+    const service = new SessionRunService({
+      repository,
+      activePathRepository: activePathRepo,
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          const parentAtStart = activePathRepo.getActiveLeaf(input.sessionId)?.leafSourceEntryId;
+          activePathRepo.appendSourceEntry({
+            sourceEntryId: 'source-entry-new-branch',
+            sessionId: input.sessionId,
+            parentSourceEntryId: 'source-entry-message-kept',
+            sourceRef: {
+              sourceKind: 'session_message',
+              sourceId: 'message-new-branch',
+              sourceUri: 'session-message://message-new-branch',
+              loadedAt: '2026-05-31T11:04:30.000Z',
+            },
+            createdAt: '2026-05-31T11:04:30.000Z',
+          });
+          activePathRepo.setActiveLeaf({
+            sessionId: input.sessionId,
+            leafSourceEntryId: 'source-entry-new-branch',
+            updatedAt: '2026-05-31T11:04:30.000Z',
+            reason: 'source_appended',
+          });
+          repository.saveSessionCompaction({
+            compactionId: 'compaction-old-path',
+            sessionId: input.sessionId,
+            summary: 'Old path compaction must not enter the final prompt.',
+            summaryKind: 'compaction',
+            firstKeptSourceRef: {
+              sourceId: 'message-kept',
+              sourceKind: 'session_message',
+              sourceUri: 'session-message://message-kept',
+              loadedAt: '2026-05-31T11:02:00.000Z',
+            },
+            tokensBefore: 9000,
+            triggerReason: 'context_budget_pressure',
+            status: 'completed',
+            createdAt: '2026-05-31T11:04:00.000Z',
+          });
+          activePathRepo.appendSourceEntry({
+            sourceEntryId: 'source-entry-compaction-old-path',
+            sessionId: input.sessionId,
+            ...(parentAtStart ? { parentSourceEntryId: parentAtStart } : {}),
+            sourceRef: {
+              sourceKind: 'session_summary',
+              sourceId: 'compaction-old-path',
+              sourceUri: 'session-compaction://compaction-old-path',
+              loadedAt: '2026-05-31T11:04:00.000Z',
+            },
+            createdAt: '2026-05-31T11:04:00.000Z',
+          });
+          return {
+            status: 'completed',
+            events: [],
+            compaction: repository.getSessionCompaction('compaction-old-path')!,
+          };
+        },
+      },
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          requests.push(request);
+          yield assistantOutputCompletedEvent(1);
+        },
+        cancelModelStep: () => true,
+      },
+      clock: { now: () => '2026-05-31T11:05:00.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: () => 'step-1',
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return index === 1 ? 'message-current' : `message-generated-${index}`;
+          };
+        })(),
+        sourceEntryId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `source-entry-current-${index}`;
+          };
+        })(),
+      },
+    });
+    repository.saveSession({
+      sessionId: 'session-1',
+      title: 'Session',
+      status: 'active',
+      createdAt: '2026-05-31T11:00:00.000Z',
+      updatedAt: '2026-05-31T11:00:00.000Z',
+    });
+    repository.saveMessage({
+      messageId: 'message-kept',
+      sessionId: 'session-1',
+      runId: 'run-old',
+      role: 'assistant',
+      content: 'Kept context on the active branch.',
+      status: 'completed',
+      createdAt: '2026-05-31T11:02:00.000Z',
+      completedAt: '2026-05-31T11:02:00.000Z',
+    });
+    repository.saveMessage({
+      messageId: 'message-new-branch',
+      sessionId: 'session-1',
+      runId: 'run-branch',
+      role: 'user',
+      content: 'New branch context wins.',
+      status: 'completed',
+      createdAt: '2026-05-31T11:04:30.000Z',
+      completedAt: '2026-05-31T11:04:30.000Z',
+    });
+    const keptSource = appendSeedSource(activePathRepo, 'source-entry-message-kept', 'session_message', 'message-kept', undefined, '2026-05-31T11:02:00.000Z');
+    activePathRepo.setActiveLeaf({
+      sessionId: 'session-1',
+      leafSourceEntryId: keptSource.sourceEntryId,
+      updatedAt: '2026-05-31T11:02:00.000Z',
+      reason: 'source_appended',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue after branch moved.',
+          createdAt: '2026-05-31T11:05:00.000Z',
+        }],
+        createdAt: '2026-05-31T11:05:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the async iterable so the normal model request is built.
+    }
+
+    const sessionPartsJson = JSON.stringify(requests[0]?.inputContext.parts.filter((part) => part.kind === 'session'));
+    expect(sessionPartsJson).not.toContain('Old path compaction must not enter the final prompt.');
+    expect(sessionPartsJson).toContain('New branch context wins.');
   });
 
   it('fails the run and does not call the normal model step when compaction fails', async () => {
@@ -1920,8 +2123,10 @@ describe('SessionRunService', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
+    const activePathRepo = new SessionActivePathRepository(db);
     const service = new SessionRunService({
       repository,
+      activePathRepository: activePathRepo,
       modelStepProvider: {
         streamModelStep: async function* (request) {
           requests.push(request);
@@ -1982,6 +2187,15 @@ describe('SessionRunService', () => {
         retryable: false,
         source: 'provider',
       },
+    });
+    appendSeedSource(activePathRepo, 'source-entry-prev-user', 'session_message', 'message-prev-user', undefined, '2026-05-28T00:00:01.000Z');
+    appendSeedSource(activePathRepo, 'source-entry-prev-assistant', 'session_message', 'message-prev-assistant', 'source-entry-prev-user', '2026-05-28T00:00:02.000Z');
+    const previousRunSource = appendSeedSource(activePathRepo, 'source-entry-prev-run', 'session_run', 'run-prev', 'source-entry-prev-assistant', '2026-05-28T00:00:03.000Z');
+    activePathRepo.setActiveLeaf({
+      sessionId: 'session-1',
+      leafSourceEntryId: previousRunSource.sourceEntryId,
+      updatedAt: '2026-05-28T00:00:03.000Z',
+      reason: 'source_appended',
     });
 
     const result = await service.sendSessionMessage({
@@ -3039,6 +3253,9 @@ describe('SessionRunService', () => {
     }]);
     expect(requests).toHaveLength(2);
     expect(requests[1]?.inputContext.contextId.length).toBeLessThanOrEqual(128);
+    const resumedParts = requests[1]?.inputContext.parts ?? [];
+    expect(resumedParts.filter((part) => part.kind === 'tool_continuation').length).toBeGreaterThan(0);
+    expect(JSON.stringify(resumedParts.filter((part) => part.kind === 'session'))).not.toContain('package contents');
     expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'tool_continuation',

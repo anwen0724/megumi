@@ -11,6 +11,12 @@ import {
   SessionCompactionEntrySchema,
   type SessionCompactionEntry,
 } from '@megumi/shared/session-compaction-contracts';
+import {
+  SessionActiveLeafSchema,
+  SessionSourceEntrySchema,
+  type SessionActiveLeaf,
+  type SessionSourceEntry,
+} from '@megumi/shared/session-active-path-contracts';
 import type { JsonObject } from '@megumi/shared/json';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -229,6 +235,47 @@ export class SessionRunRepository {
       createdAt: parsed.createdAt,
       metadataJson: parsed.metadata ? stringifyJson(parsed.metadata) : null,
     });
+  }
+
+  saveSessionCompactionWithActivePath(input: {
+    compaction: SessionCompactionEntry;
+    sourceEntry: SessionSourceEntry;
+    activeLeaf: SessionActiveLeaf;
+    expectedCurrentLeafSourceEntryId?: string;
+  }): {
+    sourceEntry: SessionSourceEntry;
+    activeLeafAdvanced: boolean;
+  } {
+    const persist = this.database.transaction((
+      compaction: SessionCompactionEntry,
+      sourceEntry: SessionSourceEntry,
+      activeLeaf: SessionActiveLeaf,
+      expectedCurrentLeafSourceEntryId: string | undefined,
+    ) => {
+      this.saveSessionCompaction(compaction);
+      const parsedSourceEntry = this.insertSessionSourceEntry(sourceEntry);
+      const parsedActiveLeaf = SessionActiveLeafSchema.parse(activeLeaf);
+      const currentLeaf = this.getActiveLeafSourceEntryId(parsedActiveLeaf.sessionId);
+      const expectedLeaf = expectedCurrentLeafSourceEntryId ?? null;
+      let activeLeafAdvanced = false;
+
+      if (currentLeaf === expectedLeaf) {
+        this.upsertActiveLeaf(parsedActiveLeaf);
+        activeLeafAdvanced = true;
+      }
+
+      return {
+        sourceEntry: parsedSourceEntry,
+        activeLeafAdvanced,
+      };
+    });
+
+    return persist(
+      input.compaction,
+      input.sourceEntry,
+      input.activeLeaf,
+      input.expectedCurrentLeafSourceEntryId,
+    );
   }
 
   getSessionCompaction(compactionId: string): SessionCompactionEntry | null {
@@ -475,6 +522,111 @@ export class SessionRunRepository {
     return (this.database
       .prepare('SELECT event_json FROM runtime_events WHERE run_id = ? ORDER BY sequence ASC')
       .all(runId) as RuntimeEventRow[]).map((row) => JSON.parse(row.event_json) as RuntimeEvent);
+  }
+
+  private insertSessionSourceEntry(entry: SessionSourceEntry): SessionSourceEntry {
+    const parsed = SessionSourceEntrySchema.parse(entry);
+    if (parsed.parentSourceEntryId) {
+      this.assertSourceEntryBelongsToSession(
+        parsed.sessionId,
+        parsed.parentSourceEntryId,
+        'parentSourceEntryId',
+      );
+    }
+
+    this.database.prepare(`
+      INSERT INTO session_source_entries (
+        source_entry_id,
+        session_id,
+        parent_source_entry_id,
+        source_kind,
+        source_id,
+        source_uri,
+        source_ref_json,
+        created_at,
+        metadata_json
+      ) VALUES (
+        @source_entry_id,
+        @session_id,
+        @parent_source_entry_id,
+        @source_kind,
+        @source_id,
+        @source_uri,
+        @source_ref_json,
+        @created_at,
+        @metadata_json
+      )
+    `).run({
+      source_entry_id: parsed.sourceEntryId,
+      session_id: parsed.sessionId,
+      parent_source_entry_id: parsed.parentSourceEntryId ?? null,
+      source_kind: parsed.sourceRef.sourceKind,
+      source_id: parsed.sourceRef.sourceId,
+      source_uri: parsed.sourceRef.sourceUri ?? null,
+      source_ref_json: stringifyJson(parsed.sourceRef),
+      created_at: parsed.createdAt,
+      metadata_json: parsed.metadata ? stringifyJson(parsed.metadata) : null,
+    });
+
+    return parsed;
+  }
+
+  private upsertActiveLeaf(activeLeaf: SessionActiveLeaf): SessionActiveLeaf {
+    const parsed = SessionActiveLeafSchema.parse(activeLeaf);
+    if (parsed.leafSourceEntryId) {
+      this.assertSourceEntryBelongsToSession(parsed.sessionId, parsed.leafSourceEntryId, 'leafSourceEntryId');
+    }
+
+    this.database.prepare(`
+      INSERT INTO session_active_leaves (
+        session_id,
+        leaf_source_entry_id,
+        updated_at,
+        reason,
+        metadata_json
+      ) VALUES (
+        @session_id,
+        @leaf_source_entry_id,
+        @updated_at,
+        @reason,
+        @metadata_json
+      )
+      ON CONFLICT(session_id) DO UPDATE SET
+        leaf_source_entry_id = excluded.leaf_source_entry_id,
+        updated_at = excluded.updated_at,
+        reason = excluded.reason,
+        metadata_json = excluded.metadata_json
+    `).run({
+      session_id: parsed.sessionId,
+      leaf_source_entry_id: parsed.leafSourceEntryId ?? null,
+      updated_at: parsed.updatedAt,
+      reason: parsed.reason,
+      metadata_json: parsed.metadata ? stringifyJson(parsed.metadata) : null,
+    });
+
+    return parsed;
+  }
+
+  private getActiveLeafSourceEntryId(sessionId: string): string | null {
+    const row = this.database
+      .prepare('SELECT leaf_source_entry_id FROM session_active_leaves WHERE session_id = ?')
+      .get(sessionId) as { leaf_source_entry_id: string | null } | undefined;
+
+    return row?.leaf_source_entry_id ?? null;
+  }
+
+  private assertSourceEntryBelongsToSession(
+    sessionId: string,
+    sourceEntryId: string,
+    fieldName: string,
+  ): void {
+    const row = this.database
+      .prepare('SELECT session_id FROM session_source_entries WHERE source_entry_id = ?')
+      .get(sourceEntryId) as { session_id: string } | undefined;
+
+    if (!row || row.session_id !== sessionId) {
+      throw new Error(`${fieldName} must belong to session ${sessionId}`);
+    }
   }
 }
 

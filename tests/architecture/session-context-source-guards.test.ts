@@ -38,10 +38,16 @@ const forbiddenSessionRunNames = [
 
 const forbiddenContextManagementNames = [
   'history' + 'Messages',
+  'Session' + 'ActivePathRepository',
+  'session_' + 'source_entries',
+  'get' + 'ActivePath(',
+  'get' + 'ActiveLeaf(',
+  '@megumi/db',
 ];
 
 const forbiddenProviderAndRendererSources = [
   'Session' + 'RunRepository',
+  'Session' + 'ActivePathRepository',
   'timeline' + 'MessageRepository',
   'list' + 'CommittedMessagesBySession',
   'list' + 'MessagesBySession',
@@ -50,6 +56,12 @@ const forbiddenProviderAndRendererSources = [
   'get' + 'LatestCompletedSessionCompaction',
   'list' + 'SessionCompactionsBySession',
   'session_' + 'compactions',
+  'session_' + 'source_entries',
+  'session_' + 'active_leaves',
+  'session_' + 'branch_markers',
+  'create' + 'BranchFromUserMessage',
+  'cancel' + 'BranchDraft',
+  'get' + 'ActivePath(',
   'Session' + 'CompactionEntry',
   'list' + 'Tool',
 ];
@@ -98,9 +110,20 @@ describe('session context source guards', () => {
 
     expect(contextManagement).not.toContain('get' + 'LatestCompletedSessionCompaction');
     expect(contextManagement).not.toContain('session_' + 'compactions');
+    expect(contextManagement).not.toContain('Session' + 'ActivePathRepository');
+    expect(contextManagement).not.toContain('session_' + 'source_entries');
+    expect(contextManagement).not.toContain('get' + 'ActivePath(');
+    expect(contextManagement).not.toContain('get' + 'ActiveLeaf(');
     expect(contextManagement).not.toContain('@megumi/db');
     expect(providerAndRenderer).not.toContain('get' + 'LatestCompletedSessionCompaction');
     expect(providerAndRenderer).not.toContain('session_' + 'compactions');
+    expect(providerAndRenderer).not.toContain('Session' + 'ActivePathRepository');
+    expect(providerAndRenderer).not.toContain('session_' + 'source_entries');
+    expect(providerAndRenderer).not.toContain('session_' + 'active_leaves');
+    expect(providerAndRenderer).not.toContain('session_' + 'branch_markers');
+    expect(providerAndRenderer).not.toContain('create' + 'BranchFromUserMessage');
+    expect(providerAndRenderer).not.toContain('cancel' + 'BranchDraft');
+    expect(providerAndRenderer).not.toContain('get' + 'ActivePath(');
     expect(providerAndRenderer).not.toContain('Session' + 'CompactionEntry');
   });
 

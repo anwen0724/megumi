@@ -6,7 +6,10 @@ import {
 } from '@megumi/context-management/session-compaction';
 import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
 import type { ModelId } from '@megumi/shared/model-contracts';
-import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
+import type {
+  ModelInputContext,
+  ModelInputContextSourceKind,
+} from '@megumi/shared/model-input-context-contracts';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
@@ -19,10 +22,33 @@ import {
 } from '@megumi/shared/runtime-event-factory';
 import type { SessionCompactionEntry } from '@megumi/shared/session-compaction-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
+import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
 
 export interface SessionCompactionOrchestratorRepository {
   getLatestCompletedSessionCompaction(sessionId: string): SessionCompactionEntry | null;
   saveSessionCompaction(entry: SessionCompactionEntry): void;
+  saveSessionCompactionWithActivePath?(input: {
+    compaction: SessionCompactionEntry;
+    sourceEntry: SessionSourceEntry;
+    activeLeaf: SessionActiveLeaf;
+    expectedCurrentLeafSourceEntryId?: string;
+  }): {
+    sourceEntry: SessionSourceEntry;
+    activeLeafAdvanced: boolean;
+  };
+}
+
+export interface SessionCompactionActivePathRepository {
+  getActiveLeaf(sessionId: string): SessionActiveLeaf | undefined;
+  appendSourceEntry(entry: SessionSourceEntry): SessionSourceEntry;
+  setActiveLeaf(activeLeaf: SessionActiveLeaf): SessionActiveLeaf;
+  getSourceEntryBySourceRef(
+    sessionId: string,
+    sourceRef: {
+      sourceKind: ModelInputContextSourceKind;
+      sourceId: string;
+    },
+  ): SessionSourceEntry | undefined;
 }
 
 export interface SessionCompactionOrchestratorModelStepProvider {
@@ -36,10 +62,12 @@ export interface SessionCompactionOrchestratorClock {
 export interface SessionCompactionOrchestratorIds {
   compactionId(): string;
   eventId(): string;
+  sourceEntryId(): string;
 }
 
 export interface SessionCompactionOrchestratorOptions {
   repository: SessionCompactionOrchestratorRepository;
+  activePathRepository?: SessionCompactionActivePathRepository;
   modelStepProvider: SessionCompactionOrchestratorModelStepProvider;
   clock: SessionCompactionOrchestratorClock;
   ids: SessionCompactionOrchestratorIds;
@@ -78,7 +106,6 @@ export class SessionCompactionOrchestrator {
       return { status: 'skipped', events: [] };
     }
 
-    const previous = this.options.repository.getLatestCompletedSessionCompaction(input.sessionId);
     const prepared = prepareSessionCompactionInput({
       sessionId: input.sessionId,
       builtAt: input.createdAt,
@@ -86,7 +113,7 @@ export class SessionCompactionOrchestrator {
       keepRecentTokens: input.budgetPolicy.keepRecentTokens,
       tokensBefore: pressure.tokensBefore,
     });
-    const previousCompactionId = previous?.compactionId ?? latestPreviousSummaryId(input.sessionContext);
+    const previousCompactionId = latestPreviousSummaryId(input.sessionContext);
 
     if (!prepared) {
       const error = runtimeError({
@@ -141,6 +168,9 @@ export class SessionCompactionOrchestrator {
       createdAt: input.createdAt,
     };
 
+    const activePathRepository = this.options.activePathRepository;
+    const parentLeafAtStart = activePathRepository?.getActiveLeaf(input.sessionId)?.leafSourceEntryId ?? undefined;
+    const compactionSourceEntryId = activePathRepository ? this.options.ids.sourceEntryId() : undefined;
     const summary = await this.collectSummary(summaryRequest);
     if (!summary.ok) {
       return {
@@ -172,7 +202,55 @@ export class SessionCompactionOrchestrator {
     };
 
     try {
-      this.options.repository.saveSessionCompaction(compaction);
+      if (activePathRepository && compactionSourceEntryId) {
+        const sourceEntry: SessionSourceEntry = {
+          sourceEntryId: compactionSourceEntryId,
+          sessionId: input.sessionId,
+          ...(parentLeafAtStart ? { parentSourceEntryId: parentLeafAtStart } : {}),
+          sourceRef: {
+            sourceKind: 'session_summary',
+            sourceId: compaction.compactionId,
+            sourceUri: `session-compaction://${compaction.compactionId}`,
+            loadedAt: compaction.createdAt,
+          },
+          createdAt: compaction.createdAt,
+          metadata: {
+            runId: input.runId,
+            stepId: input.stepId,
+            triggerReason: compaction.triggerReason,
+          },
+        };
+        const activeLeaf: SessionActiveLeaf = {
+          sessionId: input.sessionId,
+          leafSourceEntryId: compactionSourceEntryId,
+          updatedAt: compaction.createdAt,
+          reason: 'source_appended',
+          metadata: {
+            runId: input.runId,
+            stepId: input.stepId,
+            triggerReason: compaction.triggerReason,
+          },
+        };
+
+        if (this.options.repository.saveSessionCompactionWithActivePath) {
+          this.options.repository.saveSessionCompactionWithActivePath({
+            compaction,
+            sourceEntry,
+            activeLeaf,
+            ...(parentLeafAtStart ? { expectedCurrentLeafSourceEntryId: parentLeafAtStart } : {}),
+          });
+        } else {
+          this.options.repository.saveSessionCompaction(compaction);
+          activePathRepository.appendSourceEntry(sourceEntry);
+
+          const currentLeaf = activePathRepository.getActiveLeaf(input.sessionId)?.leafSourceEntryId ?? undefined;
+          if (currentLeaf === parentLeafAtStart) {
+            activePathRepository.setActiveLeaf(activeLeaf);
+          }
+        }
+      } else {
+        this.options.repository.saveSessionCompaction(compaction);
+      }
     } catch {
       const error = runtimeError({
         code: 'database_error',

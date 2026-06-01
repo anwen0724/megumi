@@ -301,7 +301,9 @@ export class SessionRunService {
             ids: {
               compactionId: this.ids.compactionId,
               eventId: this.ids.eventId,
+              sourceEntryId: this.ids.sourceEntryId,
             },
+            ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
           })
         : undefined);
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);

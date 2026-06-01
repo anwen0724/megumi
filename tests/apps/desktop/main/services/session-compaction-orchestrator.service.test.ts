@@ -5,6 +5,7 @@ import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contract
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { SessionCompactionEntry } from '@megumi/shared/session-compaction-contracts';
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
+import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import {
   SessionCompactionOrchestrator,
@@ -34,6 +35,92 @@ function repository(): SessionCompactionOrchestratorRepository & {
       }
       this.entries.unshift(entry);
     },
+  };
+}
+
+function activePathRepository() {
+  const sourceEntries = new Map<string, SessionSourceEntry>();
+  let activeLeaf: SessionActiveLeaf | undefined = {
+    sessionId: 'session-1',
+    leafSourceEntryId: 'source-entry-leaf-at-start',
+    updatedAt: builtAt,
+    reason: 'source_appended',
+  };
+  sourceEntries.set('source-entry-leaf-at-start', {
+    sourceEntryId: 'source-entry-leaf-at-start',
+    sessionId: 'session-1',
+    sourceRef: {
+      sourceKind: 'session_message',
+      sourceId: 'message-leaf-at-start',
+      sourceUri: 'session-message://message-leaf-at-start',
+      loadedAt: builtAt,
+    },
+    createdAt: builtAt,
+  });
+
+  return {
+    sourceEntries,
+    getActiveLeaf(sessionId: string) {
+      return activeLeaf?.sessionId === sessionId ? activeLeaf : undefined;
+    },
+    appendSourceEntry(entry: SessionSourceEntry) {
+      sourceEntries.set(entry.sourceEntryId, entry);
+      return entry;
+    },
+    setActiveLeaf(next: SessionActiveLeaf) {
+      activeLeaf = next;
+      return next;
+    },
+    getSourceEntryBySourceRef(
+      sessionId: string,
+      sourceRef: Pick<SessionSourceEntry['sourceRef'], 'sourceKind' | 'sourceId'>,
+    ) {
+      return [...sourceEntries.values()].find(
+        (entry) =>
+          entry.sessionId === sessionId
+          && entry.sourceRef.sourceKind === sourceRef.sourceKind
+          && entry.sourceRef.sourceId === sourceRef.sourceId,
+      );
+    },
+  };
+}
+
+function installTransactionalActivePathSave(
+  repo: ReturnType<typeof repository>,
+  activePathRepo: ReturnType<typeof activePathRepository>,
+  options: { failSourceWrite?: boolean } = {},
+): void {
+  repo.saveSessionCompactionWithActivePath = ({ compaction, sourceEntry, activeLeaf, expectedCurrentLeafSourceEntryId }) => {
+    const entrySnapshot = [...repo.entries];
+    const sourceEntrySnapshot = new Map(activePathRepo.sourceEntries);
+    const activeLeafSnapshot = activePathRepo.getActiveLeaf(compaction.sessionId);
+
+    try {
+      repo.saveSessionCompaction(compaction);
+      if (options.failSourceWrite) {
+        throw new Error('source write failed');
+      }
+      const appended = activePathRepo.appendSourceEntry(sourceEntry);
+      const currentLeaf = activePathRepo.getActiveLeaf(compaction.sessionId)?.leafSourceEntryId;
+      let activeLeafAdvanced = false;
+
+      if (currentLeaf === expectedCurrentLeafSourceEntryId) {
+        activePathRepo.setActiveLeaf(activeLeaf);
+        activeLeafAdvanced = true;
+      }
+
+      return { sourceEntry: appended, activeLeafAdvanced };
+    } catch (error) {
+      repo.entries.splice(0, repo.entries.length, ...entrySnapshot);
+      activePathRepo.sourceEntries.clear();
+      for (const [sourceEntryId, entry] of sourceEntrySnapshot) {
+        activePathRepo.sourceEntries.set(sourceEntryId, entry);
+      }
+      if (activeLeafSnapshot) {
+        activePathRepo.setActiveLeaf(activeLeafSnapshot);
+      }
+      throw error;
+    }
   };
 }
 
@@ -168,6 +255,7 @@ describe('SessionCompactionOrchestrator', () => {
             return `event-compaction-${index}`;
           };
         })(),
+        sourceEntryId: () => 'source-entry-compaction-1',
       },
     });
 
@@ -218,6 +306,184 @@ describe('SessionCompactionOrchestrator', () => {
     ]);
   });
 
+  it('writes a session summary source on the leaf captured before the summary model call', async () => {
+    const repo = repository();
+    const activePathRepo = activePathRepository();
+    const orchestrator = new SessionCompactionOrchestrator({
+      repository: repo,
+      activePathRepository: activePathRepo,
+      modelStepProvider: {
+        streamModelStep: async function* (request: ModelStepRuntimeRequest) {
+          yield completedSummaryEvent(request);
+        },
+      },
+      clock: { now: () => builtAt },
+      ids: {
+        compactionId: () => 'compaction-1',
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `event-compaction-${index}`;
+          };
+        })(),
+        sourceEntryId: () => 'source-entry-compaction-1',
+      },
+    });
+
+    const result = await orchestrator.compactIfNeeded({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      createdAt: builtAt,
+      sessionContext: sessionContext(),
+      preflightInputContext: preflightInputContext(),
+      budgetPolicy,
+      startSequence: 1,
+    });
+
+    expect(result.status).toBe('completed');
+    expect(activePathRepo.getSourceEntryBySourceRef('session-1', {
+      sourceKind: 'session_summary',
+      sourceId: 'compaction-1',
+    })?.parentSourceEntryId).toBe('source-entry-leaf-at-start');
+    expect(activePathRepo.getSourceEntryBySourceRef('session-1', {
+      sourceKind: 'session_summary',
+      sourceId: 'compaction-1',
+    })?.metadata).toEqual({
+      runId: 'run-1',
+      stepId: 'step-1',
+      triggerReason: 'context_budget_pressure',
+    });
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-compaction-1');
+  });
+
+  it('uses the active context summary instead of session-wide latest row as previous compaction', async () => {
+    const repo = repository();
+    repo.entries.unshift({
+      compactionId: 'compaction-old-path',
+      sessionId: 'session-1',
+      summary: 'Old path summary.',
+      summaryKind: 'compaction',
+      firstKeptSourceRef: {
+        sourceId: 'message-old-path',
+        sourceKind: 'session_message',
+        sourceUri: 'session-message://message-old-path',
+        loadedAt: '2026-05-31T10:00:00.000Z',
+      },
+      tokensBefore: 9000,
+      triggerReason: 'context_budget_pressure',
+      status: 'completed',
+      createdAt: '2026-05-31T10:01:00.000Z',
+    });
+    const orchestrator = new SessionCompactionOrchestrator({
+      repository: repo,
+      modelStepProvider: {
+        streamModelStep: async function* (request: ModelStepRuntimeRequest) {
+          yield completedSummaryEvent(request);
+        },
+      },
+      clock: { now: () => builtAt },
+      ids: {
+        compactionId: () => 'compaction-1',
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `event-compaction-${index}`;
+          };
+        })(),
+        sourceEntryId: () => 'source-entry-compaction-1',
+      },
+    });
+
+    const result = await orchestrator.compactIfNeeded({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      createdAt: builtAt,
+      sessionContext: sessionContext(),
+      preflightInputContext: preflightInputContext(),
+      budgetPolicy,
+      startSequence: 1,
+    });
+
+    expect(result.status).toBe('completed');
+    expect(repo.entries[0]?.metadata?.previousCompactionId).toBe('summary-1');
+    expect(repo.entries[0]?.metadata?.previousCompactionId).not.toBe('compaction-old-path');
+  });
+
+  it('does not move the active leaf when it changed during the summary model call', async () => {
+    const repo = repository();
+    const activePathRepo = activePathRepository();
+    const orchestrator = new SessionCompactionOrchestrator({
+      repository: repo,
+      activePathRepository: activePathRepo,
+      modelStepProvider: {
+        streamModelStep: async function* (request: ModelStepRuntimeRequest) {
+          activePathRepo.appendSourceEntry({
+            sourceEntryId: 'source-entry-new-branch',
+            sessionId: 'session-1',
+            parentSourceEntryId: 'source-entry-leaf-at-start',
+            sourceRef: {
+              sourceKind: 'session_message',
+              sourceId: 'message-new-branch',
+              sourceUri: 'session-message://message-new-branch',
+              loadedAt: builtAt,
+            },
+            createdAt: builtAt,
+          });
+          activePathRepo.setActiveLeaf({
+            sessionId: 'session-1',
+            leafSourceEntryId: 'source-entry-new-branch',
+            updatedAt: builtAt,
+            reason: 'source_appended',
+          });
+          yield completedSummaryEvent(request);
+        },
+      },
+      clock: { now: () => builtAt },
+      ids: {
+        compactionId: () => 'compaction-1',
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `event-compaction-${index}`;
+          };
+        })(),
+        sourceEntryId: () => 'source-entry-compaction-1',
+      },
+    });
+
+    const result = await orchestrator.compactIfNeeded({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      createdAt: builtAt,
+      sessionContext: sessionContext(),
+      preflightInputContext: preflightInputContext(),
+      budgetPolicy,
+      startSequence: 1,
+    });
+
+    expect(result.status).toBe('completed');
+    expect(activePathRepo.getSourceEntryBySourceRef('session-1', {
+      sourceKind: 'session_summary',
+      sourceId: 'compaction-1',
+    })?.parentSourceEntryId).toBe('source-entry-leaf-at-start');
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-new-branch');
+  });
+
   it('returns skipped when preflight tokens fit the budget', async () => {
     const repo = repository();
     const orchestrator = new SessionCompactionOrchestrator({
@@ -231,6 +497,7 @@ describe('SessionCompactionOrchestrator', () => {
       ids: {
         compactionId: () => 'compaction-1',
         eventId: () => 'event-compaction-1',
+        sourceEntryId: () => 'source-entry-compaction-1',
       },
     });
 
@@ -299,6 +566,7 @@ describe('SessionCompactionOrchestrator', () => {
             return `event-compaction-${index}`;
           };
         })(),
+        sourceEntryId: () => 'source-entry-compaction-1',
       },
     });
 
@@ -344,6 +612,7 @@ describe('SessionCompactionOrchestrator', () => {
             return `event-compaction-${index}`;
           };
         })(),
+        sourceEntryId: () => 'source-entry-compaction-1',
       },
     });
 
@@ -366,5 +635,57 @@ describe('SessionCompactionOrchestrator', () => {
     }
     expect(result.failure?.code).toBe('database_error');
     expect(repo.entries).toEqual([]);
+  });
+
+  it('rolls back the compaction row when active path source persistence fails', async () => {
+    const repo = repository();
+    const activePathRepo = activePathRepository();
+    installTransactionalActivePathSave(repo, activePathRepo, { failSourceWrite: true });
+    const orchestrator = new SessionCompactionOrchestrator({
+      repository: repo,
+      activePathRepository: activePathRepo,
+      modelStepProvider: {
+        streamModelStep: async function* (request) {
+          yield completedSummaryEvent(request);
+        },
+      },
+      clock: { now: () => builtAt },
+      ids: {
+        compactionId: () => 'compaction-1',
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `event-compaction-${index}`;
+          };
+        })(),
+        sourceEntryId: () => 'source-entry-compaction-1',
+      },
+    });
+
+    const result = await orchestrator.compactIfNeeded({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      createdAt: builtAt,
+      sessionContext: sessionContext(),
+      preflightInputContext: preflightInputContext(),
+      budgetPolicy,
+      startSequence: 1,
+    });
+
+    if (result.status !== 'failed') {
+      throw new Error(`Expected compaction to fail, got ${result.status}.`);
+    }
+    expect(result.failure?.code).toBe('database_error');
+    expect(repo.entries).toEqual([]);
+    expect(activePathRepo.getSourceEntryBySourceRef('session-1', {
+      sourceKind: 'session_summary',
+      sourceId: 'compaction-1',
+    })).toBeUndefined();
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-leaf-at-start');
   });
 });
