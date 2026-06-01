@@ -323,6 +323,72 @@ function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   return { service, repository, activePathRepo };
 }
 
+function createServiceWithAutomaticRetryStream(
+  events: (request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[],
+  options?: {
+    maxAutomaticModelStepRetries?: number;
+    retrySleep?: (input: { delayMs: number; attemptNumber: number; runId: string }) => Promise<void>;
+  },
+) {
+  db = new Database(':memory:');
+  migrateDatabase(db);
+  const repository = new SessionRunRepository(db);
+  const activePathRepo = new SessionActivePathRepository(db);
+  let callIndex = 0;
+  let messageIndex = 0;
+  let sourceEntryIndex = 0;
+  let retryAttemptIndex = 0;
+  const service = new SessionRunService({
+    repository,
+    activePathRepository: activePathRepo,
+    automaticRetry: {
+      maxAttempts: options?.maxAutomaticModelStepRetries ?? 2,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      sleep: options?.retrySleep,
+    },
+    modelStepProvider: {
+      streamModelStep: async function* (request) {
+        callIndex += 1;
+        yield* events(request, callIndex);
+      },
+      cancelModelStep: () => true,
+    },
+    clock: { now: () => '2026-06-01T10:00:00.000Z' },
+    ids: {
+      sessionId: () => 'session-1',
+      runId: () => 'run-1',
+      stepId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `step-${index}`;
+        };
+      })(),
+      eventId: (() => {
+        let index = 0;
+        return () => {
+          index += 1;
+          return `event-retry-${index}`;
+        };
+      })(),
+      messageId: () => {
+        messageIndex += 1;
+        return `message-${messageIndex}`;
+      },
+      sourceEntryId: () => {
+        sourceEntryIndex += 1;
+        return `source-entry-${sourceEntryIndex}`;
+      },
+      retryAttemptId: () => {
+        retryAttemptIndex += 1;
+        return `retry-attempt-${retryAttemptIndex}`;
+      },
+    },
+  });
+  return { service, repository, activePathRepo };
+}
+
 function createBranchServiceFixture() {
   db = new Database(':memory:');
   migrateDatabase(db);
@@ -933,6 +999,275 @@ describe('SessionRunService', () => {
       content: 'Assistant answer.',
       status: 'completed',
       runId: 'run-1',
+    });
+  });
+
+  it('automatically retries transient provider model-step failures and keeps attempt audit', async () => {
+    const providerRequests: ModelStepRuntimeRequest[] = [];
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request, callIndex) => {
+      providerRequests.push(request);
+      if (callIndex === 1) {
+        return [{
+          eventId: 'event-provider-failed',
+          schemaVersion: 1,
+          eventType: 'run.failed',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          stepId: request.stepId,
+          sequence: 1,
+          createdAt: '2026-06-01T10:00:01.000Z',
+          source: 'provider',
+          visibility: 'user',
+          persist: 'required',
+          payload: {
+            error: {
+              code: 'provider_rate_limited',
+              message: '429 rate limit',
+              severity: 'error',
+              retryable: true,
+              source: 'provider',
+            },
+          },
+        }];
+      }
+      return [{
+        ...assistantOutputCompletedEvent(1),
+        stepId: request.stepId,
+      }];
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Hello',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(providerRequests).toHaveLength(2);
+    expect(streamed.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'retry.started',
+      'retry.completed',
+      'assistant.output.completed',
+      'run.completed',
+    ]));
+    expect(streamed.map((event) => event.eventType)).not.toContain('run.failed');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([
+      expect.objectContaining({
+        runId: 'run-1',
+        attemptNumber: 1,
+        retryKind: 'automatic_model_step',
+        reason: 'rate_limited',
+        status: 'succeeded',
+        retryable: true,
+      }),
+    ]);
+  });
+
+  it('does not retry context overflow or quota style provider failures', async () => {
+    const providerRequests: ModelStepRuntimeRequest[] = [];
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request) => {
+      providerRequests.push(request);
+      return [{
+        eventId: 'event-provider-failed',
+        schemaVersion: 1,
+        eventType: 'run.failed',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: request.stepId,
+        sequence: 1,
+        createdAt: '2026-06-01T10:00:01.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'required',
+        payload: {
+          error: {
+            code: 'context_budget_exceeded',
+            message: 'maximum context window exceeded',
+            severity: 'error',
+            retryable: false,
+            source: 'provider',
+          },
+        },
+      }];
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Overflow',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(providerRequests).toHaveLength(1);
+    expect(streamed.map((event) => event.eventType)).toContain('run.failed');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([]);
+  });
+
+  it('fails the run after automatic retry attempts are exhausted', async () => {
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request) => [{
+      eventId: `event-provider-failed-${Math.random()}`,
+      schemaVersion: 1,
+      eventType: 'run.failed',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: request.stepId,
+      sequence: 1,
+      createdAt: '2026-06-01T10:00:01.000Z',
+      source: 'provider',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        error: {
+          code: 'provider_network_error',
+          message: 'request timed out',
+          severity: 'error',
+          retryable: true,
+          source: 'provider',
+        },
+      },
+    }], {
+      maxAutomaticModelStepRetries: 2,
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Timeout',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(streamed.map((event) => event.eventType).filter((type) => type === 'retry.started')).toHaveLength(2);
+    expect(streamed.map((event) => event.eventType)).toContain('run.failed');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1').at(-1)).toMatchObject({
+      attemptNumber: 2,
+      status: 'exhausted',
+      reason: 'network_timeout',
+    });
+  });
+
+  it('cancels automatic retry while waiting in backoff', async () => {
+    let releaseBackoff: (() => void) | undefined;
+    let markBackoffStarted: (() => void) | undefined;
+    const backoffStarted = new Promise<void>((resolve) => {
+      markBackoffStarted = resolve;
+    });
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request) => [{
+      eventId: 'event-provider-failed',
+      schemaVersion: 1,
+      eventType: 'run.failed',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: request.stepId,
+      sequence: 1,
+      createdAt: '2026-06-01T10:00:01.000Z',
+      source: 'provider',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        error: {
+          code: 'provider_rate_limited',
+          message: '429 rate limit',
+          severity: 'error',
+          retryable: true,
+          source: 'provider',
+        },
+      },
+    }], {
+      retrySleep: async () => {
+        markBackoffStarted?.();
+        await new Promise<void>((resolve) => {
+          releaseBackoff = resolve;
+        });
+      },
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Stop retry',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    const consume = (async () => {
+      for await (const event of result.events) {
+        streamed.push(event);
+      }
+    })();
+    await backoffStarted;
+    service.cancelSessionMessage({ targetRequestId: 'request-1' });
+    releaseBackoff?.();
+    await consume;
+
+    expect(streamed.map((event) => event.eventType)).not.toContain('assistant.output.completed');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1').at(-1)).toMatchObject({
+      status: 'cancelled',
     });
   });
 

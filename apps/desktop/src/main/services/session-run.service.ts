@@ -68,6 +68,7 @@ import {
   createSessionBranchMarkerCreatedEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime-event-factory';
+import type { SessionRetryAttempt } from '@megumi/shared/session-active-path-contracts';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
@@ -89,6 +90,10 @@ import {
   type CompactIfNeededInput,
   type SessionCompactionOrchestrationResult,
 } from './session-compaction-orchestrator.service';
+import {
+  classifyAutomaticModelStepRetry,
+  createAutomaticRetryBackoffMs,
+} from './session-retry-policy.service';
 
 export interface SessionRunServiceClock {
   now(): string;
@@ -96,6 +101,7 @@ export interface SessionRunServiceClock {
 
 export interface SessionRunServiceIds extends RunIdFactory {
   compactionId(): string;
+  retryAttemptId(): string;
   sessionId(): string;
   sourceEntryId(): string;
   branchMarkerId(): string;
@@ -146,6 +152,13 @@ export interface SessionRunSessionContextInputService {
   buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
 }
 
+export interface SessionRunAutomaticRetryOptions {
+  maxAttempts: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  sleep?: (input: { delayMs: number; attemptNumber: number; runId: string }) => Promise<void>;
+}
+
 interface ApprovalContinuationGroup {
   groupId: string;
   request: ModelStepRuntimeRequest;
@@ -179,6 +192,7 @@ export interface SessionRunServiceOptions {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
   activePathRepository?: SessionActivePathRepository;
+  automaticRetry?: Partial<SessionRunAutomaticRetryOptions>;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
   timelineMessageRepository?: {
@@ -207,6 +221,12 @@ const DEFAULT_CONTEXT_BUDGET_POLICY: ContextBudgetPolicy = {
   keepRecentTokens: 7168,
 };
 
+const DEFAULT_AUTOMATIC_RETRY: SessionRunAutomaticRetryOptions = {
+  maxAttempts: 3,
+  baseDelayMs: 2000,
+  maxDelayMs: 8000,
+};
+
 class EmptySessionActivePathRepository {
   getActivePath(sessionId: string): SessionActivePath {
     return {
@@ -228,6 +248,7 @@ function createDefaultIds(): SessionRunServiceIds {
     cancelRequestId: () => `cancel-request:${crypto.randomUUID()}`,
     retryRequestId: () => `retry-request:${crypto.randomUUID()}`,
     compactionId: () => `compaction:${crypto.randomUUID()}`,
+    retryAttemptId: () => `retry-attempt:${crypto.randomUUID()}`,
     sourceEntryId: () => `source-entry:${crypto.randomUUID()}`,
     branchMarkerId: () => `branch-marker:${crypto.randomUUID()}`,
     eventId: () => `event:${crypto.randomUUID()}`,
@@ -265,6 +286,7 @@ export class SessionRunService {
   private readonly timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
+  private readonly automaticRetry: SessionRunAutomaticRetryOptions;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
   private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
   private readonly activeSessionMessageRuns = new Map<string, {
@@ -292,6 +314,10 @@ export class SessionRunService {
     this.timelineMessageRepository = options.timelineMessageRepository;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
+    this.automaticRetry = {
+      ...DEFAULT_AUTOMATIC_RETRY,
+      ...(options.automaticRetry ?? {}),
+    };
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
       ?? (options.modelStepProvider
         ? new SessionCompactionOrchestrator({
@@ -1199,11 +1225,17 @@ export class SessionRunService {
 
     const modelStepProvider = this.requireModelStepProvider();
     const toolRuntime = input.toolRuntime;
+    const streamProviderModelStep = (request: ModelStepRuntimeRequest) =>
+      this.streamModelStepWithAutomaticRetry({
+        request,
+        run: input.run,
+        stream: (nextRequest) => modelStepProvider.streamModelStep(nextRequest),
+      });
     const modelEvents = toolRuntime
       ? runModelToolLoop({
           request: input.request,
           aiPort: {
-            streamModelStep: ({ request }) => modelStepProvider.streamModelStep(request),
+            streamModelStep: ({ request }) => streamProviderModelStep(request),
           },
           toolCallHandler: toolRuntime,
           ids: {
@@ -1234,11 +1266,12 @@ export class SessionRunService {
             }),
           }),
         })
-      : modelStepProvider.streamModelStep(input.request);
+      : streamProviderModelStep(input.request);
 
     try {
       for await (const event of coalesceTextDeltaRuntimeEvents(modelEvents)) {
         registerPendingApprovalGroup();
+        lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(input.request.runId)));
         const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
         lastSequence = eventWithRequest.sequence;
         this.persistModelStepRecordFromEvent(input.request, eventWithRequest, currentModelStep.stepId);
@@ -1279,6 +1312,10 @@ export class SessionRunService {
         yield eventWithRequest;
       }
     } catch (error) {
+      if (this.repository.getRun(input.request.runId)?.status === 'cancelled') {
+        return;
+      }
+      lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(input.request.runId)));
       const failedEvent = withRequestMetadata(createRunFailedEvent({
         eventId: this.ids.eventId(),
         sessionId: input.request.sessionId,
@@ -1471,6 +1508,209 @@ export class SessionRunService {
       this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
       yield eventWithRequest;
     }
+  }
+
+  private streamModelStepWithAutomaticRetry(input: {
+    request: ModelStepRuntimeRequest;
+    run: Run;
+    stream: (request: ModelStepRuntimeRequest) => AsyncIterable<RuntimeEvent>;
+  }): AsyncIterable<RuntimeEvent> {
+    return this.doStreamModelStepWithAutomaticRetry(input);
+  }
+
+  private async *doStreamModelStepWithAutomaticRetry(input: {
+    request: ModelStepRuntimeRequest;
+    run: Run;
+    stream: (request: ModelStepRuntimeRequest) => AsyncIterable<RuntimeEvent>;
+  }): AsyncIterable<RuntimeEvent> {
+    let retryAttemptNumber = 0;
+    let currentAttempt: SessionRetryAttempt | undefined;
+
+    while (true) {
+      const bufferedEvents: RuntimeEvent[] = currentAttempt ? [] : [];
+      let retryableFailureEvent: RuntimeEvent | undefined;
+      let retryableFailureError: RuntimeError | undefined;
+      let shouldRetry = false;
+
+      try {
+        for await (const event of input.stream(input.request)) {
+          if (event.eventType === 'run.failed') {
+            const error = getRunFailedError(event.payload);
+            const decision = error ? classifyAutomaticModelStepRetry(error) : { retryable: false };
+            if (error && decision.retryable) {
+              retryableFailureEvent = event;
+              retryableFailureError = error;
+              shouldRetry = retryAttemptNumber < this.automaticRetry.maxAttempts;
+              break;
+            }
+          }
+
+          if (currentAttempt) {
+            bufferedEvents.push(event);
+          } else {
+            yield event;
+          }
+        }
+      } catch (error) {
+        const runtimeError = createModelStepRuntimeErrorFromUnknown(error);
+        const decision = classifyAutomaticModelStepRetry(runtimeError);
+        if (!decision.retryable) {
+          throw error;
+        }
+        retryableFailureError = runtimeError;
+        shouldRetry = retryAttemptNumber < this.automaticRetry.maxAttempts;
+        if (!shouldRetry) {
+          if (currentAttempt) {
+            this.saveRetryAttemptUpdate(currentAttempt, 'exhausted', {
+              completedAt: this.clock.now(),
+              error: runtimeError,
+            });
+          }
+          throw error;
+        }
+      }
+
+      if (!retryableFailureError) {
+        if (currentAttempt) {
+          const completedAt = this.clock.now();
+          this.saveRetryAttemptUpdate(currentAttempt, 'succeeded', { completedAt });
+          for (const event of bufferedEvents) {
+            yield event;
+          }
+          yield this.createRetryAuditEvent({
+            request: input.request,
+            eventType: 'retry.completed',
+            retryAttemptId: currentAttempt.retryAttemptId,
+            createdAt: completedAt,
+          });
+        }
+        return;
+      }
+
+      if (!shouldRetry) {
+        if (currentAttempt) {
+          this.saveRetryAttemptUpdate(currentAttempt, 'exhausted', {
+            completedAt: this.clock.now(),
+            error: retryableFailureError,
+          });
+        }
+        if (retryableFailureEvent) {
+          yield retryableFailureEvent;
+          return;
+        }
+        throw retryableFailureError;
+      }
+
+      if (currentAttempt) {
+        this.saveRetryAttemptUpdate(currentAttempt, 'failed', {
+          completedAt: this.clock.now(),
+          error: retryableFailureError,
+        });
+      }
+
+      retryAttemptNumber += 1;
+      currentAttempt = this.createRunningAutomaticRetryAttempt({
+        request: input.request,
+        run: input.run,
+        attemptNumber: retryAttemptNumber,
+        error: retryableFailureError,
+      });
+      yield this.createRetryAuditEvent({
+        request: input.request,
+        eventType: 'retry.started',
+        retryAttemptId: currentAttempt.retryAttemptId,
+        createdAt: currentAttempt.createdAt,
+      });
+
+      if (this.repository.getRun(input.request.runId)?.status === 'cancelled') {
+        this.saveRetryAttemptUpdate(currentAttempt, 'cancelled', {
+          completedAt: this.clock.now(),
+        });
+        return;
+      }
+
+      const delayMs = createAutomaticRetryBackoffMs({
+        attemptNumber: retryAttemptNumber,
+        baseDelayMs: this.automaticRetry.baseDelayMs,
+        maxDelayMs: this.automaticRetry.maxDelayMs,
+      });
+      await (this.automaticRetry.sleep ?? sleepRetryBackoff)({
+        delayMs,
+        attemptNumber: retryAttemptNumber,
+        runId: input.request.runId,
+      });
+
+      if (this.repository.getRun(input.request.runId)?.status === 'cancelled') {
+        this.saveRetryAttemptUpdate(currentAttempt, 'cancelled', {
+          completedAt: this.clock.now(),
+        });
+        return;
+      }
+    }
+  }
+
+  private createRunningAutomaticRetryAttempt(input: {
+    request: ModelStepRuntimeRequest;
+    run: Run;
+    attemptNumber: number;
+    error: RuntimeError;
+  }): SessionRetryAttempt {
+    const decision = classifyAutomaticModelStepRetry(input.error);
+    return this.requireActivePathRepository().saveRetryAttempt({
+      retryAttemptId: this.ids.retryAttemptId(),
+      sessionId: input.request.sessionId,
+      runId: input.request.runId,
+      baseRunId: input.run.runId,
+      attemptNumber: input.attemptNumber,
+      retryKind: 'automatic_model_step',
+      reason: decision.reason ?? 'runtime_provider_error',
+      status: 'running',
+      retryable: true,
+      createdAt: this.clock.now(),
+      metadata: {
+        requestId: input.request.requestId,
+        providerId: input.request.providerId,
+        modelId: input.request.modelId,
+      },
+    });
+  }
+
+  private saveRetryAttemptUpdate(
+    attempt: SessionRetryAttempt,
+    status: SessionRetryAttempt['status'],
+    updates: Pick<SessionRetryAttempt, 'completedAt'> & Partial<Pick<SessionRetryAttempt, 'error'>>,
+  ): SessionRetryAttempt {
+    return this.requireActivePathRepository().saveRetryAttempt({
+      ...attempt,
+      status,
+      completedAt: updates.completedAt,
+      ...(updates.error ? { error: updates.error } : {}),
+    });
+  }
+
+  private createRetryAuditEvent(input: {
+    request: ModelStepRuntimeRequest;
+    eventType: 'retry.started' | 'retry.completed';
+    retryAttemptId: string;
+    createdAt: string;
+  }): RuntimeEvent {
+    return createRuntimeEvent({
+      eventId: this.ids.eventId(),
+      eventType: input.eventType,
+      sessionId: input.request.sessionId,
+      runId: input.request.runId,
+      stepId: input.request.stepId,
+      requestId: input.request.requestId,
+      sequence: 0,
+      createdAt: input.createdAt,
+      source: 'main',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        retryRequestId: input.retryAttemptId,
+        retryKind: 'automatic_model_step',
+      },
+    });
   }
 
   private appendSourceAndMoveLeaf(input: {
@@ -2002,6 +2242,26 @@ function createRuntimeErrorFromUnknown(error: unknown): RuntimeError {
   };
 }
 
+function createModelStepRuntimeErrorFromUnknown(error: unknown): RuntimeError {
+  if (isRuntimeError(error)) {
+    return error;
+  }
+
+  const message = error instanceof Error && error.message
+    ? error.message
+    : 'Model step provider failed.';
+  const looksProviderTransient = /provider|rate.?limit|too many requests|429|timeout|timed out|network|overload|503|unavailable|premature|stream ended/i
+    .test(message);
+
+  return {
+    code: looksProviderTransient ? 'provider_network_error' : 'runtime_unknown',
+    message,
+    severity: 'error',
+    retryable: looksProviderTransient,
+    source: looksProviderTransient ? 'provider' : 'core',
+  };
+}
+
 function isRuntimeError(value: unknown): value is RuntimeError {
   return isObjectRecord(value)
     && typeof value.code === 'string'
@@ -2042,6 +2302,16 @@ function withSequenceAfter(event: RuntimeEvent, lastSequence: number): RuntimeEv
     ...event,
     sequence: lastSequence + 1,
   };
+}
+
+async function sleepRetryBackoff(input: { delayMs: number }): Promise<void> {
+  if (input.delayMs <= 0) {
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, input.delayMs);
+  });
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
