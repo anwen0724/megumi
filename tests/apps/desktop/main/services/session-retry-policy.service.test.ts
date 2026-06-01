@@ -46,6 +46,27 @@ describe('session retry policy', () => {
     });
   });
 
+  it.each([
+    error({ code: 'provider_auth_failed', message: '401 invalid api key', source: 'provider', retryable: false }),
+    error({ code: 'provider_invalid_request', message: '400 invalid request', source: 'provider', retryable: false }),
+    error({ code: 'provider_unsupported', message: 'provider unsupported', source: 'provider', retryable: false }),
+  ])('rejects non transient provider failures', (runtimeError) => {
+    expect(classifyAutomaticModelStepRetry(runtimeError)).toMatchObject({
+      retryable: false,
+    });
+  });
+
+  it('rejects non retryable generic provider errors', () => {
+    expect(classifyAutomaticModelStepRetry(error({
+      code: 'provider_unknown',
+      message: 'provider returned error',
+      source: 'provider',
+      retryable: false,
+    }))).toMatchObject({
+      retryable: false,
+    });
+  });
+
   it('uses bounded exponential backoff', () => {
     expect(createAutomaticRetryBackoffMs({ attemptNumber: 1, baseDelayMs: 2000, maxDelayMs: 8000 })).toBe(2000);
     expect(createAutomaticRetryBackoffMs({ attemptNumber: 2, baseDelayMs: 2000, maxDelayMs: 8000 })).toBe(4000);

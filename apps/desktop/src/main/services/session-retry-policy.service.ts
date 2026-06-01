@@ -21,17 +21,20 @@ const RETRY_REASON_PATTERNS: Array<[SessionRetryReason, RegExp]> = [
   ['service_unavailable', /service.?unavailable|unavailable|503/i],
   ['premature_stream_end', /premature|stream ended|message_stop/i],
   ['network_timeout', /timeout|timed out|network/i],
-  ['runtime_provider_error', /provider/i],
+  ['runtime_provider_error', /provider.?returned.?error/i],
 ];
 
 export function classifyAutomaticModelStepRetry(error: RuntimeError): AutomaticModelStepRetryDecision {
   const searchable = [
     error.code,
     error.message,
-    error.source,
   ].join(' ');
 
   if (NON_RETRYABLE_PATTERNS.some((pattern) => pattern.test(searchable))) {
+    return { retryable: false };
+  }
+
+  if (error.retryable === false) {
     return { retryable: false };
   }
 
@@ -41,10 +44,6 @@ export function classifyAutomaticModelStepRetry(error: RuntimeError): AutomaticM
       retryable: true,
       reason: matchedReason,
     };
-  }
-
-  if (error.retryable === false) {
-    return { retryable: false };
   }
 
   return { retryable: false };
