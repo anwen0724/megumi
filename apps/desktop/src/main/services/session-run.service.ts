@@ -969,6 +969,12 @@ export class SessionRunService {
     for (const event of events) {
       this.repository.appendRuntimeEvent(event);
     }
+    this.publishBranchSeparatorRemovalForDraft({
+      sessionId: input.sessionId,
+      branchMarkerId: marker.branchMarkerId,
+      seedRunId: this.seedRunIdForBranchMarker(marker),
+      createdAt: input.createdAt,
+    });
 
     return { cancelled: true, events };
   }
@@ -2040,6 +2046,38 @@ export class SessionRunService {
       sourceMessageId: input.branchDraft.sourceMessageId,
       label: input.branchDraft.label,
     }));
+  }
+
+  private publishBranchSeparatorRemovalForDraft(input: {
+    sessionId: string;
+    branchMarkerId: string;
+    seedRunId: string;
+    createdAt: string;
+  }): void {
+    if (!this.chatStreamEventSink) {
+      return;
+    }
+
+    const session = this.repository.getSession(input.sessionId);
+    this.chatStreamEventSink.publish(createChatStreamEvent({
+      eventId: this.ids.chatStreamEventId(),
+      eventType: 'branch.separator.removed',
+      projectId: String(session?.workspaceId ?? input.sessionId),
+      sessionId: input.sessionId,
+      runId: input.seedRunId,
+      streamId: `branch-draft:${input.branchMarkerId}`,
+      streamKind: 'main',
+      seq: 2,
+      createdAt: input.createdAt,
+      branchMarkerId: input.branchMarkerId,
+    }));
+  }
+
+  private seedRunIdForBranchMarker(marker: SessionBranchMarker): string {
+    if (marker.seedSourceRef?.sourceKind === 'session_message') {
+      return String(this.repository.getMessage(marker.seedSourceRef.sourceId)?.runId ?? marker.branchMarkerId);
+    }
+    return marker.branchMarkerId;
   }
 
   private shouldHydrateTimelineMessage(message: TimelineMessage): boolean {

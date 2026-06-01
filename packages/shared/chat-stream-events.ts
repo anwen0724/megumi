@@ -28,6 +28,7 @@ export const CHAT_STREAM_EVENT_TYPES = [
   'approval.requested',
   'approval.resolved',
   'branch.separator.created',
+  'branch.separator.removed',
   'process.compaction.recorded',
   'process.retry.recorded',
   'process.recovery.recorded',
@@ -218,6 +219,11 @@ export interface BranchSeparatorCreatedEvent extends ChatStreamEventBase {
   label: string;
 }
 
+export interface BranchSeparatorRemovedEvent extends ChatStreamEventBase {
+  eventType: 'branch.separator.removed';
+  branchMarkerId: string;
+}
+
 export interface ProcessCompactionRecordedEvent extends ChatStreamEventBase {
   eventType: 'process.compaction.recorded';
   compactionId?: string;
@@ -261,6 +267,7 @@ export type ChatStreamEvent =
   | ApprovalRequestedEvent
   | ApprovalResolvedEvent
   | BranchSeparatorCreatedEvent
+  | BranchSeparatorRemovedEvent
   | ProcessCompactionRecordedEvent
   | ProcessRetryRecordedEvent
   | ProcessRecoveryRecordedEvent;

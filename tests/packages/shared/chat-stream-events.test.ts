@@ -51,6 +51,7 @@ describe('chat stream event contract', () => {
       'approval.requested',
       'approval.resolved',
       'branch.separator.created',
+      'branch.separator.removed',
       'process.compaction.recorded',
       'process.retry.recorded',
       'process.recovery.recorded',
@@ -202,6 +203,19 @@ describe('chat stream event contract', () => {
       sourceMessageId: 'message-1',
       label: 'Branch from 07:28',
     }).eventType).toBe('branch.separator.created');
+
+    expect(createChatStreamEvent({
+      eventId: 'event-branch-remove-1',
+      eventType: 'branch.separator.removed',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      streamKind: 'main',
+      seq: 2,
+      createdAt: '2026-06-01T10:00:01.000Z',
+      branchMarkerId: 'branch-marker-1',
+    }).eventType).toBe('branch.separator.removed');
 
     expect(createChatStreamEvent({
       eventId: 'event-retry-1',

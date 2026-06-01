@@ -423,4 +423,22 @@ describe('chat stream to timeline projection reducer', () => {
     expect(JSON.stringify(assistant)).toContain('Retry attempt 1 failed');
     expect(JSON.stringify(assistant)).toContain('Previous run was interrupted');
   });
+
+  it('removes a live branch separator when a draft is cancelled', () => {
+    let messages = reduceChatStreamEvent([], chatEvent({
+      eventType: 'branch.separator.created',
+      seq: 1,
+      branchMarkerId: 'branch-marker-1',
+      sourceMessageId: 'message-1',
+      label: 'Branch from 07:28',
+    }));
+
+    messages = reduceChatStreamEvent(messages, chatEvent({
+      eventType: 'branch.separator.removed',
+      seq: 2,
+      branchMarkerId: 'branch-marker-1',
+    }));
+
+    expect(messages).toEqual([]);
+  });
 });

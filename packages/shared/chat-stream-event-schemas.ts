@@ -216,6 +216,10 @@ export const BranchSeparatorCreatedEventSchema = chatStreamEventSchema('branch.s
   label: z.string().min(1),
 });
 
+export const BranchSeparatorRemovedEventSchema = chatStreamEventSchema('branch.separator.removed', {
+  branchMarkerId: z.string().min(1),
+});
+
 export const ProcessCompactionRecordedEventSchema = chatStreamEventSchema(
   'process.compaction.recorded',
   {
@@ -267,6 +271,7 @@ const ChatStreamEventUnionSchema = z.union([
   ApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema,
   BranchSeparatorCreatedEventSchema,
+  BranchSeparatorRemovedEventSchema,
   ProcessCompactionRecordedEventSchema,
   ProcessRetryRecordedEventSchema,
   ProcessRecoveryRecordedEventSchema,

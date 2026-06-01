@@ -1754,6 +1754,32 @@ describe('SessionRunService', () => {
     expect(JSON.stringify(chatEvents)).not.toContain('source-entry-branch-marker');
   });
 
+  it('publishes a branch separator removal when cancelling a draft before send', () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const { service } = createBranchServiceFixture({ chatEvents });
+
+    const result = service.createBranchDraft({
+      requestId: 'request-branch-draft-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      intent: 'branch',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const cancelResult = service.cancelBranchDraft({
+      requestId: 'request-branch-cancel-1',
+      sessionId: 'session-1',
+      branchMarkerId: result.branchDraft.branchMarkerId,
+      createdAt: '2026-06-01T10:00:01.000Z',
+    });
+
+    expect(cancelResult.cancelled).toBe(true);
+    expect(chatEvents).toContainEqual(expect.objectContaining({
+      eventType: 'branch.separator.removed',
+      branchMarkerId: result.branchDraft.branchMarkerId,
+    }));
+  });
+
   it('persists branch draft separators for timeline hydration without waiting for a terminal run event', () => {
     const { service } = createBranchServiceFixture({ useTimelineProjector: true });
 

@@ -29,6 +29,11 @@ export function reduceChatStreamEvent(
       return nextMessages;
     }
 
+    case 'branch.separator.removed': {
+      removeBranchSeparator(nextMessages, event);
+      return nextMessages;
+    }
+
     case 'turn.started': {
       const assistant = ensureAssistantMessage(nextMessages, event);
       ensureProcessBlock(assistant, event).status = 'running';
@@ -276,6 +281,19 @@ function upsertBranchSeparator(
     updatedAt: event.createdAt,
     blocks: [block],
   });
+}
+
+function removeBranchSeparator(
+  messages: TimelineMessage[],
+  event: Extract<ChatStreamEvent, { eventType: 'branch.separator.removed' }>,
+): void {
+  const messageId = `separator:${event.branchMarkerId}`;
+  const index = messages.findIndex(
+    (message) => message.role === 'separator' && message.messageId === messageId,
+  );
+  if (index !== -1) {
+    messages.splice(index, 1);
+  }
 }
 
 function ensureAssistantMessage(
