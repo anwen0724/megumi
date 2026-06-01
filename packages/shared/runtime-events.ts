@@ -499,6 +499,7 @@ export interface RunRetryRequestedPayload {
   requestedBy: RetryRequestedBy;
   retryKind: RetryKind;
   reason: RetryReason;
+  attemptNumber?: number;
   checkpointId?: string;
 }
 

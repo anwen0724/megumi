@@ -153,6 +153,57 @@ export const SessionCurrentMessageSchema = z
   })
   .strict();
 
+export const SessionBranchDraftIntentSchema = z.enum(['branch', 'rerun']);
+
+export const SessionBranchDraftPayloadSchema = z
+  .object({
+    branchMarkerId: z.string().min(1),
+    intent: SessionBranchDraftIntentSchema,
+  })
+  .strict();
+
+export const SessionBranchDraftSchema = z
+  .object({
+    branchMarkerId: z.string().min(1),
+    sessionId: z.string().min(1),
+    sourceMessageId: z.string().min(1),
+    seedText: z.string(),
+    label: z.string().min(1),
+    intent: SessionBranchDraftIntentSchema,
+    createdAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const SessionBranchDraftCreatePayloadSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    messageId: z.string().min(1),
+    intent: SessionBranchDraftIntentSchema,
+    createdAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const SessionBranchDraftCreateDataSchema = z
+  .object({
+    branchDraft: SessionBranchDraftSchema,
+  })
+  .strict();
+
+export const SessionBranchDraftCancelPayloadSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    branchMarkerId: z.string().min(1),
+    createdAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export const SessionBranchDraftCancelDataSchema = z
+  .object({
+    cancelled: z.boolean(),
+    reason: z.enum(['branch_has_new_sources', 'branch_marker_not_active', 'branch_marker_not_found']).optional(),
+  })
+  .strict();
+
 export const SessionMessageRuntimeContextSchema = z
   .object({
     workspaceId: z.string().min(1).optional(),
@@ -171,6 +222,7 @@ export const SessionMessageSendPayloadSchema = z
     message: SessionCurrentMessageSchema.optional(),
     messages: z.array(SessionMessageIpcSchema).min(1).optional(),
     context: SessionMessageRuntimeContextSchema.optional(),
+    branchDraft: SessionBranchDraftPayloadSchema.optional(),
     createdAt: IsoDateTimeSchema,
   })
   .strict()
@@ -698,6 +750,16 @@ export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(
   SessionMessageCancelPayloadSchema,
 );
 
+export const SessionBranchDraftCreateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.branchDraft.create,
+  SessionBranchDraftCreatePayloadSchema,
+);
+
+export const SessionBranchDraftCancelRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.branchDraft.cancel,
+  SessionBranchDraftCancelPayloadSchema,
+);
+
 export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.message.list,
   SessionMessageListPayloadSchema,
@@ -931,6 +993,16 @@ export const SessionMessageSendResultSchema = createRuntimeIpcResultSchema(
 export const SessionMessageCancelResultSchema = createRuntimeIpcResultSchema(
   SessionMessageCancelDataSchema,
   IPC_CHANNELS.session.message.cancel,
+);
+
+export const SessionBranchDraftCreateResultSchema = createRuntimeIpcResultSchema(
+  SessionBranchDraftCreateDataSchema,
+  IPC_CHANNELS.session.branchDraft.create,
+);
+
+export const SessionBranchDraftCancelResultSchema = createRuntimeIpcResultSchema(
+  SessionBranchDraftCancelDataSchema,
+  IPC_CHANNELS.session.branchDraft.cancel,
 );
 
 export const SessionMessageListResultSchema = createRuntimeIpcResultSchema(
@@ -1202,6 +1274,13 @@ export type SessionMessageSendPayload = z.infer<typeof SessionMessageSendPayload
 export type SessionMessageSendData = z.infer<typeof SessionMessageSendDataSchema>;
 export type SessionMessageCancelPayload = z.infer<typeof SessionMessageCancelPayloadSchema>;
 export type SessionMessageCancelData = z.infer<typeof SessionMessageCancelDataSchema>;
+export type SessionBranchDraftIntent = z.infer<typeof SessionBranchDraftIntentSchema>;
+export type SessionBranchDraftPayload = z.infer<typeof SessionBranchDraftPayloadSchema>;
+export type SessionBranchDraft = z.infer<typeof SessionBranchDraftSchema>;
+export type SessionBranchDraftCreatePayload = z.infer<typeof SessionBranchDraftCreatePayloadSchema>;
+export type SessionBranchDraftCreateData = z.infer<typeof SessionBranchDraftCreateDataSchema>;
+export type SessionBranchDraftCancelPayload = z.infer<typeof SessionBranchDraftCancelPayloadSchema>;
+export type SessionBranchDraftCancelData = z.infer<typeof SessionBranchDraftCancelDataSchema>;
 export type SessionMessageListPayload = z.infer<typeof SessionMessageListPayloadSchema>;
 export type SessionMessageListData = z.infer<typeof SessionMessageListDataSchema>;
 export type SessionTimelineListPayload = z.infer<typeof SessionTimelineListPayloadSchema>;

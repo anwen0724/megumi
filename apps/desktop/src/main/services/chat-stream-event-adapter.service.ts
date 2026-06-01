@@ -97,6 +97,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private readonly terminalToolCallIds = new Set<string>();
   private readonly pendingToolTerminalsByCallId = new Map<string, PendingToolTerminalState>();
   private readonly approvalLinksById = new Map<string, ApprovalLinkState>();
+  private readonly retryAttemptNumbersById = new Map<string, number>();
   private seq = 0;
   private started = false;
   private terminal = false;
@@ -187,6 +188,21 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       case 'approval.expired':
         this.handleApprovalExpired(event);
         return;
+      case 'session.branch_marker.created':
+        this.handleBranchMarkerCreated(event);
+        return;
+      case 'context.compaction.completed':
+        this.handleCompactionCompleted(event);
+        return;
+      case 'run.retry.requested':
+      case 'retry.started':
+      case 'retry.completed':
+      case 'retry.failed':
+        this.handleRetryRecorded(event);
+        return;
+      case 'run.interrupted':
+        this.handleRunInterrupted(event);
+        return;
       case 'run.completed':
         this.handleRunCompleted(event);
         return;
@@ -199,6 +215,73 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       default:
         return;
     }
+  }
+
+  private handleBranchMarkerCreated(event: RuntimeEvent): void {
+    const payload = event.payload as {
+      branchMarkerId?: unknown;
+      seedSourceRef?: unknown;
+    };
+    const branchMarkerId = stringValue(payload.branchMarkerId);
+    const seedSourceRef = isRecord(payload.seedSourceRef) ? payload.seedSourceRef : undefined;
+    const sourceMessageId = seedSourceRef?.sourceKind === 'session_message'
+      ? stringValue(seedSourceRef.sourceId)
+      : undefined;
+    if (!branchMarkerId || !sourceMessageId) {
+      return;
+    }
+
+    this.publish(createChatStreamEvent({
+      ...this.base(event.createdAt),
+      eventType: 'branch.separator.created',
+      branchMarkerId,
+      sourceMessageId,
+      label: `Branch from ${formatProcessFactTime(event.createdAt)}`,
+    }));
+  }
+
+  private handleCompactionCompleted(event: RuntimeEvent): void {
+    const payload = event.payload as { compactionId?: unknown };
+    this.publish(createChatStreamEvent({
+      ...this.base(event.createdAt),
+      eventType: 'process.compaction.recorded',
+      ...(typeof payload.compactionId === 'string' ? { compactionId: payload.compactionId } : {}),
+      status: 'completed',
+      label: 'Compacted context',
+    }));
+  }
+
+  private handleRetryRecorded(event: RuntimeEvent): void {
+    const payload = event.payload as {
+      retryRequestId?: unknown;
+      reason?: unknown;
+      attemptNumber?: unknown;
+    };
+    const retryAttemptId = stringValue(payload.retryRequestId);
+    if (!retryAttemptId) {
+      return;
+    }
+
+    const attemptNumber = this.retryAttemptNumber(retryAttemptId, payload.attemptNumber);
+    const status = retryStatusForRuntimeEvent(event.eventType);
+    this.publish(createChatStreamEvent({
+      ...this.base(event.createdAt),
+      eventType: 'process.retry.recorded',
+      retryAttemptId,
+      attemptNumber,
+      status,
+      label: retryProcessLabel(status, attemptNumber),
+      ...(typeof payload.reason === 'string' ? { reason: payload.reason } : {}),
+    }));
+  }
+
+  private handleRunInterrupted(event: RuntimeEvent): void {
+    this.publish(createChatStreamEvent({
+      ...this.base(event.createdAt),
+      eventType: 'process.recovery.recorded',
+      status: 'interrupted',
+      label: 'Previous run was interrupted',
+    }));
   }
 
   flushPhaseGate(): void {
@@ -940,6 +1023,26 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     this.options.sink.publish(event);
   }
 
+  private retryAttemptNumber(retryAttemptId: string, persistedAttemptNumber?: unknown): number {
+    if (
+      typeof persistedAttemptNumber === 'number'
+      && Number.isInteger(persistedAttemptNumber)
+      && persistedAttemptNumber > 0
+    ) {
+      this.retryAttemptNumbersById.set(retryAttemptId, persistedAttemptNumber);
+      return persistedAttemptNumber;
+    }
+
+    const existing = this.retryAttemptNumbersById.get(retryAttemptId);
+    if (existing) {
+      return existing;
+    }
+
+    const next = this.retryAttemptNumbersById.size + 1;
+    this.retryAttemptNumbersById.set(retryAttemptId, next);
+    return next;
+  }
+
   private base(createdAt = this.now()) {
     this.seq += 1;
     return {
@@ -979,6 +1082,37 @@ function approvalResolutionStatus(value: unknown): 'approved' | 'rejected' | 'ex
   }
 
   return 'cancelled';
+}
+
+function retryStatusForRuntimeEvent(
+  eventType: RuntimeEvent['eventType'],
+): 'started' | 'failed' | 'completed' | 'exhausted' | 'cancelled' {
+  if (eventType === 'retry.failed') {
+    return 'failed';
+  }
+  if (eventType === 'retry.completed') {
+    return 'completed';
+  }
+  return 'started';
+}
+
+function retryProcessLabel(
+  status: 'started' | 'failed' | 'completed' | 'exhausted' | 'cancelled',
+  attemptNumber: number,
+): string {
+  if (status === 'started') return `Retry attempt ${attemptNumber} started`;
+  if (status === 'failed') return `Retry attempt ${attemptNumber} failed`;
+  if (status === 'completed') return `Retry attempt ${attemptNumber} completed`;
+  if (status === 'exhausted') return `Retry attempt ${attemptNumber} exhausted`;
+  return `Retry attempt ${attemptNumber} cancelled`;
+}
+
+function formatProcessFactTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return 'message';
+  }
+  return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 function subjectSummaryFromApproval(value: Record<string, unknown>): string | undefined {

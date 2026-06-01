@@ -54,6 +54,11 @@ export class TimelineHistoryCommitProjectorService implements ChatStreamEventSin
     const existingState = this.states.get(key);
     this.publishDownstream(event);
 
+    if (event.eventType === 'branch.separator.created') {
+      this.commitBranchSeparatorEvent(event);
+      return;
+    }
+
     if (!existingState && isTerminalEvent(event)) {
       return;
     }
@@ -68,7 +73,7 @@ export class TimelineHistoryCommitProjectorService implements ChatStreamEventSin
     };
     this.states.set(key, state);
 
-    state.messages = reduceChatStreamEvent(state.messages, event);
+    state.messages = projectCommittedChatStreamEvent(state.messages, event);
 
     if (!isTerminalEvent(event) || state.terminal) {
       return;
@@ -105,6 +110,30 @@ export class TimelineHistoryCommitProjectorService implements ChatStreamEventSin
     }
   }
 
+  private commitBranchSeparatorEvent(
+    event: Extract<ChatStreamEvent, { eventType: 'branch.separator.created' }>,
+  ): void {
+    try {
+      this.options.repository.commitRunTimeline({
+        projectId: event.projectId,
+        sessionId: String(event.sessionId),
+        runId: String(event.runId),
+        committedAt: event.createdAt,
+        messages: projectCommittedChatStreamEvent([], event),
+      });
+    } catch {
+      this.options.repository.recordCommitDiagnostic({
+        diagnosticId: this.options.ids.diagnosticId(),
+        projectId: event.projectId,
+        sessionId: String(event.sessionId),
+        runId: String(event.runId),
+        code: 'timeline_commit_failed',
+        message: 'Timeline commit failed.',
+        createdAt: event.createdAt,
+      });
+    }
+  }
+
   private publishDownstream(event: ChatStreamEvent): void {
     try {
       this.options.downstream?.publish(event);
@@ -124,6 +153,13 @@ function isTerminalEvent(
   return event.eventType === 'turn.completed'
     || event.eventType === 'turn.failed'
     || event.eventType === 'turn.cancelled';
+}
+
+function projectCommittedChatStreamEvent(
+  messages: TimelineMessage[],
+  event: ChatStreamEvent,
+): TimelineMessage[] {
+  return reduceChatStreamEvent(messages, event);
 }
 
 function previewFromMessages(messages: TimelineMessage[]): string | undefined {

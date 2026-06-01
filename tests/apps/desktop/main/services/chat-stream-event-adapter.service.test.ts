@@ -89,6 +89,111 @@ describe('createChatStreamEventAdapter', () => {
     expect(events[0].streamId).not.toBe(events[0].runId);
   });
 
+  it('maps branch and runtime process facts into canonical chat stream events without raw backend details', () => {
+    const events: ChatStreamEvent[] = [];
+    const subject = adapter(events);
+    subject.startTurn();
+
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'session.branch_marker.created',
+      sequence: 1,
+      createdAt: '2026-06-01T10:00:00.000Z',
+      payload: {
+        branchMarkerId: 'branch-marker-1',
+        branchMarkerSourceEntryId: 'source-entry-branch-marker-1',
+        seedSourceRef: {
+          sourceKind: 'session_message',
+          sourceId: 'message-seed-1',
+          sourceUri: 'session-message://message-seed-1',
+          loadedAt: '2026-06-01T09:58:00.000Z',
+        },
+        selectedSourceRef: {
+          sourceKind: 'session_message',
+          sourceId: 'message-seed-1',
+          sourceUri: 'session-message://message-seed-1',
+          loadedAt: '2026-06-01T09:58:00.000Z',
+        },
+        reason: 'branch_from_user_message',
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'context.compaction.completed',
+      sequence: 2,
+      payload: {
+        compactionId: 'compaction-1',
+        triggerReason: 'token_budget',
+        tokensBefore: 12000,
+        firstKeptSourceRef: {
+          sourceKind: 'session_message',
+          sourceId: 'message-kept-1',
+          sourceUri: 'session-message://message-kept-1',
+          loadedAt: '2026-06-01T10:00:00.000Z',
+        },
+        summarizedSourceCount: 3,
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'run.retry.requested',
+      sequence: 3,
+      payload: {
+        retryRequestId: 'retry-attempt-1',
+        requestedBy: 'user',
+        retryKind: 'manual_rerun',
+        reason: 'user_requested',
+        metadata: {
+          rawProviderBody: 'secret provider body',
+        },
+      },
+    }));
+    subject.handleRuntimeEvent(runtimeEvent({
+      eventType: 'run.interrupted',
+      sequence: 4,
+      payload: {
+        interruptedMarkerId: 'interrupted-marker-1',
+        previousStatus: 'running',
+        reason: 'app_restarted',
+        stack: 'secret stack',
+      },
+    }));
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'branch.separator.created',
+      'process.compaction.recorded',
+      'process.retry.recorded',
+      'process.recovery.recorded',
+    ]);
+    expect(events[2]).toMatchObject({
+      eventType: 'branch.separator.created',
+      branchMarkerId: 'branch-marker-1',
+      sourceMessageId: 'message-seed-1',
+      label: 'Branch from 10:00',
+    });
+    expect(events[3]).toMatchObject({
+      eventType: 'process.compaction.recorded',
+      compactionId: 'compaction-1',
+      status: 'completed',
+      label: 'Compacted context',
+    });
+    expect(events[4]).toMatchObject({
+      eventType: 'process.retry.recorded',
+      retryAttemptId: 'retry-attempt-1',
+      attemptNumber: 1,
+      status: 'started',
+      label: 'Retry attempt 1 started',
+      reason: 'user_requested',
+    });
+    expect(events[5]).toMatchObject({
+      eventType: 'process.recovery.recorded',
+      status: 'interrupted',
+      label: 'Previous run was interrupted',
+    });
+    expect(JSON.stringify(events)).not.toContain('secret provider body');
+    expect(JSON.stringify(events)).not.toContain('secret stack');
+    expect(JSON.stringify(events)).not.toContain('source-entry-branch-marker-1');
+  });
+
   it('buffers tool-enabled pure text until run completion confirms final answer phase', () => {
     vi.useFakeTimers();
     const events: ChatStreamEvent[] = [];

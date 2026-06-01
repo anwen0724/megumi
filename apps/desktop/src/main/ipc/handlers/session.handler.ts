@@ -5,6 +5,10 @@ import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import type {
   SessionCreateData,
   SessionCreatePayload,
+  SessionBranchDraftCancelData,
+  SessionBranchDraftCancelPayload,
+  SessionBranchDraftCreateData,
+  SessionBranchDraftCreatePayload,
   SessionListData,
   SessionMessageListData,
   SessionMessageListPayload,
@@ -16,6 +20,8 @@ import type {
   SessionTimelineListPayload,
 } from '@megumi/shared/ipc-schemas';
 import {
+  SessionBranchDraftCancelRequestSchema,
+  SessionBranchDraftCreateRequestSchema,
   SessionCreateRequestSchema,
   SessionListRequestSchema,
   SessionMessageListRequestSchema,
@@ -36,6 +42,8 @@ export type SessionHandlersService = Pick<
   | 'listTimelineMessagesBySession'
   | 'sendSessionMessage'
   | 'cancelSessionMessage'
+  | 'createBranchDraft'
+  | 'cancelBranchDraft'
 >;
 
 export interface RegisterSessionHandlersOptions {
@@ -139,6 +147,55 @@ export function registerSessionHandlers(
       mapError: mapSessionIpcError,
     }),
   );
+
+  ipcMain.handle(
+    IPC_CHANNELS.session.branchDraft.create,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.session.branchDraft.create,
+      requestSchema: SessionBranchDraftCreateRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<SessionBranchDraftCreatePayload, typeof IPC_CHANNELS.session.branchDraft.create>,
+        event,
+        context,
+      ): SessionBranchDraftCreateData => {
+        const result = service.createBranchDraft({
+          requestId: request.requestId,
+          ...request.payload,
+          runtimeContext: context,
+        });
+        void forwardRuntimeEvents(event.sender, asyncIterableFrom(result.events), { logger: options.logger });
+        return { branchDraft: result.branchDraft };
+      },
+      mapError: mapSessionIpcError,
+    }),
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.session.branchDraft.cancel,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.session.branchDraft.cancel,
+      requestSchema: SessionBranchDraftCancelRequestSchema,
+      logger: options.logger,
+      handle: (
+        request: RuntimeIpcRequest<SessionBranchDraftCancelPayload, typeof IPC_CHANNELS.session.branchDraft.cancel>,
+        event,
+        context,
+      ): SessionBranchDraftCancelData => {
+        const result = service.cancelBranchDraft({
+          requestId: request.requestId,
+          ...request.payload,
+          runtimeContext: context,
+        });
+        void forwardRuntimeEvents(event.sender, asyncIterableFrom(result.events), { logger: options.logger });
+        return {
+          cancelled: result.cancelled,
+          ...(result.reason ? { reason: result.reason } : {}),
+        };
+      },
+      mapError: mapSessionIpcError,
+    }),
+  );
 }
 
 function mapSessionIpcError(): RuntimeIpcError {
@@ -149,4 +206,10 @@ function mapSessionIpcError(): RuntimeIpcError {
     retryable: true,
     source: 'main',
   };
+}
+
+async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {
+  for (const item of items) {
+    yield item;
+  }
 }

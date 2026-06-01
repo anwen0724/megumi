@@ -59,6 +59,8 @@ import {
   RunResumeRequestSchema,
   RunRetryRequestSchema,
   SessionCreateRequestSchema,
+  SessionBranchDraftCancelRequestSchema,
+  SessionBranchDraftCreateRequestSchema,
   SessionListRequestSchema,
   SessionMessageCancelPayloadSchema,
   SessionMessageCancelRequestSchema,
@@ -71,6 +73,8 @@ import {
   ToolExecutionGetResultSchema,
   WorkspaceFilesListRequestSchema,
   WorkspaceFilesListResultSchema,
+  type SessionBranchDraftCancelPayload,
+  type SessionBranchDraftCreatePayload,
 } from '@megumi/shared/ipc-schemas';
 
 describe('json value schemas', () => {
@@ -797,6 +801,41 @@ describe('agent context runtime IPC schemas', () => {
         source: 'renderer',
       },
     }).meta.channel).toBe(IPC_CHANNELS.run.events.list);
+  });
+
+  it('parses session branch draft ipc contracts', () => {
+    const createPayload = {
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      intent: 'branch',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    } satisfies SessionBranchDraftCreatePayload;
+    const createRequest = SessionBranchDraftCreateRequestSchema.parse({
+      requestId: 'request_branch_1',
+      payload: createPayload,
+      meta: {
+        channel: IPC_CHANNELS.session.branchDraft.create,
+        createdAt: '2026-06-01T10:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+    expect(createRequest.payload.intent).toBe('branch');
+
+    const cancelPayload = {
+      sessionId: 'session-1',
+      branchMarkerId: 'branch-marker-1',
+      createdAt: '2026-06-01T10:00:01.000Z',
+    } satisfies SessionBranchDraftCancelPayload;
+    const cancelRequest = SessionBranchDraftCancelRequestSchema.parse({
+      requestId: 'request_branch_cancel_1',
+      payload: cancelPayload,
+      meta: {
+        channel: IPC_CHANNELS.session.branchDraft.cancel,
+        createdAt: '2026-06-01T10:00:01.000Z',
+        source: 'renderer',
+      },
+    });
+    expect(cancelRequest.meta.channel).toBe(IPC_CHANNELS.session.branchDraft.cancel);
   });
 
   it('parses primary run context, plan, tool, recovery, artifact, and memory request schemas', () => {

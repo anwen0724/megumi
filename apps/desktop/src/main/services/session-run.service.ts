@@ -56,6 +56,8 @@ import type {
   SessionTimelineListData,
   SessionTimelineListPayload,
 } from '@megumi/shared/ipc-schemas';
+import { createChatStreamEvent } from '@megumi/shared/chat-stream-event-factory';
+import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { ImplementationPlanArtifactRecord, RunMode, RunModeSnapshot } from '@megumi/shared/run-mode-contracts';
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
@@ -125,6 +127,16 @@ export interface SessionRunContextService {
 export interface SessionRunModelStepProvider {
   streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
   cancelModelStep(requestId: string): boolean;
+}
+
+export interface SessionBranchDraftView {
+  branchMarkerId: string;
+  sessionId: string;
+  sourceMessageId: string;
+  seedText: string;
+  label: string;
+  intent: 'branch' | 'rerun';
+  createdAt: string;
 }
 
 export interface SessionRunToolRuntimeFactory {
@@ -360,7 +372,11 @@ export class SessionRunService {
       return { messages: [], diagnostics: [] };
     }
 
-    return this.timelineMessageRepository.listCommittedMessagesBySession(input);
+    const result = this.timelineMessageRepository.listCommittedMessagesBySession(input);
+    return {
+      ...result,
+      messages: result.messages.filter((message) => this.shouldHydrateTimelineMessage(message)),
+    };
   }
 
   listRunsBySession(sessionId: string): Run[] {
@@ -452,6 +468,17 @@ export class SessionRunService {
     payload: SessionMessageSendPayload;
     runtimeContext?: RuntimeContext;
   }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }> {
+    let branchDraftMarker: SessionBranchMarker | undefined;
+    if (input.payload.branchDraft) {
+      if (!input.payload.sessionId) {
+        throw new Error('Branch draft requires an existing session.');
+      }
+      branchDraftMarker = this.assertActiveBranchDraftMarker({
+        sessionId: input.payload.sessionId,
+        branchMarkerId: input.payload.branchDraft.branchMarkerId,
+      });
+    }
+
     const session = this.resolveSessionForMessage(input.payload);
     const runId = this.ids.runId();
     const stepId = this.ids.stepId();
@@ -506,6 +533,21 @@ export class SessionRunService {
       sourceRef: sessionRunSourceRef(String(run.runId), createdAt),
       createdAt,
     });
+    let manualRerunAuditEvent: RuntimeEvent | undefined;
+    if (input.payload.branchDraft?.intent === 'rerun') {
+      if (!branchDraftMarker) {
+        throw new Error('Branch draft marker was not found.');
+      }
+      manualRerunAuditEvent = this.recordManualRerunAttemptForBranchDraft({
+        requestId: input.requestId,
+        sessionId: String(session.sessionId),
+        runId: String(run.runId),
+        branchMarkerId: input.payload.branchDraft.branchMarkerId,
+        marker: branchDraftMarker,
+        createdAt,
+        runtimeContext: input.runtimeContext,
+      });
+    }
     const step = this.repository.saveStep({
       stepId,
       runId,
@@ -535,6 +577,9 @@ export class SessionRunService {
         })
       : undefined;
     chatStreamAdapter?.startTurn();
+    if (manualRerunAuditEvent) {
+      this.appendRuntimeEvent(manualRerunAuditEvent, chatStreamAdapter);
+    }
     this.activeSessionMessageRuns.set(input.requestId, {
       runId,
       sessionId: session.sessionId,
@@ -665,6 +710,37 @@ export class SessionRunService {
       branchMarkerSourceEntry,
       seedMessage,
       events,
+    };
+  }
+
+  createBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    messageId: string;
+    intent: 'branch' | 'rerun';
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    branchDraft: SessionBranchDraftView;
+    events: RuntimeEvent[];
+  } {
+    const result = this.createBranchFromUserMessage(input);
+    const branchDraft: SessionBranchDraftView = {
+      branchMarkerId: result.branchMarker.branchMarkerId,
+      sessionId: input.sessionId,
+      sourceMessageId: input.messageId,
+      seedText: result.seedMessage.content,
+      label: formatBranchDraftTime(result.seedMessage.createdAt),
+      intent: input.intent,
+      createdAt: input.createdAt,
+    };
+    this.publishBranchSeparatorForDraft({
+      branchDraft,
+      seedRunId: String(result.seedMessage.runId ?? result.branchMarker.branchMarkerId),
+    });
+    return {
+      branchDraft,
+      events: result.events,
     };
   }
 
@@ -1855,6 +1931,158 @@ export class SessionRunService {
     });
   }
 
+  private recordManualRerunAttemptForBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    runId: string;
+    branchMarkerId: string;
+    marker: SessionBranchMarker;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): RuntimeEvent {
+    const activePathRepository = this.requireActivePathRepository();
+    const marker = input.marker;
+
+    const seedRunId = marker.seedSourceRef?.sourceKind === 'session_message'
+      ? this.repository.getMessage(marker.seedSourceRef.sourceId)?.runId
+      : undefined;
+    const runId = String(seedRunId ?? input.runId);
+    const retryAttemptId = this.ids.retryAttemptId();
+    const retryAttempt = activePathRepository.saveRetryAttempt({
+      retryAttemptId,
+      sessionId: input.sessionId,
+      runId,
+      ...(marker.targetLeafSourceEntryId ? { baseSourceEntryId: marker.targetLeafSourceEntryId } : {}),
+      attemptNumber: activePathRepository.listRetryAttemptsByRun(runId).length + 1,
+      retryKind: 'manual_rerun',
+      reason: 'user_requested',
+      status: 'pending',
+      retryable: true,
+      createdAt: input.createdAt,
+      metadata: {
+        requestId: input.requestId,
+        branchMarkerId: input.branchMarkerId,
+      },
+    });
+
+    return createRuntimeEvent({
+      eventId: this.ids.eventId(),
+      eventType: 'run.retry.requested',
+      runId,
+      sessionId: input.sessionId,
+      requestId: input.requestId,
+      ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
+      sequence: nextRuntimeSequence(this.repository.listRuntimeEventsByRun(runId)),
+      createdAt: input.createdAt,
+      source: 'main',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        retryRequestId: retryAttempt.retryAttemptId,
+        requestedBy: 'user',
+        retryKind: 'manual_rerun',
+        reason: 'user_requested',
+        attemptNumber: retryAttempt.attemptNumber,
+      },
+    });
+  }
+
+  private assertActiveBranchDraftMarker(input: {
+    sessionId: string;
+    branchMarkerId: string;
+  }): SessionBranchMarker {
+    const activePathRepository = this.requireActivePathRepository();
+    const marker = activePathRepository.getBranchMarker(input.branchMarkerId);
+    if (!marker || marker.sessionId !== input.sessionId) {
+      throw new Error('Branch draft marker was not found.');
+    }
+
+    const markerSourceEntry = activePathRepository.getSourceEntryBySourceRef(input.sessionId, {
+      sourceKind: 'branch_marker',
+      sourceId: input.branchMarkerId,
+    });
+    if (!markerSourceEntry) {
+      throw new Error('Branch draft marker was not found.');
+    }
+
+    const activeLeaf = activePathRepository.getActiveLeaf(input.sessionId);
+    if (activeLeaf?.leafSourceEntryId !== markerSourceEntry.sourceEntryId) {
+      throw new Error('Branch draft marker is not active.');
+    }
+
+    if (activePathRepository.listChildSourceEntries(markerSourceEntry.sourceEntryId).length > 0) {
+      throw new Error('Branch draft marker is not active.');
+    }
+
+    return marker;
+  }
+
+  private publishBranchSeparatorForDraft(input: {
+    branchDraft: SessionBranchDraftView;
+    seedRunId: string;
+  }): void {
+    if (!this.chatStreamEventSink) {
+      return;
+    }
+
+    const session = this.repository.getSession(input.branchDraft.sessionId);
+    this.chatStreamEventSink.publish(createChatStreamEvent({
+      eventId: this.ids.chatStreamEventId(),
+      eventType: 'branch.separator.created',
+      projectId: String(session?.workspaceId ?? input.branchDraft.sessionId),
+      sessionId: input.branchDraft.sessionId,
+      runId: input.seedRunId,
+      streamId: `branch-draft:${input.branchDraft.branchMarkerId}`,
+      streamKind: 'main',
+      seq: 1,
+      createdAt: input.branchDraft.createdAt,
+      branchMarkerId: input.branchDraft.branchMarkerId,
+      sourceMessageId: input.branchDraft.sourceMessageId,
+      label: input.branchDraft.label,
+    }));
+  }
+
+  private shouldHydrateTimelineMessage(message: TimelineMessage): boolean {
+    if (message.role !== 'separator') {
+      return true;
+    }
+
+    const branchSeparator = message.blocks.find((block) => block.kind === 'branch_separator');
+    if (!branchSeparator) {
+      return true;
+    }
+
+    return this.shouldHydrateBranchSeparator({
+      sessionId: String(message.sessionId),
+      branchMarkerId: branchSeparator.branchMarkerId,
+    });
+  }
+
+  private shouldHydrateBranchSeparator(input: {
+    sessionId: string;
+    branchMarkerId: string;
+  }): boolean {
+    const activePathRepository = this.activePathRepository;
+    if (!activePathRepository) {
+      return true;
+    }
+
+    const markerSourceEntry = activePathRepository.getSourceEntryBySourceRef(input.sessionId, {
+      sourceKind: 'branch_marker',
+      sourceId: input.branchMarkerId,
+    });
+    if (!markerSourceEntry) {
+      return false;
+    }
+
+    const activeLeaf = activePathRepository.getActiveLeaf(input.sessionId);
+    if (activeLeaf?.leafSourceEntryId === markerSourceEntry.sourceEntryId) {
+      return true;
+    }
+
+    return activePathRepository.listChildSourceEntries(markerSourceEntry.sourceEntryId).length > 0;
+  }
+
   private createRetryAuditEvent(input: {
     request: ModelStepRuntimeRequest;
     eventType: 'retry.started' | 'retry.completed';
@@ -2310,6 +2538,14 @@ function retryAttemptSourceRef(retryAttemptId: string, builtAt: string): ModelIn
     sourceUri: `retry-attempt://${retryAttemptId}`,
     loadedAt: builtAt,
   };
+}
+
+function formatBranchDraftTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return 'Branch from message';
+  }
+  return `Branch from ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function manualRetryReasonForRunStatus(status: Run['status']): SessionRetryAttempt['reason'] {

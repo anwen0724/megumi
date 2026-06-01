@@ -542,6 +542,7 @@ const RunRetryRequestedPayloadSchema = z
     requestedBy: RetryRequestedBySchema,
     retryKind: RetryKindSchema,
     reason: RetryReasonSchema,
+    attemptNumber: z.number().int().positive().optional(),
     checkpointId: z.string().min(1).optional(),
   })
   .strict();

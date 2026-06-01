@@ -17,6 +17,8 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.session.message.list,
   IPC_CHANNELS.session.message.send,
   IPC_CHANNELS.session.message.cancel,
+  IPC_CHANNELS.session.branchDraft.create,
+  IPC_CHANNELS.session.branchDraft.cancel,
   IPC_CHANNELS.session.timeline.list,
   IPC_CHANNELS.run.listBySession,
   IPC_CHANNELS.run.events.list,

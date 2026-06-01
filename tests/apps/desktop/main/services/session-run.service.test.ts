@@ -8,11 +8,13 @@ import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
+import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import {
   SessionRunService,
   type SessionRunContextService,
   type SessionRunServiceOptions,
 } from '@megumi/desktop/main/services/session-run.service';
+import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/services/timeline-history-commit-projector.service';
 import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session-compaction-orchestrator.service';
 import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
 import type { ChatStreamEvent } from '@megumi/shared';
@@ -390,15 +392,38 @@ function createServiceWithAutomaticRetryStream(
   return { service, repository, activePathRepo };
 }
 
-function createBranchServiceFixture() {
+function createBranchServiceFixture(options: {
+  chatEvents?: ChatStreamEvent[];
+  chatStreamEventSink?: SessionRunServiceOptions['chatStreamEventSink'];
+  timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
+  useTimelineProjector?: boolean;
+} = {}) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
+  const timelineRepository = options.useTimelineProjector
+    ? new TimelineMessageRepository(db)
+    : undefined;
+  const timelineProjector = timelineRepository
+    ? new TimelineHistoryCommitProjectorService({
+        repository: timelineRepository,
+        ids: { diagnosticId: () => 'diagnostic-branch-1' },
+      })
+    : undefined;
   let branchMarkerIndex = 0;
   const service = new SessionRunService({
     repository,
     activePathRepository: activePathRepo,
+    ...(timelineRepository ? { timelineMessageRepository: timelineRepository } : {}),
+    ...(options.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
+    ...(timelineProjector ? { chatStreamEventSink: timelineProjector } : {}),
+    ...(options.chatStreamEventSink ? { chatStreamEventSink: options.chatStreamEventSink } : {}),
+    ...(options.chatEvents ? {
+      chatStreamEventSink: {
+        publish: (event) => options.chatEvents?.push(event),
+      },
+    } : {}),
     clock: { now: () => '2026-06-01T08:00:00.000Z' },
     ids: {
       sessionId: () => 'session-1',
@@ -423,7 +448,7 @@ function createBranchServiceFixture() {
     },
   });
   seedBranchHistory(repository, activePathRepo);
-  return { service, repository, activePathRepo };
+  return { service, repository, activePathRepo, timelineRepository };
 }
 
 function createManualRetryFixture() {
@@ -1708,6 +1733,85 @@ describe('SessionRunService', () => {
     ]);
   });
 
+  it('publishes a canonical branch separator when creating a branch draft with a chat stream sink', () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const { service } = createBranchServiceFixture({ chatEvents });
+
+    const result = service.createBranchDraft({
+      requestId: 'request-branch-draft-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      intent: 'branch',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    expect(chatEvents).toContainEqual(expect.objectContaining({
+      eventType: 'branch.separator.created',
+      branchMarkerId: result.branchDraft.branchMarkerId,
+      sourceMessageId: 'message-3',
+      label: result.branchDraft.label,
+    }));
+    expect(JSON.stringify(chatEvents)).not.toContain('source-entry-branch-marker');
+  });
+
+  it('persists branch draft separators for timeline hydration without waiting for a terminal run event', () => {
+    const { service } = createBranchServiceFixture({ useTimelineProjector: true });
+
+    const result = service.createBranchDraft({
+      requestId: 'request-branch-draft-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      intent: 'branch',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    expect(service.listTimelineMessagesBySession({
+      projectId: 'session-1',
+      sessionId: 'session-1',
+    })).toMatchObject({
+      diagnostics: [],
+      messages: [
+        {
+          role: 'separator',
+          blocks: [{
+            kind: 'branch_separator',
+            branchMarkerId: result.branchDraft.branchMarkerId,
+            sourceMessageId: 'message-3',
+            label: result.branchDraft.label,
+          }],
+        },
+      ],
+    });
+  });
+
+  it('removes hydrated branch draft separators when cancelling before send', () => {
+    const { service } = createBranchServiceFixture({ useTimelineProjector: true });
+
+    const result = service.createBranchDraft({
+      requestId: 'request-branch-draft-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      intent: 'branch',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const cancelResult = service.cancelBranchDraft({
+      requestId: 'request-branch-cancel-1',
+      sessionId: 'session-1',
+      branchMarkerId: result.branchDraft.branchMarkerId,
+      createdAt: '2026-06-01T10:00:01.000Z',
+    });
+
+    expect(cancelResult.cancelled).toBe(true);
+    expect(service.listTimelineMessagesBySession({
+      projectId: 'session-1',
+      sessionId: 'session-1',
+    })).toMatchObject({
+      diagnostics: [],
+      messages: [],
+    });
+  });
+
   it('rejects branching from an assistant message', () => {
     const { service } = createBranchServiceFixture();
 
@@ -1780,6 +1884,167 @@ describe('SessionRunService', () => {
       'session.branch_draft.cancelled',
       'session.active_leaf.changed',
     ]);
+  });
+
+  it('records manual rerun intent when sending a branch draft while keeping the draft cancellable before send', async () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const { service, activePathRepo } = createBranchServiceFixture({ chatEvents });
+    const branch = service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    expect(service.cancelBranchDraft({
+      requestId: 'request-cancel-before-send',
+      sessionId: 'session-1',
+      branchMarkerId: branch.branchMarker.branchMarkerId,
+      createdAt: '2026-06-01T10:00:01.000Z',
+    }).cancelled).toBe(true);
+
+    const secondBranch = service.createBranchFromUserMessage({
+      requestId: 'request-branch-2',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      createdAt: '2026-06-01T10:00:02.000Z',
+    });
+
+    await service.sendSessionMessage({
+      requestId: 'request-send-rerun-draft',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'message-rerun-new',
+          content: 'rerun edited prompt',
+          createdAt: '2026-06-01T10:00:03.000Z',
+        },
+        branchDraft: {
+          branchMarkerId: secondBranch.branchMarker.branchMarkerId,
+          intent: 'rerun',
+        },
+        createdAt: '2026-06-01T10:00:03.000Z',
+      },
+    });
+
+    const attempts = activePathRepo.listRetryAttemptsByRun(String(secondBranch.seedMessage.runId));
+    expect(attempts.at(-1)).toMatchObject({
+      retryKind: 'manual_rerun',
+      reason: 'user_requested',
+      status: 'pending',
+      retryable: true,
+    });
+    expect(chatEvents).toContainEqual(expect.objectContaining({
+      eventType: 'process.retry.recorded',
+      retryAttemptId: attempts.at(-1)?.retryAttemptId,
+      status: 'started',
+      label: 'Retry attempt 1 started',
+      reason: 'user_requested',
+    }));
+  });
+
+  it('labels manual rerun draft audits with the persisted retry attempt number', async () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const { service, activePathRepo } = createBranchServiceFixture({ chatEvents });
+    const branch = service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+    activePathRepo.saveRetryAttempt({
+      retryAttemptId: 'retry-existing-1',
+      sessionId: 'session-1',
+      runId: String(branch.seedMessage.runId),
+      ...(branch.branchMarker.targetLeafSourceEntryId
+        ? { baseSourceEntryId: branch.branchMarker.targetLeafSourceEntryId }
+        : {}),
+      attemptNumber: 1,
+      retryKind: 'manual_rerun',
+      reason: 'user_requested',
+      status: 'failed',
+      retryable: true,
+      createdAt: '2026-06-01T09:59:00.000Z',
+      completedAt: '2026-06-01T09:59:01.000Z',
+    });
+
+    await service.sendSessionMessage({
+      requestId: 'request-send-rerun-draft',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'message-rerun-new',
+          content: 'rerun edited prompt',
+          createdAt: '2026-06-01T10:00:03.000Z',
+        },
+        branchDraft: {
+          branchMarkerId: branch.branchMarker.branchMarkerId,
+          intent: 'rerun',
+        },
+        createdAt: '2026-06-01T10:00:03.000Z',
+      },
+    });
+
+    const attempts = activePathRepo.listRetryAttemptsByRun(String(branch.seedMessage.runId));
+    expect(attempts.at(-1)).toMatchObject({
+      attemptNumber: 2,
+      retryKind: 'manual_rerun',
+    });
+    expect(chatEvents).toContainEqual(expect.objectContaining({
+      eventType: 'process.retry.recorded',
+      retryAttemptId: attempts.at(-1)?.retryAttemptId,
+      attemptNumber: 2,
+      status: 'started',
+      label: 'Retry attempt 2 started',
+    }));
+  });
+
+  it('rejects stale rerun branch drafts before creating new message run or active path entries', async () => {
+    const { service, repository, activePathRepo } = createBranchServiceFixture();
+    const branch = service.createBranchFromUserMessage({
+      requestId: 'request-branch-1',
+      sessionId: 'session-1',
+      messageId: 'message-3',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+    expect(service.cancelBranchDraft({
+      requestId: 'request-cancel-before-send',
+      sessionId: 'session-1',
+      branchMarkerId: branch.branchMarker.branchMarkerId,
+      createdAt: '2026-06-01T10:00:01.000Z',
+    }).cancelled).toBe(true);
+    const messageCount = repository.listMessagesBySession('session-1').length;
+    const runCount = repository.listRunsBySession('session-1').length;
+    const sourceEntryIds = activePathRepo.listSourceEntriesBySession('session-1')
+      .map((entry) => entry.sourceEntryId);
+
+    await expect(service.sendSessionMessage({
+      requestId: 'request-send-stale-rerun-draft',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'message-rerun-new',
+          content: 'rerun edited prompt',
+          createdAt: '2026-06-01T10:00:03.000Z',
+        },
+        branchDraft: {
+          branchMarkerId: branch.branchMarker.branchMarkerId,
+          intent: 'rerun',
+        },
+        createdAt: '2026-06-01T10:00:03.000Z',
+      },
+    })).rejects.toThrow('Branch draft marker is not active.');
+
+    expect(repository.listMessagesBySession('session-1')).toHaveLength(messageCount);
+    expect(repository.listRunsBySession('session-1')).toHaveLength(runCount);
+    expect(activePathRepo.listSourceEntriesBySession('session-1').map((entry) => entry.sourceEntryId))
+      .toEqual(sourceEntryIds);
   });
 
   it('does not cancel a branch draft after new sources are appended', () => {

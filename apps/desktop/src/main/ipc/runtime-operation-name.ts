@@ -21,6 +21,10 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'session.message.send';
     case IPC_CHANNELS.session.message.cancel:
       return 'session.message.cancel';
+    case IPC_CHANNELS.session.branchDraft.create:
+      return 'session.branch-draft.create';
+    case IPC_CHANNELS.session.branchDraft.cancel:
+      return 'session.branch-draft.cancel';
     case IPC_CHANNELS.session.timeline.list:
       return 'session.timeline.list';
     case IPC_CHANNELS.run.listBySession:

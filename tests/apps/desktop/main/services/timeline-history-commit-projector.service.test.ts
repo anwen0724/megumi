@@ -150,6 +150,92 @@ describe('TimelineHistoryCommitProjectorService', () => {
     });
   });
 
+  it('commits branch separators and process fact blocks through the shared timeline reducer', () => {
+    const { repository, commits } = createRepository();
+    const service = new TimelineHistoryCommitProjectorService({
+      repository,
+      ids: { diagnosticId: () => 'diagnostic-1' },
+    });
+
+    [
+      event({
+        eventType: 'branch.separator.created',
+        seq: 1,
+        branchMarkerId: 'branch-marker-1',
+        sourceMessageId: 'message-user-1',
+        label: 'Branch from 10:00',
+      }),
+      event({ eventType: 'turn.started', seq: 2, userMessageId: 'message-user-2' }),
+      event({
+        eventType: 'process.compaction.recorded',
+        seq: 3,
+        compactionId: 'compaction-1',
+        status: 'completed',
+        label: 'Compacted context',
+      }),
+      event({
+        eventType: 'process.retry.recorded',
+        seq: 4,
+        retryAttemptId: 'retry-attempt-1',
+        attemptNumber: 1,
+        status: 'started',
+        label: 'Retry attempt 1 started',
+        reason: 'user_requested',
+      }),
+      event({
+        eventType: 'process.recovery.recorded',
+        seq: 5,
+        status: 'interrupted',
+        label: 'Previous run was interrupted',
+      }),
+      event({ eventType: 'turn.completed', seq: 6 }),
+    ].forEach((chatEvent) => service.publish(chatEvent));
+
+    expect(repository.commitRunTimeline).toHaveBeenCalledTimes(2);
+    expect(commits[0]?.messages[0]).toMatchObject({
+      role: 'separator',
+      blocks: [{ kind: 'branch_separator', branchMarkerId: 'branch-marker-1' }],
+    });
+    expect(processBlock(assistantMessage(commits[1]?.messages ?? [])).items).toEqual([
+      expect.objectContaining({ kind: 'compaction_activity', label: 'Compacted context' }),
+      expect.objectContaining({ kind: 'retry_activity', label: 'Retry attempt 1 started' }),
+      expect.objectContaining({ kind: 'recovery_activity', label: 'Previous run was interrupted' }),
+    ]);
+  });
+
+  it('commits a branch separator-only stream immediately and ignores a later terminal for that stream', () => {
+    const { repository, commits } = createRepository();
+    const service = new TimelineHistoryCommitProjectorService({
+      repository,
+      ids: { diagnosticId: () => 'diagnostic-1' },
+    });
+    const separator = event({
+      eventType: 'branch.separator.created',
+      seq: 1,
+      streamId: 'branch-draft:branch-marker-1',
+      branchMarkerId: 'branch-marker-1',
+      sourceMessageId: 'message-user-1',
+      label: 'Branch from 10:00',
+    });
+
+    service.publish(separator);
+    service.publish(event({
+      eventType: 'turn.completed',
+      seq: 2,
+      streamId: 'branch-draft:branch-marker-1',
+    }));
+
+    expect(repository.commitRunTimeline).toHaveBeenCalledTimes(1);
+    expect(commits[0]).toMatchObject({
+      runId: 'run-1',
+      committedAt: separator.createdAt,
+      messages: [{
+        role: 'separator',
+        blocks: [{ kind: 'branch_separator', branchMarkerId: 'branch-marker-1' }],
+      }],
+    });
+  });
+
   it('commits failed and cancelled partial answers with terminal statuses and partial text', () => {
     const { commits, repository } = createRepository();
     const service = new TimelineHistoryCommitProjectorService({
