@@ -118,6 +118,44 @@ describe('recovery contracts', () => {
     ).toBe('retry_action');
   });
 
+  it('accepts 10.01 retry request kinds while keeping legacy recovery kinds', () => {
+    expect(RETRY_KINDS).toEqual(expect.arrayContaining([
+      'retry_action',
+      'retry_step',
+      'retry_run_from_checkpoint',
+      'automatic_model_step',
+      'manual_retry',
+      'manual_rerun',
+    ]));
+    expect(RETRY_REASONS).toEqual(expect.arrayContaining([
+      'provider_overload',
+      'rate_limited',
+      'service_unavailable',
+      'network_timeout',
+      'premature_stream_end',
+      'runtime_provider_error',
+      'interrupted',
+    ]));
+
+    expect(RetryRequestSchema.parse({
+      retryRequestId: 'retry_request_auto',
+      runId: 'run_123',
+      requestedBy: 'runtime',
+      retryKind: 'automatic_model_step',
+      reason: 'rate_limited',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    }).retryKind).toBe('automatic_model_step');
+
+    expect(RetryRequestSchema.parse({
+      retryRequestId: 'retry_request_manual',
+      runId: 'run_123',
+      requestedBy: 'user',
+      retryKind: 'manual_rerun',
+      reason: 'interrupted',
+      createdAt: '2026-06-01T10:00:01.000Z',
+    }).reason).toBe('interrupted');
+  });
+
   it('rejects extra fields in recovery request records', () => {
     expect(ResumeRequestSchema.safeParse({
       resumeRequestId: 'resume_request_123',
@@ -194,13 +232,27 @@ describe('recovery contracts', () => {
     ]);
     expect(CANCEL_SCOPES).toEqual(['run', 'step', 'action', 'background_process']);
     expect(RETRY_REQUESTED_BY).toEqual(['user', 'host', 'runtime']);
-    expect(RETRY_KINDS).toEqual(['retry_action', 'retry_step', 'retry_run_from_checkpoint']);
+    expect(RETRY_KINDS).toEqual([
+      'retry_action',
+      'retry_step',
+      'retry_run_from_checkpoint',
+      'automatic_model_step',
+      'manual_retry',
+      'manual_rerun',
+    ]);
     expect(RETRY_REASONS).toEqual([
       'user_requested',
       'failed',
       'cancelled',
       'approval_resolved',
       'runtime_error',
+      'provider_overload',
+      'rate_limited',
+      'service_unavailable',
+      'network_timeout',
+      'premature_stream_end',
+      'runtime_provider_error',
+      'interrupted',
     ]);
   });
 });

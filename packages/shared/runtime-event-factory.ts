@@ -15,6 +15,7 @@ import type {
   RunCancelledPayload,
   RunCompletedPayload,
   RunFailedPayload,
+  RunInterruptedPayload,
   RunStartedPayload,
   RuntimeEvent,
   RuntimeEventPayloadByType,
@@ -821,6 +822,23 @@ export function createRunCancelledEvent(input: {
     payload: {
       reason: input.reason,
     },
+  });
+}
+
+export function createRunInterruptedEvent(input: {
+  eventId: string;
+  runId: RunId | string;
+  sessionId: string;
+  sequence: number;
+  createdAt: string;
+  payload: RunInterruptedPayload;
+}): TypedRuntimeEvent<'run.interrupted'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'run.interrupted',
+    source: 'main',
+    visibility: 'system',
+    persist: 'required',
   });
 }
 

@@ -6,6 +6,8 @@ import { ModelInputContextSourceRefSchema } from './model-input-context-contract
 import {
   SESSION_ACTIVE_LEAF_REASONS,
   SESSION_BRANCH_MARKER_REASONS,
+  SESSION_INTERRUPTED_RUN_PREVIOUS_STATUSES,
+  SESSION_INTERRUPTED_RUN_REASONS,
 } from './session-active-path-contracts';
 import { SESSION_COMPACTION_TRIGGER_REASONS } from './session-compaction-contracts';
 import {
@@ -447,6 +449,14 @@ const RunCancelledPayloadSchema = z
   })
   .strict();
 
+const RunInterruptedPayloadSchema = z
+  .object({
+    interruptedMarkerId: z.string().min(1),
+    previousStatus: z.enum(SESSION_INTERRUPTED_RUN_PREVIOUS_STATUSES),
+    reason: z.enum(SESSION_INTERRUPTED_RUN_REASONS),
+  })
+  .strict();
+
 const RunWaitingForApprovalPayloadSchema = z
   .object({
     approvalRequestId: z.string().min(1),
@@ -829,6 +839,7 @@ export const RunStatusChangedEventSchema = eventSchema('run.status.changed', Run
 export const RunCompletedEventSchema = eventSchema('run.completed', RunCompletedPayloadSchema);
 export const RunFailedEventSchema = eventSchema('run.failed', RunFailedPayloadSchema);
 export const RunCancelledEventSchema = eventSchema('run.cancelled', RunCancelledPayloadSchema);
+export const RunInterruptedEventSchema = eventSchema('run.interrupted', RunInterruptedPayloadSchema);
 export const RunWaitingForApprovalEventSchema = eventSchema(
   'run.waiting_for_approval',
   RunWaitingForApprovalPayloadSchema,
@@ -994,6 +1005,7 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   RunCompletedEventSchema,
   RunFailedEventSchema,
   RunCancelledEventSchema,
+  RunInterruptedEventSchema,
   RunWaitingForApprovalEventSchema,
   StepCreatedEventSchema,
   StepStartedEventSchema,

@@ -5,6 +5,8 @@ import type { ModelInputContextSourceRef } from './model-input-context-contracts
 import type {
   SessionActiveLeafReason,
   SessionBranchMarkerReason,
+  SessionInterruptedRunPreviousStatus,
+  SessionInterruptedRunReason,
 } from './session-active-path-contracts';
 import type { SessionCompactionTriggerReason } from './session-compaction-contracts';
 import type {
@@ -74,6 +76,7 @@ export const RUNTIME_EVENT_TYPES = [
   'run.completed',
   'run.failed',
   'run.cancelled',
+  'run.interrupted',
   'run.waiting_for_approval',
   'step.created',
   'step.started',
@@ -416,6 +419,12 @@ export interface RunCancelledPayload {
   error?: RuntimeError;
 }
 
+export interface RunInterruptedPayload {
+  interruptedMarkerId: string;
+  previousStatus: SessionInterruptedRunPreviousStatus;
+  reason: SessionInterruptedRunReason;
+}
+
 export interface RunWaitingForApprovalPayload {
   approvalRequestId: string;
   toolCallId: string;
@@ -688,6 +697,7 @@ export type RuntimeEventPayloadByType = {
   'run.completed': RunCompletedPayload;
   'run.failed': RunFailedPayload;
   'run.cancelled': RunCancelledPayload;
+  'run.interrupted': RunInterruptedPayload;
   'run.waiting_for_approval': RunWaitingForApprovalPayload;
   'step.created': StepCreatedPayload;
   'step.started': StepStartedPayload;

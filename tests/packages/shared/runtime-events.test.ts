@@ -28,6 +28,7 @@ import {
   createModelThinkingStartedEvent,
   createModelStepStartedEvent,
   createModelToolCallDetectedEvent,
+  createRunInterruptedEvent,
   createRunWaitingForApprovalEvent,
   createRunStartedEvent,
   createRuntimeEvent,
@@ -364,6 +365,27 @@ describe('runtime event contracts', () => {
     expect(RuntimeEventSchema.parse(branchCreated).eventType).toBe('session.branch_marker.created');
     expect(RuntimeEventSchema.parse(activeChanged).eventType).toBe('session.active_leaf.changed');
     expect(RuntimeEventSchema.parse(cancelled).eventType).toBe('session.branch_draft.cancelled');
+  });
+
+  it('parses interrupted run audit events', () => {
+    const event = RuntimeEventSchema.parse(createRunInterruptedEvent({
+      eventId: 'event-interrupted-1',
+      runId: 'run_123',
+      sessionId: 'session_123',
+      sequence: 1,
+      createdAt: '2026-06-01T10:00:00.000Z',
+      payload: {
+        interruptedMarkerId: 'interrupted_marker_123',
+        previousStatus: 'running',
+        reason: 'app_restarted',
+      },
+    }));
+
+    expect(event.eventType).toBe('run.interrupted');
+    if (event.eventType !== 'run.interrupted') {
+      throw new Error('Expected run.interrupted event.');
+    }
+    expect(event.payload.previousStatus).toBe('running');
   });
 });
 
