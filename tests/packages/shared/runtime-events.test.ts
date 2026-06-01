@@ -34,6 +34,9 @@ import {
   createContextCompactionCompletedEvent,
   createContextCompactionFailedEvent,
   createContextCompactionStartedEvent,
+  createSessionActiveLeafChangedEvent,
+  createSessionBranchDraftCancelledEvent,
+  createSessionBranchMarkerCreatedEvent,
   createToolResultCreatedEvent,
   createToolCallCreatedEvent,
   createToolExecutionApprovalRequestedEvent,
@@ -300,6 +303,67 @@ describe('runtime event contracts', () => {
     expect(JSON.stringify([started, completed, failed])).not.toContain('rawProviderBody');
     expect(JSON.stringify([started, completed, failed])).not.toContain('summaryPrompt');
     expect(JSON.stringify([started, completed, failed])).not.toContain('tool result raw');
+  });
+
+  it('validates active path branch audit runtime events', () => {
+    const branchCreated = createSessionBranchMarkerCreatedEvent({
+      eventId: 'event-branch-created',
+      sessionId: 'session-1',
+      requestId: 'request-branch-1',
+      sequence: 1,
+      createdAt: '2026-06-01T08:00:00.000Z',
+      payload: {
+        branchMarkerId: 'branch-marker-1',
+        branchMarkerSourceEntryId: 'source-entry-branch-marker-1',
+        previousLeafSourceEntryId: 'source-entry-old-leaf',
+        targetLeafSourceEntryId: 'source-entry-parent',
+        selectedSourceRef: {
+          sourceKind: 'session_message',
+          sourceId: 'message-2',
+          sourceUri: 'session-message://message-2',
+        },
+        seedSourceRef: {
+          sourceKind: 'session_message',
+          sourceId: 'message-2',
+          sourceUri: 'session-message://message-2',
+        },
+        reason: 'branch_from_user_message',
+      },
+    });
+    const activeChanged = createSessionActiveLeafChangedEvent({
+      eventId: 'event-active-leaf-changed',
+      sessionId: 'session-1',
+      requestId: 'request-branch-1',
+      sequence: 2,
+      createdAt: '2026-06-01T08:00:00.000Z',
+      payload: {
+        previousLeafSourceEntryId: 'source-entry-old-leaf',
+        leafSourceEntryId: 'source-entry-branch-marker-1',
+        reason: 'branch_marker',
+        sourceRef: {
+          sourceKind: 'branch_marker',
+          sourceId: 'branch-marker-1',
+          sourceUri: 'branch-marker://branch-marker-1',
+        },
+      },
+    });
+    const cancelled = createSessionBranchDraftCancelledEvent({
+      eventId: 'event-branch-cancelled',
+      sessionId: 'session-1',
+      requestId: 'request-branch-1',
+      sequence: 3,
+      createdAt: '2026-06-01T08:00:01.000Z',
+      payload: {
+        branchMarkerId: 'branch-marker-1',
+        branchMarkerSourceEntryId: 'source-entry-branch-marker-1',
+        restoredLeafSourceEntryId: 'source-entry-old-leaf',
+        reason: 'branch_cancelled',
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(branchCreated).eventType).toBe('session.branch_marker.created');
+    expect(RuntimeEventSchema.parse(activeChanged).eventType).toBe('session.active_leaf.changed');
+    expect(RuntimeEventSchema.parse(cancelled).eventType).toBe('session.branch_draft.cancelled');
   });
 });
 

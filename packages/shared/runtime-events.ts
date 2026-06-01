@@ -2,6 +2,10 @@ import type { JsonValue } from './json';
 import type { RuntimeError } from './runtime-errors';
 import type { RuntimeContext } from './runtime-context';
 import type { ModelInputContextSourceRef } from './model-input-context-contracts';
+import type {
+  SessionActiveLeafReason,
+  SessionBranchMarkerReason,
+} from './session-active-path-contracts';
 import type { SessionCompactionTriggerReason } from './session-compaction-contracts';
 import type {
   RunActionKind,
@@ -61,6 +65,9 @@ export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 export const RUNTIME_EVENT_TYPES = [
   'session.created',
   'session.updated',
+  'session.active_leaf.changed',
+  'session.branch_marker.created',
+  'session.branch_draft.cancelled',
   'run.created',
   'run.started',
   'run.status.changed',
@@ -211,6 +218,30 @@ export interface SessionCreatedPayload {
 
 export interface SessionUpdatedPayload {
   changedFields: string[];
+}
+
+export interface SessionActiveLeafChangedPayload {
+  previousLeafSourceEntryId?: string;
+  leafSourceEntryId?: string;
+  reason: SessionActiveLeafReason;
+  sourceRef?: ModelInputContextSourceRef;
+}
+
+export interface SessionBranchMarkerCreatedPayload {
+  branchMarkerId: string;
+  branchMarkerSourceEntryId: string;
+  previousLeafSourceEntryId?: string;
+  targetLeafSourceEntryId?: string;
+  selectedSourceRef: ModelInputContextSourceRef;
+  seedSourceRef?: ModelInputContextSourceRef;
+  reason: SessionBranchMarkerReason;
+}
+
+export interface SessionBranchDraftCancelledPayload {
+  branchMarkerId: string;
+  branchMarkerSourceEntryId: string;
+  restoredLeafSourceEntryId?: string;
+  reason: 'branch_cancelled';
 }
 
 export interface RunCreatedPayload {
@@ -648,6 +679,9 @@ export interface MemoryAccessRecordedPayload {
 export type RuntimeEventPayloadByType = {
   'session.created': SessionCreatedPayload;
   'session.updated': SessionUpdatedPayload;
+  'session.active_leaf.changed': SessionActiveLeafChangedPayload;
+  'session.branch_marker.created': SessionBranchMarkerCreatedPayload;
+  'session.branch_draft.cancelled': SessionBranchDraftCancelledPayload;
   'run.created': RunCreatedPayload;
   'run.started': RunStartedPayload;
   'run.status.changed': RunStatusChangedPayload;

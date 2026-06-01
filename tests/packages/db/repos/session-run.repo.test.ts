@@ -128,6 +128,29 @@ describe('SessionRunRepository', () => {
     expect(repo.listRunsBySession('session-1').map((run) => run.runId)).toEqual(['run-1', 'run-2']);
   });
 
+  it('gets one session message by id', () => {
+    const repo = createRepo();
+    repo.saveSession({
+      sessionId: 'session-1',
+      title: 'One message',
+      status: 'active',
+      createdAt: '2026-06-01T08:00:00.000Z',
+      updatedAt: '2026-06-01T08:00:00.000Z',
+    });
+    repo.saveMessage({
+      messageId: 'message-1',
+      sessionId: 'session-1',
+      role: 'user',
+      content: 'Hello',
+      status: 'completed',
+      createdAt: '2026-06-01T08:01:00.000Z',
+      completedAt: '2026-06-01T08:01:00.000Z',
+    });
+
+    expect(repo.getMessage('message-1')?.content).toBe('Hello');
+    expect(repo.getMessage('message-missing')).toBeUndefined();
+  });
+
   it('saves and reads session compactions by id, session, and latest completed', () => {
     const repo = createRepo();
     repo.saveSession({

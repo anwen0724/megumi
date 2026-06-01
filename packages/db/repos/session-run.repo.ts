@@ -283,6 +283,13 @@ export class SessionRunRepository {
     return message;
   }
 
+  getMessage(messageId: string): SessionMessage | undefined {
+    const row = this.database.prepare('SELECT * FROM session_messages WHERE message_id = ?').get(messageId) as
+      | SessionMessageRow
+      | undefined;
+    return row ? fromSessionMessageRow(row) : undefined;
+  }
+
   listMessagesBySession(sessionId: string): SessionMessage[] {
     return (this.database
       .prepare('SELECT * FROM session_messages WHERE session_id = ? ORDER BY created_at ASC')

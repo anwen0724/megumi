@@ -182,6 +182,85 @@ describe('SessionActivePathRepository', () => {
     expect(activePathRepo.listActivePathSourceRefs('session-1')).toEqual([]);
   });
 
+  it('atomically appends a source entry and advances active leaf', () => {
+    const { activePathRepo, sessionRunRepo } = createRepositories();
+    seedSession(sessionRunRepo);
+
+    const entry = sourceEntry('source-entry-1', 'message-1', 'session_message');
+    activePathRepo.appendSourceEntryAndSetActiveLeaf(entry, {
+      sessionId: 'session-1',
+      leafSourceEntryId: 'source-entry-1',
+      updatedAt: '2026-06-01T08:00:00.000Z',
+      reason: 'source_appended',
+    });
+
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-1');
+    expect(activePathRepo.getActivePath('session-1').entries.map((item) => item.sourceEntryId)).toEqual([
+      'source-entry-1',
+    ]);
+  });
+
+  it('rolls back source entry append when active leaf update fails', () => {
+    const { activePathRepo, sessionRunRepo } = createRepositories();
+    seedSession(sessionRunRepo);
+    const existingLeaf = activePathRepo.appendSourceEntry(
+      sourceEntry('source-entry-existing-leaf', 'message-existing', 'session_message'),
+    );
+    activePathRepo.setActiveLeaf({
+      sessionId: 'session-1',
+      leafSourceEntryId: existingLeaf.sourceEntryId,
+      updatedAt: '2026-06-01T08:00:00.000Z',
+      reason: 'source_appended',
+    });
+
+    const newEntry = sourceEntry(
+      'source-entry-rolled-back',
+      'message-rolled-back',
+      'session_message',
+      existingLeaf.sourceEntryId,
+    );
+
+    expect(() => activePathRepo.appendSourceEntryAndSetActiveLeaf(newEntry, {
+      sessionId: 'session-1',
+      leafSourceEntryId: 'source-entry-missing',
+      updatedAt: '2026-06-01T08:01:00.000Z',
+      reason: 'source_appended',
+    })).toThrow(/leafSourceEntryId must belong to session session-1/);
+
+    expect(activePathRepo.getSourceEntry(newEntry.sourceEntryId)).toBeUndefined();
+    expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe(existingLeaf.sourceEntryId);
+    expect(activePathRepo.getActivePath('session-1').entries.map((entry) => entry.sourceEntryId)).toEqual([
+      existingLeaf.sourceEntryId,
+    ]);
+  });
+
+  it('gets branch marker by id and lists child source entries', () => {
+    const { activePathRepo, sessionRunRepo } = createRepositories();
+    seedSession(sessionRunRepo);
+    const root = activePathRepo.appendSourceEntry(sourceEntry('source-entry-root', 'message-1', 'session_message'));
+    const child = activePathRepo.appendSourceEntry(sourceEntry(
+      'source-entry-child',
+      'run-1',
+      'session_run',
+      'source-entry-root',
+    ));
+    const marker = activePathRepo.recordBranchMarker({
+      branchMarkerId: 'branch-marker-1',
+      sessionId: 'session-1',
+      previousLeafSourceEntryId: child.sourceEntryId,
+      targetLeafSourceEntryId: root.sourceEntryId,
+      selectedSourceRef: root.sourceRef,
+      seedSourceRef: root.sourceRef,
+      reason: 'branch_from_user_message',
+      createdAt: '2026-06-01T08:00:00.000Z',
+    });
+
+    expect(activePathRepo.getBranchMarker(marker.branchMarkerId)?.branchMarkerId).toBe('branch-marker-1');
+    expect(activePathRepo.listChildSourceEntries(root.sourceEntryId).map((entry) => entry.sourceEntryId)).toEqual([
+      'source-entry-child',
+    ]);
+  });
+
   it('rejects active leaves whose source entry belongs to another session', () => {
     const { activePathRepo, sessionRunRepo } = createRepositories();
     seedSession(sessionRunRepo);

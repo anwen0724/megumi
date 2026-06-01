@@ -87,6 +87,20 @@ export interface RunRuntimeEventFactoryInput<TType extends RuntimeEventType> {
   payload: RuntimeEventPayloadByType[TType];
 }
 
+export interface SessionScopedRuntimeEventFactoryInput<TType extends RuntimeEventType> {
+  eventId: string;
+  eventType: TType;
+  sessionId: string;
+  requestId?: string;
+  context?: RuntimeContext;
+  sequence: number;
+  createdAt: string;
+  source: RuntimeEventSource;
+  visibility: RuntimeEventVisibility;
+  persist: RuntimeEventPersistMode;
+  payload: RuntimeEventPayloadByType[TType];
+}
+
 export function createRuntimeEvent<TType extends RuntimeEventType>(
   input: RunRuntimeEventFactoryInput<TType>,
 ): RuntimeEvent<RuntimeEventPayloadByType[TType]> & { eventType: TType } {
@@ -108,6 +122,70 @@ export function createRuntimeEvent<TType extends RuntimeEventType>(
     persist: input.persist,
     payload: input.payload,
   };
+}
+
+function createSessionScopedRuntimeEvent<TType extends RuntimeEventType>(
+  input: SessionScopedRuntimeEventFactoryInput<TType>,
+): RuntimeEvent<RuntimeEventPayloadByType[TType]> & { eventType: TType } {
+  if (!Number.isInteger(input.sequence) || input.sequence <= 0) {
+    throw new Error('Runtime event sequence must be a positive integer.');
+  }
+
+  return {
+    eventId: input.eventId,
+    schemaVersion: 1,
+    eventType: input.eventType,
+    sessionId: input.sessionId,
+    ...(input.requestId ? { requestId: input.requestId } : {}),
+    ...(input.context ? { context: input.context } : {}),
+    sequence: input.sequence,
+    createdAt: input.createdAt,
+    source: input.source,
+    visibility: input.visibility,
+    persist: input.persist,
+    payload: input.payload,
+  };
+}
+
+type ActivePathSessionRuntimeEventInput<TType extends RuntimeEventType> = Omit<
+  SessionScopedRuntimeEventFactoryInput<TType>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>;
+
+export function createSessionActiveLeafChangedEvent(
+  input: ActivePathSessionRuntimeEventInput<'session.active_leaf.changed'>,
+): TypedRuntimeEvent<'session.active_leaf.changed'> {
+  return createSessionScopedRuntimeEvent({
+    ...input,
+    eventType: 'session.active_leaf.changed',
+    source: 'main',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
+export function createSessionBranchMarkerCreatedEvent(
+  input: ActivePathSessionRuntimeEventInput<'session.branch_marker.created'>,
+): TypedRuntimeEvent<'session.branch_marker.created'> {
+  return createSessionScopedRuntimeEvent({
+    ...input,
+    eventType: 'session.branch_marker.created',
+    source: 'main',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
+export function createSessionBranchDraftCancelledEvent(
+  input: ActivePathSessionRuntimeEventInput<'session.branch_draft.cancelled'>,
+): TypedRuntimeEvent<'session.branch_draft.cancelled'> {
+  return createSessionScopedRuntimeEvent({
+    ...input,
+    eventType: 'session.branch_draft.cancelled',
+    source: 'main',
+    visibility: 'system',
+    persist: 'required',
+  });
 }
 
 export function createModelStepStartedEvent(

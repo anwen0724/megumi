@@ -100,6 +100,22 @@ export class SessionActivePathRepository {
     return parsed;
   }
 
+  appendSourceEntryAndSetActiveLeaf(
+    entry: SessionSourceEntry,
+    activeLeaf: SessionActiveLeaf,
+  ): SessionSourceEntry {
+    const appendAndSetActiveLeaf = this.database.transaction((
+      sourceEntry: SessionSourceEntry,
+      nextActiveLeaf: SessionActiveLeaf,
+    ) => {
+      const appended = this.appendSourceEntry(sourceEntry);
+      this.setActiveLeaf(nextActiveLeaf);
+      return appended;
+    });
+
+    return appendAndSetActiveLeaf(entry, activeLeaf);
+  }
+
   getSourceEntry(sourceEntryId: string): SessionSourceEntry | undefined {
     const row = this.database
       .prepare('SELECT * FROM session_source_entries WHERE source_entry_id = ?')
@@ -311,6 +327,23 @@ export class SessionActivePathRepository {
     `).all(sessionId) as BranchMarkerRow[]).map((row) =>
       SessionBranchMarkerSchema.parse(parseJson(row.branch_marker_json)),
     );
+  }
+
+  getBranchMarker(branchMarkerId: string): SessionBranchMarker | undefined {
+    const row = this.database
+      .prepare('SELECT branch_marker_json FROM session_branch_markers WHERE branch_marker_id = ?')
+      .get(branchMarkerId) as BranchMarkerRow | undefined;
+
+    return row ? SessionBranchMarkerSchema.parse(parseJson(row.branch_marker_json)) : undefined;
+  }
+
+  listChildSourceEntries(parentSourceEntryId: string): SessionSourceEntry[] {
+    return (this.database.prepare(`
+      SELECT *
+      FROM session_source_entries
+      WHERE parent_source_entry_id = ?
+      ORDER BY created_at ASC, source_entry_id ASC
+    `).all(parentSourceEntryId) as SourceEntryRow[]).map(fromSourceEntryRow);
   }
 
   saveRetryAttempt(attempt: SessionRetryAttempt): SessionRetryAttempt {

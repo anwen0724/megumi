@@ -3,6 +3,10 @@ import { JsonObjectSchema, JsonValueSchema } from './json';
 import { RuntimeContextSchema } from './runtime-context';
 import { RuntimeErrorSchema } from './runtime-errors';
 import { ModelInputContextSourceRefSchema } from './model-input-context-contracts';
+import {
+  SESSION_ACTIVE_LEAF_REASONS,
+  SESSION_BRANCH_MARKER_REASONS,
+} from './session-active-path-contracts';
 import { SESSION_COMPACTION_TRIGGER_REASONS } from './session-compaction-contracts';
 import {
   RunActionKindSchema,
@@ -131,6 +135,11 @@ const RunScopedRuntimeEventBaseSchema = RuntimeEventBaseSchema.extend({
   runId: z.string().min(1),
 }).strict();
 
+const SessionScopedRuntimeEventBaseSchema = RuntimeEventBaseSchema.extend({
+  sessionId: z.string().min(1),
+  runId: z.undefined().optional(),
+}).strict();
+
 const SessionCreatedPayloadSchema = z
   .object({
     title: z.string().min(1),
@@ -141,6 +150,36 @@ const SessionCreatedPayloadSchema = z
 const SessionUpdatedPayloadSchema = z
   .object({
     changedFields: z.array(z.string().min(1)).min(1),
+  })
+  .strict();
+
+const SessionActiveLeafChangedPayloadSchema = z
+  .object({
+    previousLeafSourceEntryId: z.string().min(1).optional(),
+    leafSourceEntryId: z.string().min(1).optional(),
+    reason: z.enum(SESSION_ACTIVE_LEAF_REASONS),
+    sourceRef: ModelInputContextSourceRefSchema.optional(),
+  })
+  .strict();
+
+const SessionBranchMarkerCreatedPayloadSchema = z
+  .object({
+    branchMarkerId: z.string().min(1),
+    branchMarkerSourceEntryId: z.string().min(1),
+    previousLeafSourceEntryId: z.string().min(1).optional(),
+    targetLeafSourceEntryId: z.string().min(1).optional(),
+    selectedSourceRef: ModelInputContextSourceRefSchema,
+    seedSourceRef: ModelInputContextSourceRefSchema.optional(),
+    reason: z.enum(SESSION_BRANCH_MARKER_REASONS),
+  })
+  .strict();
+
+const SessionBranchDraftCancelledPayloadSchema = z
+  .object({
+    branchMarkerId: z.string().min(1),
+    branchMarkerSourceEntryId: z.string().min(1),
+    restoredLeafSourceEntryId: z.string().min(1).optional(),
+    reason: z.literal('branch_cancelled'),
   })
   .strict();
 
@@ -760,8 +799,30 @@ function sessionEventSchema<TType extends 'session.created' | 'session.updated',
   }).strict();
 }
 
+function sessionScopedEventSchema<TType extends RuntimeEventType, TPayloadSchema extends z.ZodTypeAny>(
+  eventType: TType,
+  payload: TPayloadSchema,
+) {
+  return SessionScopedRuntimeEventBaseSchema.extend({
+    eventType: z.literal(eventType),
+    payload,
+  }).strict();
+}
+
 export const SessionCreatedEventSchema = sessionEventSchema('session.created', SessionCreatedPayloadSchema);
 export const SessionUpdatedEventSchema = sessionEventSchema('session.updated', SessionUpdatedPayloadSchema);
+export const SessionActiveLeafChangedEventSchema = sessionScopedEventSchema(
+  'session.active_leaf.changed',
+  SessionActiveLeafChangedPayloadSchema,
+);
+export const SessionBranchMarkerCreatedEventSchema = sessionScopedEventSchema(
+  'session.branch_marker.created',
+  SessionBranchMarkerCreatedPayloadSchema,
+);
+export const SessionBranchDraftCancelledEventSchema = sessionScopedEventSchema(
+  'session.branch_draft.cancelled',
+  SessionBranchDraftCancelledPayloadSchema,
+);
 export const RunCreatedEventSchema = eventSchema('run.created', RunCreatedPayloadSchema);
 export const RunStartedEventSchema = eventSchema('run.started', RunStartedPayloadSchema);
 export const RunStatusChangedEventSchema = eventSchema('run.status.changed', RunStatusChangedPayloadSchema);
@@ -924,6 +985,9 @@ export const MemoryAccessRecordedEventSchema = eventSchema('memory.access.record
 export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   SessionCreatedEventSchema,
   SessionUpdatedEventSchema,
+  SessionActiveLeafChangedEventSchema,
+  SessionBranchMarkerCreatedEventSchema,
+  SessionBranchDraftCancelledEventSchema,
   RunCreatedEventSchema,
   RunStartedEventSchema,
   RunStatusChangedEventSchema,
