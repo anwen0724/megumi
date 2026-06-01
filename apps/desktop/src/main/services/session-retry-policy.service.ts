@@ -38,6 +38,10 @@ export function classifyAutomaticModelStepRetry(error: RuntimeError): AutomaticM
     return { retryable: false };
   }
 
+  if (error.source !== 'provider' && !String(error.code).startsWith('provider_')) {
+    return { retryable: false };
+  }
+
   const matchedReason = RETRY_REASON_PATTERNS.find(([, pattern]) => pattern.test(searchable))?.[0];
   if (matchedReason) {
     return {

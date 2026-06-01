@@ -6,26 +6,24 @@ import {
 } from '@megumi/desktop/main/services/session-retry-policy.service';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 
-function error(
-  overrides: Omit<Partial<RuntimeError>, 'code'> & { code?: string },
-): RuntimeError {
+function error(overrides: Partial<RuntimeError>): RuntimeError {
   return {
     code: overrides.code ?? 'provider_network_error',
     message: overrides.message ?? 'Provider returned a network error.',
     severity: overrides.severity ?? 'error',
     retryable: overrides.retryable ?? true,
     source: overrides.source ?? 'provider',
-  } as RuntimeError;
+  };
 }
 
 describe('session retry policy', () => {
   it.each([
-    ['provider_overload', error({ code: 'provider_overloaded', message: 'overloaded_error' })],
+    ['provider_overload', error({ code: 'provider_network_error', message: 'overloaded_error' })],
     ['rate_limited', error({ code: 'provider_rate_limited', message: '429 rate limit' })],
-    ['service_unavailable', error({ code: 'provider_unavailable', message: '503 service unavailable' })],
+    ['service_unavailable', error({ code: 'provider_network_error', message: '503 service unavailable' })],
     ['network_timeout', error({ code: 'provider_network_error', message: 'request timed out' })],
     ['premature_stream_end', error({ code: 'provider_network_error', message: 'stream ended before message_stop' })],
-    ['runtime_provider_error', error({ code: 'provider_unknown', message: 'provider returned error' })],
+    ['runtime_provider_error', error({ code: 'runtime_unknown', message: 'provider returned error' })],
   ] as const)('classifies retryable transient provider errors as %s', (reason, runtimeError) => {
     expect(classifyAutomaticModelStepRetry(runtimeError)).toMatchObject({
       retryable: true,
@@ -34,11 +32,11 @@ describe('session retry policy', () => {
   });
 
   it.each([
-    error({ code: 'context_budget_exceeded', message: 'context window exceeded', source: 'core', retryable: false }),
-    error({ code: 'provider_insufficient_quota', message: 'insufficient_quota billing', retryable: false }),
-    error({ code: 'permission_denied', message: 'permission denied', source: 'security', retryable: false }),
-    error({ code: 'user_cancelled', message: 'user cancelled', source: 'core', retryable: false }),
-    error({ code: 'tool_validation_failed', message: 'tool input validation failed', source: 'tool', retryable: false }),
+    error({ code: 'runtime_unknown', message: 'context window exceeded', source: 'core', retryable: false }),
+    error({ code: 'provider_invalid_request', message: 'insufficient_quota billing', retryable: false }),
+    error({ code: 'security_denied', message: 'permission denied', source: 'security', retryable: false }),
+    error({ code: 'runtime_cancelled', message: 'user cancelled', source: 'core', retryable: false }),
+    error({ code: 'tool_input_invalid', message: 'tool input validation failed', source: 'tool', retryable: false }),
     error({ code: 'runtime_protocol_violation', message: 'deterministic runtime protocol violation', source: 'core', retryable: false }),
   ])('rejects non retryable failures', (runtimeError) => {
     expect(classifyAutomaticModelStepRetry(runtimeError)).toMatchObject({
@@ -56,9 +54,19 @@ describe('session retry policy', () => {
     });
   });
 
+  it.each([
+    error({ code: 'runtime_unknown', message: '429 rate limit', source: 'core', retryable: true }),
+    error({ code: 'tool_execution_failed', message: 'service unavailable', source: 'tool', retryable: true }),
+    error({ code: 'security_denied', message: 'network timeout', source: 'security', retryable: true }),
+  ])('rejects retryable non provider failures with transient-looking messages', (runtimeError) => {
+    expect(classifyAutomaticModelStepRetry(runtimeError)).toMatchObject({
+      retryable: false,
+    });
+  });
+
   it('rejects non retryable generic provider errors', () => {
     expect(classifyAutomaticModelStepRetry(error({
-      code: 'provider_unknown',
+      code: 'runtime_unknown',
       message: 'provider returned error',
       source: 'provider',
       retryable: false,
