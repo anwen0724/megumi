@@ -188,6 +188,46 @@ function emitRuntimeEvent(
   }));
 }
 
+function recoveryMeta(channel: string) {
+  return {
+    requestId: `request-${channel}`,
+    channel,
+    handledAt: '2026-06-01T10:00:00.000Z',
+  };
+}
+
+function createRetryRequest(runId: string, reason: 'failed' | 'cancelled' | 'interrupted' = 'failed') {
+  return {
+    retryRequestId: `retry-${runId}`,
+    runId,
+    requestedBy: 'user' as const,
+    retryKind: 'manual_retry' as const,
+    reason,
+    createdAt: '2026-06-01T10:00:00.000Z',
+  };
+}
+
+function createCancelRequest(runId: string) {
+  return {
+    cancelRequestId: `cancel-${runId}`,
+    runId,
+    requestedBy: 'user' as const,
+    reason: 'user_requested' as const,
+    scope: 'run' as const,
+    createdAt: '2026-06-01T10:00:00.000Z',
+  };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 function installMegumiMock() {
   const session = {
     message: {
@@ -201,6 +241,16 @@ function installMegumiMock() {
   };
   const approval = {
     resolve: vi.fn().mockResolvedValue({ ok: true, requestId: 'request-approval-1' }),
+  };
+  const recovery = {
+    listRecoverableRuns: vi.fn().mockResolvedValue({
+      ok: true,
+      data: { runs: [] },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+    }),
+    resume: vi.fn(),
+    cancel: vi.fn(),
+    retry: vi.fn(),
   };
   Object.defineProperty(window, 'megumi', {
     configurable: true,
@@ -219,6 +269,7 @@ function installMegumiMock() {
         },
       },
       approval,
+      recovery,
       runtime: {
         onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
           runtimeEventCallback = callback;
@@ -230,7 +281,7 @@ function installMegumiMock() {
       provider: { list: vi.fn(), update: vi.fn(), setApiKey: vi.fn(), deleteApiKey: vi.fn() },
     },
   });
-  return { ...session, session, approval };
+  return { ...session, session, approval, recovery };
 }
 
 function selectMegumiProject() {
@@ -623,6 +674,279 @@ describe('ChatTimeline', () => {
     expect(timelineText).toContain('UI update summary is complete.');
     expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/Generate UI summary/)).not.toBeInTheDocument();
+  });
+
+  it('renders recoverable actions by status without a generic cancel action', async () => {
+    const api = installMegumiMock();
+    api.recovery.listRecoverableRuns.mockResolvedValue({
+      ok: true,
+      data: {
+        runs: [
+          { runId: 'run-failed', sessionId: 'session-1', status: 'failed', reason: 'failed', title: 'Failed run' },
+          { runId: 'run-cancelled', sessionId: 'session-1', status: 'cancelled', reason: 'cancelled', title: 'Cancelled run' },
+          { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
+          { runId: 'run-other-session', sessionId: 'session-2', status: 'failed', reason: 'failed', title: 'Other session run' },
+        ],
+      },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+    });
+    api.recovery.retry.mockResolvedValue({
+      ok: true,
+      data: { request: createRetryRequest('run-failed') },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.retry),
+    });
+    api.recovery.cancel.mockResolvedValue({
+      ok: true,
+      data: { request: createCancelRequest('run-interrupted') },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.cancel),
+    });
+
+    activateCanonicalSession([
+      committedUser('message-1', 'hello'),
+      committedAssistant('assistant:run-failed', 'run-failed', 'failed answer'),
+      committedAssistant('assistant:run-cancelled', 'run-cancelled', 'cancelled answer'),
+      committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
+    ]);
+
+    render(<ChatTimeline />);
+
+    expect(await screen.findAllByRole('button', { name: 'Retry' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Rerun' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark cancelled' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Other session run')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0]);
+    expect(api.recovery.retry).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ runId: 'run-failed', retryKind: 'manual_retry', reason: 'failed' }),
+    }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Rerun' }));
+    expect(api.recovery.retry).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ runId: 'run-cancelled', retryKind: 'manual_retry', reason: 'cancelled' }),
+    }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mark cancelled' }));
+    expect(api.recovery.cancel).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ runId: 'run-interrupted', reason: 'user_requested' }),
+    }));
+  });
+
+  it('shows recoverable action fallback only for runs without a matching assistant message', async () => {
+    const api = installMegumiMock();
+    api.recovery.listRecoverableRuns.mockResolvedValue({
+      ok: true,
+      data: {
+        runs: [
+          { runId: 'run-visible', sessionId: 'session-1', status: 'failed', reason: 'failed', title: 'Visible failed run' },
+          { runId: 'run-unmatched', sessionId: 'session-1', status: 'failed', reason: 'failed', title: 'Unmatched failed run' },
+        ],
+      },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+    });
+    activateCanonicalSession([
+      committedUser('message-1', 'hello'),
+      committedAssistant('assistant:run-visible', 'run-visible', 'visible answer'),
+    ]);
+
+    render(<ChatTimeline />);
+
+    expect(await screen.findByLabelText('Recoverable actions for Unmatched failed run')).toBeInTheDocument();
+    expect(screen.getByLabelText('Recoverable actions for Visible failed run').closest('[role="article"]')).toHaveTextContent('visible answer');
+  });
+
+  it('prevents duplicate recoverable action requests while a request is pending', async () => {
+    const api = installMegumiMock();
+    const retryDeferred = createDeferred<Awaited<ReturnType<typeof api.recovery.retry>>>();
+    const cancelDeferred = createDeferred<Awaited<ReturnType<typeof api.recovery.cancel>>>();
+    api.recovery.listRecoverableRuns
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          runs: [
+            { runId: 'run-failed', sessionId: 'session-1', status: 'failed', reason: 'failed', title: 'Failed run' },
+            { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
+          ],
+        },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          runs: [
+            { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
+          ],
+        },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { runs: [] },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      });
+    api.recovery.retry.mockReturnValueOnce(retryDeferred.promise);
+    api.recovery.cancel.mockReturnValueOnce(cancelDeferred.promise);
+    activateCanonicalSession([
+      committedUser('message-1', 'hello'),
+      committedAssistant('assistant:run-failed', 'run-failed', 'failed answer'),
+      committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
+    ]);
+
+    render(<ChatTimeline />);
+
+    const retryActions = await screen.findByLabelText('Recoverable actions for Failed run');
+    const retryButton = within(retryActions).getByRole('button', { name: 'Retry' });
+    await userEvent.dblClick(retryButton);
+
+    expect(api.recovery.retry).toHaveBeenCalledTimes(1);
+    expect(retryButton).toBeDisabled();
+
+    retryDeferred.resolve({
+      ok: true,
+      data: { request: createRetryRequest('run-failed') },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.retry),
+    });
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Recoverable actions for Failed run')).not.toBeInTheDocument();
+    });
+
+    const interruptedActions = screen.getByLabelText('Recoverable actions for Interrupted run');
+    const markCancelledButton = within(interruptedActions).getByRole('button', { name: 'Mark cancelled' });
+    await userEvent.dblClick(markCancelledButton);
+
+    expect(api.recovery.cancel).toHaveBeenCalledTimes(1);
+    expect(markCancelledButton).toBeDisabled();
+
+    cancelDeferred.resolve({
+      ok: true,
+      data: { request: createCancelRequest('run-interrupted') },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.cancel),
+    });
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Recoverable actions for Interrupted run')).not.toBeInTheDocument();
+    });
+  });
+  it('refreshes recoverable actions after retry rerun and mark-cancelled requests succeed', async () => {
+    const api = installMegumiMock();
+    api.recovery.listRecoverableRuns
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          runs: [
+            { runId: 'run-failed', sessionId: 'session-1', status: 'failed', reason: 'failed', title: 'Failed run' },
+            { runId: 'run-cancelled', sessionId: 'session-1', status: 'cancelled', reason: 'cancelled', title: 'Cancelled run' },
+            { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
+          ],
+        },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          runs: [
+            { runId: 'run-cancelled', sessionId: 'session-1', status: 'cancelled', reason: 'cancelled', title: 'Cancelled run' },
+            { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
+          ],
+        },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          runs: [
+            { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
+          ],
+        },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { runs: [] },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      });
+    api.recovery.retry.mockResolvedValue({
+      ok: true,
+      data: { request: createRetryRequest('run-failed') },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.retry),
+    });
+    api.recovery.cancel.mockResolvedValue({
+      ok: true,
+      data: { request: createCancelRequest('run-interrupted') },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.cancel),
+    });
+    activateCanonicalSession([
+      committedUser('message-1', 'hello'),
+      committedAssistant('assistant:run-failed', 'run-failed', 'failed answer'),
+      committedAssistant('assistant:run-cancelled', 'run-cancelled', 'cancelled answer'),
+      committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
+    ]);
+
+    render(<ChatTimeline />);
+
+    await userEvent.click(within(await screen.findByLabelText('Recoverable actions for Failed run')).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(api.recovery.listRecoverableRuns).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByLabelText('Recoverable actions for Failed run')).not.toBeInTheDocument();
+
+    await userEvent.click(within(screen.getByLabelText('Recoverable actions for Cancelled run')).getByRole('button', { name: 'Rerun' }));
+    await waitFor(() => {
+      expect(api.recovery.listRecoverableRuns).toHaveBeenCalledTimes(3);
+    });
+    expect(screen.queryByLabelText('Recoverable actions for Cancelled run')).not.toBeInTheDocument();
+
+    await userEvent.click(within(screen.getByLabelText('Recoverable actions for Interrupted run')).getByRole('button', { name: 'Mark cancelled' }));
+    await waitFor(() => {
+      expect(api.recovery.listRecoverableRuns).toHaveBeenCalledTimes(4);
+    });
+    expect(screen.queryByLabelText('Recoverable actions for Interrupted run')).not.toBeInTheDocument();
+  });
+
+  it('refreshes recoverable actions when the current session run later becomes recoverable', async () => {
+    const api = installMegumiMock();
+    api.recovery.listRecoverableRuns
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { runs: [] },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          runs: [
+            { runId: 'run-late-failed', sessionId: 'session-1', status: 'failed', reason: 'failed', title: 'Late failed run' },
+          ],
+        },
+        meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
+      });
+    activateCanonicalSession([
+      committedUser('message-1', 'hello'),
+      committedAssistant('assistant:run-late-failed', 'run-late-failed', 'late failed answer'),
+    ]);
+
+    render(<ChatTimeline />);
+
+    await waitFor(() => {
+      expect(api.recovery.listRecoverableRuns).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+
+    act(() => {
+      useRunStore.setState({
+        activeRunId: 'run-late-failed',
+        runs: {
+          'run-late-failed': {
+            runId: 'run-late-failed',
+            sessionId: 'session-1',
+            status: 'failed',
+            updatedAt: '2026-06-01T10:00:01.000Z',
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(api.recovery.listRecoverableRuns).toHaveBeenCalledTimes(2);
   });
 
   it('shows branch and rerun actions only for completed user messages and creates a branch draft', async () => {

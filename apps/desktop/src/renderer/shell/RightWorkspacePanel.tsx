@@ -2,20 +2,16 @@ import { useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import {
   ArtifactsPanelTab,
-  ContextPanelTab,
   FilesPanelTab,
-  MemoryPanelTab,
 } from '../features/workspace-panel';
 import { useProjectStore } from '../entities/project/store';
 import { IconButton, PanelTitle, Tabs, type TabItem } from '../shared/ui';
 
-type WorkspaceTab = 'files' | 'context' | 'artifacts' | 'memory';
+type WorkspaceTab = 'files' | 'artifacts';
 
 const tabs: TabItem<WorkspaceTab>[] = [
   { id: 'files', label: 'Files' },
-  { id: 'context', label: 'Context' },
   { id: 'artifacts', label: 'Artifacts' },
-  { id: 'memory', label: 'Memory' },
 ];
 
 interface RightWorkspacePanelProps {
@@ -66,9 +62,7 @@ export function RightWorkspacePanel({ collapsed, onToggleCollapsed }: RightWorks
 
       <div data-testid="right-workspace-panel-content" className="min-h-0 flex-1 overflow-y-auto p-3">
         {activeTab === 'files' ? <FilesPanelTab /> : null}
-        {activeTab === 'context' ? <ContextPanelTab /> : null}
         {activeTab === 'artifacts' ? <ArtifactsPanelTab /> : null}
-        {activeTab === 'memory' ? <MemoryPanelTab /> : null}
       </div>
     </aside>
   );

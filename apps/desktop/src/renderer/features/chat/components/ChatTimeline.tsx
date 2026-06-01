@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { ApprovalResolvePayload } from '@megumi/shared/ipc-schemas';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import { ApprovalCard, type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
@@ -9,6 +10,7 @@ import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
+import { Button } from '../../../shared/ui';
 import { chatStreamSessionKey, useChatStreamStore } from '../../chat-stream';
 import { Composer, type ComposerStatus, type ComposerSubmitPayload } from './Composer';
 import { TimelineMessage } from './TimelineMessage';
@@ -53,6 +55,56 @@ function canShowUserMessageActions(
   return assistant !== undefined && !isActiveTimelineAssistantMessage(assistant);
 }
 
+type RecoverableAction = 'retry' | 'rerun' | 'mark_cancelled';
+
+function recoverableActionsFor(run: RecoverableRunSummary): RecoverableAction[] {
+  if (run.reason === 'waiting_for_approval') return [];
+  if (run.reason === 'interrupted') return ['retry', 'mark_cancelled'];
+  if (run.status === 'failed' || run.reason === 'failed') return ['retry'];
+  if (run.status === 'cancelled' || run.reason === 'cancelled') return ['rerun'];
+  return [];
+}
+
+function RecoverableRunActions({
+  run,
+  pending,
+  onRetry,
+  onRerun,
+  onMarkCancelled,
+}: {
+  run: RecoverableRunSummary;
+  pending: boolean;
+  onRetry: (run: RecoverableRunSummary) => void;
+  onRerun: (run: RecoverableRunSummary) => void;
+  onMarkCancelled: (run: RecoverableRunSummary) => void;
+}) {
+  const actions = recoverableActionsFor(run);
+  if (actions.length === 0) return null;
+
+  return (
+    <div
+      className="mt-2 flex flex-wrap items-center gap-2 text-xs"
+      aria-label={`Recoverable actions for ${run.title ?? run.runId}`}
+    >
+      {actions.includes('retry') ? (
+        <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={() => onRetry(run)}>
+          Retry
+        </Button>
+      ) : null}
+      {actions.includes('rerun') ? (
+        <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={() => onRerun(run)}>
+          Rerun
+        </Button>
+      ) : null}
+      {actions.includes('mark_cancelled') ? (
+        <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => onMarkCancelled(run)}>
+          Mark cancelled
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function ChatTimeline() {
   const agentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
@@ -61,6 +113,9 @@ export function ChatTimeline() {
   const activeRunId = useRunStore((state) => state.activeRunId);
   const runs = useRunStore((state) => state.runs);
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
+  const [recoverableRuns, setRecoverableRuns] = useState<RecoverableRunSummary[]>([]);
+  const [pendingRecoverableRunIds, setPendingRecoverableRunIds] = useState<Set<string>>(() => new Set());
+  const pendingRecoverableRunIdsRef = useRef(new Set<string>());
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
   const {
     sendSessionMessage,
@@ -78,6 +133,25 @@ export function ChatTimeline() {
       : EMPTY_CANONICAL_MESSAGES
   ));
   const timelineMessages = canonicalMessages;
+  const visibleRecoverableRuns = useMemo(
+    () => recoverableRuns.filter((run) => run.sessionId === activeSessionId),
+    [activeSessionId, recoverableRuns],
+  );
+  const recoverableRunsByRunId = useMemo(() => {
+    const byRunId = new Map<string, RecoverableRunSummary>();
+    for (const run of visibleRecoverableRuns) {
+      byRunId.set(run.runId, run);
+    }
+    return byRunId;
+  }, [visibleRecoverableRuns]);
+  const visibleAssistantRunIds = useMemo(() => new Set(
+    timelineMessages
+      .flatMap((message) => (message.role === 'assistant' && message.runId ? [message.runId] : [])),
+  ), [timelineMessages]);
+  const unmatchedRecoverableRuns = useMemo(
+    () => visibleRecoverableRuns.filter((run) => !visibleAssistantRunIds.has(run.runId)),
+    [visibleAssistantRunIds, visibleRecoverableRuns],
+  );
   const timelineUpdateKey = useMemo(() => JSON.stringify(timelineMessages.map((message) => [
     message.messageId,
     message.updatedAt ?? message.createdAt,
@@ -103,6 +177,7 @@ export function ChatTimeline() {
   const activeRun = activeRunCandidate && (!activeSessionId || !activeRunCandidate.sessionId || activeRunCandidate.sessionId === activeSessionId)
     ? activeRunCandidate
     : null;
+  const recoveryBridge = window.megumi?.recovery;
   const visibleRunId = activeRun?.runId ?? null;
   const userActionsBlocked =
     agentStatus === 'sending' ||
@@ -129,12 +204,89 @@ export function ChatTimeline() {
     agentStatus === 'running' ||
     agentStatus === 'error';
 
+  const loadRecoverableRuns = useCallback(async ({ clearOnFailure }: { clearOnFailure: boolean }) => {
+    if (!activeSessionId || !recoveryBridge) {
+      setRecoverableRuns([]);
+      return;
+    }
+
+    try {
+      const result = await recoveryBridge.listRecoverableRuns(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.recovery.recoverableRunsList,
+        {},
+      ));
+
+      if (result.ok || clearOnFailure) {
+        setRecoverableRuns(result.ok ? result.data.runs : []);
+      }
+    } catch {
+      if (clearOnFailure) {
+        setRecoverableRuns([]);
+      }
+    }
+  }, [activeSessionId, recoveryBridge]);
+
+  useEffect(() => {
+    void loadRecoverableRuns({ clearOnFailure: true });
+  }, [activeRun?.runId, activeRun?.status, loadRecoverableRuns]);
+
   function handleSubmit(payload: ComposerSubmitPayload) {
     void sendSessionMessage(payload);
   }
 
   function handleStop() {
     void cancelSessionMessage();
+  }
+
+  async function runRecoverableAction(
+    run: RecoverableRunSummary,
+    action: () => Promise<{ ok: boolean } | undefined>,
+  ) {
+    if (pendingRecoverableRunIdsRef.current.has(run.runId)) {
+      return;
+    }
+
+    pendingRecoverableRunIdsRef.current.add(run.runId);
+    setPendingRecoverableRunIds(new Set(pendingRecoverableRunIdsRef.current));
+
+    try {
+      const result = await action();
+      if (result?.ok) {
+        await loadRecoverableRuns({ clearOnFailure: false });
+      }
+    } catch {
+      // Keep the backend-sourced recoverable list as-is when an action or refresh fails.
+    } finally {
+      pendingRecoverableRunIdsRef.current.delete(run.runId);
+      setPendingRecoverableRunIds(new Set(pendingRecoverableRunIdsRef.current));
+    }
+  }
+
+  async function retryRecoverableRun(run: RecoverableRunSummary) {
+    await runRecoverableAction(run, () => recoveryBridge?.retry(createRendererRuntimeIpcRequest(IPC_CHANNELS.recovery.retry, {
+      runId: run.runId,
+      requestedBy: 'user',
+      retryKind: 'manual_retry',
+      reason: run.reason === 'interrupted' ? 'interrupted' : 'failed',
+    })));
+  }
+
+  async function rerunRecoverableRun(run: RecoverableRunSummary) {
+    await runRecoverableAction(run, () => recoveryBridge?.retry(createRendererRuntimeIpcRequest(IPC_CHANNELS.recovery.retry, {
+      runId: run.runId,
+      requestedBy: 'user',
+      retryKind: 'manual_retry',
+      reason: 'cancelled',
+    })));
+  }
+
+  async function markRecoverableRunCancelled(run: RecoverableRunSummary) {
+    await runRecoverableAction(run, () => recoveryBridge?.cancel(createRendererRuntimeIpcRequest(IPC_CHANNELS.recovery.cancel, {
+      runId: run.runId,
+      requestedBy: 'user',
+      reason: 'user_requested',
+      scope: 'run',
+    })));
   }
 
   async function resolveApproval(payload: ApprovalCardResolvePayload) {
@@ -171,6 +323,21 @@ export function ChatTimeline() {
                 key={message.messageId}
                 message={message}
                 showUserActions={canShowUserMessageActions(message, timelineMessages, userActionsBlocked)}
+                afterContent={message.role === 'assistant' && message.runId && recoverableRunsByRunId.has(message.runId) ? (
+                  <RecoverableRunActions
+                    run={recoverableRunsByRunId.get(message.runId)!}
+                    pending={pendingRecoverableRunIds.has(message.runId)}
+                    onRetry={(run) => {
+                      void retryRecoverableRun(run);
+                    }}
+                    onRerun={(run) => {
+                      void rerunRecoverableRun(run);
+                    }}
+                    onMarkCancelled={(run) => {
+                      void markRecoverableRunCancelled(run);
+                    }}
+                  />
+                ) : null}
                 onBranchFromMessage={(timelineMessage) => {
                   void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'branch' });
                 }}
@@ -229,6 +396,29 @@ export function ChatTimeline() {
                 request={request}
                 onResolve={(payload) => {
                   void resolveApproval(payload);
+                }}
+              />
+            ))}
+          </section>
+        ) : null}
+        {unmatchedRecoverableRuns.length > 0 ? (
+          <section
+            aria-label="Recoverable run fallback actions"
+            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
+          >
+            {unmatchedRecoverableRuns.map((run) => (
+              <RecoverableRunActions
+                key={run.runId}
+                run={run}
+                pending={pendingRecoverableRunIds.has(run.runId)}
+                onRetry={(recoverableRun) => {
+                  void retryRecoverableRun(recoverableRun);
+                }}
+                onRerun={(recoverableRun) => {
+                  void rerunRecoverableRun(recoverableRun);
+                }}
+                onMarkCancelled={(recoverableRun) => {
+                  void markRecoverableRunCancelled(recoverableRun);
                 }}
               />
             ))}

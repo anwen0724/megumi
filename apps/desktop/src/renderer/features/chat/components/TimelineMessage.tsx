@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { GitBranch, RotateCcw } from 'lucide-react';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import { cx, IconButton } from '../../../shared/ui';
@@ -9,6 +9,7 @@ interface TimelineMessageProps {
   showUserActions?: boolean;
   onBranchFromMessage?: (message: CanonicalTimelineMessage) => void;
   onRerunMessage?: (message: CanonicalTimelineMessage) => void;
+  afterContent?: ReactNode;
 }
 
 function formatTime(timestamp: string): string {
@@ -23,6 +24,7 @@ function TimelineMessageComponent({
   showUserActions = false,
   onBranchFromMessage,
   onRerunMessage,
+  afterContent,
 }: TimelineMessageProps) {
   const role = message.role;
   const isUser = role === 'user';
@@ -84,6 +86,7 @@ function TimelineMessageComponent({
             </div>
 
             <TimelineMessageBlocks message={message} />
+            {afterContent}
           </div>
         </div>
       ) : (
@@ -106,6 +109,7 @@ function TimelineMessageComponent({
         </div>
 
         <TimelineMessageBlocks message={message} />
+        {afterContent}
       </div>
       )}
     </article>

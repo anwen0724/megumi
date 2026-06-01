@@ -338,4 +338,103 @@ describe('TimelineMessage canonical block rendering', () => {
       expect(row?.querySelector('svg')?.getAttribute('class')).not.toContain('text-[var(--color-success)]');
     }
   });
+
+  it('renders compaction retry and recovery process items without collapsing them into the top label', () => {
+    render(<TimelineMessage message={assistantMessage({
+      blocks: [{
+        blockId: 'process:run-1',
+        kind: 'process_disclosure',
+        runId: 'run-1',
+        status: 'completed',
+        startedAt: '2026-06-01T10:00:00.000Z',
+        endedAt: '2026-06-01T10:00:04.000Z',
+        items: [
+          {
+            itemId: 'compaction:1',
+            kind: 'compaction_activity',
+            status: 'completed',
+            label: 'Compacted context',
+          },
+          {
+            itemId: 'retry:1',
+            kind: 'retry_activity',
+            retryAttemptId: 'retry-1',
+            attemptNumber: 1,
+            status: 'failed',
+            label: 'Retry attempt 1 failed',
+            reason: 'rate_limited',
+          },
+          {
+            itemId: 'recovery:1',
+            kind: 'recovery_activity',
+            status: 'interrupted',
+            label: 'Previous run was interrupted',
+          },
+        ],
+      }],
+    })} />);
+
+    const disclosure = screen.getByRole('button', { name: /Expand process disclosure/ });
+    expect(disclosure).toHaveTextContent('已处理');
+    expect(disclosure).not.toHaveTextContent('Compacted context');
+    expect(screen.queryByText(/Compacted .* Retrying/)).not.toBeInTheDocument();
+
+    fireEvent.click(disclosure);
+    expect(screen.getByText('Compacted context')).toBeInTheDocument();
+    expect(screen.getByText('Retry attempt 1 failed')).toBeInTheDocument();
+    expect(screen.getByText('rate_limited')).toBeInTheDocument();
+    expect(screen.getByText('Previous run was interrupted')).toBeInTheDocument();
+  });
+
+  it('does not use success icons for failed retry or non-success recovery process states', () => {
+    render(<TimelineMessage message={assistantMessage({
+      blocks: [{
+        blockId: 'process:run-1',
+        kind: 'process_disclosure',
+        runId: 'run-1',
+        status: 'running',
+        startedAt: '2026-06-01T10:00:00.000Z',
+        items: [
+          {
+            itemId: 'retry:failed',
+            kind: 'retry_activity',
+            retryAttemptId: 'retry-failed',
+            attemptNumber: 1,
+            status: 'failed',
+            label: 'Retry attempt 1 failed',
+          },
+          {
+            itemId: 'retry:exhausted',
+            kind: 'retry_activity',
+            retryAttemptId: 'retry-exhausted',
+            attemptNumber: 2,
+            status: 'exhausted',
+            label: 'Retry attempts exhausted',
+          },
+          {
+            itemId: 'recovery:interrupted',
+            kind: 'recovery_activity',
+            status: 'interrupted',
+            label: 'Previous run was interrupted',
+          },
+          {
+            itemId: 'recovery:marked-cancelled',
+            kind: 'recovery_activity',
+            status: 'marked_cancelled',
+            label: 'Run marked cancelled',
+          },
+        ],
+      }],
+    })} />);
+
+    for (const label of [
+      'Retry attempt 1 failed',
+      'Retry attempts exhausted',
+      'Previous run was interrupted',
+      'Run marked cancelled',
+    ]) {
+      const row = screen.getByText(label).closest('div');
+      expect(row?.querySelector('svg')?.getAttribute('class')).not.toContain('text-[var(--color-success)]');
+    }
+  });
 });

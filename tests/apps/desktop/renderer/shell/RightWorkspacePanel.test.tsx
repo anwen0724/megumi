@@ -62,26 +62,26 @@ describe('RightWorkspacePanel', () => {
     expect(await screen.findByText('No files found')).toBeInTheDocument();
   });
 
-  it('uses Files Context Artifacts Memory tabs and does not expose Tasks or Run tabs', () => {
+  it('uses Files and Artifacts tabs and does not expose Context Memory Tasks or Run tabs', () => {
     render(<RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />);
 
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Files',
-      'Context',
       'Artifacts',
-      'Memory',
     ]);
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
   });
 
-  it('switches to Context tab', async () => {
+  it('switches to Artifacts tab', async () => {
     render(<RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />);
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Context' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
 
-    expect(screen.getByRole('tab', { name: 'Context' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Megumi')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Artifacts' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
   });
 
   it('renders collapsed rail and calls toggle', async () => {

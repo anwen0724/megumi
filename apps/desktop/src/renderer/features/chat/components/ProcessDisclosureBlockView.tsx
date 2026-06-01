@@ -73,6 +73,18 @@ function ItemIcon({ item }: { item: ProcessDisclosureItem }) {
   if (item.kind === 'approval_activity' && (item.status === 'expired' || item.status === 'cancelled')) {
     return <CircleSlash size={14} aria-hidden="true" className="mt-1 shrink-0 text-[var(--color-text-muted)]" />;
   }
+  if (item.kind === 'retry_activity' && (item.status === 'failed' || item.status === 'exhausted')) {
+    return <XCircle size={14} aria-hidden="true" className="mt-1 shrink-0 text-[var(--color-danger)]" />;
+  }
+  if (item.kind === 'retry_activity' && item.status === 'cancelled') {
+    return <CircleSlash size={14} aria-hidden="true" className="mt-1 shrink-0 text-[var(--color-text-muted)]" />;
+  }
+  if (item.kind === 'retry_activity' && item.status === 'started') {
+    return <CircleDot size={14} aria-hidden="true" className="mt-1 shrink-0 text-[var(--color-accent)]" />;
+  }
+  if (item.kind === 'recovery_activity' && item.status !== 'manual_retry_requested' && item.status !== 'manual_rerun_requested') {
+    return <CircleSlash size={14} aria-hidden="true" className="mt-1 shrink-0 text-[var(--color-text-muted)]" />;
+  }
   if (item.kind === 'error_activity') {
     return <XCircle size={14} aria-hidden="true" className="mt-1 shrink-0 text-[var(--color-danger)]" />;
   }
@@ -171,11 +183,11 @@ function CompactionActivityItemView({ item }: { item: CompactionActivityItem }) 
 
 function RetryActivityItemView({ item }: { item: RetryActivityItem }) {
   return (
-    <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
+    <div className="flex min-w-0 items-start gap-2">
       <ItemIcon item={item} />
       <span className="min-w-0">
-        <span className="block">{item.label}</span>
-        {item.reason ? <span className="block text-xs">{item.reason}</span> : null}
+        <span className="block text-[var(--color-text)]">{item.label}</span>
+        {item.reason ? <span className="block text-xs text-[var(--color-text-muted)]">{item.reason}</span> : null}
       </span>
     </div>
   );
