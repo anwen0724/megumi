@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -11,6 +11,17 @@ import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatc
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
+
+export interface BranchDraftState {
+  branchMarkerId: string;
+  projectId: string;
+  sessionId: string;
+  sourceMessageId: string;
+  seedText: string;
+  label: string;
+  intent: 'branch' | 'rerun';
+  createdAt: string;
+}
 
 function createId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -72,6 +83,7 @@ function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
   finalClientMessageId: string,
   messageCreatedAt: string,
+  branchDraft: BranchDraftState | null,
 ): SessionMessageSendPayload {
   const sessionState = useSessionStore.getState();
   const projectState = useProjectStore.getState();
@@ -79,7 +91,7 @@ function createSessionMessageSendPayload(
   const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
   const activeProject = projectState.projects.find((project) => project.id === projectState.currentProjectId);
 
-  return {
+  const sendPayload: SessionMessageSendPayload = {
     sessionId: sessionState.activeSessionId ?? undefined,
     providerId,
     modelId: payload.model,
@@ -97,6 +109,15 @@ function createSessionMessageSendPayload(
     },
     createdAt: messageCreatedAt,
   };
+
+  if (branchDraft) {
+    sendPayload.branchDraft = {
+      branchMarkerId: branchDraft.branchMarkerId,
+      intent: branchDraft.intent,
+    };
+  }
+
+  return sendPayload;
 }
 
 function shouldProcessRuntimeEvent(
@@ -124,12 +145,33 @@ function failSessionMessageSend(message: string, sessionId?: string | null) {
   current.setLastError(message, sessionId);
 }
 
+function isSameBranchDraft(
+  left: BranchDraftState | null,
+  right: BranchDraftState | null,
+): boolean {
+  return Boolean(
+    left &&
+    right &&
+    left.branchMarkerId === right.branchMarkerId &&
+    left.sessionId === right.sessionId &&
+    left.projectId === right.projectId,
+  );
+}
+
 export function useSessionTimeline() {
+  const [branchDraft, setBranchDraft] = useState<BranchDraftState | null>(null);
+  const branchDraftRef = useRef<BranchDraftState | null>(null);
+  const branchDraftCreateSequenceRef = useRef(0);
   const activeRequestIdRef = useRef<string | null>(null);
   const activeTraceIdRef = useRef<string | null>(null);
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
   const processedSequencesRef = useRef<Map<string, number>>(new Map());
+
+  const updateBranchDraft = useCallback((draft: BranchDraftState | null) => {
+    branchDraftRef.current = draft;
+    setBranchDraft(draft);
+  }, []);
 
   useEffect(() => {
     const syncActiveSession = () => {
@@ -139,6 +181,7 @@ export function useSessionTimeline() {
       if (!currentProjectId || !activeSessionId) {
         useChatStreamStore.getState().setActiveSession(null, null);
         useChatUiStore.getState().setActiveSession(null);
+        updateBranchDraft(null);
         return;
       }
 
@@ -147,11 +190,23 @@ export function useSessionTimeline() {
       if (!activeSession || activeSession.projectId !== currentProjectId) {
         useChatStreamStore.getState().setActiveSession(null, null);
         useChatUiStore.getState().setActiveSession(null);
+        updateBranchDraft(null);
         return;
       }
 
       useChatStreamStore.getState().setActiveSession(activeSession.projectId, activeSession.id);
       useChatUiStore.getState().setActiveSession(activeSession.id);
+
+      if (
+        branchDraftRef.current &&
+        (
+          branchDraftRef.current.sessionId !== activeSession.id ||
+          branchDraftRef.current.projectId !== activeSession.projectId ||
+          branchDraftRef.current.projectId !== currentProjectId
+        )
+      ) {
+        updateBranchDraft(null);
+      }
     };
 
     syncActiveSession();
@@ -163,7 +218,7 @@ export function useSessionTimeline() {
       unsubscribeProject();
       unsubscribeSession();
     };
-  }, []);
+  }, [updateBranchDraft]);
 
   useEffect(() => {
     if (!window.megumi?.chatStream?.onEvent) {
@@ -211,6 +266,12 @@ export function useSessionTimeline() {
 
     renameEmptyManualSessionFromPrompt(payload, activeCanonicalMessageCount(projectId, runSessionId));
 
+    const branchDraftForSend = branchDraft?.sessionId === runSessionId &&
+      branchDraft.projectId === projectId &&
+      branchDraft.projectId === projectState.currentProjectId
+      ? branchDraft
+      : null;
+
     const clientMessageId = createId('message-user');
     const createdAt = new Date().toISOString();
     useChatStreamStore.getState().addPendingUserMessage(projectId, runSessionId, {
@@ -221,7 +282,12 @@ export function useSessionTimeline() {
     const requestId = `ipc-session-message-${createId('request')}`;
     const request = createRendererRuntimeIpcRequest(
       IPC_CHANNELS.session.message.send,
-      createSessionMessageSendPayload(payload, clientMessageId, createdAt),
+      createSessionMessageSendPayload(
+        payload,
+        clientMessageId,
+        createdAt,
+        branchDraftForSend,
+      ),
       { requestId },
     );
     activeRequestIdRef.current = request.requestId;
@@ -236,8 +302,13 @@ export function useSessionTimeline() {
 
     if (!result.ok) {
       failSessionMessageSend(result.error.message, runSessionId);
+      return;
     }
-  }, []);
+
+    if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {
+      updateBranchDraft(null);
+    }
+  }, [branchDraft, updateBranchDraft]);
 
   const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'permissionMode' | 'model'>) => {
     if (!lastPayloadRef.current) {
@@ -274,9 +345,140 @@ export function useSessionTimeline() {
     }
   }, []);
 
+  const createBranchDraft = useCallback(async (input: {
+    messageId: string;
+    intent: 'branch' | 'rerun';
+  }) => {
+    const sessionState = useSessionStore.getState();
+    const projectState = useProjectStore.getState();
+    const sessionId = sessionState.activeSessionId;
+
+    if (!sessionId) {
+      failSessionMessageSend('Select a session before branching.');
+      return;
+    }
+
+    const activeSession = sessionState.sessions.find((session) => session.id === sessionId);
+    const projectId = activeSession?.projectId;
+
+    if (!projectId || projectId !== projectState.currentProjectId) {
+      failSessionMessageSend('Select a session before branching.', sessionId);
+      return;
+    }
+
+    const branchDraftForReplacement = branchDraftRef.current?.sessionId === sessionId &&
+      branchDraftRef.current.projectId === projectId
+      ? branchDraftRef.current
+      : null;
+
+    if (branchDraftForReplacement) {
+      const cancelRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.cancel, {
+        sessionId: branchDraftForReplacement.sessionId,
+        branchMarkerId: branchDraftForReplacement.branchMarkerId,
+        createdAt: new Date().toISOString(),
+      });
+      const cancelResult = await window.megumi.session.branchDraft.cancel(cancelRequest);
+
+      if (!cancelResult.ok) {
+        failSessionMessageSend(cancelResult.error.message, sessionId);
+        return;
+      }
+
+      if (!cancelResult.data.cancelled) {
+        failSessionMessageSend(
+          cancelResult.data.reason ?? 'Branch draft could not be cancelled.',
+          sessionId,
+        );
+        return;
+      }
+
+      if (!isSameBranchDraft(branchDraftRef.current, branchDraftForReplacement)) {
+        return;
+      }
+
+      updateBranchDraft(null);
+    }
+
+    const createSequence = branchDraftCreateSequenceRef.current + 1;
+    branchDraftCreateSequenceRef.current = createSequence;
+
+    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.create, {
+      sessionId,
+      messageId: input.messageId,
+      intent: input.intent,
+      createdAt: new Date().toISOString(),
+    });
+    const result = await window.megumi.session.branchDraft.create(request);
+
+    if (!result.ok) {
+      failSessionMessageSend(result.error.message, sessionId);
+      return;
+    }
+
+    if (
+      branchDraftCreateSequenceRef.current !== createSequence ||
+      useSessionStore.getState().activeSessionId !== sessionId ||
+      useProjectStore.getState().currentProjectId !== projectId ||
+      result.data.branchDraft.sessionId !== sessionId
+    ) {
+      try {
+        await window.megumi.session.branchDraft.cancel(
+          createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.cancel, {
+            sessionId: result.data.branchDraft.sessionId,
+            branchMarkerId: result.data.branchDraft.branchMarkerId,
+            createdAt: new Date().toISOString(),
+          }),
+        );
+      } catch {
+        // Stale cleanup is best-effort; the marker may no longer be the backend active draft.
+      }
+      return;
+    }
+
+    updateBranchDraft({
+      ...result.data.branchDraft,
+      projectId,
+    });
+  }, [updateBranchDraft]);
+
+  const cancelBranchDraft = useCallback(async () => {
+    const branchDraftForCancel = branchDraft;
+
+    if (!branchDraftForCancel) {
+      return;
+    }
+
+    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.cancel, {
+      sessionId: branchDraftForCancel.sessionId,
+      branchMarkerId: branchDraftForCancel.branchMarkerId,
+      createdAt: new Date().toISOString(),
+    });
+    const result = await window.megumi.session.branchDraft.cancel(request);
+
+    if (!result.ok) {
+      failSessionMessageSend(result.error.message, branchDraftForCancel.sessionId);
+      return;
+    }
+
+    if (result.data.cancelled) {
+      if (isSameBranchDraft(branchDraftRef.current, branchDraftForCancel)) {
+        updateBranchDraft(null);
+      }
+      return;
+    }
+
+    failSessionMessageSend(
+      result.data.reason ?? 'Branch draft could not be cancelled.',
+      branchDraftForCancel.sessionId,
+    );
+  }, [branchDraft, updateBranchDraft]);
+
   return {
     sendSessionMessage,
     retryLastSessionMessage,
     cancelSessionMessage,
+    branchDraft,
+    createBranchDraft,
+    cancelBranchDraft,
   };
 }

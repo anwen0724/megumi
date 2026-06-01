@@ -139,6 +139,44 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('shrink-0');
   });
 
+  it('renders branch draft row, resets seed text by draft key, and cancels from the row', async () => {
+    const onCancelBranchDraft = vi.fn();
+    const onSubmit = vi.fn();
+    const { rerender } = render(
+      <Composer
+        onSubmit={onSubmit}
+        branchDraft={{
+          key: 'branch-marker-1',
+          label: 'Branch from 07:28',
+          seedText: 'original prompt',
+          onCancel: onCancelBranchDraft,
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Branch from 07:28')).toBeInTheDocument();
+    expect(screen.getByLabelText('Message Megumi')).toHaveValue('original prompt');
+
+    await userEvent.clear(screen.getByLabelText('Message Megumi'));
+    await userEvent.type(screen.getByLabelText('Message Megumi'), 'edited prompt');
+
+    rerender(
+      <Composer
+        onSubmit={onSubmit}
+        branchDraft={{
+          key: 'branch-marker-2',
+          label: 'Branch from 07:31',
+          seedText: 'second prompt',
+          onCancel: onCancelBranchDraft,
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText('Message Megumi')).toHaveValue('second prompt');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel branch' }));
+    expect(onCancelBranchDraft).toHaveBeenCalledTimes(1);
+  });
+
   it('auto grows the textarea for multiline drafts while preserving a maximum height', async () => {
     render(<Composer onSubmit={() => undefined} />);
     const input = screen.getByLabelText('Message Megumi');

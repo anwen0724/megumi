@@ -17,6 +17,42 @@ import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
 
+function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): boolean {
+  if (message.role !== 'assistant') {
+    return false;
+  }
+
+  return message.blocks.some((block) => {
+    if (block.kind === 'answer_text') {
+      return block.status === 'streaming';
+    }
+
+    if (block.status === 'running') {
+      return true;
+    }
+
+    return block.items.some((item) =>
+      'status' in item && ['running', 'streaming', 'pending'].includes(String(item.status))
+    );
+  });
+}
+
+function canShowUserMessageActions(
+  message: CanonicalTimelineMessage,
+  messages: CanonicalTimelineMessage[],
+  userActionsBlocked: boolean,
+): boolean {
+  if (userActionsBlocked || message.role !== 'user' || !message.runId) {
+    return false;
+  }
+
+  const assistant = messages.find((candidate) =>
+    candidate.role === 'assistant' && candidate.runId === message.runId
+  );
+
+  return assistant !== undefined && !isActiveTimelineAssistantMessage(assistant);
+}
+
 export function ChatTimeline() {
   const agentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
@@ -26,7 +62,13 @@ export function ChatTimeline() {
   const runs = useRunStore((state) => state.runs);
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
-  const { sendSessionMessage, cancelSessionMessage } = useSessionTimeline();
+  const {
+    sendSessionMessage,
+    cancelSessionMessage,
+    branchDraft,
+    createBranchDraft,
+    cancelBranchDraft,
+  } = useSessionTimeline();
   const activeChatStreamSessionKey = currentProjectId && activeSessionId
     ? chatStreamSessionKey(currentProjectId, activeSessionId)
     : null;
@@ -62,6 +104,14 @@ export function ChatTimeline() {
     ? activeRunCandidate
     : null;
   const visibleRunId = activeRun?.runId ?? null;
+  const userActionsBlocked =
+    agentStatus === 'sending' ||
+    agentStatus === 'running' ||
+    agentStatus === 'waiting-approval' ||
+    activeRun?.status === 'queued' ||
+    activeRun?.status === 'running' ||
+    activeRun?.status === 'waiting_for_approval' ||
+    activeRun?.status === 'cancelling';
 
   const pendingApprovals = useMemo(() => (
     visibleRunId
@@ -120,6 +170,13 @@ export function ChatTimeline() {
               <TimelineMessage
                 key={message.messageId}
                 message={message}
+                showUserActions={canShowUserMessageActions(message, timelineMessages, userActionsBlocked)}
+                onBranchFromMessage={(timelineMessage) => {
+                  void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'branch' });
+                }}
+                onRerunMessage={(timelineMessage) => {
+                  void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'rerun' });
+                }}
               />
             ))}
           </div>
@@ -179,6 +236,14 @@ export function ChatTimeline() {
         ) : null}
         <Composer
           status={composerStatus}
+          branchDraft={branchDraft ? {
+            key: branchDraft.branchMarkerId,
+            label: branchDraft.label,
+            seedText: branchDraft.seedText,
+            onCancel: () => {
+              void cancelBranchDraft();
+            },
+          } : null}
           onSubmit={handleSubmit}
           onStop={handleStop}
           onAttachFiles={() => undefined}

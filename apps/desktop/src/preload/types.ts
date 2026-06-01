@@ -1,4 +1,8 @@
 import type {
+  SessionBranchDraftCancelData,
+  SessionBranchDraftCancelPayload,
+  SessionBranchDraftCreateData,
+  SessionBranchDraftCreatePayload,
   SessionMessageSendData,
   SessionMessageSendPayload,
   SessionTimelineListData,
@@ -11,3 +15,7 @@ export type SessionMessageSendPreloadPayload = SessionMessageSendPayload;
 export type SessionMessageSendPreloadData = SessionMessageSendData;
 export type SessionTimelineListPreloadPayload = SessionTimelineListPayload;
 export type SessionTimelineListPreloadData = SessionTimelineListData;
+export type SessionBranchDraftCreatePreloadPayload = SessionBranchDraftCreatePayload;
+export type SessionBranchDraftCreatePreloadData = SessionBranchDraftCreateData;
+export type SessionBranchDraftCancelPreloadPayload = SessionBranchDraftCancelPayload;
+export type SessionBranchDraftCancelPreloadData = SessionBranchDraftCancelData;

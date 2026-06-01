@@ -12,6 +12,10 @@ describe('session and run preload API shape', () => {
       session: {
         create: vi.fn(),
         list: vi.fn(),
+        branchDraft: {
+          create: vi.fn(),
+          cancel: vi.fn(),
+        },
         message: {
           list: vi.fn(),
           send: vi.fn(),
@@ -55,10 +59,23 @@ describe('session and run preload API shape', () => {
     const runsRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.run.listBySession, {
       sessionId: 'session-1',
     });
+    const branchCreateRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.create, {
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      intent: 'branch' as const,
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+    const branchCancelRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.cancel, {
+      sessionId: 'session-1',
+      branchMarkerId: 'branch-marker-1',
+      createdAt: '2026-06-01T10:00:01.000Z',
+    });
 
     await api.session.create(createRequest);
     await api.session.message.list(messagesRequest);
     await api.session.message.send(sendRequest);
+    await api.session.branchDraft.create(branchCreateRequest);
+    await api.session.branchDraft.cancel(branchCancelRequest);
     await api.run.listBySession(runsRequest);
     await api.run.events.list(eventsRequest);
 
@@ -79,6 +96,16 @@ describe('session and run preload API shape', () => {
       payload: {
         sessionId: 'session-1',
       },
+    }));
+    expect(api.session.branchDraft.create).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.session.branchDraft.create,
+      }),
+    }));
+    expect(api.session.branchDraft.cancel).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.session.branchDraft.cancel,
+      }),
     }));
     expect(api.run.listBySession).toHaveBeenCalledWith(expect.objectContaining({
       meta: expect.objectContaining({

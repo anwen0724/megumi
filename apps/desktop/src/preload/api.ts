@@ -86,6 +86,10 @@ import type {
   RunRetryPayload,
   SessionCreateData,
   SessionCreatePayload,
+  SessionBranchDraftCancelData,
+  SessionBranchDraftCancelPayload,
+  SessionBranchDraftCreateData,
+  SessionBranchDraftCreatePayload,
   SessionListData,
   SessionListPayload,
   SessionMessageCancelData,
@@ -183,6 +187,16 @@ export const api = {
       request: BusinessRequest<SessionListPayload, typeof IPC_CHANNELS.session.list>,
     ): Promise<RuntimeIpcResult<SessionListData, typeof IPC_CHANNELS.session.list>> =>
       invokeRuntimeIpc(IPC_CHANNELS.session.list, request),
+    branchDraft: {
+      create: (
+        request: BusinessRequest<SessionBranchDraftCreatePayload, typeof IPC_CHANNELS.session.branchDraft.create>,
+      ): Promise<RuntimeIpcResult<SessionBranchDraftCreateData, typeof IPC_CHANNELS.session.branchDraft.create>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.session.branchDraft.create, request),
+      cancel: (
+        request: BusinessRequest<SessionBranchDraftCancelPayload, typeof IPC_CHANNELS.session.branchDraft.cancel>,
+      ): Promise<RuntimeIpcResult<SessionBranchDraftCancelData, typeof IPC_CHANNELS.session.branchDraft.cancel>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.session.branchDraft.cancel, request),
+    },
     message: {
       list: (
         request: BusinessRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.message.list>,

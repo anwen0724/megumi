@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useId, useLayoutEffect, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import {
   AtSign,
   Bot,
@@ -23,9 +23,17 @@ export interface ComposerSubmitPayload {
   model: ComposerModel;
 }
 
+export interface ComposerBranchDraftView {
+  key: string;
+  label: string;
+  seedText: string;
+  onCancel: () => void;
+}
+
 interface ComposerProps {
   status?: ComposerStatus;
   initialValue?: string;
+  branchDraft?: ComposerBranchDraftView | null;
   onSubmit: (payload: ComposerSubmitPayload) => void;
   onStop?: () => void;
   onChooseContext?: () => void;
@@ -38,6 +46,7 @@ const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 export function Composer({
   status = 'idle',
   initialValue = '',
+  branchDraft = null,
   onSubmit,
   onStop,
   onChooseContext,
@@ -56,6 +65,12 @@ export function Composer({
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
   const placeholder = 'Ask Megumi anything...';
+
+  useEffect(() => {
+    if (branchDraft) {
+      setValue(branchDraft.seedText);
+    }
+  }, [branchDraft?.key]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -121,6 +136,24 @@ export function Composer({
   return (
     <form onSubmit={handleSubmit} className="pointer-events-auto mx-auto w-full min-w-[38rem] max-w-3xl px-6 pb-6">
       <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)]">
+        {branchDraft ? (
+          <div
+            data-testid="composer-branch-draft-row"
+            className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)]"
+          >
+            <span className="truncate">{branchDraft.label}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={branchDraft.onCancel}
+              aria-label="Cancel branch"
+              className="shrink-0"
+            >
+              Cancel branch
+            </Button>
+          </div>
+        ) : null}
         <div data-testid="composer-input-panel" className="border-b border-[var(--color-border)] px-3 py-2">
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi

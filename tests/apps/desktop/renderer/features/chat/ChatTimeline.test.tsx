@@ -34,12 +34,13 @@ function resetChatUiStore() {
   });
 }
 
-function committedUser(messageId: string, text: string): TimelineUserMessage {
+function committedUser(messageId: string, text: string, runId?: string): TimelineUserMessage {
   return {
     messageId,
     role: 'user',
     projectId: 'project-1',
     sessionId: 'session-1',
+    runId,
     createdAt: '2026-05-24T00:00:00.000Z',
     updatedAt: '2026-05-24T00:00:00.000Z',
     blocks: [{
@@ -193,6 +194,10 @@ function installMegumiMock() {
       send: vi.fn().mockResolvedValue({ ok: true, requestId: 'request-1' }),
       cancel: vi.fn(),
     },
+    branchDraft: {
+      create: vi.fn(),
+      cancel: vi.fn(),
+    },
   };
   const approval = {
     resolve: vi.fn().mockResolvedValue({ ok: true, requestId: 'request-approval-1' }),
@@ -208,6 +213,10 @@ function installMegumiMock() {
           send: session.message.send,
           cancel: session.message.cancel,
         },
+        branchDraft: {
+          create: session.branchDraft.create,
+          cancel: session.branchDraft.cancel,
+        },
       },
       approval,
       runtime: {
@@ -221,7 +230,7 @@ function installMegumiMock() {
       provider: { list: vi.fn(), update: vi.fn(), setApiKey: vi.fn(), deleteApiKey: vi.fn() },
     },
   });
-  return { ...session, approval };
+  return { ...session, session, approval };
 }
 
 function selectMegumiProject() {
@@ -614,6 +623,204 @@ describe('ChatTimeline', () => {
     expect(timelineText).toContain('UI update summary is complete.');
     expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/Generate UI summary/)).not.toBeInTheDocument();
+  });
+
+  it('shows branch and rerun actions only for completed user messages and creates a branch draft', async () => {
+    const api = installMegumiMock();
+    api.session.branchDraft.create.mockResolvedValue({
+      ok: true,
+      data: {
+        branchDraft: {
+          branchMarkerId: 'branch-marker-1',
+          sessionId: 'session-1',
+          sourceMessageId: 'message-1',
+          seedText: 'original prompt',
+          label: 'Branch from 07:28',
+          intent: 'branch',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        },
+      },
+      meta: {
+        requestId: 'request-branch-1',
+        channel: IPC_CHANNELS.session.branchDraft.create,
+        handledAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+    activateCanonicalSession([
+      committedUser('message-1', 'original prompt', 'run-1'),
+      committedAssistant('assistant:run-1', 'run-1', 'answer'),
+    ]);
+
+    render(<ChatTimeline />);
+
+    const userArticle = screen.getByRole('article', { name: 'User message' });
+    await userEvent.hover(userArticle);
+    await userEvent.click(screen.getByRole('button', { name: 'Branch from here' }));
+
+    expect(api.session.branchDraft.create).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        sessionId: 'session-1',
+        messageId: 'message-1',
+        intent: 'branch',
+      }),
+    }));
+    expect(screen.getByText('Branch from 07:28')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Message Megumi')).toHaveValue('original prompt');
+    });
+    expect(screen.queryByRole('button', { name: 'Branch from assistant message' })).not.toBeInTheDocument();
+  });
+
+  it('hides branch and rerun actions for in-flight user messages and sends rerun intent for historical messages', async () => {
+    const api = installMegumiMock();
+    api.session.branchDraft.create.mockResolvedValue({
+      ok: true,
+      data: {
+        branchDraft: {
+          branchMarkerId: 'branch-marker-rerun',
+          sessionId: 'session-1',
+          sourceMessageId: 'message-history',
+          seedText: 'historical prompt',
+          label: 'Branch from 07:28',
+          intent: 'rerun',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        },
+      },
+      meta: {
+        requestId: 'request-rerun-1',
+        channel: IPC_CHANNELS.session.branchDraft.create,
+        handledAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+    activateCanonicalSession([
+      committedUser('message-history', 'historical prompt', 'run-history'),
+      committedAssistant('assistant:run-history', 'run-history', 'historical answer'),
+    ]);
+
+    useChatStreamStore.getState().addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'message-user-current-uuid',
+      text: 'current prompt',
+      createdAt: '2026-06-01T10:01:00.000Z',
+    });
+
+    render(<ChatTimeline />);
+
+    const currentArticle = screen.getByText('current prompt').closest('article');
+    expect(currentArticle).not.toBeNull();
+    if (!currentArticle) {
+      throw new Error('Expected current user article.');
+    }
+    await userEvent.hover(currentArticle);
+    expect(within(currentArticle).queryByRole('button', { name: 'Branch from here' })).not.toBeInTheDocument();
+    expect(within(currentArticle).queryByRole('button', { name: 'Rerun' })).not.toBeInTheDocument();
+
+    const historicalArticle = screen.getByText('historical prompt').closest('article');
+    expect(historicalArticle).not.toBeNull();
+    if (!historicalArticle) {
+      throw new Error('Expected historical user article.');
+    }
+    await userEvent.hover(historicalArticle);
+    await userEvent.click(within(historicalArticle).getByRole('button', { name: 'Rerun' }));
+
+    expect(api.session.branchDraft.create).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        sessionId: 'session-1',
+        messageId: 'message-history',
+        intent: 'rerun',
+      }),
+    }));
+  });
+
+  it('hides branch and rerun actions for historical messages while another run is active', async () => {
+    installMegumiMock();
+    activateCanonicalSession([
+      committedUser('message-history', 'historical prompt', 'run-history'),
+      committedAssistant('assistant:run-history', 'run-history', 'historical answer'),
+    ]);
+    useRunStore.setState({
+      activeRunId: 'run-active',
+      runs: {
+        'run-active': {
+          runId: 'run-active',
+          sessionId: 'session-1',
+          status: 'running',
+          updatedAt: '2026-06-01T10:00:00.000Z',
+        },
+      },
+    });
+
+    render(<ChatTimeline />);
+
+    const historicalArticle = screen.getByText('historical prompt').closest('article');
+    expect(historicalArticle).not.toBeNull();
+    if (!historicalArticle) {
+      throw new Error('Expected historical user article.');
+    }
+    await userEvent.hover(historicalArticle);
+
+    expect(within(historicalArticle).queryByRole('button', { name: 'Branch from here' })).not.toBeInTheDocument();
+    expect(within(historicalArticle).queryByRole('button', { name: 'Rerun' })).not.toBeInTheDocument();
+  });
+
+  it('hides branch and rerun actions while waiting for approval', async () => {
+    installMegumiMock();
+    activateCanonicalSession([
+      committedUser('message-history', 'historical prompt', 'run-history'),
+      committedAssistant('assistant:run-history', 'run-history', 'historical answer'),
+    ]);
+    useChatUiStore.setState({
+      activeSessionId: 'session-1',
+      agentStatus: 'waiting-approval',
+      sessionStates: {
+        'session-1': {
+          agentStatus: 'waiting-approval',
+          lastError: null,
+        },
+      },
+    });
+
+    render(<ChatTimeline />);
+
+    const historicalArticle = screen.getByText('historical prompt').closest('article');
+    expect(historicalArticle).not.toBeNull();
+    if (!historicalArticle) {
+      throw new Error('Expected historical user article.');
+    }
+    await userEvent.hover(historicalArticle);
+
+    expect(within(historicalArticle).queryByRole('button', { name: 'Branch from here' })).not.toBeInTheDocument();
+    expect(within(historicalArticle).queryByRole('button', { name: 'Rerun' })).not.toBeInTheDocument();
+  });
+
+  it('hides branch and rerun actions while the active run is waiting for approval', async () => {
+    installMegumiMock();
+    activateCanonicalSession([
+      committedUser('message-history', 'historical prompt', 'run-history'),
+      committedAssistant('assistant:run-history', 'run-history', 'historical answer'),
+    ]);
+    useRunStore.setState({
+      activeRunId: 'run-active',
+      runs: {
+        'run-active': {
+          runId: 'run-active',
+          sessionId: 'session-1',
+          status: 'waiting_for_approval',
+          updatedAt: '2026-06-01T10:00:00.000Z',
+        },
+      },
+    });
+
+    render(<ChatTimeline />);
+
+    const historicalArticle = screen.getByText('historical prompt').closest('article');
+    expect(historicalArticle).not.toBeNull();
+    if (!historicalArticle) {
+      throw new Error('Expected historical user article.');
+    }
+    await userEvent.hover(historicalArticle);
+
+    expect(within(historicalArticle).queryByRole('button', { name: 'Branch from here' })).not.toBeInTheDocument();
+    expect(within(historicalArticle).queryByRole('button', { name: 'Rerun' })).not.toBeInTheDocument();
   });
 
   it('wires the running composer Stop button to the active session message cancel request', async () => {

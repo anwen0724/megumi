@@ -109,6 +109,36 @@ function installMegumiMock() {
         data: { messages: [] },
       }),
     },
+    branchDraft: {
+      create: vi.fn().mockResolvedValue({
+        ok: true,
+        data: {
+          branchDraft: {
+            branchMarkerId: 'branch-marker-1',
+            sessionId: 'session-1',
+            sourceMessageId: 'message-1',
+            seedText: 'original prompt',
+            label: 'Branch from 07:28',
+            intent: 'branch',
+            createdAt: '2026-06-01T10:00:00.000Z',
+          },
+        },
+        meta: {
+          requestId: 'ipc-branch-draft-create-1',
+          channel: IPC_CHANNELS.session.branchDraft.create,
+          handledAt: '2026-06-01T10:00:00.100Z',
+        },
+      }),
+      cancel: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { cancelled: true },
+        meta: {
+          requestId: 'ipc-branch-draft-cancel-1',
+          channel: IPC_CHANNELS.session.branchDraft.cancel,
+          handledAt: '2026-06-01T10:00:00.100Z',
+        },
+      }),
+    },
     timeline: {
       list: vi.fn().mockResolvedValue({
         ok: true,
@@ -658,6 +688,727 @@ describe('useSessionTimeline', () => {
           content: 'Try Claude first',
         }),
       }),
+    });
+  });
+
+  it('ignores stale branch draft responses after the active session changes', async () => {
+    const { session } = installMegumiMock();
+    const branchDeferred = deferred<{
+      ok: true;
+      data: {
+        branchDraft: {
+          branchMarkerId: string;
+          sessionId: string;
+          sourceMessageId: string;
+          seedText: string;
+          label: string;
+          intent: 'branch';
+          createdAt: string;
+        };
+      };
+      meta: {
+        requestId: string;
+        channel: typeof IPC_CHANNELS.session.branchDraft.create;
+        handledAt: string;
+      };
+    }>();
+    session.branchDraft.create.mockReturnValueOnce(branchDeferred.promise);
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'First session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'Second session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    const createPromise = act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-1',
+        intent: 'branch',
+      });
+    });
+    await waitFor(() => expect(session.branchDraft.create).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      useSessionStore.getState().setActiveSession('session-2');
+    });
+    branchDeferred.resolve({
+      ok: true,
+      data: {
+        branchDraft: {
+          branchMarkerId: 'branch-marker-stale',
+          sessionId: 'session-1',
+          sourceMessageId: 'message-1',
+          seedText: 'stale prompt',
+          label: 'Branch from 07:28',
+          intent: 'branch',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        },
+      },
+      meta: {
+        requestId: 'ipc-branch-draft-create-stale',
+        channel: IPC_CHANNELS.session.branchDraft.create,
+        handledAt: '2026-06-01T10:00:00.100Z',
+      },
+    });
+    await createPromise;
+
+    expect(result.current.branchDraft).toBeNull();
+  });
+
+  it('ignores stale branch draft responses after the active project changes with the same active session id', async () => {
+    const { session } = installMegumiMock();
+    const branchDeferred = deferred<{
+      ok: true;
+      data: {
+        branchDraft: {
+          branchMarkerId: string;
+          sessionId: string;
+          sourceMessageId: string;
+          seedText: string;
+          label: string;
+          intent: 'branch';
+          createdAt: string;
+        };
+      };
+      meta: {
+        requestId: string;
+        channel: typeof IPC_CHANNELS.session.branchDraft.create;
+        handledAt: string;
+      };
+    }>();
+    session.branchDraft.create.mockReturnValueOnce(branchDeferred.promise);
+    useProjectStore.setState({
+      currentProjectId: 'project-1',
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Megumi',
+          repoPath: 'C:/all/work/study/megumi',
+          createdAt: '2026-05-12T00:00:00.000Z',
+          projectId: 'project-1',
+          repoPathKey: 'c:/all/work/study/megumi',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'available' as const,
+        },
+        {
+          id: 'project-2',
+          name: 'Other',
+          repoPath: 'C:/all/work/study/other',
+          createdAt: '2026-05-12T00:00:00.000Z',
+          projectId: 'project-2',
+          repoPathKey: 'c:/all/work/study/other',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'available' as const,
+        },
+      ],
+    });
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'First session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    const createPromise = result.current.createBranchDraft({
+      messageId: 'message-1',
+      intent: 'branch',
+    });
+    await waitFor(() => expect(session.branchDraft.create).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      useProjectStore.setState({ currentProjectId: 'project-2' });
+    });
+    await act(async () => {
+      branchDeferred.resolve({
+        ok: true,
+        data: {
+          branchDraft: {
+            branchMarkerId: 'branch-marker-stale-project',
+            sessionId: 'session-1',
+            sourceMessageId: 'message-1',
+            seedText: 'stale project prompt',
+            label: 'Branch from 07:28',
+            intent: 'branch',
+            createdAt: '2026-06-01T10:00:00.000Z',
+          },
+        },
+        meta: {
+          requestId: 'ipc-branch-draft-create-stale-project',
+          channel: IPC_CHANNELS.session.branchDraft.create,
+          handledAt: '2026-06-01T10:00:00.100Z',
+        },
+      });
+      await createPromise;
+    });
+
+    expect(result.current.branchDraft).toBeNull();
+  });
+
+  it('keeps the newest branch draft and cancels stale slower create responses', async () => {
+    const { session } = installMegumiMock();
+    const firstDeferred = deferred<{
+      ok: true;
+      data: {
+        branchDraft: {
+          branchMarkerId: string;
+          sessionId: string;
+          sourceMessageId: string;
+          seedText: string;
+          label: string;
+          intent: 'branch';
+          createdAt: string;
+        };
+      };
+      meta: {
+        requestId: string;
+        channel: typeof IPC_CHANNELS.session.branchDraft.create;
+        handledAt: string;
+      };
+    }>();
+    const secondDeferred = deferred<{
+      ok: true;
+      data: {
+        branchDraft: {
+          branchMarkerId: string;
+          sessionId: string;
+          sourceMessageId: string;
+          seedText: string;
+          label: string;
+          intent: 'rerun';
+          createdAt: string;
+        };
+      };
+      meta: {
+        requestId: string;
+        channel: typeof IPC_CHANNELS.session.branchDraft.create;
+        handledAt: string;
+      };
+    }>();
+    session.branchDraft.create
+      .mockReturnValueOnce(firstDeferred.promise)
+      .mockReturnValueOnce(secondDeferred.promise);
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'First session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    const firstPromise = result.current.createBranchDraft({
+      messageId: 'message-1',
+      intent: 'branch',
+    });
+    const secondPromise = result.current.createBranchDraft({
+      messageId: 'message-2',
+      intent: 'rerun',
+    });
+    await waitFor(() => expect(session.branchDraft.create).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      secondDeferred.resolve({
+        ok: true,
+        data: {
+          branchDraft: {
+            branchMarkerId: 'branch-marker-new',
+            sessionId: 'session-1',
+            sourceMessageId: 'message-2',
+            seedText: 'new prompt',
+            label: 'Branch from 07:31',
+            intent: 'rerun',
+            createdAt: '2026-06-01T10:00:01.000Z',
+          },
+        },
+        meta: {
+          requestId: 'ipc-branch-draft-create-new',
+          channel: IPC_CHANNELS.session.branchDraft.create,
+          handledAt: '2026-06-01T10:00:01.100Z',
+        },
+      });
+      await secondPromise;
+    });
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-new',
+      seedText: 'new prompt',
+      intent: 'rerun',
+    });
+
+    await act(async () => {
+      firstDeferred.resolve({
+        ok: true,
+        data: {
+          branchDraft: {
+            branchMarkerId: 'branch-marker-old',
+            sessionId: 'session-1',
+            sourceMessageId: 'message-1',
+            seedText: 'old prompt',
+            label: 'Branch from 07:28',
+            intent: 'branch',
+            createdAt: '2026-06-01T10:00:00.000Z',
+          },
+        },
+        meta: {
+          requestId: 'ipc-branch-draft-create-old',
+          channel: IPC_CHANNELS.session.branchDraft.create,
+          handledAt: '2026-06-01T10:00:02.100Z',
+        },
+      });
+      await firstPromise;
+    });
+
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-new',
+      seedText: 'new prompt',
+      intent: 'rerun',
+    });
+    expect(session.branchDraft.cancel).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        sessionId: 'session-1',
+        branchMarkerId: 'branch-marker-old',
+      }),
+    }));
+  });
+
+  it('cancels the current branch draft before creating a replacement', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'First session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-1',
+        intent: 'branch',
+      });
+    });
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-1',
+      seedText: 'original prompt',
+    });
+
+    session.branchDraft.cancel.mockResolvedValueOnce({
+      ok: true,
+      data: { cancelled: true },
+      meta: {
+        requestId: 'ipc-branch-draft-cancel-replace',
+        channel: IPC_CHANNELS.session.branchDraft.cancel,
+        handledAt: '2026-06-01T10:00:01.100Z',
+      },
+    });
+    session.branchDraft.create.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        branchDraft: {
+          branchMarkerId: 'branch-marker-replacement',
+          sessionId: 'session-1',
+          sourceMessageId: 'message-2',
+          seedText: 'replacement prompt',
+          label: 'Branch from 07:31',
+          intent: 'rerun',
+          createdAt: '2026-06-01T10:00:01.000Z',
+        },
+      },
+      meta: {
+        requestId: 'ipc-branch-draft-create-replacement',
+        channel: IPC_CHANNELS.session.branchDraft.create,
+        handledAt: '2026-06-01T10:00:01.200Z',
+      },
+    });
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-2',
+        intent: 'rerun',
+      });
+    });
+
+    expect(session.branchDraft.cancel).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        sessionId: 'session-1',
+        branchMarkerId: 'branch-marker-1',
+      }),
+    }));
+    expect(session.branchDraft.create.mock.calls[1][0]).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        sessionId: 'session-1',
+        messageId: 'message-2',
+        intent: 'rerun',
+      }),
+    }));
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-replacement',
+      seedText: 'replacement prompt',
+      intent: 'rerun',
+    });
+  });
+
+  it('does not create a replacement branch draft when cancelling the current draft fails', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'First session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-1',
+        intent: 'branch',
+      });
+    });
+
+    session.branchDraft.cancel.mockResolvedValueOnce({
+      ok: true,
+      data: { cancelled: false, reason: 'branch_has_new_sources' },
+      meta: {
+        requestId: 'ipc-branch-draft-cancel-replace-failed',
+        channel: IPC_CHANNELS.session.branchDraft.cancel,
+        handledAt: '2026-06-01T10:00:01.100Z',
+      },
+    });
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-2',
+        intent: 'rerun',
+      });
+    });
+
+    expect(session.branchDraft.cancel).toHaveBeenCalledTimes(1);
+    expect(session.branchDraft.create).toHaveBeenCalledTimes(1);
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-1',
+      seedText: 'original prompt',
+    });
+    expect(useChatUiStore.getState()).toMatchObject({
+      agentStatus: 'error',
+      lastError: 'branch_has_new_sources',
+    });
+  });
+
+  it('clears branch draft on active session switch and does not attach stale draft on send', async () => {
+    const { session } = installMegumiMock();
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'First session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          agentType: 'free',
+          title: 'Second session',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+        },
+      ],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-1',
+        intent: 'branch',
+      });
+    });
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-1',
+      sessionId: 'session-1',
+    });
+
+    act(() => {
+      useSessionStore.getState().setActiveSession('session-2');
+    });
+
+    expect(result.current.branchDraft).toBeNull();
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'New session prompt',
+        permissionMode: 'default',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    expect(session.message.send).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        sessionId: 'session-2',
+        message: expect.objectContaining({
+          content: 'New session prompt',
+        }),
+      }),
+    }));
+    expect(session.message.send.mock.calls.at(-1)?.[0].payload).not.toHaveProperty('branchDraft');
+  });
+
+  it('does not attach a branch draft after switching project with the same active session id', async () => {
+    const { session } = installMegumiMock();
+    useProjectStore.setState({
+      currentProjectId: 'project-1',
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Megumi',
+          repoPath: 'C:/all/work/study/megumi',
+          createdAt: '2026-05-12T00:00:00.000Z',
+          projectId: 'project-1',
+          repoPathKey: 'c:/all/work/study/megumi',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'available' as const,
+        },
+        {
+          id: 'project-2',
+          name: 'Other',
+          repoPath: 'C:/all/work/study/other',
+          createdAt: '2026-05-12T00:00:00.000Z',
+          projectId: 'project-2',
+          repoPathKey: 'c:/all/work/study/other',
+          lastOpenedAt: '2026-05-19T00:00:00.000Z',
+          status: 'available' as const,
+        },
+      ],
+    });
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'First session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-1',
+        intent: 'branch',
+      });
+    });
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-1',
+      sessionId: 'session-1',
+    });
+
+    act(() => {
+      useProjectStore.setState({ currentProjectId: 'project-2' });
+    });
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'Other project prompt',
+        permissionMode: 'default',
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    expect(session.message.send.mock.calls.at(-1)?.[0].payload).not.toHaveProperty('branchDraft');
+  });
+
+  it('does not let older send or cancel completions clear a newer branch draft', async () => {
+    const { session } = installMegumiMock();
+    const sendDeferred = deferred<{
+      ok: true;
+      data: { requestId: string };
+      meta: {
+        requestId: string;
+        channel: typeof IPC_CHANNELS.session.message.send;
+        handledAt: string;
+      };
+    }>();
+    const cancelDeferred = deferred<{
+      ok: true;
+      data: { cancelled: true };
+      meta: {
+        requestId: string;
+        channel: typeof IPC_CHANNELS.session.branchDraft.cancel;
+        handledAt: string;
+      };
+    }>();
+    session.message.send.mockReturnValueOnce(sendDeferred.promise);
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'First session',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-1',
+        intent: 'branch',
+      });
+    });
+    const sendPromise = result.current.sendSessionMessage({
+      message: 'Send old draft',
+      permissionMode: 'default',
+      model: 'deepseek-v4-flash',
+    });
+    await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
+
+    session.branchDraft.create.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        branchDraft: {
+          branchMarkerId: 'branch-marker-new-after-send',
+          sessionId: 'session-1',
+          sourceMessageId: 'message-2',
+          seedText: 'new after send',
+          label: 'Branch from 07:31',
+          intent: 'rerun',
+          createdAt: '2026-06-01T10:00:01.000Z',
+        },
+      },
+      meta: {
+        requestId: 'ipc-branch-draft-create-new-after-send',
+        channel: IPC_CHANNELS.session.branchDraft.create,
+        handledAt: '2026-06-01T10:00:01.100Z',
+      },
+    });
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-2',
+        intent: 'rerun',
+      });
+    });
+
+    await act(async () => {
+      sendDeferred.resolve({
+        ok: true,
+        data: { requestId: 'ipc-session-message-send-old' },
+        meta: {
+          requestId: 'ipc-session-message-send-old',
+          channel: IPC_CHANNELS.session.message.send,
+          handledAt: '2026-06-01T10:00:02.100Z',
+        },
+      });
+      await sendPromise;
+    });
+
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-new-after-send',
+      seedText: 'new after send',
+    });
+
+    session.branchDraft.cancel.mockReturnValueOnce(cancelDeferred.promise);
+    const cancelPromise = result.current.cancelBranchDraft();
+    await waitFor(() => expect(session.branchDraft.cancel).toHaveBeenCalledTimes(2));
+    session.branchDraft.cancel.mockResolvedValueOnce({
+      ok: true,
+      data: { cancelled: true },
+      meta: {
+        requestId: 'ipc-branch-draft-cancel-replace-after-pending-cancel',
+        channel: IPC_CHANNELS.session.branchDraft.cancel,
+        handledAt: '2026-06-01T10:00:02.900Z',
+      },
+    });
+    session.branchDraft.create.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        branchDraft: {
+          branchMarkerId: 'branch-marker-new-after-cancel',
+          sessionId: 'session-1',
+          sourceMessageId: 'message-3',
+          seedText: 'new after cancel',
+          label: 'Branch from 07:32',
+          intent: 'branch',
+          createdAt: '2026-06-01T10:00:03.000Z',
+        },
+      },
+      meta: {
+        requestId: 'ipc-branch-draft-create-new-after-cancel',
+        channel: IPC_CHANNELS.session.branchDraft.create,
+        handledAt: '2026-06-01T10:00:03.100Z',
+      },
+    });
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-3',
+        intent: 'branch',
+      });
+    });
+
+    await act(async () => {
+      cancelDeferred.resolve({
+        ok: true,
+        data: { cancelled: true },
+        meta: {
+          requestId: 'ipc-branch-draft-cancel-old',
+          channel: IPC_CHANNELS.session.branchDraft.cancel,
+          handledAt: '2026-06-01T10:00:04.100Z',
+        },
+      });
+      await cancelPromise;
+    });
+
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-new-after-cancel',
+      seedText: 'new after cancel',
     });
   });
 
