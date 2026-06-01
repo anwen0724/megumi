@@ -277,8 +277,12 @@ export class RecoveryRepository {
           LIMIT 1
         )
       WHERE runs.status IN (${RECOVERABLE_RUN_STATUSES.map(() => '?').join(', ')})
+        AND (
+          runs.status NOT IN (${RUNNING_LIKE_STATUSES.map(() => '?').join(', ')})
+          OR latest_marker.interrupted_marker_id IS NOT NULL
+        )
       ORDER BY runs.created_at ASC, runs.run_id ASC
-    `).all(...RECOVERABLE_RUN_STATUSES) as RecoverableRunRow[])
+    `).all(...RECOVERABLE_RUN_STATUSES, ...RUNNING_LIKE_STATUSES) as RecoverableRunRow[])
       .map((row) => RecoverableRunSummarySchema.parse({
         runId: row.run_id,
         sessionId: row.session_id,
@@ -367,7 +371,7 @@ function recoverableReasonFor(
   status: RecoverableRunSummary['status'],
   interruptedMarkerId: string | null,
 ): RecoverableRunReason {
-  if (interruptedMarkerId || RUNNING_LIKE_STATUSES.includes(status as SessionInterruptedRunPreviousStatus)) {
+  if (interruptedMarkerId) {
     return 'interrupted';
   }
   return status as RecoverableRunReason;

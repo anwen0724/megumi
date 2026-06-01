@@ -232,6 +232,25 @@ describe('RecoveryRepository', () => {
     ]);
   });
 
+  it('does not list live running-like runs until they are marked interrupted', () => {
+    const { recoveryRepository, sessionRunRepository } = createRepositories();
+
+    for (const [runId, status] of [
+      ['run_queued', 'queued'],
+      ['run_running', 'running'],
+      ['run_cancelling', 'cancelling'],
+    ] as const) {
+      seedSessionRun(sessionRunRepository, {
+        runId,
+        status,
+        goal: `Live ${runId}`,
+        createdAt: '2026-06-01T10:00:00.000Z',
+      });
+    }
+
+    expect(recoveryRepository.listRecoverableRuns()).toEqual([]);
+  });
+
   it('marks stale running-like runs as interrupted without changing waiting approval', () => {
     const { recoveryRepository, sessionRunRepository } = createRepositories();
 
