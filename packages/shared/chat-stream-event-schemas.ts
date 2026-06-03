@@ -117,6 +117,15 @@ export const AssistantTextDeltaEventSchema = chatStreamEventSchema('assistant.te
   delta: z.string(),
 });
 
+export const AssistantTextReclassifiedEventSchema = chatStreamEventSchema(
+  'assistant.text.reclassified',
+  {
+    textId: z.string().min(1),
+    fromPhase: AssistantTextPhaseSchema,
+    toPhase: AssistantTextPhaseSchema,
+  },
+);
+
 export const AssistantTextCompletedEventSchema = chatStreamEventSchema('assistant.text.completed', {
   textId: z.string().min(1),
   phase: AssistantTextPhaseSchema,
@@ -258,6 +267,7 @@ const ChatStreamEventUnionSchema = z.union([
   UserMessageCommittedEventSchema,
   AssistantTextStartedEventSchema,
   AssistantTextDeltaEventSchema,
+  AssistantTextReclassifiedEventSchema,
   AssistantTextCompletedEventSchema,
   AssistantTextFailedEventSchema,
   AssistantTextCancelledPartialEventSchema,

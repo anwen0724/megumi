@@ -27,7 +27,8 @@ type ScheduledFlush = { cancel(): void };
 
 const DEFAULT_FLUSH_INTERVAL_MS = 100;
 
-const TERMINAL_EVENT_TYPES = new Set<ChatStreamEvent['eventType']>([
+const FLUSH_BEFORE_EVENT_TYPES = new Set<ChatStreamEvent['eventType']>([
+  'assistant.text.reclassified',
   'assistant.text.completed',
   'assistant.text.failed',
   'assistant.text.cancelled_partial',
@@ -115,7 +116,7 @@ export function createChatStreamBuffer(options: ChatStreamBufferOptions): ChatSt
         return { status: 'accepted' };
       }
 
-      if (TERMINAL_EVENT_TYPES.has(event.eventType)) {
+      if (FLUSH_BEFORE_EVENT_TYPES.has(event.eventType)) {
         flush();
       }
 

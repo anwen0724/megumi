@@ -312,7 +312,9 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
 
     const state = this.textState(payload.modelStepId);
     if (!state.phase) {
-      state.bufferedDeltas.push(payload.delta);
+      state.phase = 'answer';
+      this.ensureTextStarted(state, 'answer');
+      this.publishTextDelta(state.text, payload.delta);
       return;
     }
 
@@ -734,6 +736,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
   private markStepPrelude(modelStepId: string): void {
     const state = this.textState(modelStepId);
     if (state.phase === 'answer' && state.text && !state.text.terminal) {
+      this.reclassifyText(state, 'prelude');
       return;
     }
 
@@ -743,6 +746,24 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
     }
 
     state.phase = 'prelude';
+  }
+
+  private reclassifyText(state: ModelStepTextState, toPhase: AssistantTextPhase): void {
+    if (!state.text || state.text.terminal || state.text.phase === toPhase) {
+      state.phase = toPhase;
+      return;
+    }
+
+    const fromPhase = state.text.phase;
+    state.phase = toPhase;
+    state.text.phase = toPhase;
+    this.publish(createChatStreamEvent({
+      ...this.base(),
+      eventType: 'assistant.text.reclassified',
+      textId: state.text.textId,
+      fromPhase,
+      toPhase,
+    }));
   }
 
   private releaseText(state: ModelStepTextState, phase: AssistantTextPhase): void {

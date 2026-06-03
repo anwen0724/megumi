@@ -102,6 +102,28 @@ describe('chat stream buffer', () => {
     expect(applied[0]).toMatchObject({ delta: 'Partial' });
   });
 
+  it('flushes pending deltas before text reclassification events', () => {
+    const applied: ChatStreamEvent[] = [];
+    const buffer = createChatStreamBuffer({
+      applyEvent: (item) => applied.push(item),
+      flushIntervalMs: 100,
+    });
+
+    buffer.handle(event({ eventType: 'assistant.text.delta', seq: 1, textId: 'text-1', phase: 'answer', delta: 'Let me check.' }));
+    buffer.handle(event({
+      eventType: 'assistant.text.reclassified',
+      seq: 2,
+      textId: 'text-1',
+      fromPhase: 'answer',
+      toPhase: 'prelude',
+    }));
+
+    expect(applied.map((item) => item.eventType)).toEqual([
+      'assistant.text.delta',
+      'assistant.text.reclassified',
+    ]);
+  });
+
   it('returns duplicate for duplicate seq and gap for out-of-order seq without projecting the gap event', () => {
     const applied: ChatStreamEvent[] = [];
     const gaps: Array<{ expectedSeq: number; receivedSeq: number; event: ChatStreamEvent }> = [];

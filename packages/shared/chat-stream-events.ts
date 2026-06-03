@@ -15,6 +15,7 @@ export const CHAT_STREAM_EVENT_TYPES = [
   'user.message.committed',
   'assistant.text.started',
   'assistant.text.delta',
+  'assistant.text.reclassified',
   'assistant.text.completed',
   'assistant.text.failed',
   'assistant.text.cancelled_partial',
@@ -107,6 +108,13 @@ export interface AssistantTextDeltaEvent extends ChatStreamEventBase {
   textId: string;
   phase: AssistantTextPhase;
   delta: string;
+}
+
+export interface AssistantTextReclassifiedEvent extends ChatStreamEventBase {
+  eventType: 'assistant.text.reclassified';
+  textId: string;
+  fromPhase: AssistantTextPhase;
+  toPhase: AssistantTextPhase;
 }
 
 export interface AssistantTextCompletedEvent extends ChatStreamEventBase {
@@ -254,6 +262,7 @@ export type ChatStreamEvent =
   | UserMessageCommittedEvent
   | AssistantTextStartedEvent
   | AssistantTextDeltaEvent
+  | AssistantTextReclassifiedEvent
   | AssistantTextCompletedEvent
   | AssistantTextFailedEvent
   | AssistantTextCancelledPartialEvent

@@ -38,6 +38,7 @@ describe('chat stream event contract', () => {
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
+      'assistant.text.reclassified',
       'assistant.text.completed',
       'assistant.text.failed',
       'assistant.text.cancelled_partial',
@@ -142,6 +143,21 @@ describe('chat stream event contract', () => {
 
     expect(prelude.phase).toBe('prelude');
     expect(answer.phase).toBe('answer');
+  });
+
+  it('parses assistant text reclassification events', () => {
+    expect(ChatStreamEventSchema.parse({
+      ...base,
+      eventType: 'assistant.text.reclassified',
+      textId: 'text-1',
+      fromPhase: 'answer',
+      toPhase: 'prelude',
+    })).toMatchObject({
+      eventType: 'assistant.text.reclassified',
+      textId: 'text-1',
+      fromPhase: 'answer',
+      toPhase: 'prelude',
+    });
   });
 
   it('parses thinking, tool, approval, and terminal events', () => {

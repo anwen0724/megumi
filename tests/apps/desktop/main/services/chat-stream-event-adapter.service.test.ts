@@ -194,8 +194,7 @@ describe('createChatStreamEventAdapter', () => {
     expect(JSON.stringify(events)).not.toContain('source-entry-branch-marker-1');
   });
 
-  it('buffers tool-enabled pure text until run completion confirms final answer phase', () => {
-    vi.useFakeTimers();
+  it('streams unknown model text as live answer before run completion', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
     subject.startTurn();
@@ -208,12 +207,8 @@ describe('createChatStreamEventAdapter', () => {
     expect(events.map((event) => event.eventType)).toEqual([
       'turn.started',
       'user.message.committed',
-    ]);
-
-    vi.advanceTimersByTime(50);
-    expect(events.map((event) => event.eventType)).toEqual([
-      'turn.started',
-      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
     ]);
 
     subject.handleRuntimeEvent(runtimeEvent({
@@ -240,10 +235,9 @@ describe('createChatStreamEventAdapter', () => {
       'answer',
       'answer',
     ]);
-    vi.useRealTimers();
   });
 
-  it('moves buffered text to prelude when tool use is detected before phase gate flush', () => {
+  it('reclassifies live answer text to prelude when tool use is detected later in the model step', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
     subject.startTurn();
@@ -283,10 +277,17 @@ describe('createChatStreamEventAdapter', () => {
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
+      'assistant.text.reclassified',
       'tool.started',
       'assistant.text.completed',
     ]);
-    expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'prelude' });
+    expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'answer' });
+    expect(events[4]).toMatchObject({
+      eventType: 'assistant.text.reclassified',
+      fromPhase: 'answer',
+      toPhase: 'prelude',
+    });
+    expect(events[6]).toMatchObject({ eventType: 'assistant.text.completed', phase: 'prelude' });
   });
 
   it('keeps prelude text open for later same-step deltas until tool-call step completion', () => {
@@ -323,18 +324,23 @@ describe('createChatStreamEventAdapter', () => {
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
+      'assistant.text.reclassified',
       'assistant.text.delta',
       'assistant.text.completed',
     ]);
     expect(events.filter((event) => event.eventType === 'assistant.text.delta')).toEqual([
-      expect.objectContaining({ phase: 'prelude', delta: "I'll " }),
+      expect.objectContaining({ phase: 'answer', delta: "I'll " }),
       expect.objectContaining({ phase: 'prelude', delta: 'check that.' }),
     ]);
+    expect(events).toContainEqual(expect.objectContaining({
+      eventType: 'assistant.text.reclassified',
+      fromPhase: 'answer',
+      toPhase: 'prelude',
+    }));
     expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
   });
 
-  it('does not let elapsed phase timing classify a later tool-use step as answer', () => {
-    vi.useFakeTimers();
+  it('reclassifies each tool-use step independently without stale phase state', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
     subject.startTurn();
@@ -358,19 +364,20 @@ describe('createChatStreamEventAdapter', () => {
       payload: { modelStepId: 'model-step-1', finishReason: 'tool_calls' },
     }));
 
-    vi.advanceTimersByTime(49);
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.output.delta',
       sequence: 4,
       payload: { modelStepId: 'model-step-2', delta: 'Second step prelude.' },
     }));
-    vi.advanceTimersByTime(1);
     expect(events.map((event) => event.eventType)).toEqual([
       'turn.started',
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
+      'assistant.text.reclassified',
       'assistant.text.completed',
+      'assistant.text.started',
+      'assistant.text.delta',
     ]);
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.tool_call.detected',
@@ -392,17 +399,22 @@ describe('createChatStreamEventAdapter', () => {
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
+      'assistant.text.reclassified',
       'assistant.text.completed',
       'assistant.text.started',
       'assistant.text.delta',
+      'assistant.text.reclassified',
       'assistant.text.completed',
     ]);
     expect(events.filter((event) => event.eventType === 'assistant.text.delta').map((event) => event.phase)).toEqual([
-      'prelude',
-      'prelude',
+      'answer',
+      'answer',
+    ]);
+    expect(events.filter((event) => event.eventType === 'assistant.text.reclassified')).toEqual([
+      expect.objectContaining({ fromPhase: 'answer', toPhase: 'prelude' }),
+      expect.objectContaining({ fromPhase: 'answer', toPhase: 'prelude' }),
     ]);
     expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
-    vi.useRealTimers();
   });
 
   it('completes open prelude text when a tool-call model step completes', () => {
@@ -1070,8 +1082,7 @@ describe('createChatStreamEventAdapter', () => {
     vi.useRealTimers();
   });
 
-  it('moves elapsed buffered text to prelude when a late tool-use signal arrives in the same model step', () => {
-    vi.useFakeTimers();
+  it('reclassifies live text to prelude when a late tool-use signal arrives in the same model step', () => {
     const events: ChatStreamEvent[] = [];
     const subject = adapter(events);
     subject.startTurn();
@@ -1080,7 +1091,6 @@ describe('createChatStreamEventAdapter', () => {
       sequence: 1,
       payload: { modelStepId: 'model-step-1', delta: 'This is final.' },
     }));
-    vi.advanceTimersByTime(50);
     subject.handleRuntimeEvent(runtimeEvent({
       eventType: 'model.tool_call.detected',
       sequence: 2,
@@ -1101,10 +1111,16 @@ describe('createChatStreamEventAdapter', () => {
       'user.message.committed',
       'assistant.text.started',
       'assistant.text.delta',
+      'assistant.text.reclassified',
       'assistant.text.completed',
     ]);
-    expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'prelude' });
+    expect(events[3]).toMatchObject({ eventType: 'assistant.text.delta', phase: 'answer' });
+    expect(events[4]).toMatchObject({
+      eventType: 'assistant.text.reclassified',
+      fromPhase: 'answer',
+      toPhase: 'prelude',
+    });
+    expect(events[5]).toMatchObject({ eventType: 'assistant.text.completed', phase: 'prelude' });
     expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
-    vi.useRealTimers();
   });
 });

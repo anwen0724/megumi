@@ -69,9 +69,15 @@ export function reduceChatStreamEvent(
 
     case 'assistant.text.started':
     case 'assistant.text.delta':
+    case 'assistant.text.reclassified':
     case 'assistant.text.completed':
     case 'assistant.text.failed':
     case 'assistant.text.cancelled_partial': {
+      if (event.eventType === 'assistant.text.reclassified') {
+        reclassifyAssistantText(nextMessages, event);
+        return nextMessages;
+      }
+
       if (event.phase === 'prelude') {
         const assistant = ensureAssistantMessage(nextMessages, event);
         const process = ensureProcessBlock(assistant, event);
@@ -456,6 +462,37 @@ function ensureAnswerBlock(
   const processIndex = assistant.blocks.findIndex((block) => block.kind === 'process_disclosure');
   assistant.blocks.splice(processIndex === -1 ? assistant.blocks.length : processIndex + 1, 0, answer);
   return answer;
+}
+
+function reclassifyAssistantText(
+  messages: TimelineMessage[],
+  event: Extract<ChatStreamEvent, { eventType: 'assistant.text.reclassified' }>,
+): void {
+  if (event.fromPhase === event.toPhase) {
+    return;
+  }
+
+  if (event.fromPhase === 'answer' && event.toPhase === 'prelude') {
+    const assistant = ensureAssistantMessage(messages, event);
+    const answerIndex = assistant.blocks.findIndex(
+      (block): block is AnswerTextBlock =>
+        block.kind === 'answer_text' && block.textId === event.textId,
+    );
+    const answer = answerIndex === -1 ? undefined : assistant.blocks[answerIndex] as AnswerTextBlock;
+    const text = answer?.text ?? '';
+
+    if (answerIndex !== -1) {
+      assistant.blocks.splice(answerIndex, 1);
+    }
+
+    const process = ensureProcessBlock(assistant, event);
+    const item = ensurePreludeItem(process, event.textId, event.createdAt);
+    item.text = text;
+    item.status = answer?.status ?? item.status;
+    item.updatedAt = event.createdAt;
+    process.updatedAt = event.createdAt;
+    assistant.updatedAt = event.createdAt;
+  }
 }
 
 function ensureThinkingItem(

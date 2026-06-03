@@ -269,6 +269,49 @@ describe('chat stream to timeline projection reducer', () => {
     });
   });
 
+  it('reclassifies live answer text into prelude when a tool call appears later in the model step', () => {
+    const messages = reduceEvents([
+      chatEvent({ eventType: 'turn.started', seq: 1, userMessageId: 'message-user-1' }),
+      chatEvent({ eventType: 'assistant.text.started', seq: 2, textId: 'text-1', phase: 'answer' }),
+      chatEvent({ eventType: 'assistant.text.delta', seq: 3, textId: 'text-1', phase: 'answer', delta: 'I will inspect the project.' }),
+      chatEvent({
+        eventType: 'assistant.text.reclassified',
+        seq: 4,
+        textId: 'text-1',
+        fromPhase: 'answer',
+        toPhase: 'prelude',
+      }),
+      chatEvent({ eventType: 'assistant.text.completed', seq: 5, textId: 'text-1', phase: 'prelude' }),
+      chatEvent({ eventType: 'tool.started', seq: 6, toolCallId: 'tool-call-1', toolName: 'list_directory', inputSummary: '.' }),
+    ]);
+
+    const assistant = assistantMessage(messages);
+    expect(assistant.blocks.map((block) => block.blockId)).toEqual(['process:run-1']);
+    expect(processBlock(assistant).items).toEqual([
+      {
+        itemId: 'prelude:text-1',
+        kind: 'assistant_text',
+        textId: 'text-1',
+        phase: 'prelude',
+        status: 'completed',
+        text: 'I will inspect the project.',
+        format: 'markdown',
+        createdAt: '2026-05-24T00:00:04.000Z',
+        updatedAt: '2026-05-24T00:00:05.000Z',
+      },
+      {
+        itemId: 'tool:tool-call-1',
+        kind: 'tool_activity',
+        toolCallId: 'tool-call-1',
+        toolName: 'list_directory',
+        inputSummary: '.',
+        status: 'running',
+        createdAt: '2026-05-24T00:00:06.000Z',
+        updatedAt: '2026-05-24T00:00:06.000Z',
+      },
+    ]);
+  });
+
   it('preserves partial answer text and appends terminal process items for failed and cancelled turns', () => {
     const failedMessages = reduceEvents([
       chatEvent({ eventType: 'turn.started', seq: 1, userMessageId: 'message-user-1' }),
