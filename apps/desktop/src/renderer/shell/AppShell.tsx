@@ -18,7 +18,6 @@ export function AppShell() {
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const sessions = useSessionStore((state) => state.sessions);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
-  const createLocalSession = useSessionStore((state) => state.createLocalSession);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
   const { hydrateSessions, hydrateSessionTimeline } = useSessionHistoryHydration();
 
@@ -63,13 +62,7 @@ export function AppShell() {
       return;
     }
 
-    const session = createLocalSession({
-      projectId: currentProject.id,
-      title: 'New session',
-      agentType: 'free',
-    });
-
-    setActiveSession(session.id);
+    setActiveSession(null);
   }
 
   async function handleSelectSession(sessionId: string) {

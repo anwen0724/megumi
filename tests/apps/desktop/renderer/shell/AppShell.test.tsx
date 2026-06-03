@@ -316,16 +316,37 @@ describe('AppShell', () => {
     expect(window.megumi.project.list).toHaveBeenCalled();
   });
 
-  it('creates and selects a local session from the sidebar', async () => {
+  it('opens a draft from the sidebar and creates the session on first send', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    let state = useSessionStore.getState();
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBeNull();
+    expect(screen.queryByRole('button', { name: /Open session New session/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), 'Switch project');
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    state = useSessionStore.getState();
+    expect(state.sessions[0].title).toBe('Switch project');
+    expect(state.sessions[0].projectId).toBe('project-1');
+    expect(state.activeSessionId).toBe(state.sessions[0].id);
+    expect(screen.getByRole('button', { name: /Open session Switch project/ })).toBeInTheDocument();
+  });
+
+  it('keeps draft project switching out of the sidebar until first send', async () => {
+    const originalSessionCount = useSessionStore.getState().sessions.length;
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
     const state = useSessionStore.getState();
-    expect(state.sessions[0].title).toBe('New session');
-    expect(state.sessions[0].projectId).toBe('project-1');
-    expect(state.activeSessionId).toBe(state.sessions[0].id);
-    expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
+    expect(state.sessions).toHaveLength(originalSessionCount);
+    expect(state.activeSessionId).toBeNull();
+    expect(screen.queryByRole('button', { name: /Open session New session/ })).not.toBeInTheDocument();
   });
 
   it('lets an empty new session switch its target project from the welcome state', async () => {
@@ -373,7 +394,8 @@ describe('AppShell', () => {
     await waitFor(() => {
       expect(useProjectStore.getState().currentProjectId).toBe('project-2');
     });
-    expect(useSessionStore.getState().sessions[0].projectId).toBe('project-2');
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(useSessionStore.getState().sessions).toHaveLength(2);
     expect(window.megumi.project.open).toHaveBeenCalledWith(expect.objectContaining({
       payload: { projectId: 'project-2' },
     }));
@@ -482,10 +504,10 @@ describe('AppShell', () => {
     expect(screen.queryByText('Review notes')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
-    expect(useSessionStore.getState().sessions[0].title).toBe('New session');
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
-    expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
+    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
   });
 
   it('opens and closes settings from the expanded sidebar', async () => {
@@ -554,8 +576,8 @@ describe('AppShell', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
-    const createdSession = useSessionStore.getState().sessions[0];
-    expect(createdSession.title).toBe('New session');
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(useSessionStore.getState().sessions[0].title).toBe('Planning the UI');
     expect(screen.queryByText('Saved in planning session')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /Planning the UI/ }));
