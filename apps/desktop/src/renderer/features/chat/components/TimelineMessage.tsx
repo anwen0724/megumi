@@ -90,27 +90,27 @@ function TimelineMessageComponent({
           </div>
         </div>
       ) : (
-      <div
-        className={cx(
-          'max-w-2xl text-sm leading-7',
-          isUser
-            ? 'rounded-lg bg-[var(--color-accent-soft)] px-4 py-3 text-right text-[var(--color-text)]'
-            : 'text-left text-[var(--color-text)]',
-        )}
-      >
         <div
           className={cx(
-            'mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)]',
-            isUser ? 'justify-end' : 'justify-start',
+            'max-w-2xl text-sm leading-7',
+            isUser
+              ? 'rounded-lg bg-[var(--color-accent-soft)] px-4 py-3 text-right text-[var(--color-text)]'
+              : 'w-full text-left text-[var(--color-text)]',
           )}
         >
-          <span>{isUser ? 'You' : isAssistant ? 'Megumi' : role}</span>
-          <span>{formatTime(message.createdAt)}</span>
-        </div>
+          <div
+            className={cx(
+              'mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)]',
+              isUser ? 'justify-end' : 'justify-start',
+            )}
+          >
+            <span>{isUser ? 'You' : isAssistant ? 'Megumi' : role}</span>
+            <span>{formatTime(message.createdAt)}</span>
+          </div>
 
-        <TimelineMessageBlocks message={message} />
-        {afterContent}
-      </div>
+          <TimelineMessageBlocks message={message} />
+          {afterContent}
+        </div>
       )}
     </article>
   );

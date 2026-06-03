@@ -101,6 +101,29 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('你是谁').closest('div')).toHaveClass('bg-[var(--color-accent-soft)]');
   });
 
+  it('keeps assistant content width stable without widening user bubbles', () => {
+    const { rerender } = render(<TimelineMessage message={assistantMessage({
+      blocks: [{
+        blockId: 'process:run-1',
+        kind: 'process_disclosure',
+        runId: 'run-1',
+        status: 'running',
+        startedAt: '2026-05-24T12:00:00.000Z',
+        items: [],
+      }],
+    })} />);
+
+    const assistantArticle = screen.getByRole('article', { name: 'Megumi message' });
+    expect(assistantArticle.firstElementChild).toHaveClass('w-full');
+    expect(assistantArticle.firstElementChild).toHaveClass('max-w-2xl');
+
+    rerender(<TimelineMessage message={userMessage()} />);
+
+    const userArticle = screen.getByRole('article', { name: 'User message' });
+    expect(userArticle.firstElementChild).not.toHaveClass('w-full');
+    expect(userArticle.firstElementChild).toHaveClass('max-w-2xl');
+  });
+
   it('renders completed process disclosure collapsed before final answer', () => {
     render(<TimelineMessage message={assistantMessage()} />);
 
