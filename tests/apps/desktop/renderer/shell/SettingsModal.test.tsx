@@ -59,9 +59,19 @@ describe('SettingsModal', () => {
 
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Current theme')).toBeInTheDocument();
-    expect(screen.getAllByText('Megumi Warm').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole('button', { name: 'Switch to Neutral Light theme' })).toBeInTheDocument();
+    expect(screen.getByText('Theme')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Megumi Warm/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /Graphite Dark/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Switch to .* theme/ })).not.toBeInTheDocument();
+  });
+
+  it('selects themes from settings appearance', async () => {
+    renderSettingsModal(true);
+
+    await userEvent.click(screen.getByRole('radio', { name: /Midnight Blue/ }));
+
+    expect(useThemeStore.getState().theme).toBe('midnight-blue');
+    expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'midnight-blue');
   });
 
   it('switches between settings categories', async () => {

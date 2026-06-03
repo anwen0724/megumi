@@ -8,10 +8,13 @@ import {
 } from '@megumi/desktop/renderer/shared/theme';
 
 describe('theme tokens', () => {
-  it('defines both first-pass desktop themes', () => {
-    expect(themeNames).toEqual(['megumi-warm', 'neutral-light']);
+  it('defines the built-in desktop themes', () => {
+    expect(themeNames).toEqual(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']);
     expect(themeDefinitions['megumi-warm'].label).toBe('Megumi Warm');
     expect(themeDefinitions['neutral-light'].label).toBe('Neutral Light');
+    expect(themeDefinitions['graphite-dark'].label).toBe('Graphite Dark');
+    expect(themeDefinitions['sage-mist'].label).toBe('Sage Mist');
+    expect(themeDefinitions['midnight-blue'].label).toBe('Midnight Blue');
   });
 
   it('provides every semantic variable for every theme', () => {
@@ -24,9 +27,9 @@ describe('theme tokens', () => {
     }
   });
 
-  it('uses different app background values for warm and neutral themes', () => {
-    expect(themeDefinitions['megumi-warm'].variables['--color-app-bg']).not.toBe(
-      themeDefinitions['neutral-light'].variables['--color-app-bg'],
-    );
+  it('uses distinct app background values across built-in themes', () => {
+    const appBackgrounds = themeNames.map((themeName) => themeDefinitions[themeName].variables['--color-app-bg']);
+
+    expect(new Set(appBackgrounds).size).toBe(themeNames.length);
   });
 });

@@ -1,5 +1,4 @@
 import { Minus, Square, X } from 'lucide-react';
-import { ThemeToggle } from '../shared/theme';
 import { IconButton, cx } from '../shared/ui';
 import { windowControls } from '../shared/ipc/client';
 
@@ -22,7 +21,6 @@ export function WindowTitleBar({ title, className }: WindowTitleBarProps) {
       </div>
 
       <div data-testid="window-titlebar-controls" className="app-no-drag flex items-center gap-2">
-        <ThemeToggle />
         <div className="flex items-center gap-1">
           <IconButton
             label="Minimize window"

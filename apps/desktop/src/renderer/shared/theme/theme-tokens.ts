@@ -1,4 +1,4 @@
-export type ThemeName = 'megumi-warm' | 'neutral-light';
+export type ThemeName = 'megumi-warm' | 'neutral-light' | 'graphite-dark' | 'sage-mist' | 'midnight-blue';
 
 export const SEMANTIC_THEME_VARIABLES = [
   '--color-app-bg',
@@ -92,14 +92,94 @@ export const themeDefinitions = {
       '--shadow-soft': '0 16px 40px rgba(30, 31, 28, 0.1)',
     },
   },
+  'graphite-dark': {
+    name: 'graphite-dark',
+    label: 'Graphite Dark',
+    variables: {
+      '--color-app-bg': '#171817',
+      '--color-surface': '#20211f',
+      '--color-surface-muted': '#262823',
+      '--color-surface-elevated': '#2b2c29',
+      '--color-border': '#3c3e38',
+      '--color-border-strong': '#55584f',
+      '--color-text': '#efeee8',
+      '--color-text-muted': '#b5b3aa',
+      '--color-text-subtle': '#85837b',
+      '--color-accent': '#8fb6a0',
+      '--color-accent-soft': '#2c4135',
+      '--color-accent-foreground': '#111612',
+      '--color-danger': '#d47c6e',
+      '--color-danger-soft': '#4e2d28',
+      '--color-warning': '#cba35d',
+      '--color-warning-soft': '#463821',
+      '--color-success': '#8fbd86',
+      '--color-success-soft': '#2f462d',
+      '--color-approval': '#b0a1d4',
+      '--color-approval-soft': '#3b344c',
+      '--color-focus': '#9fcdb4',
+      '--shadow-soft': '0 18px 46px rgba(0, 0, 0, 0.34)',
+    },
+  },
+  'sage-mist': {
+    name: 'sage-mist',
+    label: 'Sage Mist',
+    variables: {
+      '--color-app-bg': '#edf3ed',
+      '--color-surface': '#fbfdf8',
+      '--color-surface-muted': '#dfe9df',
+      '--color-surface-elevated': '#ffffff',
+      '--color-border': '#cbd8c8',
+      '--color-border-strong': '#aebfad',
+      '--color-text': '#253026',
+      '--color-text-muted': '#687563',
+      '--color-text-subtle': '#96a18f',
+      '--color-accent': '#4f8772',
+      '--color-accent-soft': '#d4e8df',
+      '--color-accent-foreground': '#fbfffc',
+      '--color-danger': '#b65f58',
+      '--color-danger-soft': '#f1ddda',
+      '--color-warning': '#9b7d3a',
+      '--color-warning-soft': '#efe6c8',
+      '--color-success': '#4f8157',
+      '--color-success-soft': '#d7ead9',
+      '--color-approval': '#6f719d',
+      '--color-approval-soft': '#e0e2f1',
+      '--color-focus': '#5b947f',
+      '--shadow-soft': '0 16px 40px rgba(40, 63, 43, 0.12)',
+    },
+  },
+  'midnight-blue': {
+    name: 'midnight-blue',
+    label: 'Midnight Blue',
+    variables: {
+      '--color-app-bg': '#10151d',
+      '--color-surface': '#171d27',
+      '--color-surface-muted': '#202838',
+      '--color-surface-elevated': '#222a36',
+      '--color-border': '#344052',
+      '--color-border-strong': '#4b5a70',
+      '--color-text': '#eef3f8',
+      '--color-text-muted': '#aab7c4',
+      '--color-text-subtle': '#7d8b9a',
+      '--color-accent': '#75a9be',
+      '--color-accent-soft': '#233d4a',
+      '--color-accent-foreground': '#081117',
+      '--color-danger': '#da8275',
+      '--color-danger-soft': '#4f302d',
+      '--color-warning': '#d0a85f',
+      '--color-warning-soft': '#453927',
+      '--color-success': '#86b989',
+      '--color-success-soft': '#2d4533',
+      '--color-approval': '#b1a0d8',
+      '--color-approval-soft': '#3b3551',
+      '--color-focus': '#87c1d8',
+      '--shadow-soft': '0 18px 48px rgba(0, 0, 0, 0.36)',
+    },
+  },
 } satisfies Record<ThemeName, ThemeDefinition>;
 
 export const themeNames = Object.keys(themeDefinitions) as ThemeName[];
 
 export function getThemeDefinition(theme: ThemeName): ThemeDefinition {
   return themeDefinitions[theme];
-}
-
-export function getNextThemeName(theme: ThemeName): ThemeName {
-  return theme === 'megumi-warm' ? 'neutral-light' : 'megumi-warm';
 }

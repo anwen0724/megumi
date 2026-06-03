@@ -39,7 +39,7 @@ describe('WindowTitleBar', () => {
 
     expect(screen.getByText('Planning the UI')).toBeInTheDocument();
     expect(screen.queryByText('Warm agent workspace')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Switch to Neutral Light theme' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Switch to .* theme/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Minimize window' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Maximize or restore window' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close window' })).toBeInTheDocument();

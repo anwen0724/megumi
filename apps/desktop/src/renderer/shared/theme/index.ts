@@ -1,9 +1,8 @@
 export { ThemeProvider } from './ThemeProvider';
-export { ThemeToggle } from './ThemeToggle';
+export { ThemeSelector } from './ThemeSelector';
 export { useThemeStore } from './theme-store';
 export {
   SEMANTIC_THEME_VARIABLES,
-  getNextThemeName,
   getThemeDefinition,
   themeDefinitions,
   themeNames,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bot, Info, Palette, ShieldCheck, X } from 'lucide-react';
 import { ProviderSettingsPanel } from '../features/provider-settings';
-import { ThemeToggle, getThemeDefinition, useThemeStore } from '../shared/theme';
+import { ThemeSelector } from '../shared/theme';
 import { Button, IconButton, cx } from '../shared/ui';
 
 type SettingsCategory = 'appearance' | 'models' | 'security' | 'about';
@@ -26,8 +26,6 @@ const categories: SettingsCategoryItem[] = [
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [category, setCategory] = useState<SettingsCategory>('appearance');
-  const theme = useThemeStore((state) => state.theme);
-  const currentTheme = getThemeDefinition(theme);
 
   useEffect(() => {
     if (!open) {
@@ -129,12 +127,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             {category === 'appearance' ? (
               <div className="space-y-4">
                 <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-sm font-semibold text-[var(--color-text)]">Current theme</h3>
-                      <p className="mt-1 text-sm text-[var(--color-text-muted)]">{currentTheme.label}</p>
-                    </div>
-                    <ThemeToggle />
+                  <h3 className="text-sm font-semibold text-[var(--color-text)]">Theme</h3>
+                  <div className="mt-3">
+                    <ThemeSelector />
                   </div>
                 </section>
               </div>
