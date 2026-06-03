@@ -328,6 +328,59 @@ describe('AppShell', () => {
     expect(screen.getAllByText('New session')[0]).toBeInTheDocument();
   });
 
+  it('lets an empty new session switch its target project from the welcome state', async () => {
+    const otherProjectRecord = {
+      projectId: 'project-2',
+      name: 'Other',
+      repoPath: 'C:/all/work/study/other',
+      repoPathKey: 'c:/all/work/study/other',
+      status: 'available' as const,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      lastOpenedAt: '2026-05-20T00:00:00.000Z',
+    };
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce({
+      ok: true,
+      data: { projects: [DEFAULT_PROJECT_RECORD, otherProjectRecord] },
+      meta: {
+        requestId: 'ipc-project-list-switch-target-test',
+        channel: 'project:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
+    });
+    vi.mocked(window.megumi.project.open).mockImplementation(async (request) => ({
+      ok: true,
+      data: {
+        project: request.payload.projectId === otherProjectRecord.projectId
+          ? otherProjectRecord
+          : DEFAULT_PROJECT_RECORD,
+      },
+      meta: {
+        requestId: 'ipc-project-open-switch-target-test',
+        channel: 'project:open',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
+    }));
+
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Change project' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Use project Other for this new session' }));
+
+    await waitFor(() => {
+      expect(useProjectStore.getState().currentProjectId).toBe('project-2');
+    });
+    expect(useSessionStore.getState().sessions[0].projectId).toBe('project-2');
+    expect(window.megumi.project.open).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { projectId: 'project-2' },
+    }));
+    expect(screen.getByLabelText('New session project: Other')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/other')).toBeInTheDocument();
+  });
+
   it('uses existing project flow instead of creating a session when no project is selected', async () => {
     useProjectStore.setState({
       projects: [],

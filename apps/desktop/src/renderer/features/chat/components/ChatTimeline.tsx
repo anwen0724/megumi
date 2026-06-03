@@ -108,6 +108,7 @@ function RecoverableRunActions({
 export function ChatTimeline() {
   const agentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
+  const sessions = useSessionStore((state) => state.sessions);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const projects = useProjectStore((state) => state.projects);
   const activeRunId = useRunStore((state) => state.activeRunId);
@@ -115,8 +116,10 @@ export function ChatTimeline() {
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const [recoverableRuns, setRecoverableRuns] = useState<RecoverableRunSummary[]>([]);
   const [pendingRecoverableRunIds, setPendingRecoverableRunIds] = useState<Set<string>>(() => new Set());
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const pendingRecoverableRunIdsRef = useRef(new Set<string>());
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   const {
     sendSessionMessage,
     cancelSessionMessage,
@@ -203,6 +206,17 @@ export function ChatTimeline() {
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
     agentStatus === 'error';
+  const activeEmptyNewSession =
+    activeSession?.title === 'New session' &&
+    activeSession.projectId === currentProjectId &&
+    timelineMessages.length === 0;
+  const canChangeNewSessionProject =
+    Boolean(currentProject) &&
+    agentStatus === 'idle' &&
+    !activeRun &&
+    timelineMessages.length === 0 &&
+    pendingApprovals.length === 0 &&
+    (!activeSessionId || activeEmptyNewSession);
 
   const loadRecoverableRuns = useCallback(async ({ clearOnFailure }: { clearOnFailure: boolean }) => {
     if (!activeSessionId || !recoveryBridge) {
@@ -260,6 +274,47 @@ export function ChatTimeline() {
       pendingRecoverableRunIdsRef.current.delete(run.runId);
       setPendingRecoverableRunIds(new Set(pendingRecoverableRunIdsRef.current));
     }
+  }
+
+  async function switchNewSessionProject(projectId: string) {
+    if (projectId === currentProjectId) {
+      setProjectPickerOpen(false);
+      return;
+    }
+
+    const sessionBeforeOpen = activeSessionId
+      ? useSessionStore.getState().sessions.find((session) => session.id === activeSessionId)
+      : null;
+    const canMoveActiveSession =
+      !sessionBeforeOpen ||
+      (
+        sessionBeforeOpen.title === 'New session' &&
+        (
+          useChatStreamStore.getState().sessions[chatStreamSessionKey(sessionBeforeOpen.projectId, sessionBeforeOpen.id)]
+            ?.messages.length ?? 0
+        ) === 0
+      );
+
+    if (!canMoveActiveSession) {
+      setProjectPickerOpen(false);
+      return;
+    }
+
+    const project = await useProjectStore.getState().openProject(projectId);
+    if (!project) {
+      return;
+    }
+
+    if (sessionBeforeOpen) {
+      const sessionState = useSessionStore.getState();
+      const latestSession = sessionState.sessions.find((session) => session.id === sessionBeforeOpen.id);
+      if (latestSession?.title === 'New session') {
+        sessionState.updateSession(latestSession.id, { projectId: project.id });
+        useChatStreamStore.getState().setActiveSession(project.id, latestSession.id);
+      }
+    }
+
+    setProjectPickerOpen(false);
   }
 
   async function retryRecoverableRun(run: RecoverableRunSummary) {
@@ -374,7 +429,61 @@ export function ChatTimeline() {
                   <p className="mt-2 text-sm text-[var(--color-text-muted)]">
                     Megumi is ready to help with this workspace.
                   </p>
-                  <p className="mt-3 text-sm text-[var(--color-text-muted)]">{currentProject?.repoPath}</p>
+                  {currentProject ? (
+                    <div className="mt-4 flex flex-col items-center gap-2 text-sm">
+                      <div
+                        aria-label={`New session project: ${currentProject.name}`}
+                        className="relative inline-flex items-center gap-2 text-[var(--color-text)]"
+                      >
+                        <span className="text-[var(--color-text-muted)]">New session in</span>
+                        <span className="font-medium">{currentProject.name}</span>
+                        {canChangeNewSessionProject ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => setProjectPickerOpen((value) => !value)}
+                          >
+                            Change project
+                          </Button>
+                        ) : null}
+
+                        {projectPickerOpen && canChangeNewSessionProject ? (
+                          <div
+                            role="menu"
+                            aria-label="Select project for new session"
+                            className="absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-left shadow-[var(--shadow-soft)]"
+                          >
+                            {projects.map((project) => {
+                              const isCurrent = project.id === currentProjectId;
+                              return (
+                                <button
+                                  key={project.id}
+                                  type="button"
+                                  role="menuitem"
+                                  aria-label={`Use project ${project.name} for this new session`}
+                                  disabled={isCurrent}
+                                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface)] disabled:cursor-default disabled:bg-[var(--color-accent-soft)] disabled:text-[var(--color-text)]"
+                                  onClick={() => {
+                                    void switchNewSessionProject(project.id);
+                                  }}
+                                >
+                                  <span className="min-w-0 truncate">{project.name}</span>
+                                  {isCurrent ? (
+                                    <span className="shrink-0 text-xs text-[var(--color-text-muted)]">Current</span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                      <p className="max-w-md truncate text-sm text-[var(--color-text-muted)]">
+                        {currentProject.repoPath}
+                      </p>
+                    </div>
+                  ) : null}
                 </>
               )}
             </div>
