@@ -209,7 +209,11 @@ export function Composer({
                 className="bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
               >
                 {COMPOSER_PERMISSION_MODE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option
+                    key={option.value}
+                    value={option.value}
+                    className="bg-[var(--color-surface-elevated)] text-[var(--color-text)]"
+                  >
                     {option.label}
                   </option>
                 ))}
@@ -230,7 +234,11 @@ export function Composer({
                 className="max-w-36 truncate bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
               >
                 {COMPOSER_MODEL_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option
+                    key={option.value}
+                    value={option.value}
+                    className="bg-[var(--color-surface-elevated)] text-[var(--color-text)]"
+                  >
                     {option.label}
                   </option>
                 ))}

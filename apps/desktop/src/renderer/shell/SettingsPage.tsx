@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Bot, CheckCircle2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Bot, CheckCircle2, Info, Palette, ShieldCheck } from 'lucide-react';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { ThemeSelector } from '../shared/theme';
-import { cx } from '../shared/ui';
+import { Button, cx } from '../shared/ui';
 
 type SettingsCategory = 'appearance' | 'models' | 'security' | 'about';
 
@@ -54,6 +54,16 @@ export function SettingsPage({ onDone }: SettingsPageProps) {
           className="grid h-full min-h-0 grid-cols-[13rem_minmax(0,1fr)] overflow-hidden"
         >
           <aside className="border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onDone}
+              className="mb-3 w-full justify-start"
+            >
+              <ArrowLeft size={14} aria-hidden="true" />
+              Back to chat
+            </Button>
             <nav role="tablist" aria-label="Settings categories" className="space-y-1">
               {categories.map((item) => {
                 const Icon = item.icon;

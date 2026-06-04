@@ -51,6 +51,7 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.queryByText('Local desktop preferences')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to chat' })).toBeInTheDocument();
   });
 
   it('renders the appearance section by default with visual theme picker', () => {
@@ -123,6 +124,14 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns to chat from the sidebar back button', async () => {
+    const { onDone } = renderSettingsPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to chat' }));
+
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 });

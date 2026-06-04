@@ -139,6 +139,20 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('shrink-0');
   });
 
+  it('themes native select dropdown options for dark and light themes', () => {
+    render(<Composer onSubmit={() => undefined} />);
+
+    for (const option of screen.getByLabelText('Permission mode').querySelectorAll('option')) {
+      expect(option).toHaveClass('bg-[var(--color-surface-elevated)]');
+      expect(option).toHaveClass('text-[var(--color-text)]');
+    }
+
+    for (const option of screen.getByLabelText('Model').querySelectorAll('option')) {
+      expect(option).toHaveClass('bg-[var(--color-surface-elevated)]');
+      expect(option).toHaveClass('text-[var(--color-text)]');
+    }
+  });
+
   it('uses a stable floating composer shell for focus canvas resizing', () => {
     render(<Composer onSubmit={() => undefined} />);
 
