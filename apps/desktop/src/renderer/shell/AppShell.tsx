@@ -92,11 +92,6 @@ export function AppShell() {
   }
 
   function toggleWorkspaceSidebar() {
-    if (settingsOpen) {
-      setRightSidebarOpen(false);
-      return;
-    }
-
     setRightSidebarOpen((value) => !value);
   }
 
@@ -137,7 +132,7 @@ export function AppShell() {
         <WindowTitleBar
           title={settingsOpen ? 'Settings' : titlebarTitle}
           workspaceSidebarOpen={rightSidebarOpen}
-          onToggleWorkspaceSidebar={toggleWorkspaceSidebar}
+          onToggleWorkspaceSidebar={settingsOpen ? undefined : toggleWorkspaceSidebar}
         />
         <div
           data-testid="workbench-content"

@@ -639,16 +639,17 @@ describe('AppShell', () => {
 
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
     expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
   });
 
-  it('keeps the workspace sidebar closed if the titlebar toggle is clicked while settings is open', async () => {
+  it('hides the workspace sidebar toggle while settings is open and restores it after Done', async () => {
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close workspace sidebar' })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
