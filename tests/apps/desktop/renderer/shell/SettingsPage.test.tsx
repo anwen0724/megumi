@@ -41,15 +41,16 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('renders as a main-area page instead of a modal dialog', () => {
+  it('renders as a main-area page without its own page header or Done action', () => {
     renderSettingsPage();
 
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Close settings ' + 'overlay')).not.toBeInTheDocument();
     expect(screen.getByTestId('settings-page')).not.toHaveClass('fixed');
-    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Local desktop preferences')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
   });
 
   it('renders the appearance section by default with visual theme picker', () => {
@@ -116,13 +117,12 @@ describe('SettingsPage', () => {
     expect(content).toHaveClass('grid-cols-[13rem_minmax(0,1fr)]');
   });
 
-  it('calls Done from button and Escape', async () => {
+  it('calls onDone from Escape without rendering a visible Done button', () => {
     const { onDone } = renderSettingsPage();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
-    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onDone).toHaveBeenCalledTimes(2);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 });

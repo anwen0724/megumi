@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, Info, Palette, ShieldCheck } from 'lucide-react';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { ThemeSelector } from '../shared/theme';
-import { Button, cx } from '../shared/ui';
+import { cx } from '../shared/ui';
 
 type SettingsCategory = 'appearance' | 'models' | 'security' | 'about';
 
@@ -48,20 +48,10 @@ export function SettingsPage({ onDone }: SettingsPageProps) {
       data-testid="settings-page"
       className="min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)]"
     >
-      <div className="flex h-full flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-8 py-5">
-          <div>
-            <h1 className="text-xl font-semibold text-[var(--color-text)]">Settings</h1>
-            <p className="mt-1 text-sm text-[var(--color-text-muted)]">Local desktop preferences</p>
-          </div>
-          <Button type="button" variant="secondary" size="sm" onClick={onDone}>
-            Done
-          </Button>
-        </header>
-
+      <div className="h-full">
         <div
           data-testid="settings-page-content"
-          className="grid min-h-0 flex-1 grid-cols-[13rem_minmax(0,1fr)] overflow-hidden"
+          className="grid h-full min-h-0 grid-cols-[13rem_minmax(0,1fr)] overflow-hidden"
         >
           <aside className="border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
             <nav role="tablist" aria-label="Settings categories" className="space-y-1">

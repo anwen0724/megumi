@@ -520,11 +520,6 @@ describe('AppShell', () => {
     expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('chat-timeline-root')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
-
-    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
-    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
   });
 
   it('opens settings as the main area page from the collapsed sidebar rail', async () => {
@@ -535,7 +530,37 @@ describe('AppShell', () => {
 
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Local desktop preferences')).toBeInTheDocument();
+    expect(screen.queryByText('Local desktop preferences')).not.toBeInTheDocument();
+  });
+
+  it('leaves settings and opens the selected session from the left sidebar', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Review notes/ }));
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().activeSessionId).toBe('session-2');
+    });
+    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
+    expect(within(screen.getByTestId('window-titlebar')).getByText('Review notes')).toBeInTheDocument();
+  });
+
+  it('leaves settings when creating a new draft session from the left sidebar', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
+    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
   });
 
   it('clears the center timeline when creating a new local session', async () => {
@@ -650,7 +675,7 @@ describe('AppShell', () => {
     expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Close workspace sidebar' })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();

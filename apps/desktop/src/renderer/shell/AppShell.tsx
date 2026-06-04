@@ -58,15 +58,18 @@ export function AppShell() {
 
   function handleCreateSession() {
     if (!currentProject) {
+      setSettingsOpen(false);
       void useProjectStore.getState().useExistingProject();
       return;
     }
 
+    setSettingsOpen(false);
     setActiveSession(null);
   }
 
   async function handleSelectSession(sessionId: string) {
     if (sessionId === activeSessionId) {
+      setSettingsOpen(false);
       return;
     }
 
@@ -78,6 +81,7 @@ export function AppShell() {
     if (selectedSession.projectId !== currentProjectId) {
       await useProjectStore.getState().openProject(selectedSession.projectId);
     }
+    setSettingsOpen(false);
     setActiveSession(sessionId);
     await hydrateSessionTimeline(sessionId);
   }
