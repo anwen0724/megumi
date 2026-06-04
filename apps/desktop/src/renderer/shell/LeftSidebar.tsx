@@ -96,7 +96,10 @@ export function LeftSidebar({
 
   if (collapsed) {
     return (
-      <aside className="w-14 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-muted)]">
+      <aside
+        data-testid="left-sidebar"
+        className="w-14 shrink-0 overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] transition-[width] duration-200 ease-out"
+      >
         <nav aria-label="Primary workspace navigation" className="flex h-full flex-col items-center gap-3 py-3">
           <IconButton label="Expand sidebar" onClick={onToggleCollapsed} size="sm">
             <PanelLeftOpen size={16} aria-hidden="true" />
@@ -118,15 +121,18 @@ export function LeftSidebar({
   }
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-muted)]">
-      <div className="flex items-center justify-between px-4 py-3">
+    <aside
+      data-testid="left-sidebar"
+      className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] transition-[width] duration-200 ease-out"
+    >
+      <div className="flex items-center justify-between px-4 py-3.5">
         <p className="truncate text-sm font-semibold text-[var(--color-text)]">Megumi</p>
         <IconButton label="Collapse sidebar" onClick={onToggleCollapsed} size="sm" className="ml-3">
           <ChevronLeft size={16} aria-hidden="true" />
         </IconButton>
       </div>
 
-      <nav aria-label="Primary workspace navigation" className="flex-1 overflow-y-auto px-3 py-2">
+      <nav aria-label="Primary workspace navigation" className="flex-1 overflow-y-auto px-3 py-2.5">
         <Button onClick={onCreateSession} variant="primary" size="sm" className="mb-3 w-full justify-start">
           <MessageSquarePlus size={15} aria-hidden="true" />
           New session
@@ -212,7 +218,7 @@ export function LeftSidebar({
                     type="button"
                     onClick={() => toggleProject(project.id)}
                     aria-expanded={isExpanded}
-                    className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-sm font-medium text-[var(--color-text)] transition hover:bg-[var(--color-surface)]"
+                    className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
                   >
                     {project.name}
                   </button>
@@ -234,7 +240,7 @@ export function LeftSidebar({
                               aria-label={`Open session ${session.title}, updated ${session.meta}`}
                               title={`${session.title} · ${session.meta}`}
                               className={cx(
-                                'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pl-8 pr-3 text-left text-sm transition',
+                                'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pl-8 pr-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
                                 session.active
                                   ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
                                   : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]',

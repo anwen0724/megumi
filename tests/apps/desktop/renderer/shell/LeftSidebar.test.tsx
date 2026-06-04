@@ -228,4 +228,24 @@ describe('LeftSidebar', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: '管理项目' }));
     expect(onManageProjects).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps files out of the left sidebar navigation', () => {
+    render(<LeftSidebar {...defaultProps} />);
+
+    expect(screen.queryByText('Files')).not.toBeInTheDocument();
+    expect(screen.queryByText('Artifacts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
+  });
+
+  it('uses transition classes for expanded and collapsed sidebar motion', () => {
+    const { rerender } = render(<LeftSidebar {...defaultProps} />);
+
+    expect(screen.getByTestId('left-sidebar')).toHaveClass('transition-[width]');
+    expect(screen.getByTestId('left-sidebar')).toHaveClass('w-72');
+
+    rerender(<LeftSidebar {...defaultProps} collapsed />);
+
+    expect(screen.getByTestId('left-sidebar')).toHaveClass('transition-[width]');
+    expect(screen.getByTestId('left-sidebar')).toHaveClass('w-14');
+  });
 });
