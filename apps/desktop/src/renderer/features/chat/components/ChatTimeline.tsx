@@ -359,7 +359,7 @@ export function ChatTimeline() {
   return (
     <main
       data-testid="chat-timeline-root"
-      className="relative min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)]"
+      className="relative min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
     >
       <div
         ref={timelineScroll.scrollRef}
@@ -369,10 +369,10 @@ export function ChatTimeline() {
         onWheel={timelineScroll.onWheel}
         onPointerDown={timelineScroll.onPointerDown}
         onKeyDown={timelineScroll.onKeyDown}
-        className="absolute inset-0 overflow-y-auto px-6 pb-72 pt-6"
+        className="absolute inset-0 overflow-y-auto px-8 pb-[19rem] pt-7"
       >
         {hasTimelineContent ? (
-          <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-4xl flex-col gap-4">
+          <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-3xl flex-col gap-5">
             {timelineMessages.map((message) => (
               <TimelineMessage
                 key={message.messageId}
@@ -491,13 +491,13 @@ export function ChatTimeline() {
         )}
       </div>
 
-      <div data-testid="chat-composer-overlay" className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+      <div data-testid="chat-composer-overlay" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 transition-[padding,width] duration-200 ease-out">
         {pendingApprovals.length > 0 ? (
           <section
             aria-label="Blocking approval controls"
             aria-live="polite"
             aria-atomic="true"
-            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
+            className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2 px-6"
           >
             {pendingApprovals.map((request) => (
               <ApprovalCard
@@ -513,7 +513,7 @@ export function ChatTimeline() {
         {unmatchedRecoverableRuns.length > 0 ? (
           <section
             aria-label="Recoverable run fallback actions"
-            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
+            className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2 px-6"
           >
             {unmatchedRecoverableRuns.map((run) => (
               <RecoverableRunActions

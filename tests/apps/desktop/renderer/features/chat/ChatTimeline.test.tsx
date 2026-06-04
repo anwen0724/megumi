@@ -342,6 +342,8 @@ describe('ChatTimeline', () => {
   });
 
   it('keeps timeline layout independent from the bottom composer overlay', () => {
+    activateCanonicalSession([committedUser('message-layout-user', 'Check layout')]);
+
     render(<ChatTimeline />);
 
     const root = screen.getByTestId('chat-timeline-root');
@@ -351,15 +353,19 @@ describe('ChatTimeline', () => {
     expect(root).toHaveClass('relative');
     expect(root).toHaveClass('overflow-hidden');
     expect(root).toHaveClass('min-w-[42rem]');
+    expect(root).toHaveClass('transition-[background-color]');
     expect(scrollArea).toHaveClass('absolute');
     expect(scrollArea).toHaveClass('inset-0');
     expect(scrollArea).toHaveClass('overflow-y-auto');
-    expect(scrollArea).toHaveClass('pb-72');
+    expect(scrollArea).toHaveClass('px-8');
+    expect(scrollArea).toHaveClass('pb-[19rem]');
     expect(scrollArea).toHaveAttribute('tabIndex', '0');
+    expect(screen.getByRole('log', { name: 'Chat timeline' })).toHaveClass('max-w-3xl');
     expect(composerOverlay).toHaveClass('absolute');
     expect(composerOverlay).toHaveClass('inset-x-0');
     expect(composerOverlay).toHaveClass('bottom-0');
-    expect(within(scrollArea).getByText('Welcome to Megumi')).toBeInTheDocument();
+    expect(composerOverlay).toHaveClass('transition-[padding,width]');
+    expect(within(scrollArea).getByText('Check layout')).toBeInTheDocument();
     expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 

@@ -240,7 +240,7 @@ export function ProcessDisclosureBlockView({ block }: ProcessDisclosureBlockView
         onClick={() => setExpanded((value) => !value)}
         className={cx(
           'flex w-full items-center gap-2 border-b border-[var(--color-border)] px-1 py-2 text-left',
-          'text-sm text-[var(--color-text-muted)] transition hover:text-[var(--color-text)]',
+          'text-sm text-[var(--color-text-muted)] transition-[color,border-color] duration-150 hover:text-[var(--color-text)]',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
         )}
       >

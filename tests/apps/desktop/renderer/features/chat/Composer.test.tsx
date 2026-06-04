@@ -139,6 +139,17 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('shrink-0');
   });
 
+  it('uses a stable floating composer shell for focus canvas resizing', () => {
+    render(<Composer onSubmit={() => undefined} />);
+
+    const form = screen.getByRole('form', { name: 'Message composer' });
+    expect(form).toHaveClass('max-w-3xl');
+    expect(form).toHaveClass('transition-[width,transform,opacity]');
+    expect(screen.getByTestId('composer-input-panel')).toHaveClass('px-4');
+    expect(screen.getByTestId('composer-toolbar')).toHaveClass('px-3');
+    expect(screen.getByTestId('composer-toolbar')).toHaveClass('min-h-12');
+  });
+
   it('renders branch draft row, resets seed text by draft key, and cancels from the row', async () => {
     const onCancelBranchDraft = vi.fn();
     const onSubmit = vi.fn();

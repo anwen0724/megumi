@@ -124,6 +124,16 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(userArticle.firstElementChild).toHaveClass('max-w-2xl');
   });
 
+  it('uses focus-thread motion classes without adding a timeline rail or assistant card', () => {
+    render(<TimelineMessage message={assistantMessage()} />);
+
+    const article = screen.getByRole('article', { name: 'Megumi message' });
+    expect(article).toHaveClass('animate-[megumi-message-in_160ms_ease-out]');
+    expect(article.firstElementChild).toHaveClass('w-full');
+    expect(article.firstElementChild).not.toHaveClass('rounded-lg');
+    expect(article.querySelector('[data-testid="timeline-rail"]')).toBeNull();
+  });
+
   it('renders completed process disclosure collapsed before final answer', () => {
     render(<TimelineMessage message={assistantMessage()} />);
 

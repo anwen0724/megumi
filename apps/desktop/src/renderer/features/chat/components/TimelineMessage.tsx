@@ -50,7 +50,7 @@ function TimelineMessageComponent({
       role="article"
       aria-label={isUser ? 'User message' : isAssistant ? 'Megumi message' : `${role} message`}
       className={cx(
-        'flex w-full',
+        'flex w-full animate-[megumi-message-in_160ms_ease-out]',
         isUser ? 'justify-end' : 'justify-start',
       )}
     >

@@ -134,8 +134,12 @@ export function Composer({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="pointer-events-auto mx-auto w-full min-w-[38rem] max-w-3xl px-6 pb-6">
-      <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)]">
+    <form
+      aria-label="Message composer"
+      onSubmit={handleSubmit}
+      className="pointer-events-auto mx-auto w-full min-w-[38rem] max-w-3xl px-6 pb-6 transition-[width,transform,opacity] duration-200 ease-out"
+    >
+      <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
         {branchDraft ? (
           <div
             data-testid="composer-branch-draft-row"
@@ -154,7 +158,7 @@ export function Composer({
             </Button>
           </div>
         ) : null}
-        <div data-testid="composer-input-panel" className="border-b border-[var(--color-border)] px-3 py-2">
+        <div data-testid="composer-input-panel" className="border-b border-[var(--color-border)] px-4 py-3">
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi
           </label>
@@ -171,7 +175,7 @@ export function Composer({
           />
         </div>
 
-        <div data-testid="composer-toolbar" className="flex flex-nowrap items-center justify-between gap-2 px-2 py-2">
+        <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">
           <div className="flex shrink-0 items-center gap-1.5">
             <IconButton label="Attach files" variant="ghost" size="sm" className="shrink-0" onClick={onAttachFiles}>
               <Paperclip size={16} aria-hidden="true" />
