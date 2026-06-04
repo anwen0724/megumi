@@ -7,6 +7,6 @@ interface ThemeState {
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  theme: 'graphite-dark',
+  theme: 'midnight-blue',
   setTheme: (theme) => set({ theme }),
 }));

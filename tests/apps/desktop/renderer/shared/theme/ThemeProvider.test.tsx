@@ -9,15 +9,15 @@ describe('ThemeProvider', () => {
     useThemeStore.setState({ theme: useThemeStore.getInitialState().theme });
   });
 
-  it('renders children inside the default Graphite Dark theme root', () => {
+  it('renders children inside the default Midnight Blue theme root', () => {
     render(
       <ThemeProvider>
         <div>Workspace</div>
       </ThemeProvider>,
     );
 
-    expect(useThemeStore.getInitialState().theme).toBe('graphite-dark');
-    expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'graphite-dark');
+    expect(useThemeStore.getInitialState().theme).toBe('midnight-blue');
+    expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'midnight-blue');
     expect(screen.getByText('Workspace')).toBeInTheDocument();
   });
 
