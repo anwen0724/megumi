@@ -16,6 +16,9 @@ describe('AppShell right panel entry', () => {
 
     expect(source).toContain("from './RightWorkspacePanel'");
     expect(source).toContain('<RightWorkspacePanel');
+    expect(source).toContain('rightSidebarOpen');
+    expect(source).toContain('workspaceSidebarOpen={rightSidebarOpen}');
+    expect(source).toContain('open={rightSidebarOpen}');
   });
 
   it('does not import the temporary right workspace component', () => {

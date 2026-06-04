@@ -221,8 +221,9 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Files' })).toBeVisible();
-    expect(screen.getByRole('tab', { name: 'Artifacts' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
   });
@@ -588,16 +589,32 @@ describe('AppShell', () => {
     expect(screen.queryByText('Message in new session')).not.toBeInTheDocument();
   });
 
-  it('collapses and expands the right workspace panel', async () => {
+  it('opens and closes the right workspace sidebar from the titlebar without a collapsed rail', async () => {
     renderShell();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse workspace panel' }));
-    expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Expand workspace panel' })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
-    expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Artifacts' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+
+    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
+    expect(screen.queryByText('Tools')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
+
+    expect(screen.getByRole('heading', { name: 'Files' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
+
+    await userEvent.click(
+      within(screen.getByTestId('right-workspace-panel')).getByRole('button', {
+        name: 'Close workspace sidebar',
+      }),
+    );
+
+    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
   });
 });

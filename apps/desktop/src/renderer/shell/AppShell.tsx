@@ -12,7 +12,7 @@ import { formatSessionUpdatedAt } from './shell-display';
 
 export function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const projects = useProjectStore((state) => state.projects);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
@@ -116,12 +116,19 @@ export function AppShell() {
         }}
       />
       <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">
-        <WindowTitleBar title={titlebarTitle} />
-        <div data-testid="workbench-content" className="flex min-h-0 min-w-[62rem] flex-1 overflow-hidden">
+        <WindowTitleBar
+          title={titlebarTitle}
+          workspaceSidebarOpen={rightSidebarOpen}
+          onToggleWorkspaceSidebar={() => setRightSidebarOpen((value) => !value)}
+        />
+        <div
+          data-testid="workbench-content"
+          className="flex min-h-0 min-w-[62rem] flex-1 overflow-hidden transition-[padding,width] duration-200 ease-out"
+        >
           <ChatTimeline />
           <RightWorkspacePanel
-            collapsed={rightPanelCollapsed}
-            onToggleCollapsed={() => setRightPanelCollapsed((value) => !value)}
+            open={rightSidebarOpen}
+            onClose={() => setRightSidebarOpen(false)}
           />
         </div>
       </div>
