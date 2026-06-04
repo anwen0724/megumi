@@ -544,8 +544,9 @@ describe('interaction baseline acceptance', () => {
     expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-pro for the interaction baseline.');
     expect(await screen.findByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
-    expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Files' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
@@ -556,7 +557,7 @@ describe('interaction baseline acceptance', () => {
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
     expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
 
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
 
@@ -564,7 +565,7 @@ describe('interaction baseline acceptance', () => {
     expect(screen.queryByText('No active memories.')).not.toBeInTheDocument();
   });
 
-  it('keeps right panel collapse and tab switching from clearing chat state', async () => {
+  it('keeps right sidebar close and workspace switching from clearing chat state', async () => {
     const session = installMegumiMock();
     renderAppShell();
 
@@ -580,12 +581,14 @@ describe('interaction baseline acceptance', () => {
       'Runtime response from deepseek-v4-flash for the visible conversation.',
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse workspace panel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close workspace sidebar' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
 
     expectCanonicalUserText('Keep the conversation visible');
     expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-flash for the visible conversation.');

@@ -241,7 +241,7 @@ function renderChatWithRightPanel() {
   return render(
     <div className="flex h-screen">
       <ChatTimeline />
-      <RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />
+      <RightWorkspacePanel open onClose={() => undefined} />
     </div>,
   );
 }
@@ -289,7 +289,7 @@ describe('right workspace panel session run sync', () => {
     emitRuntimeSuccess(request, 'Runtime response from deepseek-v4-pro for the shell.');
     expect(screen.queryByText('Runtime response from deepseek-v4-pro for the shell.')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
 
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
 
@@ -312,9 +312,11 @@ describe('right workspace panel session run sync', () => {
     emitRuntimeStarted(latestSessionMessageSendRequest(session));
     emitRuntimeSuccess(latestSessionMessageSendRequest(session), 'Runtime response from deepseek-v4-flash for timeline persistence.');
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
 

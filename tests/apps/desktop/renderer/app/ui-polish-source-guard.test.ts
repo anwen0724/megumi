@@ -28,6 +28,17 @@ describe('UI polish source guard', () => {
     expect(source).toContain('data-testid="right-workspace-panel"');
   });
 
+  it('keeps the right workspace panel scoped to Workspace Files and Artifacts views', () => {
+    const rightPanel = readSource('apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+
+    expect(rightPanel).toContain("'workspace' | 'files' | 'artifacts'");
+    expect(rightPanel).toContain('aria-label={`Open ${title} workspace view`}');
+    expect(rightPanel).toContain('title="Files"');
+    expect(rightPanel).toContain('Back to Workspace');
+    expect(rightPanel).not.toMatch(/ContextPanelTab|MemoryPanelTab|Run dashboard|active path tree|branch tree|tool rail/i);
+    expect(rightPanel).not.toMatch(/PanelTitle>\s*Tools|label:\s*['"]Tools['"]|>\s*Tools\s*</);
+  });
+
   it('keeps composer shortcuts out of persistent visible UI copy', () => {
     const source = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
 

@@ -20,13 +20,15 @@ describe('RightWorkspacePanel responsive ownership', () => {
     expect(source).not.toContain('hidden w-12');
   });
 
-  it('renders both an expanded panel and a collapsed rail from explicit state', () => {
+  it('renders an occupied sidebar without the old collapsed rail', () => {
     const source = readRightPanelSource();
 
-    expect(source).toContain('className="flex w-80 shrink-0');
-    expect(source).toContain('className="flex w-12 shrink-0');
-    expect(source).toContain('Expand workspace panel');
-    expect(source).toContain('Collapse workspace panel');
+    expect(source).toContain("'flex w-80 shrink-0");
+    expect(source).not.toContain("'flex w-12 shrink-0");
+    expect(source).not.toContain('className="flex w-12 shrink-0');
+    expect(source).not.toContain('Expand workspace panel');
+    expect(source).not.toContain('Collapse workspace panel');
+    expect(source).toContain('return null');
   });
 
   it('avoids heavy double-background appearance', () => {

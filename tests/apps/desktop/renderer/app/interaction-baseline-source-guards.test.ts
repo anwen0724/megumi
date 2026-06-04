@@ -17,6 +17,9 @@ describe('interaction baseline source guards', () => {
     expect(appShell).toContain("from './LeftSidebar'");
     expect(appShell).toContain("from './RightWorkspacePanel'");
     expect(appShell).toContain("from '../features/chat'");
+    expect(appShell).toContain('rightSidebarOpen');
+    expect(appShell).toContain('workspaceSidebarOpen={rightSidebarOpen}');
+    expect(appShell).toContain('open={rightSidebarOpen}');
   });
 
   it('keeps deleted old visual UI files absent', () => {
