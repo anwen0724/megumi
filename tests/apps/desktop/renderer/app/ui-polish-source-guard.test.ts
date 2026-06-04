@@ -39,6 +39,34 @@ describe('UI polish source guard', () => {
     expect(rightPanel).not.toMatch(/PanelTitle>\s*Tools|label:\s*['"]Tools['"]|>\s*Tools\s*</);
   });
 
+  it('keeps Settings as a main-area page instead of an overlay modal', () => {
+    const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
+    const settingsPage = readSource('apps/desktop/src/renderer/shell/SettingsPage.tsx');
+
+    expect(appShell).toContain("from './SettingsPage'");
+    expect(appShell).toContain('<SettingsPage');
+    expect(appShell).not.toContain('Settings' + 'Modal');
+    expect(settingsPage).toContain('data-testid="settings-page"');
+    expect(settingsPage).toContain('grid-cols-[13rem_minmax(0,1fr)]');
+    expect(settingsPage).not.toMatch(new RegExp([
+      'role=["\']dialog["\']',
+      'aria-modal',
+      'fixed inset-0',
+      'Close settings ' + 'overlay',
+    ].join('|')));
+    expect(settingsPage).not.toMatch(/Memory|Context debug|Run dashboard|Checkpoint/);
+  });
+
+  it('keeps the focus canvas free of timeline rails and assistant cards', () => {
+    const chatTimeline = readSource('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const timelineMessage = readSource('apps/desktop/src/renderer/features/chat/components/TimelineMessage.tsx');
+
+    expect(chatTimeline).toContain('max-w-3xl');
+    expect(chatTimeline).toContain('transition-[padding,width]');
+    expect(timelineMessage).not.toMatch(/timeline-rail|border-l-2.*article|steps rail/i);
+    expect(timelineMessage).not.toMatch(/isAssistant\s*\?\s*['"][^'"]*rounded-lg/);
+  });
+
   it('keeps composer shortcuts out of persistent visible UI copy', () => {
     const source = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
 

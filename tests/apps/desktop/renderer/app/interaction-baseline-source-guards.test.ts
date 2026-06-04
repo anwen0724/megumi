@@ -16,10 +16,14 @@ describe('interaction baseline source guards', () => {
     expect(appShell).toContain("from './WindowTitleBar'");
     expect(appShell).toContain("from './LeftSidebar'");
     expect(appShell).toContain("from './RightWorkspacePanel'");
+    expect(appShell).toContain("from './SettingsPage'");
     expect(appShell).toContain("from '../features/chat'");
     expect(appShell).toContain('rightSidebarOpen');
     expect(appShell).toContain('workspaceSidebarOpen={rightSidebarOpen}');
     expect(appShell).toContain('open={rightSidebarOpen}');
+    expect(appShell).toContain('settingsOpen ?');
+    expect(appShell).not.toContain("from './Settings" + "Modal'");
+    expect(appShell).not.toContain('<Settings' + 'Modal');
   });
 
   it('keeps deleted old visual UI files absent', () => {
@@ -92,5 +96,7 @@ describe('interaction baseline source guards', () => {
     expect(globals).toContain(':focus-visible');
     expect(globals).toContain('outline: 2px solid var(--color-focus)');
     expect(globals).toContain('scrollbar-color: var(--color-border-strong) transparent');
+    expect(globals).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(globals).toContain('animation-duration: 0.01ms !important');
   });
 });

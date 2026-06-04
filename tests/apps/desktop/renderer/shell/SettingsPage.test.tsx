@@ -47,7 +47,7 @@ describe('SettingsPage', () => {
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Close settings overlay')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Close settings ' + 'overlay')).not.toBeInTheDocument();
     expect(screen.getByTestId('settings-page')).not.toHaveClass('fixed');
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
   });

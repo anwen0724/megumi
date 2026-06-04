@@ -33,7 +33,7 @@ describe('AppShell custom window chrome entry', () => {
     expect(source).toContain("from './SettingsPage'");
     expect(source).toContain('settingsOpen ?');
     expect(source).toContain('<SettingsPage');
-    expect(source).not.toContain("from './SettingsModal'");
-    expect(source).not.toContain('<SettingsModal');
+    expect(source).not.toContain("from './Settings" + "Modal'");
+    expect(source).not.toContain('<Settings' + 'Modal');
   });
 });
