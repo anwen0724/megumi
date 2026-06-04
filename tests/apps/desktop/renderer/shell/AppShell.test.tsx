@@ -511,27 +511,31 @@ describe('AppShell', () => {
     expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
   });
 
-  it('opens and closes settings from the expanded sidebar', async () => {
+  it('opens and closes settings as the main area page from the expanded sidebar', async () => {
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
-    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Close settings' }));
-
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-timeline-root')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
   });
 
-  it('opens settings from the collapsed sidebar rail', async () => {
+  it('opens settings as the main area page from the collapsed sidebar rail', async () => {
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
-    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
-    expect(within(screen.getByRole('dialog', { name: 'Settings' })).getAllByText('Local desktop preferences')).toHaveLength(2);
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Local desktop preferences')).toBeInTheDocument();
   });
 
   it('clears the center timeline when creating a new local session', async () => {
@@ -621,6 +625,34 @@ describe('AppShell', () => {
 
     fireEvent.transitionEnd(closingPanel);
 
+    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('closes the workspace sidebar when opening settings', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('keeps the workspace sidebar closed if the titlebar toggle is clicked while settings is open', async () => {
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
     expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
   });

@@ -6,7 +6,7 @@ import { ChatTimeline } from '../features/chat';
 import { useSessionHistoryHydration } from '../features/session-history/use-session-history-hydration';
 import { LeftSidebar, type SidebarProjectItem } from './LeftSidebar';
 import { RightWorkspacePanel } from './RightWorkspacePanel';
-import { SettingsModal } from './SettingsModal';
+import { SettingsPage } from './SettingsPage';
 import { WindowTitleBar } from './WindowTitleBar';
 import { formatSessionUpdatedAt } from './shell-display';
 
@@ -82,6 +82,24 @@ export function AppShell() {
     await hydrateSessionTimeline(sessionId);
   }
 
+  function openSettings() {
+    setRightSidebarOpen(false);
+    setSettingsOpen(true);
+  }
+
+  function closeSettings() {
+    setSettingsOpen(false);
+  }
+
+  function toggleWorkspaceSidebar() {
+    if (settingsOpen) {
+      setRightSidebarOpen(false);
+      return;
+    }
+
+    setRightSidebarOpen((value) => !value);
+  }
+
   return (
     <div className="flex h-screen min-h-0 bg-[var(--color-app-bg)] text-[var(--color-text)]">
       <LeftSidebar
@@ -99,7 +117,7 @@ export function AppShell() {
         onManageProjects={() => {
           // LeftSidebar manages the modal open state internally
         }}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={openSettings}
         onOpenProject={(projectId) => {
           void useProjectStore.getState().openProject(projectId);
         }}
@@ -117,23 +135,27 @@ export function AppShell() {
       />
       <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">
         <WindowTitleBar
-          title={titlebarTitle}
+          title={settingsOpen ? 'Settings' : titlebarTitle}
           workspaceSidebarOpen={rightSidebarOpen}
-          onToggleWorkspaceSidebar={() => setRightSidebarOpen((value) => !value)}
+          onToggleWorkspaceSidebar={toggleWorkspaceSidebar}
         />
         <div
           data-testid="workbench-content"
           className="flex min-h-0 min-w-[62rem] flex-1 overflow-hidden transition-[padding,width] duration-200 ease-out"
         >
-          <ChatTimeline />
-          <RightWorkspacePanel
-            open={rightSidebarOpen}
-            onClose={() => setRightSidebarOpen(false)}
-          />
+          {settingsOpen ? (
+            <SettingsPage onDone={closeSettings} />
+          ) : (
+            <>
+              <ChatTimeline />
+              <RightWorkspacePanel
+                open={rightSidebarOpen}
+                onClose={() => setRightSidebarOpen(false)}
+              />
+            </>
+          )}
         </div>
       </div>
-
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
