@@ -63,4 +63,39 @@ describe('WindowTitleBar', () => {
     expect(screen.getByTestId('window-titlebar')).toHaveClass('app-drag-region');
     expect(screen.getByTestId('window-titlebar-controls')).toHaveClass('app-no-drag');
   });
+
+  it('renders a workspace sidebar toggle when shell handlers are provided', async () => {
+    const onToggleWorkspaceSidebar = vi.fn();
+    render(
+      <ThemeProvider>
+        <WindowTitleBar
+          title="Planning the UI"
+          workspaceSidebarOpen={false}
+          onToggleWorkspaceSidebar={onToggleWorkspaceSidebar}
+        />
+      </ThemeProvider>,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'Open workspace sidebar' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(toggle);
+
+    expect(onToggleWorkspaceSidebar).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates the workspace sidebar toggle state when open', () => {
+    render(
+      <ThemeProvider>
+        <WindowTitleBar
+          title="Planning the UI"
+          workspaceSidebarOpen
+          onToggleWorkspaceSidebar={() => undefined}
+        />
+      </ThemeProvider>,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'Close workspace sidebar' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
 });
