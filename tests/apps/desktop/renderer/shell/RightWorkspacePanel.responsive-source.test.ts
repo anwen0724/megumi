@@ -23,7 +23,11 @@ describe('RightWorkspacePanel responsive ownership', () => {
   it('renders an occupied sidebar without the old collapsed rail', () => {
     const source = readRightPanelSource();
 
-    expect(source).toContain("'flex w-80 shrink-0");
+    expect(source).toContain("'flex shrink-0 overflow-hidden");
+    expect(source).toContain("? 'w-80 translate-x-0 flex-col opacity-100'");
+    expect(source).toContain(": 'w-0 translate-x-6 flex-col opacity-0 pointer-events-none'");
+    expect(source).toContain('SIDEBAR_TRANSITION_MS');
+    expect(source).toContain('onTransitionEnd');
     expect(source).not.toContain("'flex w-12 shrink-0");
     expect(source).not.toContain('className="flex w-12 shrink-0');
     expect(source).not.toContain('Expand workspace panel');

@@ -1,6 +1,6 @@
 ﻿// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
 import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
@@ -613,6 +613,13 @@ describe('AppShell', () => {
         name: 'Close workspace sidebar',
       }),
     );
+
+    const closingPanel = screen.getByTestId('right-workspace-panel');
+    expect(closingPanel).toHaveClass('w-0');
+    expect(closingPanel).toHaveClass('opacity-0');
+    expect(closingPanel).toHaveClass('pointer-events-none');
+
+    fireEvent.transitionEnd(closingPanel);
 
     expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');

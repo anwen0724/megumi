@@ -8,6 +8,7 @@ import { useProjectStore } from '../entities/project/store';
 import { IconButton, PanelTitle, cx } from '../shared/ui';
 
 type WorkspaceView = 'workspace' | 'files' | 'artifacts';
+const SIDEBAR_TRANSITION_MS = 200;
 
 interface RightWorkspacePanelProps {
   open: boolean;
@@ -46,6 +47,8 @@ function WorkspaceToolButton({ icon: Icon, title, description, onClick }: Worksp
 
 export function RightWorkspacePanel({ open, onClose }: RightWorkspacePanelProps) {
   const [activeView, setActiveView] = useState<WorkspaceView>('workspace');
+  const [mounted, setMounted] = useState(open);
+  const [visible, setVisible] = useState(open);
   const currentProject = useProjectStore((state) =>
     state.projects.find((project) => project.id === state.currentProjectId) ?? null
   );
@@ -54,22 +57,41 @@ export function RightWorkspacePanel({ open, onClose }: RightWorkspacePanelProps)
   const isDetailView = activeView !== 'workspace';
 
   useEffect(() => {
-    if (!open) {
-      setActiveView('workspace');
+    if (open) {
+      setMounted(true);
+      const enterTimer = window.setTimeout(() => setVisible(true), 0);
+
+      return () => window.clearTimeout(enterTimer);
     }
+
+    setActiveView('workspace');
+    setVisible(false);
+    const exitTimer = window.setTimeout(() => setMounted(false), SIDEBAR_TRANSITION_MS);
+
+    return () => window.clearTimeout(exitTimer);
   }, [open]);
 
-  if (!open) {
+  if (!open && !mounted) {
     return null;
   }
+
+  const expanded = open && visible;
 
   return (
     <aside
       id="right-workspace-sidebar"
       data-testid="right-workspace-panel"
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && !open) {
+          setMounted(false);
+        }
+      }}
       className={cx(
-        'flex w-80 shrink-0 translate-x-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] opacity-100',
+        'flex shrink-0 overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)]',
         'shadow-[-18px_0_48px_rgba(76,92,70,0.08)] transition-[width,opacity,transform] duration-200 ease-out',
+        expanded
+          ? 'w-80 translate-x-0 flex-col opacity-100'
+          : 'w-0 translate-x-6 flex-col opacity-0 pointer-events-none',
       )}
     >
       <div

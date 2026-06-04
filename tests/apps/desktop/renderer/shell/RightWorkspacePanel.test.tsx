@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import { RightWorkspacePanel } from '@megumi/desktop/renderer/shell/RightWorkspacePanel';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
@@ -54,12 +54,39 @@ describe('RightWorkspacePanel', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders nothing when the workspace sidebar is closed', () => {
     render(<RightWorkspacePanel open={false} onClose={() => undefined} />);
 
     expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Expand workspace panel' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
+  });
+
+  it('mounts before entering the expanded open state', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<RightWorkspacePanel open={false} onClose={() => undefined} />);
+
+    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+
+    rerender(<RightWorkspacePanel open onClose={() => undefined} />);
+
+    const enteringPanel = screen.getByTestId('right-workspace-panel');
+    expect(enteringPanel).toHaveClass('w-0');
+    expect(enteringPanel).toHaveClass('opacity-0');
+    expect(enteringPanel).toHaveClass('translate-x-6');
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    const expandedPanel = screen.getByTestId('right-workspace-panel');
+    expect(expandedPanel).toHaveClass('w-80');
+    expect(expandedPanel).toHaveClass('opacity-100');
+    expect(expandedPanel).toHaveClass('translate-x-0');
   });
 
   it('opens to the Workspace chooser without exposing a Tools label', () => {
@@ -128,5 +155,31 @@ describe('RightWorkspacePanel', () => {
     expect(panel).not.toHaveClass('absolute');
     expect(content).toHaveClass('overflow-y-auto');
     expect(panel.querySelector('[data-testid="right-workspace-panel-card"]')).toBeNull();
+  });
+
+  it('keeps the sidebar mounted during the closing transition before unmounting', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<RightWorkspacePanel open onClose={() => undefined} />);
+
+    expect(screen.getByTestId('right-workspace-panel')).toHaveClass('w-80');
+
+    rerender(<RightWorkspacePanel open={false} onClose={() => undefined} />);
+
+    const closingPanel = screen.getByTestId('right-workspace-panel');
+    expect(closingPanel).toHaveClass('w-0');
+    expect(closingPanel).toHaveClass('opacity-0');
+    expect(closingPanel).toHaveClass('translate-x-6');
+    expect(closingPanel).toHaveClass('pointer-events-none');
+    expect(closingPanel).not.toHaveClass('w-80');
+
+    act(() => {
+      vi.advanceTimersByTime(199);
+    });
+    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
   });
 });
