@@ -3,9 +3,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
-import { SettingsModal } from '@megumi/desktop/renderer/shell/SettingsModal';
+import { SettingsPage } from '@megumi/desktop/renderer/shell/SettingsPage';
 
-describe('SettingsModal provider settings', () => {
+describe('SettingsPage provider settings', () => {
   beforeEach(() => {
     useProviderStore.setState({
       providers: [
@@ -32,7 +32,7 @@ describe('SettingsModal provider settings', () => {
   it('opens the Models tab with provider settings', async () => {
     const user = userEvent.setup();
 
-    render(<SettingsModal open onClose={vi.fn()} />);
+    render(<SettingsPage onDone={vi.fn()} />);
 
     await user.click(screen.getByRole('tab', { name: 'Models' }));
 

@@ -1,23 +1,23 @@
-﻿// @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+// @vitest-environment jsdom
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import { SettingsModal } from '@megumi/desktop/renderer/shell/SettingsModal';
+import { SettingsPage } from '@megumi/desktop/renderer/shell/SettingsPage';
 import { ThemeProvider, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 
-function renderSettingsModal(open: boolean, onClose = vi.fn()) {
+function renderSettingsPage(onDone = vi.fn()) {
   return {
-    onClose,
+    onDone,
     ...render(
       <ThemeProvider>
-        <SettingsModal open={open} onClose={onClose} />
+        <SettingsPage onDone={onDone} />
       </ThemeProvider>,
     ),
   };
 }
 
-describe('SettingsModal', () => {
+describe('SettingsPage', () => {
   beforeEach(() => {
     useThemeStore.setState({ theme: 'megumi-warm' });
     Object.defineProperty(window, 'megumi', {
@@ -37,27 +37,24 @@ describe('SettingsModal', () => {
           setApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
           deleteApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
         },
-        chat: {
-          start: vi.fn(),
-          cancel: vi.fn(),
-        },
-        runtime: {
-          onEvent: vi.fn(),
-        },
       },
     });
   });
 
-  it('does not render when closed', () => {
-    renderSettingsModal(false);
+  it('renders as a main-area page instead of a modal dialog', () => {
+    renderSettingsPage();
 
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Close settings overlay')).not.toBeInTheDocument();
+    expect(screen.getByTestId('settings-page')).not.toHaveClass('fixed');
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
   });
 
-  it('renders the appearance section by default', () => {
-    renderSettingsModal(true);
+  it('renders the appearance section by default with visual theme picker', () => {
+    renderSettingsPage();
 
-    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Theme')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Megumi Warm/ })).toHaveAttribute('aria-checked', 'true');
@@ -65,8 +62,8 @@ describe('SettingsModal', () => {
     expect(screen.queryByRole('button', { name: /Switch to .* theme/ })).not.toBeInTheDocument();
   });
 
-  it('selects themes from settings appearance', async () => {
-    renderSettingsModal(true);
+  it('selects themes from settings appearance without changing theme persistence semantics', async () => {
+    renderSettingsPage();
 
     await userEvent.click(screen.getByRole('radio', { name: /Midnight Blue/ }));
 
@@ -74,69 +71,58 @@ describe('SettingsModal', () => {
     expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'midnight-blue');
   });
 
-  it('switches between settings categories', async () => {
-    renderSettingsModal(true);
+  it('switches between available settings categories without exposing unclosed product areas', async () => {
+    renderSettingsPage();
+
+    const categories = screen.getByRole('tablist', { name: 'Settings categories' });
+    expect(within(categories).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Appearance',
+      'Models',
+      'Security',
+      'About',
+    ]);
+    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Run dashboard' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Checkpoint' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Models' }));
-
     expect(screen.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Provider settings')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Security' }));
-
     expect(screen.getByText('Secret storage')).toBeInTheDocument();
     expect(screen.getByText('Approval policies')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: 'About' }));
-
     expect(screen.getByText('AI provider chat runtime integration')).toBeInTheDocument();
     expect(screen.getByText('This build connects the desktop UI to provider-backed streaming chat.')).toBeInTheDocument();
   });
 
-  it('keeps the same panel height after switching categories', async () => {
-    renderSettingsModal(true);
+  it('uses a stable two-pane page layout across categories', async () => {
+    renderSettingsPage();
 
-    const panel = screen.getByTestId('settings-modal-panel');
-    expect(panel).toHaveClass('h-[560px]');
+    const page = screen.getByTestId('settings-page');
+    const content = screen.getByTestId('settings-page-content');
+    expect(page).toHaveClass('min-w-[42rem]');
+    expect(page).toHaveClass('overflow-hidden');
+    expect(content).toHaveClass('grid');
+    expect(content).toHaveClass('grid-cols-[13rem_minmax(0,1fr)]');
 
     await userEvent.click(screen.getByRole('tab', { name: 'Models' }));
-    expect(panel).toHaveClass('h-[560px]');
-
-    await userEvent.click(screen.getByRole('tab', { name: 'Security' }));
-    expect(panel).toHaveClass('h-[560px]');
-
-    await userEvent.click(screen.getByRole('tab', { name: 'About' }));
-    expect(panel).toHaveClass('h-[560px]');
+    expect(content).toHaveClass('grid-cols-[13rem_minmax(0,1fr)]');
 
     await userEvent.click(screen.getByRole('tab', { name: 'Appearance' }));
-    expect(panel).toHaveClass('h-[560px]');
+    expect(content).toHaveClass('grid-cols-[13rem_minmax(0,1fr)]');
   });
 
-  it('closes from the close button', async () => {
-    const { onClose } = renderSettingsModal(true);
+  it('calls Done from button and Escape', async () => {
+    const { onDone } = renderSettingsPage();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Close settings' }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('closes from Escape', () => {
-    const { onClose } = renderSettingsModal(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onDone).toHaveBeenCalledTimes(1);
 
     fireEvent.keyDown(document, { key: 'Escape' });
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('closes from the overlay but not from inside the panel', () => {
-    const { onClose } = renderSettingsModal(true);
-
-    fireEvent.click(screen.getByTestId('settings-modal-panel'));
-
-    expect(onClose).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByLabelText('Close settings overlay'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(2);
   });
 });
