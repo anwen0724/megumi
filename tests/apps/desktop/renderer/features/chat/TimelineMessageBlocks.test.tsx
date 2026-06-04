@@ -91,14 +91,22 @@ function assistantMessage(overrides: Partial<TimelineAssistantMessage> = {}): Ti
 }
 
 describe('TimelineMessage canonical block rendering', () => {
-  it('renders user messages as right aligned lightweight bubbles', () => {
+  it('renders user messages as right aligned plain text with the time below', () => {
     render(<TimelineMessage message={userMessage()} />);
 
     const article = screen.getByRole('article', { name: 'User message' });
+    const text = screen.getByText('你是谁');
+    const time = article.querySelector('time');
+
     expect(article).toHaveClass('justify-end');
-    expect(screen.getByText('You')).toBeInTheDocument();
-    expect(screen.getByText('你是谁')).toBeInTheDocument();
-    expect(screen.getByText('你是谁').closest('div')).toHaveClass('bg-[var(--color-accent-soft)]');
+    expect(screen.queryByText('You')).not.toBeInTheDocument();
+    expect(text).toBeInTheDocument();
+    expect(article.textContent).toContain('你是谁');
+    expect([...article.querySelectorAll('*')].some((element) =>
+      element.classList.contains('bg-[var(--color-accent-soft)]'),
+    )).toBe(false);
+    expect(time).toHaveAttribute('dateTime', createdAt);
+    expect(text.compareDocumentPosition(time!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('keeps assistant content width stable without widening user bubbles', () => {

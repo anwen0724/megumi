@@ -6,17 +6,18 @@ import { ThemeProvider, useThemeStore } from '@megumi/desktop/renderer/shared/th
 
 describe('ThemeProvider', () => {
   beforeEach(() => {
-    useThemeStore.setState({ theme: 'megumi-warm' });
+    useThemeStore.setState({ theme: useThemeStore.getInitialState().theme });
   });
 
-  it('renders children inside the default Megumi Warm theme root', () => {
+  it('renders children inside the default Graphite Dark theme root', () => {
     render(
       <ThemeProvider>
         <div>Workspace</div>
       </ThemeProvider>,
     );
 
-    expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'megumi-warm');
+    expect(useThemeStore.getInitialState().theme).toBe('graphite-dark');
+    expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'graphite-dark');
     expect(screen.getByText('Workspace')).toBeInTheDocument();
   });
 

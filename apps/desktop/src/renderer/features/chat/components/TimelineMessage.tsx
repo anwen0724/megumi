@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { GitBranch, RotateCcw } from 'lucide-react';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
-import { cx, IconButton } from '../../../shared/ui';
+import { IconButton } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
 
 interface TimelineMessageProps {
@@ -45,73 +45,63 @@ function TimelineMessageComponent({
     );
   }
 
+  if (isUser) {
+    return (
+      <article
+        role="article"
+        aria-label="User message"
+        className="flex w-full justify-end animate-[megumi-message-in_160ms_ease-out]"
+      >
+        <div className="relative group flex max-w-2xl flex-col items-end text-right text-sm leading-7 text-[var(--color-text)]">
+          {canBranch ? (
+            <div className="absolute -left-24 top-0 flex opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+              <IconButton
+                label="Branch from here"
+                size="sm"
+                variant="ghost"
+                onClick={() => onBranchFromMessage?.(message)}
+              >
+                <GitBranch size={14} aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                label="Rerun"
+                size="sm"
+                variant="ghost"
+                onClick={() => onRerunMessage?.(message)}
+              >
+                <RotateCcw size={14} aria-hidden="true" />
+              </IconButton>
+            </div>
+          ) : null}
+
+          <TimelineMessageBlocks message={message} />
+          <time
+            dateTime={message.createdAt}
+            className="mt-1 block text-xs leading-5 text-[var(--color-text-muted)]"
+          >
+            {formatTime(message.createdAt)}
+          </time>
+          {afterContent}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article
       role="article"
-      aria-label={isUser ? 'User message' : isAssistant ? 'Megumi message' : `${role} message`}
-      className={cx(
-        'flex w-full animate-[megumi-message-in_160ms_ease-out]',
-        isUser ? 'justify-end' : 'justify-start',
-      )}
+      aria-label={isAssistant ? 'Megumi message' : `${role} message`}
+      className="flex w-full animate-[megumi-message-in_160ms_ease-out] justify-start"
     >
-      {canBranch ? (
-        <div className="relative group flex justify-end">
-          <div className="absolute -left-24 top-2 flex opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-            <IconButton
-              label="Branch from here"
-              size="sm"
-              variant="ghost"
-              onClick={() => onBranchFromMessage?.(message)}
-            >
-              <GitBranch size={14} aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              label="Rerun"
-              size="sm"
-              variant="ghost"
-              onClick={() => onRerunMessage?.(message)}
-            >
-              <RotateCcw size={14} aria-hidden="true" />
-            </IconButton>
-          </div>
-          <div
-            className={cx(
-              'max-w-2xl text-sm leading-7',
-              'rounded-lg bg-[var(--color-accent-soft)] px-4 py-3 text-right text-[var(--color-text)]',
-            )}
-          >
-            <div className="mb-2 flex items-center justify-end gap-2 text-xs text-[var(--color-text-muted)]">
-              <span>You</span>
-              <span>{formatTime(message.createdAt)}</span>
-            </div>
-
-            <TimelineMessageBlocks message={message} />
-            {afterContent}
-          </div>
+      <div className="max-w-2xl text-sm leading-7 w-full text-left text-[var(--color-text)]">
+        <div className="mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)] justify-start">
+          <span>{isAssistant ? 'Megumi' : role}</span>
+          <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
         </div>
-      ) : (
-        <div
-          className={cx(
-            'max-w-2xl text-sm leading-7',
-            isUser
-              ? 'rounded-lg bg-[var(--color-accent-soft)] px-4 py-3 text-right text-[var(--color-text)]'
-              : 'w-full text-left text-[var(--color-text)]',
-          )}
-        >
-          <div
-            className={cx(
-              'mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)]',
-              isUser ? 'justify-end' : 'justify-start',
-            )}
-          >
-            <span>{isUser ? 'You' : isAssistant ? 'Megumi' : role}</span>
-            <span>{formatTime(message.createdAt)}</span>
-          </div>
 
-          <TimelineMessageBlocks message={message} />
-          {afterContent}
-        </div>
-      )}
+        <TimelineMessageBlocks message={message} />
+        {afterContent}
+      </div>
     </article>
   );
 }
