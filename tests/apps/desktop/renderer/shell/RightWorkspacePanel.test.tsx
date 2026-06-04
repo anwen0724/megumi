@@ -54,58 +54,79 @@ describe('RightWorkspacePanel', () => {
     });
   });
 
-  it('renders Files tab by default and shows workspace path in the header', async () => {
-    render(<RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />);
+  it('renders nothing when the workspace sidebar is closed', () => {
+    render(<RightWorkspacePanel open={false} onClose={() => undefined} />);
 
-    expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('C:/all/work/study/megumi')).toHaveAttribute('title', 'C:/all/work/study/megumi');
-    expect(await screen.findByText('No files found')).toBeInTheDocument();
+    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Expand workspace panel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
   });
 
-  it('uses Files and Artifacts tabs and does not expose Context Memory Tasks or Run tabs', () => {
-    render(<RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />);
+  it('opens to the Workspace chooser without exposing a Tools label', () => {
+    render(<RightWorkspacePanel open onClose={() => undefined} />);
 
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
-      'Files',
-      'Artifacts',
-    ]);
+    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Artifacts workspace view' })).toBeInTheDocument();
+    expect(screen.queryByText('Tools')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
   });
 
-  it('switches to Artifacts tab', async () => {
-    render(<RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />);
+  it('shows Files inside the full workspace sidebar and can return to Workspace', async () => {
+    render(<RightWorkspacePanel open onClose={() => undefined} />);
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Artifacts' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
 
-    expect(screen.getByRole('tab', { name: 'Artifacts' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Files' })).toBeInTheDocument();
+    expect(screen.getByText('Megumi')).toBeInTheDocument();
+    expect(screen.getByText('C:/all/work/study/megumi')).toHaveAttribute('title', 'C:/all/work/study/megumi');
+    expect(await screen.findByText('No files found')).toBeInTheDocument();
+    expect(screen.queryByText('Tools')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to Workspace' }));
+
+    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
+  });
+
+  it('shows Artifacts inside the full workspace sidebar', async () => {
+    render(<RightWorkspacePanel open onClose={() => undefined} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
+
+    expect(screen.getByRole('heading', { name: 'Artifacts' })).toBeInTheDocument();
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
+    expect(screen.queryByText('Tools')).not.toBeInTheDocument();
   });
 
-  it('renders collapsed rail and calls toggle', async () => {
-    const onToggleCollapsed = vi.fn();
+  it('calls onClose from the full sidebar close button', async () => {
+    const onClose = vi.fn();
 
-    render(<RightWorkspacePanel collapsed onToggleCollapsed={onToggleCollapsed} />);
+    render(<RightWorkspacePanel open onClose={onClose} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Expand workspace panel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close workspace sidebar' }));
 
-    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the workspace panel as an integrated workbench surface instead of a floating card', async () => {
-    render(<RightWorkspacePanel collapsed={false} onToggleCollapsed={() => undefined} />);
+  it('uses an occupied sidebar surface instead of a floating card or collapsed rail', () => {
+    render(<RightWorkspacePanel open onClose={() => undefined} />);
 
     const panel = screen.getByTestId('right-workspace-panel');
-    const header = screen.getByTestId('right-workspace-panel-header');
     const content = screen.getByTestId('right-workspace-panel-content');
 
-    expect(panel).toHaveClass('bg-[var(--color-surface)]');
-    expect(panel).not.toHaveClass('bg-[var(--color-app-bg)]');
-    expect(header).toHaveClass('border-b');
+    expect(panel).toHaveAttribute('id', 'right-workspace-sidebar');
+    expect(panel).toHaveClass('w-80');
+    expect(panel).toHaveClass('border-l');
+    expect(panel).toHaveClass('transition-[width,opacity,transform]');
+    expect(panel).not.toHaveClass('fixed');
+    expect(panel).not.toHaveClass('absolute');
     expect(content).toHaveClass('overflow-y-auto');
     expect(panel.querySelector('[data-testid="right-workspace-panel-card"]')).toBeNull();
-    expect(await screen.findByText('No files found')).toBeInTheDocument();
   });
 });
