@@ -63,6 +63,6 @@ describe('composer source guard', () => {
     expect(timeline).toMatch(/data-testid="chat-timeline-scroll"[\s\S]*?className="[^"]*\babsolute\b[^"]*\binset-0\b/);
     expect(timeline).toMatch(/data-testid="chat-timeline-scroll"[\s\S]*?className="[^"]*\bpb-72\b/);
     expect(timeline).toMatch(/data-testid="chat-composer-overlay" className="[^"]*\babsolute\b[^"]*\bbottom-0\b/);
-    expect(appShell).toMatch(/data-testid="workbench-content" className="[^"]*\bmin-w-\[62rem\]/);
+    expect(appShell).toMatch(/data-testid="workbench-content"[\s\S]*?className="[^"]*\bmin-w-\[62rem\]/);
   });
 });
