@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import {
   WorkspaceChangedFileSchema,
@@ -144,6 +146,7 @@ export class WorkspaceChangeRepository {
 
   saveSnapshotContent(content: WorkspaceSnapshotContent): WorkspaceSnapshotContent {
     const parsed = WorkspaceSnapshotContentSchema.parse(content);
+    assertSnapshotContentMatchesDeclaredIntegrity(parsed);
     assertRunBelongsToSession(this.database, 'Snapshot content', parsed.runId, parsed.sessionId);
     const existing = this.getSnapshotContent(parsed.contentRefId);
     if (existing) {
@@ -1090,6 +1093,20 @@ function assertSnapshotDurableFieldsMatch(
   const hasDifference = durableFields.some((field) => existing[field] !== next[field]);
   if (hasDifference) {
     throw new Error(`Snapshot content ${next.contentRefId} already exists with different durable fields`);
+  }
+}
+
+function assertSnapshotContentMatchesDeclaredIntegrity(content: WorkspaceSnapshotContent): void {
+  const actualSha256 = createHash('sha256').update(content.contentText, 'utf8').digest('hex');
+  if (actualSha256 !== content.sha256) {
+    throw new Error(`Snapshot content ${content.contentRefId} sha256 does not match contentText`);
+  }
+
+  const actualByteLength = Buffer.byteLength(content.contentText, 'utf8');
+  if (actualByteLength !== content.byteLength) {
+    throw new Error(
+      `Snapshot content ${content.contentRefId} byteLength does not match contentText UTF-8 byte length`,
+    );
   }
 }
 

@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
+
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -32,15 +34,37 @@ afterEach(() => {
 describe('WorkspaceChangeRepository', () => {
   it('saves and reads UTF-8 snapshot content', () => {
     const repo = createRepo();
+    const contentText = 'const greeting = "你好, Megumi";\n';
     const snapshot = snapshotContent({
       contentRefId: 'snapshot-unicode',
-      contentText: 'const greeting = "你好, Megumi";\n',
-      byteLength: 31,
+      contentText,
+      sha256: hash(contentText),
+      byteLength: byteLength(contentText),
       metadata: { source: 'before_snapshot' },
     });
 
     expect(repo.saveSnapshotContent(snapshot)).toEqual(snapshot);
     expect(repo.getSnapshotContent('snapshot-unicode')).toEqual(snapshot);
+  });
+
+  it('rejects snapshot content when declared hash or byte length does not match UTF-8 content', () => {
+    const repo = createRepo();
+
+    expect(() => repo.saveSnapshotContent(snapshotContent({
+      contentRefId: 'snapshot-hash-mismatch',
+      sha256: hash('c'),
+    }))).toThrow(
+      'Snapshot content snapshot-hash-mismatch sha256 does not match contentText',
+    );
+    expect(repo.getSnapshotContent('snapshot-hash-mismatch')).toBeUndefined();
+
+    expect(() => repo.saveSnapshotContent(snapshotContent({
+      contentRefId: 'snapshot-byte-length-mismatch',
+      byteLength: 7,
+    }))).toThrow(
+      'Snapshot content snapshot-byte-length-mismatch byteLength does not match contentText UTF-8 byte length',
+    );
+    expect(repo.getSnapshotContent('snapshot-byte-length-mismatch')).toBeUndefined();
   });
 
   it('saves an open change set, checkpoint, changed file, then finalizes with computed count', () => {
@@ -123,8 +147,9 @@ describe('WorkspaceChangeRepository', () => {
 
     expect(() => repo.saveSnapshotContent({
       ...snapshot,
-      sha256: hash('c'),
       contentText: 'changed',
+      sha256: hash('changed'),
+      byteLength: byteLength('changed'),
     })).toThrow('Snapshot content snapshot-immutable already exists with different durable fields');
     expect(repo.getSnapshotContent('snapshot-immutable')).toEqual(snapshot);
   });
@@ -374,7 +399,7 @@ describe('WorkspaceChangeRepository', () => {
       sourceEntryId: 'source-2',
       responseMessageId: 'message-2',
       beforeContentRefId: 'snapshot-before-2',
-      beforeHash: hash('c'),
+      beforeHash: hash('before2'),
       beforeByteLength: 7,
     }));
     expect(() => repo.saveChangedFile(workspaceChangedFile({
@@ -506,7 +531,7 @@ describe('WorkspaceChangeRepository', () => {
     expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
       workspaceCheckpointId: 'checkpoint-before-hash-mismatch',
       beforeHash: hash('c'),
-    }))).toThrow('Workspace checkpoint beforeContentRefId snapshot-before sha256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa does not match beforeHash cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc');
+    }))).toThrow(`Workspace checkpoint beforeContentRefId snapshot-before sha256 ${hash('before')} does not match beforeHash ${hash('c')}`);
     expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
       workspaceCheckpointId: 'checkpoint-before-length-mismatch',
       beforeByteLength: 7,
@@ -516,7 +541,7 @@ describe('WorkspaceChangeRepository', () => {
     expect(() => repo.saveChangedFile(workspaceChangedFile({
       changedFileId: 'changed-file-before-hash-mismatch',
       beforeHash: hash('c'),
-    }))).toThrow('Changed file beforeContentRefId snapshot-before sha256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa does not match beforeHash cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc');
+    }))).toThrow(`Changed file beforeContentRefId snapshot-before sha256 ${hash('before')} does not match beforeHash ${hash('c')}`);
     expect(() => repo.saveChangedFile(workspaceChangedFile({
       changedFileId: 'changed-file-before-length-mismatch',
       beforeByteLength: 7,
@@ -524,7 +549,7 @@ describe('WorkspaceChangeRepository', () => {
     expect(() => repo.saveChangedFile(workspaceChangedFile({
       changedFileId: 'changed-file-after-hash-mismatch',
       afterHash: hash('c'),
-    }))).toThrow('Changed file afterContentRefId snapshot-after sha256 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb does not match afterHash cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc');
+    }))).toThrow(`Changed file afterContentRefId snapshot-after sha256 ${hash('after')} does not match afterHash ${hash('c')}`);
     expect(() => repo.saveChangedFile(workspaceChangedFile({
       changedFileId: 'changed-file-after-length-mismatch',
       afterByteLength: 6,
@@ -620,7 +645,7 @@ describe('WorkspaceChangeRepository', () => {
       sourceEntryId: 'source-2',
       responseMessageId: 'message-2',
       beforeContentRefId: 'snapshot-before-2',
-      beforeHash: hash('c'),
+      beforeHash: hash('before2'),
       beforeByteLength: 7,
     }));
     repo.saveChangedFile(workspaceChangedFile({
@@ -636,9 +661,9 @@ describe('WorkspaceChangeRepository', () => {
       responseMessageId: 'message-2',
       beforeContentRefId: 'snapshot-before-2',
       afterContentRefId: 'snapshot-after-2',
-      beforeHash: hash('c'),
+      beforeHash: hash('before2'),
       beforeByteLength: 7,
-      afterHash: hash('d'),
+      afterHash: hash('after2'),
       afterByteLength: 6,
     }));
 
@@ -705,34 +730,34 @@ function seedChange(repo: WorkspaceChangeRepository): void {
 function seedSnapshots(repo: WorkspaceChangeRepository): void {
   repo.saveSnapshotContent(snapshotContent({
     contentRefId: 'snapshot-before',
-    sha256: hash('a'),
-    byteLength: 6,
     contentText: 'before',
+    sha256: hash('before'),
+    byteLength: byteLength('before'),
     createdAt: '2026-06-05T10:00:00.000Z',
   }));
   repo.saveSnapshotContent(snapshotContent({
     contentRefId: 'snapshot-after',
-    sha256: hash('b'),
-    byteLength: 5,
     contentText: 'after',
+    sha256: hash('after'),
+    byteLength: byteLength('after'),
     createdAt: '2026-06-05T10:00:01.000Z',
   }));
   repo.saveSnapshotContent(snapshotContent({
     contentRefId: 'snapshot-before-2',
     sessionId: 'session-2',
     runId: 'run-2',
-    sha256: hash('c'),
-    byteLength: 7,
     contentText: 'before2',
+    sha256: hash('before2'),
+    byteLength: byteLength('before2'),
     createdAt: '2026-06-05T10:00:02.000Z',
   }));
   repo.saveSnapshotContent(snapshotContent({
     contentRefId: 'snapshot-after-2',
     sessionId: 'session-2',
     runId: 'run-2',
-    sha256: hash('d'),
-    byteLength: 6,
     contentText: 'after2',
+    sha256: hash('after2'),
+    byteLength: byteLength('after2'),
     createdAt: '2026-06-05T10:00:03.000Z',
   }));
 }
@@ -745,9 +770,9 @@ function snapshotContent(overrides: Partial<WorkspaceSnapshotContent> = {}): Wor
     projectPath: 'src/app.ts',
     storage: 'sqlite_text',
     encoding: 'utf8',
-    sha256: hash('a'),
-    byteLength: 6,
     contentText: 'before',
+    sha256: hash('before'),
+    byteLength: byteLength('before'),
     createdAt: '2026-06-05T10:00:00.000Z',
     ...overrides,
   };
@@ -783,7 +808,7 @@ function workspaceCheckpoint(overrides: Partial<WorkspaceCheckpoint> = {}): Work
     projectPath: 'src/app.ts',
     beforeExists: true,
     beforeContentRefId: 'snapshot-before',
-    beforeHash: hash('a'),
+    beforeHash: hash('before'),
     beforeByteLength: 6,
     createdAt: '2026-06-05T10:02:00.000Z',
     metadata: { toolName: 'write_file' },
@@ -808,11 +833,11 @@ function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile> = {}): Wo
     restoreState: 'restorable',
     beforeExists: true,
     beforeContentRefId: 'snapshot-before',
-    beforeHash: hash('a'),
+    beforeHash: hash('before'),
     beforeByteLength: 6,
     afterExists: true,
     afterContentRefId: 'snapshot-after',
-    afterHash: hash('b'),
+    afterHash: hash('after'),
     afterByteLength: 5,
     createdAt: '2026-06-05T10:03:00.000Z',
     updatedAt: '2026-06-05T10:03:00.000Z',
@@ -1025,6 +1050,10 @@ function seedLifecycle(database: Database.Database): void {
   `);
 }
 
-function hash(character: string): string {
-  return character.repeat(64);
+function hash(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function byteLength(value: string): number {
+  return Buffer.byteLength(value, 'utf8');
 }
