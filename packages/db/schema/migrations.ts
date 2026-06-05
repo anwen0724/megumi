@@ -1002,6 +1002,215 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS workspace_snapshot_contents (
+      content_ref_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      storage TEXT NOT NULL CHECK (storage = 'sqlite_text'),
+      encoding TEXT NOT NULL CHECK (encoding = 'utf8'),
+      sha256 TEXT NOT NULL,
+      byte_length INTEGER NOT NULL CHECK (byte_length >= 0),
+      content_text TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_change_sets (
+      change_set_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      source_entry_id TEXT,
+      response_message_id TEXT,
+      status TEXT NOT NULL CHECK (status IN ('open', 'finalized')),
+      changed_file_count INTEGER NOT NULL DEFAULT 0 CHECK (changed_file_count >= 0),
+      created_at TEXT NOT NULL,
+      finalized_at TEXT,
+      metadata_json TEXT,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL,
+      FOREIGN KEY(source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL,
+      FOREIGN KEY(response_message_id) REFERENCES session_messages(message_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_checkpoints (
+      workspace_checkpoint_id TEXT PRIMARY KEY,
+      change_set_id TEXT,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      tool_call_id TEXT,
+      tool_execution_id TEXT,
+      source_entry_id TEXT,
+      response_message_id TEXT,
+      project_path TEXT NOT NULL,
+      before_exists INTEGER NOT NULL CHECK (before_exists IN (0, 1)),
+      before_content_ref_id TEXT,
+      before_hash TEXT,
+      before_byte_length INTEGER CHECK (before_byte_length IS NULL OR before_byte_length >= 0),
+      created_at TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(change_set_id) REFERENCES workspace_change_sets(change_set_id) ON DELETE SET NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE SET NULL,
+      FOREIGN KEY(tool_execution_id) REFERENCES tool_executions(tool_execution_id) ON DELETE SET NULL,
+      FOREIGN KEY(source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL,
+      FOREIGN KEY(response_message_id) REFERENCES session_messages(message_id) ON DELETE SET NULL,
+      FOREIGN KEY(before_content_ref_id) REFERENCES workspace_snapshot_contents(content_ref_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_changed_files (
+      changed_file_id TEXT PRIMARY KEY,
+      change_set_id TEXT NOT NULL,
+      workspace_checkpoint_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT,
+      tool_call_id TEXT,
+      tool_execution_id TEXT,
+      source_entry_id TEXT,
+      response_message_id TEXT,
+      project_path TEXT NOT NULL,
+      change_kind TEXT NOT NULL CHECK (change_kind IN ('created', 'modified', 'deleted')),
+      restore_state TEXT NOT NULL CHECK (
+        restore_state IN ('restorable', 'restored', 'conflict', 'restore_failed', 'not_restorable')
+      ),
+      before_exists INTEGER NOT NULL CHECK (before_exists IN (0, 1)),
+      before_content_ref_id TEXT,
+      before_hash TEXT,
+      before_byte_length INTEGER CHECK (before_byte_length IS NULL OR before_byte_length >= 0),
+      after_exists INTEGER NOT NULL CHECK (after_exists IN (0, 1)),
+      after_content_ref_id TEXT,
+      after_hash TEXT,
+      after_byte_length INTEGER CHECK (after_byte_length IS NULL OR after_byte_length >= 0),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT,
+      FOREIGN KEY(change_set_id) REFERENCES workspace_change_sets(change_set_id) ON DELETE CASCADE,
+      FOREIGN KEY(workspace_checkpoint_id) REFERENCES workspace_checkpoints(workspace_checkpoint_id) ON DELETE CASCADE,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE SET NULL,
+      FOREIGN KEY(tool_call_id) REFERENCES tool_calls(tool_call_id) ON DELETE SET NULL,
+      FOREIGN KEY(tool_execution_id) REFERENCES tool_executions(tool_execution_id) ON DELETE SET NULL,
+      FOREIGN KEY(source_entry_id) REFERENCES session_source_entries(source_entry_id) ON DELETE SET NULL,
+      FOREIGN KEY(response_message_id) REFERENCES session_messages(message_id) ON DELETE SET NULL,
+      FOREIGN KEY(before_content_ref_id) REFERENCES workspace_snapshot_contents(content_ref_id) ON DELETE SET NULL,
+      FOREIGN KEY(after_content_ref_id) REFERENCES workspace_snapshot_contents(content_ref_id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_restore_requests (
+      restore_request_id TEXT PRIMARY KEY,
+      change_set_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      requested_by TEXT NOT NULL CHECK (requested_by IN ('user', 'host', 'system')),
+      status TEXT NOT NULL CHECK (status IN ('requested', 'running', 'completed', 'failed')),
+      requested_at TEXT NOT NULL,
+      completed_at TEXT,
+      metadata_json TEXT,
+      FOREIGN KEY(change_set_id) REFERENCES workspace_change_sets(change_set_id) ON DELETE CASCADE,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_restore_results (
+      restore_result_id TEXT PRIMARY KEY,
+      restore_request_id TEXT NOT NULL,
+      change_set_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('restored', 'partial', 'conflict', 'failed', 'noop')),
+      restored_at TEXT NOT NULL,
+      error_json TEXT,
+      metadata_json TEXT,
+      FOREIGN KEY(restore_request_id) REFERENCES workspace_restore_requests(restore_request_id) ON DELETE CASCADE,
+      FOREIGN KEY(change_set_id) REFERENCES workspace_change_sets(change_set_id) ON DELETE CASCADE,
+      FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS workspace_restore_file_results (
+      restore_file_result_id TEXT PRIMARY KEY,
+      restore_result_id TEXT NOT NULL,
+      changed_file_id TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('restored', 'conflict', 'failed', 'noop')),
+      conflict_reason TEXT CHECK (
+        conflict_reason IS NULL
+        OR conflict_reason IN (
+          'current_hash_mismatch',
+          'current_file_missing',
+          'current_file_exists',
+          'path_outside_project',
+          'snapshot_missing',
+          'unsupported_file',
+          'write_failed'
+        )
+      ),
+      error_json TEXT,
+      restored_at TEXT,
+      metadata_json TEXT,
+      FOREIGN KEY(restore_result_id) REFERENCES workspace_restore_results(restore_result_id) ON DELETE CASCADE,
+      FOREIGN KEY(changed_file_id) REFERENCES workspace_changed_files(changed_file_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_snapshot_contents_session_run
+      ON workspace_snapshot_contents(session_id, run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_snapshot_contents_run_path
+      ON workspace_snapshot_contents(run_id, project_path);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_change_sets_session_created
+      ON workspace_change_sets(session_id, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_change_sets_run_created
+      ON workspace_change_sets(run_id, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_checkpoints_change_set
+      ON workspace_checkpoints(change_set_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_checkpoints_run_path
+      ON workspace_checkpoints(run_id, project_path);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_checkpoints_tool_execution
+      ON workspace_checkpoints(tool_execution_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_changed_files_change_set
+      ON workspace_changed_files(change_set_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_changed_files_run
+      ON workspace_changed_files(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_changed_files_run_path
+      ON workspace_changed_files(run_id, project_path);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_changed_files_restore_state
+      ON workspace_changed_files(restore_state);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_restore_requests_change_set
+      ON workspace_restore_requests(change_set_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_restore_results_request
+      ON workspace_restore_results(restore_request_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_restore_results_change_set
+      ON workspace_restore_results(change_set_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_restore_file_results_result
+      ON workspace_restore_file_results(restore_result_id);
+
+    CREATE INDEX IF NOT EXISTS idx_workspace_restore_file_results_changed_file
+      ON workspace_restore_file_results(changed_file_id);
+  `);
+
+  database.exec(`
     CREATE TABLE IF NOT EXISTS artifacts (
       artifact_id TEXT PRIMARY KEY,
       session_id TEXT,

@@ -1968,6 +1968,629 @@ describe('provider settings migrations', () => {
     ]));
   });
 
+  it('creates workspace change persistence tables with expected columns, foreign keys, and indexes', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+
+    for (const tableName of [
+      'workspace_snapshot_contents',
+      'workspace_change_sets',
+      'workspace_checkpoints',
+      'workspace_changed_files',
+      'workspace_restore_requests',
+      'workspace_restore_results',
+      'workspace_restore_file_results',
+    ]) {
+      expect(tableExists(database, tableName)).toBe(true);
+    }
+
+    expect(tableColumns(database, 'workspace_snapshot_contents').map((column) => column.name)).toEqual([
+      'content_ref_id',
+      'session_id',
+      'run_id',
+      'project_path',
+      'storage',
+      'encoding',
+      'sha256',
+      'byte_length',
+      'content_text',
+      'created_at',
+      'metadata_json',
+    ]);
+    expect(columnByName(tableColumns(database, 'workspace_snapshot_contents'), 'content_ref_id')).toMatchObject({
+      type: 'TEXT',
+      pk: 1,
+    });
+
+    expect(tableColumns(database, 'workspace_change_sets').map((column) => column.name)).toEqual([
+      'change_set_id',
+      'session_id',
+      'run_id',
+      'step_id',
+      'source_entry_id',
+      'response_message_id',
+      'status',
+      'changed_file_count',
+      'created_at',
+      'finalized_at',
+      'metadata_json',
+    ]);
+
+    expect(tableColumns(database, 'workspace_checkpoints').map((column) => column.name)).toEqual([
+      'workspace_checkpoint_id',
+      'change_set_id',
+      'session_id',
+      'run_id',
+      'step_id',
+      'tool_call_id',
+      'tool_execution_id',
+      'source_entry_id',
+      'response_message_id',
+      'project_path',
+      'before_exists',
+      'before_content_ref_id',
+      'before_hash',
+      'before_byte_length',
+      'created_at',
+      'metadata_json',
+    ]);
+
+    expect(tableColumns(database, 'workspace_changed_files').map((column) => column.name)).toEqual([
+      'changed_file_id',
+      'change_set_id',
+      'workspace_checkpoint_id',
+      'session_id',
+      'run_id',
+      'step_id',
+      'tool_call_id',
+      'tool_execution_id',
+      'source_entry_id',
+      'response_message_id',
+      'project_path',
+      'change_kind',
+      'restore_state',
+      'before_exists',
+      'before_content_ref_id',
+      'before_hash',
+      'before_byte_length',
+      'after_exists',
+      'after_content_ref_id',
+      'after_hash',
+      'after_byte_length',
+      'created_at',
+      'updated_at',
+      'metadata_json',
+    ]);
+
+    expect(tableColumns(database, 'workspace_restore_requests').map((column) => column.name)).toEqual([
+      'restore_request_id',
+      'change_set_id',
+      'session_id',
+      'run_id',
+      'requested_by',
+      'status',
+      'requested_at',
+      'completed_at',
+      'metadata_json',
+    ]);
+
+    expect(tableColumns(database, 'workspace_restore_results').map((column) => column.name)).toEqual([
+      'restore_result_id',
+      'restore_request_id',
+      'change_set_id',
+      'session_id',
+      'run_id',
+      'status',
+      'restored_at',
+      'error_json',
+      'metadata_json',
+    ]);
+
+    expect(tableColumns(database, 'workspace_restore_file_results').map((column) => column.name)).toEqual([
+      'restore_file_result_id',
+      'restore_result_id',
+      'changed_file_id',
+      'project_path',
+      'status',
+      'conflict_reason',
+      'error_json',
+      'restored_at',
+      'metadata_json',
+    ]);
+
+    expect(foreignKeys(database, 'workspace_snapshot_contents')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'session_id', table: 'sessions', to: 'session_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'run_id', table: 'runs', to: 'run_id', on_delete: 'CASCADE' }),
+    ]));
+    expect(foreignKeys(database, 'workspace_change_sets')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'session_id', table: 'sessions', to: 'session_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'run_id', table: 'runs', to: 'run_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'step_id', table: 'run_steps', to: 'step_id', on_delete: 'SET NULL' }),
+      expect.objectContaining({
+        from: 'source_entry_id',
+        table: 'session_source_entries',
+        to: 'source_entry_id',
+        on_delete: 'SET NULL',
+      }),
+      expect.objectContaining({
+        from: 'response_message_id',
+        table: 'session_messages',
+        to: 'message_id',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'workspace_checkpoints')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'change_set_id',
+        table: 'workspace_change_sets',
+        to: 'change_set_id',
+        on_delete: 'SET NULL',
+      }),
+      expect.objectContaining({ from: 'session_id', table: 'sessions', to: 'session_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'run_id', table: 'runs', to: 'run_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'tool_call_id', table: 'tool_calls', to: 'tool_call_id', on_delete: 'SET NULL' }),
+      expect.objectContaining({
+        from: 'tool_execution_id',
+        table: 'tool_executions',
+        to: 'tool_execution_id',
+        on_delete: 'SET NULL',
+      }),
+      expect.objectContaining({
+        from: 'before_content_ref_id',
+        table: 'workspace_snapshot_contents',
+        to: 'content_ref_id',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'workspace_changed_files')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'change_set_id',
+        table: 'workspace_change_sets',
+        to: 'change_set_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'workspace_checkpoint_id',
+        table: 'workspace_checkpoints',
+        to: 'workspace_checkpoint_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({ from: 'session_id', table: 'sessions', to: 'session_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'run_id', table: 'runs', to: 'run_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({
+        from: 'before_content_ref_id',
+        table: 'workspace_snapshot_contents',
+        to: 'content_ref_id',
+        on_delete: 'SET NULL',
+      }),
+      expect.objectContaining({
+        from: 'after_content_ref_id',
+        table: 'workspace_snapshot_contents',
+        to: 'content_ref_id',
+        on_delete: 'SET NULL',
+      }),
+    ]));
+    expect(foreignKeys(database, 'workspace_restore_requests')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'change_set_id',
+        table: 'workspace_change_sets',
+        to: 'change_set_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({ from: 'session_id', table: 'sessions', to: 'session_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'run_id', table: 'runs', to: 'run_id', on_delete: 'CASCADE' }),
+    ]));
+    expect(foreignKeys(database, 'workspace_restore_results')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'restore_request_id',
+        table: 'workspace_restore_requests',
+        to: 'restore_request_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'change_set_id',
+        table: 'workspace_change_sets',
+        to: 'change_set_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({ from: 'session_id', table: 'sessions', to: 'session_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'run_id', table: 'runs', to: 'run_id', on_delete: 'CASCADE' }),
+    ]));
+    expect(foreignKeys(database, 'workspace_restore_file_results')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'restore_result_id',
+        table: 'workspace_restore_results',
+        to: 'restore_result_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'changed_file_id',
+        table: 'workspace_changed_files',
+        to: 'changed_file_id',
+        on_delete: 'CASCADE',
+      }),
+    ]));
+
+    expect(indexNames(database)).toEqual(expect.arrayContaining([
+      'idx_workspace_snapshot_contents_session_run',
+      'idx_workspace_snapshot_contents_run_path',
+      'idx_workspace_change_sets_session_created',
+      'idx_workspace_change_sets_run_created',
+      'idx_workspace_checkpoints_change_set',
+      'idx_workspace_checkpoints_run_path',
+      'idx_workspace_checkpoints_tool_execution',
+      'idx_workspace_changed_files_change_set',
+      'idx_workspace_changed_files_run',
+      'idx_workspace_changed_files_run_path',
+      'idx_workspace_changed_files_restore_state',
+      'idx_workspace_restore_requests_change_set',
+      'idx_workspace_restore_results_request',
+      'idx_workspace_restore_results_change_set',
+      'idx_workspace_restore_file_results_result',
+      'idx_workspace_restore_file_results_changed_file',
+    ]));
+  });
+
+  it('cascades workspace change rows when deleting a session', () => {
+    const database = createTestDb();
+    database.pragma('foreign_keys = ON');
+    migrateDatabase(database);
+
+    database.exec(`
+      INSERT INTO sessions (session_id, title, status, created_at, updated_at)
+      VALUES ('session-workspace', 'Workspace changes', 'active', '2026-06-05T10:00:00.000Z', '2026-06-05T10:00:00.000Z');
+
+      INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
+      VALUES ('run-workspace', 'session-workspace', 'chat', 'Change file', 'completed', '2026-06-05T10:01:00.000Z');
+
+      INSERT INTO run_steps (step_id, run_id, kind, status)
+      VALUES ('step-workspace', 'run-workspace', 'tool', 'succeeded');
+
+      INSERT INTO session_messages (message_id, session_id, run_id, role, content, status, created_at)
+      VALUES (
+        'message-workspace',
+        'session-workspace',
+        'run-workspace',
+        'assistant',
+        'Changed src/index.ts',
+        'completed',
+        '2026-06-05T10:02:00.000Z'
+      );
+
+      INSERT INTO session_source_entries (
+        source_entry_id,
+        session_id,
+        source_kind,
+        source_id,
+        source_ref_json,
+        created_at
+      ) VALUES (
+        'source-workspace',
+        'session-workspace',
+        'session_message',
+        'message-workspace',
+        '{"sourceKind":"session_message","sourceId":"message-workspace"}',
+        '2026-06-05T10:02:00.000Z'
+      );
+
+      INSERT INTO model_steps (
+        model_step_id,
+        run_id,
+        step_id,
+        provider_id,
+        model_id,
+        status,
+        started_at,
+        model_step_json
+      ) VALUES (
+        'model-step-workspace',
+        'run-workspace',
+        'step-workspace',
+        'openai-compatible',
+        'gpt-5',
+        'completed',
+        '2026-06-05T10:02:30.000Z',
+        '{}'
+      );
+
+      INSERT INTO tool_calls (
+        tool_call_id,
+        run_id,
+        model_step_id,
+        provider_tool_call_id,
+        tool_name,
+        input_json,
+        input_preview_json,
+        status,
+        created_at,
+        tool_call_json
+      ) VALUES (
+        'tool-call-workspace',
+        'run-workspace',
+        'model-step-workspace',
+        'provider-tool-call-workspace',
+        'write_file',
+        '{}',
+        '{}',
+        'completed',
+        '2026-06-05T10:03:00.000Z',
+        '{}'
+      );
+
+      INSERT INTO tool_executions (
+        tool_execution_id,
+        tool_call_id,
+        run_id,
+        step_id,
+        tool_name,
+        input_json,
+        input_preview_json,
+        capabilities_json,
+        risk_level,
+        side_effect,
+        status,
+        requested_at,
+        tool_execution_json
+      ) VALUES (
+        'tool-execution-workspace',
+        'tool-call-workspace',
+        'run-workspace',
+        'step-workspace',
+        'write_file',
+        '{}',
+        '{}',
+        '["project_write"]',
+        'medium',
+        'write_file',
+        'succeeded',
+        '2026-06-05T10:03:01.000Z',
+        '{}'
+      );
+
+      INSERT INTO workspace_snapshot_contents (
+        content_ref_id,
+        session_id,
+        run_id,
+        project_path,
+        storage,
+        encoding,
+        sha256,
+        byte_length,
+        content_text,
+        created_at
+      ) VALUES
+        (
+          'snapshot-before',
+          'session-workspace',
+          'run-workspace',
+          'src/index.ts',
+          'sqlite_text',
+          'utf8',
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          6,
+          'before',
+          '2026-06-05T10:03:02.000Z'
+        ),
+        (
+          'snapshot-after',
+          'session-workspace',
+          'run-workspace',
+          'src/index.ts',
+          'sqlite_text',
+          'utf8',
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          5,
+          'after',
+          '2026-06-05T10:03:03.000Z'
+        );
+
+      INSERT INTO workspace_change_sets (
+        change_set_id,
+        session_id,
+        run_id,
+        step_id,
+        source_entry_id,
+        response_message_id,
+        status,
+        changed_file_count,
+        created_at
+      ) VALUES (
+        'change-set-workspace',
+        'session-workspace',
+        'run-workspace',
+        'step-workspace',
+        'source-workspace',
+        'message-workspace',
+        'finalized',
+        1,
+        '2026-06-05T10:03:04.000Z'
+      );
+
+      INSERT INTO workspace_checkpoints (
+        workspace_checkpoint_id,
+        change_set_id,
+        session_id,
+        run_id,
+        step_id,
+        tool_call_id,
+        tool_execution_id,
+        source_entry_id,
+        response_message_id,
+        project_path,
+        before_exists,
+        before_content_ref_id,
+        before_hash,
+        before_byte_length,
+        created_at
+      ) VALUES (
+        'workspace-checkpoint',
+        'change-set-workspace',
+        'session-workspace',
+        'run-workspace',
+        'step-workspace',
+        'tool-call-workspace',
+        'tool-execution-workspace',
+        'source-workspace',
+        'message-workspace',
+        'src/index.ts',
+        1,
+        'snapshot-before',
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        6,
+        '2026-06-05T10:03:05.000Z'
+      );
+
+      INSERT INTO workspace_changed_files (
+        changed_file_id,
+        change_set_id,
+        workspace_checkpoint_id,
+        session_id,
+        run_id,
+        step_id,
+        tool_call_id,
+        tool_execution_id,
+        source_entry_id,
+        response_message_id,
+        project_path,
+        change_kind,
+        restore_state,
+        before_exists,
+        before_content_ref_id,
+        before_hash,
+        before_byte_length,
+        after_exists,
+        after_content_ref_id,
+        after_hash,
+        after_byte_length,
+        created_at,
+        updated_at
+      ) VALUES (
+        'changed-file-workspace',
+        'change-set-workspace',
+        'workspace-checkpoint',
+        'session-workspace',
+        'run-workspace',
+        'step-workspace',
+        'tool-call-workspace',
+        'tool-execution-workspace',
+        'source-workspace',
+        'message-workspace',
+        'src/index.ts',
+        'modified',
+        'restorable',
+        1,
+        'snapshot-before',
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        6,
+        1,
+        'snapshot-after',
+        'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        5,
+        '2026-06-05T10:03:06.000Z',
+        '2026-06-05T10:03:06.000Z'
+      );
+
+      INSERT INTO workspace_restore_requests (
+        restore_request_id,
+        change_set_id,
+        session_id,
+        run_id,
+        requested_by,
+        status,
+        requested_at
+      ) VALUES (
+        'restore-request-workspace',
+        'change-set-workspace',
+        'session-workspace',
+        'run-workspace',
+        'user',
+        'completed',
+        '2026-06-05T10:04:00.000Z'
+      );
+
+      INSERT INTO workspace_restore_results (
+        restore_result_id,
+        restore_request_id,
+        change_set_id,
+        session_id,
+        run_id,
+        status,
+        restored_at
+      ) VALUES (
+        'restore-result-workspace',
+        'restore-request-workspace',
+        'change-set-workspace',
+        'session-workspace',
+        'run-workspace',
+        'restored',
+        '2026-06-05T10:04:01.000Z'
+      );
+
+      INSERT INTO workspace_restore_file_results (
+        restore_file_result_id,
+        restore_result_id,
+        changed_file_id,
+        project_path,
+        status,
+        restored_at
+      ) VALUES (
+        'restore-file-result-workspace',
+        'restore-result-workspace',
+        'changed-file-workspace',
+        'src/index.ts',
+        'restored',
+        '2026-06-05T10:04:02.000Z'
+      );
+    `);
+
+    expect(countRows(database, 'workspace_snapshot_contents')).toBe(2);
+    expect(countRows(database, 'workspace_change_sets')).toBe(1);
+    expect(countRows(database, 'workspace_checkpoints')).toBe(1);
+    expect(countRows(database, 'workspace_changed_files')).toBe(1);
+    expect(countRows(database, 'workspace_restore_requests')).toBe(1);
+    expect(countRows(database, 'workspace_restore_results')).toBe(1);
+    expect(countRows(database, 'workspace_restore_file_results')).toBe(1);
+
+    database.prepare("DELETE FROM sessions WHERE session_id = 'session-workspace'").run();
+
+    expect(countRows(database, 'workspace_snapshot_contents')).toBe(0);
+    expect(countRows(database, 'workspace_change_sets')).toBe(0);
+    expect(countRows(database, 'workspace_checkpoints')).toBe(0);
+    expect(countRows(database, 'workspace_changed_files')).toBe(0);
+    expect(countRows(database, 'workspace_restore_requests')).toBe(0);
+    expect(countRows(database, 'workspace_restore_results')).toBe(0);
+    expect(countRows(database, 'workspace_restore_file_results')).toBe(0);
+  });
+
+  it('keeps runtime checkpoint tables separate from workspace checkpoint schema', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+
+    expect(tableExists(database, 'checkpoints')).toBe(true);
+    expect(tableExists(database, 'checkpoint_restore_records')).toBe(true);
+    expect(tableExists(database, 'workspace_checkpoints')).toBe(true);
+    expect(tableExists(database, 'workspace_restore_requests')).toBe(true);
+
+    const runtimeCheckpointColumnNames = tableColumns(database, 'checkpoints').map((column) => column.name);
+    expect(runtimeCheckpointColumnNames).toEqual(expect.arrayContaining([
+      'checkpoint_id',
+      'side_effect_refs_json',
+      'checkpoint_json',
+    ]));
+    expect(runtimeCheckpointColumnNames).not.toContain('workspace_checkpoint_id');
+    expect(runtimeCheckpointColumnNames).not.toContain('before_content_ref_id');
+
+    const runtimeRestoreColumnNames = tableColumns(database, 'checkpoint_restore_records').map((column) => column.name);
+    expect(runtimeRestoreColumnNames).toEqual(expect.arrayContaining([
+      'restore_record_id',
+      'checkpoint_id',
+      'resume_request_id',
+      'restore_record_json',
+    ]));
+    expect(runtimeRestoreColumnNames).not.toContain('restore_request_id');
+    expect(runtimeRestoreColumnNames).not.toContain('changed_file_id');
+  });
+
   it('creates projects table and indexes', () => {
     const database = createTestDb();
 
