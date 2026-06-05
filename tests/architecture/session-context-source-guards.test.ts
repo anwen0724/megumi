@@ -99,6 +99,14 @@ const forbiddenRendererSourceSelectionSources = [
   'list' + 'Tool',
 ];
 
+const forbiddenWorkspaceChangePersistenceSources = [
+  'Workspace' + 'ChangeRepository',
+  'workspace_' + 'changed_files',
+  'workspace_' + 'checkpoints',
+  'workspace_' + 'restore_requests',
+  'workspace_' + 'snapshot_contents',
+];
+
 const forbiddenSessionContextInputServiceCalls = [
   'list' + 'MessagesBySession',
   'list' + 'RunsBySession',
@@ -133,6 +141,18 @@ describe('session context source guards', () => {
 
     for (const forbidden of forbiddenRendererSourceSelectionSources) {
       expect(rendererSource).not.toContain(forbidden);
+    }
+  });
+
+  it('keeps renderer provider and context-management away from workspace change persistence', () => {
+    const contextManagement = sourceUnder('packages/context-management');
+    const provider = sourceUnder('packages/ai');
+    const renderer = sourceUnder('apps/desktop/src/renderer');
+
+    for (const source of [contextManagement, provider, renderer]) {
+      for (const forbidden of forbiddenWorkspaceChangePersistenceSources) {
+        expect(source).not.toContain(forbidden);
+      }
     }
   });
 
