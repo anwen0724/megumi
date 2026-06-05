@@ -33,6 +33,8 @@ describe('processing disclosure source guard', () => {
     expect(component).not.toContain('rounded-xl');
     expect(component).not.toContain('border-[var(--color-accent)] bg-[var(--color-accent)]');
     expect(component).not.toContain('border-[var(--color-border)] bg-[var(--color-surface)]');
-    expect(component).toContain('bg-[var(--color-accent-soft)]');
+    expect(component).not.toContain('bg-[var(--color-accent-soft)]');
+    expect(component).toContain('justify-end');
+    expect(component).toContain('text-right');
   });
 });
