@@ -7,6 +7,7 @@ export * from './repos/run-context.repo';
 export * from './repos/run-mode.repo';
 export * from './repos/tool.repo';
 export * from './repos/recovery.repo';
+export * from './repos/workspace-change.repo';
 export * from './repos/artifact.repo';
 export * from './repos/memory.repo';
 export * from './repos/project.repo';
