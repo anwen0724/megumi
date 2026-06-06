@@ -19,13 +19,13 @@ function projectFileExists(relativePath: string): boolean {
 }
 
 describe('session timeline source guards', () => {
-  it('ChatTimeline uses runtime chat instead of mock agent flow', () => {
+  it('ChatPage uses runtime chat instead of mock agent flow', () => {
     const controllerSource = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-chat-page-controller.ts');
-    const timelineSource = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const chatPageSource = readProjectFile('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
     const oldHook = 'use' + 'MockAgentFlow';
 
     expect(controllerSource).toContain('useSessionTimeline');
-    expect(timelineSource).toContain('useChatPageController');
+    expect(chatPageSource).toContain('useChatPageController');
     expect(controllerSource).not.toContain(oldHook);
     expect(controllerSource).not.toContain('run' + 'MockAgentFlow');
     expect(controllerSource).not.toContain('retryLast' + 'MockAgentFlow');
@@ -99,7 +99,7 @@ describe('session timeline source guards', () => {
   });
 
   it('keeps old standalone processing and tool card components out of the canonical timeline path', () => {
-    const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx');
 
     expect(source).not.toContain('<ToolActivityRow');
     expect(source).not.toContain('TOOL CALLS');

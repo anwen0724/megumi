@@ -321,7 +321,7 @@ function selectMegumiProject() {
   });
 }
 
-describe('ChatTimeline', () => {
+describe('ChatPage flow', () => {
   beforeEach(() => {
     runtimeEventCallback = null;
     runtimeSequence = 1;

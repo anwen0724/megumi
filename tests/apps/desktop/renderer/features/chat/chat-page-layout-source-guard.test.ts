@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -9,14 +9,35 @@ function readSource(path: string): string {
   return readFileSync(resolve(repoRoot, path), 'utf8');
 }
 
+function readProductionChatSources(): string {
+  const chatRoot = resolve(repoRoot, 'apps/desktop/src/renderer/features/chat');
+  const sources: string[] = [];
+
+  function visit(directory: string) {
+    for (const entry of readdirSync(directory)) {
+      const entryPath = resolve(directory, entry);
+      const stat = statSync(entryPath);
+      if (stat.isDirectory()) {
+        visit(entryPath);
+        continue;
+      }
+
+      if (entryPath.endsWith('.ts') || entryPath.endsWith('.tsx')) {
+        sources.push(readFileSync(entryPath, 'utf8'));
+      }
+    }
+  }
+
+  visit(chatRoot);
+  return sources.join('\n');
+}
+
 describe('chat page layout source guard', () => {
   it('keeps ChatPage split into ChatArea and ComposerArea', () => {
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
     expect(chatPage).toContain('<ChatArea');
     expect(chatPage).toContain('<ComposerArea');
-    expect(chatPage).not.toContain('data-testid="chat-composer-dock"');
-    expect(chatPage).not.toContain('data-testid="chat-message-scroll-area"');
   });
 
   it('keeps composer outside the timeline role log', () => {
@@ -28,9 +49,15 @@ describe('chat page layout source guard', () => {
     expect(composerArea).toContain('<Composer');
   });
 
-  it('keeps old ChatTimeline from owning page layout', () => {
+  it('removes the old ChatTimeline page component and dock layout from production chat sources', () => {
     const chatIndex = readSource('apps/desktop/src/renderer/features/chat/index.ts');
+    const chatSources = readProductionChatSources();
+
     expect(chatIndex).toContain("export { ChatPage } from './pages/ChatPage'");
     expect(chatIndex).not.toContain("export { ChatTimeline }");
+    expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx'))).toBe(false);
+    expect(chatSources).not.toContain('chat-composer-dock');
+    expect(chatSources).not.toContain('chat-message-scroll-area');
+    expect(chatSources).not.toContain('chat-timeline-root');
   });
 });

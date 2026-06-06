@@ -13,7 +13,8 @@ const CHAT_STREAM_DATA_LAYER_FILES = [
 ];
 
 const CHAT_RENDERER_UI_FILES = [
-  'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
+  'apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx',
+  'apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx',
   'apps/desktop/src/renderer/features/chat/components/WorkspaceChangeFooter.tsx',
   'apps/desktop/src/renderer/shell/RightSidebar.tsx',
 ];
@@ -71,18 +72,18 @@ describe('renderer chat stream source guards', () => {
     expect(source).not.toContain('ChatStreamEventSchema');
   });
 
-  it('routes ChatTimeline live rendering through canonical chat-stream state', () => {
+  it('routes ChatPage live rendering through canonical chat-stream state', () => {
     const controllerSource = read('apps/desktop/src/renderer/features/chat/hooks/use-chat-page-controller.ts');
-    const timelineSource = read('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const chatPageSource = read('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
     expect(controllerSource).toContain('useChatStreamStore');
     expect(controllerSource).toContain('chatStreamSessionKey');
     expect(controllerSource).toContain('canonicalMessages');
     expect(controllerSource).toContain('timelineMessages = canonicalMessages');
-    expect(timelineSource).toContain('useChatPageController');
-    expect(timelineSource).not.toContain('StreamingAssistantMessage');
-    expect(timelineSource).not.toContain('streamingText');
-    expect(timelineSource).not.toContain('TimelineMessageData');
+    expect(chatPageSource).toContain('useChatPageController');
+    expect(chatPageSource).not.toContain('StreamingAssistantMessage');
+    expect(chatPageSource).not.toContain('streamingText');
+    expect(chatPageSource).not.toContain('TimelineMessageData');
     expect(controllerSource).not.toContain('bufferedStreamOutputsByRun');
     expect(controllerSource).not.toContain('answerRevealAllowedByRun');
   });

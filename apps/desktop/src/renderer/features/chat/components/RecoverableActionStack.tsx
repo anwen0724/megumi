@@ -1,15 +1,6 @@
 import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 import { Button } from '../../../shared/ui';
-
-type RecoverableAction = 'retry' | 'rerun' | 'mark_cancelled';
-
-function recoverableActionsFor(run: RecoverableRunSummary): RecoverableAction[] {
-  if (run.reason === 'waiting_for_approval') return [];
-  if (run.reason === 'interrupted') return ['retry', 'mark_cancelled'];
-  if (run.status === 'failed' || run.reason === 'failed') return ['retry'];
-  if (run.status === 'cancelled' || run.reason === 'cancelled') return ['rerun'];
-  return [];
-}
+import { recoverableActionsFor } from '../hooks/use-chat-page-controller';
 
 interface RecoverableActionStackProps {
   runs: RecoverableRunSummary[];
