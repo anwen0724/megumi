@@ -661,12 +661,8 @@ export function ChatTimeline() {
         data-testid="chat-composer-overlay"
         className="pointer-events-none absolute inset-x-0 bottom-0 z-10 transition-[padding,width] duration-200 ease-out"
       >
-        <div data-testid="chat-composer-content-shell" className={`${CHAT_CONTENT_SHELL_CLASS} relative`}>
-          <div
-            data-testid="chat-composer-bottom-base"
-            className="pointer-events-none absolute inset-x-0 bottom-0 top-8 bg-[var(--color-app-bg)]"
-          />
-          <div data-testid="chat-composer-stack" className="relative z-10">
+        <div data-testid="chat-composer-content-shell" className={CHAT_CONTENT_SHELL_CLASS}>
+          <div data-testid="chat-composer-bottom-base" className="bg-[var(--color-app-bg)]">
             {pendingApprovals.length > 0 ? (
               <section
                 aria-label="Blocking approval controls"
