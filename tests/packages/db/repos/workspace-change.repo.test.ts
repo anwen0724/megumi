@@ -306,6 +306,118 @@ describe('WorkspaceChangeRepository', () => {
     ]);
   });
 
+  it('updates restore request lifecycle without rewriting durable ownership fields', () => {
+    const repo = createRepo();
+    seedChange(repo);
+
+    repo.saveRestoreRequest(restoreRequest({
+      status: 'requested',
+      completedAt: undefined,
+      metadata: { source: 'ui' },
+    }));
+
+    expect(repo.updateRestoreRequestStatus({
+      restoreRequestId: 'restore-request-1',
+      status: 'running',
+      metadata: { source: 'ui', started: true },
+    })).toEqual(expect.objectContaining({
+      restoreRequestId: 'restore-request-1',
+      status: 'running',
+      completedAt: undefined,
+      metadata: { source: 'ui', started: true },
+    }));
+
+    expect(repo.updateRestoreRequestStatus({
+      restoreRequestId: 'restore-request-1',
+      status: 'completed',
+      completedAt: '2026-06-05T10:06:04.000Z',
+      metadata: { source: 'ui', started: true, completed: true },
+    })).toEqual(expect.objectContaining({
+      status: 'completed',
+      completedAt: '2026-06-05T10:06:04.000Z',
+      metadata: { source: 'ui', started: true, completed: true },
+    }));
+
+    expect(repo.updateRestoreRequestStatus({
+      restoreRequestId: 'missing-restore-request',
+      status: 'completed',
+      completedAt: '2026-06-05T10:06:04.000Z',
+    })).toBeUndefined();
+  });
+
+  it('updates changed file restore state and keeps summaries current', () => {
+    const repo = createRepo();
+    seedSnapshots(repo);
+    repo.saveChangeSet(workspaceChangeSet());
+    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
+    repo.saveChangedFile(workspaceChangedFile({
+      changedFileId: 'changed-file-restorable',
+      restoreState: 'restorable',
+      updatedAt: '2026-06-05T10:05:00.000Z',
+    }));
+    repo.saveChangedFile(workspaceChangedFile({
+      changedFileId: 'changed-file-conflict',
+      restoreState: 'restorable',
+      updatedAt: '2026-06-05T10:05:00.000Z',
+    }));
+
+    expect(repo.updateChangedFileRestoreState({
+      changedFileId: 'changed-file-restorable',
+      restoreState: 'restored',
+      updatedAt: '2026-06-05T10:06:00.000Z',
+      metadata: { restoreResultId: 'restore-result-1' },
+    })).toEqual(expect.objectContaining({
+      changedFileId: 'changed-file-restorable',
+      restoreState: 'restored',
+      updatedAt: '2026-06-05T10:06:00.000Z',
+      metadata: { restoreResultId: 'restore-result-1' },
+    }));
+
+    repo.updateChangedFileRestoreState({
+      changedFileId: 'changed-file-conflict',
+      restoreState: 'conflict',
+      updatedAt: '2026-06-05T10:06:01.000Z',
+      metadata: { conflictReason: 'current_hash_mismatch' },
+    });
+
+    expect(repo.getChangeSummary('change-set-1')).toEqual(expect.objectContaining({
+      changedFileCount: 2,
+      restorableCount: 0,
+      restoredCount: 1,
+      conflictCount: 1,
+      failedCount: 0,
+      hasRestorableChanges: false,
+      updatedAt: '2026-06-05T10:06:01.000Z',
+    }));
+  });
+
+  it('lists change summaries by run in change-set creation order', () => {
+    const repo = createRepo();
+    seedChange(repo);
+    repo.saveChangedFile(workspaceChangedFile({
+      changedFileId: 'changed-file-a',
+      changeSetId: 'change-set-1',
+    }));
+    repo.saveChangeSet(workspaceChangeSet({
+      changeSetId: 'change-set-2',
+      createdAt: '2026-06-05T10:04:00.000Z',
+    }));
+    repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
+      workspaceCheckpointId: 'workspace-checkpoint-2',
+      changeSetId: 'change-set-2',
+    }));
+    repo.saveChangedFile(workspaceChangedFile({
+      changedFileId: 'changed-file-b',
+      changeSetId: 'change-set-2',
+      workspaceCheckpointId: 'workspace-checkpoint-2',
+    }));
+
+    expect(repo.listChangeSummariesByRun('run-1').map((summary) => summary.changeSetId)).toEqual([
+      'change-set-1',
+      'change-set-2',
+    ]);
+  });
+
   it('orders restore results and file results by restored timestamp, then primary key', () => {
     const repo = createRepo();
     seedChange(repo);
