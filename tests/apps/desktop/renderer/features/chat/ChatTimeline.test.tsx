@@ -370,6 +370,8 @@ describe('ChatTimeline', () => {
     const composerOverlay = screen.getByTestId('chat-composer-overlay');
     const contentShell = screen.getByTestId('chat-timeline-content-shell');
     const composerShell = screen.getByTestId('chat-composer-content-shell');
+    const composerBase = screen.getByTestId('chat-composer-bottom-base');
+    const composerStack = screen.getByTestId('chat-composer-stack');
     const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');
@@ -395,8 +397,14 @@ describe('ChatTimeline', () => {
     expect(composerShell).toHaveClass('max-w-4xl');
     expect(composerShell).toHaveClass('pr-16');
     expect(composerShell).toHaveClass('xl:pr-32');
-    expect(screen.getByTestId('chat-composer-bottom-base')).toHaveClass('bg-[var(--color-app-bg)]');
-    expect(screen.getByTestId('chat-composer-bottom-base')).toHaveClass('pt-6');
+    expect(composerShell).toHaveClass('relative');
+    expect(composerBase).toHaveClass('absolute');
+    expect(composerBase).toHaveClass('inset-x-0');
+    expect(composerBase).toHaveClass('bottom-0');
+    expect(composerBase).toHaveClass('top-8');
+    expect(composerBase).toHaveClass('bg-[var(--color-app-bg)]');
+    expect(composerStack).toHaveClass('relative');
+    expect(composerStack).toHaveClass('z-10');
     expect(within(scrollArea).getByText('Check layout')).toBeInTheDocument();
     expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
