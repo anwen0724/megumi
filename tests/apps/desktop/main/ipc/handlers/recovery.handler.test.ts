@@ -30,7 +30,38 @@ describe('registerRecoveryHandlers', () => {
       warn: vi.fn(),
       error: vi.fn(),
     };
-    const service: RecoveryService = {
+    const restoreWorkspaceChangeSet = vi.fn(async (payload) => ({
+      request: {
+        restoreRequestId: 'workspace-restore-request-1',
+        changeSetId: payload.changeSetId,
+        sessionId: 'session_123',
+        runId: 'run_123',
+        requestedBy: payload.requestedBy,
+        status: 'completed' as const,
+        requestedAt: '2026-06-05T10:00:00.000Z',
+        completedAt: '2026-06-05T10:00:01.000Z',
+      },
+      result: {
+        restoreResultId: 'workspace-restore-result-1',
+        restoreRequestId: 'workspace-restore-request-1',
+        changeSetId: payload.changeSetId,
+        sessionId: 'session_123',
+        runId: 'run_123',
+        status: 'restored' as const,
+        restoredAt: '2026-06-05T10:00:01.000Z',
+        metadata: {
+          changedFileCount: 1,
+          restoredCount: 1,
+          conflictCount: 0,
+          failedCount: 0,
+          noopCount: 0,
+        },
+      },
+      fileResults: [],
+    }));
+    const service: RecoveryService & {
+      restoreWorkspaceChangeSet: typeof restoreWorkspaceChangeSet;
+    } = {
       listRecoverableRuns: () => [],
       resumeRun: (payload) => ({
         ...payload,
@@ -47,6 +78,7 @@ describe('registerRecoveryHandlers', () => {
         retryRequestId: 'retry_request_123',
         createdAt: '2026-05-16T10:00:00.000Z',
       }),
+      restoreWorkspaceChangeSet,
     };
 
     registerRecoveryHandlers(service, { logger });
@@ -68,7 +100,7 @@ describe('registerRecoveryHandlers', () => {
       expect.any(Function),
     );
     expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.recovery.resume,
+      IPC_CHANNELS.recovery.workspaceRestore,
       expect.any(Function),
     );
 
@@ -91,5 +123,26 @@ describe('registerRecoveryHandlers', () => {
 
     expect(response.ok).toBe(true);
     expect(response.data.request.resumeRequestId).toBe('resume_request_123');
+
+    const restoreHandler = getRegisteredHandler(IPC_CHANNELS.recovery.workspaceRestore);
+    const restoreResponse = await restoreHandler({} as never, {
+      requestId: 'request_workspace_restore',
+      payload: {
+        changeSetId: 'change-set-1',
+        requestedBy: 'user',
+      },
+      meta: {
+        channel: IPC_CHANNELS.recovery.workspaceRestore,
+        createdAt: '2026-06-05T10:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(restoreWorkspaceChangeSet).toHaveBeenCalledWith({
+      changeSetId: 'change-set-1',
+      requestedBy: 'user',
+    });
+    expect(restoreResponse.ok).toBe(true);
+    expect(restoreResponse.data.result.restoreResultId).toBe('workspace-restore-result-1');
   });
 });

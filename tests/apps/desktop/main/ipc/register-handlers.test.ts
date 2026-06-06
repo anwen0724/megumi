@@ -136,6 +136,7 @@ describe('registerAllHandlers', () => {
       resumeRun: vi.fn(),
       cancelRun: vi.fn(),
       retryRun: vi.fn(),
+      restoreWorkspaceChangeSet: vi.fn(),
     };
 
     registerAllHandlers({ recoveryService });

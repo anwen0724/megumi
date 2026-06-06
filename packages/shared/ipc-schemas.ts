@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JsonObjectSchema } from './json';
 import {
   createRuntimeIpcRequestSchema,
   createRuntimeIpcResultSchema,
@@ -68,6 +69,13 @@ import {
   WorkspaceFilesListDataSchema,
   WorkspaceFilesListPayloadSchema,
 } from './workspace-file-contracts';
+import {
+  WorkspaceChangeSummarySchema,
+  WorkspaceRestoreFileResultSchema,
+  WorkspaceRestoreRequestedBySchema,
+  WorkspaceRestoreRequestSchema as WorkspaceRestoreRecordSchema,
+  WorkspaceRestoreResultSchema as WorkspaceRestoreRecordResultSchema,
+} from './workspace-change-contracts';
 import { TimelineMessageSchema } from './timeline-message-block-schemas';
 import { RuntimeEventSchema } from './runtime-event-schemas';
 import { IPC_CHANNELS } from './ipc-channels';
@@ -458,6 +466,23 @@ export const RunRetryDataSchema = z
   })
   .strict();
 
+export const WorkspaceRestorePayloadSchema = z
+  .object({
+    changeSetId: z.string().min(1),
+    requestedBy: WorkspaceRestoreRequestedBySchema.default('user'),
+    metadata: JsonObjectSchema.optional(),
+  })
+  .strict();
+
+export const WorkspaceRestoreDataSchema = z
+  .object({
+    request: WorkspaceRestoreRecordSchema,
+    result: WorkspaceRestoreRecordResultSchema,
+    fileResults: z.array(WorkspaceRestoreFileResultSchema),
+    summary: WorkspaceChangeSummarySchema.optional(),
+  })
+  .strict();
+
 export const ArtifactListByRunPayloadSchema = z
   .object({
     runId: z.string().min(1),
@@ -845,6 +870,11 @@ export const RunRetryRequestSchema = createRuntimeIpcRequestSchema(
   RunRetryPayloadSchema,
 );
 
+export const WorkspaceRestoreRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.recovery.workspaceRestore,
+  WorkspaceRestorePayloadSchema,
+);
+
 export const ArtifactListByRunRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.artifacts.listByRun,
   ArtifactListByRunPayloadSchema,
@@ -1090,6 +1120,11 @@ export const RunRetryResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.recovery.retry,
 );
 
+export const WorkspaceRestoreResultSchema = createRuntimeIpcResultSchema(
+  WorkspaceRestoreDataSchema,
+  IPC_CHANNELS.recovery.workspaceRestore,
+);
+
 export const ArtifactListByRunResultSchema = createRuntimeIpcResultSchema(
   ArtifactListDataSchema,
   IPC_CHANNELS.artifacts.listByRun,
@@ -1317,6 +1352,8 @@ export type RunCancelPayload = z.infer<typeof RunCancelPayloadSchema>;
 export type RunCancelData = z.infer<typeof RunCancelDataSchema>;
 export type RunRetryPayload = z.infer<typeof RunRetryPayloadSchema>;
 export type RunRetryData = z.infer<typeof RunRetryDataSchema>;
+export type WorkspaceRestorePayload = z.infer<typeof WorkspaceRestorePayloadSchema>;
+export type WorkspaceRestoreData = z.infer<typeof WorkspaceRestoreDataSchema>;
 export type ArtifactListByRunPayload = z.infer<typeof ArtifactListByRunPayloadSchema>;
 export type ArtifactListBySessionPayload = z.infer<typeof ArtifactListBySessionPayloadSchema>;
 export type ArtifactGetPayload = z.infer<typeof ArtifactGetPayloadSchema>;

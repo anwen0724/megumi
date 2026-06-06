@@ -730,6 +730,28 @@ export function createRuntimeMemoryAccessRecordedEvent(
   });
 }
 
+export function createWorkspaceRestoreRequestedEvent(
+  input: Omit<RunRuntimeEventFactoryInput<'workspace.restore.requested'>, 'eventType' | 'visibility' | 'persist'>,
+): TypedRuntimeEvent<'workspace.restore.requested'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'workspace.restore.requested',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
+export function createWorkspaceRestoreCompletedEvent(
+  input: Omit<RunRuntimeEventFactoryInput<'workspace.restore.completed'>, 'eventType' | 'visibility' | 'persist'>,
+): TypedRuntimeEvent<'workspace.restore.completed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'workspace.restore.completed',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
 export function createRunStartedEvent(input: {
   eventId: string;
   request: RuntimeEventRequestRef;

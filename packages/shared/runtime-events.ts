@@ -47,6 +47,10 @@ import type {
   RetryRequestedBy,
 } from './recovery-contracts';
 import type {
+  WorkspaceRestoreRequestedBy,
+  WorkspaceRestoreResultStatus,
+} from './workspace-change-contracts';
+import type {
   ArtifactContentStorage,
   ArtifactContentType,
   ArtifactKind,
@@ -150,6 +154,8 @@ export const RUNTIME_EVENT_TYPES = [
   'memory.recall.completed',
   'memory.recall.failed',
   'memory.access.recorded',
+  'workspace.restore.requested',
+  'workspace.restore.completed',
 ] as const;
 
 export type RuntimeEventType = (typeof RUNTIME_EVENT_TYPES)[number];
@@ -686,6 +692,24 @@ export interface MemoryAccessRecordedPayload {
   selectedForContext: boolean;
 }
 
+export interface WorkspaceRestoreRequestedPayload {
+  restoreRequestId: string;
+  changeSetId: string;
+  requestedBy: WorkspaceRestoreRequestedBy;
+}
+
+export interface WorkspaceRestoreCompletedPayload {
+  restoreRequestId: string;
+  restoreResultId: string;
+  changeSetId: string;
+  status: WorkspaceRestoreResultStatus;
+  changedFileCount: number;
+  restoredCount: number;
+  conflictCount: number;
+  failedCount: number;
+  noopCount: number;
+}
+
 export type RuntimeEventPayloadByType = {
   'session.created': SessionCreatedPayload;
   'session.updated': SessionUpdatedPayload;
@@ -773,6 +797,8 @@ export type RuntimeEventPayloadByType = {
   'memory.recall.completed': MemoryRecallCompletedPayload;
   'memory.recall.failed': MemoryRecallFailedPayload;
   'memory.access.recorded': MemoryAccessRecordedPayload;
+  'workspace.restore.requested': WorkspaceRestoreRequestedPayload;
+  'workspace.restore.completed': WorkspaceRestoreCompletedPayload;
 };
 
 export type TypedRuntimeEvent<TType extends RuntimeEventType> = RuntimeEvent<

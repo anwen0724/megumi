@@ -10,6 +10,10 @@ import {
   ResumeRequestSchema,
   RetryRequestSchema,
 } from '@megumi/shared/recovery-contracts';
+import type {
+  WorkspaceRestoreData,
+  WorkspaceRestorePayload,
+} from '@megumi/shared/ipc-schemas';
 import { createRunInterruptedEvent } from '@megumi/shared/runtime-event-factory';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -34,6 +38,7 @@ export interface RecoveryService {
   resumeRun(payload: Omit<ResumeRequest, 'resumeRequestId' | 'createdAt'>): ResumeRequest;
   cancelRun(payload: Omit<CancelRequest, 'cancelRequestId' | 'createdAt'>): CancelRequest;
   retryRun(payload: Omit<RetryRequest, 'retryRequestId' | 'createdAt'>): RetryRequest;
+  restoreWorkspaceChangeSet(payload: WorkspaceRestorePayload): Promise<WorkspaceRestoreData>;
 }
 
 export function createRecoveryService(options: CreateRecoveryServiceOptions): RecoveryService {
@@ -83,6 +88,9 @@ export function createRecoveryService(options: CreateRecoveryServiceOptions): Re
         createdAt: options.clock().toISOString(),
       });
       return options.repository.saveRetryRequest(request);
+    },
+    restoreWorkspaceChangeSet: async () => {
+      throw new Error('Workspace restore service is not configured.');
     },
   };
 }

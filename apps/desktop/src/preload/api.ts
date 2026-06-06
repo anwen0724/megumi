@@ -84,6 +84,8 @@ import type {
   RunResumePayload,
   RunRetryData,
   RunRetryPayload,
+  WorkspaceRestoreData,
+  WorkspaceRestorePayload,
   SessionCreateData,
   SessionCreatePayload,
   SessionBranchDraftCancelData,
@@ -283,6 +285,10 @@ export const api = {
       request: BusinessRequest<RunRetryPayload, typeof IPC_CHANNELS.recovery.retry>,
     ): Promise<RuntimeIpcResult<RunRetryData, typeof IPC_CHANNELS.recovery.retry>> =>
       invokeRuntimeIpc(IPC_CHANNELS.recovery.retry, request),
+    restoreWorkspaceChangeSet: (
+      request: BusinessRequest<WorkspaceRestorePayload, typeof IPC_CHANNELS.recovery.workspaceRestore>,
+    ): Promise<RuntimeIpcResult<WorkspaceRestoreData, typeof IPC_CHANNELS.recovery.workspaceRestore>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.recovery.workspaceRestore, request),
   },
   project: {
     list: (
