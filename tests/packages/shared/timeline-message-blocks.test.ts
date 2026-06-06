@@ -164,6 +164,52 @@ describe('timeline message and block contracts', () => {
     expect(TimelineMessageSchema.parse(message).role).toBe('assistant');
   });
 
+  it('parses assistant messages with workspace change footer facts outside process disclosure blocks', () => {
+    const parsed = TimelineAssistantMessageSchema.parse({
+      messageId: 'assistant:run-1',
+      role: 'assistant',
+      runId: 'run-1',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      createdAt: '2026-06-06T10:00:00.000Z',
+      blocks: [{
+        blockId: 'answer:run-1',
+        kind: 'answer_text',
+        runId: 'run-1',
+        textId: 'answer-text-1',
+        status: 'completed',
+        text: 'Done.',
+        format: 'markdown',
+      }],
+      workspaceChangeFooter: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        updatedAt: '2026-06-06T10:00:01.000Z',
+        changeSets: [{
+          changeSetId: 'workspace-change-set-1',
+          changedFileCount: 1,
+          restorableCount: 1,
+          restoredCount: 0,
+          conflictCount: 0,
+          failedCount: 0,
+          hasRestorableChanges: true,
+          files: [{
+            changedFileId: 'workspace-changed-file-1',
+            projectPath: 'AGENTS.md',
+            changeKind: 'modified',
+            restoreState: 'restorable',
+          }],
+        }],
+      },
+    });
+
+    expect(parsed.workspaceChangeFooter?.changeSets[0]?.files[0]).toMatchObject({
+      projectPath: 'AGENTS.md',
+      changeKind: 'modified',
+    });
+    expect(parsed.blocks.map((block) => block.kind)).toEqual(['answer_text']);
+  });
+
   it('allows process completed while answer text is still streaming', () => {
     expect(PROCESS_DISCLOSURE_STATUSES).toContain('completed');
     expect(ANSWER_TEXT_STATUSES).toContain('streaming');

@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { reduceChatStreamEvent } from '@megumi/shared/chat-stream-to-timeline-projection';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
 import type { AnswerTextBlock, ProcessDisclosureBlock, TimelineAssistantMessage, TimelineMessage, TimelineUserMessage } from '@megumi/shared/timeline-message-blocks';
+import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace-change-contracts';
 
-function chatEvent(overrides: Partial<ChatStreamEvent> & { eventType: ChatStreamEvent['eventType']; seq: number }): ChatStreamEvent {
+type WorkspaceChangeFooterUpdatedEventInput = Partial<ChatStreamEvent> & {
+  eventType: 'workspace.change.footer.updated';
+  footer: WorkspaceChangeFooterFact;
+  seq: number;
+};
+
+type ChatEventInput =
+  | (Partial<ChatStreamEvent> & { eventType: ChatStreamEvent['eventType']; seq: number })
+  | WorkspaceChangeFooterUpdatedEventInput;
+
+function chatEvent(overrides: ChatEventInput): ChatStreamEvent {
   return {
     eventId: `event-${overrides.seq}`,
     projectId: 'project-1',
@@ -483,5 +494,43 @@ describe('chat stream to timeline projection reducer', () => {
     }));
 
     expect(messages).toEqual([]);
+  });
+
+  it('attaches workspace change footer facts to the assistant timeline message', () => {
+    let messages = reduceChatStreamEvent([], chatEvent({
+      eventType: 'turn.started',
+      seq: 1,
+      userMessageId: 'message-user-1',
+    }));
+    messages = reduceChatStreamEvent(messages, chatEvent({
+      eventType: 'workspace.change.footer.updated',
+      seq: 2,
+      footer: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        updatedAt: '2026-06-06T10:00:02.000Z',
+        changeSets: [{
+          changeSetId: 'workspace-change-set-1',
+          changedFileCount: 1,
+          restorableCount: 1,
+          restoredCount: 0,
+          conflictCount: 0,
+          failedCount: 0,
+          hasRestorableChanges: true,
+          files: [{
+            changedFileId: 'workspace-changed-file-1',
+            projectPath: 'AGENTS.md',
+            changeKind: 'modified',
+            restoreState: 'restorable',
+          }],
+        }],
+      },
+    }));
+
+    const assistant = messages.find((message) => message.role === 'assistant');
+    expect(assistant?.workspaceChangeFooter?.changeSets[0]?.files[0]).toMatchObject({
+      projectPath: 'AGENTS.md',
+      restoreState: 'restorable',
+    });
   });
 });

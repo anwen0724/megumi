@@ -56,6 +56,7 @@ describe('chat stream event contract', () => {
       'process.compaction.recorded',
       'process.retry.recorded',
       'process.recovery.recorded',
+      'workspace.change.footer.updated',
     ]);
     expect(CHAT_STREAM_EVENT_TYPES.some((type) => type.startsWith('assistant.answer.'))).toBe(false);
     expect(ASSISTANT_TEXT_PHASES).toEqual(['prelude', 'answer']);
@@ -249,6 +250,43 @@ describe('chat stream event contract', () => {
       label: 'Retry attempt 1 failed',
       reason: 'rate_limited',
     }).eventType).toBe('process.retry.recorded');
+  });
+
+  it('parses workspace change footer update chat stream events', () => {
+    const parsed = ChatStreamEventSchema.parse({
+      eventId: 'chat-stream-event-workspace-footer-1',
+      eventType: 'workspace.change.footer.updated',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'chat-stream-run-1',
+      streamKind: 'main',
+      seq: 1,
+      createdAt: '2026-06-06T10:00:00.000Z',
+      footer: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        updatedAt: '2026-06-06T10:00:00.000Z',
+        changeSets: [{
+          changeSetId: 'workspace-change-set-1',
+          changedFileCount: 1,
+          restorableCount: 1,
+          restoredCount: 0,
+          conflictCount: 0,
+          failedCount: 0,
+          hasRestorableChanges: true,
+          files: [{
+            changedFileId: 'workspace-changed-file-1',
+            projectPath: 'src/app.ts',
+            changeKind: 'modified',
+            restoreState: 'restorable',
+          }],
+        }],
+      },
+    });
+
+    expect(parsed.eventType).toBe('workspace.change.footer.updated');
+    expect(JSON.stringify(parsed)).not.toContain('contentText');
   });
 
   it('requires explicit stream identity and rejects runId as streamId', () => {

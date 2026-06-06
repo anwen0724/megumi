@@ -6,6 +6,7 @@ import type {
   ToolExecutionId,
   ToolResultId,
 } from './ids';
+import type { WorkspaceChangeFooterFact } from './workspace-change-contracts';
 
 export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant', 'separator'] as const;
 export type TimelineMessageRole = (typeof TIMELINE_MESSAGE_ROLES)[number];
@@ -256,6 +257,7 @@ export interface TimelineAssistantMessage extends TimelineMessageBase {
   role: 'assistant';
   runId: RunId | string;
   blocks: AssistantTimelineBlock[];
+  workspaceChangeFooter?: WorkspaceChangeFooterFact;
 }
 
 export type TimelineMessage = TimelineUserMessage | TimelineAssistantMessage | TimelineSeparatorMessage;

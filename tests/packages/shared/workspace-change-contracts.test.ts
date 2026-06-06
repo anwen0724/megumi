@@ -13,6 +13,8 @@ import {
   WORKSPACE_SNAPSHOT_CONTENT_ENCODINGS,
   WORKSPACE_SNAPSHOT_CONTENT_STORAGES,
   WorkspaceChangedFileSchema,
+  WorkspaceChangeFooterFactSchema,
+  WorkspaceChangeFooterFileSchema,
   WorkspaceChangeSetSchema,
   WorkspaceCheckpointSchema,
   WorkspaceRestoreFileResultSchema,
@@ -308,5 +310,62 @@ describe('workspace change contracts', () => {
     expect(WorkspaceChangedFileSchema.safeParse(changedFile({
       rawAfterContent: 'raw after content',
     })).success).toBe(false);
+  });
+
+  it('parses workspace change footer facts without raw snapshot content or absolute paths', () => {
+    const fact = WorkspaceChangeFooterFactSchema.parse({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      updatedAt: '2026-06-06T10:00:00.000Z',
+      changeSets: [{
+        changeSetId: 'workspace-change-set-1',
+        changedFileCount: 2,
+        restorableCount: 2,
+        restoredCount: 0,
+        conflictCount: 0,
+        failedCount: 0,
+        hasRestorableChanges: true,
+        files: [
+          {
+            changedFileId: 'workspace-changed-file-1',
+            projectPath: 'AGENTS.md',
+            changeKind: 'modified',
+            restoreState: 'restorable',
+          },
+          {
+            changedFileId: 'workspace-changed-file-2',
+            projectPath: '.local-docs/status/capability-map.md',
+            changeKind: 'modified',
+            restoreState: 'restorable',
+          },
+        ],
+      }],
+    });
+
+    expect(fact.changeSets[0]?.files.map((file) => file.projectPath)).toEqual([
+      'AGENTS.md',
+      '.local-docs/status/capability-map.md',
+    ]);
+    expect(JSON.stringify(fact)).not.toContain('contentText');
+    expect(JSON.stringify(fact)).not.toContain('beforeHash');
+    expect(JSON.stringify(fact)).not.toContain('afterHash');
+    expect(JSON.stringify(fact)).not.toContain('C:/');
+  });
+
+  it('rejects unsafe workspace change footer file paths and raw snapshot fields', () => {
+    expect(() => WorkspaceChangeFooterFileSchema.parse({
+      changedFileId: 'workspace-changed-file-1',
+      projectPath: '../outside.txt',
+      changeKind: 'modified',
+      restoreState: 'restorable',
+    })).toThrow();
+
+    expect(() => WorkspaceChangeFooterFileSchema.parse({
+      changedFileId: 'workspace-changed-file-1',
+      projectPath: 'src/app.ts',
+      changeKind: 'modified',
+      restoreState: 'restorable',
+      contentText: 'raw snapshot must not leak',
+    })).toThrow();
   });
 });

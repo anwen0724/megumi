@@ -6,6 +6,7 @@ import type {
   ToolExecutionId,
   ToolResultId,
 } from './ids';
+import type { WorkspaceChangeFooterFact } from './workspace-change-contracts';
 
 export const CHAT_STREAM_EVENT_TYPES = [
   'turn.started',
@@ -33,6 +34,7 @@ export const CHAT_STREAM_EVENT_TYPES = [
   'process.compaction.recorded',
   'process.retry.recorded',
   'process.recovery.recorded',
+  'workspace.change.footer.updated',
 ] as const;
 
 export type ChatStreamEventType = (typeof CHAT_STREAM_EVENT_TYPES)[number];
@@ -254,6 +256,11 @@ export interface ProcessRecoveryRecordedEvent extends ChatStreamEventBase {
   label: string;
 }
 
+export interface WorkspaceChangeFooterUpdatedEvent extends ChatStreamEventBase {
+  eventType: 'workspace.change.footer.updated';
+  footer: WorkspaceChangeFooterFact;
+}
+
 export type ChatStreamEvent =
   | TurnStartedEvent
   | TurnCompletedEvent
@@ -279,7 +286,8 @@ export type ChatStreamEvent =
   | BranchSeparatorRemovedEvent
   | ProcessCompactionRecordedEvent
   | ProcessRetryRecordedEvent
-  | ProcessRecoveryRecordedEvent;
+  | ProcessRecoveryRecordedEvent
+  | WorkspaceChangeFooterUpdatedEvent;
 
 export type TypedChatStreamEvent<TType extends ChatStreamEventType> = Extract<
   ChatStreamEvent,

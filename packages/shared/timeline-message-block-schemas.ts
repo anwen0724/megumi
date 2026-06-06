@@ -47,6 +47,7 @@ import {
   type UserAttachmentSource,
   type UserTextBlock,
 } from './timeline-message-blocks';
+import { WorkspaceChangeFooterFactSchema } from './workspace-change-contracts';
 
 const TIMELINE_MESSAGE_ROLE_VALUES = [...TIMELINE_MESSAGE_ROLES] as [
   TimelineMessageRole,
@@ -341,6 +342,7 @@ export const TimelineAssistantMessageSchema = z
     role: z.literal('assistant'),
     runId: z.string().min(1),
     blocks: z.array(AssistantTimelineBlockSchema).min(1),
+    workspaceChangeFooter: WorkspaceChangeFooterFactSchema.optional(),
   })
   .strict()
   .superRefine((message, ctx) => {

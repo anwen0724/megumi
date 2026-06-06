@@ -186,6 +186,13 @@ export function reduceChatStreamEvent(
       return nextMessages;
     }
 
+    case 'workspace.change.footer.updated': {
+      const assistant = ensureAssistantMessage(nextMessages, event);
+      assistant.workspaceChangeFooter = event.footer;
+      assistant.updatedAt = event.createdAt;
+      return nextMessages;
+    }
+
     case 'turn.completed': {
       const assistant = ensureAssistantMessage(nextMessages, event);
       const process = ensureProcessBlock(assistant, event);
@@ -240,6 +247,15 @@ function cloneMessages(messages: TimelineMessage[]): TimelineMessage[] {
 
     return {
       ...message,
+      workspaceChangeFooter: message.workspaceChangeFooter
+        ? {
+            ...message.workspaceChangeFooter,
+            changeSets: message.workspaceChangeFooter.changeSets.map((changeSet) => ({
+              ...changeSet,
+              files: changeSet.files.map((file) => ({ ...file })),
+            })),
+          }
+        : undefined,
       blocks: message.blocks.map((block) => {
         if (block.kind === 'process_disclosure') {
           return {

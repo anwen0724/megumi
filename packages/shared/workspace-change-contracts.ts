@@ -444,6 +444,52 @@ export const WorkspaceChangeSummarySchema = z
 
 export type WorkspaceChangeSummary = z.infer<typeof WorkspaceChangeSummarySchema>;
 
+export const WorkspaceChangeFooterFileSchema = z
+  .object({
+    changedFileId: WorkspaceIdSchema,
+    projectPath: WorkspaceProjectPathSchema,
+    changeKind: WorkspaceChangeKindSchema,
+    restoreState: WorkspaceRestoreStateSchema,
+  })
+  .strict();
+
+export type WorkspaceChangeFooterFile = z.infer<typeof WorkspaceChangeFooterFileSchema>;
+
+export const WorkspaceChangeFooterChangeSetSchema = z
+  .object({
+    changeSetId: WorkspaceIdSchema,
+    changedFileCount: z.number().int().nonnegative(),
+    restorableCount: z.number().int().nonnegative(),
+    restoredCount: z.number().int().nonnegative(),
+    conflictCount: z.number().int().nonnegative(),
+    failedCount: z.number().int().nonnegative(),
+    hasRestorableChanges: z.boolean(),
+    files: z.array(WorkspaceChangeFooterFileSchema),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.changedFileCount !== value.files.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'changedFileCount must match files.length.',
+        path: ['changedFileCount'],
+      });
+    }
+  });
+
+export type WorkspaceChangeFooterChangeSet = z.infer<typeof WorkspaceChangeFooterChangeSetSchema>;
+
+export const WorkspaceChangeFooterFactSchema = z
+  .object({
+    runId: WorkspaceIdSchema,
+    sessionId: WorkspaceIdSchema,
+    updatedAt: IsoDateTimeSchema,
+    changeSets: z.array(WorkspaceChangeFooterChangeSetSchema),
+  })
+  .strict();
+
+export type WorkspaceChangeFooterFact = z.infer<typeof WorkspaceChangeFooterFactSchema>;
+
 export type WorkspaceChangeKind = z.infer<typeof WorkspaceChangeKindSchema>;
 export type WorkspaceChangeSetStatus = z.infer<typeof WorkspaceChangeSetStatusSchema>;
 export type WorkspaceRestoreState = z.infer<typeof WorkspaceRestoreStateSchema>;

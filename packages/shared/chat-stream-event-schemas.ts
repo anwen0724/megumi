@@ -10,6 +10,7 @@ import {
   type ChatStreamEvent,
   type ChatStreamEventType,
 } from './chat-stream-events';
+import { WorkspaceChangeFooterFactSchema } from './workspace-change-contracts';
 
 const CHAT_STREAM_EVENT_TYPE_VALUES = [...CHAT_STREAM_EVENT_TYPES] as [
   ChatStreamEventType,
@@ -259,6 +260,13 @@ export const ProcessRecoveryRecordedEventSchema = chatStreamEventSchema(
   },
 );
 
+export const WorkspaceChangeFooterUpdatedEventSchema = chatStreamEventSchema(
+  'workspace.change.footer.updated',
+  {
+    footer: WorkspaceChangeFooterFactSchema,
+  },
+);
+
 const ChatStreamEventUnionSchema = z.union([
   TurnStartedEventSchema,
   TurnCompletedEventSchema,
@@ -285,6 +293,7 @@ const ChatStreamEventUnionSchema = z.union([
   ProcessCompactionRecordedEventSchema,
   ProcessRetryRecordedEventSchema,
   ProcessRecoveryRecordedEventSchema,
+  WorkspaceChangeFooterUpdatedEventSchema,
 ]);
 
 export const ChatStreamEventSchema = ChatStreamEventUnionSchema satisfies z.ZodType<ChatStreamEvent>;
