@@ -20,21 +20,27 @@ describe('WorkspaceChangeFooter', () => {
     );
 
     expect(screen.getByRole('region', { name: '本轮工作区变更' })).toBeInTheDocument();
-    expect(screen.getByText('Megumi 修改了 2 个文件')).toBeInTheDocument();
-    expect(screen.getByText('可撤销 1 个，冲突 1 个')).toBeInTheDocument();
     expect(screen.getByText('src/app.ts')).toBeInTheDocument();
-    expect(screen.getByText('README.md')).toBeInTheDocument();
+    expect(screen.getAllByText('README.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('contentText')).not.toBeInTheDocument();
     expect(screen.queryByText('beforeHash')).not.toBeInTheDocument();
 
-    const appRow = screen.getByText('src/app.ts').closest('li');
+    const fileList = screen.getByRole('list', { name: 'Changed files' });
+    expect(fileList).toHaveClass('divide-y');
+    expect(fileList).toHaveClass('rounded-md');
+    expect(screen.getByTestId('workspace-change-summary-row')).toHaveTextContent('已编辑 2 个文件');
+    expect(screen.getByTestId('workspace-change-summary-row')).toHaveTextContent('Megumi 修改了 2 个文件');
+    expect(screen.getByTestId('workspace-change-summary-row')).toHaveTextContent('可撤销 1 个，冲突 1 个');
+
+    const appRow = screen.getByText('app.ts').closest('li');
     expect(appRow).not.toBeNull();
     if (!appRow) {
       throw new Error('Expected app row.');
     }
+    expect(appRow).toHaveAttribute('data-workspace-change-file-row', 'true');
 
     await userEvent.click(within(appRow).getByRole('button', { name: '打开' }));
-    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    await userEvent.click(within(screen.getByTestId('workspace-change-summary-row')).getByRole('button', { name: '撤销' }));
 
     expect(onOpenFile).toHaveBeenCalledWith('src/app.ts');
     expect(onRestoreChangeSet).toHaveBeenCalledWith('workspace-change-set-1');

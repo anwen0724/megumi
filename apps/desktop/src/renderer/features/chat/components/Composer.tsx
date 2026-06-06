@@ -137,7 +137,7 @@ export function Composer({
     <form
       aria-label="Message composer"
       onSubmit={handleSubmit}
-      className="pointer-events-auto mx-auto w-full min-w-[38rem] max-w-3xl px-6 pb-6 transition-[width,transform,opacity] duration-200 ease-out"
+      className="pointer-events-auto mx-auto w-full min-w-[38rem] max-w-4xl px-6 pb-6 transition-[width,transform,opacity] duration-200 ease-out"
     >
       <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
         {branchDraft ? (

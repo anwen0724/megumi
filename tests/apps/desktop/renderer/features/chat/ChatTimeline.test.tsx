@@ -379,7 +379,7 @@ describe('ChatTimeline', () => {
     expect(scrollArea).toHaveClass('px-8');
     expect(scrollArea).toHaveClass('pb-[19rem]');
     expect(scrollArea).toHaveAttribute('tabIndex', '0');
-    expect(screen.getByRole('log', { name: 'Chat timeline' })).toHaveClass('max-w-3xl');
+    expect(screen.getByRole('log', { name: 'Chat timeline' })).toHaveClass('max-w-4xl');
     expect(composerOverlay).toHaveClass('absolute');
     expect(composerOverlay).toHaveClass('inset-x-0');
     expect(composerOverlay).toHaveClass('bottom-0');
@@ -1412,6 +1412,57 @@ describe('ChatTimeline', () => {
 
   it('renders workspace change footer actions under assistant messages', async () => {
     const api = installMegumiMock();
+    api.recovery.restoreWorkspaceChangeSet.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        request: {
+          restoreRequestId: 'workspace-restore-request-1',
+          changeSetId: 'workspace-change-set-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          requestedBy: 'user',
+          status: 'completed',
+          requestedAt: '2026-06-06T10:00:01.000Z',
+          completedAt: '2026-06-06T10:00:02.000Z',
+        },
+        result: {
+          restoreResultId: 'workspace-restore-result-1',
+          restoreRequestId: 'workspace-restore-request-1',
+          changeSetId: 'workspace-change-set-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          status: 'restored',
+          restoredAt: '2026-06-06T10:00:02.000Z',
+          metadata: {
+            changedFileCount: 1,
+            restoredCount: 1,
+            conflictCount: 0,
+            failedCount: 0,
+          },
+        },
+        fileResults: [{
+          restoreFileResultId: 'workspace-restore-file-result-1',
+          restoreResultId: 'workspace-restore-result-1',
+          changedFileId: 'workspace-changed-file-1',
+          projectPath: 'src/app.ts',
+          status: 'restored',
+          restoredAt: '2026-06-06T10:00:02.000Z',
+        }],
+        summary: {
+          changeSetId: 'workspace-change-set-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          changedFileCount: 1,
+          restorableCount: 0,
+          restoredCount: 1,
+          conflictCount: 0,
+          failedCount: 0,
+          hasRestorableChanges: false,
+          updatedAt: '2026-06-06T10:00:02.000Z',
+        },
+      },
+      meta: recoveryMeta(IPC_CHANNELS.recovery.workspaceRestore),
+    });
     activateCanonicalSession([
       committedUser('message-user-1', 'Change a file', 'run-1'),
       {
@@ -1445,6 +1496,9 @@ describe('ChatTimeline', () => {
     expect(footer).toHaveTextContent('Megumi 修改了 1 个文件');
     await userEvent.click(within(footer).getByRole('button', { name: '打开' }));
     await userEvent.click(within(footer).getByRole('button', { name: '撤销' }));
+    const restoreDialog = await screen.findByRole('status', { name: '撤销结果' });
+    expect(restoreDialog).toHaveTextContent('已撤销 1 个文件');
+    expect(restoreDialog).toHaveTextContent('src/app.ts 已恢复到修改前状态');
 
     expect(api.workspace.files.open).toHaveBeenCalledWith(expect.objectContaining({
       payload: {

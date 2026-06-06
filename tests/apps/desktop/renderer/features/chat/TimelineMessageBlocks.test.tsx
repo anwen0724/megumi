@@ -91,7 +91,7 @@ function assistantMessage(overrides: Partial<TimelineAssistantMessage> = {}): Ti
 }
 
 describe('TimelineMessage canonical block rendering', () => {
-  it('renders user messages as right aligned plain text with the time below', () => {
+  it('renders user messages as a lightweight right aligned card with the time below', () => {
     render(<TimelineMessage message={userMessage()} />);
 
     const article = screen.getByRole('article', { name: 'User message' });
@@ -104,7 +104,8 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(article.textContent).toContain('你是谁');
     expect([...article.querySelectorAll('*')].some((element) =>
       element.classList.contains('bg-[var(--color-accent-soft)]'),
-    )).toBe(false);
+    )).toBe(true);
+    expect(text.closest('[data-testid="user-message-card"]')).toHaveClass('rounded-md');
     expect(time).toHaveAttribute('dateTime', createdAt);
     expect(text.compareDocumentPosition(time!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
@@ -123,13 +124,13 @@ describe('TimelineMessage canonical block rendering', () => {
 
     const assistantArticle = screen.getByRole('article', { name: 'Megumi message' });
     expect(assistantArticle.firstElementChild).toHaveClass('w-full');
-    expect(assistantArticle.firstElementChild).toHaveClass('max-w-2xl');
+    expect(assistantArticle.firstElementChild).toHaveClass('max-w-3xl');
 
     rerender(<TimelineMessage message={userMessage()} />);
 
     const userArticle = screen.getByRole('article', { name: 'User message' });
     expect(userArticle.firstElementChild).not.toHaveClass('w-full');
-    expect(userArticle.firstElementChild).toHaveClass('max-w-2xl');
+    expect(userArticle.firstElementChild).toHaveClass('max-w-3xl');
   });
 
   it('uses focus-thread motion classes without adding a timeline rail or assistant card', () => {

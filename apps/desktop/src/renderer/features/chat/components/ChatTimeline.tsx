@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import type { ApprovalResolvePayload } from '@megumi/shared/ipc-schemas';
+import type { ApprovalResolvePayload, WorkspaceRestoreData } from '@megumi/shared/ipc-schemas';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
@@ -58,12 +58,61 @@ function canShowUserMessageActions(
 
 type RecoverableAction = 'retry' | 'rerun' | 'mark_cancelled';
 
+interface RestoreFeedback {
+  title: string;
+  description: string;
+  persistent: boolean;
+}
+
 function recoverableActionsFor(run: RecoverableRunSummary): RecoverableAction[] {
   if (run.reason === 'waiting_for_approval') return [];
   if (run.reason === 'interrupted') return ['retry', 'mark_cancelled'];
   if (run.status === 'failed' || run.reason === 'failed') return ['retry'];
   if (run.status === 'cancelled' || run.reason === 'cancelled') return ['rerun'];
   return [];
+}
+
+function restoreFeedbackFromData(data: WorkspaceRestoreData): RestoreFeedback {
+  const restoredCount = data.fileResults.filter((file) => file.status === 'restored').length;
+  const conflictCount = data.fileResults.filter((file) => file.status === 'conflict').length;
+  const failedCount = data.fileResults.filter((file) => file.status === 'failed').length;
+  const firstRestored = data.fileResults.find((file) => file.status === 'restored');
+  const firstConflict = data.fileResults.find((file) => file.status === 'conflict');
+  const firstFailed = data.fileResults.find((file) => file.status === 'failed');
+
+  if (data.result.status === 'restored' && restoredCount > 0) {
+    return {
+      title: `已撤销 ${restoredCount} 个文件`,
+      description: firstRestored
+        ? `${firstRestored.projectPath} 已恢复到修改前状态`
+        : '文件已恢复到修改前状态',
+      persistent: false,
+    };
+  }
+
+  if (data.result.status === 'conflict' || conflictCount > 0) {
+    return {
+      title: '撤销冲突',
+      description: firstConflict
+        ? `${firstConflict.projectPath} 当前内容已变化，需要手动处理`
+        : '文件当前内容已变化，需要手动处理',
+      persistent: true,
+    };
+  }
+
+  if (data.result.status === 'failed' || failedCount > 0) {
+    return {
+      title: '撤销失败',
+      description: firstFailed?.error?.message ?? data.result.error?.message ?? 'Megumi 现在无法撤销这些文件变更。',
+      persistent: true,
+    };
+  }
+
+  return {
+    title: '撤销完成',
+    description: '没有需要恢复的文件。',
+    persistent: false,
+  };
 }
 
 function RecoverableRunActions({
@@ -118,6 +167,7 @@ export function ChatTimeline() {
   const [recoverableRuns, setRecoverableRuns] = useState<RecoverableRunSummary[]>([]);
   const [pendingRecoverableRunIds, setPendingRecoverableRunIds] = useState<Set<string>>(() => new Set());
   const [pendingWorkspaceChangeSetIds, setPendingWorkspaceChangeSetIds] = useState<Set<string>>(() => new Set());
+  const [restoreFeedback, setRestoreFeedback] = useState<RestoreFeedback | null>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const pendingRecoverableRunIdsRef = useRef(new Set<string>());
   const pendingWorkspaceChangeSetIdsRef = useRef(new Set<string>());
@@ -246,6 +296,18 @@ export function ChatTimeline() {
   useEffect(() => {
     void loadRecoverableRuns({ clearOnFailure: true });
   }, [activeRun?.runId, activeRun?.status, loadRecoverableRuns]);
+
+  useEffect(() => {
+    if (!restoreFeedback || restoreFeedback.persistent) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setRestoreFeedback(null);
+    }, 3000);
+
+    return () => window.clearTimeout(timeout);
+  }, [restoreFeedback]);
 
   function handleSubmit(payload: ComposerSubmitPayload) {
     void sendSessionMessage(payload);
@@ -385,10 +447,21 @@ export function ChatTimeline() {
         },
       ));
       if (result.ok) {
+        setRestoreFeedback(restoreFeedbackFromData(result.data));
         await loadRecoverableRuns({ clearOnFailure: false });
+      } else {
+        setRestoreFeedback({
+          title: '撤销失败',
+          description: 'Megumi 现在无法撤销这些文件变更。',
+          persistent: true,
+        });
       }
     } catch {
-      // Keep the footer as projected by main if restore or refresh fails.
+      setRestoreFeedback({
+        title: '撤销失败',
+        description: 'Megumi 现在无法撤销这些文件变更。',
+        persistent: true,
+      });
     } finally {
       pendingWorkspaceChangeSetIdsRef.current.delete(changeSetId);
       setPendingWorkspaceChangeSetIds(new Set(pendingWorkspaceChangeSetIdsRef.current));
@@ -423,7 +496,7 @@ export function ChatTimeline() {
         className="absolute inset-0 overflow-y-auto px-8 pb-[19rem] pt-7"
       >
         {hasTimelineContent ? (
-          <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-3xl flex-col gap-5">
+          <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-4xl flex-col gap-5">
             {timelineMessages.map((message) => (
               <TimelineMessage
                 key={message.messageId}
@@ -558,13 +631,36 @@ export function ChatTimeline() {
         )}
       </div>
 
+      {restoreFeedback ? (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-8">
+          <div
+            role="status"
+            aria-label="撤销结果"
+            aria-live="polite"
+            className="pointer-events-auto w-full max-w-sm rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 text-sm text-[var(--color-text)] shadow-[var(--shadow-soft)]"
+          >
+            <div className="font-medium leading-6">{restoreFeedback.title}</div>
+            <div className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
+              {restoreFeedback.description}
+            </div>
+            {restoreFeedback.persistent ? (
+              <div className="mt-3 flex justify-end">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setRestoreFeedback(null)}>
+                  关闭
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div data-testid="chat-composer-overlay" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 transition-[padding,width] duration-200 ease-out">
         {pendingApprovals.length > 0 ? (
           <section
             aria-label="Blocking approval controls"
             aria-live="polite"
             aria-atomic="true"
-            className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2 px-6"
+            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
           >
             {pendingApprovals.map((request) => (
               <ApprovalCard
@@ -580,7 +676,7 @@ export function ChatTimeline() {
         {unmatchedRecoverableRuns.length > 0 ? (
           <section
             aria-label="Recoverable run fallback actions"
-            className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2 px-6"
+            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
           >
             {unmatchedRecoverableRuns.map((run) => (
               <RecoverableRunActions

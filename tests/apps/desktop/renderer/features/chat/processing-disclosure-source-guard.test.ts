@@ -27,13 +27,14 @@ describe('processing disclosure source guard', () => {
     expect(component).not.toContain('shadow-sm');
   });
 
-  it('keeps timeline messages visually lightweight instead of rendering chat cards', () => {
+  it('keeps timeline messages visually lightweight while allowing the user message chip', () => {
     const component = readSource('apps/desktop/src/renderer/features/chat/components/TimelineMessage.tsx');
 
     expect(component).not.toContain('rounded-xl');
     expect(component).not.toContain('border-[var(--color-accent)] bg-[var(--color-accent)]');
     expect(component).not.toContain('border-[var(--color-border)] bg-[var(--color-surface)]');
-    expect(component).not.toContain('bg-[var(--color-accent-soft)]');
+    expect(component).toContain('data-testid="user-message-card"');
+    expect(component).toContain('bg-[var(--color-accent-soft)]');
     expect(component).toContain('justify-end');
     expect(component).toContain('text-right');
   });

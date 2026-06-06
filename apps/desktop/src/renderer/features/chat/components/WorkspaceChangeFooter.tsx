@@ -24,62 +24,85 @@ export function WorkspaceChangeFooter({
   return (
     <section
       aria-label="本轮工作区变更"
-      className="mt-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm"
+      className="mt-4 space-y-3 text-sm"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-medium leading-6 text-[var(--color-text)]">
-            {`Megumi 修改了 ${totalChangedFiles} 个文件`}
-          </p>
-          <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-muted)]">
-            {summaryText(footer.changeSets)}
-          </p>
-        </div>
-      </div>
+      <ul
+        aria-label="Changed files"
+        className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]"
+      >
+        {footer.changeSets.flatMap((changeSet) => changeSet.files).map((file) => (
+          <li
+            key={file.changedFileId}
+            data-workspace-change-file-row="true"
+            className="flex min-h-14 items-center justify-between gap-3 px-3 py-2"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-elevated)] text-[var(--color-text-muted)]">
+                <FileText size={16} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium leading-5 text-[var(--color-text)]">
+                  {fileName(file.projectPath)}
+                </div>
+                <div className="truncate text-xs leading-5 text-[var(--color-text-muted)]">
+                  {fileKindText(file)}
+                </div>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8 shrink-0 px-3 text-xs"
+              onClick={() => onOpenFile(file.projectPath)}
+            >
+              打开
+            </Button>
+          </li>
+        ))}
+      </ul>
 
-      <div className="mt-3 space-y-3">
+      <div className="space-y-3">
         {footer.changeSets.map((changeSet) => (
-          <div key={changeSet.changeSetId} className="space-y-2">
-            <ul className="space-y-1.5">
-              {changeSet.files.map((file) => (
-                <li
-                  key={file.changedFileId}
-                  className="flex min-h-8 items-center justify-between gap-3 rounded-md bg-[var(--color-surface-elevated)] px-2 py-1"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <FileText size={14} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
-                    <span className="min-w-0 truncate text-xs leading-5 text-[var(--color-text)]">
-                      {file.projectPath}
-                    </span>
-                    <span className="shrink-0 text-xs leading-5 text-[var(--color-text-muted)]">
-                      {fileStatusText(file)}
-                    </span>
+          <div
+            key={changeSet.changeSetId}
+            data-testid="workspace-change-summary-row"
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-elevated)] text-[var(--color-text-muted)]">
+                  <RotateCcw size={16} aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <div className="font-medium leading-6 text-[var(--color-text)]">
+                    {summaryTitle(changeSet)}
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 shrink-0 px-2 text-xs"
-                    onClick={() => onOpenFile(file.projectPath)}
-                  >
-                    打开
-                  </Button>
-                </li>
-              ))}
-            </ul>
-
-            <div className="flex justify-end">
+                  <div className="text-xs leading-5 text-[var(--color-text-muted)]">
+                    {`Megumi 修改了 ${totalChangedFiles} 个文件 · ${summaryText(footer.changeSets)}`}
+                  </div>
+                </div>
+              </div>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="h-7 gap-1 px-2 text-xs"
+                className="h-8 shrink-0 gap-1 px-3 text-xs"
                 disabled={!changeSet.hasRestorableChanges || pendingChangeSetIds.has(changeSet.changeSetId)}
                 onClick={() => onRestoreChangeSet(changeSet.changeSetId)}
               >
                 <RotateCcw size={13} aria-hidden="true" />
                 撤销
               </Button>
+            </div>
+
+            <div className="mt-3 space-y-1 text-xs leading-5 text-[var(--color-text-muted)]">
+              {changeSet.files.map((file) => (
+                <div key={`${changeSet.changeSetId}:${file.changedFileId}`} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate">{file.projectPath}</span>
+                  <span className="shrink-0">{fileStatusText(file)}</span>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -100,6 +123,37 @@ function summaryText(changeSets: WorkspaceChangeFooterChangeSet[]): string {
     parts.push(`失败 ${failedCount} 个`);
   }
   return parts.join('，');
+}
+
+function summaryTitle(changeSet: WorkspaceChangeFooterChangeSet): string {
+  if (changeSet.restoredCount > 0 && !changeSet.hasRestorableChanges) {
+    return `已撤销 ${changeSet.restoredCount} 个文件`;
+  }
+  if (changeSet.failedCount > 0 && changeSet.failedCount === changeSet.changedFileCount) {
+    return '撤销失败';
+  }
+  if (changeSet.conflictCount > 0 && changeSet.conflictCount === changeSet.changedFileCount) {
+    return `撤销冲突 · ${changeSet.conflictCount} 个文件`;
+  }
+
+  const kinds = new Set(changeSet.files.map((file) => file.changeKind));
+  if (kinds.size === 1) {
+    const kind = changeSet.files[0]?.changeKind;
+    if (kind === 'created') return `已创建 ${changeSet.changedFileCount} 个文件`;
+    if (kind === 'deleted') return `已删除 ${changeSet.changedFileCount} 个文件`;
+    return `已编辑 ${changeSet.changedFileCount} 个文件`;
+  }
+  return `已变更 ${changeSet.changedFileCount} 个文件`;
+}
+
+function fileName(projectPath: string): string {
+  return projectPath.split('/').filter(Boolean).at(-1) ?? projectPath;
+}
+
+function fileKindText(file: WorkspaceChangeFooterFile): string {
+  const extension = file.projectPath.split('.').at(-1);
+  const kind = extension && extension !== file.projectPath ? extension.toUpperCase() : 'FILE';
+  return `文档 · ${kind}`;
 }
 
 function fileStatusText(file: WorkspaceChangeFooterFile): string {
