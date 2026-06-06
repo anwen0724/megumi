@@ -159,6 +159,7 @@ const sessionRunService = new SessionRunService({
   agentInstructionSourceService,
   toolRuntimeFactory,
   toolDefinitionProvider: toolRegistry,
+  workspaceChanges: workspaceChangeRepository,
   chatStreamEventSink: chatStreamSink,
   timelineMessageRepository,
 });

@@ -730,6 +730,17 @@ export function createRuntimeMemoryAccessRecordedEvent(
   });
 }
 
+export function createWorkspaceChangesDetectedBeforeRetryEvent(
+  input: Omit<RunRuntimeEventFactoryInput<'workspace.changes.detected_before_retry'>, 'eventType' | 'visibility' | 'persist'>,
+): TypedRuntimeEvent<'workspace.changes.detected_before_retry'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'workspace.changes.detected_before_retry',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
 export function createWorkspaceRestoreRequestedEvent(
   input: Omit<RunRuntimeEventFactoryInput<'workspace.restore.requested'>, 'eventType' | 'visibility' | 'persist'>,
 ): TypedRuntimeEvent<'workspace.restore.requested'> {
