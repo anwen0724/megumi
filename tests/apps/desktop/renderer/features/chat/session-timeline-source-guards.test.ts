@@ -20,13 +20,15 @@ function projectFileExists(relativePath: string): boolean {
 
 describe('session timeline source guards', () => {
   it('ChatTimeline uses runtime chat instead of mock agent flow', () => {
-    const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const controllerSource = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-chat-page-controller.ts');
+    const timelineSource = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
     const oldHook = 'use' + 'MockAgentFlow';
 
-    expect(source).toContain('useSessionTimeline');
-    expect(source).not.toContain(oldHook);
-    expect(source).not.toContain('run' + 'MockAgentFlow');
-    expect(source).not.toContain('retryLast' + 'MockAgentFlow');
+    expect(controllerSource).toContain('useSessionTimeline');
+    expect(timelineSource).toContain('useChatPageController');
+    expect(controllerSource).not.toContain(oldHook);
+    expect(controllerSource).not.toContain('run' + 'MockAgentFlow');
+    expect(controllerSource).not.toContain('retryLast' + 'MockAgentFlow');
   });
 
   it('does not export mock agent flow from the chat feature barrel', () => {
@@ -82,18 +84,18 @@ describe('session timeline source guards', () => {
   });
 
   it('renders live assistant answers from canonical chat stream blocks instead of legacy streamingText', () => {
-    const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const controllerSource = readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-chat-page-controller.ts');
 
-    expect(source).toContain('CanonicalTimelineMessage');
-    expect(source).toContain('useChatStreamStore');
-    expect(source).toContain('chatStreamSessionKey');
-    expect(source).toContain('canonicalMessages');
-    expect(source).toContain('timelineMessages = canonicalMessages');
-    expect(source).not.toContain('StreamingAssistantMessage');
-    expect(source).not.toContain('TimelineMessageData');
-    expect(source).not.toContain('<StreamingAssistantMessage');
-    expect(source).not.toContain('Legacy active tool calls');
-    expect(source).not.toContain('completedToolActivities.map');
+    expect(controllerSource).toContain('CanonicalTimelineMessage');
+    expect(controllerSource).toContain('useChatStreamStore');
+    expect(controllerSource).toContain('chatStreamSessionKey');
+    expect(controllerSource).toContain('canonicalMessages');
+    expect(controllerSource).toContain('timelineMessages = canonicalMessages');
+    expect(controllerSource).not.toContain('StreamingAssistantMessage');
+    expect(controllerSource).not.toContain('TimelineMessageData');
+    expect(controllerSource).not.toContain('<StreamingAssistantMessage');
+    expect(controllerSource).not.toContain('Legacy active tool calls');
+    expect(controllerSource).not.toContain('completedToolActivities.map');
   });
 
   it('keeps old standalone processing and tool card components out of the canonical timeline path', () => {
@@ -107,7 +109,7 @@ describe('session timeline source guards', () => {
 
   it('keeps branch and retry ui as renderer intents without active path persistence logic', () => {
     const chatSources = [
-      readProjectFile('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx'),
+      readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-chat-page-controller.ts'),
       readProjectFile('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts'),
     ].join('\n');
 

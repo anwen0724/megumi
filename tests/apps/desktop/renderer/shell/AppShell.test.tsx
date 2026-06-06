@@ -393,8 +393,9 @@ describe('AppShell', () => {
 
     expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Change project' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Use project Other for this new session' }));
+    await userEvent.click(screen.getByRole('button', { name: /New session project: Megumi/ }));
+    const menu = screen.getByRole('menu', { name: 'Choose project for new session' });
+    await userEvent.click(within(menu).getByRole('menuitem', { name: /Other/ }));
 
     await waitFor(() => {
       expect(useProjectStore.getState().currentProjectId).toBe('project-2');

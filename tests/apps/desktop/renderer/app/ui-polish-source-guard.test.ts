@@ -25,7 +25,7 @@ describe('UI polish source guard', () => {
     expect(source).not.toContain('TasksPanelTab');
     expect(source).not.toMatch(/label:\s*['"]Tasks['"]/);
     expect(source).not.toMatch(/label:\s*['"]Run['"]/);
-    expect(source).toContain('data-testid="right-workspace-panel"');
+    expect(source).toContain('data-testid="right-sidebar"');
   });
 
   it('keeps the right workspace panel scoped to Workspace Files and Artifacts views', () => {
@@ -58,17 +58,20 @@ describe('UI polish source guard', () => {
   });
 
   it('keeps the focus canvas free of timeline rails and assistant cards', () => {
-    const chatTimeline = readSource('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
+    const messageScrollPanel = readSource('apps/desktop/src/renderer/features/chat/components/MessageScrollPanel.tsx');
+    const messageColumn = readSource('apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx');
+    const composerArea = readSource('apps/desktop/src/renderer/features/chat/components/ComposerArea.tsx');
     const timelineMessage = readSource('apps/desktop/src/renderer/features/chat/components/TimelineMessage.tsx');
 
-    expect(chatTimeline).toContain('max-w-3xl');
-    expect(chatTimeline).not.toMatch(/pr-16|xl:pr-32/);
-    expect(chatTimeline).toContain('data-testid="chat-message-scroll-area"');
-    expect(chatTimeline).toContain('data-testid="chat-message-content-column"');
-    expect(chatTimeline).toContain('data-testid="chat-composer-dock"');
-    expect(chatTimeline).toContain('data-testid="chat-composer-content-column"');
-    expect(chatTimeline).not.toMatch(/chat-content-shell|chat-message-section|chat-bottom-base/);
-    expect(chatTimeline).not.toMatch(/chat-composer-overlay|chat-composer-content-shell/);
+    expect(messageColumn).toContain('max-w-3xl');
+    expect(messageScrollPanel).not.toMatch(/pr-16|xl:pr-32/);
+    expect(messageScrollPanel).toContain('data-testid="message-scroll-panel"');
+    expect(messageColumn).toContain('data-testid="message-column"');
+    expect(composerArea).toContain('data-testid="composer-area"');
+    expect(composerArea).toContain('data-testid="composer-area-column"');
+    expect(chatPage).not.toMatch(/chat-content-shell|chat-message-section|chat-bottom-base/);
+    expect(chatPage).not.toMatch(/chat-composer-overlay|chat-composer-content-shell/);
     expect(timelineMessage).not.toMatch(/timeline-rail|border-l-2.*article|steps rail/i);
     expect(timelineMessage).not.toMatch(/isAssistant\s*\?\s*['"][^'"]*rounded-lg/);
   });

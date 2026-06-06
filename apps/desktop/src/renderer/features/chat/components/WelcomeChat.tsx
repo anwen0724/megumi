@@ -42,11 +42,17 @@ export function WelcomeChat({
               type="button"
               disabled={!canChangeNewSessionProject}
               onClick={onToggleProjectPicker}
+              aria-label={`New session project: ${currentProject.name}`}
               className="inline-flex items-center gap-2 rounded-md px-2 py-1 font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-default disabled:hover:bg-transparent"
             >
               <span>New session in</span>
               <span>{currentProject.name}</span>
-              {canChangeNewSessionProject ? <ChevronDown className="h-4 w-4" aria-hidden="true" /> : null}
+              {canChangeNewSessionProject ? (
+                <>
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  <span className="text-[var(--color-text-muted)]">Change project</span>
+                </>
+              ) : null}
             </button>
             <p className="max-w-xl truncate text-[var(--color-text-secondary)]">{currentProject.repoPath}</p>
             {canChangeNewSessionProject && projectPickerOpen ? (
@@ -74,9 +80,14 @@ export function WelcomeChat({
             ) : null}
           </div>
         ) : (
-          <Button type="button" variant="secondary" onClick={onOpenWorkspace} className="mt-6">
-            Open workspace
-          </Button>
+          <>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              Open a workspace to get started.
+            </p>
+            <Button type="button" variant="secondary" onClick={onOpenWorkspace} className="mt-4">
+              Open workspace
+            </Button>
+          </>
         )}
       </div>
     </div>

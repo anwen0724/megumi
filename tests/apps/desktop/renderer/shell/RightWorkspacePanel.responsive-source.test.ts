@@ -46,9 +46,9 @@ describe('RightSidebar responsive ownership', () => {
   it('uses an integrated workspace surface instead of an inner workspace card', () => {
     const source = readRightPanelSource();
 
-    expect(source).toContain('data-testid="right-workspace-panel"');
-    expect(source).toContain('data-testid="right-workspace-panel-header"');
-    expect(source).toContain('data-testid="right-workspace-panel-content"');
+    expect(source).toContain('data-testid="right-sidebar"');
+    expect(source).toContain('data-testid="right-sidebar-header"');
+    expect(source).toContain('data-testid="right-sidebar-content"');
     expect(source).toContain('bg-[var(--color-surface)]');
     expect(source).not.toMatch(/<Panel(?:\s|>)/);
   });

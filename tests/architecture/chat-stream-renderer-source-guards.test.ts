@@ -72,17 +72,19 @@ describe('renderer chat stream source guards', () => {
   });
 
   it('routes ChatTimeline live rendering through canonical chat-stream state', () => {
-    const source = read('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+    const controllerSource = read('apps/desktop/src/renderer/features/chat/hooks/use-chat-page-controller.ts');
+    const timelineSource = read('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
 
-    expect(source).toContain('useChatStreamStore');
-    expect(source).toContain('chatStreamSessionKey');
-    expect(source).toContain('canonicalMessages');
-    expect(source).toContain('timelineMessages = canonicalMessages');
-    expect(source).not.toContain('StreamingAssistantMessage');
-    expect(source).not.toContain('streamingText');
-    expect(source).not.toContain('TimelineMessageData');
-    expect(source).not.toContain('bufferedStreamOutputsByRun');
-    expect(source).not.toContain('answerRevealAllowedByRun');
+    expect(controllerSource).toContain('useChatStreamStore');
+    expect(controllerSource).toContain('chatStreamSessionKey');
+    expect(controllerSource).toContain('canonicalMessages');
+    expect(controllerSource).toContain('timelineMessages = canonicalMessages');
+    expect(timelineSource).toContain('useChatPageController');
+    expect(timelineSource).not.toContain('StreamingAssistantMessage');
+    expect(timelineSource).not.toContain('streamingText');
+    expect(timelineSource).not.toContain('TimelineMessageData');
+    expect(controllerSource).not.toContain('bufferedStreamOutputsByRun');
+    expect(controllerSource).not.toContain('answerRevealAllowedByRun');
   });
 
   it('keeps timeline history hydration out of old useChatStore message snapshots', () => {
