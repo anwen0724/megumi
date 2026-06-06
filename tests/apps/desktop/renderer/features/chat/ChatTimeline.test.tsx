@@ -369,6 +369,7 @@ describe('ChatTimeline', () => {
     const scrollArea = screen.getByTestId('chat-timeline-scroll');
     const composerOverlay = screen.getByTestId('chat-composer-overlay');
     const contentShell = screen.getByTestId('chat-timeline-content-shell');
+    const composerShell = screen.getByTestId('chat-composer-content-shell');
     const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');
@@ -379,15 +380,22 @@ describe('ChatTimeline', () => {
     expect(scrollArea).toHaveClass('inset-0');
     expect(scrollArea).toHaveClass('overflow-y-auto');
     expect(scrollArea).toHaveClass('px-8');
-    expect(scrollArea).toHaveClass('pb-[19rem]');
+    expect(scrollArea).toHaveClass('pb-[11rem]');
     expect(scrollArea).toHaveAttribute('tabIndex', '0');
     expect(contentShell).toHaveClass('max-w-4xl');
+    expect(contentShell).toHaveClass('pr-16');
+    expect(contentShell).toHaveClass('xl:pr-32');
     expect(contentColumn).toHaveClass('max-w-3xl');
     expect(contentColumn).toHaveClass('mx-auto');
     expect(composerOverlay).toHaveClass('absolute');
     expect(composerOverlay).toHaveClass('inset-x-0');
     expect(composerOverlay).toHaveClass('bottom-0');
+    expect(composerOverlay).toHaveClass('bg-[var(--color-app-bg)]');
+    expect(composerOverlay).toHaveClass('pt-3');
     expect(composerOverlay).toHaveClass('transition-[padding,width]');
+    expect(composerShell).toHaveClass('max-w-4xl');
+    expect(composerShell).toHaveClass('pr-16');
+    expect(composerShell).toHaveClass('xl:pr-32');
     expect(within(scrollArea).getByText('Check layout')).toBeInTheDocument();
     expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
