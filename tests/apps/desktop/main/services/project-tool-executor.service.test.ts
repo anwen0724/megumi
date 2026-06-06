@@ -106,6 +106,7 @@ describe('ProjectToolExecutor', () => {
       expect.objectContaining({ cwd: expect.stringContaining('project') }),
     );
   });
+
 });
 
 function toolCall(toolName: string, input: Record<string, unknown>): ToolExecution {
