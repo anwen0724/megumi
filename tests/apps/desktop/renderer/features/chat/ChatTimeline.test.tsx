@@ -368,6 +368,8 @@ describe('ChatTimeline', () => {
     const root = screen.getByTestId('chat-timeline-root');
     const scrollArea = screen.getByTestId('chat-timeline-scroll');
     const composerOverlay = screen.getByTestId('chat-composer-overlay');
+    const contentShell = screen.getByTestId('chat-timeline-content-shell');
+    const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');
     expect(root).toHaveClass('overflow-hidden');
@@ -379,7 +381,9 @@ describe('ChatTimeline', () => {
     expect(scrollArea).toHaveClass('px-8');
     expect(scrollArea).toHaveClass('pb-[19rem]');
     expect(scrollArea).toHaveAttribute('tabIndex', '0');
-    expect(screen.getByRole('log', { name: 'Chat timeline' })).toHaveClass('max-w-4xl');
+    expect(contentShell).toHaveClass('max-w-4xl');
+    expect(contentColumn).toHaveClass('max-w-3xl');
+    expect(contentColumn).toHaveClass('mx-auto');
     expect(composerOverlay).toHaveClass('absolute');
     expect(composerOverlay).toHaveClass('inset-x-0');
     expect(composerOverlay).toHaveClass('bottom-0');

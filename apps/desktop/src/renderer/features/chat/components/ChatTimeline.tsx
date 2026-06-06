@@ -496,51 +496,53 @@ export function ChatTimeline() {
         className="absolute inset-0 overflow-y-auto px-8 pb-[19rem] pt-7"
       >
         {hasTimelineContent ? (
-          <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-4xl flex-col gap-5">
-            {timelineMessages.map((message) => (
-              <TimelineMessage
-                key={message.messageId}
-                message={message}
-                showUserActions={canShowUserMessageActions(message, timelineMessages, userActionsBlocked)}
-                afterContent={message.role === 'assistant' ? (
-                  <>
-                    {message.workspaceChangeFooter ? (
-                      <WorkspaceChangeFooter
-                        footer={message.workspaceChangeFooter}
-                        pendingChangeSetIds={pendingWorkspaceChangeSetIds}
-                        onOpenFile={(projectPath) => {
-                          void openWorkspaceChangedFile(projectPath);
-                        }}
-                        onRestoreChangeSet={(changeSetId) => {
-                          void restoreWorkspaceChangeSet(changeSetId);
-                        }}
-                      />
-                    ) : null}
-                    {message.runId && recoverableRunsByRunId.has(message.runId) ? (
-                      <RecoverableRunActions
-                        run={recoverableRunsByRunId.get(message.runId)!}
-                        pending={pendingRecoverableRunIds.has(message.runId)}
-                        onRetry={(run) => {
-                          void retryRecoverableRun(run);
-                        }}
-                        onRerun={(run) => {
-                          void rerunRecoverableRun(run);
-                        }}
-                        onMarkCancelled={(run) => {
-                          void markRecoverableRunCancelled(run);
-                        }}
-                      />
-                    ) : null}
-                  </>
-                ) : null}
-                onBranchFromMessage={(timelineMessage) => {
-                  void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'branch' });
-                }}
-                onRerunMessage={(timelineMessage) => {
-                  void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'rerun' });
-                }}
-              />
-            ))}
+          <div data-testid="chat-timeline-content-shell" className="mx-auto w-full max-w-4xl">
+            <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-3xl flex-col gap-5">
+              {timelineMessages.map((message) => (
+                <TimelineMessage
+                  key={message.messageId}
+                  message={message}
+                  showUserActions={canShowUserMessageActions(message, timelineMessages, userActionsBlocked)}
+                  afterContent={message.role === 'assistant' ? (
+                    <>
+                      {message.workspaceChangeFooter ? (
+                        <WorkspaceChangeFooter
+                          footer={message.workspaceChangeFooter}
+                          pendingChangeSetIds={pendingWorkspaceChangeSetIds}
+                          onOpenFile={(projectPath) => {
+                            void openWorkspaceChangedFile(projectPath);
+                          }}
+                          onRestoreChangeSet={(changeSetId) => {
+                            void restoreWorkspaceChangeSet(changeSetId);
+                          }}
+                        />
+                      ) : null}
+                      {message.runId && recoverableRunsByRunId.has(message.runId) ? (
+                        <RecoverableRunActions
+                          run={recoverableRunsByRunId.get(message.runId)!}
+                          pending={pendingRecoverableRunIds.has(message.runId)}
+                          onRetry={(run) => {
+                            void retryRecoverableRun(run);
+                          }}
+                          onRerun={(run) => {
+                            void rerunRecoverableRun(run);
+                          }}
+                          onMarkCancelled={(run) => {
+                            void markRecoverableRunCancelled(run);
+                          }}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+                  onBranchFromMessage={(timelineMessage) => {
+                    void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'branch' });
+                  }}
+                  onRerunMessage={(timelineMessage) => {
+                    void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'rerun' });
+                  }}
+                />
+              ))}
+            </div>
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">
@@ -660,7 +662,7 @@ export function ChatTimeline() {
             aria-label="Blocking approval controls"
             aria-live="polite"
             aria-atomic="true"
-            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
+            className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
           >
             {pendingApprovals.map((request) => (
               <ApprovalCard
@@ -676,7 +678,7 @@ export function ChatTimeline() {
         {unmatchedRecoverableRuns.length > 0 ? (
           <section
             aria-label="Recoverable run fallback actions"
-            className="pointer-events-auto mx-auto mb-3 max-w-4xl space-y-2 px-6"
+            className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
           >
             {unmatchedRecoverableRuns.map((run) => (
               <RecoverableRunActions

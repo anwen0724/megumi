@@ -157,7 +157,8 @@ describe('Composer', () => {
     render(<Composer onSubmit={() => undefined} />);
 
     const form = screen.getByRole('form', { name: 'Message composer' });
-    expect(form).toHaveClass('max-w-4xl');
+    expect(form).toHaveClass('max-w-3xl');
+    expect(form).not.toHaveClass('px-6');
     expect(form).toHaveClass('transition-[width,transform,opacity]');
     expect(screen.getByTestId('composer-input-panel')).toHaveClass('px-4');
     expect(screen.getByTestId('composer-toolbar')).toHaveClass('px-3');
