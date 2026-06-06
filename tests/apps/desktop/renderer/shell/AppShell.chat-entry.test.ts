@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,11 +11,11 @@ function readAppShellSource() {
 }
 
 describe('AppShell chat entry', () => {
-  it('uses ChatTimeline for the center workspace', () => {
+  it('uses ChatPage for the center workspace', () => {
     const source = readAppShellSource();
 
     expect(source).toContain("from '../features/chat'");
-    expect(source).toContain('<ChatTimeline />');
+    expect(source).toContain('<ChatPage />');
   });
 
   it('does not import the temporary center workspace component', () => {

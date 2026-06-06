@@ -12,7 +12,7 @@ import {
   chatStreamSessionKey,
   useChatStreamStore,
 } from '@megumi/desktop/renderer/features/chat-stream';
-import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
+import { ChatPage } from '@megumi/desktop/renderer/features/chat';
 
 const project: Project = {
   id: 'project-1',
@@ -135,7 +135,7 @@ describe('auto session on first send', () => {
   });
 
   it('creates and selects a local session from the first submitted message', () => {
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     submitPrompt('  first line\nsecond line  ');
 
@@ -159,7 +159,7 @@ describe('auto session on first send', () => {
       loading: false,
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     submitPrompt('Start without a project');
 
@@ -186,7 +186,7 @@ describe('auto session on first send', () => {
       activeAgentType: 'reviewer',
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     submitPrompt('Continue in the active session');
 
@@ -212,7 +212,7 @@ describe('auto session on first send', () => {
       activeAgentType: 'free',
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     submitPrompt('Rename this session from prompt');
 
@@ -236,7 +236,7 @@ describe('auto session on first send', () => {
       activeAgentType: 'free',
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     submitPrompt('This should not rename the session');
 

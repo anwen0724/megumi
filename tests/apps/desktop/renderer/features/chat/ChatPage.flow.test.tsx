@@ -10,7 +10,7 @@ import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
-import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
+import { ChatPage } from '@megumi/desktop/renderer/features/chat';
 import {
   chatStreamSessionKey,
   useChatStreamStore,
@@ -321,7 +321,7 @@ function selectMegumiProject() {
   });
 }
 
-describe('ChatTimeline', () => {
+describe('ChatPage flow', () => {
   beforeEach(() => {
     runtimeEventCallback = null;
     runtimeSequence = 1;
@@ -351,7 +351,7 @@ describe('ChatTimeline', () => {
   });
 
   it('renders the open workspace welcome state when no project is selected, with composer controls available', () => {
-    render(<ChatTimeline />);
+    render(<ChatPage />);
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
     expect(screen.getByText('Open a workspace to get started.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open workspace' })).toBeInTheDocument();
@@ -363,23 +363,18 @@ describe('ChatTimeline', () => {
   it('keeps the scrollbar on the full-width message area while aligning message and composer columns', () => {
     activateCanonicalSession([committedUser('message-layout-user', 'Check layout')]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
-    const root = screen.getByTestId('chat-timeline-root');
-    const messageScrollArea = screen.getByTestId('chat-message-scroll-area');
-    const messageContentColumn = screen.getByTestId('chat-message-content-column');
-    const composerDock = screen.getByTestId('chat-composer-dock');
-    const composerContentColumn = screen.getByTestId('chat-composer-content-column');
+    const root = screen.getByTestId('chat-page-root');
+    const messageScrollArea = screen.getByTestId('message-scroll-panel');
+    const messageContentColumn = screen.getByTestId('message-column');
+    const composerArea = screen.getByTestId('composer-area');
+    const composerContentColumn = screen.getByTestId('composer-area-column');
     const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');
     expect(root).toHaveClass('overflow-hidden');
-    expect(root).toHaveClass('flex');
-    expect(root).toHaveClass('flex-col');
-    expect(root).toHaveClass('min-w-[42rem]');
-    expect(root).toHaveClass('transition-[background-color]');
     expect(messageScrollArea).toHaveClass('min-h-0');
-    expect(messageScrollArea).toHaveClass('flex-1');
     expect(messageScrollArea).toHaveClass('overflow-y-auto');
     expect(messageScrollArea).not.toHaveClass('max-w-3xl');
     expect(messageScrollArea).toHaveAttribute('tabIndex', '0');
@@ -389,29 +384,27 @@ describe('ChatTimeline', () => {
     expect(composerContentColumn).toHaveClass('max-w-3xl');
     expect(contentColumn).toHaveClass('w-full');
     expect(contentColumn).not.toHaveClass('max-w-4xl');
-    expect(composerDock).toHaveClass('shrink-0');
-    expect(composerDock).toHaveClass('bg-[var(--color-app-bg)]');
+    expect(composerArea).toHaveClass('absolute');
+    expect(composerArea).toHaveClass('bottom-0');
     expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');
     expect(within(messageScrollArea).getByText('Check layout')).toBeInTheDocument();
-    expect(within(composerDock).getByLabelText('Message Megumi')).toBeInTheDocument();
+    expect(within(composerArea).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 
   it('keeps the empty-session composer on the centered chat content column', () => {
     selectMegumiProject();
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
-    const messageScrollArea = screen.getByTestId('chat-message-scroll-area');
-    const composerContentColumn = screen.getByTestId('chat-composer-content-column');
+    const welcomeComposerLayout = screen.getByTestId('welcome-composer-layout');
+    const composerForm = screen.getByRole('form', { name: 'Message composer' });
 
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
-    expect(messageScrollArea).toHaveClass('overflow-y-auto');
-    expect(messageScrollArea).not.toHaveClass('max-w-3xl');
-    expect(composerContentColumn).toHaveClass('max-w-3xl');
-    expect(composerContentColumn).toHaveClass('mx-auto');
-    expect(composerContentColumn).not.toHaveClass('pr-16');
-    expect(composerContentColumn).not.toHaveClass('xl:pr-32');
-    expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');
+    expect(welcomeComposerLayout).toHaveClass('max-w-3xl');
+    expect(welcomeComposerLayout).toHaveClass('mx-auto');
+    expect(welcomeComposerLayout).not.toHaveClass('pr-16');
+    expect(welcomeComposerLayout).not.toHaveClass('xl:pr-32');
+    expect(composerForm).toHaveClass('max-w-3xl');
   });
 
   it('renders pending approvals in blocking controls without the separate tool-call card section', () => {
@@ -420,7 +413,7 @@ describe('ChatTimeline', () => {
     useToolCallStore.getState().upsertToolCall(createToolCall());
     useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     const approvalControls = screen.getByRole('region', { name: 'Blocking approval controls' });
@@ -437,7 +430,7 @@ describe('ChatTimeline', () => {
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'run');
     await userEvent.click(screen.getByRole('button', { name: 'Approve run_command' }));
@@ -465,7 +458,7 @@ describe('ChatTimeline', () => {
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     expect(within(timeline).queryByRole('button', { name: 'Approve run_command' })).not.toBeInTheDocument();
@@ -488,7 +481,7 @@ describe('ChatTimeline', () => {
   it('submits a message through the runtime chat flow', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -502,7 +495,7 @@ describe('ChatTimeline', () => {
   it('shows the pending canonical user message while waiting for stream events', async () => {
     installMegumiMock();
     selectMegumiProject();
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Start with the shell' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -517,7 +510,7 @@ describe('ChatTimeline', () => {
   it('does not render legacy runtime final output without canonical stream messages', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Explain Verilog' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -546,7 +539,7 @@ describe('ChatTimeline', () => {
   it('continues writing live runtime output to the original session after switching sessions', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Explain Verilog' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -605,7 +598,7 @@ describe('ChatTimeline', () => {
   it('does not render persisted legacy runtime error messages and does not retry from an empty draft', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'please fail this run' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -641,7 +634,7 @@ describe('ChatTimeline', () => {
       lastError: null,
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(screen.queryByText('Check current UI')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /processing disclosure/ })).not.toBeInTheDocument();
@@ -655,7 +648,7 @@ describe('ChatTimeline', () => {
       lastError: null,
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(screen.queryByText('正在处理')).not.toBeInTheDocument();
     expect(screen.queryByText('live')).not.toBeInTheDocument();
@@ -675,7 +668,7 @@ describe('ChatTimeline', () => {
       lastError: null,
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(screen.queryByRole('button', { name: /Expand processing disclosure/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Inspect project first')).not.toBeInTheDocument();
@@ -718,7 +711,7 @@ describe('ChatTimeline', () => {
       },
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const timelineText = screen.getByRole('log', { name: 'Chat timeline' }).textContent ?? '';
     expect(timelineText).toContain('Summarize UI updates');
@@ -759,7 +752,7 @@ describe('ChatTimeline', () => {
       committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(await screen.findAllByRole('button', { name: 'Retry' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Rerun' })).toBeInTheDocument();
@@ -800,7 +793,7 @@ describe('ChatTimeline', () => {
       committedAssistant('assistant:run-visible', 'run-visible', 'visible answer'),
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(await screen.findByLabelText('Recoverable actions for Unmatched failed run')).toBeInTheDocument();
     expect(screen.getByLabelText('Recoverable actions for Visible failed run').closest('[role="article"]')).toHaveTextContent('visible answer');
@@ -843,7 +836,7 @@ describe('ChatTimeline', () => {
       committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const retryActions = await screen.findByLabelText('Recoverable actions for Failed run');
     const retryButton = within(retryActions).getByRole('button', { name: 'Retry' });
@@ -932,7 +925,7 @@ describe('ChatTimeline', () => {
       committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     await userEvent.click(within(await screen.findByLabelText('Recoverable actions for Failed run')).getByRole('button', { name: 'Retry' }));
     await waitFor(() => {
@@ -975,7 +968,7 @@ describe('ChatTimeline', () => {
       committedAssistant('assistant:run-late-failed', 'run-late-failed', 'late failed answer'),
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     await waitFor(() => {
       expect(api.recovery.listRecoverableRuns).toHaveBeenCalledTimes(1);
@@ -1026,7 +1019,7 @@ describe('ChatTimeline', () => {
       committedAssistant('assistant:run-1', 'run-1', 'answer'),
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const userArticle = screen.getByRole('article', { name: 'User message' });
     await userEvent.hover(userArticle);
@@ -1078,7 +1071,7 @@ describe('ChatTimeline', () => {
       createdAt: '2026-06-01T10:01:00.000Z',
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const currentArticle = screen.getByText('current prompt').closest('article');
     expect(currentArticle).not.toBeNull();
@@ -1124,7 +1117,7 @@ describe('ChatTimeline', () => {
       },
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const historicalArticle = screen.getByText('historical prompt').closest('article');
     expect(historicalArticle).not.toBeNull();
@@ -1154,7 +1147,7 @@ describe('ChatTimeline', () => {
       },
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const historicalArticle = screen.getByText('historical prompt').closest('article');
     expect(historicalArticle).not.toBeNull();
@@ -1185,7 +1178,7 @@ describe('ChatTimeline', () => {
       },
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const historicalArticle = screen.getByText('historical prompt').closest('article');
     expect(historicalArticle).not.toBeNull();
@@ -1201,7 +1194,7 @@ describe('ChatTimeline', () => {
   it('wires the running composer Stop button to the active session message cancel request', async () => {
     const session = installMegumiMock();
     selectMegumiProject();
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     fireEvent.change(screen.getByLabelText('Message Megumi'), { target: { value: 'Cancel this run' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -1238,7 +1231,7 @@ describe('ChatTimeline', () => {
 
   it('calls useExistingProject when the Open workspace button is clicked', async () => {
     installMegumiMock();
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const openButton = screen.getByRole('button', { name: 'Open workspace' });
     expect(openButton).toBeInTheDocument();
@@ -1267,7 +1260,7 @@ describe('ChatTimeline', () => {
       error: null,
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
     expect(screen.getByText('Megumi is ready to help with this workspace.')).toBeInTheDocument();
@@ -1351,7 +1344,7 @@ describe('ChatTimeline', () => {
       },
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     expect(timeline).toHaveTextContent('读取 docs 目录');
@@ -1381,7 +1374,7 @@ describe('ChatTimeline', () => {
       committedUser('message-user-1', 'Canonical prompt'),
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(screen.getByText('Canonical prompt')).toBeInTheDocument();
     expect(screen.queryByText('Legacy duplicate')).not.toBeInTheDocument();
@@ -1431,7 +1424,7 @@ describe('ChatTimeline', () => {
       },
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     expect(screen.getByText('NEW CANONICAL ANSWER')).toBeInTheDocument();
   });
@@ -1516,7 +1509,7 @@ describe('ChatTimeline', () => {
       },
     ]);
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const footer = screen.getByRole('region', { name: '本轮工作区变更' });
     expect(footer).toHaveTextContent('Megumi 修改了 1 个文件');
@@ -1610,7 +1603,7 @@ describe('ChatTimeline', () => {
       },
     });
 
-    render(<ChatTimeline />);
+    render(<ChatPage />);
 
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
     expect(timeline).not.toHaveTextContent('Earlier user question');

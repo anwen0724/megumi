@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,9 +13,10 @@ const CHAT_STREAM_DATA_LAYER_FILES = [
 ];
 
 const CHAT_RENDERER_UI_FILES = [
-  'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
+  'apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx',
+  'apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx',
   'apps/desktop/src/renderer/features/chat/components/WorkspaceChangeFooter.tsx',
-  'apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx',
+  'apps/desktop/src/renderer/shell/RightSidebar.tsx',
 ];
 
 function read(path: string): string {
@@ -71,18 +72,20 @@ describe('renderer chat stream source guards', () => {
     expect(source).not.toContain('ChatStreamEventSchema');
   });
 
-  it('routes ChatTimeline live rendering through canonical chat-stream state', () => {
-    const source = read('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
+  it('routes ChatPage live rendering through canonical chat-stream state', () => {
+    const controllerSource = read('apps/desktop/src/renderer/features/chat/hooks/use-chat-page-controller.ts');
+    const chatPageSource = read('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
-    expect(source).toContain('useChatStreamStore');
-    expect(source).toContain('chatStreamSessionKey');
-    expect(source).toContain('canonicalMessages');
-    expect(source).toContain('timelineMessages = canonicalMessages');
-    expect(source).not.toContain('StreamingAssistantMessage');
-    expect(source).not.toContain('streamingText');
-    expect(source).not.toContain('TimelineMessageData');
-    expect(source).not.toContain('bufferedStreamOutputsByRun');
-    expect(source).not.toContain('answerRevealAllowedByRun');
+    expect(controllerSource).toContain('useChatStreamStore');
+    expect(controllerSource).toContain('chatStreamSessionKey');
+    expect(controllerSource).toContain('canonicalMessages');
+    expect(controllerSource).toContain('timelineMessages = canonicalMessages');
+    expect(chatPageSource).toContain('useChatPageController');
+    expect(chatPageSource).not.toContain('StreamingAssistantMessage');
+    expect(chatPageSource).not.toContain('streamingText');
+    expect(chatPageSource).not.toContain('TimelineMessageData');
+    expect(controllerSource).not.toContain('bufferedStreamOutputsByRun');
+    expect(controllerSource).not.toContain('answerRevealAllowedByRun');
   });
 
   it('keeps timeline history hydration out of old useChatStore message snapshots', () => {
@@ -116,7 +119,7 @@ describe('renderer chat stream source guards', () => {
   });
 
   it('does not add a right workspace sidebar Changes view for workspace change footer V1', () => {
-    const source = read('apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+    const source = read('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
     expect(source).not.toContain('Changes');
     expect(source).not.toContain('changed files');

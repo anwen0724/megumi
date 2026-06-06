@@ -1,16 +1,16 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../../../../..');
-const rightPanelSourcePath = resolve(repoRoot, 'apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+const rightPanelSourcePath = resolve(repoRoot, 'apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
 function readRightPanelSource() {
   return readFileSync(rightPanelSourcePath, 'utf8');
 }
 
-describe('RightWorkspacePanel responsive ownership', () => {
+describe('RightSidebar responsive ownership', () => {
   it('does not hide the panel through Tailwind breakpoint-only classes', () => {
     const source = readRightPanelSource();
 
@@ -46,9 +46,9 @@ describe('RightWorkspacePanel responsive ownership', () => {
   it('uses an integrated workspace surface instead of an inner workspace card', () => {
     const source = readRightPanelSource();
 
-    expect(source).toContain('data-testid="right-workspace-panel"');
-    expect(source).toContain('data-testid="right-workspace-panel-header"');
-    expect(source).toContain('data-testid="right-workspace-panel-content"');
+    expect(source).toContain('data-testid="right-sidebar"');
+    expect(source).toContain('data-testid="right-sidebar-header"');
+    expect(source).toContain('data-testid="right-sidebar-content"');
     expect(source).toContain('bg-[var(--color-surface)]');
     expect(source).not.toMatch(/<Panel(?:\s|>)/);
   });

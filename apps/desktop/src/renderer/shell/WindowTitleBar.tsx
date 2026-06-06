@@ -38,7 +38,7 @@ export function WindowTitleBar({
             size="sm"
             variant={workspaceSidebarOpen ? 'secondary' : 'ghost'}
             aria-expanded={workspaceSidebarOpen ? 'true' : 'false'}
-            aria-controls="right-workspace-sidebar"
+            aria-controls="right-sidebar"
             className="h-7 w-8 rounded-sm"
           >
             <WorkspaceSidebarIcon size={15} aria-hidden="true" />

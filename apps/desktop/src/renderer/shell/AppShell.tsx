@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSessionStore } from '../entities/session/store';
 import { useProjectStore } from '../entities/project/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
-import { ChatTimeline } from '../features/chat';
+import { ChatPage } from '../features/chat';
 import { useSessionHistoryHydration } from '../features/session-history/use-session-history-hydration';
 import { LeftSidebar, type SidebarProjectItem } from './LeftSidebar';
-import { RightWorkspacePanel } from './RightWorkspacePanel';
+import { RightSidebar } from './RightSidebar';
 import { SettingsPage } from './SettingsPage';
 import { WindowTitleBar } from './WindowTitleBar';
 import { formatSessionUpdatedAt } from './shell-display';
@@ -100,60 +100,60 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-screen min-h-0 bg-[var(--color-app-bg)] text-[var(--color-text)]">
-      <LeftSidebar
-        collapsed={sidebarCollapsed}
-        projects={sidebarProjects}
-        allProjects={projects}
-        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
-        onCreateSession={handleCreateSession}
-        onSelectSession={(sessionId) => {
-          void handleSelectSession(sessionId);
-        }}
-        onUseExistingProject={() => {
-          void useProjectStore.getState().useExistingProject();
-        }}
-        onManageProjects={() => {
-          // LeftSidebar manages the modal open state internally
-        }}
-        onOpenSettings={openSettings}
-        onOpenProject={(projectId) => {
-          void useProjectStore.getState().openProject(projectId);
-        }}
-        onRemoveProject={(projectId) => {
-          void (async () => {
-            const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
-            const removed = await useProjectStore.getState().removeProject(projectId);
-
-            if (removed && wasCurrent) {
-              setActiveSession(null);
-              useWorkspaceFilesStore.getState().reset();
-            }
-          })();
-        }}
+    <div className="flex h-screen min-h-0 flex-col bg-[var(--color-app-bg)] text-[var(--color-text)]">
+      <WindowTitleBar
+        title={settingsOpen ? 'Settings' : titlebarTitle}
+        workspaceSidebarOpen={rightSidebarOpen}
+        onToggleWorkspaceSidebar={settingsOpen ? undefined : toggleWorkspaceSidebar}
       />
-      <div className="flex min-w-[62rem] flex-1 flex-col overflow-hidden">
-        <WindowTitleBar
-          title={settingsOpen ? 'Settings' : titlebarTitle}
-          workspaceSidebarOpen={rightSidebarOpen}
-          onToggleWorkspaceSidebar={settingsOpen ? undefined : toggleWorkspaceSidebar}
+      <div data-testid="app-body" className="flex min-h-0 flex-1 overflow-hidden">
+        <LeftSidebar
+          collapsed={sidebarCollapsed}
+          projects={sidebarProjects}
+          allProjects={projects}
+          onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+          onCreateSession={handleCreateSession}
+          onSelectSession={(sessionId) => {
+            void handleSelectSession(sessionId);
+          }}
+          onUseExistingProject={() => {
+            void useProjectStore.getState().useExistingProject();
+          }}
+          onManageProjects={() => {
+            // LeftSidebar manages the modal open state internally
+          }}
+          onOpenSettings={openSettings}
+          onOpenProject={(projectId) => {
+            void useProjectStore.getState().openProject(projectId);
+          }}
+          onRemoveProject={(projectId) => {
+            void (async () => {
+              const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
+              const removed = await useProjectStore.getState().removeProject(projectId);
+
+              if (removed && wasCurrent) {
+                setActiveSession(null);
+                useWorkspaceFilesStore.getState().reset();
+              }
+            })();
+          }}
         />
-        <div
-          data-testid="workbench-content"
-          className="flex min-h-0 min-w-[62rem] flex-1 overflow-hidden transition-[padding,width] duration-200 ease-out"
+        <main
+          data-testid="main-content"
+          className="relative flex min-h-0 min-w-[42rem] flex-1 overflow-hidden transition-[width] duration-200 ease-out"
         >
           {settingsOpen ? (
             <SettingsPage onDone={closeSettings} />
           ) : (
-            <>
-              <ChatTimeline />
-              <RightWorkspacePanel
-                open={rightSidebarOpen}
-                onClose={() => setRightSidebarOpen(false)}
-              />
-            </>
+            <ChatPage />
           )}
-        </div>
+        </main>
+        {!settingsOpen ? (
+          <RightSidebar
+            open={rightSidebarOpen}
+            onClose={() => setRightSidebarOpen(false)}
+          />
+        ) : null}
       </div>
     </div>
   );

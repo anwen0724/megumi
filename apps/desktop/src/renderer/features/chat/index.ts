@@ -1,4 +1,4 @@
-export { ChatTimeline } from './components/ChatTimeline';
+export { ChatPage } from './pages/ChatPage';
 export { Composer } from './components/Composer';
 export type { ComposerStatus, ComposerSubmitPayload } from './components/Composer';
 export {

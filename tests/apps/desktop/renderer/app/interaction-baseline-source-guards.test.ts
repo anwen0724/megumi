@@ -15,7 +15,7 @@ describe('interaction baseline source guards', () => {
 
     expect(appShell).toContain("from './WindowTitleBar'");
     expect(appShell).toContain("from './LeftSidebar'");
-    expect(appShell).toContain("from './RightWorkspacePanel'");
+    expect(appShell).toContain("from './RightSidebar'");
     expect(appShell).toContain("from './SettingsPage'");
     expect(appShell).toContain("from '../features/chat'");
     expect(appShell).toContain('rightSidebarOpen');
@@ -50,7 +50,8 @@ describe('interaction baseline source guards', () => {
 
   it('keeps chat feature independent from workspace-panel feature', () => {
     const chatFiles = [
-      'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
+      'apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx',
+      'apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx',
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
       'apps/desktop/src/renderer/features/chat/index.ts',
     ];
@@ -79,7 +80,7 @@ describe('interaction baseline source guards', () => {
     const rendererEntryFiles = [
       'apps/desktop/src/renderer/shell/WindowTitleBar.tsx',
       'apps/desktop/src/renderer/shared/ipc/client.ts',
-      'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
+      'apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx',
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
     ];
 

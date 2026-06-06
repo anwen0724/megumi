@@ -3,7 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import { RightWorkspacePanel } from '@megumi/desktop/renderer/shell/RightWorkspacePanel';
+import { RightSidebar } from '@megumi/desktop/renderer/shell/RightSidebar';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 
@@ -32,7 +32,7 @@ function installWorkspaceFilesMock() {
   });
 }
 
-describe('RightWorkspacePanel', () => {
+describe('RightSidebar', () => {
   beforeEach(() => {
     useWorkspaceFilesStore.getState().reset();
     installWorkspaceFilesMock();
@@ -59,22 +59,22 @@ describe('RightWorkspacePanel', () => {
   });
 
   it('renders nothing when the workspace sidebar is closed', () => {
-    render(<RightWorkspacePanel open={false} onClose={() => undefined} />);
+    render(<RightSidebar open={false} onClose={() => undefined} />);
 
-    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Expand workspace panel' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
   });
 
   it('mounts before entering the expanded open state', () => {
     vi.useFakeTimers();
-    const { rerender } = render(<RightWorkspacePanel open={false} onClose={() => undefined} />);
+    const { rerender } = render(<RightSidebar open={false} onClose={() => undefined} />);
 
-    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
 
-    rerender(<RightWorkspacePanel open onClose={() => undefined} />);
+    rerender(<RightSidebar open onClose={() => undefined} />);
 
-    const enteringPanel = screen.getByTestId('right-workspace-panel');
+    const enteringPanel = screen.getByTestId('right-sidebar');
     expect(enteringPanel).toHaveClass('w-0');
     expect(enteringPanel).toHaveClass('opacity-0');
     expect(enteringPanel).toHaveClass('translate-x-6');
@@ -83,16 +83,16 @@ describe('RightWorkspacePanel', () => {
       vi.runOnlyPendingTimers();
     });
 
-    const expandedPanel = screen.getByTestId('right-workspace-panel');
+    const expandedPanel = screen.getByTestId('right-sidebar');
     expect(expandedPanel).toHaveClass('w-80');
     expect(expandedPanel).toHaveClass('opacity-100');
     expect(expandedPanel).toHaveClass('translate-x-0');
   });
 
   it('opens to the Workspace chooser without exposing a Tools label', () => {
-    render(<RightWorkspacePanel open onClose={() => undefined} />);
+    render(<RightSidebar open onClose={() => undefined} />);
 
-    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Artifacts workspace view' })).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('RightWorkspacePanel', () => {
   });
 
   it('shows Files inside the full workspace sidebar and can return to Workspace', async () => {
-    render(<RightWorkspacePanel open onClose={() => undefined} />);
+    render(<RightSidebar open onClose={() => undefined} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
 
@@ -122,7 +122,7 @@ describe('RightWorkspacePanel', () => {
   });
 
   it('shows Artifacts inside the full workspace sidebar', async () => {
-    render(<RightWorkspacePanel open onClose={() => undefined} />);
+    render(<RightSidebar open onClose={() => undefined} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
 
@@ -134,7 +134,7 @@ describe('RightWorkspacePanel', () => {
   it('calls onClose from the full sidebar close button', async () => {
     const onClose = vi.fn();
 
-    render(<RightWorkspacePanel open onClose={onClose} />);
+    render(<RightSidebar open onClose={onClose} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Close workspace sidebar' }));
 
@@ -142,30 +142,30 @@ describe('RightWorkspacePanel', () => {
   });
 
   it('uses an occupied sidebar surface instead of a floating card or collapsed rail', () => {
-    render(<RightWorkspacePanel open onClose={() => undefined} />);
+    render(<RightSidebar open onClose={() => undefined} />);
 
-    const panel = screen.getByTestId('right-workspace-panel');
-    const content = screen.getByTestId('right-workspace-panel-content');
+    const panel = screen.getByTestId('right-sidebar');
+    const content = screen.getByTestId('right-sidebar-content');
 
-    expect(panel).toHaveAttribute('id', 'right-workspace-sidebar');
+    expect(panel).toHaveAttribute('id', 'right-sidebar');
     expect(panel).toHaveClass('w-80');
     expect(panel).toHaveClass('border-l');
     expect(panel).toHaveClass('transition-[width,opacity,transform]');
     expect(panel).not.toHaveClass('fixed');
     expect(panel).not.toHaveClass('absolute');
     expect(content).toHaveClass('overflow-y-auto');
-    expect(panel.querySelector('[data-testid="right-workspace-panel-card"]')).toBeNull();
+    expect(panel.querySelector('[data-testid="right-sidebar-card"]')).toBeNull();
   });
 
   it('keeps the sidebar mounted during the closing transition before unmounting', () => {
     vi.useFakeTimers();
-    const { rerender } = render(<RightWorkspacePanel open onClose={() => undefined} />);
+    const { rerender } = render(<RightSidebar open onClose={() => undefined} />);
 
-    expect(screen.getByTestId('right-workspace-panel')).toHaveClass('w-80');
+    expect(screen.getByTestId('right-sidebar')).toHaveClass('w-80');
 
-    rerender(<RightWorkspacePanel open={false} onClose={() => undefined} />);
+    rerender(<RightSidebar open={false} onClose={() => undefined} />);
 
-    const closingPanel = screen.getByTestId('right-workspace-panel');
+    const closingPanel = screen.getByTestId('right-sidebar');
     expect(closingPanel).toHaveClass('w-0');
     expect(closingPanel).toHaveClass('opacity-0');
     expect(closingPanel).toHaveClass('translate-x-6');
@@ -175,11 +175,11 @@ describe('RightWorkspacePanel', () => {
     act(() => {
       vi.advanceTimersByTime(199);
     });
-    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
   });
 });
