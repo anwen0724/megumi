@@ -203,6 +203,55 @@ describe('TimelineHistoryCommitProjectorService', () => {
     ]);
   });
 
+  it('forwards live-only workspace footer streams without creating history commit state', () => {
+    const { repository } = createRepository();
+    const downstream = { publish: vi.fn() };
+    const service = new TimelineHistoryCommitProjectorService({
+      repository,
+      downstream,
+      ids: { diagnosticId: () => 'diagnostic-1' },
+    });
+    const footerEvent = event({
+      eventType: 'workspace.change.footer.updated',
+      seq: 1,
+      streamId: 'chat-stream:run-1:workspace-footer',
+      streamKind: 'workspace-footer',
+      footer: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        updatedAt: '2026-06-06T10:00:00.000Z',
+        changeSets: [{
+          changeSetId: 'workspace-change-set-1',
+          changedFileCount: 1,
+          restorableCount: 0,
+          restoredCount: 1,
+          conflictCount: 0,
+          failedCount: 0,
+          hasRestorableChanges: false,
+          files: [{
+            changedFileId: 'workspace-changed-file-1',
+            projectPath: 'src/app.ts',
+            changeKind: 'modified',
+            restoreState: 'restored',
+          }],
+        }],
+      },
+    });
+
+    service.publish(footerEvent);
+    service.publish(event({
+      eventType: 'turn.completed',
+      seq: 2,
+      streamId: 'chat-stream:run-1:workspace-footer',
+      streamKind: 'workspace-footer',
+    }));
+
+    expect(downstream.publish).toHaveBeenCalledTimes(2);
+    expect(downstream.publish).toHaveBeenNthCalledWith(1, footerEvent);
+    expect(repository.commitRunTimeline).not.toHaveBeenCalled();
+    expect(repository.recordCommitDiagnostic).not.toHaveBeenCalled();
+  });
+
   it('commits a branch separator-only stream immediately and ignores a later terminal for that stream', () => {
     const { repository, commits } = createRepository();
     const service = new TimelineHistoryCommitProjectorService({

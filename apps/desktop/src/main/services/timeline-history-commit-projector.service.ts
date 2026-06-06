@@ -54,6 +54,10 @@ export class TimelineHistoryCommitProjectorService implements ChatStreamEventSin
     const existingState = this.states.get(key);
     this.publishDownstream(event);
 
+    if (event.streamKind !== 'main') {
+      return;
+    }
+
     if (event.eventType === 'branch.separator.created') {
       this.commitBranchSeparatorEvent(event);
       return;
