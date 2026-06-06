@@ -11,7 +11,7 @@ import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
-import { ChatTimeline } from '@megumi/desktop/renderer/features/chat';
+import { ChatPage } from '@megumi/desktop/renderer/features/chat';
 import { RightSidebar } from '@megumi/desktop/renderer/shell/RightSidebar';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
@@ -240,7 +240,7 @@ function resetStores() {
 function renderChatWithRightPanel() {
   return render(
     <div className="flex h-screen">
-      <ChatTimeline />
+      <ChatPage />
       <RightSidebar open onClose={() => undefined} />
     </div>,
   );

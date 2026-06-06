@@ -1,9 +1,180 @@
-import { ChatTimeline } from '../components/ChatTimeline';
+import { useState, type CSSProperties } from 'react';
+import { useProjectStore } from '../../../entities/project/store';
+import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
+import { useChatPageController } from '../hooks/use-chat-page-controller';
+import { ChatArea } from '../components/ChatArea';
+import { ComposerArea } from '../components/ComposerArea';
+import { RestoreFeedbackDialog } from '../components/RestoreFeedbackDialog';
+import { Composer } from '../components/Composer';
+
+const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 
 export function ChatPage() {
+  const controller = useChatPageController();
+  const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
+  const timelineScroll = useTimelineAutoScroll({
+    sessionKey: controller.activeChatStreamSessionKey,
+    updateKey: controller.timelineUpdateKey,
+  });
+
+  const bottomSpacerHeight = Math.max(composerHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
+
+  const scrollPanel = {
+    scrollRef: timelineScroll.scrollRef,
+    onScroll: timelineScroll.onScroll,
+    onWheel: timelineScroll.onWheel,
+    onPointerDown: timelineScroll.onPointerDown,
+    onKeyDown: timelineScroll.onKeyDown,
+  };
+
+  const branchDraft = controller.branchDraft ? {
+    key: controller.branchDraft.branchMarkerId,
+    label: controller.branchDraft.label,
+    seedText: controller.branchDraft.seedText,
+    onCancel: () => {
+      void controller.cancelBranchDraft();
+    },
+  } : null;
+
   return (
-    <div data-testid="chat-page-root" className="min-h-0 flex-1">
-      <ChatTimeline />
+    <div
+      data-testid="chat-page-root"
+      className="relative min-h-0 flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
+      style={{
+        '--chat-composer-height': `${composerHeight}px`,
+        '--chat-bottom-spacer-height': `${bottomSpacerHeight}px`,
+      } as CSSProperties}
+    >
+      {controller.hasTimelineContent ? (
+        <>
+          <div className="absolute inset-0 min-h-0">
+            <ChatArea
+              hasTimelineContent
+              welcome={{
+                currentProject: controller.currentProject,
+                currentProjectId: controller.currentProjectId,
+                projects: controller.projects,
+                canChangeNewSessionProject: controller.canChangeNewSessionProject,
+                projectPickerOpen: controller.projectPickerOpen,
+                onOpenWorkspace: () => {
+                  void useProjectStore.getState().useExistingProject();
+                },
+                onToggleProjectPicker: () => controller.setProjectPickerOpen((value) => !value),
+                onSwitchProject: (projectId) => {
+                  void controller.switchNewSessionProject(projectId);
+                },
+              }}
+              scrollPanel={scrollPanel}
+              messageColumn={{
+                timelineMessages: controller.timelineMessages,
+                recoverableRunsByRunId: controller.recoverableRunsByRunId,
+                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
+                pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
+                bottomSpacerHeight,
+                canShowUserMessageActions: controller.canShowUserMessageActions,
+                onBranchFromMessage: (message) => {
+                  void controller.createBranchDraft({ messageId: message.messageId, intent: 'branch' });
+                },
+                onRerunMessage: (message) => {
+                  void controller.createBranchDraft({ messageId: message.messageId, intent: 'rerun' });
+                },
+                onOpenWorkspaceChangedFile: (projectPath) => {
+                  void controller.openWorkspaceChangedFile(projectPath);
+                },
+                onRestoreWorkspaceChangeSet: (changeSetId) => {
+                  void controller.restoreWorkspaceChangeSet(changeSetId);
+                },
+                onRetryRecoverableRun: (run) => {
+                  void controller.retryRecoverableRun(run);
+                },
+                onRerunRecoverableRun: (run) => {
+                  void controller.rerunRecoverableRun(run);
+                },
+                onMarkRecoverableRunCancelled: (run) => {
+                  void controller.markRecoverableRunCancelled(run);
+                },
+              }}
+            />
+          </div>
+          <ComposerArea
+            status={controller.composerStatus}
+            branchDraft={branchDraft}
+            pendingApprovals={controller.pendingApprovals}
+            unmatchedRecoverableRuns={controller.unmatchedRecoverableRuns}
+            pendingRecoverableRunIds={controller.pendingRecoverableRunIds}
+            onApprovalResolve={(payload) => {
+              void controller.resolveApproval(payload);
+            }}
+            onRetry={(run) => {
+              void controller.retryRecoverableRun(run);
+            }}
+            onRerun={(run) => {
+              void controller.rerunRecoverableRun(run);
+            }}
+            onMarkCancelled={(run) => {
+              void controller.markRecoverableRunCancelled(run);
+            }}
+            onSubmit={controller.handleSubmit}
+            onStop={controller.handleStop}
+            onHeightChange={setComposerHeight}
+          />
+        </>
+      ) : (
+        <div className="flex h-full min-h-0 flex-col items-center justify-center px-6">
+          <div className="min-h-0 w-full flex-1">
+            <ChatArea
+              hasTimelineContent={false}
+              welcome={{
+                currentProject: controller.currentProject,
+                currentProjectId: controller.currentProjectId,
+                projects: controller.projects,
+                canChangeNewSessionProject: controller.canChangeNewSessionProject,
+                projectPickerOpen: controller.projectPickerOpen,
+                onOpenWorkspace: () => {
+                  void useProjectStore.getState().useExistingProject();
+                },
+                onToggleProjectPicker: () => controller.setProjectPickerOpen((value) => !value),
+                onSwitchProject: (projectId) => {
+                  void controller.switchNewSessionProject(projectId);
+                },
+              }}
+              scrollPanel={scrollPanel}
+              messageColumn={{
+                timelineMessages: [],
+                recoverableRunsByRunId: controller.recoverableRunsByRunId,
+                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
+                pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
+                bottomSpacerHeight: 0,
+                canShowUserMessageActions: controller.canShowUserMessageActions,
+                onBranchFromMessage: () => undefined,
+                onRerunMessage: () => undefined,
+                onOpenWorkspaceChangedFile: () => undefined,
+                onRestoreWorkspaceChangeSet: () => undefined,
+                onRetryRecoverableRun: () => undefined,
+                onRerunRecoverableRun: () => undefined,
+                onMarkRecoverableRunCancelled: () => undefined,
+              }}
+            />
+          </div>
+          <div data-testid="welcome-composer-layout" className="mx-auto mt-10 w-full max-w-3xl">
+            <Composer
+              status={controller.composerStatus}
+              branchDraft={branchDraft}
+              onSubmit={controller.handleSubmit}
+              onStop={controller.handleStop}
+              onAttachFiles={() => undefined}
+              onChooseContext={() => undefined}
+            />
+          </div>
+        </div>
+      )}
+
+      {controller.restoreFeedback ? (
+        <RestoreFeedbackDialog
+          feedback={controller.restoreFeedback}
+          onClose={() => controller.setRestoreFeedback(null)}
+        />
+      ) : null}
     </div>
   );
 }
