@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 import { Composer, type ComposerStatus, type ComposerSubmitPayload, type ComposerBranchDraftView } from './Composer';
@@ -32,9 +33,36 @@ export function ComposerArea({
   onMarkCancelled,
   onSubmit,
   onStop,
+  onHeightChange,
 }: ComposerAreaProps) {
+  const areaRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const element = areaRef.current;
+    if (!element || !onHeightChange) return undefined;
+
+    const publishHeight = () => {
+      onHeightChange(Math.ceil(element.getBoundingClientRect().height));
+    };
+
+    publishHeight();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver(() => publishHeight());
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [onHeightChange]);
+
   return (
-    <div data-testid="composer-area" className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-transparent px-6 pb-6">
+    <div
+      ref={areaRef}
+      data-testid="composer-area"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-transparent px-6 pb-6"
+    >
       <div data-testid="composer-area-column" className="pointer-events-auto mx-auto w-full max-w-3xl">
         <ApprovalStack requests={pendingApprovals} onResolve={onApprovalResolve} />
         <RecoverableActionStack
