@@ -20,6 +20,7 @@ import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
 const CHAT_CONTENT_SHELL_CLASS = 'mx-auto w-full max-w-4xl pr-16 xl:pr-32';
+const EMPTY_CONTENT_SHELL_CLASS = 'mx-auto w-full max-w-4xl';
 
 function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): boolean {
   if (message.role !== 'assistant') {
@@ -260,6 +261,7 @@ export function ChatTimeline() {
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
     agentStatus === 'error';
+  const contentShellClass = hasTimelineContent ? CHAT_CONTENT_SHELL_CLASS : EMPTY_CONTENT_SHELL_CLASS;
   const activeEmptyNewSession =
     activeSession?.title === 'New session' &&
     activeSession.projectId === currentProjectId &&
@@ -494,10 +496,10 @@ export function ChatTimeline() {
         onWheel={timelineScroll.onWheel}
         onPointerDown={timelineScroll.onPointerDown}
         onKeyDown={timelineScroll.onKeyDown}
-        className="absolute inset-0 overflow-y-auto px-8 pb-[11rem] pt-7"
+        className="absolute inset-0 overflow-y-auto px-8 pb-[13rem] pt-7"
       >
         {hasTimelineContent ? (
-          <div data-testid="chat-timeline-content-shell" className={CHAT_CONTENT_SHELL_CLASS}>
+          <div data-testid="chat-timeline-content-shell" className={contentShellClass}>
             <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-3xl flex-col gap-5">
               {timelineMessages.map((message) => (
                 <TimelineMessage
@@ -659,65 +661,67 @@ export function ChatTimeline() {
 
       <div
         data-testid="chat-composer-overlay"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-[var(--color-app-bg)] pt-3 transition-[padding,width] duration-200 ease-out"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 transition-[padding,width] duration-200 ease-out"
       >
-        <div data-testid="chat-composer-content-shell" className={CHAT_CONTENT_SHELL_CLASS}>
-          {pendingApprovals.length > 0 ? (
-            <section
-              aria-label="Blocking approval controls"
-              aria-live="polite"
-              aria-atomic="true"
-              className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
-            >
-              {pendingApprovals.map((request) => (
-                <ApprovalCard
-                  key={request.approvalRequestId}
-                  request={request}
-                  onResolve={(payload) => {
-                    void resolveApproval(payload);
-                  }}
-                />
-              ))}
-            </section>
-          ) : null}
-          {unmatchedRecoverableRuns.length > 0 ? (
-            <section
-              aria-label="Recoverable run fallback actions"
-              className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
-            >
-              {unmatchedRecoverableRuns.map((run) => (
-                <RecoverableRunActions
-                  key={run.runId}
-                  run={run}
-                  pending={pendingRecoverableRunIds.has(run.runId)}
-                  onRetry={(recoverableRun) => {
-                    void retryRecoverableRun(recoverableRun);
-                  }}
-                  onRerun={(recoverableRun) => {
-                    void rerunRecoverableRun(recoverableRun);
-                  }}
-                  onMarkCancelled={(recoverableRun) => {
-                    void markRecoverableRunCancelled(recoverableRun);
-                  }}
-                />
-              ))}
-            </section>
-          ) : null}
-          <Composer
-            status={composerStatus}
-            branchDraft={branchDraft ? {
-              key: branchDraft.branchMarkerId,
-              label: branchDraft.label,
-              seedText: branchDraft.seedText,
-              onCancel: () => {
-                void cancelBranchDraft();
-              },
-            } : null}
-            onSubmit={handleSubmit}
-            onStop={handleStop}
-            onAttachFiles={() => undefined}
-            onChooseContext={() => undefined}
-          />
+        <div data-testid="chat-composer-content-shell" className={contentShellClass}>
+          <div data-testid="chat-composer-bottom-base" className="bg-[var(--color-app-bg)] pt-6">
+            {pendingApprovals.length > 0 ? (
+              <section
+                aria-label="Blocking approval controls"
+                aria-live="polite"
+                aria-atomic="true"
+                className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
+              >
+                {pendingApprovals.map((request) => (
+                  <ApprovalCard
+                    key={request.approvalRequestId}
+                    request={request}
+                    onResolve={(payload) => {
+                      void resolveApproval(payload);
+                    }}
+                  />
+                ))}
+              </section>
+            ) : null}
+            {unmatchedRecoverableRuns.length > 0 ? (
+              <section
+                aria-label="Recoverable run fallback actions"
+                className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
+              >
+                {unmatchedRecoverableRuns.map((run) => (
+                  <RecoverableRunActions
+                    key={run.runId}
+                    run={run}
+                    pending={pendingRecoverableRunIds.has(run.runId)}
+                    onRetry={(recoverableRun) => {
+                      void retryRecoverableRun(recoverableRun);
+                    }}
+                    onRerun={(recoverableRun) => {
+                      void rerunRecoverableRun(recoverableRun);
+                    }}
+                    onMarkCancelled={(recoverableRun) => {
+                      void markRecoverableRunCancelled(recoverableRun);
+                    }}
+                  />
+                ))}
+              </section>
+            ) : null}
+            <Composer
+              status={composerStatus}
+              branchDraft={branchDraft ? {
+                key: branchDraft.branchMarkerId,
+                label: branchDraft.label,
+                seedText: branchDraft.seedText,
+                onCancel: () => {
+                  void cancelBranchDraft();
+                },
+              } : null}
+              onSubmit={handleSubmit}
+              onStop={handleStop}
+              onAttachFiles={() => undefined}
+              onChooseContext={() => undefined}
+            />
+          </div>
         </div>
       </div>
     </main>
