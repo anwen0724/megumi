@@ -14,6 +14,7 @@ import { Button } from '../../../shared/ui';
 import { chatStreamSessionKey, useChatStreamStore } from '../../chat-stream';
 import { Composer, type ComposerStatus, type ComposerSubmitPayload } from './Composer';
 import { TimelineMessage } from './TimelineMessage';
+import { WorkspaceChangeFooter } from './WorkspaceChangeFooter';
 import { useSessionTimeline } from '../hooks/use-session-timeline';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 
@@ -116,8 +117,10 @@ export function ChatTimeline() {
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const [recoverableRuns, setRecoverableRuns] = useState<RecoverableRunSummary[]>([]);
   const [pendingRecoverableRunIds, setPendingRecoverableRunIds] = useState<Set<string>>(() => new Set());
+  const [pendingWorkspaceChangeSetIds, setPendingWorkspaceChangeSetIds] = useState<Set<string>>(() => new Set());
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const pendingRecoverableRunIdsRef = useRef(new Set<string>());
+  const pendingWorkspaceChangeSetIdsRef = useRef(new Set<string>());
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   const {
@@ -344,6 +347,54 @@ export function ChatTimeline() {
     })));
   }
 
+  async function openWorkspaceChangedFile(projectPath: string) {
+    if (!currentProject) {
+      return;
+    }
+
+    try {
+      await window.megumi.workspace.files.open(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.workspace.files.open,
+        {
+          workspaceRoot: currentProject.repoPath,
+          filePath: projectPath,
+        },
+      ));
+    } catch {
+      // Opening a file is best-effort; the footer projection remains the source of truth.
+    }
+  }
+
+  async function restoreWorkspaceChangeSet(changeSetId: string) {
+    if (!recoveryBridge || pendingWorkspaceChangeSetIdsRef.current.has(changeSetId)) {
+      return;
+    }
+
+    pendingWorkspaceChangeSetIdsRef.current.add(changeSetId);
+    setPendingWorkspaceChangeSetIds(new Set(pendingWorkspaceChangeSetIdsRef.current));
+
+    try {
+      const result = await recoveryBridge.restoreWorkspaceChangeSet(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.recovery.workspaceRestore,
+        {
+          changeSetId,
+          requestedBy: 'user',
+          metadata: {
+            source: 'workspace-change-footer',
+          },
+        },
+      ));
+      if (result.ok) {
+        await loadRecoverableRuns({ clearOnFailure: false });
+      }
+    } catch {
+      // Keep the footer as projected by main if restore or refresh fails.
+    } finally {
+      pendingWorkspaceChangeSetIdsRef.current.delete(changeSetId);
+      setPendingWorkspaceChangeSetIds(new Set(pendingWorkspaceChangeSetIdsRef.current));
+    }
+  }
+
   async function resolveApproval(payload: ApprovalCardResolvePayload) {
     const resolvePayload: ApprovalResolvePayload = {
       ...payload,
@@ -378,20 +429,36 @@ export function ChatTimeline() {
                 key={message.messageId}
                 message={message}
                 showUserActions={canShowUserMessageActions(message, timelineMessages, userActionsBlocked)}
-                afterContent={message.role === 'assistant' && message.runId && recoverableRunsByRunId.has(message.runId) ? (
-                  <RecoverableRunActions
-                    run={recoverableRunsByRunId.get(message.runId)!}
-                    pending={pendingRecoverableRunIds.has(message.runId)}
-                    onRetry={(run) => {
-                      void retryRecoverableRun(run);
-                    }}
-                    onRerun={(run) => {
-                      void rerunRecoverableRun(run);
-                    }}
-                    onMarkCancelled={(run) => {
-                      void markRecoverableRunCancelled(run);
-                    }}
-                  />
+                afterContent={message.role === 'assistant' ? (
+                  <>
+                    {message.workspaceChangeFooter ? (
+                      <WorkspaceChangeFooter
+                        footer={message.workspaceChangeFooter}
+                        pendingChangeSetIds={pendingWorkspaceChangeSetIds}
+                        onOpenFile={(projectPath) => {
+                          void openWorkspaceChangedFile(projectPath);
+                        }}
+                        onRestoreChangeSet={(changeSetId) => {
+                          void restoreWorkspaceChangeSet(changeSetId);
+                        }}
+                      />
+                    ) : null}
+                    {message.runId && recoverableRunsByRunId.has(message.runId) ? (
+                      <RecoverableRunActions
+                        run={recoverableRunsByRunId.get(message.runId)!}
+                        pending={pendingRecoverableRunIds.has(message.runId)}
+                        onRetry={(run) => {
+                          void retryRecoverableRun(run);
+                        }}
+                        onRerun={(run) => {
+                          void rerunRecoverableRun(run);
+                        }}
+                        onMarkCancelled={(run) => {
+                          void markRecoverableRunCancelled(run);
+                        }}
+                      />
+                    ) : null}
+                  </>
                 ) : null}
                 onBranchFromMessage={(timelineMessage) => {
                   void createBranchDraft({ messageId: timelineMessage.messageId, intent: 'branch' });

@@ -106,6 +106,8 @@ import type {
   ToolExecutionGetPayload,
   ToolDefinitionsListData,
   ToolDefinitionsListPayload,
+  WorkspaceFileOpenData,
+  WorkspaceFileOpenPayload,
   WorkspaceFilesListData,
   WorkspaceFilesListPayload,
 } from '@megumi/shared/ipc-schemas';
@@ -419,6 +421,10 @@ export const api = {
         request: BusinessRequest<WorkspaceFilesListPayload, typeof IPC_CHANNELS.workspace.files.list>,
       ): Promise<RuntimeIpcResult<WorkspaceFilesListData, typeof IPC_CHANNELS.workspace.files.list>> =>
         invokeRuntimeIpc(IPC_CHANNELS.workspace.files.list, request),
+      open: (
+        request: BusinessRequest<WorkspaceFileOpenPayload, typeof IPC_CHANNELS.workspace.files.open>,
+      ): Promise<RuntimeIpcResult<WorkspaceFileOpenData, typeof IPC_CHANNELS.workspace.files.open>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.workspace.files.open, request),
     },
   },
   runtime: {

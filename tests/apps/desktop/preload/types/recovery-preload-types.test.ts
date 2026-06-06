@@ -17,6 +17,8 @@ import type {
   RunRetryPayload,
   WorkspaceRestoreData,
   WorkspaceRestorePayload,
+  WorkspaceFileOpenData,
+  WorkspaceFileOpenPayload,
 } from '@megumi/shared/ipc-schemas';
 
 vi.mock('electron', () => ({
@@ -60,6 +62,12 @@ describe('recovery preload types', () => {
     >();
     expectTypeOf<Parameters<MegumiAPI['recovery']['restoreWorkspaceChangeSet']>[0]>().toEqualTypeOf<
       RuntimeIpcRequest<WorkspaceRestorePayload, typeof IPC_CHANNELS.recovery.workspaceRestore>
+    >();
+    expectTypeOf<MegumiAPI['workspace']['files']['open']>().returns.resolves.toEqualTypeOf<
+      RuntimeIpcResult<WorkspaceFileOpenData, typeof IPC_CHANNELS.workspace.files.open>
+    >();
+    expectTypeOf<Parameters<MegumiAPI['workspace']['files']['open']>[0]>().toEqualTypeOf<
+      RuntimeIpcRequest<WorkspaceFileOpenPayload, typeof IPC_CHANNELS.workspace.files.open>
     >();
   });
 

@@ -251,6 +251,24 @@ function installMegumiMock() {
     resume: vi.fn(),
     cancel: vi.fn(),
     retry: vi.fn(),
+    restoreWorkspaceChangeSet: vi.fn().mockResolvedValue({
+      ok: true,
+      data: {},
+      meta: recoveryMeta(IPC_CHANNELS.recovery.workspaceRestore),
+    }),
+  };
+  const workspace = {
+    files: {
+      open: vi.fn().mockResolvedValue({
+        ok: true,
+        data: {
+          workspaceRoot: 'C:/all/work/study/megumi',
+          filePath: 'src/app.ts',
+          opened: true,
+        },
+        meta: recoveryMeta(IPC_CHANNELS.workspace.files.open),
+      }),
+    },
   };
   Object.defineProperty(window, 'megumi', {
     configurable: true,
@@ -258,6 +276,7 @@ function installMegumiMock() {
       project: {
         useExisting: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true } }),
       },
+      workspace,
       session: {
         message: {
           send: session.message.send,
@@ -281,7 +300,7 @@ function installMegumiMock() {
       provider: { list: vi.fn(), update: vi.fn(), setApiKey: vi.fn(), deleteApiKey: vi.fn() },
     },
   });
-  return { ...session, session, approval, recovery };
+  return { ...session, session, approval, recovery, workspace };
 }
 
 function selectMegumiProject() {
@@ -1389,6 +1408,67 @@ describe('ChatTimeline', () => {
     render(<ChatTimeline />);
 
     expect(screen.getByText('NEW CANONICAL ANSWER')).toBeInTheDocument();
+  });
+
+  it('renders workspace change footer actions under assistant messages', async () => {
+    const api = installMegumiMock();
+    activateCanonicalSession([
+      committedUser('message-user-1', 'Change a file', 'run-1'),
+      {
+        ...committedAssistant('assistant:run-1', 'run-1', 'Changed src/app.ts'),
+        workspaceChangeFooter: {
+          runId: 'run-1',
+          sessionId: 'session-1',
+          updatedAt: '2026-06-06T10:00:00.000Z',
+          changeSets: [{
+            changeSetId: 'workspace-change-set-1',
+            changedFileCount: 1,
+            restorableCount: 1,
+            restoredCount: 0,
+            conflictCount: 0,
+            failedCount: 0,
+            hasRestorableChanges: true,
+            files: [{
+              changedFileId: 'workspace-changed-file-1',
+              projectPath: 'src/app.ts',
+              changeKind: 'modified',
+              restoreState: 'restorable',
+            }],
+          }],
+        },
+      },
+    ]);
+
+    render(<ChatTimeline />);
+
+    const footer = screen.getByRole('region', { name: '本轮工作区变更' });
+    expect(footer).toHaveTextContent('Megumi 修改了 1 个文件');
+    await userEvent.click(within(footer).getByRole('button', { name: '打开' }));
+    await userEvent.click(within(footer).getByRole('button', { name: '撤销' }));
+
+    expect(api.workspace.files.open).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        workspaceRoot: 'C:/all/work/study/megumi',
+        filePath: 'src/app.ts',
+      },
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.workspace.files.open,
+        source: 'renderer',
+      }),
+    }));
+    expect(api.recovery.restoreWorkspaceChangeSet).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        changeSetId: 'workspace-change-set-1',
+        requestedBy: 'user',
+        metadata: {
+          source: 'workspace-change-footer',
+        },
+      },
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.recovery.workspaceRestore,
+        source: 'renderer',
+      }),
+    }));
   });
 
   it('renders canonical live assistant blocks without legacy history fallback', () => {
