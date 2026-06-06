@@ -7,22 +7,22 @@ import {
 import { useProjectStore } from '../entities/project/store';
 import { IconButton, PanelTitle, cx } from '../shared/ui';
 
-type WorkspaceView = 'workspace' | 'files' | 'artifacts';
+type RightSidebarView = 'workspace' | 'files' | 'artifacts';
 const SIDEBAR_TRANSITION_MS = 200;
 
-interface RightWorkspacePanelProps {
+interface RightSidebarProps {
   open: boolean;
   onClose: () => void;
 }
 
-interface WorkspaceToolButtonProps {
+interface SidebarToolButtonProps {
   icon: typeof FolderTree;
   title: string;
   description: string;
   onClick: () => void;
 }
 
-function WorkspaceToolButton({ icon: Icon, title, description, onClick }: WorkspaceToolButtonProps) {
+function SidebarToolButton({ icon: Icon, title, description, onClick }: SidebarToolButtonProps) {
   return (
     <button
       type="button"
@@ -45,8 +45,8 @@ function WorkspaceToolButton({ icon: Icon, title, description, onClick }: Worksp
   );
 }
 
-export function RightWorkspacePanel({ open, onClose }: RightWorkspacePanelProps) {
-  const [activeView, setActiveView] = useState<WorkspaceView>('workspace');
+export function RightSidebar({ open, onClose }: RightSidebarProps) {
+  const [activeView, setActiveView] = useState<RightSidebarView>('workspace');
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(open);
   const currentProject = useProjectStore((state) =>
@@ -79,8 +79,8 @@ export function RightWorkspacePanel({ open, onClose }: RightWorkspacePanelProps)
 
   return (
     <aside
-      id="right-workspace-sidebar"
-      data-testid="right-workspace-panel"
+      id="right-sidebar"
+      data-testid="right-sidebar"
       onTransitionEnd={(event) => {
         if (event.target === event.currentTarget && !open) {
           setMounted(false);
@@ -95,7 +95,7 @@ export function RightWorkspacePanel({ open, onClose }: RightWorkspacePanelProps)
       )}
     >
       <div
-        data-testid="right-workspace-panel-header"
+        data-testid="right-sidebar-header"
         className="flex min-h-16 items-start justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3"
       >
         <div className="flex min-w-0 items-start gap-2">
@@ -122,16 +122,16 @@ export function RightWorkspacePanel({ open, onClose }: RightWorkspacePanelProps)
         </IconButton>
       </div>
 
-      <div data-testid="right-workspace-panel-content" className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div data-testid="right-sidebar-content" className="min-h-0 flex-1 overflow-y-auto p-3">
         {activeView === 'workspace' ? (
           <div className="space-y-3">
-            <WorkspaceToolButton
+            <SidebarToolButton
               icon={FolderTree}
               title="Files"
               description="Browse project files"
               onClick={() => setActiveView('files')}
             />
-            <WorkspaceToolButton
+            <SidebarToolButton
               icon={Archive}
               title="Artifacts"
               description="Open generated outputs"

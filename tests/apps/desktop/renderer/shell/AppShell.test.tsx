@@ -209,18 +209,22 @@ describe('AppShell', () => {
   it('renders the refined workspace shell with session title and compact sidebar sessions', () => {
     renderShell();
     const titlebar = screen.getByTestId('window-titlebar');
-    const workbenchContent = screen.getByTestId('workbench-content');
+    const appBody = screen.getByTestId('app-body');
+    const mainContent = screen.getByTestId('main-content');
 
     expect(titlebar).toBeInTheDocument();
-    expect(workbenchContent).toHaveClass('min-w-[62rem]');
-    expect(workbenchContent).toHaveClass('overflow-hidden');
+    expect(appBody).toHaveClass('flex');
+    expect(appBody).toHaveClass('min-h-0');
+    expect(appBody).toHaveClass('flex-1');
+    expect(mainContent).toHaveClass('min-w-[42rem]');
+    expect(mainContent).toHaveClass('overflow-hidden');
     expect(within(titlebar).getByText('Planning the UI')).toBeInTheDocument();
     expect(within(titlebar).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Megumi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
-    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-page-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
@@ -401,7 +405,7 @@ describe('AppShell', () => {
       payload: { projectId: 'project-2' },
     }));
     expect(screen.getByLabelText('New session project: Other')).toBeInTheDocument();
-    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/other')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-page-root')).getByText('C:/all/work/study/other')).toBeInTheDocument();
   });
 
   it('uses existing project flow instead of creating a session when no project is selected', async () => {
@@ -519,7 +523,7 @@ describe('AppShell', () => {
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('chat-timeline-root')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-page-root')).not.toBeInTheDocument();
   });
 
   it('opens settings as the main area page from the collapsed sidebar rail', async () => {
@@ -545,7 +549,7 @@ describe('AppShell', () => {
       expect(useSessionStore.getState().activeSessionId).toBe('session-2');
     });
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
-    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-page-root')).toBeInTheDocument();
     expect(within(screen.getByTestId('window-titlebar')).getByText('Review notes')).toBeInTheDocument();
   });
 
@@ -559,7 +563,7 @@ describe('AppShell', () => {
 
     expect(useSessionStore.getState().activeSessionId).toBeNull();
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
-    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-page-root')).toBeInTheDocument();
     expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
   });
 
@@ -575,7 +579,7 @@ describe('AppShell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
     expect(screen.queryByText('Message from the first session')).not.toBeInTheDocument();
-    expect(within(screen.getByTestId('chat-timeline-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-page-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
   });
 
   it('restores the previous session timeline when selecting it again', async () => {
@@ -621,12 +625,12 @@ describe('AppShell', () => {
   it('opens and closes the right workspace sidebar from the titlebar without a collapsed rail', async () => {
     renderShell();
 
-    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Expand workspace panel' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
 
-    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
     expect(screen.queryByText('Tools')).not.toBeInTheDocument();
@@ -638,19 +642,19 @@ describe('AppShell', () => {
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
 
     await userEvent.click(
-      within(screen.getByTestId('right-workspace-panel')).getByRole('button', {
+      within(screen.getByTestId('right-sidebar')).getByRole('button', {
         name: 'Close workspace sidebar',
       }),
     );
 
-    const closingPanel = screen.getByTestId('right-workspace-panel');
+    const closingPanel = screen.getByTestId('right-sidebar');
     expect(closingPanel).toHaveClass('w-0');
     expect(closingPanel).toHaveClass('opacity-0');
     expect(closingPanel).toHaveClass('pointer-events-none');
 
     fireEvent.transitionEnd(closingPanel);
 
-    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -658,12 +662,12 @@ describe('AppShell', () => {
     renderShell();
 
     await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
-    expect(screen.getByTestId('right-workspace-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
-    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
   });
 
@@ -678,8 +682,8 @@ describe('AppShell', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
-    expect(screen.getByTestId('chat-timeline-root')).toBeInTheDocument();
-    expect(screen.queryByTestId('right-workspace-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-page-root')).toBeInTheDocument();
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
   });
 });
