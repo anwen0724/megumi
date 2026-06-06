@@ -121,7 +121,7 @@ export function createToolCallHandlerService(
         runtimeEvents.push(...(outcome.runtimeEvents ?? []));
       }
 
-      if (executedToolCount > 0 && pendingApprovals.length === 0) {
+      if (executedToolCount > 0) {
         resolvedOptions.projectExecutor.finalizeWorkspaceChangeSet?.(workspaceChangeScope);
       }
 

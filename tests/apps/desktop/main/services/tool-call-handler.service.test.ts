@@ -211,7 +211,7 @@ describe('ToolCallHandlerService', () => {
     }));
   });
 
-  it('does not finalize a workspace change set when a batch pauses for approval', async () => {
+  it('finalizes executed workspace changes when a later tool pauses for approval', async () => {
     const repository = fakeRepository();
     const executor = {
       executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
@@ -220,7 +220,7 @@ describe('ToolCallHandlerService', () => {
         toolExecutionId: toolExecution.toolExecutionId,
         runId: toolExecution.runId,
         kind: 'success',
-        textContent: 'read',
+        textContent: 'wrote',
         redactionState: 'none',
         createdAt: '2026-05-20T00:00:02.000Z',
       })),
@@ -229,7 +229,7 @@ describe('ToolCallHandlerService', () => {
     const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
-      permissionMode: 'default',
+      permissionMode: 'accept_edits',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
       projectExecutor: executor,
@@ -240,7 +240,7 @@ describe('ToolCallHandlerService', () => {
     const outcome = await handler.handleToolCalls({
       request: modelRequest(),
       toolCalls: [
-        toolCall('read_file', { path: 'README.md' }, 'tool-call-1'),
+        toolCall('write_file', { path: 'src/app.ts', content: 'export {}' }, 'tool-call-1'),
         toolCall('run_command', { command: 'npm install lodash' }, 'tool-call-2'),
       ],
     });
@@ -248,7 +248,11 @@ describe('ToolCallHandlerService', () => {
     expect(outcome.toolResults).toHaveLength(1);
     expect(outcome.pendingApprovals).toHaveLength(1);
     expect(executor.executeToolExecution).toHaveBeenCalledTimes(1);
-    expect(executor.finalizeWorkspaceChangeSet).not.toHaveBeenCalled();
+    expect(executor.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+    });
   });
 
   it('resumes approved waiting tool executions by resolving approval and executing the host adapter', async () => {
