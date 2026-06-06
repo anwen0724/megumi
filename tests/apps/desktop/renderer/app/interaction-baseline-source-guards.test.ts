@@ -15,7 +15,7 @@ describe('interaction baseline source guards', () => {
 
     expect(appShell).toContain("from './WindowTitleBar'");
     expect(appShell).toContain("from './LeftSidebar'");
-    expect(appShell).toContain("from './RightWorkspacePanel'");
+    expect(appShell).toContain("from './RightSidebar'");
     expect(appShell).toContain("from './SettingsPage'");
     expect(appShell).toContain("from '../features/chat'");
     expect(appShell).toContain('rightSidebarOpen');

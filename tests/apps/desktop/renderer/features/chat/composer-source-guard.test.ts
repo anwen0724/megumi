@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -38,7 +38,7 @@ describe('composer source guard', () => {
   });
 
   it('does not introduce a right panel Run tab from composer work', () => {
-    const rightPanel = readSource('apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+    const rightPanel = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
     expect(readTabLabels(rightPanel)).not.toContain('Run');
   });

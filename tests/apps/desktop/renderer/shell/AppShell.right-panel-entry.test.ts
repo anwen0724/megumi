@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,11 +11,11 @@ function readAppShellSource() {
 }
 
 describe('AppShell right panel entry', () => {
-  it('uses RightWorkspacePanel for the right workspace', () => {
+  it('uses RightSidebar for the right workspace', () => {
     const source = readAppShellSource();
 
-    expect(source).toContain("from './RightWorkspacePanel'");
-    expect(source).toContain('<RightWorkspacePanel');
+    expect(source).toContain("from './RightSidebar'");
+    expect(source).toContain('<RightSidebar');
     expect(source).toContain('rightSidebarOpen');
     expect(source).toContain('workspaceSidebarOpen={rightSidebarOpen}');
     expect(source).toContain('open={rightSidebarOpen}');

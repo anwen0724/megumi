@@ -1,16 +1,16 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../../../../..');
-const rightPanelSourcePath = resolve(repoRoot, 'apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+const rightPanelSourcePath = resolve(repoRoot, 'apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
 function readRightPanelSource() {
   return readFileSync(rightPanelSourcePath, 'utf8');
 }
 
-describe('RightWorkspacePanel responsive ownership', () => {
+describe('RightSidebar responsive ownership', () => {
   it('does not hide the panel through Tailwind breakpoint-only classes', () => {
     const source = readRightPanelSource();
 

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -18,7 +18,7 @@ describe('UI polish source guard', () => {
   });
 
   it('keeps the right workspace panel as an integrated workspace surface without Tasks or Run tabs', () => {
-    const source = readSource('apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+    const source = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
     expect(source).not.toMatch(/<Panel(?:\s|>)/);
     expect(source).not.toContain('PanelHeader');
@@ -29,7 +29,7 @@ describe('UI polish source guard', () => {
   });
 
   it('keeps the right workspace panel scoped to Workspace Files and Artifacts views', () => {
-    const rightPanel = readSource('apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+    const rightPanel = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
     expect(rightPanel).toContain("'workspace' | 'files' | 'artifacts'");
     expect(rightPanel).toContain('aria-label={`Open ${title} workspace view`}');
@@ -83,7 +83,7 @@ describe('UI polish source guard', () => {
 
   it('keeps renderer workspace panel code away from direct Host APIs', () => {
     const files = [
-      'apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx',
+      'apps/desktop/src/renderer/shell/RightSidebar.tsx',
       'apps/desktop/src/renderer/features/workspace-panel/components/FilesPanelTab.tsx',
       'apps/desktop/src/renderer/entities/workspace-files/store.ts',
     ];
