@@ -254,7 +254,7 @@ describe('chat stream event contract', () => {
 
   it('parses workspace change footer update chat stream events', () => {
     const parsed = ChatStreamEventSchema.parse({
-      eventId: 'chat-stream-event-workspace-footer-1',
+      eventId: 'chat-stream-event-workspace-change-footer-1',
       eventType: 'workspace.change.footer.updated',
       projectId: 'project-1',
       sessionId: 'session-1',

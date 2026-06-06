@@ -214,8 +214,8 @@ describe('TimelineHistoryCommitProjectorService', () => {
     const footerEvent = event({
       eventType: 'workspace.change.footer.updated',
       seq: 1,
-      streamId: 'chat-stream:run-1:workspace-footer',
-      streamKind: 'workspace-footer',
+      streamId: 'chat-stream:run-1:workspace-change-footer',
+      streamKind: 'workspace-change-footer',
       footer: {
         runId: 'run-1',
         sessionId: 'session-1',
@@ -242,8 +242,8 @@ describe('TimelineHistoryCommitProjectorService', () => {
     service.publish(event({
       eventType: 'turn.completed',
       seq: 2,
-      streamId: 'chat-stream:run-1:workspace-footer',
-      streamKind: 'workspace-footer',
+      streamId: 'chat-stream:run-1:workspace-change-footer',
+      streamKind: 'workspace-change-footer',
     }));
 
     expect(downstream.publish).toHaveBeenCalledTimes(2);
