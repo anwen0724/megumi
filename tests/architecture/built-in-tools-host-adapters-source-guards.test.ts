@@ -71,18 +71,25 @@ describe('built-in tools and host adapters source guards', () => {
     const resumeToolApproval = functionSection(handler, 'resumeToolApproval', 'handleSingleToolCall');
     const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
     const getToolExecutionIndex = resumeToolApproval.indexOf('repository.getToolExecution(approvalRequest.toolExecutionId)');
-    const saveApprovalIndex = resumeToolApproval.indexOf('repository.saveApprovalRequest');
     const deniedBranchIndex = resumeToolApproval.indexOf("input.decision === 'denied'");
     const rejectedResultIndex = resumeToolApproval.indexOf("kind: 'user_rejected'");
+    const sessionLookupIndex = resumeToolApproval.indexOf('repository.getRunSessionId');
+    const approvedSaveApprovalIndex = resumeToolApproval.indexOf(
+      'repository.saveApprovalRequest',
+      sessionLookupIndex,
+    );
     const executeIndex = resumeToolApproval.indexOf('projectExecutor.executeToolExecution');
+    const deniedBranch = resumeToolApproval.slice(deniedBranchIndex, sessionLookupIndex);
+    const deniedSaveApprovalIndex = deniedBranch.indexOf('repository.saveApprovalRequest');
 
     expect(getApprovalIndex).toBeGreaterThan(-1);
     expect(getToolExecutionIndex).toBeGreaterThan(getApprovalIndex);
-    expect(saveApprovalIndex).toBeGreaterThan(getToolExecutionIndex);
-    expect(deniedBranchIndex).toBeGreaterThan(saveApprovalIndex);
+    expect(deniedBranchIndex).toBeGreaterThan(getToolExecutionIndex);
+    expect(deniedSaveApprovalIndex).toBeGreaterThan(-1);
     expect(rejectedResultIndex).toBeGreaterThan(deniedBranchIndex);
-    expect(executeIndex).toBeGreaterThan(deniedBranchIndex);
-    expect(executeIndex).toBeGreaterThan(rejectedResultIndex);
+    expect(sessionLookupIndex).toBeGreaterThan(rejectedResultIndex);
+    expect(approvedSaveApprovalIndex).toBeGreaterThan(sessionLookupIndex);
+    expect(executeIndex).toBeGreaterThan(approvedSaveApprovalIndex);
     expect(resumeToolApproval).not.toContain('evaluatePermissionPolicy({');
   });
 

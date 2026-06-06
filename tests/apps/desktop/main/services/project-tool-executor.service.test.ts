@@ -82,6 +82,39 @@ describe('ProjectToolExecutor', () => {
     expect(files.get('C:\\project\\src\\new.ts')).toBe('export {}');
   });
 
+  it('wraps edit_file and write_file with workspace change tracking when scope is provided', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\src\\index.ts', 'export const answer = 41;'],
+    ]);
+    const workspaceChangeTracker = {
+      trackToolExecution: vi.fn(async (input: { execute(): Promise<unknown> }) => input.execute()),
+      finalizeChangeSet: vi.fn(),
+    };
+    const executor = createProjectToolExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(files),
+      workspaceChangeTracker: workspaceChangeTracker as never,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await executor.executeToolExecution(
+      toolCall('edit_file', {
+        path: 'src/index.ts',
+        oldText: '41',
+        newText: '42',
+      }),
+      { sessionId: 'session-1', runId: 'run-1', stepId: 'step-1' },
+    );
+
+    expect(workspaceChangeTracker.trackToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { sessionId: 'session-1', runId: 'run-1', stepId: 'step-1' },
+      toolExecution: expect.objectContaining({ toolName: 'edit_file' }),
+      execute: expect.any(Function),
+    }));
+    expect(files.get('C:\\project\\src\\index.ts')).toBe('export const answer = 42;');
+  });
+
   it('dispatches run_command to the command executor', async () => {
     const spawn = vi.fn(() => fakeChildProcess({ stdout: 'ok\n', stderr: '', exitCode: 0 }));
     const executor = createProjectToolExecutor({
@@ -107,6 +140,32 @@ describe('ProjectToolExecutor', () => {
     );
   });
 
+  it('delegates run_command tracking decisions to workspace change tracking', async () => {
+    const spawn = vi.fn(() => fakeChildProcess({ stdout: 'ok\n', stderr: '', exitCode: 0 }));
+    const workspaceChangeTracker = {
+      trackToolExecution: vi.fn(async (input: { execute(): Promise<unknown> }) => input.execute()),
+      finalizeChangeSet: vi.fn(),
+    };
+    const executor = createProjectToolExecutor({
+      projectRoot: 'C:/project',
+      fileSystem: fakeFileSystem(new Map()),
+      spawn,
+      workspaceChangeTracker: workspaceChangeTracker as never,
+      now: () => '2026-05-20T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-1' },
+    });
+
+    await executor.executeToolExecution(
+      toolCall('run_command', { command: 'npm test' }),
+      { sessionId: 'session-1', runId: 'run-1', stepId: 'step-1' },
+    );
+
+    expect(workspaceChangeTracker.trackToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { sessionId: 'session-1', runId: 'run-1', stepId: 'step-1' },
+      toolExecution: expect.objectContaining({ toolName: 'run_command' }),
+      execute: expect.any(Function),
+    }));
+  });
 });
 
 function toolCall(toolName: string, input: Record<string, unknown>): ToolExecution {

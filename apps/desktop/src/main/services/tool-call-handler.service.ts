@@ -33,6 +33,7 @@ import type {
   ToolResult,
 } from '@megumi/shared/tool-contracts';
 import type { ProjectToolExecutor } from './project-tool-executor.service';
+import type { WorkspaceChangeExecutionScope } from './workspace-change-tracker.service';
 
 export interface ToolCallHandlerRepositoryPort {
   saveToolCall(toolCall: ToolCall): ToolCall;
@@ -43,6 +44,7 @@ export interface ToolCallHandlerRepositoryPort {
   saveApprovalRequest(approvalRequest: ApprovalRequest): ApprovalRequest;
   getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined;
   saveToolResult(toolResult: ToolResult): ToolResult;
+  getRunSessionId(runId: string): string | undefined;
 }
 
 export interface ToolCallHandlerServiceOptions {
@@ -70,6 +72,7 @@ interface SingleToolCallOutcome {
   toolResult?: ToolResult;
   pendingApproval?: PendingToolApproval;
   runtimeEvents?: RuntimeEvent[];
+  executedTool?: boolean;
 }
 
 export function createToolCallHandlerService(
@@ -91,17 +94,35 @@ export function createToolCallHandlerService(
       const toolResults: ToolResult[] = [];
       const pendingApprovals: PendingToolApproval[] = [];
       const runtimeEvents: RuntimeEvent[] = [];
+      let executedToolCount = 0;
+      const workspaceChangeScope: WorkspaceChangeExecutionScope = {
+        sessionId: String(input.request.sessionId),
+        runId: String(input.request.runId),
+        stepId: String(input.request.stepId),
+      };
 
       for (const toolCall of input.toolCalls) {
         resolvedOptions.repository.saveToolCall(toolCall);
-        const outcome = await handleSingleToolCall(resolvedOptions, input.request, toolCall);
+        const outcome = await handleSingleToolCall(
+          resolvedOptions,
+          input.request,
+          toolCall,
+          workspaceChangeScope,
+        );
         if (outcome.toolResult) {
           toolResults.push(outcome.toolResult);
         }
         if (outcome.pendingApproval) {
           pendingApprovals.push(outcome.pendingApproval);
         }
+        if (outcome.executedTool) {
+          executedToolCount += 1;
+        }
         runtimeEvents.push(...(outcome.runtimeEvents ?? []));
+      }
+
+      if (executedToolCount > 0) {
+        resolvedOptions.projectExecutor.finalizeWorkspaceChangeSet?.(workspaceChangeScope);
       }
 
       return { toolResults, pendingApprovals, runtimeEvents };
@@ -126,13 +147,13 @@ async function resumeToolApproval(
     return undefined;
   }
 
-  options.repository.saveApprovalRequest({
-    ...approvalRequest,
-    status: input.decision,
-    resolvedAt: input.decidedAt,
-  });
-
   if (input.decision === 'denied') {
+    options.repository.saveApprovalRequest({
+      ...approvalRequest,
+      status: input.decision,
+      resolvedAt: input.decidedAt,
+    });
+
     const deniedToolExecution = options.repository.saveToolExecution({
       ...toolExecution,
       status: 'denied',
@@ -162,12 +183,30 @@ async function resumeToolApproval(
     };
   }
 
+  const sessionId = options.repository.getRunSessionId(String(toolExecution.runId));
+  if (!sessionId) {
+    return undefined;
+  }
+  options.repository.saveApprovalRequest({
+    ...approvalRequest,
+    status: input.decision,
+    resolvedAt: input.decidedAt,
+  });
+
   const runningToolExecution = options.repository.saveToolExecution({
     ...toolExecution,
     status: 'running',
     startedAt: input.decidedAt,
   });
-  const toolResult = await options.projectExecutor.executeToolExecution(runningToolExecution);
+  const workspaceChangeScope: WorkspaceChangeExecutionScope = {
+    sessionId,
+    runId: String(runningToolExecution.runId),
+    stepId: String(runningToolExecution.stepId),
+  };
+  const toolResult = await options.projectExecutor.executeToolExecution(
+    runningToolExecution,
+    workspaceChangeScope,
+  );
 
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
@@ -178,6 +217,7 @@ async function resumeToolApproval(
   });
 
   const savedToolResult = options.repository.saveToolResult(toolResult);
+  options.projectExecutor.finalizeWorkspaceChangeSet?.(workspaceChangeScope);
   return {
     toolResult: savedToolResult,
     runtimeEvents: [
@@ -194,6 +234,7 @@ async function handleSingleToolCall(
   options: ResolvedToolCallHandlerServiceOptions,
   request: ModelStepRuntimeRequest,
   toolCall: ToolCall,
+  workspaceChangeScope: WorkspaceChangeExecutionScope,
 ): Promise<SingleToolCallOutcome> {
   const definition = options.registry.getDefinition(toolCall.toolName, {
     runId: String(request.runId),
@@ -289,7 +330,10 @@ async function handleSingleToolCall(
     startedAt: options.now(),
   });
   runtimeEvents.push(createToolExecutionStartedRuntimeEvent(request, runningToolExecution));
-  const result = await options.projectExecutor.executeToolExecution(runningToolExecution);
+  const result = await options.projectExecutor.executeToolExecution(
+    runningToolExecution,
+    workspaceChangeScope,
+  );
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
     status: result.kind === 'success' ? 'completed' : 'failed',
@@ -306,6 +350,7 @@ async function handleSingleToolCall(
 
   return {
     toolResult: options.repository.saveToolResult(result),
+    executedTool: true,
     runtimeEvents,
   };
 }

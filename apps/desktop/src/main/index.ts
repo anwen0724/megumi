@@ -8,6 +8,7 @@ import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
+import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -30,6 +31,7 @@ import { createDefaultRunContextService } from './services/run-context.service';
 import { ToolService } from './services/tool.service';
 import { createToolCallHandlerService } from './services/tool-call-handler.service';
 import { createProjectToolExecutor } from './services/project-tool-executor.service';
+import { WorkspaceChangeTrackerService } from './services/workspace-change-tracker.service';
 import { createPermissionSettingsService } from './services/permission-settings.service';
 import { createRecoveryService } from './services/recovery.service';
 import { ArtifactContentStore } from './services/artifact-content-store.service';
@@ -94,6 +96,7 @@ const agentInstructionSourceService = new AgentInstructionSourceService();
 const timelineMessageRepository = new TimelineMessageRepository(database);
 const sessionRunRepository = new SessionRunRepository(database);
 const activePathRepository = new SessionActivePathRepository(database);
+const workspaceChangeRepository = new WorkspaceChangeRepository(database);
 const chatStreamSink = new TimelineHistoryCommitProjectorService({
   repository: timelineMessageRepository,
   downstream: {
@@ -109,13 +112,40 @@ const chatStreamSink = new TimelineHistoryCommitProjectorService({
 });
 const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
   async create({ projectRoot, permissionMode }) {
+    const workspaceChangeTracker = new WorkspaceChangeTrackerService({
+      projectRoot,
+      fileSystem: fs,
+      repository: workspaceChangeRepository,
+      ids: {
+        changeSetId: () => `workspace-change-set:${crypto.randomUUID()}`,
+        workspaceCheckpointId: () => `workspace-checkpoint:${crypto.randomUUID()}`,
+        snapshotContentRefId: () => `workspace-snapshot:${crypto.randomUUID()}`,
+        changedFileId: () => `workspace-changed-file:${crypto.randomUUID()}`,
+      },
+    });
     return createToolCallHandlerService({
       registry: toolRegistry,
-      repository: toolRepository,
+      repository: {
+        saveToolCall: (toolCall) => toolRepository.saveToolCall(toolCall),
+        getToolCall: (toolCallId) => toolRepository.getToolCall(toolCallId),
+        saveToolExecution: (toolExecution) => toolRepository.saveToolExecution(toolExecution),
+        getToolExecution: (toolExecutionId) => toolRepository.getToolExecution(toolExecutionId),
+        savePermissionDecision: (permissionDecision) => toolRepository.savePermissionDecision(permissionDecision),
+        saveApprovalRequest: (approvalRequest) => toolRepository.saveApprovalRequest(approvalRequest),
+        getApprovalRequest: (approvalRequestId) => toolRepository.getApprovalRequest(approvalRequestId),
+        saveToolResult: (toolResult) => toolRepository.saveToolResult(toolResult),
+        getRunSessionId(runId) {
+          const run = sessionRunRepository.getRun(runId);
+          return run ? String(run.sessionId) : undefined;
+        },
+      },
       permissionMode,
       projectRoot,
       settings: await permissionSettingsService.loadForProject(projectRoot),
-      projectExecutor: createProjectToolExecutor({ projectRoot }),
+      projectExecutor: createProjectToolExecutor({
+        projectRoot,
+        workspaceChangeTracker,
+      }),
     });
   },
 };
