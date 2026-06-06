@@ -19,8 +19,7 @@ import { useSessionTimeline } from '../hooks/use-session-timeline';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
-const CHAT_CONTENT_SHELL_CLASS = 'mx-auto w-full max-w-4xl pr-16 xl:pr-32';
-const EMPTY_CONTENT_SHELL_CLASS = 'mx-auto w-full max-w-4xl';
+const CHAT_CONTENT_SHELL_CLASS = 'mx-auto w-full max-w-3xl';
 
 function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): boolean {
   if (message.role !== 'assistant') {
@@ -261,7 +260,6 @@ export function ChatTimeline() {
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
     agentStatus === 'error';
-  const contentShellClass = hasTimelineContent ? CHAT_CONTENT_SHELL_CLASS : EMPTY_CONTENT_SHELL_CLASS;
   const activeEmptyNewSession =
     activeSession?.title === 'New session' &&
     activeSession.projectId === currentProjectId &&
@@ -499,8 +497,8 @@ export function ChatTimeline() {
         className="absolute inset-0 overflow-y-auto px-8 pb-[13rem] pt-7"
       >
         {hasTimelineContent ? (
-          <div data-testid="chat-timeline-content-shell" className={contentShellClass}>
-            <div role="log" aria-label="Chat timeline" className="mx-auto flex max-w-3xl flex-col gap-5">
+          <div data-testid="chat-timeline-content-shell" className={CHAT_CONTENT_SHELL_CLASS}>
+            <div role="log" aria-label="Chat timeline" className="flex w-full flex-col gap-5">
               {timelineMessages.map((message) => (
                 <TimelineMessage
                   key={message.messageId}
@@ -663,7 +661,7 @@ export function ChatTimeline() {
         data-testid="chat-composer-overlay"
         className="pointer-events-none absolute inset-x-0 bottom-0 z-10 transition-[padding,width] duration-200 ease-out"
       >
-        <div data-testid="chat-composer-content-shell" className={`${contentShellClass} relative`}>
+        <div data-testid="chat-composer-content-shell" className={`${CHAT_CONTENT_SHELL_CLASS} relative`}>
           <div
             data-testid="chat-composer-bottom-base"
             className="pointer-events-none absolute inset-x-0 bottom-0 top-8 bg-[var(--color-app-bg)]"

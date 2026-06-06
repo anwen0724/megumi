@@ -384,19 +384,19 @@ describe('ChatTimeline', () => {
     expect(scrollArea).toHaveClass('px-8');
     expect(scrollArea).toHaveClass('pb-[13rem]');
     expect(scrollArea).toHaveAttribute('tabIndex', '0');
-    expect(contentShell).toHaveClass('max-w-4xl');
-    expect(contentShell).toHaveClass('pr-16');
-    expect(contentShell).toHaveClass('xl:pr-32');
-    expect(contentColumn).toHaveClass('max-w-3xl');
-    expect(contentColumn).toHaveClass('mx-auto');
+    expect(contentShell).toHaveClass('max-w-3xl');
+    expect(contentShell).not.toHaveClass('pr-16');
+    expect(contentShell).not.toHaveClass('xl:pr-32');
+    expect(contentColumn).toHaveClass('w-full');
+    expect(contentColumn).not.toHaveClass('max-w-4xl');
     expect(composerOverlay).toHaveClass('absolute');
     expect(composerOverlay).toHaveClass('inset-x-0');
     expect(composerOverlay).toHaveClass('bottom-0');
     expect(composerOverlay).not.toHaveClass('bg-[var(--color-app-bg)]');
     expect(composerOverlay).toHaveClass('transition-[padding,width]');
-    expect(composerShell).toHaveClass('max-w-4xl');
-    expect(composerShell).toHaveClass('pr-16');
-    expect(composerShell).toHaveClass('xl:pr-32');
+    expect(composerShell).toHaveClass('max-w-3xl');
+    expect(composerShell).not.toHaveClass('pr-16');
+    expect(composerShell).not.toHaveClass('xl:pr-32');
     expect(composerShell).toHaveClass('relative');
     expect(composerBase).toHaveClass('absolute');
     expect(composerBase).toHaveClass('inset-x-0');
@@ -409,7 +409,7 @@ describe('ChatTimeline', () => {
     expect(within(composerOverlay).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 
-  it('keeps the empty-session composer centered instead of reserving the future tool tray lane', () => {
+  it('keeps the empty-session composer on the same centered chat content shell', () => {
     selectMegumiProject();
 
     render(<ChatTimeline />);
@@ -419,7 +419,7 @@ describe('ChatTimeline', () => {
 
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
     expect(composerOverlay).not.toHaveClass('bg-[var(--color-app-bg)]');
-    expect(composerShell).toHaveClass('max-w-4xl');
+    expect(composerShell).toHaveClass('max-w-3xl');
     expect(composerShell).not.toHaveClass('pr-16');
     expect(composerShell).not.toHaveClass('xl:pr-32');
     expect(screen.getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');

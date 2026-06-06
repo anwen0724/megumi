@@ -61,7 +61,8 @@ describe('UI polish source guard', () => {
     const chatTimeline = readSource('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
     const timelineMessage = readSource('apps/desktop/src/renderer/features/chat/components/TimelineMessage.tsx');
 
-    expect(chatTimeline).toContain('max-w-4xl');
+    expect(chatTimeline).toContain('max-w-3xl');
+    expect(chatTimeline).not.toMatch(/pr-16|xl:pr-32/);
     expect(chatTimeline).toContain('transition-[padding,width]');
     expect(timelineMessage).not.toMatch(/timeline-rail|border-l-2.*article|steps rail/i);
     expect(timelineMessage).not.toMatch(/isAssistant\s*\?\s*['"][^'"]*rounded-lg/);
