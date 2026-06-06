@@ -730,6 +730,39 @@ export function createRuntimeMemoryAccessRecordedEvent(
   });
 }
 
+export function createWorkspaceChangesDetectedBeforeRetryEvent(
+  input: Omit<RunRuntimeEventFactoryInput<'workspace.changes.detected_before_retry'>, 'eventType' | 'visibility' | 'persist'>,
+): TypedRuntimeEvent<'workspace.changes.detected_before_retry'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'workspace.changes.detected_before_retry',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
+export function createWorkspaceRestoreRequestedEvent(
+  input: Omit<RunRuntimeEventFactoryInput<'workspace.restore.requested'>, 'eventType' | 'visibility' | 'persist'>,
+): TypedRuntimeEvent<'workspace.restore.requested'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'workspace.restore.requested',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
+export function createWorkspaceRestoreCompletedEvent(
+  input: Omit<RunRuntimeEventFactoryInput<'workspace.restore.completed'>, 'eventType' | 'visibility' | 'persist'>,
+): TypedRuntimeEvent<'workspace.restore.completed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'workspace.restore.completed',
+    visibility: 'system',
+    persist: 'required',
+  });
+}
+
 export function createRunStartedEvent(input: {
   eventId: string;
   request: RuntimeEventRequestRef;

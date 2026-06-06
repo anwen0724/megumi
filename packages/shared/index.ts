@@ -24,6 +24,10 @@ export * from './ipc-errors';
 export * from './ipc-contracts';
 export * from './project-contracts';
 export * from './workspace-change-contracts';
+export {
+  WorkspaceRestoreRequestSchema,
+  WorkspaceRestoreResultSchema,
+} from './workspace-change-contracts';
 export * from './ipc-schemas';
 export * from './runtime-errors';
 export * from './runtime-events';

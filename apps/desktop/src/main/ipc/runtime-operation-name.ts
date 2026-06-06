@@ -53,6 +53,8 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'recovery.cancel';
     case IPC_CHANNELS.recovery.retry:
       return 'recovery.retry';
+    case IPC_CHANNELS.recovery.workspaceRestore:
+      return 'recovery.workspace-restore';
     case IPC_CHANNELS.artifacts.listByRun:
       return 'artifacts.list-by-run';
     case IPC_CHANNELS.artifacts.listBySession:

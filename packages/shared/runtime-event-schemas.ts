@@ -72,6 +72,10 @@ import {
   MemoryRiskLevelSchema,
   MemoryScopeSchema,
 } from './memory-contracts';
+import {
+  WorkspaceRestoreRequestedBySchema,
+  WorkspaceRestoreResultStatusSchema,
+} from './workspace-change-contracts';
 
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
   RuntimeEventType,
@@ -790,6 +794,37 @@ const MemoryAccessRecordedPayloadSchema = z
   })
   .strict();
 
+const WorkspaceChangesDetectedBeforeRetryPayloadSchema = z
+  .object({
+    runId: z.string().min(1),
+    changedFileCount: z.number().int().nonnegative(),
+    restorableCount: z.number().int().nonnegative(),
+    changeSetIds: z.array(z.string().min(1)),
+  })
+  .strict();
+
+const WorkspaceRestoreRequestedPayloadSchema = z
+  .object({
+    restoreRequestId: z.string().min(1),
+    changeSetId: z.string().min(1),
+    requestedBy: WorkspaceRestoreRequestedBySchema,
+  })
+  .strict();
+
+const WorkspaceRestoreCompletedPayloadSchema = z
+  .object({
+    restoreRequestId: z.string().min(1),
+    restoreResultId: z.string().min(1),
+    changeSetId: z.string().min(1),
+    status: WorkspaceRestoreResultStatusSchema,
+    changedFileCount: z.number().int().nonnegative(),
+    restoredCount: z.number().int().nonnegative(),
+    conflictCount: z.number().int().nonnegative(),
+    failedCount: z.number().int().nonnegative(),
+    noopCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
 function eventSchema<TType extends RuntimeEventEnvelopeType, TPayloadSchema extends z.ZodTypeAny>(
   eventType: TType,
   payload: TPayloadSchema,
@@ -993,6 +1028,18 @@ export const MemoryRecallRequestedEventSchema = eventSchema('memory.recall.reque
 export const MemoryRecallCompletedEventSchema = eventSchema('memory.recall.completed', MemoryRecallCompletedPayloadSchema);
 export const MemoryRecallFailedEventSchema = eventSchema('memory.recall.failed', MemoryRecallFailedPayloadSchema);
 export const MemoryAccessRecordedEventSchema = eventSchema('memory.access.recorded', MemoryAccessRecordedPayloadSchema);
+export const WorkspaceChangesDetectedBeforeRetryEventSchema = eventSchema(
+  'workspace.changes.detected_before_retry',
+  WorkspaceChangesDetectedBeforeRetryPayloadSchema,
+);
+export const WorkspaceRestoreRequestedEventSchema = eventSchema(
+  'workspace.restore.requested',
+  WorkspaceRestoreRequestedPayloadSchema,
+);
+export const WorkspaceRestoreCompletedEventSchema = eventSchema(
+  'workspace.restore.completed',
+  WorkspaceRestoreCompletedPayloadSchema,
+);
 
 export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   SessionCreatedEventSchema,
@@ -1081,6 +1128,9 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   MemoryRecallCompletedEventSchema,
   MemoryRecallFailedEventSchema,
   MemoryAccessRecordedEventSchema,
+  WorkspaceChangesDetectedBeforeRetryEventSchema,
+  WorkspaceRestoreRequestedEventSchema,
+  WorkspaceRestoreCompletedEventSchema,
 ]);
 
 export { isTerminalRuntimeEvent } from './runtime-events';

@@ -10,9 +10,11 @@ describe('workspace change managed write source guards', () => {
     const forbidden = [
       'WorkspaceChangeRepository',
       'WorkspaceChangeTrackerService',
+      'WorkspaceRestoreService',
       'workspace_change_sets',
       'workspace_checkpoints',
       'workspace_changed_files',
+      'workspace_restore_requests',
       'workspace_snapshot_contents',
     ];
     const roots = [
@@ -43,10 +45,35 @@ describe('workspace change managed write source guards', () => {
 
     expect(matches).toEqual([]);
   });
+
+  it('keeps run_command executor path away from workspace restore record writes', () => {
+    const files = [
+      'apps/desktop/src/main/services/tool-executors/run-command.executor.ts',
+      'apps/desktop/src/main/services/project-tool-executor.service.ts',
+      'apps/desktop/src/main/services/tool-call-handler.service.ts',
+    ];
+    const forbidden = [
+      'saveRestoreRequest',
+      'saveRestoreResult',
+      'saveRestoreFileResult',
+      'updateRestoreRequestStatus',
+      'updateChangedFileRestoreState',
+      'workspace_restore_requests',
+      'workspace_restore_results',
+      'workspace_restore_file_results',
+    ];
+
+    const matches = files.flatMap((file) => scanFiles(path.join(repoRoot, file), forbidden));
+
+    expect(matches).toEqual([]);
+  });
 });
 
 function scanFiles(root: string, forbidden: string[]): string[] {
   if (!fs.existsSync(root)) return [];
+  if (fs.statSync(root).isFile()) {
+    return scanFile(root, forbidden);
+  }
   const output: string[] = [];
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
@@ -56,11 +83,17 @@ function scanFiles(root: string, forbidden: string[]): string[] {
       continue;
     }
     if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-    const content = fs.readFileSync(fullPath, 'utf8');
-    for (const term of forbidden) {
-      if (content.includes(term)) {
-        output.push(`${path.relative(repoRoot, fullPath).replace(/\\/g, '/')} contains ${term}`);
-      }
+    output.push(...scanFile(fullPath, forbidden));
+  }
+  return output;
+}
+
+function scanFile(file: string, forbidden: string[]): string[] {
+  const output: string[] = [];
+  const content = fs.readFileSync(file, 'utf8');
+  for (const term of forbidden) {
+    if (content.includes(term)) {
+      output.push(`${path.relative(repoRoot, file).replace(/\\/g, '/')} contains ${term}`);
     }
   }
   return output;

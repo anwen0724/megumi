@@ -576,6 +576,37 @@ export class WorkspaceChangeRepository {
     `).all(runId) as WorkspaceChangedFileRow[]).map(changedFileFromRow);
   }
 
+  updateChangedFileRestoreState(input: {
+    changedFileId: string;
+    restoreState: WorkspaceChangedFile['restoreState'];
+    updatedAt: string;
+    metadata?: WorkspaceChangedFile['metadata'];
+  }): WorkspaceChangedFile | undefined {
+    const existing = this.getChangedFile(input.changedFileId);
+    if (!existing) {
+      return undefined;
+    }
+    const parsed = WorkspaceChangedFileSchema.parse({
+      ...existing,
+      restoreState: input.restoreState,
+      updatedAt: input.updatedAt,
+      metadata: input.metadata,
+    });
+    this.database.prepare(`
+      UPDATE workspace_changed_files
+      SET restore_state = @restore_state,
+        updated_at = @updated_at,
+        metadata_json = @metadata_json
+      WHERE changed_file_id = @changed_file_id
+    `).run({
+      changed_file_id: parsed.changedFileId,
+      restore_state: parsed.restoreState,
+      updated_at: parsed.updatedAt,
+      metadata_json: stringifyOptionalJson(parsed.metadata),
+    });
+    return this.getChangedFile(parsed.changedFileId);
+  }
+
   getChangeSummary(changeSetId: string): WorkspaceChangeSummary | undefined {
     const changeSet = this.getChangeSet(changeSetId);
     if (!changeSet) {
@@ -605,6 +636,12 @@ export class WorkspaceChangeRepository {
       hasRestorableChanges: row.restorable_count > 0,
       updatedAt: row.updated_at ?? changeSet.finalizedAt ?? changeSet.createdAt,
     });
+  }
+
+  listChangeSummariesByRun(runId: string): WorkspaceChangeSummary[] {
+    return this.listChangeSetsByRun(runId)
+      .map((changeSet) => this.getChangeSummary(changeSet.changeSetId))
+      .filter((summary): summary is WorkspaceChangeSummary => Boolean(summary));
   }
 
   saveRestoreRequest(request: WorkspaceRestoreRequest): WorkspaceRestoreRequest {
@@ -662,6 +699,37 @@ export class WorkspaceChangeRepository {
       WHERE restore_request_id = ?
     `).get(restoreRequestId) as WorkspaceRestoreRequestRow | undefined;
     return row ? restoreRequestFromRow(row) : undefined;
+  }
+
+  updateRestoreRequestStatus(input: {
+    restoreRequestId: string;
+    status: WorkspaceRestoreRequest['status'];
+    completedAt?: string;
+    metadata?: WorkspaceRestoreRequest['metadata'];
+  }): WorkspaceRestoreRequest | undefined {
+    const existing = this.getRestoreRequest(input.restoreRequestId);
+    if (!existing) {
+      return undefined;
+    }
+    const parsed = WorkspaceRestoreRequestSchema.parse({
+      ...existing,
+      status: input.status,
+      completedAt: input.completedAt,
+      metadata: input.metadata,
+    });
+    this.database.prepare(`
+      UPDATE workspace_restore_requests
+      SET status = @status,
+        completed_at = @completed_at,
+        metadata_json = @metadata_json
+      WHERE restore_request_id = @restore_request_id
+    `).run({
+      restore_request_id: parsed.restoreRequestId,
+      status: parsed.status,
+      completed_at: parsed.completedAt ?? null,
+      metadata_json: stringifyOptionalJson(parsed.metadata),
+    });
+    return this.getRestoreRequest(parsed.restoreRequestId);
   }
 
   saveRestoreResult(result: WorkspaceRestoreResult): WorkspaceRestoreResult {

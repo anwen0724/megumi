@@ -52,6 +52,7 @@ export const IPC_CHANNELS = {
     resume: 'recovery:resume',
     cancel: 'recovery:cancel',
     retry: 'recovery:retry',
+    workspaceRestore: 'recovery:workspace-restore',
   },
   project: {
     list: 'project:list',
@@ -136,6 +137,7 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.recovery.resume,
   IPC_CHANNELS.recovery.cancel,
   IPC_CHANNELS.recovery.retry,
+  IPC_CHANNELS.recovery.workspaceRestore,
   IPC_CHANNELS.project.list,
   IPC_CHANNELS.project.useExisting,
   IPC_CHANNELS.project.open,

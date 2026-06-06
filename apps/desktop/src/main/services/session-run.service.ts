@@ -69,9 +69,11 @@ import {
   createSessionBranchDraftCancelledEvent,
   createSessionBranchMarkerCreatedEvent,
   createToolResultCreatedEvent,
+  createWorkspaceChangesDetectedBeforeRetryEvent,
 } from '@megumi/shared/runtime-event-factory';
 import type { SessionRetryAttempt } from '@megumi/shared/session-active-path-contracts';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
+import type { WorkspaceChangedFile } from '@megumi/shared/workspace-change-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 import {
@@ -171,6 +173,10 @@ export interface SessionRunAutomaticRetryOptions {
   sleep?: (input: { delayMs: number; attemptNumber: number; runId: string }) => Promise<void>;
 }
 
+export interface SessionRunWorkspaceChangeReadPort {
+  listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
+}
+
 interface ApprovalContinuationGroup {
   groupId: string;
   request: ModelStepRuntimeRequest;
@@ -205,6 +211,7 @@ export interface SessionRunServiceOptions {
   };
   activePathRepository?: SessionActivePathRepository;
   automaticRetry?: Partial<SessionRunAutomaticRetryOptions>;
+  workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
   timelineMessageRepository?: {
@@ -299,6 +306,7 @@ export class SessionRunService {
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
   private readonly automaticRetry: SessionRunAutomaticRetryOptions;
+  private readonly workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
   private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
   private readonly activeSessionMessageRuns = new Map<string, {
@@ -330,6 +338,7 @@ export class SessionRunService {
       ...DEFAULT_AUTOMATIC_RETRY,
       ...(options.automaticRetry ?? {}),
     };
+    this.workspaceChanges = options.workspaceChanges;
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
       ?? (options.modelStepProvider
         ? new SessionCompactionOrchestrator({
@@ -1850,6 +1859,29 @@ export class SessionRunService {
         throw retryableFailureError;
       }
 
+      const retryBlockingChanges = this.getRetryBlockingWorkspaceChanges(input.request.runId);
+      if (retryBlockingChanges.length > 0) {
+        if (currentAttempt) {
+          this.saveRetryAttemptUpdate(currentAttempt, 'failed', {
+            completedAt: this.clock.now(),
+            error: retryableFailureError,
+          });
+        }
+        yield this.createWorkspaceChangesDetectedBeforeRetryEvent({
+          request: input.request,
+          changedFiles: retryBlockingChanges,
+          createdAt: this.clock.now(),
+        });
+        if (retryableFailureEvent) {
+          for (const event of bufferedEvents) {
+            yield event;
+          }
+          yield retryableFailureEvent;
+          return;
+        }
+        throw retryableFailureError;
+      }
+
       if (currentAttempt) {
         this.saveRetryAttemptUpdate(currentAttempt, 'failed', {
           completedAt: this.clock.now(),
@@ -1896,6 +1928,15 @@ export class SessionRunService {
         return;
       }
     }
+  }
+
+  private getRetryBlockingWorkspaceChanges(runId: string): WorkspaceChangedFile[] {
+    return (this.workspaceChanges?.listChangedFilesByRun(runId) ?? [])
+      .filter((changedFile) => (
+        changedFile.restoreState === 'restorable'
+        || changedFile.restoreState === 'conflict'
+        || changedFile.restoreState === 'restore_failed'
+      ));
   }
 
   private createRunningAutomaticRetryAttempt(input: {
@@ -2142,6 +2183,31 @@ export class SessionRunService {
       payload: {
         retryRequestId: input.retryAttemptId,
         retryKind: 'automatic_model_step',
+      },
+    });
+  }
+
+  private createWorkspaceChangesDetectedBeforeRetryEvent(input: {
+    request: ModelStepRuntimeRequest;
+    changedFiles: WorkspaceChangedFile[];
+    createdAt: string;
+  }): RuntimeEvent {
+    const changeSetIds = [...new Set(input.changedFiles.map((changedFile) => changedFile.changeSetId))];
+
+    return createWorkspaceChangesDetectedBeforeRetryEvent({
+      eventId: this.ids.eventId(),
+      sessionId: input.request.sessionId,
+      runId: input.request.runId,
+      stepId: input.request.stepId,
+      requestId: input.request.requestId,
+      sequence: 0,
+      createdAt: input.createdAt,
+      source: 'main',
+      payload: {
+        runId: input.request.runId,
+        changedFileCount: input.changedFiles.length,
+        restorableCount: input.changedFiles.filter((changedFile) => changedFile.restoreState === 'restorable').length,
+        changeSetIds,
       },
     });
   }

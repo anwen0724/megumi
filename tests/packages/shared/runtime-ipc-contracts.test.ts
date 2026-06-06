@@ -51,6 +51,7 @@ import {
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
   RecoverableRunListRequestSchema,
+  RecoverableRunListResultSchema,
   RunCancelRequestSchema,
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
@@ -58,6 +59,8 @@ import {
   RunListBySessionRequestSchema,
   RunResumeRequestSchema,
   RunRetryRequestSchema,
+  WorkspaceRestoreRequestSchema,
+  WorkspaceRestoreResultSchema,
   SessionCreateRequestSchema,
   SessionBranchDraftCancelRequestSchema,
   SessionBranchDraftCreateRequestSchema,
@@ -1089,6 +1092,124 @@ describe('agent recovery runtime IPC schemas', () => {
     expect(resumeRequest.payload.resumeMode).toBe('from_checkpoint');
     expect(cancelRequest.payload.scope).toBe('run');
     expect(retryRequest.payload.retryKind).toBe('retry_run_from_checkpoint');
+  });
+
+  it('parses recoverable run list results with workspace summaries but without snapshot content', () => {
+    const result = RecoverableRunListResultSchema.parse({
+      ok: true,
+      data: {
+        runs: [{
+          runId: 'run-1',
+          sessionId: 'session-1',
+          status: 'failed',
+          reason: 'failed',
+          latestCheckpointId: 'checkpoint-1',
+          workspaceChangeSummaries: [{
+            changeSetId: 'workspace-change-set-1',
+            sessionId: 'session-1',
+            runId: 'run-1',
+            changedFileCount: 2,
+            restorableCount: 2,
+            restoredCount: 0,
+            conflictCount: 0,
+            failedCount: 0,
+            hasRestorableChanges: true,
+            updatedAt: '2026-06-05T10:00:00.000Z',
+          }],
+        }],
+      },
+      meta: {
+        requestId: 'request_recovery_list',
+        channel: IPC_CHANNELS.recovery.recoverableRunsList,
+        handledAt: '2026-06-05T10:00:01.000Z',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('contentText');
+    expect(JSON.stringify(result)).not.toContain('beforeContent');
+    expect(JSON.stringify(result)).not.toContain('afterContent');
+  });
+
+  it('parses workspace restore IPC request and result without snapshot content', () => {
+    const request = WorkspaceRestoreRequestSchema.parse({
+      requestId: 'request_workspace_restore',
+      payload: {
+        changeSetId: 'change-set-1',
+        requestedBy: 'user',
+        metadata: { source: 'recoverable-run-list' },
+      },
+      meta: {
+        channel: IPC_CHANNELS.recovery.workspaceRestore,
+        createdAt: '2026-06-05T10:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(request.meta.channel).toBe('recovery:workspace-restore');
+    expect(isBusinessIpcChannel(request.meta.channel)).toBe(true);
+
+    const result = WorkspaceRestoreResultSchema.parse({
+      ok: true,
+      data: {
+        request: {
+          restoreRequestId: 'workspace-restore-request-1',
+          changeSetId: 'change-set-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          requestedBy: 'user',
+          status: 'completed',
+          requestedAt: '2026-06-05T10:00:00.000Z',
+          completedAt: '2026-06-05T10:00:01.000Z',
+        },
+        result: {
+          restoreResultId: 'workspace-restore-result-1',
+          restoreRequestId: 'workspace-restore-request-1',
+          changeSetId: 'change-set-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          status: 'partial',
+          restoredAt: '2026-06-05T10:00:01.000Z',
+          metadata: {
+            changedFileCount: 2,
+            restoredCount: 1,
+            conflictCount: 1,
+            failedCount: 0,
+            noopCount: 0,
+          },
+        },
+        fileResults: [{
+          restoreFileResultId: 'workspace-restore-file-result-1',
+          restoreResultId: 'workspace-restore-result-1',
+          changedFileId: 'changed-file-1',
+          projectPath: 'src/app.ts',
+          status: 'restored',
+          restoredAt: '2026-06-05T10:00:01.000Z',
+        }],
+        summary: {
+          changeSetId: 'change-set-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          changedFileCount: 2,
+          restorableCount: 0,
+          restoredCount: 1,
+          conflictCount: 1,
+          failedCount: 0,
+          hasRestorableChanges: false,
+          updatedAt: '2026-06-05T10:00:01.000Z',
+        },
+      },
+      meta: {
+        requestId: 'request_workspace_restore',
+        channel: IPC_CHANNELS.recovery.workspaceRestore,
+        handledAt: '2026-06-05T10:00:02.000Z',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('before secret');
+    expect(JSON.stringify(result)).not.toContain('after secret');
+    expect(JSON.stringify(result)).not.toContain('contentText');
   });
 
   it('rejects extra fields in recovery IPC payloads', () => {

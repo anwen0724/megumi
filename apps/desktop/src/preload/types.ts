@@ -7,6 +7,8 @@ import type {
   SessionMessageSendPayload,
   SessionTimelineListData,
   SessionTimelineListPayload,
+  WorkspaceRestoreData,
+  WorkspaceRestorePayload,
 } from '@megumi/shared/ipc-schemas';
 import type { api } from './api';
 
@@ -19,3 +21,5 @@ export type SessionBranchDraftCreatePreloadPayload = SessionBranchDraftCreatePay
 export type SessionBranchDraftCreatePreloadData = SessionBranchDraftCreateData;
 export type SessionBranchDraftCancelPreloadPayload = SessionBranchDraftCancelPayload;
 export type SessionBranchDraftCancelPreloadData = SessionBranchDraftCancelData;
+export type WorkspaceRestorePreloadPayload = WorkspaceRestorePayload;
+export type WorkspaceRestorePreloadData = WorkspaceRestoreData;

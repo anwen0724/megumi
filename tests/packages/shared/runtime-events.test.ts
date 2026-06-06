@@ -9,6 +9,7 @@ import {
   ToolExecutionDeniedEventSchema,
   ToolExecutionPolicyDecidedEventSchema,
   ToolExecutionRequestedEventSchema,
+  WorkspaceChangesDetectedBeforeRetryEventSchema,
   isTerminalRuntimeEvent,
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime-event-schemas';
@@ -48,6 +49,9 @@ import {
   createToolExecutionRequestedEvent,
   createToolExecutionStartedEvent,
   createToolExecutionValidatedEvent,
+  createWorkspaceChangesDetectedBeforeRetryEvent,
+  createWorkspaceRestoreCompletedEvent,
+  createWorkspaceRestoreRequestedEvent,
 } from '@megumi/shared/runtime-event-factory';
 import { RUNTIME_EVENT_TYPES, type RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -386,6 +390,110 @@ describe('runtime event contracts', () => {
       throw new Error('Expected run.interrupted event.');
     }
     expect(event.payload.previousStatus).toBe('running');
+  });
+
+  it('parses workspace restore audit events without snapshot raw content', () => {
+    const requested = createWorkspaceRestoreRequestedEvent({
+      eventId: 'event-workspace-restore-requested',
+      runId: 'run-restore-1',
+      sessionId: 'session-restore-1',
+      requestId: 'restore-request-1',
+      sequence: 1,
+      createdAt: '2026-06-05T10:00:00.000Z',
+      source: 'main',
+      payload: {
+        restoreRequestId: 'workspace-restore-request-1',
+        changeSetId: 'change-set-1',
+        requestedBy: 'user',
+      },
+    });
+    const completed = createWorkspaceRestoreCompletedEvent({
+      eventId: 'event-workspace-restore-completed',
+      runId: 'run-restore-1',
+      sessionId: 'session-restore-1',
+      requestId: 'restore-request-1',
+      sequence: 2,
+      createdAt: '2026-06-05T10:00:01.000Z',
+      source: 'main',
+      payload: {
+        restoreRequestId: 'workspace-restore-request-1',
+        restoreResultId: 'workspace-restore-result-1',
+        changeSetId: 'change-set-1',
+        status: 'partial',
+        changedFileCount: 3,
+        restoredCount: 1,
+        conflictCount: 1,
+        failedCount: 0,
+        noopCount: 1,
+      },
+    });
+
+    expect(RuntimeEventSchema.parse(requested)).toEqual(requested);
+    expect(RuntimeEventSchema.parse(completed)).toEqual(completed);
+    expect(requested).toMatchObject({
+      eventType: 'workspace.restore.requested',
+      visibility: 'system',
+      persist: 'required',
+    });
+    expect(completed).toMatchObject({
+      eventType: 'workspace.restore.completed',
+      visibility: 'system',
+      persist: 'required',
+    });
+    expect(RUNTIME_EVENT_TYPES).toEqual(expect.arrayContaining([
+      'workspace.restore.requested',
+      'workspace.restore.completed',
+    ]));
+    const serialized = JSON.stringify([requested, completed]);
+    expect(serialized).not.toContain('before secret');
+    expect(serialized).not.toContain('after secret');
+    expect(serialized).not.toContain('contentText');
+  });
+
+  it('creates workspace change retry guard events without paths or raw content', () => {
+    const event = createWorkspaceChangesDetectedBeforeRetryEvent({
+      eventId: 'event-workspace-changes-detected',
+      runId: 'run-restore-1',
+      sessionId: 'session-restore-1',
+      requestId: 'request-restore-1',
+      sequence: 3,
+      createdAt: '2026-06-05T10:00:02.000Z',
+      source: 'main',
+      payload: {
+        runId: 'run-restore-1',
+        changedFileCount: 3,
+        restorableCount: 1,
+        changeSetIds: ['change-set-1', 'change-set-2'],
+      },
+    });
+
+    expect(WorkspaceChangesDetectedBeforeRetryEventSchema.parse(event)).toEqual(event);
+    expect(RuntimeEventSchema.parse(event)).toEqual(event);
+    expect(event).toMatchObject({
+      eventType: 'workspace.changes.detected_before_retry',
+      visibility: 'system',
+      persist: 'required',
+    });
+    expect(RUNTIME_EVENT_TYPES).toContain('workspace.changes.detected_before_retry');
+    expect(Object.keys(event.payload).sort()).toEqual([
+      'changeSetIds',
+      'changedFileCount',
+      'restorableCount',
+      'runId',
+    ]);
+    expect(() => RuntimeEventSchema.parse({
+      ...event,
+      payload: {
+        ...event.payload,
+        projectPath: 'src/app.ts',
+      },
+    })).toThrow();
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain('src/app.ts');
+    expect(serialized).not.toContain('C:\\project');
+    expect(serialized).not.toContain('before secret');
+    expect(serialized).not.toContain('after secret');
+    expect(serialized).not.toContain('contentText');
   });
 });
 

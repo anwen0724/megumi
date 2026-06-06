@@ -10,8 +10,17 @@ import {
   ResumeRequestSchema,
   RetryRequestSchema,
 } from '@megumi/shared/recovery-contracts';
-import { createRunInterruptedEvent } from '@megumi/shared/runtime-event-factory';
+import type {
+  WorkspaceRestoreData,
+  WorkspaceRestorePayload,
+} from '@megumi/shared/ipc-schemas';
+import {
+  createRunInterruptedEvent,
+  createWorkspaceRestoreCompletedEvent,
+  createWorkspaceRestoreRequestedEvent,
+} from '@megumi/shared/runtime-event-factory';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { WorkspaceChangeSummary } from '@megumi/shared/workspace-change-contracts';
 
 export interface RecoveryIds {
   resumeRequestId(): string;
@@ -21,12 +30,22 @@ export interface RecoveryIds {
   interruptedMarkerId(runId: string): string;
 }
 
+export interface WorkspaceChangeSummaryPort {
+  listChangeSummariesByRun(runId: string): WorkspaceChangeSummary[];
+}
+
+export interface WorkspaceRestorePort {
+  restoreChangeSet(input: WorkspaceRestorePayload): Promise<WorkspaceRestoreData>;
+}
+
 export interface CreateRecoveryServiceOptions {
   repository: RecoveryRepository;
   clock: () => Date;
   ids: RecoveryIds;
   appendRuntimeEvent?: (event: RuntimeEvent) => void;
   nextRuntimeSequence?: (runId: string) => number;
+  workspaceChanges?: WorkspaceChangeSummaryPort;
+  workspaceRestore: WorkspaceRestorePort;
 }
 
 export interface RecoveryService {
@@ -34,6 +53,7 @@ export interface RecoveryService {
   resumeRun(payload: Omit<ResumeRequest, 'resumeRequestId' | 'createdAt'>): ResumeRequest;
   cancelRun(payload: Omit<CancelRequest, 'cancelRequestId' | 'createdAt'>): CancelRequest;
   retryRun(payload: Omit<RetryRequest, 'retryRequestId' | 'createdAt'>): RetryRequest;
+  restoreWorkspaceChangeSet(payload: WorkspaceRestorePayload): Promise<WorkspaceRestoreData>;
 }
 
 export function createRecoveryService(options: CreateRecoveryServiceOptions): RecoveryService {
@@ -59,7 +79,15 @@ export function createRecoveryService(options: CreateRecoveryServiceOptions): Re
   }
 
   return {
-    listRecoverableRuns: () => options.repository.listRecoverableRuns(),
+    listRecoverableRuns: () => options.repository.listRecoverableRuns().map((run) => {
+      const workspaceChangeSummaries = options.workspaceChanges
+        ?.listChangeSummariesByRun(run.runId)
+        .filter((summary) => summary.changedFileCount > 0);
+      return {
+        ...run,
+        ...(workspaceChangeSummaries?.length ? { workspaceChangeSummaries } : {}),
+      };
+    }),
     resumeRun: (payload) => {
       const request = ResumeRequestSchema.parse({
         ...payload,
@@ -84,5 +112,53 @@ export function createRecoveryService(options: CreateRecoveryServiceOptions): Re
       });
       return options.repository.saveRetryRequest(request);
     },
+    restoreWorkspaceChangeSet: async (payload) => {
+      const restored = await options.workspaceRestore.restoreChangeSet(payload);
+      const createdAt = options.clock().toISOString();
+      const sequence = options.nextRuntimeSequence?.(restored.result.runId) ?? 1;
+
+      options.appendRuntimeEvent?.(createWorkspaceRestoreRequestedEvent({
+        eventId: options.ids.eventId(),
+        runId: restored.result.runId,
+        sessionId: restored.result.sessionId,
+        requestId: restored.request.restoreRequestId,
+        sequence,
+        createdAt,
+        source: 'main',
+        payload: {
+          restoreRequestId: restored.request.restoreRequestId,
+          changeSetId: restored.request.changeSetId,
+          requestedBy: restored.request.requestedBy,
+        },
+      }));
+
+      options.appendRuntimeEvent?.(createWorkspaceRestoreCompletedEvent({
+        eventId: options.ids.eventId(),
+        runId: restored.result.runId,
+        sessionId: restored.result.sessionId,
+        requestId: restored.request.restoreRequestId,
+        sequence: sequence + 1,
+        createdAt,
+        source: 'main',
+        payload: {
+          restoreRequestId: restored.request.restoreRequestId,
+          restoreResultId: restored.result.restoreResultId,
+          changeSetId: restored.result.changeSetId,
+          status: restored.result.status,
+          changedFileCount: numberMetadata(restored.result.metadata, 'changedFileCount'),
+          restoredCount: numberMetadata(restored.result.metadata, 'restoredCount'),
+          conflictCount: numberMetadata(restored.result.metadata, 'conflictCount'),
+          failedCount: numberMetadata(restored.result.metadata, 'failedCount'),
+          noopCount: numberMetadata(restored.result.metadata, 'noopCount'),
+        },
+      }));
+
+      return restored;
+    },
   };
+}
+
+function numberMetadata(metadata: WorkspaceRestoreData['result']['metadata'], key: string): number {
+  const value = metadata?.[key];
+  return typeof value === 'number' ? value : 0;
 }

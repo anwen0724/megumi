@@ -1,0 +1,167 @@
+// @vitest-environment node
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const repoRoot = process.cwd();
+
+const productionRoots = [
+  'apps/desktop/src',
+  'packages/ai',
+  'packages/context-management',
+  'packages/core',
+  'packages/db',
+  'packages/shared',
+];
+
+const restoreBoundaryTerms = [
+  'WorkspaceChangeRepository',
+  'WorkspaceRestoreService',
+  'workspace_restore_requests',
+  'workspace_changed_files',
+  'current_hash_mismatch',
+  'restoreModifiedFile',
+  'restoreCreatedFile',
+  'restoreDeletedFile',
+];
+
+const restoreBoundaryAllowlist = new Set([
+  'apps/desktop/src/main/index.ts',
+  'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
+  'apps/desktop/src/main/ipc/register-handlers.ts',
+  'apps/desktop/src/main/services/recovery.service.ts',
+  'apps/desktop/src/main/services/session-run.service.ts',
+  'apps/desktop/src/main/services/workspace-change-tracker.service.ts',
+  'apps/desktop/src/main/services/workspace-restore.service.ts',
+  'packages/db/repos/workspace-change.repo.ts',
+  'packages/db/schema/migrations.ts',
+  'packages/shared/ipc-schemas.ts',
+  'packages/shared/recovery-contracts.ts',
+  'packages/shared/runtime-event-factory.ts',
+  'packages/shared/runtime-event-schemas.ts',
+  'packages/shared/runtime-events.ts',
+  'packages/shared/workspace-change-contracts.ts',
+]);
+
+const forbiddenRestoreRoots = [
+  'apps/desktop/src/renderer',
+  'packages/ai',
+  'packages/context-management',
+];
+
+const rawContentTerms = [
+  'contentText',
+  'before secret',
+  'after secret',
+  'beforeContent',
+  'afterContent',
+];
+
+const runtimeAndIpcSchemaFiles = [
+  'packages/shared/runtime-events.ts',
+  'packages/shared/runtime-event-schemas.ts',
+  'packages/shared/runtime-event-factory.ts',
+  'packages/shared/ipc-schemas.ts',
+];
+
+const runCommandExecutorPath = 'apps/desktop/src/main/services/tool-executors/run-command.executor.ts';
+const runCommandPathFiles = [
+  runCommandExecutorPath,
+  'apps/desktop/src/main/services/project-tool-executor.service.ts',
+  'apps/desktop/src/main/services/tool-call-handler.service.ts',
+];
+
+describe('workspace restore source guards', () => {
+  it('keeps workspace restore repository and safety logic in explicit backend boundaries', () => {
+    const matches = productionRoots
+      .flatMap((root) => sourceFiles(path.join(repoRoot, root)))
+      .flatMap((file) => forbiddenMatchesOutsideAllowlist(file, restoreBoundaryTerms, restoreBoundaryAllowlist));
+
+    expect(matches).toEqual([]);
+  });
+
+  it('keeps renderer provider and context-management away from restore persistence and safety logic', () => {
+    const matches = forbiddenRestoreRoots
+      .flatMap((root) => sourceFiles(path.join(repoRoot, root)))
+      .flatMap((file) => forbiddenMatches(file, restoreBoundaryTerms));
+
+    expect(matches).toEqual([]);
+  });
+
+  it('keeps WorkspaceRestoreService free of git and stash commands', () => {
+    const source = read('apps/desktop/src/main/services/workspace-restore.service.ts');
+
+    expect(source).not.toContain('child_process');
+    expect(source).not.toContain('simple-git');
+    expect(source).not.toContain('git.cmd');
+    expect(source).not.toContain('git.exe');
+    expect(source).not.toMatch(/(^|[^A-Za-z])git([^A-Za-z]|$)/i);
+    expect(source).not.toMatch(/(^|[^A-Za-z])stash([^A-Za-z]|$)/i);
+  });
+
+  it('keeps runtime event and IPC schemas from exposing raw snapshot content', () => {
+    const matches = runtimeAndIpcSchemaFiles.flatMap((file) => forbiddenMatches(
+      path.join(repoRoot, file),
+      rawContentTerms,
+    ));
+
+    expect(matches).toEqual([]);
+  });
+
+  it('keeps run_command executor path from creating workspace change restore records', () => {
+    const forbiddenRecordCalls = [
+      'saveRestoreRequest',
+      'saveRestoreResult',
+      'saveRestoreFileResult',
+      'updateRestoreRequestStatus',
+      'updateChangedFileRestoreState',
+      'workspace_restore_requests',
+      'workspace_restore_results',
+      'workspace_restore_file_results',
+    ];
+    const matches = runCommandPathFiles
+      .flatMap((file) => forbiddenMatches(path.join(repoRoot, file), forbiddenRecordCalls));
+
+    expect(matches).toEqual([]);
+    expect(read(runCommandExecutorPath)).not.toContain('WorkspaceChangeRepository');
+  });
+});
+
+function read(relativePath: string): string {
+  return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+}
+
+function sourceFiles(root: string): string[] {
+  if (!fs.existsSync(root)) return [];
+  const output: string[] = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      output.push(...sourceFiles(fullPath));
+      continue;
+    }
+    if (/\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry.name)) {
+      output.push(fullPath);
+    }
+  }
+  return output;
+}
+
+function forbiddenMatchesOutsideAllowlist(file: string, terms: string[], allowlist: Set<string>): string[] {
+  const relative = relativePath(file);
+  if (allowlist.has(relative)) return [];
+  return forbiddenMatches(file, terms);
+}
+
+function forbiddenMatches(file: string, terms: string[]): string[] {
+  const relative = relativePath(file);
+  const source = fs.readFileSync(file, 'utf8');
+  return terms
+    .filter((term) => source.includes(term))
+    .map((term) => `${relative} contains ${term}`);
+}
+
+function relativePath(file: string): string {
+  return path.relative(repoRoot, file).replace(/\\/g, '/');
+}

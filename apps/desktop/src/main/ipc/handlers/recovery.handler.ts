@@ -10,12 +10,15 @@ import type {
   RunResumePayload,
   RunRetryData,
   RunRetryPayload,
+  WorkspaceRestoreData,
 } from '@megumi/shared/ipc-schemas';
 import {
   RecoverableRunListRequestSchema,
   RunCancelRequestSchema,
   RunResumeRequestSchema,
   RunRetryRequestSchema,
+  WorkspaceRestorePayloadSchema,
+  WorkspaceRestoreRequestSchema,
 } from '@megumi/shared/ipc-schemas';
 import type { RecoveryService } from '../../services/recovery.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
@@ -79,13 +82,17 @@ export function registerRecoveryHandlers(
     }),
   );
 
-
-
-
-
-
-
-
+  ipcMain.handle(
+    IPC_CHANNELS.recovery.workspaceRestore,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.recovery.workspaceRestore,
+      requestSchema: WorkspaceRestoreRequestSchema,
+      logger: options.logger,
+      handle: (request): Promise<WorkspaceRestoreData> =>
+        service.restoreWorkspaceChangeSet(WorkspaceRestorePayloadSchema.parse(request.payload)),
+      mapError: mapRecoveryIpcError,
+    }),
+  );
 }
 
 function mapRecoveryIpcError(): RuntimeIpcError {

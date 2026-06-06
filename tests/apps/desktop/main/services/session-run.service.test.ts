@@ -2,7 +2,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
@@ -13,6 +13,7 @@ import {
   SessionRunService,
   type SessionRunContextService,
   type SessionRunServiceOptions,
+  type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/desktop/main/services/session-run.service';
 import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/services/timeline-history-commit-projector.service';
 import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session-compaction-orchestrator.service';
@@ -26,8 +27,34 @@ import type { SessionSourceEntry } from '@megumi/shared/session-active-path-cont
 import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { WorkspaceChangedFile } from '@megumi/shared/workspace-change-contracts';
 
 let db: Database.Database | null = null;
+
+function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile> = {}): WorkspaceChangedFile {
+  return {
+    changedFileId: 'changed-file-1',
+    changeSetId: 'change-set-1',
+    workspaceCheckpointId: 'workspace-checkpoint-1',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    stepId: 'step-1',
+    projectPath: 'src/app.ts',
+    changeKind: 'modified',
+    restoreState: 'restorable',
+    beforeExists: true,
+    beforeContentRefId: 'snapshot-before-1',
+    beforeHash: 'a'.repeat(64),
+    beforeByteLength: 6,
+    afterExists: true,
+    afterContentRefId: 'snapshot-after-1',
+    afterHash: 'b'.repeat(64),
+    afterByteLength: 5,
+    createdAt: '2026-06-01T10:00:00.000Z',
+    updatedAt: '2026-06-01T10:00:00.000Z',
+    ...overrides,
+  };
+}
 
 function createService() {
   db = new Database(':memory:');
@@ -331,6 +358,7 @@ function createServiceWithAutomaticRetryStream(
   options?: {
     maxAutomaticModelStepRetries?: number;
     retrySleep?: (input: { delayMs: number; attemptNumber: number; runId: string }) => Promise<void>;
+    workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   },
 ) {
   db = new Database(':memory:');
@@ -357,6 +385,7 @@ function createServiceWithAutomaticRetryStream(
       },
       cancelModelStep: () => true,
     },
+    workspaceChanges: options?.workspaceChanges,
     clock: { now: () => '2026-06-01T10:00:00.000Z' },
     ids: {
       sessionId: () => 'session-1',
@@ -1292,6 +1321,111 @@ describe('SessionRunService', () => {
     expect(providerRequests).toHaveLength(1);
     expect(streamed.map((event) => event.eventType)).toContain('run.failed');
     expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([]);
+  });
+
+  it('does not automatically retry a transient provider failure after managed file changes', async () => {
+    const providerRequests: ModelStepRuntimeRequest[] = [];
+    const workspaceChangedFiles: WorkspaceChangedFile[] = [
+      workspaceChangedFile({
+        changedFileId: 'changed-file-restorable',
+        changeSetId: 'change-set-restorable',
+        restoreState: 'restorable',
+      }),
+      workspaceChangedFile({
+        changedFileId: 'changed-file-conflict',
+        changeSetId: 'change-set-conflict',
+        restoreState: 'conflict',
+      }),
+      workspaceChangedFile({
+        changedFileId: 'changed-file-failed',
+        changeSetId: 'change-set-failed',
+        restoreState: 'restore_failed',
+      }),
+      workspaceChangedFile({
+        changedFileId: 'changed-file-restored',
+        changeSetId: 'change-set-restored',
+        restoreState: 'restored',
+      }),
+    ];
+    const workspaceChanges = {
+      listChangedFilesByRun: vi.fn(() => workspaceChangedFiles),
+    };
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request) => {
+      providerRequests.push(request);
+      return [{
+        eventId: 'event-provider-failed',
+        schemaVersion: 1,
+        eventType: 'run.failed',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: request.stepId,
+        sequence: 1,
+        createdAt: '2026-06-01T10:00:01.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'required',
+        payload: {
+          error: {
+            code: 'provider_unavailable',
+            message: 'service unavailable',
+            severity: 'error',
+            retryable: true,
+            source: 'provider',
+          },
+        },
+      }];
+    }, {
+      workspaceChanges,
+    });
+    service.createSession({
+      title: 'Retry session',
+      createdAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Change then fail',
+          createdAt: '2026-06-01T10:00:00.000Z',
+        }],
+        createdAt: '2026-06-01T10:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    const eventTypes = streamed.map((event) => event.eventType);
+    const detectedEvent = streamed.find((event) => event.eventType === 'workspace.changes.detected_before_retry');
+
+    expect(providerRequests).toHaveLength(1);
+    expect(workspaceChanges.listChangedFilesByRun).toHaveBeenCalledWith('run-1');
+    expect(eventTypes).toContain('workspace.changes.detected_before_retry');
+    expect(eventTypes).not.toContain('retry.started');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([]);
+    expect(detectedEvent?.payload).toEqual({
+      runId: 'run-1',
+      changedFileCount: 3,
+      restorableCount: 1,
+      changeSetIds: ['change-set-restorable', 'change-set-conflict', 'change-set-failed'],
+    });
+    expect(Object.keys(detectedEvent?.payload ?? {}).sort()).toEqual([
+      'changeSetIds',
+      'changedFileCount',
+      'restorableCount',
+      'runId',
+    ]);
+    expect(JSON.stringify(detectedEvent)).not.toContain('C:\\project');
+    expect(JSON.stringify(detectedEvent)).not.toContain('src/app.ts');
+    expect(eventTypes).toContain('run.failed');
   });
 
   it('fails the run after automatic retry attempts are exhausted', async () => {
