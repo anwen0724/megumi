@@ -54,15 +54,17 @@ describe('composer source guard', () => {
     expect(composer).toMatch(/aria-label="Stop current run"[\s\S]*className="[^"]*\bshrink-0\b/);
   });
 
-  it('keeps the composer anchored as a bottom overlay with reserved timeline space', () => {
+  it('keeps messages and composer inside one real chat content shell', () => {
     const timeline = readSource('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
     const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
 
     expect(timeline).toMatch(/data-testid="chat-timeline-root"[\s\S]*?className="[^"]*\brelative\b[^"]*\boverflow-hidden\b/);
     expect(timeline).toMatch(/data-testid="chat-timeline-root"[\s\S]*?className="[^"]*\bmin-w-\[42rem\]/);
-    expect(timeline).toMatch(/data-testid="chat-timeline-scroll"[\s\S]*?className="[^"]*\babsolute\b[^"]*\binset-0\b/);
-    expect(timeline).toMatch(/data-testid="chat-timeline-scroll"[\s\S]*?className="[^"]*\bpb-\[19rem\]/);
-    expect(timeline).toMatch(/data-testid="chat-composer-overlay" className="[^"]*\babsolute\b[^"]*\bbottom-0\b[^"]*\btransition-\[padding,width\]/);
+    expect(timeline).toMatch(/data-testid="chat-content-shell"[\s\S]*?className=\{CHAT_CONTENT_SHELL_CLASS\}/);
+    expect(timeline).toMatch(/data-testid="chat-message-section"[\s\S]*?className="[^"]*\bflex-1\b[^"]*\boverflow-y-auto\b/);
+    expect(timeline).toMatch(/data-testid="chat-bottom-base"[\s\S]*?className="[^"]*\bshrink-0\b[^"]*\bbg-\[var\(--color-app-bg\)\]/);
+    expect(timeline).not.toContain('chat-composer-overlay');
+    expect(timeline).not.toContain('chat-composer-content-shell');
     expect(appShell).toMatch(/data-testid="workbench-content"[\s\S]*?className="[^"]*\bmin-w-\[62rem\]/);
   });
 });

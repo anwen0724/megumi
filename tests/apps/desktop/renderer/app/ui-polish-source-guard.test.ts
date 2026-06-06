@@ -63,7 +63,10 @@ describe('UI polish source guard', () => {
 
     expect(chatTimeline).toContain('max-w-3xl');
     expect(chatTimeline).not.toMatch(/pr-16|xl:pr-32/);
-    expect(chatTimeline).toContain('transition-[padding,width]');
+    expect(chatTimeline).toContain('data-testid="chat-content-shell"');
+    expect(chatTimeline).toContain('data-testid="chat-message-section"');
+    expect(chatTimeline).toContain('data-testid="chat-bottom-base"');
+    expect(chatTimeline).not.toMatch(/chat-composer-overlay|chat-composer-content-shell/);
     expect(timelineMessage).not.toMatch(/timeline-rail|border-l-2.*article|steps rail/i);
     expect(timelineMessage).not.toMatch(/isAssistant\s*\?\s*['"][^'"]*rounded-lg/);
   });

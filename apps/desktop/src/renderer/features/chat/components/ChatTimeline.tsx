@@ -19,7 +19,7 @@ import { useSessionTimeline } from '../hooks/use-session-timeline';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
-const CHAT_CONTENT_SHELL_CLASS = 'mx-auto w-full max-w-3xl';
+const CHAT_CONTENT_SHELL_CLASS = 'mx-auto flex h-full w-full max-w-3xl flex-col';
 
 function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): boolean {
   if (message.role !== 'assistant') {
@@ -487,17 +487,20 @@ export function ChatTimeline() {
       className="relative min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
     >
       <div
-        ref={timelineScroll.scrollRef}
-        data-testid="chat-timeline-scroll"
-        tabIndex={0}
-        onScroll={timelineScroll.onScroll}
-        onWheel={timelineScroll.onWheel}
-        onPointerDown={timelineScroll.onPointerDown}
-        onKeyDown={timelineScroll.onKeyDown}
-        className="absolute inset-0 overflow-y-auto px-8 pb-[13rem] pt-7"
+        data-testid="chat-content-shell"
+        className={CHAT_CONTENT_SHELL_CLASS}
       >
-        {hasTimelineContent ? (
-          <div data-testid="chat-timeline-content-shell" className={CHAT_CONTENT_SHELL_CLASS}>
+        <div
+          ref={timelineScroll.scrollRef}
+          data-testid="chat-message-section"
+          tabIndex={0}
+          onScroll={timelineScroll.onScroll}
+          onWheel={timelineScroll.onWheel}
+          onPointerDown={timelineScroll.onPointerDown}
+          onKeyDown={timelineScroll.onKeyDown}
+          className="min-h-0 flex-1 overflow-y-auto pb-3 pt-7"
+        >
+          {hasTimelineContent ? (
             <div role="log" aria-label="Chat timeline" className="flex w-full flex-col gap-5">
               {timelineMessages.map((message) => (
                 <TimelineMessage
@@ -544,94 +547,153 @@ export function ChatTimeline() {
                 />
               ))}
             </div>
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <div className="max-w-md text-center">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-accent)]">
-                <Sparkles size={24} aria-hidden="true" />
-              </div>
-              <h1 className="text-xl font-semibold text-[var(--color-text)]">Welcome to Megumi</h1>
-              {currentProjectId === null ? (
-                <>
-                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                    Open a workspace to get started.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void useProjectStore.getState().useExistingProject();
-                    }}
-                    className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                  >
-                    Open workspace
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-                    Megumi is ready to help with this workspace.
-                  </p>
-                  {currentProject ? (
-                    <div className="mt-4 flex flex-col items-center gap-2 text-sm">
-                      <div
-                        aria-label={`New session project: ${currentProject.name}`}
-                        className="relative inline-flex items-center gap-2 text-[var(--color-text)]"
-                      >
-                        <span className="text-[var(--color-text-muted)]">New session in</span>
-                        <span className="font-medium">{currentProject.name}</span>
-                        {canChangeNewSessionProject ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2"
-                            onClick={() => setProjectPickerOpen((value) => !value)}
-                          >
-                            Change project
-                          </Button>
-                        ) : null}
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <div className="max-w-md text-center">
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-accent)]">
+                  <Sparkles size={24} aria-hidden="true" />
+                </div>
+                <h1 className="text-xl font-semibold text-[var(--color-text)]">Welcome to Megumi</h1>
+                {currentProjectId === null ? (
+                  <>
+                    <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                      Open a workspace to get started.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void useProjectStore.getState().useExistingProject();
+                      }}
+                      className="mt-4 rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                    >
+                      Open workspace
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                      Megumi is ready to help with this workspace.
+                    </p>
+                    {currentProject ? (
+                      <div className="mt-4 flex flex-col items-center gap-2 text-sm">
+                        <div
+                          aria-label={`New session project: ${currentProject.name}`}
+                          className="relative inline-flex items-center gap-2 text-[var(--color-text)]"
+                        >
+                          <span className="text-[var(--color-text-muted)]">New session in</span>
+                          <span className="font-medium">{currentProject.name}</span>
+                          {canChangeNewSessionProject ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => setProjectPickerOpen((value) => !value)}
+                            >
+                              Change project
+                            </Button>
+                          ) : null}
 
-                        {projectPickerOpen && canChangeNewSessionProject ? (
-                          <div
-                            role="menu"
-                            aria-label="Select project for new session"
-                            className="absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-left shadow-[var(--shadow-soft)]"
-                          >
-                            {projects.map((project) => {
-                              const isCurrent = project.id === currentProjectId;
-                              return (
-                                <button
-                                  key={project.id}
-                                  type="button"
-                                  role="menuitem"
-                                  aria-label={`Use project ${project.name} for this new session`}
-                                  disabled={isCurrent}
-                                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface)] disabled:cursor-default disabled:bg-[var(--color-accent-soft)] disabled:text-[var(--color-text)]"
-                                  onClick={() => {
-                                    void switchNewSessionProject(project.id);
-                                  }}
-                                >
-                                  <span className="min-w-0 truncate">{project.name}</span>
-                                  {isCurrent ? (
-                                    <span className="shrink-0 text-xs text-[var(--color-text-muted)]">Current</span>
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : null}
+                          {projectPickerOpen && canChangeNewSessionProject ? (
+                            <div
+                              role="menu"
+                              aria-label="Select project for new session"
+                              className="absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-left shadow-[var(--shadow-soft)]"
+                            >
+                              {projects.map((project) => {
+                                const isCurrent = project.id === currentProjectId;
+                                return (
+                                  <button
+                                    key={project.id}
+                                    type="button"
+                                    role="menuitem"
+                                    aria-label={`Use project ${project.name} for this new session`}
+                                    disabled={isCurrent}
+                                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface)] disabled:cursor-default disabled:bg-[var(--color-accent-soft)] disabled:text-[var(--color-text)]"
+                                    onClick={() => {
+                                      void switchNewSessionProject(project.id);
+                                    }}
+                                  >
+                                    <span className="min-w-0 truncate">{project.name}</span>
+                                    {isCurrent ? (
+                                      <span className="shrink-0 text-xs text-[var(--color-text-muted)]">Current</span>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                        <p className="max-w-md truncate text-sm text-[var(--color-text-muted)]">
+                          {currentProject.repoPath}
+                        </p>
                       </div>
-                      <p className="max-w-md truncate text-sm text-[var(--color-text-muted)]">
-                        {currentProject.repoPath}
-                      </p>
-                    </div>
-                  ) : null}
-                </>
-              )}
+                    ) : null}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        <div data-testid="chat-bottom-base" className="shrink-0 bg-[var(--color-app-bg)]">
+          {pendingApprovals.length > 0 ? (
+            <section
+              aria-label="Blocking approval controls"
+              aria-live="polite"
+              aria-atomic="true"
+              className="mb-3 space-y-2"
+            >
+              {pendingApprovals.map((request) => (
+                <ApprovalCard
+                  key={request.approvalRequestId}
+                  request={request}
+                  onResolve={(payload) => {
+                    void resolveApproval(payload);
+                  }}
+                />
+              ))}
+            </section>
+          ) : null}
+          {unmatchedRecoverableRuns.length > 0 ? (
+            <section
+              aria-label="Recoverable run fallback actions"
+              className="mb-3 space-y-2"
+            >
+              {unmatchedRecoverableRuns.map((run) => (
+                <RecoverableRunActions
+                  key={run.runId}
+                  run={run}
+                  pending={pendingRecoverableRunIds.has(run.runId)}
+                  onRetry={(recoverableRun) => {
+                    void retryRecoverableRun(recoverableRun);
+                  }}
+                  onRerun={(recoverableRun) => {
+                    void rerunRecoverableRun(recoverableRun);
+                  }}
+                  onMarkCancelled={(recoverableRun) => {
+                    void markRecoverableRunCancelled(recoverableRun);
+                  }}
+                />
+              ))}
+            </section>
+          ) : null}
+          <Composer
+            status={composerStatus}
+            branchDraft={branchDraft ? {
+              key: branchDraft.branchMarkerId,
+              label: branchDraft.label,
+              seedText: branchDraft.seedText,
+              onCancel: () => {
+                void cancelBranchDraft();
+              },
+            } : null}
+            onSubmit={handleSubmit}
+            onStop={handleStop}
+            onAttachFiles={() => undefined}
+            onChooseContext={() => undefined}
+          />
+        </div>
       </div>
 
       {restoreFeedback ? (
@@ -656,72 +718,6 @@ export function ChatTimeline() {
           </div>
         </div>
       ) : null}
-
-      <div
-        data-testid="chat-composer-overlay"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 transition-[padding,width] duration-200 ease-out"
-      >
-        <div data-testid="chat-composer-content-shell" className={CHAT_CONTENT_SHELL_CLASS}>
-          <div data-testid="chat-composer-bottom-base" className="bg-[var(--color-app-bg)]">
-            {pendingApprovals.length > 0 ? (
-              <section
-                aria-label="Blocking approval controls"
-                aria-live="polite"
-                aria-atomic="true"
-                className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
-              >
-                {pendingApprovals.map((request) => (
-                  <ApprovalCard
-                    key={request.approvalRequestId}
-                    request={request}
-                    onResolve={(payload) => {
-                      void resolveApproval(payload);
-                    }}
-                  />
-                ))}
-              </section>
-            ) : null}
-            {unmatchedRecoverableRuns.length > 0 ? (
-              <section
-                aria-label="Recoverable run fallback actions"
-                className="pointer-events-auto mx-auto mb-3 max-w-3xl space-y-2"
-              >
-                {unmatchedRecoverableRuns.map((run) => (
-                  <RecoverableRunActions
-                    key={run.runId}
-                    run={run}
-                    pending={pendingRecoverableRunIds.has(run.runId)}
-                    onRetry={(recoverableRun) => {
-                      void retryRecoverableRun(recoverableRun);
-                    }}
-                    onRerun={(recoverableRun) => {
-                      void rerunRecoverableRun(recoverableRun);
-                    }}
-                    onMarkCancelled={(recoverableRun) => {
-                      void markRecoverableRunCancelled(recoverableRun);
-                    }}
-                  />
-                ))}
-              </section>
-            ) : null}
-            <Composer
-              status={composerStatus}
-              branchDraft={branchDraft ? {
-                key: branchDraft.branchMarkerId,
-                label: branchDraft.label,
-                seedText: branchDraft.seedText,
-                onCancel: () => {
-                  void cancelBranchDraft();
-                },
-              } : null}
-              onSubmit={handleSubmit}
-              onStop={handleStop}
-              onAttachFiles={() => undefined}
-              onChooseContext={() => undefined}
-            />
-          </div>
-        </div>
-      </div>
     </main>
   );
 }
