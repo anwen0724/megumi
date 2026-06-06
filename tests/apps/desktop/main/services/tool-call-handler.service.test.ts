@@ -27,6 +27,7 @@ describe('ToolCallHandlerService', () => {
         redactionState: 'none',
         createdAt: '2026-05-20T00:00:02.000Z',
       })),
+      finalizeWorkspaceChangeSet: vi.fn(),
     };
     const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
@@ -61,11 +62,23 @@ describe('ToolCallHandlerService', () => {
       decision: 'allow',
       mode: 'default',
     }));
-    expect(executor.executeToolExecution).toHaveBeenCalledWith(expect.objectContaining({
-      toolExecutionId: 'tool-execution-1',
-      toolName: 'read_file',
-      status: 'running',
-    }));
+    expect(executor.executeToolExecution).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolExecutionId: 'tool-execution-1',
+        toolName: 'read_file',
+        status: 'running',
+      }),
+      {
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+      },
+    );
+    expect(executor.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+    });
     expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
       toolExecutionId: 'tool-execution-1',
       status: 'completed',
@@ -94,7 +107,7 @@ describe('ToolCallHandlerService', () => {
 
   it('does not execute denied tools and returns a saved policy_denied ToolResult', async () => {
     const repository = fakeRepository();
-    const executor = { executeToolExecution: vi.fn() };
+    const executor = { executeToolExecution: vi.fn(), finalizeWorkspaceChangeSet: vi.fn() };
     const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
@@ -145,7 +158,7 @@ describe('ToolCallHandlerService', () => {
 
   it('creates ApprovalRequest for ask decisions without executing the tool', async () => {
     const repository = fakeRepository();
-    const executor = { executeToolExecution: vi.fn() };
+    const executor = { executeToolExecution: vi.fn(), finalizeWorkspaceChangeSet: vi.fn() };
     const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
       repository,
@@ -185,6 +198,7 @@ describe('ToolCallHandlerService', () => {
       'approval.requested',
     ]);
     expect(executor.executeToolExecution).not.toHaveBeenCalled();
+    expect(executor.finalizeWorkspaceChangeSet).not.toHaveBeenCalled();
     expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
@@ -195,6 +209,46 @@ describe('ToolCallHandlerService', () => {
       toolExecutionId: 'tool-execution-1',
       status: 'pending_approval',
     }));
+  });
+
+  it('does not finalize a workspace change set when a batch pauses for approval', async () => {
+    const repository = fakeRepository();
+    const executor = {
+      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
+        toolResultId: 'tool-result-1',
+        toolCallId: toolExecution.toolCallId,
+        toolExecutionId: toolExecution.toolExecutionId,
+        runId: toolExecution.runId,
+        kind: 'success',
+        textContent: 'read',
+        redactionState: 'none',
+        createdAt: '2026-05-20T00:00:02.000Z',
+      })),
+      finalizeWorkspaceChangeSet: vi.fn(),
+    };
+    const handler = createToolCallHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const outcome = await handler.handleToolCalls({
+      request: modelRequest(),
+      toolCalls: [
+        toolCall('read_file', { path: 'README.md' }, 'tool-call-1'),
+        toolCall('run_command', { command: 'npm install lodash' }, 'tool-call-2'),
+      ],
+    });
+
+    expect(outcome.toolResults).toHaveLength(1);
+    expect(outcome.pendingApprovals).toHaveLength(1);
+    expect(executor.executeToolExecution).toHaveBeenCalledTimes(1);
+    expect(executor.finalizeWorkspaceChangeSet).not.toHaveBeenCalled();
   });
 
   it('resumes approved waiting tool executions by resolving approval and executing the host adapter', async () => {
@@ -217,6 +271,7 @@ describe('ToolCallHandlerService', () => {
         redactionState: 'none',
         createdAt: '2026-05-20T00:00:04.000Z',
       })),
+      finalizeWorkspaceChangeSet: vi.fn(),
     };
     const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
@@ -245,10 +300,22 @@ describe('ToolCallHandlerService', () => {
       status: 'running',
       startedAt: '2026-05-20T00:00:03.000Z',
     }));
-    expect(executor.executeToolExecution).toHaveBeenCalledWith(expect.objectContaining({
-      toolExecutionId: 'tool-execution-1',
-      status: 'running',
-    }));
+    expect(executor.executeToolExecution).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolExecutionId: 'tool-execution-1',
+        status: 'running',
+      }),
+      {
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+      },
+    );
+    expect(executor.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+    });
     expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
       toolExecutionId: 'tool-execution-1',
       status: 'completed',
@@ -299,6 +366,7 @@ describe('ToolCallHandlerService', () => {
         redactionState: 'none',
         createdAt: '2026-05-20T00:00:04.000Z',
       })),
+      finalizeWorkspaceChangeSet: vi.fn(),
     };
     const handler = createToolCallHandlerService({
       registry: createBuiltInToolRegistry(),
@@ -331,6 +399,54 @@ describe('ToolCallHandlerService', () => {
       'tool.execution.failed',
       'tool.result.created',
     ]);
+    expect(executor.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+    });
+  });
+
+  it('does not resume approved tool execution when run session cannot be resolved', async () => {
+    const toolCall = waitingToolCall();
+    const toolExecution = waitingToolExecution(toolCall);
+    const approvalRequest = pendingApprovalRequest(toolCall, toolExecution);
+    const repository = fakeRepository({
+      toolCalls: new Map([[toolCall.toolCallId, toolCall]]),
+      toolExecutions: new Map([[toolExecution.toolExecutionId, toolExecution]]),
+      approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
+    });
+    repository.getRunSessionId.mockReturnValue(undefined);
+    const executor = {
+      executeToolExecution: vi.fn(),
+      finalizeWorkspaceChangeSet: vi.fn(),
+    };
+    const handler = createToolCallHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    await expect(handler.resumeToolApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-20T00:00:03.000Z',
+    })).resolves.toBeUndefined();
+
+    expect(repository.saveApprovalRequest).not.toHaveBeenCalledWith(expect.objectContaining({
+      approvalRequestId: 'approval-request-1',
+      status: 'approved',
+    }));
+    expect(repository.saveToolExecution).not.toHaveBeenCalledWith(expect.objectContaining({
+      toolExecutionId: 'tool-execution-1',
+      status: 'running',
+    }));
+    expect(executor.executeToolExecution).not.toHaveBeenCalled();
+    expect(executor.finalizeWorkspaceChangeSet).not.toHaveBeenCalled();
   });
 
   it('resumes denied waiting tool executions by saving a user_rejected ToolResult without execution', async () => {
@@ -411,12 +527,16 @@ function modelRequest(): ModelStepRuntimeRequest {
   };
 }
 
-function toolCall(toolName: ToolCall['toolName'], input: ToolCall['input']): ToolCall {
+function toolCall(
+  toolName: ToolCall['toolName'],
+  input: ToolCall['input'],
+  toolCallId = 'tool-call-1',
+): ToolCall {
   return {
-    toolCallId: 'tool-call-1',
+    toolCallId,
     runId: 'run-1',
     modelStepId: 'model-step-1',
-    providerToolCallId: 'provider-tool-call-1',
+    providerToolCallId: `provider-${toolCallId}`,
     toolName,
     input,
     inputPreview: {
@@ -523,5 +643,6 @@ function fakeRepository(initial?: {
     }),
     getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
     saveToolResult: vi.fn((value: ToolResult) => value),
+    getRunSessionId: vi.fn((runId: string) => (runId === 'run-1' ? 'session-1' : undefined)),
   };
 }

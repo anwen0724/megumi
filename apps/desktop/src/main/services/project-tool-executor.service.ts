@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import { normalizeToolError } from '@megumi/tools/normalization';
 import type { ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
+import type { WorkspaceChangeExecutionScope } from './workspace-change-tracker.service';
 import {
   createEditFileExecutor,
   createGlobExecutor,
@@ -17,7 +18,11 @@ import {
 export type { ProjectToolFileSystem, ProjectToolExecutorOptions } from './tool-executors';
 
 export interface ProjectToolExecutor {
-  executeToolExecution(toolExecution: ToolExecution): Promise<ToolResult>;
+  executeToolExecution(
+    toolExecution: ToolExecution,
+    scope?: WorkspaceChangeExecutionScope,
+  ): Promise<ToolResult>;
+  finalizeWorkspaceChangeSet?(scope: WorkspaceChangeExecutionScope): unknown;
 }
 
 export function createProjectToolExecutor(options: ProjectToolExecutorOptions): ProjectToolExecutor {
@@ -36,11 +41,19 @@ export function createProjectToolExecutor(options: ProjectToolExecutorOptions): 
   };
 
   return {
-    async executeToolExecution(toolExecution) {
+    async executeToolExecution(toolExecution, scope) {
       try {
         const executor = executors[toolExecution.toolName];
         if (executor) {
-          return await executor.execute(toolExecution);
+          const execute = async () => executor.execute(toolExecution);
+          if (context.workspaceChangeTracker) {
+            return await context.workspaceChangeTracker.trackToolExecution({
+              scope,
+              toolExecution,
+              execute,
+            });
+          }
+          return await execute();
         }
         throw new Error(`Unsupported project tool: ${toolExecution.toolName}`);
       } catch (error) {
@@ -59,6 +72,9 @@ export function createProjectToolExecutor(options: ProjectToolExecutorOptions): 
           createdAt: now(),
         };
       }
+    },
+    finalizeWorkspaceChangeSet(scope) {
+      return context.workspaceChangeTracker?.finalizeChangeSet(scope);
     },
   };
 }

@@ -111,7 +111,20 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
   async create({ projectRoot, permissionMode }) {
     return createToolCallHandlerService({
       registry: toolRegistry,
-      repository: toolRepository,
+      repository: {
+        saveToolCall: (toolCall) => toolRepository.saveToolCall(toolCall),
+        getToolCall: (toolCallId) => toolRepository.getToolCall(toolCallId),
+        saveToolExecution: (toolExecution) => toolRepository.saveToolExecution(toolExecution),
+        getToolExecution: (toolExecutionId) => toolRepository.getToolExecution(toolExecutionId),
+        savePermissionDecision: (permissionDecision) => toolRepository.savePermissionDecision(permissionDecision),
+        saveApprovalRequest: (approvalRequest) => toolRepository.saveApprovalRequest(approvalRequest),
+        getApprovalRequest: (approvalRequestId) => toolRepository.getApprovalRequest(approvalRequestId),
+        saveToolResult: (toolResult) => toolRepository.saveToolResult(toolResult),
+        getRunSessionId(runId) {
+          const run = sessionRunRepository.getRun(runId);
+          return run ? String(run.sessionId) : undefined;
+        },
+      },
       permissionMode,
       projectRoot,
       settings: await permissionSettingsService.loadForProject(projectRoot),

@@ -7,6 +7,7 @@ import {
 import { redactRuntimeMessage } from '@megumi/security/redaction';
 import { normalizeToolResult } from '@megumi/tools/normalization';
 import type { ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
+import type { WorkspaceChangeTrackerService } from '../workspace-change-tracker.service';
 import type { SpawnLike } from './run-command.executor';
 
 export interface ProjectToolFileSystem {
@@ -25,6 +26,7 @@ export interface ProjectToolExecutorOptions {
   projectRoot: string;
   fileSystem?: ProjectToolFileSystem;
   spawn?: SpawnLike;
+  workspaceChangeTracker?: WorkspaceChangeTrackerService;
   now?: () => string;
   ids?: {
     toolResultId(): string;
@@ -35,6 +37,7 @@ export interface ProjectToolExecutorContext {
   projectRoot: string;
   fileSystem: ProjectToolFileSystem;
   spawn?: SpawnLike;
+  workspaceChangeTracker?: WorkspaceChangeTrackerService;
   now: () => string;
   ids: {
     toolResultId(): string;
