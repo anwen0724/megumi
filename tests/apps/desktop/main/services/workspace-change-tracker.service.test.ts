@@ -139,6 +139,117 @@ describe('WorkspaceChangeTrackerService', () => {
     expect(repository.saveChangedFile).not.toHaveBeenCalled();
   });
 
+  it('fails closed before writing unsupported snapshot text', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\src\\binary.dat', 'before\u0000content'],
+    ]);
+    const repository = fakeRepository();
+    const tracker = createTracker({ files, repository });
+    const execute = vi.fn(async () => {
+      files.set('C:\\project\\src\\binary.dat', 'after');
+      return 'written';
+    });
+
+    await expect(tracker.trackToolExecution({
+      scope: scope(),
+      toolExecution: toolExecution('write_file', {
+        path: 'src/binary.dat',
+        content: 'after',
+      }),
+      execute,
+    })).rejects.toThrow('unsupported text content');
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(files.get('C:\\project\\src\\binary.dat')).toBe('before\u0000content');
+    expect(repository.saveSnapshotContent).not.toHaveBeenCalled();
+    expect(repository.saveWorkspaceCheckpoint).not.toHaveBeenCalled();
+    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before checkpointing projected unsupported after text', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\src\\app.ts', 'before'],
+    ]);
+    const repository = fakeRepository();
+    const tracker = createTracker({ files, repository });
+    const execute = vi.fn(async () => {
+      files.set('C:\\project\\src\\app.ts', 'after\u0000content');
+      return 'written';
+    });
+
+    await expect(tracker.trackToolExecution({
+      scope: scope(),
+      toolExecution: toolExecution('write_file', {
+        path: 'src/app.ts',
+        content: 'after\u0000content',
+      }),
+      execute,
+    })).rejects.toThrow('unsupported text content');
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
+    expect(repository.saveWorkspaceCheckpoint).not.toHaveBeenCalled();
+    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+  });
+
+  it('does not create a changed file when execution fails after checkpointing', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\src\\app.ts', 'before'],
+    ]);
+    const repository = fakeRepository();
+    const tracker = createTracker({ files, repository });
+    const execute = vi.fn(async () => {
+      throw new Error('write failed before mutation');
+    });
+
+    await expect(tracker.trackToolExecution({
+      scope: scope(),
+      toolExecution: toolExecution('edit_file', {
+        path: 'src/app.ts',
+        oldText: 'missing',
+        newText: 'after',
+      }),
+      execute,
+    })).rejects.toThrow('write failed before mutation');
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
+    expect(repository.saveWorkspaceCheckpoint).toHaveBeenCalledWith(expect.objectContaining({
+      projectPath: 'src/app.ts',
+      beforeExists: true,
+    }));
+    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+  });
+
+  it('does not record a changed file for a no-op overwrite', async () => {
+    const files = new Map<string, string>([
+      ['C:\\project\\src\\app.ts', 'same'],
+    ]);
+    const repository = fakeRepository();
+    const tracker = createTracker({ files, repository });
+
+    const result = await tracker.trackToolExecution({
+      scope: scope(),
+      toolExecution: toolExecution('write_file', { path: 'src/app.ts', content: 'same' }),
+      execute: async () => {
+        files.set('C:\\project\\src\\app.ts', 'same');
+        return 'ok';
+      },
+    });
+    const finalized = tracker.finalizeChangeSet(scope());
+
+    expect(result).toBe('ok');
+    expect(repository.saveWorkspaceCheckpoint).toHaveBeenCalledWith(expect.objectContaining({
+      projectPath: 'src/app.ts',
+      beforeExists: true,
+    }));
+    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(finalized).toMatchObject({
+      status: 'finalized',
+      changedFileCount: 0,
+    });
+  });
+
   it('skips non-managed tools and has nothing to finalize', async () => {
     const repository = fakeRepository();
     const tracker = createTracker({ files: new Map(), repository });
