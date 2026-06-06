@@ -4,6 +4,7 @@ import { RunStatusSchema } from './session-run-contracts';
 import { JsonObjectSchema } from './json';
 import { RuntimeErrorSchema } from './runtime-errors';
 import { IsoDateTimeSchema } from './runtime-validation';
+import { WorkspaceChangeSummarySchema } from './workspace-change-contracts';
 
 export const CHECKPOINT_REASONS = [
   'run_started',
@@ -217,6 +218,7 @@ export const RecoverableRunSummarySchema = z.object({
   latestCheckpointAt: IsoDateTimeSchema.optional(),
   title: z.string().min(1).optional(),
   preview: z.string().min(1).optional(),
+  workspaceChangeSummaries: z.array(WorkspaceChangeSummarySchema).optional(),
   metadata: JsonObjectSchema.optional(),
 }).strict();
 

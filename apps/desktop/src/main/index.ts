@@ -32,6 +32,7 @@ import { ToolService } from './services/tool.service';
 import { createToolCallHandlerService } from './services/tool-call-handler.service';
 import { createProjectToolExecutor } from './services/project-tool-executor.service';
 import { WorkspaceChangeTrackerService } from './services/workspace-change-tracker.service';
+import { WorkspaceRestoreService } from './services/workspace-restore.service';
 import { createPermissionSettingsService } from './services/permission-settings.service';
 import { createRecoveryService } from './services/recovery.service';
 import { ArtifactContentStore } from './services/artifact-content-store.service';
@@ -191,6 +192,33 @@ const memoryService = createMemoryService({
     sessionId: event.sessionId,
   }),
 });
+function createWorkspaceRestoreForChangeSet(changeSetId: string): WorkspaceRestoreService {
+  const changeSet = workspaceChangeRepository.getChangeSet(changeSetId);
+  if (!changeSet) {
+    throw new Error(`Workspace change set not found: ${changeSetId}`);
+  }
+
+  const run = sessionRunRepository.getRun(changeSet.runId);
+  if (!run) {
+    throw new Error(`Workspace restore requires run: ${changeSet.runId}`);
+  }
+
+  const session = sessionRunRepository.getSession(String(run.sessionId));
+  if (!session?.workspacePath) {
+    throw new Error(`Workspace restore requires workspacePath for session: ${run.sessionId}`);
+  }
+
+  return new WorkspaceRestoreService({
+    projectRoot: session.workspacePath,
+    fileSystem: fs,
+    repository: workspaceChangeRepository,
+    ids: {
+      restoreRequestId: () => `workspace-restore-request:${crypto.randomUUID()}`,
+      restoreResultId: () => `workspace-restore-result:${crypto.randomUUID()}`,
+      restoreFileResultId: () => `workspace-restore-file-result:${crypto.randomUUID()}`,
+    },
+  });
+}
 const recoveryService = createRecoveryService({
   repository: new RecoveryRepository(database),
   clock: () => new Date(),
@@ -200,6 +228,12 @@ const recoveryService = createRecoveryService({
     retryRequestId: () => `retry-request:${crypto.randomUUID()}`,
     eventId: () => `event:${crypto.randomUUID()}`,
     interruptedMarkerId: (runId) => `interrupted-marker:${runId}:${crypto.randomUUID()}`,
+  },
+  workspaceChanges: workspaceChangeRepository,
+  workspaceRestore: {
+    restoreChangeSet(input) {
+      return createWorkspaceRestoreForChangeSet(input.changeSetId).restoreChangeSet(input);
+    },
   },
   appendRuntimeEvent: (event) => {
     sessionRunRepository.appendRuntimeEvent(event);

@@ -28,10 +28,30 @@ const mocks = vi.hoisted(() => {
     registerAppLifecycle: vi.fn(),
     createMainWindow: vi.fn(),
     SessionRunRepository: vi.fn(function SessionRunRepository(
-      this: { database?: unknown },
+      this: {
+        database?: unknown;
+        getRun?: unknown;
+        getSession?: unknown;
+        listRuntimeEventsByRun?: unknown;
+        appendRuntimeEvent?: unknown;
+      },
       database: unknown,
     ) {
       this.database = database;
+      this.getRun = vi.fn(() => ({
+        runId: 'run_123',
+        sessionId: 'session_123',
+      }));
+      this.getSession = vi.fn(() => ({
+        sessionId: 'session_123',
+        title: 'Restore Session',
+        workspacePath: 'C:/work/project',
+        status: 'active',
+        createdAt: '2026-06-05T10:00:00.000Z',
+        updatedAt: '2026-06-05T10:00:00.000Z',
+      }));
+      this.listRuntimeEventsByRun = vi.fn(() => []);
+      this.appendRuntimeEvent = vi.fn();
     }),
     RunModeRepository: vi.fn(function RunModeRepository(
       this: { database?: unknown },
@@ -123,6 +143,61 @@ const mocks = vi.hoisted(() => {
       database: unknown,
     ) {
       this.database = database;
+    }),
+    WorkspaceChangeRepository: vi.fn(function WorkspaceChangeRepository(
+      this: {
+        database?: unknown;
+        getChangeSet?: unknown;
+        listChangeSummariesByRun?: unknown;
+      },
+      database: unknown,
+    ) {
+      this.database = database;
+      this.getChangeSet = vi.fn(() => ({
+        changeSetId: 'workspace-change-set-1',
+        sessionId: 'session_123',
+        runId: 'run_123',
+        status: 'finalized',
+        openedAt: '2026-06-05T10:00:00.000Z',
+        finalizedAt: '2026-06-05T10:00:01.000Z',
+        changedFileCount: 1,
+      }));
+      this.listChangeSummariesByRun = vi.fn(() => []);
+    }),
+    WorkspaceRestoreService: vi.fn(function WorkspaceRestoreService(
+      this: { options?: unknown; restoreChangeSet?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      this.restoreChangeSet = vi.fn(async (input) => ({
+        request: {
+          restoreRequestId: 'workspace-restore-request-1',
+          changeSetId: input.changeSetId,
+          sessionId: 'session_123',
+          runId: 'run_123',
+          requestedBy: input.requestedBy,
+          status: 'completed',
+          requestedAt: '2026-06-05T10:00:00.000Z',
+          completedAt: '2026-06-05T10:00:01.000Z',
+        },
+        result: {
+          restoreResultId: 'workspace-restore-result-1',
+          restoreRequestId: 'workspace-restore-request-1',
+          changeSetId: input.changeSetId,
+          sessionId: 'session_123',
+          runId: 'run_123',
+          status: 'restored',
+          restoredAt: '2026-06-05T10:00:01.000Z',
+          metadata: {
+            changedFileCount: 1,
+            restoredCount: 1,
+            conflictCount: 0,
+            failedCount: 0,
+            noopCount: 0,
+          },
+        },
+        fileResults: [],
+      }));
     }),
     SessionActivePathRepository: vi.fn(function SessionActivePathRepository(
       this: { database?: unknown },
@@ -275,6 +350,10 @@ vi.mock('@megumi/desktop/main/services/recovery.service', () => ({
   createRecoveryService: mocks.createRecoveryService,
 }));
 
+vi.mock('@megumi/desktop/main/services/workspace-restore.service', () => ({
+  WorkspaceRestoreService: mocks.WorkspaceRestoreService,
+}));
+
 vi.mock('@megumi/desktop/main/services/workspace-files.service', () => ({
   createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
@@ -289,6 +368,10 @@ vi.mock('@megumi/db/schema/migrations', () => ({
 
 vi.mock('@megumi/db/repos/recovery.repo', () => ({
   RecoveryRepository: mocks.RecoveryRepository,
+}));
+
+vi.mock('@megumi/db/repos/workspace-change.repo', () => ({
+  WorkspaceChangeRepository: mocks.WorkspaceChangeRepository,
 }));
 
 vi.mock('@megumi/db/repos/session-active-path.repo', () => ({
@@ -372,6 +455,8 @@ describe('main runtime logger composition', () => {
     mocks.createDatabase.mockClear();
     mocks.migrateDatabase.mockClear();
     mocks.RecoveryRepository.mockClear();
+    mocks.WorkspaceChangeRepository.mockClear();
+    mocks.WorkspaceRestoreService.mockClear();
     mocks.SessionActivePathRepository.mockClear();
     mocks.ArtifactRepository.mockClear();
     mocks.MemoryRepository.mockClear();
@@ -421,6 +506,7 @@ describe('main runtime logger composition', () => {
     expect(mocks.SessionActivePathRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.RunModeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.RecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.WorkspaceChangeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.MemoryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ProjectRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
@@ -486,10 +572,44 @@ describe('main runtime logger composition', () => {
         eventId: expect.any(Function),
         interruptedMarkerId: expect.any(Function),
       }),
+      workspaceChanges: expect.objectContaining({
+        listChangeSummariesByRun: expect.any(Function),
+      }),
+      workspaceRestore: expect.objectContaining({
+        restoreChangeSet: expect.any(Function),
+      }),
       appendRuntimeEvent: expect.any(Function),
       nextRuntimeSequence: expect.any(Function),
     }));
     expect(mocks.createRecoveryService.mock.calls[0]?.[0]).not.toHaveProperty('listRecoverableRuns');
+    const recoveryOptions = mocks.createRecoveryService.mock.calls[0]?.[0] as {
+      workspaceRestore: {
+        restoreChangeSet(input: { changeSetId: string; requestedBy: 'user' }): Promise<unknown>;
+      };
+    };
+    await recoveryOptions.workspaceRestore.restoreChangeSet({
+      changeSetId: 'workspace-change-set-1',
+      requestedBy: 'user',
+    });
+    expect(mocks.WorkspaceChangeRepository.mock.instances[0]?.getChangeSet).toHaveBeenCalledWith(
+      'workspace-change-set-1',
+    );
+    expect(mocks.SessionRunRepository.mock.instances[0]?.getRun).toHaveBeenCalledWith('run_123');
+    expect(mocks.SessionRunRepository.mock.instances[0]?.getSession).toHaveBeenCalledWith('session_123');
+    expect(mocks.WorkspaceRestoreService).toHaveBeenCalledWith(expect.objectContaining({
+      projectRoot: 'C:/work/project',
+      repository: mocks.WorkspaceChangeRepository.mock.instances[0],
+      fileSystem: expect.objectContaining({
+        readFile: expect.any(Function),
+        writeFile: expect.any(Function),
+        remove: expect.any(Function),
+      }),
+      ids: expect.objectContaining({
+        restoreRequestId: expect.any(Function),
+        restoreResultId: expect.any(Function),
+        restoreFileResultId: expect.any(Function),
+      }),
+    }));
     expect(mocks.createProjectService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       chooseDirectory: expect.any(Function),

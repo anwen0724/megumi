@@ -51,6 +51,7 @@ import {
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
   RecoverableRunListRequestSchema,
+  RecoverableRunListResultSchema,
   RunCancelRequestSchema,
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
@@ -1091,6 +1092,43 @@ describe('agent recovery runtime IPC schemas', () => {
     expect(resumeRequest.payload.resumeMode).toBe('from_checkpoint');
     expect(cancelRequest.payload.scope).toBe('run');
     expect(retryRequest.payload.retryKind).toBe('retry_run_from_checkpoint');
+  });
+
+  it('parses recoverable run list results with workspace summaries but without snapshot content', () => {
+    const result = RecoverableRunListResultSchema.parse({
+      ok: true,
+      data: {
+        runs: [{
+          runId: 'run-1',
+          sessionId: 'session-1',
+          status: 'failed',
+          reason: 'failed',
+          latestCheckpointId: 'checkpoint-1',
+          workspaceChangeSummaries: [{
+            changeSetId: 'workspace-change-set-1',
+            sessionId: 'session-1',
+            runId: 'run-1',
+            changedFileCount: 2,
+            restorableCount: 2,
+            restoredCount: 0,
+            conflictCount: 0,
+            failedCount: 0,
+            hasRestorableChanges: true,
+            updatedAt: '2026-06-05T10:00:00.000Z',
+          }],
+        }],
+      },
+      meta: {
+        requestId: 'request_recovery_list',
+        channel: IPC_CHANNELS.recovery.recoverableRunsList,
+        handledAt: '2026-06-05T10:00:01.000Z',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('contentText');
+    expect(JSON.stringify(result)).not.toContain('beforeContent');
+    expect(JSON.stringify(result)).not.toContain('afterContent');
   });
 
   it('parses workspace restore IPC request and result without snapshot content', () => {
