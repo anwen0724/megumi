@@ -113,6 +113,8 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'project.remove';
     case IPC_CHANNELS.workspace.files.list:
       return 'workspace.files.list';
+    case IPC_CHANNELS.workspace.files.open:
+      return 'workspace.files.open';
     default: {
       const exhaustive: never = channel;
       return exhaustive;

@@ -27,7 +27,11 @@ import type { SessionSourceEntry } from '@megumi/shared/session-active-path-cont
 import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { WorkspaceChangedFile } from '@megumi/shared/workspace-change-contracts';
+import type {
+  WorkspaceChangedFile,
+  WorkspaceChangeSet,
+  WorkspaceChangeSummary,
+} from '@megumi/shared/workspace-change-contracts';
 
 let db: Database.Database | null = null;
 
@@ -715,6 +719,7 @@ function createServiceWithChatStreamSink(
   options?: {
     toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
     toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
+    workspaceChanges?: SessionRunServiceOptions['workspaceChanges'];
   },
 ) {
   db = new Database(':memory:');
@@ -725,6 +730,7 @@ function createServiceWithChatStreamSink(
     repository,
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
+    ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         callIndex += 1;
@@ -4009,6 +4015,103 @@ describe('SessionRunService', () => {
     expect(chatEvents.every((event) => event.streamId === 'stream-main-1')).toBe(true);
     expect(chatEvents.every((event) => event.streamId !== 'run-1')).toBe(true);
     expect(chatEvents.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('publishes workspace change footer facts before terminal chat stream events', async () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const changeSet: WorkspaceChangeSet = {
+      changeSetId: 'workspace-change-set-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      status: 'finalized',
+      changedFileCount: 1,
+      createdAt: '2026-05-24T00:00:00.000Z',
+      finalizedAt: '2026-05-24T00:00:01.000Z',
+    };
+    const summary: WorkspaceChangeSummary = {
+      changeSetId: 'workspace-change-set-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      changedFileCount: 1,
+      restorableCount: 1,
+      restoredCount: 0,
+      conflictCount: 0,
+      failedCount: 0,
+      hasRestorableChanges: true,
+      updatedAt: '2026-05-24T00:00:01.000Z',
+    };
+    const service = createServiceWithChatStreamSink([
+      modelOutputDeltaEvent({ sequence: 1, delta: 'Changed file.' }),
+      {
+        ...modelStepCompletedEvent(2),
+        payload: { modelStepId: 'model-step-1', finishReason: 'stop' },
+      },
+    ], chatEvents, {
+      workspaceChanges: {
+        listChangedFilesByRun: vi.fn(() => []),
+        listChangeSetsByRun: vi.fn(() => [changeSet]),
+        getChangeSummary: vi.fn(() => summary),
+        listChangedFilesByChangeSet: vi.fn(() => [
+          workspaceChangedFile({
+            changedFileId: 'workspace-changed-file-1',
+            changeSetId: 'workspace-change-set-1',
+            runId: 'run-1',
+            sessionId: 'session-1',
+            projectPath: 'src/app.ts',
+          }),
+        ]),
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Change a file',
+          createdAt: '2026-05-24T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-24T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain the stream so terminal chat events are published.
+    }
+
+    expect(chatEvents.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+      'assistant.text.started',
+      'assistant.text.delta',
+      'workspace.change.footer.updated',
+      'assistant.text.completed',
+      'turn.completed',
+    ]);
+    const footerEvent = chatEvents.find((event) => event.eventType === 'workspace.change.footer.updated');
+    expect(footerEvent).toMatchObject({
+      eventType: 'workspace.change.footer.updated',
+      footer: {
+        changeSets: [{
+          changeSetId: 'workspace-change-set-1',
+          files: [{
+            projectPath: 'src/app.ts',
+            restoreState: 'restorable',
+          }],
+        }],
+      },
+    });
+    expect(JSON.stringify(footerEvent)).not.toContain('beforeHash');
+    expect(JSON.stringify(footerEvent)).not.toContain('afterHash');
+    expect(chatEvents.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   it('publishes terminal chat stream events without saving old flat assistant history', async () => {

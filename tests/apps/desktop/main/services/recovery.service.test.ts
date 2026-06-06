@@ -274,6 +274,7 @@ describe('RecoveryService', () => {
     const workspaceRestore = {
       restoreChangeSet: vi.fn(async () => restoreData),
     };
+    const publishWorkspaceChangeFooter = vi.fn();
     const service = createRecoveryService({
       repository: createRepository(),
       clock: () => new Date('2026-06-05T10:00:02.000Z'),
@@ -281,6 +282,7 @@ describe('RecoveryService', () => {
       appendRuntimeEvent,
       nextRuntimeSequence: () => 11,
       workspaceRestore,
+      publishWorkspaceChangeFooter,
     });
 
     const result = await service.restoreWorkspaceChangeSet({
@@ -334,6 +336,7 @@ describe('RecoveryService', () => {
         noopCount: 1,
       },
     }));
+    expect(publishWorkspaceChangeFooter).toHaveBeenCalledWith('run_123', '2026-06-05T10:00:02.000Z');
     const appendedEvents = JSON.stringify(appendRuntimeEvent.mock.calls.map(([event]) => event));
     expect(appendedEvents).not.toContain('before secret');
     expect(appendedEvents).not.toContain('after secret');

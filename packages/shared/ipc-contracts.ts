@@ -63,6 +63,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.memory.accessLogsList,
   IPC_CHANNELS.memory.recallPreview,
   IPC_CHANNELS.workspace.files.list,
+  IPC_CHANNELS.workspace.files.open,
 ] as const;
 
 export type BusinessIpcChannel = (typeof BUSINESS_IPC_CHANNELS)[number];

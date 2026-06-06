@@ -7,6 +7,7 @@ import {
 } from '@megumi/shared';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace-change-contracts';
 
 export interface ChatStreamEventSink {
   publish(event: ChatStreamEvent): void;
@@ -35,6 +36,7 @@ export interface ChatStreamEventAdapterOptions {
 
 export interface ChatStreamEventAdapter {
   startTurn(): void;
+  publishWorkspaceChangeFooter(footer: WorkspaceChangeFooterFact, createdAt: string): void;
   handleRuntimeEvent(event: RuntimeEvent): void;
   flushPhaseGate(): void;
   dispose(): void;
@@ -126,6 +128,18 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       clientMessageId: this.options.clientMessageId ?? this.options.userMessageId,
       messageId: this.options.userMessageId,
       text: this.options.userMessageText,
+    }));
+  }
+
+  publishWorkspaceChangeFooter(footer: WorkspaceChangeFooterFact, createdAt: string): void {
+    if (this.terminal) {
+      return;
+    }
+
+    this.publish(createChatStreamEvent({
+      ...this.base(createdAt),
+      eventType: 'workspace.change.footer.updated',
+      footer,
     }));
   }
 

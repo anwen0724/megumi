@@ -66,6 +66,8 @@ import {
   ProjectUseExistingPayloadSchema,
 } from './project-contracts';
 import {
+  WorkspaceFileOpenDataSchema,
+  WorkspaceFileOpenPayloadSchema,
   WorkspaceFilesListDataSchema,
   WorkspaceFilesListPayloadSchema,
 } from './workspace-file-contracts';
@@ -1274,6 +1276,11 @@ export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(
   WorkspaceFilesListPayloadSchema,
 );
 
+export const WorkspaceFileOpenRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.files.open,
+  WorkspaceFileOpenPayloadSchema,
+);
+
 export const ProjectListResultSchema = createRuntimeIpcResultSchema(
   ProjectListDataSchema,
   IPC_CHANNELS.project.list,
@@ -1297,6 +1304,11 @@ export const ProjectRemoveResultSchema = createRuntimeIpcResultSchema(
 export const WorkspaceFilesListResultSchema = createRuntimeIpcResultSchema(
   WorkspaceFilesListDataSchema,
   IPC_CHANNELS.workspace.files.list,
+);
+
+export const WorkspaceFileOpenResultSchema = createRuntimeIpcResultSchema(
+  WorkspaceFileOpenDataSchema,
+  IPC_CHANNELS.workspace.files.open,
 );
 
 export type ProviderListPayload = z.infer<typeof ProviderListPayloadSchema>;
@@ -1393,3 +1405,5 @@ export type MemoryAccessLogsListData = z.infer<typeof MemoryAccessLogsListDataSc
 export type MemoryRecallPreviewData = z.infer<typeof MemoryRecallPreviewDataSchema>;
 export type WorkspaceFilesListPayload = z.infer<typeof WorkspaceFilesListPayloadSchema>;
 export type WorkspaceFilesListData = z.infer<typeof WorkspaceFilesListDataSchema>;
+export type WorkspaceFileOpenPayload = z.infer<typeof WorkspaceFileOpenPayloadSchema>;
+export type WorkspaceFileOpenData = z.infer<typeof WorkspaceFileOpenDataSchema>;

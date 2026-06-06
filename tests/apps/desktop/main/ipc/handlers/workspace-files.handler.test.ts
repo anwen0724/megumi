@@ -27,6 +27,10 @@ describe('registerWorkspaceFilesHandlers', () => {
       IPC_CHANNELS.workspace.files.list,
       expect.any(Function),
     );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      IPC_CHANNELS.workspace.files.open,
+      expect.any(Function),
+    );
   });
 
   it('calls the workspace files service from a valid runtime IPC request', async () => {
@@ -80,6 +84,52 @@ describe('registerWorkspaceFilesHandlers', () => {
       meta: {
         requestId: 'ipc-workspace-files-list-1',
         channel: IPC_CHANNELS.workspace.files.list,
+      },
+    });
+  });
+
+  it('opens a workspace file from a valid runtime IPC request', async () => {
+    const { ipcMain } = await import('electron');
+    const service = {
+      listDirectory: vi.fn(),
+      openFile: vi.fn(async () => ({
+        workspaceRoot: 'C:/all/work/study/megumi',
+        filePath: 'src/app.ts',
+        opened: true,
+      })),
+    };
+
+    registerWorkspaceFilesHandlers(service);
+    const openHandler = vi.mocked(ipcMain.handle).mock.calls.find(([channel]) =>
+      channel === IPC_CHANNELS.workspace.files.open
+    )?.[1];
+    const result = await openHandler?.({} as Electron.IpcMainInvokeEvent, {
+      requestId: 'ipc-workspace-files-open-1',
+      payload: {
+        workspaceRoot: 'C:/all/work/study/megumi',
+        filePath: 'src/app.ts',
+      },
+      meta: {
+        channel: IPC_CHANNELS.workspace.files.open,
+        createdAt: '2026-05-18T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(service.openFile).toHaveBeenCalledWith({
+      workspaceRoot: 'C:/all/work/study/megumi',
+      filePath: 'src/app.ts',
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        workspaceRoot: 'C:/all/work/study/megumi',
+        filePath: 'src/app.ts',
+        opened: true,
+      },
+      meta: {
+        requestId: 'ipc-workspace-files-open-1',
+        channel: IPC_CHANNELS.workspace.files.open,
       },
     });
   });

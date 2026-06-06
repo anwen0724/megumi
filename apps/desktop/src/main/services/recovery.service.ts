@@ -44,6 +44,7 @@ export interface CreateRecoveryServiceOptions {
   ids: RecoveryIds;
   appendRuntimeEvent?: (event: RuntimeEvent) => void;
   nextRuntimeSequence?: (runId: string) => number;
+  publishWorkspaceChangeFooter?: (runId: string, createdAt: string) => void;
   workspaceChanges?: WorkspaceChangeSummaryPort;
   workspaceRestore: WorkspaceRestorePort;
 }
@@ -152,6 +153,8 @@ export function createRecoveryService(options: CreateRecoveryServiceOptions): Re
           noopCount: numberMetadata(restored.result.metadata, 'noopCount'),
         },
       }));
+
+      options.publishWorkspaceChangeFooter?.(restored.result.runId, createdAt);
 
       return restored;
     },

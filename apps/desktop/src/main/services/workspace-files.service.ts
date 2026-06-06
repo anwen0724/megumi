@@ -5,6 +5,8 @@ import {
   resolveSafePath,
 } from '@megumi/security/sandbox-policy';
 import type {
+  WorkspaceFileOpenData,
+  WorkspaceFileOpenPayload,
   WorkspaceDirectoryEntry,
   WorkspaceFilesListData,
   WorkspaceFilesListPayload,
@@ -34,6 +36,7 @@ export interface WorkspaceFilesFileSystem {
 
 export interface WorkspaceFilesService {
   listDirectory(input: WorkspaceFilesListPayload): Promise<WorkspaceFilesListData>;
+  openFile(input: WorkspaceFileOpenPayload): Promise<WorkspaceFileOpenData>;
 }
 
 export interface CreateWorkspaceFilesServiceOptions {
@@ -41,6 +44,7 @@ export interface CreateWorkspaceFilesServiceOptions {
   ignoredNames?: readonly string[];
   allowedWorkspaceRoots?: readonly string[];
   isWorkspaceRootAllowed?: (root: string) => boolean;
+  openPath?: (absolutePath: string) => Promise<string>;
 }
 
 export function createWorkspaceFilesService(
@@ -97,7 +101,37 @@ export function createWorkspaceFilesService(
         entries: listedEntries.sort(compareEntries),
       };
     },
+    async openFile(input) {
+      const workspaceRoot = normalizeWorkspaceRoot(input.workspaceRoot);
+      assertWorkspaceRootAllowed({
+        workspaceRoot,
+        allowedWorkspaceRootKeys,
+        isWorkspaceRootAllowed: options.isWorkspaceRootAllowed,
+      });
+
+      const filePath = normalizeDirectoryPath(input.filePath);
+      const absolutePath = resolveSafePath(workspaceRoot, filePath);
+      const openError = await openPath(absolutePath);
+      if (openError) {
+        throw new Error(openError);
+      }
+
+      return {
+        workspaceRoot: input.workspaceRoot,
+        filePath,
+        opened: true,
+      };
+    },
   };
+
+  async function openPath(absolutePath: string): Promise<string> {
+    if (options.openPath) {
+      return options.openPath(absolutePath);
+    }
+
+    const { shell } = await import('electron');
+    return shell.openPath(absolutePath);
+  }
 }
 
 function normalizeDirectoryPath(directoryPath: string): string {

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createWorkspaceFilesService,
   DEFAULT_WORKSPACE_FILE_IGNORE_NAMES,
@@ -72,6 +72,54 @@ describe('WorkspaceFilesService', () => {
       workspaceRoot: 'C:/all/work/study/megumi',
       directoryPath: '../outside',
     })).rejects.toThrow();
+  });
+
+  it('opens a project-relative file through the injected opener', async () => {
+    const openPath = vi.fn(async () => '');
+    const service = createWorkspaceFilesService({
+      openPath,
+      fileSystem: {
+        async readdir() {
+          return [];
+        },
+        async stat() {
+          return { size: 0, mtime: new Date('2026-05-18T00:00:00.000Z') };
+        },
+      },
+    });
+
+    const result = await service.openFile({
+      workspaceRoot: 'C:/all/work/study/megumi',
+      filePath: 'src/app.ts',
+    });
+
+    expect(result).toEqual({
+      workspaceRoot: 'C:/all/work/study/megumi',
+      filePath: 'src/app.ts',
+      opened: true,
+    });
+    expect(openPath).toHaveBeenCalledWith(expect.stringMatching(/src[\\/]app\.ts$/));
+  });
+
+  it('rejects opening paths outside workspace root', async () => {
+    const openPath = vi.fn(async () => '');
+    const service = createWorkspaceFilesService({
+      openPath,
+      fileSystem: {
+        async readdir() {
+          return [];
+        },
+        async stat() {
+          return { size: 0, mtime: new Date('2026-05-18T00:00:00.000Z') };
+        },
+      },
+    });
+
+    await expect(service.openFile({
+      workspaceRoot: 'C:/all/work/study/megumi',
+      filePath: '../outside.ts',
+    })).rejects.toThrow();
+    expect(openPath).not.toHaveBeenCalled();
   });
 
   it('rejects workspace roots outside the configured allow-list', async () => {

@@ -52,3 +52,29 @@ export interface WorkspaceFilesListData {
   directoryPath: string;
   entries: WorkspaceDirectoryEntry[];
 }
+
+export const WorkspaceFileOpenPayloadSchema = z
+  .object({
+    workspaceRoot: z.string().min(1),
+    filePath: z.string().min(1),
+  })
+  .strict();
+
+export interface WorkspaceFileOpenPayload {
+  workspaceRoot: string;
+  filePath: string;
+}
+
+export const WorkspaceFileOpenDataSchema = z
+  .object({
+    workspaceRoot: z.string().min(1),
+    filePath: z.string().min(1),
+    opened: z.literal(true),
+  })
+  .strict();
+
+export interface WorkspaceFileOpenData {
+  workspaceRoot: string;
+  filePath: string;
+  opened: true;
+}

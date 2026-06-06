@@ -98,6 +98,11 @@ import {
   classifyAutomaticModelStepRetry,
   createAutomaticRetryBackoffMs,
 } from './session-retry-policy.service';
+import {
+  createWorkspaceChangeFooterProjectorService,
+  isWorkspaceChangeFooterProjectorPort,
+  type WorkspaceChangeFooterProjectorService,
+} from './workspace-change-footer-projector.service';
 
 export interface SessionRunServiceClock {
   now(): string;
@@ -302,6 +307,7 @@ export class SessionRunService {
   };
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly chatStreamEventSink?: ChatStreamEventSink;
+  private readonly workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
   private readonly timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
@@ -329,9 +335,12 @@ export class SessionRunService {
       ?? new SessionContextInputService({
         repository: this.repository,
         activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
-      });
+    });
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.timelineMessageRepository = options.timelineMessageRepository;
+    this.workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(options.workspaceChanges)
+      ? createWorkspaceChangeFooterProjectorService({ workspaceChanges: options.workspaceChanges })
+      : undefined;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.automaticRetry = {
@@ -2242,11 +2251,35 @@ export class SessionRunService {
   }
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
+    if (isRunTerminalRuntimeEvent(event)) {
+      this.publishWorkspaceChangeFooter({
+        runId: event.runId,
+        createdAt: event.createdAt,
+        chatStreamAdapter,
+      });
+    }
     this.repository.appendRuntimeEvent(event);
     chatStreamAdapter?.handleRuntimeEvent(event);
     if (isRunTerminalRuntimeEvent(event)) {
       chatStreamAdapter?.dispose();
     }
+  }
+
+  private publishWorkspaceChangeFooter(input: {
+    runId: string;
+    createdAt: string;
+    chatStreamAdapter?: ChatStreamEventAdapter;
+  }): void {
+    if (!input.chatStreamAdapter || !this.workspaceChangeFooterProjector) {
+      return;
+    }
+
+    const footer = this.workspaceChangeFooterProjector.projectRunFooter(input.runId);
+    if (!footer) {
+      return;
+    }
+
+    input.chatStreamAdapter.publishWorkspaceChangeFooter(footer, input.createdAt);
   }
 
   private requireModelStepProvider(): SessionRunModelStepProvider {

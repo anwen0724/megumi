@@ -5,18 +5,27 @@ import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
 import type {
+  WorkspaceFileOpenData,
+  WorkspaceFileOpenPayload,
   WorkspaceFilesListData,
   WorkspaceFilesListPayload,
 } from '@megumi/shared/ipc-schemas';
-import { WorkspaceFilesListRequestSchema } from '@megumi/shared/ipc-schemas';
+import {
+  WorkspaceFileOpenRequestSchema,
+  WorkspaceFilesListRequestSchema,
+} from '@megumi/shared/ipc-schemas';
 import type { WorkspaceFilesService } from '../../services/workspace-files.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
-export type WorkspaceFilesHandlersService = Pick<WorkspaceFilesService, 'listDirectory'>;
+export type WorkspaceFilesHandlersService = Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
 type WorkspaceFilesListRequest = RuntimeIpcRequest<
   WorkspaceFilesListPayload,
   typeof IPC_CHANNELS.workspace.files.list
+>;
+type WorkspaceFileOpenRequest = RuntimeIpcRequest<
+  WorkspaceFileOpenPayload,
+  typeof IPC_CHANNELS.workspace.files.open
 >;
 
 export interface RegisterWorkspaceFilesHandlersOptions {
@@ -35,6 +44,17 @@ export function registerWorkspaceFilesHandlers(
       logger: options.logger,
       handle: (request: WorkspaceFilesListRequest): Promise<WorkspaceFilesListData> =>
         service.listDirectory(request.payload),
+      mapError: mapWorkspaceFilesIpcError,
+    }),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.workspace.files.open,
+    createRuntimeIpcHandler({
+      channel: IPC_CHANNELS.workspace.files.open,
+      requestSchema: WorkspaceFileOpenRequestSchema as z.ZodType<WorkspaceFileOpenRequest>,
+      logger: options.logger,
+      handle: (request: WorkspaceFileOpenRequest): Promise<WorkspaceFileOpenData> =>
+        service.openFile(request.payload),
       mapError: mapWorkspaceFilesIpcError,
     }),
   );

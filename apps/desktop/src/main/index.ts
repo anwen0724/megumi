@@ -12,6 +12,7 @@ import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.rep
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider-contracts';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { createChatStreamEvent } from '@megumi/shared/chat-stream-event-factory';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
@@ -48,6 +49,7 @@ import { createProjectService } from './services/project.service';
 import { createWorkspaceFilesService } from './services/workspace-files.service';
 import { createWorkspaceRootAuthorizer } from './services/workspace-root-authorization.service';
 import { getDefaultProviderService } from './ipc/handlers/provider.handler';
+import { createWorkspaceChangeFooterProjectorService } from './services/workspace-change-footer-projector.service';
 
 loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
@@ -98,6 +100,9 @@ const timelineMessageRepository = new TimelineMessageRepository(database);
 const sessionRunRepository = new SessionRunRepository(database);
 const activePathRepository = new SessionActivePathRepository(database);
 const workspaceChangeRepository = new WorkspaceChangeRepository(database);
+const workspaceChangeFooterProjector = createWorkspaceChangeFooterProjectorService({
+  workspaceChanges: workspaceChangeRepository,
+});
 const chatStreamSink = new TimelineHistoryCommitProjectorService({
   repository: timelineMessageRepository,
   downstream: {
@@ -238,6 +243,27 @@ const recoveryService = createRecoveryService({
   },
   appendRuntimeEvent: (event) => {
     sessionRunRepository.appendRuntimeEvent(event);
+  },
+  publishWorkspaceChangeFooter: (runId, createdAt) => {
+    const footer = workspaceChangeFooterProjector.projectRunFooter(runId);
+    const run = sessionRunRepository.getRun(runId);
+    const session = run ? sessionRunRepository.getSession(String(run.sessionId)) : undefined;
+    if (!footer || !run || !session) {
+      return;
+    }
+
+    chatStreamSink.publish(createChatStreamEvent({
+      eventId: `chat-stream-event:${crypto.randomUUID()}`,
+      eventType: 'workspace.change.footer.updated',
+      projectId: String(session.workspaceId ?? session.sessionId),
+      sessionId: String(session.sessionId),
+      runId,
+      streamId: `chat-stream:${runId}:workspace-footer`,
+      streamKind: 'workspace-footer',
+      seq: 1,
+      createdAt,
+      footer,
+    }));
   },
   nextRuntimeSequence: (runId) => nextPersistedRuntimeSequence(
     sessionRunRepository.listRuntimeEventsByRun(runId),
