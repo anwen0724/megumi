@@ -19,7 +19,7 @@ import { useSessionTimeline } from '../hooks/use-session-timeline';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
-const CHAT_CONTENT_SHELL_CLASS = 'mx-auto flex h-full w-full max-w-3xl flex-col';
+const CHAT_CONTENT_COLUMN_CLASS = 'mx-auto w-full max-w-3xl';
 
 function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): boolean {
   if (message.role !== 'assistant') {
@@ -484,23 +484,20 @@ export function ChatTimeline() {
   return (
     <main
       data-testid="chat-timeline-root"
-      className="relative min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
+      className="relative flex min-w-[42rem] flex-1 flex-col overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
     >
       <div
-        data-testid="chat-content-shell"
-        className={CHAT_CONTENT_SHELL_CLASS}
+        ref={timelineScroll.scrollRef}
+        data-testid="chat-message-scroll-area"
+        tabIndex={0}
+        onScroll={timelineScroll.onScroll}
+        onWheel={timelineScroll.onWheel}
+        onPointerDown={timelineScroll.onPointerDown}
+        onKeyDown={timelineScroll.onKeyDown}
+        className="min-h-0 flex-1 overflow-y-auto"
       >
-        <div
-          ref={timelineScroll.scrollRef}
-          data-testid="chat-message-section"
-          tabIndex={0}
-          onScroll={timelineScroll.onScroll}
-          onWheel={timelineScroll.onWheel}
-          onPointerDown={timelineScroll.onPointerDown}
-          onKeyDown={timelineScroll.onKeyDown}
-          className="min-h-0 flex-1 overflow-y-auto pb-3 pt-7"
-        >
-          {hasTimelineContent ? (
+        {hasTimelineContent ? (
+          <div data-testid="chat-message-content-column" className={`${CHAT_CONTENT_COLUMN_CLASS} pb-3 pt-7`}>
             <div role="log" aria-label="Chat timeline" className="flex w-full flex-col gap-5">
               {timelineMessages.map((message) => (
                 <TimelineMessage
@@ -547,7 +544,9 @@ export function ChatTimeline() {
                 />
               ))}
             </div>
-          ) : (
+          </div>
+        ) : (
+          <div data-testid="chat-message-content-column" className={`${CHAT_CONTENT_COLUMN_CLASS} flex h-full items-center justify-center`}>
             <div className="flex h-full items-center justify-center">
               <div className="max-w-md text-center">
                 <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-accent)]">
@@ -633,10 +632,12 @@ export function ChatTimeline() {
                 )}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        <div data-testid="chat-bottom-base" className="shrink-0 bg-[var(--color-app-bg)]">
+      <div data-testid="chat-composer-dock" className="shrink-0 bg-[var(--color-app-bg)]">
+        <div data-testid="chat-composer-content-column" className={CHAT_CONTENT_COLUMN_CLASS}>
           {pendingApprovals.length > 0 ? (
             <section
               aria-label="Blocking approval controls"

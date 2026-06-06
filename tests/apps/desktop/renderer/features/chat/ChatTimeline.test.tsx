@@ -360,52 +360,58 @@ describe('ChatTimeline', () => {
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
   });
 
-  it('keeps messages and composer in one real chat content shell', () => {
+  it('keeps the scrollbar on the full-width message area while aligning message and composer columns', () => {
     activateCanonicalSession([committedUser('message-layout-user', 'Check layout')]);
 
     render(<ChatTimeline />);
 
     const root = screen.getByTestId('chat-timeline-root');
-    const contentShell = screen.getByTestId('chat-content-shell');
-    const messageSection = screen.getByTestId('chat-message-section');
-    const bottomBase = screen.getByTestId('chat-bottom-base');
+    const messageScrollArea = screen.getByTestId('chat-message-scroll-area');
+    const messageContentColumn = screen.getByTestId('chat-message-content-column');
+    const composerDock = screen.getByTestId('chat-composer-dock');
+    const composerContentColumn = screen.getByTestId('chat-composer-content-column');
     const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');
     expect(root).toHaveClass('overflow-hidden');
+    expect(root).toHaveClass('flex');
+    expect(root).toHaveClass('flex-col');
     expect(root).toHaveClass('min-w-[42rem]');
     expect(root).toHaveClass('transition-[background-color]');
-    expect(contentShell).toHaveClass('max-w-3xl');
-    expect(contentShell).toHaveClass('flex');
-    expect(contentShell).toHaveClass('h-full');
-    expect(contentShell).toHaveClass('flex-col');
-    expect(messageSection).toHaveClass('min-h-0');
-    expect(messageSection).toHaveClass('flex-1');
-    expect(messageSection).toHaveClass('overflow-y-auto');
-    expect(messageSection).toHaveAttribute('tabIndex', '0');
+    expect(messageScrollArea).toHaveClass('min-h-0');
+    expect(messageScrollArea).toHaveClass('flex-1');
+    expect(messageScrollArea).toHaveClass('overflow-y-auto');
+    expect(messageScrollArea).not.toHaveClass('max-w-3xl');
+    expect(messageScrollArea).toHaveAttribute('tabIndex', '0');
+    expect(messageContentColumn).toHaveClass('mx-auto');
+    expect(messageContentColumn).toHaveClass('max-w-3xl');
+    expect(composerContentColumn).toHaveClass('mx-auto');
+    expect(composerContentColumn).toHaveClass('max-w-3xl');
     expect(contentColumn).toHaveClass('w-full');
     expect(contentColumn).not.toHaveClass('max-w-4xl');
-    expect(bottomBase).toHaveClass('shrink-0');
-    expect(bottomBase).toHaveClass('bg-[var(--color-app-bg)]');
-    expect(within(bottomBase).getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');
-    expect(within(messageSection).getByText('Check layout')).toBeInTheDocument();
-    expect(within(bottomBase).getByLabelText('Message Megumi')).toBeInTheDocument();
+    expect(composerDock).toHaveClass('shrink-0');
+    expect(composerDock).toHaveClass('bg-[var(--color-app-bg)]');
+    expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');
+    expect(within(messageScrollArea).getByText('Check layout')).toBeInTheDocument();
+    expect(within(composerDock).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 
-  it('keeps the empty-session composer on the same centered chat content shell', () => {
+  it('keeps the empty-session composer on the centered chat content column', () => {
     selectMegumiProject();
 
     render(<ChatTimeline />);
 
-    const contentShell = screen.getByTestId('chat-content-shell');
-    const bottomBase = screen.getByTestId('chat-bottom-base');
+    const messageScrollArea = screen.getByTestId('chat-message-scroll-area');
+    const composerContentColumn = screen.getByTestId('chat-composer-content-column');
 
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
-    expect(contentShell).toHaveClass('max-w-3xl');
-    expect(contentShell).toHaveClass('mx-auto');
-    expect(contentShell).not.toHaveClass('pr-16');
-    expect(contentShell).not.toHaveClass('xl:pr-32');
-    expect(within(bottomBase).getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');
+    expect(messageScrollArea).toHaveClass('overflow-y-auto');
+    expect(messageScrollArea).not.toHaveClass('max-w-3xl');
+    expect(composerContentColumn).toHaveClass('max-w-3xl');
+    expect(composerContentColumn).toHaveClass('mx-auto');
+    expect(composerContentColumn).not.toHaveClass('pr-16');
+    expect(composerContentColumn).not.toHaveClass('xl:pr-32');
+    expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');
   });
 
   it('renders pending approvals in blocking controls without the separate tool-call card section', () => {

@@ -54,15 +54,19 @@ describe('composer source guard', () => {
     expect(composer).toMatch(/aria-label="Stop current run"[\s\S]*className="[^"]*\bshrink-0\b/);
   });
 
-  it('keeps messages and composer inside one real chat content shell', () => {
+  it('keeps the message scrollbar full-width while sharing the chat content column', () => {
     const timeline = readSource('apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx');
     const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
 
-    expect(timeline).toMatch(/data-testid="chat-timeline-root"[\s\S]*?className="[^"]*\brelative\b[^"]*\boverflow-hidden\b/);
+    expect(timeline).toMatch(/data-testid="chat-timeline-root"[\s\S]*?className="[^"]*\brelative\b[^"]*\bflex\b[^"]*\bflex-col\b[^"]*\boverflow-hidden\b/);
     expect(timeline).toMatch(/data-testid="chat-timeline-root"[\s\S]*?className="[^"]*\bmin-w-\[42rem\]/);
-    expect(timeline).toMatch(/data-testid="chat-content-shell"[\s\S]*?className=\{CHAT_CONTENT_SHELL_CLASS\}/);
-    expect(timeline).toMatch(/data-testid="chat-message-section"[\s\S]*?className="[^"]*\bflex-1\b[^"]*\boverflow-y-auto\b/);
-    expect(timeline).toMatch(/data-testid="chat-bottom-base"[\s\S]*?className="[^"]*\bshrink-0\b[^"]*\bbg-\[var\(--color-app-bg\)\]/);
+    expect(timeline).toMatch(/data-testid="chat-message-scroll-area"[\s\S]*?className="[^"]*\bflex-1\b[^"]*\boverflow-y-auto\b/);
+    expect(timeline).toMatch(/data-testid="chat-message-content-column"[\s\S]*?className=\{CHAT_CONTENT_COLUMN_CLASS\}/);
+    expect(timeline).toMatch(/data-testid="chat-composer-dock"[\s\S]*?className="[^"]*\bshrink-0\b[^"]*\bbg-\[var\(--color-app-bg\)\]/);
+    expect(timeline).toMatch(/data-testid="chat-composer-content-column"[\s\S]*?className=\{CHAT_CONTENT_COLUMN_CLASS\}/);
+    expect(timeline).not.toContain('chat-content-shell');
+    expect(timeline).not.toContain('chat-message-section');
+    expect(timeline).not.toContain('chat-bottom-base');
     expect(timeline).not.toContain('chat-composer-overlay');
     expect(timeline).not.toContain('chat-composer-content-shell');
     expect(appShell).toMatch(/data-testid="workbench-content"[\s\S]*?className="[^"]*\bmin-w-\[62rem\]/);
