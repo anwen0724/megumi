@@ -212,6 +212,7 @@ describe('registerAllHandlers', () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
     const workspaceFilesService = {
       listDirectory: vi.fn(),
+      openFile: vi.fn(),
     };
 
     registerAllHandlers({ workspaceFilesService });

@@ -21,6 +21,7 @@ describe('registerWorkspaceFilesHandlers', () => {
 
     registerWorkspaceFilesHandlers({
       listDirectory: vi.fn(),
+      openFile: vi.fn(),
     });
 
     expect(ipcMain.handle).toHaveBeenCalledWith(
@@ -49,6 +50,7 @@ describe('registerWorkspaceFilesHandlers', () => {
           mtime: '2026-05-18T00:00:00.000Z',
         }],
       })),
+      openFile: vi.fn(),
     };
 
     registerWorkspaceFilesHandlers(service);
@@ -95,7 +97,7 @@ describe('registerWorkspaceFilesHandlers', () => {
       openFile: vi.fn(async () => ({
         workspaceRoot: 'C:/all/work/study/megumi',
         filePath: 'src/app.ts',
-        opened: true,
+        opened: true as const,
       })),
     };
 
@@ -140,6 +142,7 @@ describe('registerWorkspaceFilesHandlers', () => {
       listDirectory: vi.fn(async () => {
         throw new PathSandboxViolationError('C:/all/work/study/megumi', '../outside');
       }),
+      openFile: vi.fn(),
     };
 
     registerWorkspaceFilesHandlers(service);
@@ -162,6 +165,7 @@ describe('registerWorkspaceFilesHandlers', () => {
       listDirectory: vi.fn(async () => {
         throw new Error('disk unavailable');
       }),
+      openFile: vi.fn(),
     };
 
     registerWorkspaceFilesHandlers(service);

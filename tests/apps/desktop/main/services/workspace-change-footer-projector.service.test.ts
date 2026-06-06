@@ -90,7 +90,7 @@ describe('WorkspaceChangeFooterProjectorService', () => {
         listChangeSetsByRun: vi.fn(() => [
           workspaceChangeSet({
             changeSetId: 'workspace-change-set-draft',
-            status: 'draft',
+            status: 'open',
             changedFileCount: 1,
           }),
           workspaceChangeSet({
@@ -159,5 +159,8 @@ function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile>): Workspa
     restoreState: 'restorable',
     createdAt: '2026-06-06T10:00:00.000Z',
     ...overrides,
+    beforeExists: overrides.beforeExists ?? true,
+    afterExists: overrides.afterExists ?? true,
+    updatedAt: overrides.updatedAt ?? '2026-06-06T10:00:00.000Z',
   };
 }

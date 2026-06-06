@@ -73,7 +73,11 @@ import {
 } from '@megumi/shared/runtime-event-factory';
 import type { SessionRetryAttempt } from '@megumi/shared/session-active-path-contracts';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
-import type { WorkspaceChangedFile } from '@megumi/shared/workspace-change-contracts';
+import type {
+  WorkspaceChangedFile,
+  WorkspaceChangeSet,
+  WorkspaceChangeSummary,
+} from '@megumi/shared/workspace-change-contracts';
 import { RunModeService } from './run-mode.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 import {
@@ -180,6 +184,9 @@ export interface SessionRunAutomaticRetryOptions {
 
 export interface SessionRunWorkspaceChangeReadPort {
   listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
+  listChangeSetsByRun?(runId: string): WorkspaceChangeSet[];
+  getChangeSummary?(changeSetId: string): WorkspaceChangeSummary | undefined;
+  listChangedFilesByChangeSet?(changeSetId: string): WorkspaceChangedFile[];
 }
 
 interface ApprovalContinuationGroup {
@@ -2253,7 +2260,7 @@ export class SessionRunService {
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
     if (isRunTerminalRuntimeEvent(event)) {
       this.publishWorkspaceChangeFooter({
-        runId: event.runId,
+        runId: String(event.runId),
         createdAt: event.createdAt,
         chatStreamAdapter,
       });

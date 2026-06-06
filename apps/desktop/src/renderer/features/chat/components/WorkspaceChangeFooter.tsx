@@ -112,7 +112,7 @@ function fileStatusText(file: WorkspaceChangeFooterFile): string {
   if (file.restoreState === 'conflict') {
     return '冲突';
   }
-  if (file.restoreState === 'failed') {
+  if (file.restoreState === 'restore_failed') {
     return '失败';
   }
   return '无变更';

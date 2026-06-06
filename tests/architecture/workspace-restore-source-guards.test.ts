@@ -55,6 +55,10 @@ const rawContentTerms = [
   'after secret',
   'beforeContent',
   'afterContent',
+  'beforeContentRefId',
+  'afterContentRefId',
+  'beforeHash',
+  'afterHash',
 ];
 
 const runtimeAndIpcSchemaFiles = [
@@ -84,6 +88,30 @@ describe('workspace restore source guards', () => {
     const matches = forbiddenRestoreRoots
       .flatMap((root) => sourceFiles(path.join(repoRoot, root)))
       .flatMap((file) => forbiddenMatches(file, restoreBoundaryTerms));
+
+    expect(matches).toEqual([]);
+  });
+
+  it('keeps renderer provider and context-management from owning workspace change storage or restore safety decisions', () => {
+    const forbiddenTerms = [
+      'WorkspaceChangeRepository',
+      'WorkspaceRestoreService',
+      'workspace_change_sets',
+      'workspace_changed_files',
+      'workspace_snapshot_contents',
+      'workspace_restore_requests',
+      'current_hash_mismatch',
+      'restoreModifiedFile',
+      'restoreCreatedFile',
+      'restoreDeletedFile',
+      'beforeContentRefId',
+      'afterContentRefId',
+      'beforeHash',
+      'afterHash',
+    ];
+    const matches = forbiddenRestoreRoots
+      .flatMap((root) => sourceFiles(path.join(repoRoot, root)))
+      .flatMap((file) => forbiddenMatches(file, forbiddenTerms));
 
     expect(matches).toEqual([]);
   });

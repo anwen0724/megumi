@@ -12,8 +12,18 @@ const CHAT_STREAM_DATA_LAYER_FILES = [
   'apps/desktop/src/renderer/features/chat-stream/chat-stream-store.ts',
 ];
 
+const CHAT_RENDERER_UI_FILES = [
+  'apps/desktop/src/renderer/features/chat/components/ChatTimeline.tsx',
+  'apps/desktop/src/renderer/features/chat/components/WorkspaceChangeFooter.tsx',
+  'apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx',
+];
+
 function read(path: string): string {
   return readFileSync(join(ROOT, path), 'utf8');
+}
+
+function rendererSource(paths: string[]): string {
+  return paths.map((path) => read(path)).join('\n');
 }
 
 describe('renderer chat stream source guards', () => {
@@ -81,5 +91,36 @@ describe('renderer chat stream source guards', () => {
     expect(source).toContain('useChatStreamStore');
     expect(source).toContain('hydrateCommittedMessages');
     expect(source).not.toContain('timelineMessagesFromPersistedMessages');
+  });
+
+  it('keeps workspace change footer UI on V1 labels only', () => {
+    const source = rendererSource(CHAT_RENDERER_UI_FILES);
+    const forbiddenLabels = [
+      'Restore',
+      'Undo',
+      'Dismiss',
+      'Review',
+      '审查',
+      'Keep',
+      'Accept',
+    ];
+
+    for (const label of forbiddenLabels) {
+      expect(source).not.toContain(`>${label}<`);
+      expect(source).not.toContain(`'${label}'`);
+      expect(source).not.toContain(`"${label}"`);
+      expect(source).not.toContain('`' + label + '`');
+    }
+    expect(source).toContain('打开');
+    expect(source).toContain('撤销');
+  });
+
+  it('does not add a right workspace sidebar Changes view for workspace change footer V1', () => {
+    const source = read('apps/desktop/src/renderer/shell/RightWorkspacePanel.tsx');
+
+    expect(source).not.toContain('Changes');
+    expect(source).not.toContain('changed files');
+    expect(source).not.toContain('workspace changes');
+    expect(source).not.toContain('变更');
   });
 });

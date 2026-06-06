@@ -41,10 +41,24 @@ describe('workspace files preload API shape', () => {
         handledAt: '2026-05-18T00:00:00.000Z',
       },
     }));
+    const open: MegumiAPI['workspace']['files']['open'] = vi.fn(async () => ({
+      ok: true as const,
+      data: {
+        workspaceRoot: 'C:/all/work/study/megumi',
+        filePath: 'src/app.ts',
+        opened: true as const,
+      },
+      meta: {
+        requestId: 'ipc-workspace-files-open-1',
+        channel: IPC_CHANNELS.workspace.files.open,
+        handledAt: '2026-05-18T00:00:00.000Z',
+      },
+    }));
     const api: Pick<MegumiAPI, 'workspace'> = {
       workspace: {
         files: {
           list,
+          open,
         },
       },
     };
