@@ -8,6 +8,25 @@ function read(relativePath: string): string {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
+function walk(directory: string): string[] {
+  if (!fs.existsSync(directory)) {
+    return [];
+  }
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return walk(fullPath);
+    }
+    return /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry.name) ? [fullPath] : [];
+  });
+}
+
+function sourceUnder(relativeDirectory: string): string {
+  return walk(path.join(root, relativeDirectory))
+    .map((filePath) => fs.readFileSync(filePath, 'utf8'))
+    .join('\n');
+}
+
 describe('provider tool call model loop source guards', () => {
   it('keeps provider loop centered on ToolCall, ToolResult, and ToolExecution events', () => {
     const toolLoop = read('packages/core/run-runtime/tool-loop.ts');
@@ -96,5 +115,23 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('classify' + 'AutomaticModelStepRetry(');
     expect(source).not.toContain('get' + 'ActivePath(');
     expect(source).not.toContain('get' + 'ActiveLeaf(');
+  });
+
+  it('keeps provider adapters away from workspace restore persistence and safety decisions', () => {
+    const source = sourceUnder('packages/ai');
+    const forbidden = [
+      'Workspace' + 'ChangeRepository',
+      'Workspace' + 'RestoreService',
+      'workspace_' + 'changed_files',
+      'workspace_' + 'restore_requests',
+      'current_' + 'hash_mismatch',
+      'restore' + 'ModifiedFile',
+      'restore' + 'CreatedFile',
+      'restore' + 'DeletedFile',
+    ];
+
+    for (const term of forbidden) {
+      expect(source).not.toContain(term);
+    }
   });
 });

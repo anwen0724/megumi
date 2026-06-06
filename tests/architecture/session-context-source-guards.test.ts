@@ -101,10 +101,15 @@ const forbiddenRendererSourceSelectionSources = [
 
 const forbiddenWorkspaceChangePersistenceSources = [
   'Workspace' + 'ChangeRepository',
+  'Workspace' + 'RestoreService',
   'workspace_' + 'changed_files',
   'workspace_' + 'checkpoints',
   'workspace_' + 'restore_requests',
   'workspace_' + 'snapshot_contents',
+  'current_' + 'hash_mismatch',
+  'restore' + 'ModifiedFile',
+  'restore' + 'CreatedFile',
+  'restore' + 'DeletedFile',
 ];
 
 const forbiddenSessionContextInputServiceCalls = [
