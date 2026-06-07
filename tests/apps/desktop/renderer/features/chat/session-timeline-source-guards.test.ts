@@ -99,7 +99,7 @@ describe('session timeline source guards', () => {
   });
 
   it('keeps old standalone processing and tool card components out of the canonical timeline path', () => {
-    const source = readProjectFile('apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx');
+    const source = readProjectFile('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
 
     expect(source).not.toContain('<ToolActivityRow');
     expect(source).not.toContain('TOOL CALLS');

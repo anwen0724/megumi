@@ -51,7 +51,7 @@ describe('interaction baseline source guards', () => {
   it('keeps chat feature independent from workspace-panel feature', () => {
     const chatFiles = [
       'apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx',
-      'apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx',
+      'apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx',
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
       'apps/desktop/src/renderer/features/chat/index.ts',
     ];

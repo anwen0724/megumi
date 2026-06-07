@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { useProjectStore } from '../../../entities/project/store';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 import { useChatPageController } from '../hooks/use-chat-page-controller';
-import { ChatArea } from '../components/ChatArea';
+import { ChatViewport } from '../layout/ChatViewport';
 import { ComposerArea } from '../components/ComposerArea';
 import { RestoreFeedbackDialog } from '../components/RestoreFeedbackDialog';
 import { Composer } from '../components/Composer';
@@ -41,14 +41,16 @@ export function ChatPage() {
       data-testid="chat-page-root"
       className="relative min-h-0 flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
       style={{
-        '--chat-composer-height': `${composerHeight}px`,
-        '--chat-bottom-spacer-height': `${bottomSpacerHeight}px`,
+        '--chat-content-width': '48rem',
+        '--chat-composer-width': '48rem',
+        '--composer-dock-height': `${composerHeight}px`,
+        '--composer-dock-bottom-inset': `${bottomSpacerHeight}px`,
       } as CSSProperties}
     >
       {controller.hasTimelineContent ? (
         <>
           <div className="absolute inset-0 min-h-0">
-            <ChatArea
+            <ChatViewport
               hasTimelineContent
               welcome={{
                 currentProject: controller.currentProject,
@@ -67,8 +69,6 @@ export function ChatPage() {
               scrollPanel={scrollPanel}
               messageColumn={{
                 timelineMessages: controller.timelineMessages,
-                recoverableRunsByRunId: controller.recoverableRunsByRunId,
-                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
                 pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
                 bottomSpacerHeight,
                 canShowUserMessageActions: controller.canShowUserMessageActions,
@@ -83,15 +83,6 @@ export function ChatPage() {
                 },
                 onRestoreWorkspaceChangeSet: (changeSetId) => {
                   void controller.restoreWorkspaceChangeSet(changeSetId);
-                },
-                onRetryRecoverableRun: (run) => {
-                  void controller.retryRecoverableRun(run);
-                },
-                onRerunRecoverableRun: (run) => {
-                  void controller.rerunRecoverableRun(run);
-                },
-                onMarkRecoverableRunCancelled: (run) => {
-                  void controller.markRecoverableRunCancelled(run);
                 },
               }}
             />
@@ -122,7 +113,7 @@ export function ChatPage() {
       ) : (
         <div className="flex h-full min-h-0 flex-col items-center justify-center px-6">
           <div className="min-h-0 w-full flex-1">
-            <ChatArea
+            <ChatViewport
               hasTimelineContent={false}
               welcome={{
                 currentProject: controller.currentProject,
@@ -141,8 +132,6 @@ export function ChatPage() {
               scrollPanel={scrollPanel}
               messageColumn={{
                 timelineMessages: [],
-                recoverableRunsByRunId: controller.recoverableRunsByRunId,
-                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
                 pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
                 bottomSpacerHeight: 0,
                 canShowUserMessageActions: controller.canShowUserMessageActions,
@@ -150,9 +139,6 @@ export function ChatPage() {
                 onRerunMessage: () => undefined,
                 onOpenWorkspaceChangedFile: () => undefined,
                 onRestoreWorkspaceChangeSet: () => undefined,
-                onRetryRecoverableRun: () => undefined,
-                onRerunRecoverableRun: () => undefined,
-                onMarkRecoverableRunCancelled: () => undefined,
               }}
             />
           </div>

@@ -23,7 +23,7 @@ describe('timeline finalization source guards', () => {
   it('does not leave legacy chat runtime tokens in renderer source', () => {
     const rendererFiles = [
       'apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx',
-      'apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx',
+      'apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx',
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
       'apps/desktop/src/renderer/features/runtime-events/runtime-event-dispatcher.ts',
       'apps/desktop/src/renderer/features/session-history/use-session-history-hydration.ts',
@@ -46,7 +46,7 @@ describe('timeline finalization source guards', () => {
 
   it('keeps old raw runtime labels out of the timeline UI', () => {
     const source = read('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx')
-      + read('apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx')
+      + read('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx')
       + read('apps/desktop/src/renderer/features/chat/components/TimelineMessageBlocks.tsx')
       + read('apps/desktop/src/renderer/features/chat/components/ProcessDisclosureBlockView.tsx');
 

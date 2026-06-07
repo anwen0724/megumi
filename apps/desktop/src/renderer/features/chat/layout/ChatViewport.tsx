@@ -1,18 +1,23 @@
 import type { ComponentProps } from 'react';
-import { MessageScrollPanel } from './MessageScrollPanel';
+import { WelcomeChat } from '../components/WelcomeChat';
 import { MessageColumn } from './MessageColumn';
-import { WelcomeChat } from './WelcomeChat';
+import { MessageScrollPanel } from './MessageScrollPanel';
 
-interface ChatAreaProps {
+interface ChatViewportProps {
   hasTimelineContent: boolean;
   welcome: ComponentProps<typeof WelcomeChat>;
   scrollPanel: Omit<ComponentProps<typeof MessageScrollPanel>, 'children'>;
   messageColumn: ComponentProps<typeof MessageColumn>;
 }
 
-export function ChatArea({ hasTimelineContent, welcome, scrollPanel, messageColumn }: ChatAreaProps) {
+export function ChatViewport({
+  hasTimelineContent,
+  welcome,
+  scrollPanel,
+  messageColumn,
+}: ChatViewportProps) {
   return (
-    <div data-testid="chat-area" className="h-full min-h-0">
+    <div data-testid="chat-viewport" className="h-full min-h-0">
       {hasTimelineContent ? (
         <MessageScrollPanel {...scrollPanel}>
           <MessageColumn {...messageColumn} />

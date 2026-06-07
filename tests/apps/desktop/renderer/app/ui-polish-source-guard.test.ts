@@ -59,8 +59,8 @@ describe('UI polish source guard', () => {
 
   it('keeps the focus canvas free of timeline rails and assistant cards', () => {
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
-    const messageScrollPanel = readSource('apps/desktop/src/renderer/features/chat/components/MessageScrollPanel.tsx');
-    const messageColumn = readSource('apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx');
+    const messageScrollPanel = readSource('apps/desktop/src/renderer/features/chat/layout/MessageScrollPanel.tsx');
+    const messageColumn = readSource('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
     const composerArea = readSource('apps/desktop/src/renderer/features/chat/components/ComposerArea.tsx');
     const timelineMessage = readSource('apps/desktop/src/renderer/features/chat/components/TimelineMessage.tsx');
 

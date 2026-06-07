@@ -14,7 +14,7 @@ const CHAT_STREAM_DATA_LAYER_FILES = [
 
 const CHAT_RENDERER_UI_FILES = [
   'apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx',
-  'apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx',
+  'apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx',
   'apps/desktop/src/renderer/features/chat/components/WorkspaceChangeFooter.tsx',
   'apps/desktop/src/renderer/shell/RightSidebar.tsx',
 ];

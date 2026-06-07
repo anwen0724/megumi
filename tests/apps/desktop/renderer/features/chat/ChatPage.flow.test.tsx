@@ -366,29 +366,31 @@ describe('ChatPage flow', () => {
     render(<ChatPage />);
 
     const root = screen.getByTestId('chat-page-root');
+    const chatViewport = screen.getByTestId('chat-viewport');
     const messageScrollArea = screen.getByTestId('message-scroll-panel');
     const messageContentColumn = screen.getByTestId('message-column');
-    const composerArea = screen.getByTestId('composer-area');
-    const composerContentColumn = screen.getByTestId('composer-area-column');
+    const composerDock = screen.getByTestId('composer-dock');
+    const composerContentColumn = screen.getByTestId('composer-dock-column');
     const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');
     expect(root).toHaveClass('overflow-hidden');
+    expect(chatViewport).toHaveClass('h-full');
     expect(messageScrollArea).toHaveClass('min-h-0');
     expect(messageScrollArea).toHaveClass('overflow-y-auto');
     expect(messageScrollArea).not.toHaveClass('max-w-3xl');
     expect(messageScrollArea).toHaveAttribute('tabIndex', '0');
     expect(messageContentColumn).toHaveClass('mx-auto');
-    expect(messageContentColumn).toHaveClass('max-w-3xl');
+    expect(messageContentColumn).toHaveClass('max-w-[var(--chat-content-width)]');
     expect(composerContentColumn).toHaveClass('mx-auto');
-    expect(composerContentColumn).toHaveClass('max-w-3xl');
+    expect(composerContentColumn).toHaveClass('max-w-[var(--chat-composer-width)]');
     expect(contentColumn).toHaveClass('w-full');
     expect(contentColumn).not.toHaveClass('max-w-4xl');
-    expect(composerArea).toHaveClass('absolute');
-    expect(composerArea).toHaveClass('bottom-0');
-    expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).toHaveClass('max-w-3xl');
+    expect(composerDock).toHaveClass('absolute');
+    expect(composerDock).toHaveClass('bottom-0');
+    expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).not.toHaveClass('max-w-3xl');
     expect(within(messageScrollArea).getByText('Check layout')).toBeInTheDocument();
-    expect(within(composerArea).getByLabelText('Message Megumi')).toBeInTheDocument();
+    expect(within(composerDock).getByLabelText('Message Megumi')).toBeInTheDocument();
   });
 
   it('keeps the empty-session composer on the centered chat content column', () => {

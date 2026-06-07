@@ -33,15 +33,16 @@ function readProductionChatSources(): string {
 }
 
 describe('chat page layout source guard', () => {
-  it('keeps ChatPage split into ChatArea and ComposerArea', () => {
+  it('keeps ChatPage split into ChatViewport and ComposerArea', () => {
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
-    expect(chatPage).toContain('<ChatArea');
+    expect(chatPage).toContain('<ChatViewport');
     expect(chatPage).toContain('<ComposerArea');
+    expect(chatPage).not.toContain('<ChatArea');
   });
 
   it('keeps composer outside the timeline role log', () => {
-    const messageColumn = readSource('apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx');
+    const messageColumn = readSource('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
     const composerArea = readSource('apps/desktop/src/renderer/features/chat/components/ComposerArea.tsx');
 
     expect(messageColumn).toContain('role="log"');
