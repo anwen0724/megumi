@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,10 +11,14 @@ function readAppSource() {
 }
 
 describe('App clean-room UI entry', () => {
-  it('uses the new AppShell entry', () => {
+  it('uses WindowTitleBar and AppBody as direct shell roots', () => {
     const source = readAppSource();
 
-    expect(source).toContain("from '../shell/AppShell'");
+    expect(source).toContain("from '../shell/WindowTitleBar'");
+    expect(source).toContain("from '../shell/AppBody'");
+    expect(source).not.toContain("from '../shell/AppShell'");
+    expect(source).toContain('<WindowTitleBar');
+    expect(source).toContain('<AppBody');
   });
 
   it('does not import old visual shell components', () => {

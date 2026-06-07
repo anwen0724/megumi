@@ -38,9 +38,9 @@ describe('composer source guard', () => {
   });
 
   it('does not introduce a right panel Run tab from composer work', () => {
-    const rightPanel = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
+    const rightSidebar = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
-    expect(readTabLabels(rightPanel)).not.toContain('Run');
+    expect(readTabLabels(rightSidebar)).not.toContain('Run');
   });
 
   it('keeps composer toolbar controls on one line', () => {
@@ -54,20 +54,22 @@ describe('composer source guard', () => {
     expect(composer).toMatch(/aria-label="Stop current run"[\s\S]*className="[^"]*\bshrink-0\b/);
   });
 
-  it('keeps composer in ComposerArea and message scrolling in MessageScrollPanel', () => {
+  it('keeps composer in ComposerDock and message scrolling in MessageScrollPanel', () => {
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
-    const messageScrollPanel = readSource('apps/desktop/src/renderer/features/chat/components/MessageScrollPanel.tsx');
-    const composerArea = readSource('apps/desktop/src/renderer/features/chat/components/ComposerArea.tsx');
-    const messageColumn = readSource('apps/desktop/src/renderer/features/chat/components/MessageColumn.tsx');
+    const messageScrollPanel = readSource('apps/desktop/src/renderer/features/chat/layout/MessageScrollPanel.tsx');
+    const composerDock = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx');
+    const messageColumn = readSource('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
 
-    expect(chatPage).toContain('<ChatArea');
-    expect(chatPage).toContain('<ComposerArea');
+    expect(chatPage).toContain('<ChatViewport');
+    expect(chatPage).toContain('<ComposerDock');
+    expect(chatPage).not.toContain('<ChatArea');
+    expect(chatPage).not.toContain('<ComposerArea');
     expect(messageScrollPanel).toContain('data-testid="message-scroll-panel"');
     expect(messageScrollPanel).toContain('overflow-y-auto');
     expect(messageColumn).toContain('data-testid="message-column"');
     expect(messageColumn).toContain('data-testid="message-bottom-spacer"');
-    expect(composerArea).toContain('data-testid="composer-area"');
-    expect(composerArea).toContain('<Composer');
+    expect(composerDock).toContain('data-testid="composer-dock"');
+    expect(composerDock).toContain('<Composer');
     expect(chatPage).not.toContain('chat-composer-dock');
     expect(chatPage).not.toContain('chat-message-scroll-area');
   });
