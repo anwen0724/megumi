@@ -30,28 +30,34 @@ function readProductionChatSources(): string {
 }
 
 describe('13.02 chat layout contract source guard', () => {
-  it('keeps ChatPage split into ChatViewport', () => {
+  it('keeps ChatPage split into ChatViewport and ComposerDock', () => {
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
     expect(chatPage).toContain('<ChatViewport');
+    expect(chatPage).toContain('<ComposerDock');
     expect(chatPage).not.toContain('<ChatArea');
+    expect(chatPage).not.toContain('<ComposerArea');
   });
 
   it('moves chat layout owners into features/chat/layout', () => {
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/layout/ChatViewport.tsx'))).toBe(true);
+    expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx'))).toBe(true);
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/layout/MessageScrollPanel.tsx'))).toBe(true);
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx'))).toBe(true);
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/layout/BottomSpacer.tsx'))).toBe(true);
   });
 
-  it('deletes old ChatArea layout owner file', () => {
+  it('deletes old ambiguous layout owner files', () => {
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/components/ChatArea.tsx'))).toBe(false);
+    expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/features/chat/components/ComposerArea.tsx'))).toBe(false);
   });
 
-  it('keeps message scrolling in MessageScrollPanel and removes recoverable controls from MessageColumn', () => {
+  it('keeps message scrolling in MessageScrollPanel and composer input in ComposerDock', () => {
     const messageScrollPanel = readSource('apps/desktop/src/renderer/features/chat/layout/MessageScrollPanel.tsx');
     const messageColumn = readSource('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
     const bottomSpacer = readSource('apps/desktop/src/renderer/features/chat/layout/BottomSpacer.tsx');
+    const composerDock = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx');
+    const composer = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
     expect(messageScrollPanel).toContain('data-testid="message-scroll-panel"');
@@ -60,6 +66,12 @@ describe('13.02 chat layout contract source guard', () => {
     expect(messageColumn).toContain('<BottomSpacer');
     expect(messageColumn).not.toContain('RecoverableActionStack');
     expect(bottomSpacer).toContain('data-testid="message-bottom-spacer"');
+    expect(composerDock).toContain('data-testid="composer-dock"');
+    expect(composerDock).toContain('<ApprovalStack');
+    expect(composerDock).toContain('<RecoverableActionStack');
+    expect(composerDock).toContain('<BranchDraftStack');
+    expect(composerDock).toContain('<Composer');
+    expect(composer).not.toContain('composer-branch-draft-row');
     expect(chatPage).toContain('--chat-content-width');
     expect(chatPage).toContain('--chat-composer-width');
     expect(chatPage).toContain('--composer-dock-height');
@@ -71,6 +83,7 @@ describe('13.02 chat layout contract source guard', () => {
 
     expect(chatSources).not.toContain('ChatTimeline');
     expect(chatSources).not.toContain('ChatArea');
+    expect(chatSources).not.toContain('ComposerArea');
     expect(chatSources).not.toContain('chat-composer-dock');
     expect(chatSources).not.toContain('chat-message-scroll-area');
     expect(chatSources).not.toContain('chat-timeline-root');

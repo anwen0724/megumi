@@ -1,16 +1,17 @@
 import { useLayoutEffect, useRef } from 'react';
-import type { ApprovalCardResolvePayload } from '../../../entities/approval';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
-import { Composer, type ComposerStatus, type ComposerSubmitPayload, type ComposerBranchDraftView } from './Composer';
-import { ApprovalStack } from './ApprovalStack';
-import { RecoverableActionStack } from './RecoverableActionStack';
 import type { ApprovalRequest } from '@megumi/shared/tool-contracts';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
+import type { ApprovalCardResolvePayload } from '../../../entities/approval';
+import { ApprovalStack } from '../components/ApprovalStack';
+import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
+import { Composer, type ComposerStatus, type ComposerSubmitPayload } from '../components/Composer';
+import { RecoverableActionStack } from '../components/RecoverableActionStack';
 
-interface ComposerAreaProps {
+interface ComposerDockProps {
   status: ComposerStatus;
   branchDraft: ComposerBranchDraftView | null;
   pendingApprovals: ApprovalRequest[];
-  unmatchedRecoverableRuns: RecoverableRunSummary[];
+  recoverableRuns: RecoverableRunSummary[];
   pendingRecoverableRunIds: Set<string>;
   onApprovalResolve: (payload: ApprovalCardResolvePayload) => void;
   onRetry: (run: RecoverableRunSummary) => void;
@@ -21,11 +22,11 @@ interface ComposerAreaProps {
   onHeightChange?: (height: number) => void;
 }
 
-export function ComposerArea({
+export function ComposerDock({
   status,
   branchDraft,
   pendingApprovals,
-  unmatchedRecoverableRuns,
+  recoverableRuns,
   pendingRecoverableRunIds,
   onApprovalResolve,
   onRetry,
@@ -34,11 +35,11 @@ export function ComposerArea({
   onSubmit,
   onStop,
   onHeightChange,
-}: ComposerAreaProps) {
-  const areaRef = useRef<HTMLDivElement | null>(null);
+}: ComposerDockProps) {
+  const dockRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
-    const element = areaRef.current;
+    const element = dockRef.current;
     if (!element || !onHeightChange) return undefined;
 
     const publishHeight = () => {
@@ -59,22 +60,24 @@ export function ComposerArea({
 
   return (
     <div
-      ref={areaRef}
-      data-testid="composer-area"
+      ref={dockRef}
+      data-testid="composer-dock"
       className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-transparent px-6 pb-6"
     >
-      <div data-testid="composer-area-column" className="pointer-events-auto mx-auto w-full max-w-3xl">
+      <div data-testid="composer-dock-column" className="pointer-events-auto mx-auto w-full max-w-[var(--chat-composer-width)]">
         <ApprovalStack requests={pendingApprovals} onResolve={onApprovalResolve} />
         <RecoverableActionStack
-          runs={unmatchedRecoverableRuns}
+          runs={recoverableRuns}
           pendingRunIds={pendingRecoverableRunIds}
           onRetry={onRetry}
           onRerun={onRerun}
           onMarkCancelled={onMarkCancelled}
         />
+        <BranchDraftStack branchDraft={branchDraft} />
         <Composer
           status={status}
-          branchDraft={branchDraft}
+          seedTextKey={branchDraft?.key ?? null}
+          seedText={branchDraft?.seedText ?? null}
           onSubmit={onSubmit}
           onStop={onStop}
           onAttachFiles={() => undefined}

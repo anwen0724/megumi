@@ -406,7 +406,7 @@ describe('ChatPage flow', () => {
     expect(welcomeComposerLayout).toHaveClass('mx-auto');
     expect(welcomeComposerLayout).not.toHaveClass('pr-16');
     expect(welcomeComposerLayout).not.toHaveClass('xl:pr-32');
-    expect(composerForm).toHaveClass('max-w-3xl');
+    expect(composerForm).not.toHaveClass('min-w-[38rem]');
   });
 
   it('renders pending approvals in blocking controls without the separate tool-call card section', () => {
@@ -778,7 +778,7 @@ describe('ChatPage flow', () => {
     }));
   });
 
-  it('shows recoverable action fallback only for runs without a matching assistant message', async () => {
+  it('shows recoverable actions in ComposerDock instead of inside the timeline log', async () => {
     const api = installMegumiMock();
     api.recovery.listRecoverableRuns.mockResolvedValue({
       ok: true,
@@ -798,7 +798,11 @@ describe('ChatPage flow', () => {
     render(<ChatPage />);
 
     expect(await screen.findByLabelText('Recoverable actions for Unmatched failed run')).toBeInTheDocument();
-    expect(screen.getByLabelText('Recoverable actions for Visible failed run').closest('[role="article"]')).toHaveTextContent('visible answer');
+    expect(screen.getByLabelText('Recoverable actions for Visible failed run')).toBeInTheDocument();
+    const timeline = screen.getByRole('log', { name: 'Chat timeline' });
+    expect(within(timeline).queryByLabelText('Recoverable actions for Visible failed run')).not.toBeInTheDocument();
+    const composerDock = screen.getByTestId('composer-dock');
+    expect(within(composerDock).getByLabelText('Recoverable actions for Visible failed run')).toBeInTheDocument();
   });
 
   it('prevents duplicate recoverable action requests while a request is pending', async () => {

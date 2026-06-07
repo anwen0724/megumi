@@ -33,21 +33,22 @@ function readProductionChatSources(): string {
 }
 
 describe('chat page layout source guard', () => {
-  it('keeps ChatPage split into ChatViewport and ComposerArea', () => {
+  it('keeps ChatPage split into ChatViewport and ComposerDock', () => {
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
     expect(chatPage).toContain('<ChatViewport');
-    expect(chatPage).toContain('<ComposerArea');
+    expect(chatPage).toContain('<ComposerDock');
     expect(chatPage).not.toContain('<ChatArea');
+    expect(chatPage).not.toContain('<ComposerArea');
   });
 
   it('keeps composer outside the timeline role log', () => {
     const messageColumn = readSource('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
-    const composerArea = readSource('apps/desktop/src/renderer/features/chat/components/ComposerArea.tsx');
+    const composerDock = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx');
 
     expect(messageColumn).toContain('role="log"');
     expect(messageColumn).not.toContain('<Composer');
-    expect(composerArea).toContain('<Composer');
+    expect(composerDock).toContain('<Composer');
   });
 
   it('removes the old ChatTimeline page component and dock layout from production chat sources', () => {

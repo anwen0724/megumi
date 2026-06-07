@@ -23,17 +23,11 @@ export interface ComposerSubmitPayload {
   model: ComposerModel;
 }
 
-export interface ComposerBranchDraftView {
-  key: string;
-  label: string;
-  seedText: string;
-  onCancel: () => void;
-}
-
 interface ComposerProps {
   status?: ComposerStatus;
   initialValue?: string;
-  branchDraft?: ComposerBranchDraftView | null;
+  seedTextKey?: string | null;
+  seedText?: string | null;
   onSubmit: (payload: ComposerSubmitPayload) => void;
   onStop?: () => void;
   onChooseContext?: () => void;
@@ -46,7 +40,8 @@ const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 export function Composer({
   status = 'idle',
   initialValue = '',
-  branchDraft = null,
+  seedTextKey = null,
+  seedText = null,
   onSubmit,
   onStop,
   onChooseContext,
@@ -67,10 +62,10 @@ export function Composer({
   const placeholder = 'Ask Megumi anything...';
 
   useEffect(() => {
-    if (branchDraft) {
-      setValue(branchDraft.seedText);
+    if (seedTextKey && seedText !== null && seedText !== undefined) {
+      setValue(seedText);
     }
-  }, [branchDraft?.key]);
+  }, [seedTextKey, seedText]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -137,27 +132,9 @@ export function Composer({
     <form
       aria-label="Message composer"
       onSubmit={handleSubmit}
-      className="pointer-events-auto mx-auto w-full min-w-[38rem] max-w-3xl pb-6 transition-[width,transform,opacity] duration-200 ease-out"
+      className="pointer-events-auto mx-auto w-full pb-6 transition-[width,transform,opacity] duration-200 ease-out"
     >
       <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
-        {branchDraft ? (
-          <div
-            data-testid="composer-branch-draft-row"
-            className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)]"
-          >
-            <span className="truncate">{branchDraft.label}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={branchDraft.onCancel}
-              aria-label="Cancel branch"
-              className="shrink-0"
-            >
-              Cancel branch
-            </Button>
-          </div>
-        ) : null}
         <div data-testid="composer-input-panel" className="border-b border-[var(--color-border)] px-4 py-3">
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi
@@ -191,7 +168,6 @@ export function Composer({
               <AtSign size={15} aria-hidden="true" />
               Context
             </Button>
-
           </div>
 
           <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">

@@ -153,11 +153,13 @@ describe('Composer', () => {
     }
   });
 
-  it('uses a stable floating composer shell for focus canvas resizing', () => {
+  it('uses a stable floating composer shell without page-level width ownership', () => {
     render(<Composer onSubmit={() => undefined} />);
 
     const form = screen.getByRole('form', { name: 'Message composer' });
-    expect(form).toHaveClass('max-w-3xl');
+    expect(form).toHaveClass('w-full');
+    expect(form).not.toHaveClass('min-w-[38rem]');
+    expect(form).not.toHaveClass('max-w-3xl');
     expect(form).not.toHaveClass('px-6');
     expect(form).toHaveClass('transition-[width,transform,opacity]');
     expect(screen.getByTestId('composer-input-panel')).toHaveClass('px-4');
@@ -165,23 +167,18 @@ describe('Composer', () => {
     expect(screen.getByTestId('composer-toolbar')).toHaveClass('min-h-12');
   });
 
-  it('renders branch draft row, resets seed text by draft key, and cancels from the row', async () => {
-    const onCancelBranchDraft = vi.fn();
+  it('resets seed text when seedTextKey changes without rendering branch chrome', async () => {
     const onSubmit = vi.fn();
     const { rerender } = render(
       <Composer
         onSubmit={onSubmit}
-        branchDraft={{
-          key: 'branch-marker-1',
-          label: 'Branch from 07:28',
-          seedText: 'original prompt',
-          onCancel: onCancelBranchDraft,
-        }}
+        seedTextKey="branch-marker-1"
+        seedText="original prompt"
       />,
     );
 
-    expect(screen.getByText('Branch from 07:28')).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('original prompt');
+    expect(screen.queryByRole('button', { name: 'Cancel branch' })).not.toBeInTheDocument();
 
     await userEvent.clear(screen.getByLabelText('Message Megumi'));
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'edited prompt');
@@ -189,18 +186,12 @@ describe('Composer', () => {
     rerender(
       <Composer
         onSubmit={onSubmit}
-        branchDraft={{
-          key: 'branch-marker-2',
-          label: 'Branch from 07:31',
-          seedText: 'second prompt',
-          onCancel: onCancelBranchDraft,
-        }}
+        seedTextKey="branch-marker-2"
+        seedText="second prompt"
       />,
     );
 
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('second prompt');
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel branch' }));
-    expect(onCancelBranchDraft).toHaveBeenCalledTimes(1);
   });
 
   it('auto grows the textarea for multiline drafts while preserving a maximum height', async () => {

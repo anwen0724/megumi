@@ -3,7 +3,7 @@ import { useProjectStore } from '../../../entities/project/store';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 import { useChatPageController } from '../hooks/use-chat-page-controller';
 import { ChatViewport } from '../layout/ChatViewport';
-import { ComposerArea } from '../components/ComposerArea';
+import { ComposerDock } from '../layout/ComposerDock';
 import { RestoreFeedbackDialog } from '../components/RestoreFeedbackDialog';
 import { Composer } from '../components/Composer';
 
@@ -87,11 +87,11 @@ export function ChatPage() {
               }}
             />
           </div>
-          <ComposerArea
+          <ComposerDock
             status={controller.composerStatus}
             branchDraft={branchDraft}
             pendingApprovals={controller.pendingApprovals}
-            unmatchedRecoverableRuns={controller.unmatchedRecoverableRuns}
+            recoverableRuns={controller.visibleRecoverableRuns}
             pendingRecoverableRunIds={controller.pendingRecoverableRunIds}
             onApprovalResolve={(payload) => {
               void controller.resolveApproval(payload);
@@ -145,7 +145,8 @@ export function ChatPage() {
           <div data-testid="welcome-composer-layout" className="mx-auto mt-10 w-full max-w-3xl">
             <Composer
               status={controller.composerStatus}
-              branchDraft={branchDraft}
+              seedTextKey={branchDraft?.key ?? null}
+              seedText={branchDraft?.seedText ?? null}
               onSubmit={controller.handleSubmit}
               onStop={controller.handleStop}
               onAttachFiles={() => undefined}
