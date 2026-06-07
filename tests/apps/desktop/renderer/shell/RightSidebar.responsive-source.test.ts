@@ -24,7 +24,7 @@ describe('RightSidebar responsive ownership', () => {
     const source = readRightPanelSource();
 
     expect(source).toContain("'flex shrink-0 overflow-hidden");
-    expect(source).toContain("? 'w-80 translate-x-0 flex-col opacity-100'");
+    expect(source).toContain("? 'w-[var(--right-sidebar-width)] translate-x-0 flex-col opacity-100'");
     expect(source).toContain(": 'w-0 translate-x-6 flex-col opacity-0 pointer-events-none'");
     expect(source).toContain('SIDEBAR_TRANSITION_MS');
     expect(source).toContain('onTransitionEnd');
