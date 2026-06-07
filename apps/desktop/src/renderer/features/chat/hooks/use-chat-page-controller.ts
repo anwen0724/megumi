@@ -210,16 +210,18 @@ export function useChatPageController() {
   ), [visibleRunId, approvalRequestsById]);
 
   const composerStatus: ComposerStatus = agentStatus;
+  const activeEmptyNewSession =
+    activeSession?.title === 'New session' &&
+    activeSession.projectId === currentProjectId &&
+    timelineMessages.length === 0;
+  const canShowNewSessionWelcome = !activeSessionId || activeEmptyNewSession;
   const hasTimelineContent =
     timelineMessages.length > 0 ||
     pendingApprovals.length > 0 ||
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
-    agentStatus === 'error';
-  const activeEmptyNewSession =
-    activeSession?.title === 'New session' &&
-    activeSession.projectId === currentProjectId &&
-    timelineMessages.length === 0;
+    agentStatus === 'error' ||
+    !canShowNewSessionWelcome;
   const canChangeNewSessionProject =
     Boolean(currentProject) &&
     agentStatus === 'idle' &&

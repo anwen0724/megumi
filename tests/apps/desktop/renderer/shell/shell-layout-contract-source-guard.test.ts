@@ -52,6 +52,7 @@ describe('13.02 shell layout contract source guard', () => {
     const pageHost = readSource('apps/desktop/src/renderer/shell/PageHost.tsx');
 
     expect(pageHost).toContain('data-testid="page-host"');
+    expect(pageHost).toContain('className="relative flex min-h-0 flex-1 overflow-hidden"');
     expect(pageHost).toContain('<ChatPage');
     expect(pageHost).toContain('<SettingsPage');
     expect(pageHost).not.toMatch(/RightSidebar|WindowTitleBar|LeftSidebar/);

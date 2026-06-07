@@ -39,7 +39,7 @@ export function ChatPage() {
   return (
     <div
       data-testid="chat-page-root"
-      className="relative min-h-0 flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
+      className="relative h-full min-h-0 w-full flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
       style={{
         '--chat-content-width': '48rem',
         '--chat-composer-width': '48rem',
@@ -111,8 +111,8 @@ export function ChatPage() {
           />
         </>
       ) : (
-        <div className="flex h-full min-h-0 flex-col items-center justify-center px-6">
-          <div className="min-h-0 w-full flex-1">
+        <div data-testid="welcome-chat-layout" className="flex h-full min-h-0 items-center justify-center px-6">
+          <div className="w-full max-w-3xl">
             <ChatViewport
               hasTimelineContent={false}
               welcome={{
@@ -141,17 +141,17 @@ export function ChatPage() {
                 onRestoreWorkspaceChangeSet: () => undefined,
               }}
             />
-          </div>
-          <div data-testid="welcome-composer-layout" className="mx-auto mt-10 w-full max-w-3xl">
-            <Composer
-              status={controller.composerStatus}
-              seedTextKey={branchDraft?.key ?? null}
-              seedText={branchDraft?.seedText ?? null}
-              onSubmit={controller.handleSubmit}
-              onStop={controller.handleStop}
-              onAttachFiles={() => undefined}
-              onChooseContext={() => undefined}
-            />
+            <div data-testid="welcome-composer-layout" className="mt-10 w-full">
+              <Composer
+                status={controller.composerStatus}
+                seedTextKey={branchDraft?.key ?? null}
+                seedText={branchDraft?.seedText ?? null}
+                onSubmit={controller.handleSubmit}
+                onStop={controller.handleStop}
+                onAttachFiles={() => undefined}
+                onChooseContext={() => undefined}
+              />
+            </div>
           </div>
         </div>
       )}

@@ -29,8 +29,8 @@ export function WelcomeChat({
   onSwitchProject,
 }: WelcomeChatProps) {
   return (
-    <div data-testid="welcome-chat" className="flex h-full items-center justify-center px-6">
-      <div className="w-full max-w-3xl text-center">
+    <div data-testid="welcome-chat" className="text-center">
+      <div className="w-full text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] text-[var(--color-accent)]">
           <FolderOpen className="h-7 w-7" aria-hidden="true" />
         </div>

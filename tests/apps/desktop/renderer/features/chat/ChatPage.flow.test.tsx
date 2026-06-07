@@ -408,15 +408,46 @@ describe('ChatPage flow', () => {
 
     render(<ChatPage />);
 
+    const welcomeLayout = screen.getByTestId('welcome-chat-layout');
+    const welcomeCopy = screen.getByTestId('welcome-chat');
     const welcomeComposerLayout = screen.getByTestId('welcome-composer-layout');
     const composerForm = screen.getByRole('form', { name: 'Message composer' });
 
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
-    expect(welcomeComposerLayout).toHaveClass('max-w-3xl');
-    expect(welcomeComposerLayout).toHaveClass('mx-auto');
+    expect(welcomeLayout).toHaveClass('items-center');
+    expect(welcomeLayout).toContainElement(welcomeCopy);
+    expect(welcomeLayout).toContainElement(welcomeComposerLayout);
+    expect(welcomeCopy).not.toHaveClass('h-full');
+    expect(welcomeComposerLayout).toHaveClass('w-full');
     expect(welcomeComposerLayout).not.toHaveClass('pr-16');
     expect(welcomeComposerLayout).not.toHaveClass('xl:pr-32');
     expect(composerForm).not.toHaveClass('min-w-[38rem]');
+  });
+
+  it('keeps an existing empty history session in timeline mode instead of showing the new-session welcome', () => {
+    selectMegumiProject();
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-history-empty',
+        projectId: 'project-1',
+        title: 'hello',
+        agentType: 'free',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        updatedAt: '2026-05-10T12:00:00.000Z',
+      }],
+      activeSessionId: 'session-history-empty',
+      activeAgentType: 'free',
+    });
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-history-empty', []);
+
+    render(<ChatPage />);
+
+    expect(screen.queryByText('Welcome to Megumi')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('New session project: Megumi')).not.toBeInTheDocument();
+    expect(screen.getByRole('log', { name: 'Chat timeline' })).toBeInTheDocument();
+    expect(screen.getByTestId('composer-dock')).toContainElement(
+      screen.getByRole('form', { name: 'Message composer' }),
+    );
   });
 
   it('renders pending approvals in blocking controls without the separate tool-call card section', () => {

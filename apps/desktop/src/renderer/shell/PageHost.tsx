@@ -8,7 +8,7 @@ interface PageHostProps {
 
 export function PageHost({ settingsOpen, onCloseSettings }: PageHostProps) {
   return (
-    <div data-testid="page-host" className="relative min-h-0 flex-1 overflow-hidden">
+    <div data-testid="page-host" className="relative flex min-h-0 flex-1 overflow-hidden">
       {settingsOpen ? (
         <SettingsPage onDone={onCloseSettings} />
       ) : (

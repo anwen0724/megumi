@@ -219,7 +219,9 @@ describe('App shell layout contract', () => {
     expect(screen.getByRole('button', { name: 'Megumi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
-    expect(within(screen.getByTestId('chat-page-root')).getByText('C:/all/work/study/megumi')).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-page-root')).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-page-root')).getByRole('log', { name: 'Chat timeline' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-page-root')).queryByLabelText('New session project: Megumi')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
