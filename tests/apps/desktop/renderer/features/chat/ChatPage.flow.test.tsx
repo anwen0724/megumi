@@ -370,32 +370,41 @@ describe('ChatPage flow', () => {
     const messageScrollArea = screen.getByTestId('message-scroll-panel');
     const messageContentColumn = screen.getByTestId('message-column');
     const composerDock = screen.getByTestId('composer-dock');
-    const composerContentColumn = screen.getByTestId('composer-dock-column');
+    const composerContentColumn = screen.getByTestId('composer-dock-content');
     const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');
     expect(root).toHaveClass('overflow-hidden');
     expect(chatViewport).toHaveClass('h-full');
+    expect(messageScrollArea).toHaveClass('absolute');
+    expect(messageScrollArea).toHaveClass('bottom-[var(--composer-dock-cut-inset)]');
     expect(messageScrollArea).toHaveClass('min-h-0');
     expect(messageScrollArea).toHaveClass('overflow-y-auto');
+    expect(messageScrollArea).not.toHaveClass('h-full');
     expect(messageScrollArea).not.toHaveClass('max-w-3xl');
     expect(messageScrollArea).toHaveAttribute('tabIndex', '0');
     expect(messageContentColumn).toHaveClass('mx-auto');
-    expect(messageContentColumn).toHaveClass('max-w-[var(--chat-content-width)]');
+    expect(messageContentColumn).toHaveClass('max-w-[var(--chat-column-width)]');
     expect(composerContentColumn).toHaveClass('mx-auto');
-    expect(composerContentColumn).toHaveClass('max-w-[var(--chat-composer-width)]');
+    expect(composerContentColumn).toHaveClass('max-w-[var(--chat-column-width)]');
     expect(contentColumn).toHaveClass('w-full');
     expect(contentColumn).not.toHaveClass('max-w-4xl');
     expect(composerDock).toHaveClass('absolute');
     expect(composerDock).toHaveClass('bottom-0');
+    expect(composerDock).toHaveClass('bg-[var(--color-app-bg)]');
+    expect(composerDock).toHaveClass('pb-2');
+    expect(composerDock).not.toHaveClass('bg-transparent');
+    expect(composerDock).not.toHaveClass('pb-6');
     expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).not.toHaveClass('max-w-3xl');
     expect(within(messageScrollArea).getByText('Check layout')).toBeInTheDocument();
     expect(within(composerDock).getByLabelText('Message Megumi')).toBeInTheDocument();
 
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-height:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-bottom-inset:');
-    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-content-width:');
-    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-composer-width:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-cut-inset:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-column-width:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--chat-content-width:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--chat-composer-width:');
     expect(screen.getByTestId('message-bottom-spacer')).toBeInTheDocument();
     expect(screen.getByTestId('message-scroll-panel')).toHaveAttribute('tabIndex', '0');
     expect(screen.getByRole('log', { name: 'Chat timeline' })).not.toContainElement(

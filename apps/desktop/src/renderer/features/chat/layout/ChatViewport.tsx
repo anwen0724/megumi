@@ -17,7 +17,7 @@ export function ChatViewport({
   messageColumn,
 }: ChatViewportProps) {
   return (
-    <div data-testid="chat-viewport" className="h-full min-h-0">
+    <div data-testid="chat-viewport" className="relative h-full min-h-0">
       {hasTimelineContent ? (
         <MessageScrollPanel {...scrollPanel}>
           <MessageColumn {...messageColumn} />

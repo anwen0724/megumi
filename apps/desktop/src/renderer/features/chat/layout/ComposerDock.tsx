@@ -62,9 +62,9 @@ export function ComposerDock({
     <div
       ref={dockRef}
       data-testid="composer-dock"
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-transparent px-6 pb-6"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-[var(--color-app-bg)] px-6 pb-2"
     >
-      <div data-testid="composer-dock-column" className="pointer-events-auto mx-auto w-full max-w-[var(--chat-composer-width)]">
+      <div data-testid="composer-dock-content" className="pointer-events-auto mx-auto w-full max-w-[var(--chat-column-width)]">
         <ApprovalStack requests={pendingApprovals} onResolve={onApprovalResolve} />
         <RecoverableActionStack
           runs={recoverableRuns}

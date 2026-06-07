@@ -29,10 +29,38 @@ describe('ComposerDock', () => {
     );
 
     expect(screen.getByTestId('composer-dock')).toBeInTheDocument();
-    expect(screen.getByTestId('composer-dock-column')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-dock-content')).toBeInTheDocument();
     expect(screen.getByTestId('branch-draft-stack')).toHaveTextContent('Branch from 07:28');
     expect(screen.getByRole('form', { name: 'Message composer' })).toBeInTheDocument();
     expect(screen.queryByRole('log', { name: 'Chat timeline' })).not.toBeInTheDocument();
+  });
+
+  it('owns the bottom dock surface and aligns its content to the chat column width', () => {
+    render(
+      <ComposerDock
+        status="idle"
+        branchDraft={null}
+        pendingApprovals={[]}
+        recoverableRuns={[]}
+        pendingRecoverableRunIds={emptySet}
+        onApprovalResolve={vi.fn()}
+        onRetry={vi.fn()}
+        onRerun={vi.fn()}
+        onMarkCancelled={vi.fn()}
+        onSubmit={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    const dock = screen.getByTestId('composer-dock');
+    const content = screen.getByTestId('composer-dock-content');
+
+    expect(dock).toHaveClass('bg-[var(--color-app-bg)]');
+    expect(dock).toHaveClass('pb-2');
+    expect(dock).not.toHaveClass('bg-transparent');
+    expect(dock).not.toHaveClass('pt-');
+    expect(dock).not.toHaveClass('pb-6');
+    expect(content).toHaveClass('max-w-[var(--chat-column-width)]');
   });
 
   it('publishes measured dock height changes', () => {
