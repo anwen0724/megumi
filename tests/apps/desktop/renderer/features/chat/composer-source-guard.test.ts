@@ -72,9 +72,9 @@ describe('composer source guard', () => {
     expect(messageColumn).toContain('<BottomSpacer');
     expect(composerDock).toContain('data-testid="composer-dock"');
     expect(composerDock).toContain('data-testid="composer-dock-content"');
-    expect(composerDock).toContain('bg-[var(--color-app-bg)]');
+    expect(composerDock).toContain('bg-transparent');
+    expect(composerDock).toContain('pb-3');
     expect(composerDock).toContain('max-w-[var(--chat-column-width)]');
-    expect(composerDock).not.toContain('bg-transparent');
     expect(composerDock).toContain('<Composer');
     expect(chatPage).not.toContain('chat-composer-dock');
     expect(chatPage).not.toContain('chat-message-scroll-area');

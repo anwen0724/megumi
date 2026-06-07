@@ -13,11 +13,10 @@ export function ChatPage() {
   const controller = useChatPageController();
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
-  const composerDockCutInset = effectiveComposerDockHeight;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
   const timelineScroll = useTimelineAutoScroll({
     sessionKey: controller.activeChatStreamSessionKey,
-    updateKey: `${controller.timelineUpdateKey}:${composerDockCutInset}`,
+    updateKey: `${controller.timelineUpdateKey}:${bottomSpacerHeight}`,
   });
 
   const scrollPanel = {
@@ -44,7 +43,6 @@ export function ChatPage() {
       style={{
         '--chat-column-width': '48rem',
         '--composer-dock-height': `${effectiveComposerDockHeight}px`,
-        '--composer-dock-cut-inset': `${composerDockCutInset}px`,
         '--composer-dock-bottom-inset': `${bottomSpacerHeight}px`,
       } as CSSProperties}
     >

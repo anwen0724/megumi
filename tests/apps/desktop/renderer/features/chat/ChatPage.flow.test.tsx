@@ -377,7 +377,7 @@ describe('ChatPage flow', () => {
     expect(root).toHaveClass('overflow-hidden');
     expect(chatViewport).toHaveClass('h-full');
     expect(messageScrollArea).toHaveClass('absolute');
-    expect(messageScrollArea).toHaveClass('bottom-[var(--composer-dock-cut-inset)]');
+    expect(messageScrollArea).toHaveClass('bottom-4');
     expect(messageScrollArea).toHaveClass('min-h-0');
     expect(messageScrollArea).toHaveClass('overflow-y-auto');
     expect(messageScrollArea).not.toHaveClass('h-full');
@@ -391,9 +391,8 @@ describe('ChatPage flow', () => {
     expect(contentColumn).not.toHaveClass('max-w-4xl');
     expect(composerDock).toHaveClass('absolute');
     expect(composerDock).toHaveClass('bottom-0');
-    expect(composerDock).toHaveClass('bg-[var(--color-app-bg)]');
-    expect(composerDock).toHaveClass('pb-2');
-    expect(composerDock).not.toHaveClass('bg-transparent');
+    expect(composerDock).toHaveClass('bg-transparent');
+    expect(composerDock).toHaveClass('pb-3');
     expect(composerDock).not.toHaveClass('pb-6');
     expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).not.toHaveClass('max-w-3xl');
     expect(within(messageScrollArea).getByText('Check layout')).toBeInTheDocument();
@@ -401,7 +400,7 @@ describe('ChatPage flow', () => {
 
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-height:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-bottom-inset:');
-    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-cut-inset:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--composer-dock-cut-inset:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-column-width:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--chat-content-width:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--chat-composer-width:');

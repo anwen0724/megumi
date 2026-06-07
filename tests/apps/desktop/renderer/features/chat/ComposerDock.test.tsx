@@ -35,7 +35,7 @@ describe('ComposerDock', () => {
     expect(screen.queryByRole('log', { name: 'Chat timeline' })).not.toBeInTheDocument();
   });
 
-  it('owns the bottom dock surface and aligns its content to the chat column width', () => {
+  it('keeps the dock transparent while aligning its content to the chat column width', () => {
     render(
       <ComposerDock
         status="idle"
@@ -55,9 +55,8 @@ describe('ComposerDock', () => {
     const dock = screen.getByTestId('composer-dock');
     const content = screen.getByTestId('composer-dock-content');
 
-    expect(dock).toHaveClass('bg-[var(--color-app-bg)]');
-    expect(dock).toHaveClass('pb-2');
-    expect(dock).not.toHaveClass('bg-transparent');
+    expect(dock).toHaveClass('bg-transparent');
+    expect(dock).toHaveClass('pb-3');
     expect(dock).not.toHaveClass('pt-');
     expect(dock).not.toHaveClass('pb-6');
     expect(content).toHaveClass('max-w-[var(--chat-column-width)]');
