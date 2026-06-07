@@ -50,8 +50,10 @@ describe('composer source guard', () => {
     expect(composer).not.toMatch(/data-testid="composer-toolbar" className="[^"]*\bflex-wrap\b/);
     expect(composer).not.toMatch(/data-testid="composer-toolbar"[\s\S]*?\bflex-wrap\b[\s\S]*?aria-label="Send message"/);
     expect(composer).toMatch(/data-testid="composer-actions"[\s\S]*className="[^"]*\bshrink-0\b/);
-    expect(composer).toMatch(/aria-label="Send message"[\s\S]*className="[^"]*\bshrink-0\b/);
-    expect(composer).toMatch(/aria-label="Stop current run"[\s\S]*className="[^"]*\bshrink-0\b/);
+    expect(composer).toMatch(/label="Send message"[\s\S]*className="[^"]*\bshrink-0\b/);
+    expect(composer).toMatch(/label="Stop current run"[\s\S]*className="[^"]*\bshrink-0\b/);
+    expect(composer).not.toMatch(/<SendHorizontal[^>]*\/>\s*Send/);
+    expect(composer).not.toMatch(/<Square[^>]*\/>\s*Stop/);
   });
 
   it('keeps composer in ComposerDock and message scrolling in MessageScrollPanel', () => {

@@ -211,7 +211,7 @@ describe('App shell layout contract', () => {
     expect(appBody).toHaveClass('flex');
     expect(appBody).toHaveClass('min-h-0');
     expect(appBody).toHaveClass('flex-1');
-    expect(mainContent).toHaveClass('min-w-[42rem]');
+    expect(mainContent).toHaveClass('min-w-[var(--main-content-width)]');
     expect(mainContent).toHaveClass('overflow-hidden');
     expect(within(titlebar).getByText('Planning the UI')).toBeInTheDocument();
     expect(within(titlebar).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();

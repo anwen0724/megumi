@@ -17,7 +17,7 @@ export default function App() {
       <div
         className="flex h-screen min-h-0 flex-col bg-[var(--color-app-bg)] text-[var(--color-text)]"
         style={{
-          '--main-content-width': 'minmax(42rem, 1fr)',
+          '--main-content-width': '42rem',
           '--right-sidebar-width': '20rem',
         } as CSSProperties}
       >

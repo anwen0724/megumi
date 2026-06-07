@@ -42,6 +42,8 @@ describe('13.02 shell layout contract source guard', () => {
     expect(mainContent).toContain('data-testid="main-content"');
     expect(mainContent).toContain('<PageHost');
     expect(mainContent).toContain('<MainOverlays');
+    expect(mainContent).toContain('min-w-[var(--main-content-width)]');
+    expect(mainContent).not.toContain('min-w-[42rem]');
     expect(mainContent).not.toContain('<RightSidebar');
     expect(mainContent).not.toContain('<LeftSidebar');
   });
@@ -58,6 +60,10 @@ describe('13.02 shell layout contract source guard', () => {
   it('keeps shell layout away from renderer-forbidden internals', () => {
     const shellFiles = [
       'apps/desktop/src/renderer/app/App.tsx',
+      'apps/desktop/src/renderer/shell/AppBody.tsx',
+      'apps/desktop/src/renderer/shell/MainContent.tsx',
+      'apps/desktop/src/renderer/shell/PageHost.tsx',
+      'apps/desktop/src/renderer/shell/MainOverlays.tsx',
       'apps/desktop/src/renderer/shell/WindowTitleBar.tsx',
       'apps/desktop/src/renderer/shell/RightSidebar.tsx',
       'apps/desktop/src/renderer/shell/LeftSidebar.tsx',

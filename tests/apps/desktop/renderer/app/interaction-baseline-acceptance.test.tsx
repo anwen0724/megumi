@@ -420,7 +420,7 @@ function resetStores() {
   });
 }
 
-function renderAppShell() {
+function renderApp() {
   return render(<App />);
 }
 
@@ -486,7 +486,7 @@ describe('interaction baseline acceptance', () => {
 
   it('supports the complete runtime chat flow from shell chrome to right panel state', async () => {
     const session = installMegumiMock();
-    renderAppShell();
+    renderApp();
 
     expect(screen.getByTestId('window-titlebar')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Minimize window' })).toBeInTheDocument();
@@ -562,7 +562,7 @@ describe('interaction baseline acceptance', () => {
 
   it('keeps right sidebar close and workspace switching from clearing chat state', async () => {
     const session = installMegumiMock();
-    renderAppShell();
+    renderApp();
 
     const textarea = screen.getByLabelText('Message Megumi');
     const sendButton = screen.getByRole('button', { name: 'Send message' });
@@ -593,7 +593,7 @@ describe('interaction baseline acceptance', () => {
 
   it('surfaces runtime failure as a timeline message without retrying on model switch', async () => {
     const session = installMegumiMock();
-    renderAppShell();
+    renderApp();
 
     const textarea = screen.getByLabelText('Message Megumi');
     const sendButton = screen.getByRole('button', { name: 'Send message' });

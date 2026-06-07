@@ -137,6 +137,7 @@ describe('Composer', () => {
     expect(rightControls.children[1]).toContainElement(screen.getByLabelText('Model'));
     expect(rightControls.children[2]).toBe(screen.getByRole('button', { name: 'Send message' }));
     expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('shrink-0');
+    expect(screen.getByRole('button', { name: 'Send message' })).not.toHaveTextContent('Send');
   });
 
   it('themes native select dropdown options for dark and light themes', () => {
@@ -267,6 +268,7 @@ describe('Composer', () => {
     expect(rightControls).toHaveTextContent('DeepSeek V4 Pro');
     expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
     expect(screen.getByRole('button', { name: 'Stop current run' })).toHaveClass('shrink-0');
+    expect(screen.getByRole('button', { name: 'Stop current run' })).not.toHaveTextContent('Stop');
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onStop).toHaveBeenCalledTimes(1);
   });

@@ -222,30 +222,28 @@ export function Composer({
             </div>
 
             {showStop ? (
-              <Button
+              <IconButton
                 type="button"
+                label="Stop current run"
                 variant="primary"
                 size="sm"
                 onClick={onStop}
                 disabled={!canStop}
-                aria-label="Stop current run"
                 className="shrink-0"
               >
                 <Square size={13} aria-hidden="true" />
-                Stop
-              </Button>
+              </IconButton>
             ) : (
-              <Button
+              <IconButton
                 type="submit"
+                label="Send message"
                 variant="primary"
                 size="sm"
-                aria-label="Send message"
                 className="shrink-0"
                 disabled={!canSend}
               >
                 <SendHorizontal size={15} aria-hidden="true" />
-                Send
-              </Button>
+              </IconButton>
             )}
           </div>
         </div>
