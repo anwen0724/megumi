@@ -225,6 +225,11 @@ describe('App shell layout contract', () => {
     expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
+
+    expect(screen.getByTestId('page-host')).toBeInTheDocument();
+    expect(screen.getByTestId('main-overlays')).toBeInTheDocument();
+    expect(screen.getByTestId('main-content')).toContainElement(screen.getByTestId('page-host'));
+    expect(screen.getByTestId('main-content')).toContainElement(screen.getByTestId('main-overlays'));
   });
 
   it('hydrates historical sessions without selecting one until the user restores it', async () => {
@@ -520,6 +525,8 @@ describe('App shell layout contract', () => {
     expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('chat-page-root')).not.toBeInTheDocument();
+    expect(screen.getByTestId('page-host')).toContainElement(screen.getByTestId('settings-page'));
+    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
   });
 
   it('opens settings as the main area page from the collapsed sidebar rail', async () => {
@@ -627,6 +634,9 @@ describe('App shell layout contract', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
 
     expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('app-body')).toContainElement(screen.getByTestId('main-content'));
+    expect(screen.getByTestId('app-body')).toContainElement(screen.getByTestId('right-sidebar'));
+    expect(screen.getByTestId('chat-page-root')).not.toContainElement(screen.getByTestId('right-sidebar'));
     expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
     expect(screen.queryByText('Tools')).not.toBeInTheDocument();

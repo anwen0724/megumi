@@ -391,6 +391,16 @@ describe('ChatPage flow', () => {
     expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).not.toHaveClass('max-w-3xl');
     expect(within(messageScrollArea).getByText('Check layout')).toBeInTheDocument();
     expect(within(composerDock).getByLabelText('Message Megumi')).toBeInTheDocument();
+
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-height:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-bottom-inset:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-content-width:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-composer-width:');
+    expect(screen.getByTestId('message-bottom-spacer')).toBeInTheDocument();
+    expect(screen.getByTestId('message-scroll-panel')).toHaveAttribute('tabIndex', '0');
+    expect(screen.getByRole('log', { name: 'Chat timeline' })).not.toContainElement(
+      screen.getByRole('form', { name: 'Message composer' }),
+    );
   });
 
   it('keeps the empty-session composer on the centered chat content column', () => {
