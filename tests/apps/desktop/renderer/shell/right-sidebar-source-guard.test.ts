@@ -11,22 +11,23 @@ function readSource(path: string): string {
 
 describe('right sidebar source guard', () => {
   it('uses RightSidebar as the production shell component name', () => {
-    const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
+    const appBody = readSource('apps/desktop/src/renderer/shell/AppBody.tsx');
     const rightSidebar = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
-    expect(appShell).toContain("from './RightSidebar'");
-    expect(appShell).not.toContain("from './RightWorkspacePanel'");
+    expect(appBody).toContain("from './RightSidebar'");
+    expect(appBody).not.toContain("from './RightWorkspacePanel'");
     expect(rightSidebar).toContain('export function RightSidebar');
     expect(rightSidebar).not.toContain('export function RightWorkspacePanel');
   });
 
   it('keeps the right sidebar as an occupied shell sibling, not a ChatPage child', () => {
-    const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
+    const appBody = readSource('apps/desktop/src/renderer/shell/AppBody.tsx');
+    const mainContent = readSource('apps/desktop/src/renderer/shell/MainContent.tsx');
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
-    expect(appShell).toContain('data-testid="app-body"');
-    expect(appShell).toContain('data-testid="main-content"');
-    expect(appShell).toContain('<RightSidebar');
+    expect(appBody).toContain('data-testid="app-body"');
+    expect(mainContent).toContain('data-testid="main-content"');
+    expect(appBody).toContain('<RightSidebar');
     expect(chatPage).not.toContain('RightSidebar');
     expect(chatPage).not.toContain('RightWorkspacePanel');
   });

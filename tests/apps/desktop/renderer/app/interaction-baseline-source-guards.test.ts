@@ -11,19 +11,19 @@ function readSource(path: string): string {
 
 describe('interaction baseline source guards', () => {
   it('keeps the custom shell entry points wired together', () => {
-    const appShell = readSource('apps/desktop/src/renderer/shell/AppShell.tsx');
+    const app = readSource('apps/desktop/src/renderer/app/App.tsx');
+    const appBody = readSource('apps/desktop/src/renderer/shell/AppBody.tsx');
 
-    expect(appShell).toContain("from './WindowTitleBar'");
-    expect(appShell).toContain("from './LeftSidebar'");
-    expect(appShell).toContain("from './RightSidebar'");
-    expect(appShell).toContain("from './SettingsPage'");
-    expect(appShell).toContain("from '../features/chat'");
-    expect(appShell).toContain('rightSidebarOpen');
-    expect(appShell).toContain('workspaceSidebarOpen={rightSidebarOpen}');
-    expect(appShell).toContain('open={rightSidebarOpen}');
-    expect(appShell).toContain('settingsOpen ?');
-    expect(appShell).not.toContain("from './Settings" + "Modal'");
-    expect(appShell).not.toContain('<Settings' + 'Modal');
+    expect(app).toContain("from '../shell/WindowTitleBar'");
+    expect(app).toContain("from '../shell/AppBody'");
+    expect(appBody).toContain("from './LeftSidebar'");
+    expect(appBody).toContain("from './MainContent'");
+    expect(appBody).toContain("from './RightSidebar'");
+    expect(appBody).toContain('rightSidebarOpen');
+    expect(appBody).toContain('<RightSidebar');
+    expect(appBody).toContain('settingsOpen');
+    expect(appBody).not.toContain("from './Settings" + "Modal'");
+    expect(appBody).not.toContain('<Settings' + 'Modal');
   });
 
   it('keeps deleted old visual UI files absent', () => {

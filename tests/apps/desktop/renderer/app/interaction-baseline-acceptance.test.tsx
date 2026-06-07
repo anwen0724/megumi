@@ -13,8 +13,7 @@ import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/sto
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
-import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
-import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
+import App from '@megumi/desktop/renderer/app/App';
 import {
   chatStreamSessionKey,
   useChatStreamStore,
@@ -422,11 +421,7 @@ function resetStores() {
 }
 
 function renderAppShell() {
-  return render(
-    <ThemeProvider>
-      <AppShell />
-    </ThemeProvider>,
-  );
+  return render(<App />);
 }
 
 function activeCanonicalMessages() {

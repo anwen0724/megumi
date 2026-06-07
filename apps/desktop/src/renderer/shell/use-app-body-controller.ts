@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useSessionStore } from '../entities/session/store';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../entities/project/store';
+import { useSessionStore } from '../entities/session/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
-import { ChatPage } from '../features/chat';
 import { useSessionHistoryHydration } from '../features/session-history/use-session-history-hydration';
-import { LeftSidebar, type SidebarProjectItem } from './LeftSidebar';
-import { RightSidebar } from './RightSidebar';
-import { SettingsPage } from './SettingsPage';
-import { WindowTitleBar } from './WindowTitleBar';
+import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
 
-export function AppShell() {
+interface UseAppBodyControllerInput {
+  onTitleChange: (title: string) => void;
+  onWorkspaceSidebarToggleChange: (handler: (() => void) | undefined) => void;
+  onWorkspaceSidebarOpenChange: (open: boolean) => void;
+}
+
+export function useAppBodyController({
+  onTitleChange,
+  onWorkspaceSidebarToggleChange,
+  onWorkspaceSidebarOpenChange,
+}: UseAppBodyControllerInput) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -56,7 +62,7 @@ export function AppShell() {
     [projects, sessions, activeSessionId],
   );
 
-  function handleCreateSession() {
+  const handleCreateSession = useCallback(() => {
     if (!currentProject) {
       setSettingsOpen(false);
       void useProjectStore.getState().useExistingProject();
@@ -65,9 +71,9 @@ export function AppShell() {
 
     setSettingsOpen(false);
     setActiveSession(null);
-  }
+  }, [currentProject, setActiveSession]);
 
-  async function handleSelectSession(sessionId: string) {
+  const handleSelectSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeSessionId) {
       setSettingsOpen(false);
       return;
@@ -84,77 +90,69 @@ export function AppShell() {
     setSettingsOpen(false);
     setActiveSession(sessionId);
     await hydrateSessionTimeline(sessionId);
-  }
+  }, [activeSessionId, currentProjectId, hydrateSessionTimeline, sessions, setActiveSession]);
 
-  function openSettings() {
+  const handleUseExistingProject = useCallback(() => {
+    void useProjectStore.getState().useExistingProject();
+  }, []);
+
+  const handleOpenProject = useCallback((projectId: string) => {
+    void useProjectStore.getState().openProject(projectId);
+  }, []);
+
+  const handleRemoveProject = useCallback((projectId: string) => {
+    void (async () => {
+      const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
+      const removed = await useProjectStore.getState().removeProject(projectId);
+
+      if (removed && wasCurrent) {
+        setActiveSession(null);
+        useWorkspaceFilesStore.getState().reset();
+      }
+    })();
+  }, [setActiveSession]);
+
+  const openSettings = useCallback(() => {
     setRightSidebarOpen(false);
     setSettingsOpen(true);
-  }
+  }, []);
 
-  function closeSettings() {
+  const closeSettings = useCallback(() => {
     setSettingsOpen(false);
-  }
+  }, []);
 
-  function toggleWorkspaceSidebar() {
+  const toggleWorkspaceSidebar = useCallback(() => {
     setRightSidebarOpen((value) => !value);
-  }
+  }, []);
 
-  return (
-    <div className="flex h-screen min-h-0 flex-col bg-[var(--color-app-bg)] text-[var(--color-text)]">
-      <WindowTitleBar
-        title={settingsOpen ? 'Settings' : titlebarTitle}
-        workspaceSidebarOpen={rightSidebarOpen}
-        onToggleWorkspaceSidebar={settingsOpen ? undefined : toggleWorkspaceSidebar}
-      />
-      <div data-testid="app-body" className="flex min-h-0 flex-1 overflow-hidden">
-        <LeftSidebar
-          collapsed={sidebarCollapsed}
-          projects={sidebarProjects}
-          allProjects={projects}
-          onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
-          onCreateSession={handleCreateSession}
-          onSelectSession={(sessionId) => {
-            void handleSelectSession(sessionId);
-          }}
-          onUseExistingProject={() => {
-            void useProjectStore.getState().useExistingProject();
-          }}
-          onManageProjects={() => {
-            // LeftSidebar manages the modal open state internally
-          }}
-          onOpenSettings={openSettings}
-          onOpenProject={(projectId) => {
-            void useProjectStore.getState().openProject(projectId);
-          }}
-          onRemoveProject={(projectId) => {
-            void (async () => {
-              const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
-              const removed = await useProjectStore.getState().removeProject(projectId);
+  useEffect(() => {
+    onTitleChange(settingsOpen ? 'Settings' : titlebarTitle);
+  }, [onTitleChange, settingsOpen, titlebarTitle]);
 
-              if (removed && wasCurrent) {
-                setActiveSession(null);
-                useWorkspaceFilesStore.getState().reset();
-              }
-            })();
-          }}
-        />
-        <main
-          data-testid="main-content"
-          className="relative flex min-h-0 min-w-[42rem] flex-1 overflow-hidden transition-[width] duration-200 ease-out"
-        >
-          {settingsOpen ? (
-            <SettingsPage onDone={closeSettings} />
-          ) : (
-            <ChatPage />
-          )}
-        </main>
-        {!settingsOpen ? (
-          <RightSidebar
-            open={rightSidebarOpen}
-            onClose={() => setRightSidebarOpen(false)}
-          />
-        ) : null}
-      </div>
-    </div>
-  );
+  useEffect(() => {
+    onWorkspaceSidebarOpenChange(rightSidebarOpen);
+  }, [onWorkspaceSidebarOpenChange, rightSidebarOpen]);
+
+  useEffect(() => {
+    onWorkspaceSidebarToggleChange(settingsOpen ? undefined : toggleWorkspaceSidebar);
+    return () => onWorkspaceSidebarToggleChange(undefined);
+  }, [onWorkspaceSidebarToggleChange, settingsOpen, toggleWorkspaceSidebar]);
+
+  return {
+    sidebarCollapsed,
+    rightSidebarOpen,
+    settingsOpen,
+    projects,
+    sidebarProjects,
+    setSidebarCollapsed,
+    setRightSidebarOpen,
+    setActiveSession,
+    handleCreateSession,
+    handleSelectSession,
+    handleUseExistingProject,
+    handleOpenProject,
+    handleRemoveProject,
+    openSettings,
+    closeSettings,
+  };
 }

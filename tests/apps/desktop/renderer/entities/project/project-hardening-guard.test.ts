@@ -51,15 +51,15 @@ describe('project hardening guards', () => {
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
       'utf8',
     );
-    const appShellSource = readFileSync(
-      'apps/desktop/src/renderer/shell/AppShell.tsx',
+    const appBodySource = readFileSync(
+      'apps/desktop/src/renderer/shell/AppBody.tsx',
       'utf8',
     );
 
     expect(timelineSource).not.toContain('local-workspace');
     expect(timelineSource).not.toContain('NIL_UUID_SENTINEL');
-    expect(appShellSource).not.toContain('local-workspace');
-    expect(appShellSource).not.toContain('LOCAL_WORKSPACE_ID');
+    expect(appBodySource).not.toContain('local-workspace');
+    expect(appBodySource).not.toContain('LOCAL_WORKSPACE_ID');
   });
 
   it('keeps renderer Project type independent from shared ProjectRecord compatibility fields', () => {

@@ -84,7 +84,7 @@ describe('RightSidebar', () => {
     });
 
     const expandedPanel = screen.getByTestId('right-sidebar');
-    expect(expandedPanel).toHaveClass('w-80');
+    expect(expandedPanel).toHaveClass('w-[var(--right-sidebar-width)]');
     expect(expandedPanel).toHaveClass('opacity-100');
     expect(expandedPanel).toHaveClass('translate-x-0');
   });
@@ -148,7 +148,7 @@ describe('RightSidebar', () => {
     const content = screen.getByTestId('right-sidebar-content');
 
     expect(panel).toHaveAttribute('id', 'right-sidebar');
-    expect(panel).toHaveClass('w-80');
+    expect(panel).toHaveClass('w-[var(--right-sidebar-width)]');
     expect(panel).toHaveClass('border-l');
     expect(panel).toHaveClass('transition-[width,opacity,transform]');
     expect(panel).not.toHaveClass('fixed');
@@ -161,7 +161,7 @@ describe('RightSidebar', () => {
     vi.useFakeTimers();
     const { rerender } = render(<RightSidebar open onClose={() => undefined} />);
 
-    expect(screen.getByTestId('right-sidebar')).toHaveClass('w-80');
+    expect(screen.getByTestId('right-sidebar')).toHaveClass('w-[var(--right-sidebar-width)]');
 
     rerender(<RightSidebar open={false} onClose={() => undefined} />);
 
@@ -170,7 +170,7 @@ describe('RightSidebar', () => {
     expect(closingPanel).toHaveClass('opacity-0');
     expect(closingPanel).toHaveClass('translate-x-6');
     expect(closingPanel).toHaveClass('pointer-events-none');
-    expect(closingPanel).not.toHaveClass('w-80');
+    expect(closingPanel).not.toHaveClass('w-[var(--right-sidebar-width)]');
 
     act(() => {
       vi.advanceTimersByTime(199);

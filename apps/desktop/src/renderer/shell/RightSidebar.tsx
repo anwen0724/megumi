@@ -90,7 +90,7 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
         'flex shrink-0 overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)]',
         'shadow-[-18px_0_48px_rgba(76,92,70,0.08)] transition-[width,opacity,transform] duration-200 ease-out',
         expanded
-          ? 'w-80 translate-x-0 flex-col opacity-100'
+          ? 'w-[var(--right-sidebar-width)] translate-x-0 flex-col opacity-100'
           : 'w-0 translate-x-6 flex-col opacity-0 pointer-events-none',
       )}
     >

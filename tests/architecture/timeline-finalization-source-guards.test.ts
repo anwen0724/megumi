@@ -27,7 +27,7 @@ describe('timeline finalization source guards', () => {
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
       'apps/desktop/src/renderer/features/runtime-events/runtime-event-dispatcher.ts',
       'apps/desktop/src/renderer/features/session-history/use-session-history-hydration.ts',
-      'apps/desktop/src/renderer/shell/AppShell.tsx',
+      'apps/desktop/src/renderer/shell/AppBody.tsx',
     ];
 
     for (const file of rendererFiles) {

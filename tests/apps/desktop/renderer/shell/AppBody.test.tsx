@@ -2,8 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AppShell } from '@megumi/desktop/renderer/shell/AppShell';
-import { ThemeProvider } from '@megumi/desktop/renderer/shared/theme';
+import App from '@megumi/desktop/renderer/app/App';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
@@ -123,14 +122,10 @@ function committedUser(messageId: string, sessionId: string, text: string) {
 }
 
 function renderShell() {
-  return render(
-    <ThemeProvider>
-      <AppShell />
-    </ThemeProvider>,
-  );
+  return render(<App />);
 }
 
-describe('AppShell', () => {
+describe('App shell layout contract', () => {
   beforeEach(() => {
     minimize.mockReset();
     toggleMaximize.mockReset();

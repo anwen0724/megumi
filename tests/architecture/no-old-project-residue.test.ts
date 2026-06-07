@@ -105,7 +105,7 @@ const allowedCurrentLifecycleTerms = new Map<string, string[]>([
   ['packages/shared/project-contracts.ts', [
     joinForbidden('PROJECT', '_'),
   ]],
-  ['tests/apps/desktop/renderer/shell/AppShell.test.tsx', [
+  ['tests/apps/desktop/renderer/shell/AppBody.test.tsx', [
     joinForbidden('PROJECT', '_'),
   ]],
   ['AGENTS.md', [
