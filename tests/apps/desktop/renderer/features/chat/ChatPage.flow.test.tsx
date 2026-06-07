@@ -384,15 +384,20 @@ describe('ChatPage flow', () => {
     expect(messageScrollArea).not.toHaveClass('max-w-3xl');
     expect(messageScrollArea).toHaveAttribute('tabIndex', '0');
     expect(messageContentColumn).toHaveClass('mx-auto');
+    expect(messageContentColumn).toHaveClass('w-[calc(100%-3rem)]');
     expect(messageContentColumn).toHaveClass('max-w-[var(--chat-column-width)]');
+    expect(messageContentColumn).not.toHaveClass('px-6');
     expect(composerContentColumn).toHaveClass('mx-auto');
-    expect(composerContentColumn).toHaveClass('max-w-[var(--chat-column-width)]');
+    expect(composerContentColumn).toHaveClass('w-[calc(100%-3rem)]');
+    expect(composerContentColumn).toHaveClass('max-w-[var(--chat-composer-width)]');
+    expect(composerContentColumn).not.toHaveClass('px-6');
     expect(contentColumn).toHaveClass('w-full');
     expect(contentColumn).not.toHaveClass('max-w-4xl');
     expect(composerDock).toHaveClass('absolute');
     expect(composerDock).toHaveClass('bottom-0');
     expect(composerDock).toHaveClass('bg-transparent');
     expect(composerDock).toHaveClass('pb-3');
+    expect(composerDock).not.toHaveClass('px-6');
     expect(composerDock).not.toHaveClass('pb-6');
     expect(within(composerContentColumn).getByRole('form', { name: 'Message composer' })).not.toHaveClass('max-w-3xl');
     expect(within(messageScrollArea).getByText('Check layout')).toBeInTheDocument();
@@ -402,8 +407,8 @@ describe('ChatPage flow', () => {
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--composer-dock-bottom-inset:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--composer-dock-cut-inset:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-column-width:');
+    expect(screen.getByTestId('chat-page-root').getAttribute('style')).toContain('--chat-composer-width:');
     expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--chat-content-width:');
-    expect(screen.getByTestId('chat-page-root').getAttribute('style')).not.toContain('--chat-composer-width:');
     expect(screen.getByTestId('message-bottom-spacer')).toBeInTheDocument();
     expect(screen.getByTestId('message-scroll-panel')).toHaveAttribute('tabIndex', '0');
     expect(screen.getByRole('log', { name: 'Chat timeline' })).not.toContainElement(

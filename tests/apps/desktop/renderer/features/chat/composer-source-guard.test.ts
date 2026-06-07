@@ -74,7 +74,13 @@ describe('composer source guard', () => {
     expect(composerDock).toContain('data-testid="composer-dock-content"');
     expect(composerDock).toContain('bg-transparent');
     expect(composerDock).toContain('pb-3');
-    expect(composerDock).toContain('max-w-[var(--chat-column-width)]');
+    expect(composerDock).not.toContain('bg-transparent px-6');
+    expect(messageColumn).toContain('w-[calc(100%-3rem)]');
+    expect(messageColumn).toContain('max-w-[var(--chat-column-width)]');
+    expect(messageColumn).not.toContain('px-6');
+    expect(composerDock).toContain('w-[calc(100%-3rem)]');
+    expect(composerDock).toContain('max-w-[var(--chat-composer-width)]');
+    expect(composerDock).not.toContain('px-6');
     expect(composerDock).toContain('<Composer');
     expect(chatPage).not.toContain('chat-composer-dock');
     expect(chatPage).not.toContain('chat-message-scroll-area');

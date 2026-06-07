@@ -70,6 +70,7 @@ describe('13.02 chat layout contract source guard', () => {
     expect(composerDock).toContain('data-testid="composer-dock-content"');
     expect(composerDock).toContain('bg-transparent');
     expect(composerDock).toContain('pb-3');
+    expect(composerDock).not.toContain('bg-transparent px-6');
     expect(composerDock).not.toContain('pb-6');
     expect(composerDock).toContain('<ApprovalStack');
     expect(composerDock).toContain('<RecoverableActionStack');
@@ -77,15 +78,19 @@ describe('13.02 chat layout contract source guard', () => {
     expect(composerDock).toContain('<Composer');
     expect(composer).not.toContain('composer-branch-draft-row');
     expect(chatPage).toContain('--chat-column-width');
+    expect(chatPage).toContain('--chat-composer-width');
     expect(chatPage).toContain('--composer-dock-height');
     expect(chatPage).toContain('--composer-dock-bottom-inset');
     expect(chatPage).not.toContain('--composer-dock-cut-inset');
     expect(chatPage).not.toContain('--chat-content-width');
-    expect(chatPage).not.toContain('--chat-composer-width');
     expect(messageScrollPanel).toContain('bottom-4');
     expect(messageScrollPanel).not.toContain('h-full min-h-0 overflow-y-auto');
+    expect(messageColumn).toContain('w-[calc(100%-3rem)]');
     expect(messageColumn).toContain('max-w-[var(--chat-column-width)]');
-    expect(composerDock).toContain('max-w-[var(--chat-column-width)]');
+    expect(messageColumn).not.toContain('px-6');
+    expect(composerDock).toContain('w-[calc(100%-3rem)]');
+    expect(composerDock).toContain('max-w-[var(--chat-composer-width)]');
+    expect(composerDock).not.toContain('px-6');
   });
 
   it('keeps forbidden legacy chat layout names out of production chat sources', () => {

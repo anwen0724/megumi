@@ -57,9 +57,12 @@ describe('ComposerDock', () => {
 
     expect(dock).toHaveClass('bg-transparent');
     expect(dock).toHaveClass('pb-3');
+    expect(dock).not.toHaveClass('px-6');
     expect(dock).not.toHaveClass('pt-');
     expect(dock).not.toHaveClass('pb-6');
-    expect(content).toHaveClass('max-w-[var(--chat-column-width)]');
+    expect(content).toHaveClass('w-[calc(100%-3rem)]');
+    expect(content).toHaveClass('max-w-[var(--chat-composer-width)]');
+    expect(content).not.toHaveClass('px-6');
   });
 
   it('publishes measured dock height changes', () => {

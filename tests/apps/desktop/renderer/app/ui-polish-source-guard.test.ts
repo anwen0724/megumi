@@ -64,14 +64,19 @@ describe('UI polish source guard', () => {
     const composerDock = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx');
     const timelineMessage = readSource('apps/desktop/src/renderer/features/chat/components/TimelineMessage.tsx');
 
+    expect(messageColumn).toContain('w-[calc(100%-3rem)]');
     expect(messageColumn).toContain('max-w-[var(--chat-column-width)]');
+    expect(messageColumn).not.toContain('px-6');
     expect(messageScrollPanel).not.toMatch(/pr-16|xl:pr-32/);
     expect(messageScrollPanel).toContain('data-testid="message-scroll-panel"');
     expect(messageScrollPanel).toContain('bottom-4');
     expect(messageColumn).toContain('data-testid="message-column"');
     expect(composerDock).toContain('data-testid="composer-dock"');
     expect(composerDock).toContain('data-testid="composer-dock-content"');
-    expect(composerDock).toContain('max-w-[var(--chat-column-width)]');
+    expect(composerDock).toContain('w-[calc(100%-3rem)]');
+    expect(composerDock).toContain('max-w-[var(--chat-composer-width)]');
+    expect(composerDock).not.toContain('px-6');
+    expect(composerDock).not.toContain('bg-transparent px-6');
     expect(composerDock).toContain('bg-transparent');
     expect(chatPage).not.toMatch(/chat-content-shell|chat-message-section|chat-bottom-base/);
     expect(chatPage).not.toMatch(/chat-composer-overlay|chat-composer-content-shell/);

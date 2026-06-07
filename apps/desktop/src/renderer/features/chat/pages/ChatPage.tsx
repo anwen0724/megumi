@@ -42,6 +42,7 @@ export function ChatPage() {
       className="relative h-full min-h-0 w-full flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
       style={{
         '--chat-column-width': '48rem',
+        '--chat-composer-width': '50rem',
         '--composer-dock-height': `${effectiveComposerDockHeight}px`,
         '--composer-dock-bottom-inset': `${bottomSpacerHeight}px`,
       } as CSSProperties}

@@ -45,7 +45,7 @@ export function MessageColumn({
   };
 
   return (
-    <div data-testid="message-column" className="mx-auto w-full max-w-[var(--chat-column-width)] pb-3 pt-7">
+    <div data-testid="message-column" className="mx-auto w-[calc(100%-3rem)] max-w-[var(--chat-column-width)] pb-3 pt-7">
       <div role="log" aria-label="Chat timeline" className="flex w-full flex-col gap-5">
         {timelineMessages.map((message) => (
           <TimelineMessage
