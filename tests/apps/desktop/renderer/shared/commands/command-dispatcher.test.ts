@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { BUILT_IN_COMMANDS } from '@megumi/desktop/renderer/features/commands/command-registry';
-import { dispatchCommandText } from '@megumi/desktop/renderer/features/commands/command-dispatcher';
+import { BUILT_IN_WORKFLOW_COMMANDS } from '@megumi/desktop/renderer/features/workflow-commands';
+import { dispatchCommandText, listCommandSuggestions } from '@megumi/desktop/renderer/shared/commands';
 
 describe('command dispatcher', () => {
-  it('dispatches /review as a workflow command', () => {
-    expect(dispatchCommandText('/review 当前改动', BUILT_IN_COMMANDS)).toEqual({
+  it('dispatches /review as a workflow command when a workflow command registry is provided', () => {
+    expect(dispatchCommandText('/review 当前改动', BUILT_IN_WORKFLOW_COMMANDS)).toEqual({
       kind: 'workflow',
       rawText: '/review 当前改动',
       argsText: '当前改动',
@@ -17,7 +17,7 @@ describe('command dispatcher', () => {
   });
 
   it.each(['/reviewx 当前改动', '/Review 当前改动', 'hello'])('falls back for %s', (rawText) => {
-    expect(dispatchCommandText(rawText, BUILT_IN_COMMANDS)).toEqual({
+    expect(dispatchCommandText(rawText, BUILT_IN_WORKFLOW_COMMANDS)).toEqual({
       kind: 'fallback',
       rawText: rawText.trim(),
     });
@@ -31,5 +31,9 @@ describe('command dispatcher', () => {
 
     expect(dispatchCommandText('/settings', commands).kind).toBe('local');
     expect(dispatchCommandText('/template x', commands).kind).toBe('prompt_expansion');
+  });
+
+  it('stops command suggestions once arguments start', () => {
+    expect(listCommandSuggestions('/review 当前改动', BUILT_IN_WORKFLOW_COMMANDS)).toEqual([]);
   });
 });

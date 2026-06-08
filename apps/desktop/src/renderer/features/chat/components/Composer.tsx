@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import type { PermissionModeSelectionSource } from '@megumi/shared/permission-mode-contracts';
 import type { WorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
-import { createCodeReviewWorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
 import { Button, IconButton } from '../../../shared/ui';
 import {
   COMPOSER_MODEL_OPTIONS,
@@ -18,11 +17,10 @@ import {
   type ComposerPermissionMode,
 } from './composer-options';
 import {
-  BUILT_IN_COMMANDS,
-  dispatchCommandText,
-  listCommandSuggestions,
+  createWorkflowCommandSubmitPayload,
+  listWorkflowCommandSuggestions,
   type CommandDefinition,
-} from '../../commands';
+} from '../../workflow-commands';
 
 export type ComposerStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
 
@@ -53,15 +51,12 @@ function createComposerSubmitPayload(input: {
   permissionMode: ComposerPermissionMode;
   model: ComposerModel;
 }): ComposerSubmitPayload {
-  const dispatch = dispatchCommandText(input.message);
+  const workflowPayload = createWorkflowCommandSubmitPayload(input.message);
 
-  if (dispatch.kind === 'workflow' && dispatch.command.name === 'review') {
+  if (workflowPayload) {
     return {
-      message: dispatch.rawText,
-      permissionMode: 'plan',
-      permissionSource: 'workflow_default',
+      ...workflowPayload,
       model: input.model,
-      workflow: createCodeReviewWorkflowCommandMetadata(dispatch.argsText),
     };
   }
 
@@ -97,7 +92,7 @@ export function Composer({
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
   const placeholder = 'Ask Megumi anything...';
-  const commandSuggestions = listCommandSuggestions(value, BUILT_IN_COMMANDS);
+  const commandSuggestions = listWorkflowCommandSuggestions(value);
   const showCommandAutocomplete =
     commandSuggestions.length > 0 &&
     commandAutocompleteDismissedFor !== value &&

@@ -187,6 +187,7 @@ describe('Composer', () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(input).toHaveValue('/review ');
+    expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
 
     await userEvent.clear(input);
     await userEvent.type(input, '/re');
@@ -194,6 +195,31 @@ describe('Composer', () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(input).toHaveValue('/review ');
+    expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
+  });
+
+  it('submits command arguments after autocomplete completes the command name', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    await userEvent.type(input, '/re');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.type(input, '当前改动');
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      message: '/review 当前改动',
+      permissionMode: 'plan',
+      permissionSource: 'workflow_default',
+      model: 'deepseek-v4-flash',
+      workflow: {
+        intent: 'code_review',
+        source: 'builtin_command',
+        commandName: 'review',
+        argsText: '当前改动',
+      },
+    });
   });
 
   it('closes command autocomplete with Escape and keeps normal Enter submit behavior closed', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSlashCommand } from '@megumi/desktop/renderer/features/commands/command-parser';
+import { parseSlashCommand } from '@megumi/desktop/renderer/shared/commands';
 
 describe('parseSlashCommand', () => {
   it.each([

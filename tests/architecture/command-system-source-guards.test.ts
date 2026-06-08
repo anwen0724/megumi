@@ -41,6 +41,42 @@ function offenders(paths: string[], forbidden: RegExp[]): string[] {
 }
 
 describe('Command system source guards', () => {
+  it('keeps generic command primitives in renderer shared and workflow definitions in workflow-commands', () => {
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-parser.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-dispatcher.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-types.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/workflow-commands/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/commands'))).toBe(false);
+  });
+
+  it('keeps shared command primitives free of workflow-specific business contracts', () => {
+    expect(offenders(filesUnder('apps/desktop/src/renderer/shared/commands'), [
+      /workflow-command-contracts/,
+      /createCodeReviewWorkflowCommandMetadata/,
+      /\/review\b/,
+      /workflow_default/,
+    ])).toEqual([]);
+  });
+
+  it('allows chat to consume workflow commands only through their public API', () => {
+    expect(offenders([
+      'apps/desktop/src/renderer/features/chat/components/Composer.tsx',
+      'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
+    ], [
+      /features\/commands/,
+      /features\/workflow-commands\/(?!index)/,
+      /\.\.\/\.\.\/commands/,
+      /\.\.\/workflow-commands\/(?!index)/,
+    ])).toEqual([]);
+  });
+
+  it('keeps workflow commands from depending on chat internals', () => {
+    expect(offenders(filesUnder('apps/desktop/src/renderer/features/workflow-commands'), [
+      /features\/chat/,
+      /\.\.\/chat/,
+    ])).toEqual([]);
+  });
+
   it('keeps provider adapters free of slash command parsing', () => {
     expect(offenders(filesUnder('packages/ai'), [
       /parseSlashCommand/,

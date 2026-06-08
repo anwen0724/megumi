@@ -1,16 +1,27 @@
-import type { CommandDefinition } from './command-registry';
-import { BUILT_IN_COMMANDS } from './command-registry';
+import type { CommandDefinition, CommandDispatchResult } from './command-types';
 import { parseSlashCommand } from './command-parser';
 
-export type CommandDispatchResult =
-  | { kind: 'local'; command: CommandDefinition; rawText: string; argsText: string }
-  | { kind: 'prompt_expansion'; command: CommandDefinition; rawText: string; argsText: string }
-  | { kind: 'workflow'; command: CommandDefinition; rawText: string; argsText: string }
-  | { kind: 'fallback'; rawText: string };
+export function listCommandSuggestions(
+  inputText: string,
+  commands: readonly CommandDefinition[],
+): CommandDefinition[] {
+  const trimmedStart = inputText.trimStart();
+
+  if (!trimmedStart.startsWith('/')) {
+    return [];
+  }
+
+  const query = trimmedStart.slice(1);
+  if (/\s/.test(query)) {
+    return [];
+  }
+
+  return commands.filter((command) => command.name.startsWith(query));
+}
 
 export function dispatchCommandText(
   rawText: string,
-  commands: readonly CommandDefinition[] = BUILT_IN_COMMANDS,
+  commands: readonly CommandDefinition[],
 ): CommandDispatchResult {
   const trimmed = rawText.trim();
   const parsed = parseSlashCommand(trimmed);
