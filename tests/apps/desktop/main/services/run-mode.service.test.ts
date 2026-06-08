@@ -66,6 +66,44 @@ describe('RunModeService', () => {
     expect(snapshot.mode).not.toHaveProperty('outputExpectation');
   });
 
+  it('persists workflow metadata on mode snapshots', () => {
+    const repo = createRepo();
+    const service = new RunModeService({
+      repository: repo,
+      ids: { modeSnapshotId: () => 'mode-snapshot:1', planArtifactId: () => 'plan:1' },
+    });
+
+    const snapshot = service.createModeSnapshot({
+      runId: 'run:1',
+      mode: 'plan',
+      modeSnapshot: {
+        permissionMode: 'plan',
+        source: 'workflow_default',
+      },
+      metadata: {
+        workflow: {
+          intent: 'code_review',
+          source: 'builtin_command',
+          commandName: 'review',
+          argsText: '当前改动',
+        },
+      },
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    expect(snapshot.metadata).toEqual({
+      workflow: {
+        intent: 'code_review',
+        source: 'builtin_command',
+        commandName: 'review',
+        argsText: '当前改动',
+      },
+    });
+    expect(repo.snapshots[0]).toMatchObject({
+      metadata: snapshot.metadata,
+    });
+  });
+
   it('rejects source plans that are not accepted', () => {
     const repo = createRepo();
     repo.saveImplementationPlan({

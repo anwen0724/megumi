@@ -649,6 +649,71 @@ describe('provider and chat ipc schemas', () => {
     expect(parsed.payload.context?.permissionMode).toBe('plan');
   });
 
+  it('accepts code review workflow metadata on session message runtime context', () => {
+    const parsed = SessionMessageSendRequestSchema.parse({
+      requestId: 'request:workflow-review',
+      payload: {
+        sessionId: 'session:1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'client-message:1',
+          content: '/review 当前改动',
+          createdAt: '2026-06-08T00:00:00.000Z',
+        },
+        context: {
+          permissionMode: 'plan',
+          permissionSource: 'workflow_default',
+          workflow: {
+            intent: 'code_review',
+            source: 'builtin_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+        createdAt: '2026-06-08T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.message.send,
+        createdAt: '2026-06-08T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(parsed.payload.context?.workflow?.intent).toBe('code_review');
+    expect(parsed.payload.context?.permissionSource).toBe('workflow_default');
+  });
+
+  it('rejects mismatched code review workflow metadata in session message runtime context', () => {
+    expect(() => SessionMessageSendRequestSchema.parse({
+      requestId: 'request:workflow-review',
+      payload: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'client-message:1',
+          content: '/review 当前改动',
+          createdAt: '2026-06-08T00:00:00.000Z',
+        },
+        context: {
+          permissionMode: 'plan',
+          workflow: {
+            intent: 'code_review',
+            source: 'builtin_command',
+            commandName: 'reviewx',
+            argsText: '当前改动',
+          },
+        },
+        createdAt: '2026-06-08T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.message.send,
+        createdAt: '2026-06-08T00:00:00.000Z',
+        source: 'renderer',
+      },
+    })).toThrow();
+  });
+
   it('rejects legacy composerMode in session message runtime context', () => {
     expect(() => SessionMessageSendPayloadSchema.parse({
       providerId: 'deepseek',

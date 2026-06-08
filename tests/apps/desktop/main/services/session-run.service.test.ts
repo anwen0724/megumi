@@ -5338,6 +5338,101 @@ describe('SessionRunService', () => {
     ]));
   });
 
+  it('normalizes code review workflow messages to plan mode with workflow default source', async () => {
+    const records: unknown[] = [];
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([], {
+      runModeService: {
+        createModeSnapshot: (input) => {
+          records.push(input);
+          return {
+            modeSnapshotId: 'mode-snapshot:workflow',
+            runId: input.runId,
+            modeLabel: input.mode,
+            mode: input.modeSnapshot ?? {
+              permissionMode: 'default',
+              source: 'system',
+            },
+            createdAt: input.createdAt,
+            ...(input.metadata ? { metadata: input.metadata } : {}),
+          };
+        },
+        linkAcceptedSourcePlan: (input) => input,
+        createPlanRecordForRun: () => undefined,
+        getPlanByRun: () => undefined,
+        updatePlanStatus: () => {
+          throw new Error('not implemented');
+        },
+      },
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: '/review 当前改动',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        context: {
+          permissionMode: 'default',
+          permissionSource: 'user',
+          workflow: {
+            intent: 'code_review',
+            source: 'builtin_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the stream so the provider request is observed.
+    }
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        runId: 'run-1',
+        mode: 'plan',
+        modeSnapshot: {
+          permissionMode: 'plan',
+          source: 'workflow_default',
+        },
+        metadata: {
+          workflow: {
+            intent: 'code_review',
+            source: 'builtin_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+      }),
+    ]);
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'permission_mode',
+        sourceRefs: expect.arrayContaining([
+          expect.objectContaining({
+            sourceId: 'permission-mode:mode-snapshot:workflow',
+            sourceUri: 'permission-mode://mode-snapshot:workflow',
+          }),
+        ]),
+      }),
+    ]));
+  });
+
   it('saves session message run mode snapshots with the real run mode repository', async () => {
     db = new Database(':memory:');
     migrateDatabase(db);
@@ -5412,6 +5507,94 @@ describe('SessionRunService', () => {
       mode: expect.objectContaining({
         permissionMode: 'plan',
       }),
+    });
+  });
+
+  it('persists workflow metadata on session message run mode snapshots with the real repository', async () => {
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const sessionRepository = new SessionRunRepository(db);
+    const runModeRepository = new RunModeRepository(db);
+    const service = new SessionRunService({
+      repository: sessionRepository,
+      runModeService: new RunModeService({
+        repository: runModeRepository,
+        ids: {
+          modeSnapshotId: () => 'mode-snapshot:workflow-real-repo',
+          planArtifactId: () => 'plan:workflow-real-repo',
+        },
+      }),
+      modelStepProvider: {
+        streamModelStep: async function* () {
+          // No provider events are needed for snapshot persistence.
+        },
+        cancelModelStep: () => true,
+      },
+      clock: { now: () => '2026-05-17T00:00:00.000Z' },
+      ids: {
+        sessionId: () => 'session-1',
+        runId: () => 'run-1',
+        stepId: () => 'step-1',
+        messageId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `message-${index}`;
+          };
+        })(),
+      },
+    });
+
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: '/review 当前改动',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        context: {
+          workflow: {
+            intent: 'code_review',
+            source: 'builtin_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the stream so the provider request is observed.
+    }
+
+    expect(sessionRepository.getRun('run-1')).toMatchObject({
+      mode: 'plan',
+      modeSnapshotRef: 'mode-snapshot:workflow-real-repo',
+    });
+    expect(runModeRepository.getModeSnapshotByRun('run-1')).toMatchObject({
+      mode: {
+        permissionMode: 'plan',
+        source: 'workflow_default',
+      },
+      metadata: {
+        workflow: {
+          intent: 'code_review',
+          source: 'builtin_command',
+          commandName: 'review',
+          argsText: '当前改动',
+        },
+      },
     });
   });
 

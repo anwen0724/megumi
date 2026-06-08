@@ -154,6 +154,102 @@ describe('Composer', () => {
     }
   });
 
+  it('shows command autocomplete with name and description for slash prefixes', async () => {
+    render(<Composer onSubmit={() => undefined} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    await userEvent.type(input, '/');
+
+    expect(screen.getByRole('listbox', { name: 'Command suggestions' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '/review Review code in the current project' })).toBeInTheDocument();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '/re');
+
+    expect(screen.getByRole('option', { name: '/review Review code in the current project' })).toBeInTheDocument();
+  });
+
+  it('uses case-sensitive command autocomplete filtering', async () => {
+    render(<Composer onSubmit={() => undefined} />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/Review');
+
+    expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
+  });
+
+  it('completes command autocomplete with Enter or Tab without submitting', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    await userEvent.type(input, '/re');
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input).toHaveValue('/review ');
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '/re');
+    await userEvent.keyboard('{Tab}');
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input).toHaveValue('/review ');
+  });
+
+  it('closes command autocomplete with Escape and keeps normal Enter submit behavior closed', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    await userEvent.type(input, '/re');
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      message: '/re',
+      permissionMode: 'default',
+      model: 'deepseek-v4-flash',
+    });
+  });
+
+  it('submits /review as a workflow command with plan workflow default permission', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/review 当前改动');
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      message: '/review 当前改动',
+      permissionMode: 'plan',
+      permissionSource: 'workflow_default',
+      model: 'deepseek-v4-flash',
+      workflow: {
+        intent: 'code_review',
+        source: 'builtin_command',
+        commandName: 'review',
+        argsText: '当前改动',
+      },
+    });
+  });
+
+  it('keeps unknown slash commands as ordinary messages', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/unknown abc');
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      message: '/unknown abc',
+      permissionMode: 'default',
+      model: 'deepseek-v4-flash',
+    });
+  });
+
   it('uses a stable floating composer shell without page-level width ownership', () => {
     render(<Composer onSubmit={() => undefined} />);
 

@@ -7,6 +7,9 @@ import {
   SendHorizontal,
   Square,
 } from 'lucide-react';
+import type { PermissionModeSelectionSource } from '@megumi/shared/permission-mode-contracts';
+import type { WorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
+import { createCodeReviewWorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
 import { Button, IconButton } from '../../../shared/ui';
 import {
   COMPOSER_MODEL_OPTIONS,
@@ -14,13 +17,21 @@ import {
   type ComposerModel,
   type ComposerPermissionMode,
 } from './composer-options';
+import {
+  BUILT_IN_COMMANDS,
+  dispatchCommandText,
+  listCommandSuggestions,
+  type CommandDefinition,
+} from '../../commands';
 
 export type ComposerStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
 
 export interface ComposerSubmitPayload {
   message: string;
   permissionMode: ComposerPermissionMode;
+  permissionSource?: PermissionModeSelectionSource;
   model: ComposerModel;
+  workflow?: WorkflowCommandMetadata;
 }
 
 interface ComposerProps {
@@ -36,6 +47,30 @@ interface ComposerProps {
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
+
+function createComposerSubmitPayload(input: {
+  message: string;
+  permissionMode: ComposerPermissionMode;
+  model: ComposerModel;
+}): ComposerSubmitPayload {
+  const dispatch = dispatchCommandText(input.message);
+
+  if (dispatch.kind === 'workflow' && dispatch.command.name === 'review') {
+    return {
+      message: dispatch.rawText,
+      permissionMode: 'plan',
+      permissionSource: 'workflow_default',
+      model: input.model,
+      workflow: createCodeReviewWorkflowCommandMetadata(dispatch.argsText),
+    };
+  }
+
+  return {
+    message: input.message,
+    permissionMode: input.permissionMode,
+    model: input.model,
+  };
+}
 
 export function Composer({
   status = 'idle',
@@ -53,6 +88,8 @@ export function Composer({
   const [value, setValue] = useState(initialValue);
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>('default');
   const [model, setModel] = useState<ComposerModel>('deepseek-v4-flash');
+  const [commandSelectionIndex, setCommandSelectionIndex] = useState(0);
+  const [commandAutocompleteDismissedFor, setCommandAutocompleteDismissedFor] = useState<string | null>(null);
   const trimmedValue = value.trim();
   const inputLocked = status === 'waiting-approval';
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
@@ -60,6 +97,14 @@ export function Composer({
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
   const placeholder = 'Ask Megumi anything...';
+  const commandSuggestions = listCommandSuggestions(value, BUILT_IN_COMMANDS);
+  const showCommandAutocomplete =
+    commandSuggestions.length > 0 &&
+    commandAutocompleteDismissedFor !== value &&
+    !inputLocked;
+  const selectedCommand = showCommandAutocomplete
+    ? commandSuggestions[Math.min(commandSelectionIndex, commandSuggestions.length - 1)]
+    : undefined;
 
   useEffect(() => {
     if (seedTextKey && seedText !== null && seedText !== undefined) {
@@ -85,14 +130,27 @@ export function Composer({
     textarea.style.overflowY = scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
   }, [value]);
 
+  useEffect(() => {
+    setCommandSelectionIndex(0);
+    setCommandAutocompleteDismissedFor(null);
+  }, [value]);
+
+  function completeCommand(command: CommandDefinition) {
+    setValue(`/${command.name} `);
+    setCommandAutocompleteDismissedFor(`/${command.name} `);
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  }
+
   function submitDraft() {
     if (!canSend) return;
 
-    onSubmit({
+    onSubmit(createComposerSubmitPayload({
       message: trimmedValue,
       permissionMode,
       model,
-    });
+    }));
     setValue('');
   }
 
@@ -108,6 +166,32 @@ export function Composer({
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (showCommandAutocomplete) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setCommandSelectionIndex((current) => Math.min(current + 1, commandSuggestions.length - 1));
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setCommandSelectionIndex((current) => Math.max(current - 1, 0));
+        return;
+      }
+
+      if ((event.key === 'Enter' || event.key === 'Tab') && selectedCommand) {
+        event.preventDefault();
+        completeCommand(selectedCommand);
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setCommandAutocompleteDismissedFor(value);
+        return;
+      }
+    }
+
     if (event.key !== 'Enter') {
       return;
     }
@@ -150,6 +234,29 @@ export function Composer({
             rows={2}
             className="max-h-40 min-h-14 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70"
           />
+          {showCommandAutocomplete ? (
+            <div
+              role="listbox"
+              aria-label="Command suggestions"
+              className="mt-2 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]"
+            >
+              {commandSuggestions.map((command, index) => (
+                <button
+                  key={command.name}
+                  type="button"
+                  role="option"
+                  aria-selected={index === commandSelectionIndex}
+                  aria-label={`/${command.name} ${command.description}`}
+                  className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] aria-selected:bg-[var(--color-surface-hover)]"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => completeCommand(command)}
+                >
+                  <span className="shrink-0 font-mono text-[var(--color-text)]">{`/${command.name}`}</span>
+                  <span className="min-w-0 truncate text-xs text-[var(--color-text-muted)]">{command.description}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">

@@ -47,6 +47,7 @@ export class RunModeService {
     runId: string;
     mode: string;
     modeSnapshot?: RunMode;
+    metadata?: RunModeSnapshot['metadata'];
     createdAt: string;
   }): RunModeSnapshot {
     const mode = normalizeRunMode(input.modeSnapshot ?? input.mode);
@@ -56,6 +57,7 @@ export class RunModeService {
       modeLabel: mode.permissionMode,
       mode,
       createdAt: input.createdAt,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
     };
 
     return this.options.repository.saveModeSnapshot(snapshot);

@@ -4,7 +4,13 @@ import { IsoDateTimeSchema } from './runtime-validation';
 export const ACTIVE_PERMISSION_MODES = ['default', 'accept_edits', 'plan', 'auto'] as const;
 export type PermissionMode = (typeof ACTIVE_PERMISSION_MODES)[number];
 
-export const PERMISSION_MODE_SELECTION_SOURCES = ['user', 'project', 'local', 'system'] as const;
+export const PERMISSION_MODE_SELECTION_SOURCES = [
+  'user',
+  'project',
+  'local',
+  'system',
+  'workflow_default',
+] as const;
 export type PermissionModeSelectionSource = (typeof PERMISSION_MODE_SELECTION_SOURCES)[number];
 
 export interface PermissionModeSnapshot {

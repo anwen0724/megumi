@@ -702,6 +702,74 @@ describe('buildModelStepInputContextFromSources', () => {
     });
   });
 
+  it('adds workflow instruction metadata after project instructions and before runtime constraints', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:workflow-instruction',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [{
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        status: 'included',
+        sourceUri: 'project://AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: '# Project Rules',
+        loadedAt: builtAt,
+        sizeBytes: 15,
+        includedBytes: 15,
+        hardCapBytes: 65536,
+        truncated: false,
+      }],
+      workflow: {
+        intent: 'code_review',
+        source: 'builtin_command',
+        commandName: 'review',
+        argsText: '当前改动',
+      },
+      runtimeConstraints: [projectBoundaryConstraint()],
+      currentMessage: message({ messageId: 'message:current', content: '/review 当前改动' }),
+    });
+
+    expect(context.parts.map((part) => part.kind)).toEqual([
+      'instruction',
+      'instruction',
+      'runtime_constraint',
+      'current_turn',
+    ]);
+    expect(context.parts[1]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'workflow',
+      text: expect.stringContaining('Workflow intent: code_review'),
+      sourceRefs: [{
+        sourceId: 'workflow-command:review',
+        sourceKind: 'runtime_constraint',
+        sourceUri: 'workflow-command://review',
+        loadedAt: builtAt,
+        metadata: {
+          intent: 'code_review',
+          source: 'builtin_command',
+          commandName: 'review',
+          argsText: '当前改动',
+        },
+      }],
+      metadata: {
+        workflow: {
+          intent: 'code_review',
+          source: 'builtin_command',
+          commandName: 'review',
+          argsText: '当前改动',
+        },
+      },
+    });
+    expect(context.trace.selectedSources).toContainEqual({
+      sourceId: 'workflow-command:review',
+      reason: 'instruction',
+    });
+  });
+
   it('marks truncated project instruction parts with truncation metadata', () => {
     const context = buildModelStepInputContextFromSources({
       contextId: 'model-input-context:project-instruction-truncated',

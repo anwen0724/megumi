@@ -13,6 +13,7 @@ import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-cont
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
+import type { WorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
 import type { ModelInputContextPartDraft } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
 import { buildSessionContextParts } from './session-context';
@@ -60,6 +61,7 @@ export interface BuildModelStepInputContextFromSourcesInput {
   runtimeConstraints?: ModelStepRuntimeConstraintInput[];
   modeSnapshot?: PermissionModeSnapshot;
   modeSnapshotRef?: string;
+  workflow?: WorkflowCommandMetadata;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
@@ -72,6 +74,7 @@ export function buildModelStepInputContextFromSources(
   const toolParts = toolContinuationParts(input);
   const instructionSources = input.instructionSources ?? [];
   const nextInstructionParts = instructionParts(instructionSources);
+  const workflowParts = workflowInstructionParts(input.workflow, input.builtAt);
   const instructionExcludedSources = instructionExcludedSourcesFor(input.instructionSources ?? []);
   const sessionContextResult = buildSessionContextParts({
     input: input.sessionContext,
@@ -84,14 +87,17 @@ export function buildModelStepInputContextFromSources(
   const parts: ModelInputContextPartDraft[] = input.baseInputContext
     ? [
         ...nextInstructionParts,
+        ...workflowParts,
         ...input.baseInputContext.parts.filter((part) => (
           part.kind !== 'tool_continuation'
           && !(input.instructionSources && part.kind === 'instruction' && part.instructionKind === 'project')
+          && !(input.workflow && part.kind === 'instruction' && part.instructionKind === 'workflow')
         )).map(draftFromFinalPart),
         ...toolParts,
       ]
     : [
         ...nextInstructionParts,
+        ...workflowParts,
         ...runtimeConstraintParts(input),
         ...sessionContextResult.parts,
         ...toolParts,
@@ -195,6 +201,38 @@ function instructionSourceRef(source: AgentInstructionSourceSnapshot): ModelInpu
       truncated: source.truncated,
     }),
   };
+}
+
+function workflowInstructionParts(
+  workflow: WorkflowCommandMetadata | undefined,
+  builtAt: string,
+): ModelInputContextPartDraft[] {
+  if (!workflow) {
+    return [];
+  }
+
+  const workflowMetadata = workflow as unknown as JsonObject;
+  return [{
+    partId: `part:instruction:workflow:${workflow.commandName}`,
+    kind: 'instruction',
+    instructionKind: 'workflow',
+    text: [
+      `Workflow intent: ${workflow.intent}.`,
+      `Command: /${workflow.commandName}.`,
+      workflow.argsText ? `Arguments: ${workflow.argsText}.` : undefined,
+    ].filter((line): line is string => Boolean(line)).join('\n'),
+    sourceRefs: [{
+      sourceId: `workflow-command:${workflow.commandName}`,
+      sourceKind: 'runtime_constraint',
+      sourceUri: `workflow-command://${workflow.commandName}`,
+      loadedAt: builtAt,
+      metadata: workflowMetadata,
+    }],
+    priority: 95,
+    metadata: {
+      workflow: workflowMetadata,
+    },
+  }];
 }
 
 function reasonForInstructionSourceStatus(status: AgentInstructionSourceSnapshot['status']): string {

@@ -106,6 +106,8 @@ function createSessionMessageSendPayload(
       workspacePath: activeProject?.repoPath ?? undefined,
       sessionTitle: activeSession?.title ?? undefined,
       permissionMode: payload.permissionMode,
+      ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
+      ...(payload.workflow ? { workflow: payload.workflow } : {}),
     },
     createdAt: messageCreatedAt,
   };

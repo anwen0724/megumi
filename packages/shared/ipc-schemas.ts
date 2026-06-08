@@ -26,7 +26,11 @@ import {
   ToolDefinitionSchema,
   ToolExecutionSchema,
 } from './tool-contracts';
-import { PermissionModeSchema } from './permission-mode-contracts';
+import {
+  PermissionModeSchema,
+  PermissionModeSelectionSourceSchema,
+} from './permission-mode-contracts';
+import { WorkflowCommandMetadataSchema } from './workflow-command-contracts';
 import {
   CancelRequestSchema,
   RecoverableRunSummarySchema,
@@ -221,6 +225,8 @@ export const SessionMessageRuntimeContextSchema = z
     workspacePath: z.string().min(1).optional(),
     sessionTitle: z.string().min(1).optional(),
     permissionMode: PermissionModeSchema.optional(),
+    permissionSource: PermissionModeSelectionSourceSchema.optional(),
+    workflow: WorkflowCommandMetadataSchema.optional(),
   })
   .strict();
 

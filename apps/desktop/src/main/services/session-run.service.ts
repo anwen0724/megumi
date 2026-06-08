@@ -44,6 +44,7 @@ import {
   isPermissionMode,
   type PermissionMode,
   type PermissionModeSnapshot,
+  type PermissionModeSelectionSource,
 } from '@megumi/shared/permission-mode-contracts';
 import type { JsonObject } from '@megumi/shared/json';
 import type {
@@ -63,6 +64,10 @@ import type { ImplementationPlanArtifactRecord, RunMode, RunModeSnapshot } from 
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import {
+  WorkflowCommandMetadataSchema,
+  type WorkflowCommandMetadata,
+} from '@megumi/shared/workflow-command-contracts';
 import {
   createRuntimeEvent,
   createSessionActiveLeafChangedEvent,
@@ -509,7 +514,13 @@ export class SessionRunService {
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
     const currentUserMessage = currentUserChatMessage(input.payload);
-    const permissionMode = input.payload.context?.permissionMode ?? 'default';
+    const workflow = normalizeWorkflowMetadata(input.payload.context?.workflow);
+    const permissionMode = workflow?.intent === 'code_review'
+      ? 'plan'
+      : input.payload.context?.permissionMode ?? 'default';
+    const permissionSource = workflow?.intent === 'code_review'
+      ? 'workflow_default'
+      : input.payload.context?.permissionSource ?? 'user';
     const mode = permissionMode;
 
     if (!currentUserMessage) {
@@ -544,7 +555,8 @@ export class SessionRunService {
     const modeSnapshot = this.runModeService?.createModeSnapshot({
       runId,
       mode,
-      modeSnapshot: createPermissionModeRunMode(permissionMode),
+      modeSnapshot: createPermissionModeRunMode(permissionMode, permissionSource),
+      ...(workflow ? { metadata: { workflow } } : {}),
       createdAt,
     });
     const run = modeSnapshot
@@ -624,6 +636,7 @@ export class SessionRunService {
         userMessage,
         currentUserMessage,
         permissionMode,
+        ...(workflow ? { workflow } : {}),
         ...(modeSnapshot ? { modeSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
@@ -1161,6 +1174,7 @@ export class SessionRunService {
     userMessage: SessionMessage;
     currentUserMessage: SessionMessageSendCurrentMessage;
     permissionMode: PermissionMode;
+    workflow?: WorkflowCommandMetadata;
     modeSnapshot?: RunModeSnapshot;
     chatStreamAdapter?: ChatStreamEventAdapter;
   }): AsyncIterable<RuntimeEvent> {
@@ -1216,6 +1230,7 @@ export class SessionRunService {
       ...(context ? {
         runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
       } : {}),
+      ...(input.workflow ? { workflow: input.workflow } : {}),
       budgetPolicy: {
         modelContextWindow: Number.MAX_SAFE_INTEGER,
         reservedOutputTokens: 0,
@@ -1300,6 +1315,7 @@ export class SessionRunService {
       ...(context ? {
         runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
       } : {}),
+      ...(input.workflow ? { workflow: input.workflow } : {}),
       budgetPolicy,
       ...(input.modeSnapshot ? {
         modeSnapshot: toPermissionModeSnapshot(input.modeSnapshot, input.payload.createdAt),
@@ -2901,10 +2917,21 @@ function toPermissionModeSnapshot(
   };
 }
 
-function createPermissionModeRunMode(permissionMode: PermissionMode): RunMode {
+function normalizeWorkflowMetadata(value: unknown): WorkflowCommandMetadata | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return WorkflowCommandMetadataSchema.parse(value);
+}
+
+function createPermissionModeRunMode(
+  permissionMode: PermissionMode,
+  source: PermissionModeSelectionSource,
+): RunMode {
   return {
     permissionMode,
-    source: 'user',
+    source,
   };
 }
 

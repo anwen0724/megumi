@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACTIVE_PERMISSION_MODES,
+  PermissionModeSelectionSourceSchema,
   PermissionModeSchema,
   PermissionModeSnapshotSchema,
   RunModeSchema,
@@ -47,10 +48,24 @@ describe('run-mode-contracts compatibility shim', () => {
   });
 
   it('parses permission snapshots through the canonical schema', () => {
+    expect(PermissionModeSelectionSourceSchema.options).toEqual([
+      'user',
+      'project',
+      'local',
+      'system',
+      'workflow_default',
+    ]);
+
     expect(PermissionModeSnapshotSchema.parse({
       permissionMode: 'plan',
       source: 'user',
       createdAt: '2026-05-20T00:00:00.000Z',
     }).permissionMode).toBe('plan');
+
+    expect(PermissionModeSnapshotSchema.parse({
+      permissionMode: 'plan',
+      source: 'workflow_default',
+      createdAt: '2026-05-20T00:00:00.000Z',
+    }).source).toBe('workflow_default');
   });
 });

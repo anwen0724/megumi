@@ -98,7 +98,8 @@ describe('tool approval foundation source guards', () => {
       expect(source).not.toMatch(/\bComposerMode\b/);
       expect(source).not.toContain('COMPOSER_MODE_OPTIONS');
       expect(source).not.toContain("'execute'");
-      expect(source).not.toContain("'review'");
+      expect(source).not.toMatch(/permissionMode:\s*['"]review['"]/);
+      expect(source).not.toMatch(/value:\s*['"]review['"]/);
     }
   });
 

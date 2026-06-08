@@ -60,7 +60,7 @@ export const AGENT_INSTRUCTION_SOURCE_STATUSES = [
 ] as const;
 export type AgentInstructionSourceStatus = (typeof AGENT_INSTRUCTION_SOURCE_STATUSES)[number];
 
-export const MODEL_INPUT_INSTRUCTION_KINDS = ['system', 'project', 'mode', 'developer', 'user'] as const;
+export const MODEL_INPUT_INSTRUCTION_KINDS = ['system', 'project', 'mode', 'developer', 'user', 'workflow'] as const;
 export type ModelInputInstructionKind = (typeof MODEL_INPUT_INSTRUCTION_KINDS)[number];
 
 export const MODEL_INPUT_CURRENT_TURN_ROLES = ['user', 'host'] as const;

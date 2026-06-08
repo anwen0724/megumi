@@ -485,6 +485,42 @@ describe('useSessionTimeline', () => {
     expect(useChatUiStore.getState().agentStatus).toBe('idle');
   });
 
+  it('sends workflow metadata and permission source for /review commands', async () => {
+    installMegumiMock();
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: '/review 当前改动',
+        permissionMode: 'plan',
+        permissionSource: 'workflow_default',
+        model: 'deepseek-v4-flash',
+        workflow: {
+          intent: 'code_review',
+          source: 'builtin_command',
+          commandName: 'review',
+          argsText: '当前改动',
+        },
+      });
+    });
+
+    expect(window.megumi.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        message: expect.objectContaining({ content: '/review 当前改动' }),
+        context: expect.objectContaining({
+          permissionMode: 'plan',
+          permissionSource: 'workflow_default',
+          workflow: {
+            intent: 'code_review',
+            source: 'builtin_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        }),
+      }),
+    }));
+  });
+
   it('does not synthesize artifact state from completed runtime chat output', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());

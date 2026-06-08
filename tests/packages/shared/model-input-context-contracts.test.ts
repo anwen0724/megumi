@@ -4,6 +4,7 @@ import {
   MODEL_INPUT_CONTEXT_BUDGET_STATUSES,
   MODEL_INPUT_CONTEXT_PART_KINDS,
   MODEL_INPUT_CONTEXT_SOURCE_KINDS,
+  MODEL_INPUT_INSTRUCTION_KINDS,
   MODEL_INPUT_SESSION_PART_KINDS,
   ModelInputContextSchema,
   type AgentInstructionSourceSnapshot,
@@ -83,6 +84,24 @@ describe('ModelInputContext contracts', () => {
           tokenEstimate: 6,
           budgetStatus: 'included_full',
         },
+        {
+          partId: 'part:instruction:workflow:review',
+          kind: 'instruction',
+          instructionKind: 'workflow',
+          text: 'Workflow intent: code_review.',
+          sourceRefs: [sourceRef('workflow-command:review', 'runtime_constraint')],
+          priority: 95,
+          tokenEstimate: 4,
+          budgetStatus: 'included_full',
+          metadata: {
+            workflow: {
+              intent: 'code_review',
+              source: 'builtin_command',
+              commandName: 'review',
+              argsText: '当前改动',
+            },
+          },
+        },
       ],
       budget: {
         modelContextWindow: 8192,
@@ -96,6 +115,7 @@ describe('ModelInputContext contracts', () => {
           { partId: 'part:session:1', tokenEstimate: 10, budgetStatus: 'included_reduced' },
           { partId: 'part:tool:1', tokenEstimate: 8, budgetStatus: 'included_full' },
           { partId: 'part:runtime:1', tokenEstimate: 6, budgetStatus: 'included_full' },
+          { partId: 'part:instruction:workflow:review', tokenEstimate: 4, budgetStatus: 'included_full' },
         ],
       },
       trace: {
@@ -129,6 +149,7 @@ describe('ModelInputContext contracts', () => {
       'session',
       'tool_continuation',
       'runtime_constraint',
+      'instruction',
     ]);
     expect(parsed.parts[0]?.sourceRefs[0]?.sourceKind).toBe('system_instruction');
     expect(parsed.parts[2]?.budgetStatus).toBe('included_reduced');
@@ -465,6 +486,14 @@ describe('ModelInputContext contracts', () => {
       'session_history',
       'session_runtime_fact',
       'session_summary',
+    ]);
+    expect(MODEL_INPUT_INSTRUCTION_KINDS).toEqual([
+      'system',
+      'project',
+      'mode',
+      'developer',
+      'user',
+      'workflow',
     ]);
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toEqual([
       'system_instruction',
