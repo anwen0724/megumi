@@ -19,7 +19,7 @@ export function BranchDraftStack({ branchDraft }: BranchDraftStackProps) {
   return (
     <div
       data-testid="branch-draft-stack"
-      className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)] shadow-[var(--shadow-soft)]"
+      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)] shadow-[var(--shadow-soft)]"
     >
       <span className="truncate">{branchDraft.label}</span>
       <Button

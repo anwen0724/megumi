@@ -4,8 +4,14 @@ import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
-import { Composer, type ComposerStatus, type ComposerSubmitPayload } from '../components/Composer';
+import { CommandSuggestionPanel } from '../components/CommandSuggestionPanel';
+import { ComposerSurface } from '../components/ComposerSurface';
+import type { ComposerStatus, ComposerSubmitPayload } from '../components/composer-types';
 import { RecoverableActionStack } from '../components/RecoverableActionStack';
+import { useComposerController } from '../hooks/use-composer-controller';
+import { ComposerOverlayLayer } from './ComposerOverlayLayer';
+
+const COMPOSER_DOCK_BOTTOM_PADDING = 12;
 
 interface ComposerDockProps {
   status: ComposerStatus;
@@ -36,14 +42,31 @@ export function ComposerDock({
   onStop,
   onHeightChange,
 }: ComposerDockProps) {
-  const dockRef = useRef<HTMLDivElement | null>(null);
+  const composerSurfaceRef = useRef<HTMLFormElement | null>(null);
+  const {
+    commandSuggestionPanelProps,
+    composerSurfaceProps,
+  } = useComposerController({
+    status,
+    seedTextKey: branchDraft?.key ?? null,
+    seedText: branchDraft?.seedText ?? null,
+    onSubmit,
+    onStop,
+    onAttachFiles: () => undefined,
+    onChooseContext: () => undefined,
+  });
+  const hasOverlayContent =
+    pendingApprovals.length > 0 ||
+    recoverableRuns.length > 0 ||
+    Boolean(branchDraft) ||
+    Boolean(commandSuggestionPanelProps);
 
   useLayoutEffect(() => {
-    const element = dockRef.current;
+    const element = composerSurfaceRef.current;
     if (!element || !onHeightChange) return undefined;
 
     const publishHeight = () => {
-      onHeightChange(Math.ceil(element.getBoundingClientRect().height));
+      onHeightChange(Math.ceil(element.getBoundingClientRect().height) + COMPOSER_DOCK_BOTTOM_PADDING);
     };
 
     publishHeight();
@@ -60,29 +83,30 @@ export function ComposerDock({
 
   return (
     <div
-      ref={dockRef}
       data-testid="composer-dock"
       className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-transparent pb-3"
     >
-      <div data-testid="composer-dock-content" className="pointer-events-auto mx-auto w-[calc(100%-3rem)] max-w-[var(--chat-composer-width)]">
-        <ApprovalStack requests={pendingApprovals} onResolve={onApprovalResolve} />
-        <RecoverableActionStack
-          runs={recoverableRuns}
-          pendingRunIds={pendingRecoverableRunIds}
-          onRetry={onRetry}
-          onRerun={onRerun}
-          onMarkCancelled={onMarkCancelled}
-        />
-        <BranchDraftStack branchDraft={branchDraft} />
-        <Composer
-          status={status}
-          seedTextKey={branchDraft?.key ?? null}
-          seedText={branchDraft?.seedText ?? null}
-          onSubmit={onSubmit}
-          onStop={onStop}
-          onAttachFiles={() => undefined}
-          onChooseContext={() => undefined}
-        />
+      <div
+        data-testid="composer-dock-column"
+        className="pointer-events-auto relative mx-auto w-[calc(100%-3rem)] max-w-[var(--chat-composer-width)]"
+      >
+        {hasOverlayContent ? (
+          <ComposerOverlayLayer>
+            <ApprovalStack requests={pendingApprovals} onResolve={onApprovalResolve} />
+            <RecoverableActionStack
+              runs={recoverableRuns}
+              pendingRunIds={pendingRecoverableRunIds}
+              onRetry={onRetry}
+              onRerun={onRerun}
+              onMarkCancelled={onMarkCancelled}
+            />
+            <BranchDraftStack branchDraft={branchDraft} />
+            {commandSuggestionPanelProps ? (
+              <CommandSuggestionPanel {...commandSuggestionPanelProps} />
+            ) : null}
+          </ComposerOverlayLayer>
+        ) : null}
+        <ComposerSurface ref={composerSurfaceRef} {...composerSurfaceProps} />
       </div>
     </div>
   );

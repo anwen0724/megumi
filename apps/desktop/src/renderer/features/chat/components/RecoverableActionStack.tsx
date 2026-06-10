@@ -20,7 +20,7 @@ export function RecoverableActionStack({
   if (runs.length === 0) return null;
 
   return (
-    <section aria-label="Recoverable run fallback actions" className="mb-3 space-y-2">
+    <section aria-label="Recoverable run fallback actions" className="space-y-2">
       {runs.map((run) => {
         const actions = recoverableActionsFor(run);
         if (actions.length === 0) return null;

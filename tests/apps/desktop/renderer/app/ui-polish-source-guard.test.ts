@@ -72,7 +72,8 @@ describe('UI polish source guard', () => {
     expect(messageScrollPanel).toContain('bottom-4');
     expect(messageColumn).toContain('data-testid="message-column"');
     expect(composerDock).toContain('data-testid="composer-dock"');
-    expect(composerDock).toContain('data-testid="composer-dock-content"');
+    expect(composerDock).toContain('data-testid="composer-dock-column"');
+    expect(composerDock).not.toContain('data-testid="composer-dock-content"');
     expect(composerDock).toContain('w-[calc(100%-3rem)]');
     expect(composerDock).toContain('max-w-[var(--chat-composer-width)]');
     expect(composerDock).not.toContain('px-6');

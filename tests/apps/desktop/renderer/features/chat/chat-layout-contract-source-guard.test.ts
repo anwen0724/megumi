@@ -57,6 +57,7 @@ describe('13.02 chat layout contract source guard', () => {
     const messageColumn = readSource('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
     const bottomSpacer = readSource('apps/desktop/src/renderer/features/chat/layout/BottomSpacer.tsx');
     const composerDock = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx');
+    const composerOverlayLayer = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerOverlayLayer.tsx');
     const composer = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
 
@@ -67,7 +68,8 @@ describe('13.02 chat layout contract source guard', () => {
     expect(messageColumn).not.toContain('RecoverableActionStack');
     expect(bottomSpacer).toContain('data-testid="message-bottom-spacer"');
     expect(composerDock).toContain('data-testid="composer-dock"');
-    expect(composerDock).toContain('data-testid="composer-dock-content"');
+    expect(composerDock).toContain('data-testid="composer-dock-column"');
+    expect(composerDock).not.toContain('data-testid="composer-dock-content"');
     expect(composerDock).toContain('bg-transparent');
     expect(composerDock).toContain('pb-3');
     expect(composerDock).not.toContain('bg-transparent px-6');
@@ -75,7 +77,11 @@ describe('13.02 chat layout contract source guard', () => {
     expect(composerDock).toContain('<ApprovalStack');
     expect(composerDock).toContain('<RecoverableActionStack');
     expect(composerDock).toContain('<BranchDraftStack');
-    expect(composerDock).toContain('<Composer');
+    expect(composerDock).toContain('<ComposerOverlayLayer');
+    expect(composerDock).toContain('<ComposerSurface');
+    expect(composerOverlayLayer).toContain('data-testid="composer-overlay-layer"');
+    expect(composerOverlayLayer).toContain('absolute');
+    expect(composerOverlayLayer).toContain('bottom-[calc(100%+0.5rem)]');
     expect(composer).not.toContain('composer-branch-draft-row');
     expect(chatPage).toContain('--chat-column-width');
     expect(chatPage).toContain('--chat-composer-width');

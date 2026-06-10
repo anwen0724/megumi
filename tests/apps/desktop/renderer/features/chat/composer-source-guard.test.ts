@@ -24,11 +24,13 @@ function readTabLabels(source: string): string[] {
 describe('composer source guard', () => {
   it('keeps shortcut hints and running draft explanations out of persistent composer copy', () => {
     const composer = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
-    const composerCopy = readJsxTextAndStringProps(composer);
+    const composerSurface = readSource('apps/desktop/src/renderer/features/chat/components/ComposerSurface.tsx');
+    const commandSuggestionPanel = readSource('apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx');
+    const composerCopy = readJsxTextAndStringProps(`${composer}\n${composerSurface}\n${commandSuggestionPanel}`);
 
-    expect(composer).not.toMatch(/Shift\s*\+\s*Enter|Alt\s*\+\s*Enter/i);
+    expect(`${composer}\n${composerSurface}\n${commandSuggestionPanel}`).not.toMatch(/Shift\s*\+\s*Enter|Alt\s*\+\s*Enter/i);
     expect(composerCopy).not.toMatch(/\bshortcut\b/i);
-    expect(composer).not.toMatch(/next message after this run/i);
+    expect(`${composer}\n${composerSurface}\n${commandSuggestionPanel}`).not.toMatch(/next message after this run/i);
   });
 
   it('does not move composer mode or model controls into the titlebar', () => {
@@ -44,7 +46,7 @@ describe('composer source guard', () => {
   });
 
   it('keeps composer toolbar controls on one line', () => {
-    const composer = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
+    const composer = readSource('apps/desktop/src/renderer/features/chat/components/ComposerSurface.tsx');
 
     expect(composer).toMatch(/data-testid="composer-toolbar" className="[^"]*\bflex-nowrap\b/);
     expect(composer).not.toMatch(/data-testid="composer-toolbar" className="[^"]*\bflex-wrap\b/);
@@ -60,6 +62,7 @@ describe('composer source guard', () => {
     const chatPage = readSource('apps/desktop/src/renderer/features/chat/pages/ChatPage.tsx');
     const messageScrollPanel = readSource('apps/desktop/src/renderer/features/chat/layout/MessageScrollPanel.tsx');
     const composerDock = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx');
+    const composerOverlayLayer = readSource('apps/desktop/src/renderer/features/chat/layout/ComposerOverlayLayer.tsx');
     const messageColumn = readSource('apps/desktop/src/renderer/features/chat/layout/MessageColumn.tsx');
 
     expect(chatPage).toContain('<ChatViewport');
@@ -71,7 +74,8 @@ describe('composer source guard', () => {
     expect(messageColumn).toContain('data-testid="message-column"');
     expect(messageColumn).toContain('<BottomSpacer');
     expect(composerDock).toContain('data-testid="composer-dock"');
-    expect(composerDock).toContain('data-testid="composer-dock-content"');
+    expect(composerDock).toContain('data-testid="composer-dock-column"');
+    expect(composerDock).not.toContain('data-testid="composer-dock-content"');
     expect(composerDock).toContain('bg-transparent');
     expect(composerDock).toContain('pb-3');
     expect(composerDock).not.toContain('bg-transparent px-6');
@@ -81,7 +85,13 @@ describe('composer source guard', () => {
     expect(composerDock).toContain('w-[calc(100%-3rem)]');
     expect(composerDock).toContain('max-w-[var(--chat-composer-width)]');
     expect(composerDock).not.toContain('px-6');
-    expect(composerDock).toContain('<Composer');
+    expect(composerDock).toContain('<ComposerOverlayLayer');
+    expect(composerDock).toContain('<CommandSuggestionPanel');
+    expect(composerDock).toContain('<ComposerSurface');
+    expect(composerDock.indexOf('<ComposerOverlayLayer')).toBeLessThan(composerDock.indexOf('<ComposerSurface'));
+    expect(composerOverlayLayer).toContain('data-testid="composer-overlay-layer"');
+    expect(composerOverlayLayer).toContain('absolute');
+    expect(composerOverlayLayer).toContain('bottom-[calc(100%+0.5rem)]');
     expect(chatPage).not.toContain('chat-composer-dock');
     expect(chatPage).not.toContain('chat-message-scroll-area');
   });

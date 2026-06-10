@@ -370,7 +370,7 @@ describe('ChatPage flow', () => {
     const messageScrollArea = screen.getByTestId('message-scroll-panel');
     const messageContentColumn = screen.getByTestId('message-column');
     const composerDock = screen.getByTestId('composer-dock');
-    const composerContentColumn = screen.getByTestId('composer-dock-content');
+    const composerContentColumn = screen.getByTestId('composer-dock-column');
     const contentColumn = screen.getByRole('log', { name: 'Chat timeline' });
 
     expect(root).toHaveClass('relative');

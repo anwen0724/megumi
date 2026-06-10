@@ -14,7 +14,7 @@ export function ApprovalStack({ requests, onResolve }: ApprovalStackProps) {
       aria-label="Blocking approval controls"
       aria-live="polite"
       aria-atomic="true"
-      className="mb-3 space-y-2"
+      className="space-y-2"
     >
       {requests.map((request) => (
         <ApprovalCard
