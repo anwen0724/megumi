@@ -34,6 +34,10 @@ function productionSourceFiles(): string[] {
   ].filter((path) => !path.includes('/archive/'));
 }
 
+function rendererProductionFiles(): string[] {
+  return filesUnder('apps/desktop/src/renderer');
+}
+
 function offenders(paths: string[], forbidden: RegExp[]): string[] {
   const matches: string[] = [];
   for (const path of paths) {
@@ -48,11 +52,14 @@ function offenders(paths: string[], forbidden: RegExp[]): string[] {
 }
 
 describe('Command system source guards', () => {
-  it('keeps generic command primitives in renderer shared and input command definitions in input-commands', () => {
+  it('keeps generic command primitives in renderer shared and input definitions in the input feature', () => {
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-parser.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-dispatcher.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-types.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input-commands/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/commands/built-in-input-commands.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/preprocessing/input-preprocessing-submit.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input-commands'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/workflow-commands'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/commands'))).toBe(false);
   });
@@ -77,17 +84,27 @@ describe('Command system source guards', () => {
     ], [
       /features\/commands/,
       /features\/workflow-commands/,
-      /features\/input-commands\/(?!index)/,
+      /features\/input\/(?!index)/,
+      /features\/input-commands/,
       /\.\.\/\.\.\/commands/,
-      /\.\.\/input-commands\/(?!index)/,
+      /\.\.\/input\/(?!index)/,
+      /\.\.\/input-commands/,
       /\.\.\/workflow-commands/,
     ])).toEqual([]);
   });
 
-  it('keeps input commands from depending on chat internals', () => {
-    expect(offenders(filesUnder('apps/desktop/src/renderer/features/input-commands'), [
+  it('keeps the input feature from depending on chat internals', () => {
+    expect(offenders(filesUnder('apps/desktop/src/renderer/features/input'), [
       /features\/chat/,
       /\.\.\/chat/,
+    ])).toEqual([]);
+  });
+
+  it('keeps production renderer code off the old input-commands feature path', () => {
+    expect(offenders(rendererProductionFiles(), [
+      /features\/input-commands/,
+      /\.\.\/input-commands/,
+      /@megumi\/shared\/input-command/,
     ])).toEqual([]);
   });
 
