@@ -1,9 +1,9 @@
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { ProviderId } from '@megumi/shared/provider-contracts';
-import type { RuntimeContext } from '@megumi/shared/runtime-context';
-import type { RuntimeError, RuntimeErrorCode } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { createRunFailedEvent } from '@megumi/shared/runtime-event-factory';
+﻿import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { ProviderId } from '@megumi/shared/provider';
+import type { RuntimeContext } from '@megumi/shared/runtime';
+import type { RuntimeError, RuntimeErrorCode } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { createRunFailedEvent } from '@megumi/shared/runtime';
 import { normalizeRuntimeError } from '@megumi/core/runtime-exception';
 import type {
   AiProviderAdapter,
@@ -155,3 +155,4 @@ export function createModelStepProviderService(
     registry: createAiProviderRegistry(),
   });
 }
+

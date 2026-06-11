@@ -1,13 +1,13 @@
-import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcResult } from '@megumi/shared/ipc-contracts';
+﻿import { create } from 'zustand';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcResult } from '@megumi/shared/ipc';
 import type {
   ProviderApiKeyPayload,
   ProviderDeleteApiKeyPayload,
   ProviderListData,
   ProviderUpdatePayload,
-} from '@megumi/shared/ipc-schemas';
-import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/ipc';
+import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,
@@ -128,3 +128,4 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     await get().loadProviders();
   },
 }));
+

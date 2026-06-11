@@ -1,8 +1,8 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { SettingsPage } from '@megumi/desktop/renderer/shell/SettingsPage';
 import { ThemeProvider, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 
@@ -135,3 +135,4 @@ describe('SettingsPage', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 });
+

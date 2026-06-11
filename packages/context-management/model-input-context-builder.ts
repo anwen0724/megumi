@@ -1,9 +1,9 @@
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
+﻿import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import {
   ModelInputContextSchema,
   type ModelInputContext,
   type ModelInputContextExcludedSource,
-} from '@megumi/shared/model-input-context-contracts';
+} from '@megumi/shared/model';
 import {
   applyContextBudget,
   type ModelInputContextPartDraft,
@@ -52,3 +52,4 @@ export function buildModelInputContext(input: BuildModelInputContextInput): Mode
 function resolveContextBudgetPolicy(input: BuildModelInputContextInput): ContextBudgetPolicy {
   return input.budgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
 }
+

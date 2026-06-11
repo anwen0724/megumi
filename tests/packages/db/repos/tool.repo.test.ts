@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
@@ -11,7 +11,7 @@ import type {
   ToolExecution,
   ToolObservation,
   ToolResult,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 
 let db: Database.Database | null = null;
 
@@ -515,3 +515,4 @@ function seedSecondRunStep(database: Database.Database): void {
     VALUES ('step-2', 'run-2', 'model', 'running')
   `).run();
 }
+

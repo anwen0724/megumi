@@ -1,7 +1,7 @@
 ﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { RunContext, RunContextSource } from '@megumi/shared/run-context-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RunContext, RunContextSource } from '@megumi/shared/run';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { useRunContextStore } from '@megumi/desktop/renderer/entities/run-context/store';
 
 const createdAt = '2026-05-15T00:00:00.000Z';
@@ -105,3 +105,4 @@ describe('useRunContextStore', () => {
     expect(JSON.stringify(useRunContextStore.getState())).not.toContain('raw full prompt');
   });
 });
+

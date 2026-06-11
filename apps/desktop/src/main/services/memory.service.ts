@@ -1,4 +1,4 @@
-import type { MemoryRepository } from '@megumi/db';
+﻿import type { MemoryRepository } from '@megumi/db';
 import {
   createDefaultMemoryPolicy,
   createMemoryCandidateDraft,
@@ -17,7 +17,7 @@ import type {
   MemoryScope,
   MemorySettings,
   MemorySourceRef,
-} from '@megumi/shared/memory-contracts';
+} from '@megumi/shared/memory';
 import {
   createRuntimeMemoryAccessRecordedEvent,
   createRuntimeMemoryCandidateAcceptedEvent,
@@ -27,8 +27,8 @@ import {
   createRuntimeMemoryRecallRequestedEvent,
   createRuntimeMemoryRecordCreatedEvent,
   createRuntimeMemoryRecordStatusChangedEvent,
-} from '@megumi/shared/runtime-event-factory';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface MemoryServiceDependencies {
   repository: MemoryRepository;
@@ -372,3 +372,4 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
     },
   };
 }
+

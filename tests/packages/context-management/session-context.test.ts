@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { buildSessionContextParts } from '@megumi/context-management/session-context';
-import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
-import type { SessionContextInput, SessionHistoryEntryStatus } from '@megumi/shared/session-context-contracts';
+import type { ModelInputContextSourceRef } from '@megumi/shared/model';
+import type { SessionContextInput, SessionHistoryEntryStatus } from '@megumi/shared/session';
 
 const builtAt = '2026-05-29T00:00:00.000Z';
 
@@ -294,3 +294,4 @@ describe('buildSessionContextParts', () => {
     });
   });
 });
+

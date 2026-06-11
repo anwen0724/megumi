@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from 'react';
+﻿import { FormEvent, useEffect, useState } from 'react';
 import { KeyRound, RefreshCw, Trash2 } from 'lucide-react';
-import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider-contracts';
+import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider';
 import { useProviderStore } from '../../../entities/provider';
 import { Badge, Button, IconButton, TextField } from '../../../shared/ui';
 import { COMPOSER_MODEL_OPTIONS } from '../../chat/components/composer-options';
@@ -210,3 +210,4 @@ export function ProviderSettingsPanel() {
     </div>
   );
 }
+

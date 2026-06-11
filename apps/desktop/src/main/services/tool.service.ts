@@ -1,4 +1,4 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
@@ -6,14 +6,14 @@ import type {
   ApprovalRecord,
   ToolDefinition,
   ToolExecution,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 import type {
   ApprovalResolvePayload,
   ToolDefinitionsListPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import type { ToolRegistry } from '@megumi/tools/registry';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { MegumiHomePaths } from './megumi-home.service';
 
 export interface ApprovalResolveServiceResult {
@@ -110,3 +110,4 @@ export function createDefaultToolService(homePaths: MegumiHomePaths): ToolServic
     registry: createBuiltInToolRegistry(),
   });
 }
+

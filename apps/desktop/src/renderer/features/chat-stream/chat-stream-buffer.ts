@@ -1,4 +1,4 @@
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
+﻿import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 
 export type ChatStreamBufferResult =
   | { status: 'accepted' }
@@ -145,3 +145,4 @@ function deltaKey(event: BufferedDeltaEvent): string {
 
   return `thinking:${event.thinkingId}`;
 }
+

@@ -1,7 +1,7 @@
-import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+﻿import { ipcMain } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   RecoverableRunListData,
   RunCancelData,
@@ -11,7 +11,7 @@ import type {
   RunRetryData,
   RunRetryPayload,
   WorkspaceRestoreData,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import {
   RecoverableRunListRequestSchema,
   RunCancelRequestSchema,
@@ -19,7 +19,7 @@ import {
   RunRetryRequestSchema,
   WorkspaceRestorePayloadSchema,
   WorkspaceRestoreRequestSchema,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import type { RecoveryService } from '../../services/recovery.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
@@ -104,3 +104,4 @@ function mapRecoveryIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+

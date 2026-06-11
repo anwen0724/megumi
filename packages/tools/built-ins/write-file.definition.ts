@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ToolDefinition } from '@megumi/shared/tool';
 
 export const writeFileDefinition: ToolDefinition = {
   name: 'write_file',
@@ -30,3 +30,4 @@ export const writeFileDefinition: ToolDefinition = {
   sideEffect: 'project_file_operation',
   availability: { status: 'available' },
 };
+

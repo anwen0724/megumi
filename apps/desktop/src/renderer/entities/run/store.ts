@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import type { RunStepKind, RunStepStatus, RunStatus } from '@megumi/shared/session-run-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import { create } from 'zustand';
+import type { RunStepKind, RunStepStatus, RunStatus } from '@megumi/shared/session';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 export type RendererRunStatus = RunStatus;
 
@@ -166,3 +166,4 @@ export const useRunStore = create<RunState>((set) => ({
     lastError: null,
   }),
 }));
+

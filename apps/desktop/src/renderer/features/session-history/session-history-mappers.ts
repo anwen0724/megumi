@@ -1,6 +1,6 @@
-import type { Run, Session } from '@megumi/shared/session-run-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { AnswerTextBlock, TimelineMessage } from '@megumi/shared/timeline-message-blocks';
+﻿import type { Run, Session } from '@megumi/shared/session';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { AnswerTextBlock, TimelineMessage } from '@megumi/shared/timeline';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
 
 export interface TimelineHistoryMessage {
@@ -69,3 +69,4 @@ export function hydratedRuntimeEventsForRuns(
       return createdAtOrder === 0 ? left.sequence - right.sequence : createdAtOrder;
     });
 }
+

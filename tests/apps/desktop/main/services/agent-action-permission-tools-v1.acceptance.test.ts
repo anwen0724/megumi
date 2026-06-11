@@ -1,8 +1,8 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { evaluatePermissionPolicy } from '@megumi/security/tool-policy';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 
 const registry = createBuiltInToolRegistry();
 const projectRoot = 'C:/all/work/study/megumi';
@@ -198,3 +198,4 @@ describe('agent action permission tools v1 acceptance', () => {
     expect(protectedPathDecision.reason).toMatch(/Protected path|protected/i);
   });
 });
+

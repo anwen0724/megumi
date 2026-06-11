@@ -1,7 +1,7 @@
-import fs from 'fs-extra';
+﻿import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
-import type { PermissionRules } from '@megumi/shared/permission-settings-contracts';
+import type { PermissionRules } from '@megumi/shared/permission';
 
 export const MEGUMI_HOME_VERSION = 1;
 export const MEGUMI_HOME_MIGRATION_ID = 'megumi-home-v1';
@@ -416,3 +416,4 @@ function writeTextIfMissingSync(
 
   fileSystem.writeFileSync(filePath, data);
 }
+

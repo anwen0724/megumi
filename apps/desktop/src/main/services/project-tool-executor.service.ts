@@ -1,6 +1,6 @@
-import fs from 'fs-extra';
+﻿import fs from 'fs-extra';
 import { normalizeToolError } from '@megumi/tools/normalization';
-import type { ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { WorkspaceChangeExecutionScope } from './workspace-change-tracker.service';
 import {
   createEditFileExecutor,
@@ -78,3 +78,4 @@ export function createProjectToolExecutor(options: ProjectToolExecutorOptions): 
     },
   };
 }
+

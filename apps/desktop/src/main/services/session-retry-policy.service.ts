@@ -1,5 +1,5 @@
-import type { SessionRetryReason } from '@megumi/shared/session-active-path-contracts';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+﻿import type { SessionRetryReason } from '@megumi/shared/session';
+import type { RuntimeError } from '@megumi/shared/runtime';
 
 export interface AutomaticModelStepRetryDecision {
   retryable: boolean;
@@ -65,3 +65,4 @@ export function createAutomaticRetryBackoffMs(input: {
 
   return Math.min(delayMs, maxDelayMs);
 }
+

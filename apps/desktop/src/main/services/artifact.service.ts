@@ -1,12 +1,12 @@
-import type { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
+﻿import type { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import type {
   Artifact,
   ArtifactKind,
   ArtifactSourceRef,
   ArtifactStatus,
   ArtifactVersion,
-} from '@megumi/shared/artifact-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+} from '@megumi/shared/artifact';
+import type { JsonObject } from '@megumi/shared/primitives';
 import type { ArtifactContentStore } from './artifact-content-store.service';
 
 export interface ArtifactServiceIds {
@@ -217,3 +217,4 @@ export class ArtifactService {
     return this.options.contentStore.writeText(input);
   }
 }
+

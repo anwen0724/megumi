@@ -1,11 +1,11 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import {
   PermissionSettingsSchema,
   mergePermissionSettingsScopes,
   type MergedPermissionSettings,
   type PermissionSettings,
   type ScopedPermissionSettings,
-} from '@megumi/shared/permission-settings-contracts';
+} from '@megumi/shared/permission';
 
 export interface PermissionSettingsFileSystem {
   pathExists(filePath: string): Promise<boolean>;
@@ -84,3 +84,4 @@ async function readUserSettingsIfPresent(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -67,7 +67,7 @@ describe('runtime lifecycle cleanup final source guards', () => {
     const contextManagement = read('packages/context-management/model-step-input-context.ts');
     const runContext = read('packages/shared/run-context-contracts.ts');
 
-    expect(contextManagement).not.toContain('@megumi/shared/run-context-contracts');
+    expect(contextManagement).not.toContain('@megumi/shared/run');
     expect(contextManagement).not.toContain('runContext?:');
     expect(contextManagement).not.toContain('input.runContext');
     expect(runContext).toContain('contextBudgetPolicy: ContextBudgetPolicySchema');
@@ -98,3 +98,4 @@ describe('runtime lifecycle cleanup final source guards', () => {
     expect(source).not.toMatch(/\brun_mode_snapshots\b/);
   });
 });
+

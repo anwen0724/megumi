@@ -1,4 +1,4 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
@@ -10,9 +10,9 @@ import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import type { ProviderId } from '@megumi/shared/provider-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { createChatStreamEvent } from '@megumi/shared/chat-stream-event-factory';
+import type { ProviderId } from '@megumi/shared/provider';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { createChatStreamEvent } from '@megumi/shared/chat-stream';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
@@ -300,4 +300,5 @@ registerAppLifecycle({
 function nextPersistedRuntimeSequence(events: RuntimeEvent[]): number {
   return events.reduce((maxSequence, event) => Math.max(maxSequence, event.sequence), 0) + 1;
 }
+
 

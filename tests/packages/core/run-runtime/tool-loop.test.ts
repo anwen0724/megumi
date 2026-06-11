@@ -1,9 +1,9 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import { runModelToolLoop } from '@megumi/core/run-runtime/tool-loop';
 import type {
   PendingToolApproval,
@@ -809,3 +809,4 @@ describe('run model tool loop', () => {
     });
   });
 });
+

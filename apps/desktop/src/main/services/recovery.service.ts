@@ -1,26 +1,26 @@
-import type { RecoveryRepository } from '@megumi/db';
+﻿import type { RecoveryRepository } from '@megumi/db';
 import type {
   CancelRequest,
   RecoverableRunSummary,
   ResumeRequest,
   RetryRequest,
-} from '@megumi/shared/recovery-contracts';
+} from '@megumi/shared/recovery';
 import {
   CancelRequestSchema,
   ResumeRequestSchema,
   RetryRequestSchema,
-} from '@megumi/shared/recovery-contracts';
+} from '@megumi/shared/recovery';
 import type {
   WorkspaceRestoreData,
   WorkspaceRestorePayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import {
   createRunInterruptedEvent,
   createWorkspaceRestoreCompletedEvent,
   createWorkspaceRestoreRequestedEvent,
-} from '@megumi/shared/runtime-event-factory';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { WorkspaceChangeSummary } from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { WorkspaceChangeSummary } from '@megumi/shared/workspace';
 
 export interface RecoveryIds {
   resumeRequestId(): string;
@@ -165,3 +165,4 @@ function numberMetadata(metadata: WorkspaceRestoreData['result']['metadata'], ke
   const value = metadata?.[key];
   return typeof value === 'number' ? value : 0;
 }
+

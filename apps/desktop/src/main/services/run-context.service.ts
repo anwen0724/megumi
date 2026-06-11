@@ -1,12 +1,12 @@
-import { readdirSync, statSync } from 'node:fs';
+﻿import { readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { createDatabase } from '@megumi/db/connection';
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   RunContext,
   RunContextSource,
   ModelCapabilitySummary,
-} from '@megumi/shared/run-context-contracts';
+} from '@megumi/shared/run';
 import { RunContextRepository } from '@megumi/db/repos/run-context.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { MegumiHomePaths } from './megumi-home.service';
@@ -165,3 +165,4 @@ export function createDefaultRunContextService(homePaths: MegumiHomePaths): RunC
     contextRepository: new RunContextRepository(database),
   });
 }
+

@@ -1,7 +1,7 @@
-import crypto from 'node:crypto';
+﻿import crypto from 'node:crypto';
 import path from 'node:path';
 import type { MegumiDatabase } from '../connection';
-import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project-contracts';
+import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project';
 
 type NodePlatform = NodeJS.Platform;
 
@@ -160,3 +160,4 @@ function basenameProjectRepoPath(repoPath: string, platform: NodePlatform): stri
 function pathApiFor(platform: NodePlatform): typeof path.win32 | typeof path.posix {
   return platform === 'win32' ? path.win32 : path.posix;
 }
+

@@ -1,16 +1,16 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management';
 import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool-call-handler.service';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
   ToolExecution,
   ToolResult,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 
 describe('ToolCallHandlerService', () => {
   it('persists policy decisions, executes allowed tools, and returns saved ToolResult records', async () => {
@@ -650,3 +650,4 @@ function fakeRepository(initial?: {
     getRunSessionId: vi.fn((runId: string) => (runId === 'run-1' ? 'session-1' : undefined)),
   };
 }
+

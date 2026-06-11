@@ -1,28 +1,28 @@
-import {
+﻿import {
   buildSessionCompactionSummaryInputContext,
   extractSessionCompactionFileMetadata,
   prepareSessionCompactionInput,
   shouldRunSessionCompaction,
 } from '@megumi/context-management/session-compaction';
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
-import type { ModelId } from '@megumi/shared/model-contracts';
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
+import type { ModelId } from '@megumi/shared/model';
 import type {
   ModelInputContext,
   ModelInputContextSourceKind,
-} from '@megumi/shared/model-input-context-contracts';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { ProviderId } from '@megumi/shared/provider-contracts';
-import type { RuntimeContext } from '@megumi/shared/runtime-context';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/model';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { ProviderId } from '@megumi/shared/provider';
+import type { RuntimeContext } from '@megumi/shared/runtime';
+import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createContextCompactionCompletedEvent,
   createContextCompactionFailedEvent,
   createContextCompactionStartedEvent,
-} from '@megumi/shared/runtime-event-factory';
-import type { SessionCompactionEntry } from '@megumi/shared/session-compaction-contracts';
-import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
-import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
+} from '@megumi/shared/runtime';
+import type { SessionCompactionEntry } from '@megumi/shared/session';
+import type { SessionContextInput } from '@megumi/shared/session';
+import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session';
 
 export interface SessionCompactionOrchestratorRepository {
   getLatestCompletedSessionCompaction(sessionId: string): SessionCompactionEntry | null;
@@ -436,3 +436,4 @@ function isRuntimeError(value: unknown): value is RuntimeError {
     && typeof (value as RuntimeError).retryable === 'boolean'
     && typeof (value as RuntimeError).source === 'string';
 }
+

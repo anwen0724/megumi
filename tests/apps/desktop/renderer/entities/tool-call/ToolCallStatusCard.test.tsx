@@ -1,8 +1,8 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ToolCallStatusCard } from '@megumi/desktop/renderer/entities/tool-call';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 
 function createToolExecution(overrides: Partial<ToolExecution> = {}): ToolExecution {
   return {
@@ -104,3 +104,4 @@ describe('ToolCallStatusCard', () => {
     expect(screen.getByText('Command failed')).toBeInTheDocument();
   });
 });
+

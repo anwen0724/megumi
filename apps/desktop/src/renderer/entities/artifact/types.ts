@@ -1,4 +1,4 @@
-import type { ArtifactKind, ArtifactStatus } from '@megumi/shared/artifact-contracts';
+﻿import type { ArtifactKind, ArtifactStatus } from '@megumi/shared/artifact';
 
 export interface ArtifactCardData {
   artifactId: string;
@@ -8,3 +8,4 @@ export interface ArtifactCardData {
   textPreview: string;
   currentVersionId?: string;
 }
+

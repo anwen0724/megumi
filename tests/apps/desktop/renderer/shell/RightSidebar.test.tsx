@@ -1,8 +1,8 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { RightSidebar } from '@megumi/desktop/renderer/shell/RightSidebar';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
@@ -183,3 +183,4 @@ describe('RightSidebar', () => {
     expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
   });
 });
+

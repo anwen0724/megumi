@@ -1,11 +1,11 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import {
   type ImplementationPlanArtifactRecord,
   type ImplementationPlanArtifactStatus,
   type PermissionModeState,
   type PermissionSnapshotRecord,
-} from '@megumi/shared/permission-snapshot-contracts';
-import { isPermissionMode, type PermissionMode } from '@megumi/shared/permission-mode-contracts';
+} from '@megumi/shared/permission';
+import { isPermissionMode, type PermissionMode } from '@megumi/shared/permission';
 
 interface PermissionSnapshotState {
   activeRunId: string | null;
@@ -70,3 +70,4 @@ export const usePermissionSnapshotStore = create<PermissionSnapshotState>((set) 
     lastError: null,
   }),
 }));
+

@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { forwardChatStreamEvent } from '@megumi/desktop/main/ipc/chat-stream-event-forwarder';
 
 function createLogger() {
@@ -88,3 +88,4 @@ describe('forwardChatStreamEvent', () => {
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain('sk-chat-stream-secret');
   });
 });
+

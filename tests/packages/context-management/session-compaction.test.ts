@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
+﻿import { describe, expect, it } from 'vitest';
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import {
   buildSessionCompactionSummaryInputContext,
   extractSessionCompactionFileMetadata,
@@ -9,13 +9,13 @@ import {
 } from '@megumi/context-management/session-compaction';
 import { estimateModelInputContextTokens } from '@megumi/context-management/context-budget';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
-import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
+import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
   SessionContextInput,
   SessionHistoryEntry,
   SessionRuntimeFact,
   SessionSummaryEntry,
-} from '@megumi/shared/session-context-contracts';
+} from '@megumi/shared/session';
 
 const builtAt = '2026-05-31T11:00:00.000Z';
 
@@ -355,3 +355,4 @@ describe('serializeSessionCompactionInput', () => {
     expect(text.length).toBeLessThan(2500);
   });
 });
+

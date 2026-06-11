@@ -1,6 +1,6 @@
-import type { Artifact, ArtifactStatus } from '@megumi/shared/artifact-contracts';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission-snapshot-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+﻿import type { Artifact, ArtifactStatus } from '@megumi/shared/artifact';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
+import type { JsonObject } from '@megumi/shared/primitives';
 import type { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 
 export interface PlanArtifactCompatibilityServiceOptions {
@@ -66,3 +66,4 @@ function mergeMetadata(
 function assertNever(value: never): never {
   throw new Error(`Unsupported implementation plan status: ${String(value)}`);
 }
+

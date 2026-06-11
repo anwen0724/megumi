@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import { createSearchTextExecutor } from '@megumi/desktop/main/services/tool-executors/search-text.executor';
 
 describe('SearchTextExecutor', () => {
@@ -107,3 +107,4 @@ function fakeFileSystem(files: Map<string, string>) {
     },
   };
 }
+

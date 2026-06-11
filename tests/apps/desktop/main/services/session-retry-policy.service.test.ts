@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import {
   classifyAutomaticModelStepRetry,
   createAutomaticRetryBackoffMs,
 } from '@megumi/desktop/main/services/session-retry-policy.service';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { RuntimeError } from '@megumi/shared/runtime';
 
 function error(overrides: Partial<RuntimeError>): RuntimeError {
   return {
@@ -81,3 +81,4 @@ describe('session retry policy', () => {
     expect(createAutomaticRetryBackoffMs({ attemptNumber: 4, baseDelayMs: 2000, maxDelayMs: 8000 })).toBe(8000);
   });
 });
+

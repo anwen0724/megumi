@@ -1,5 +1,5 @@
-import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { PermissionMode } from '@megumi/shared/permission';
+import type { ToolDefinition } from '@megumi/shared/tool';
 
 export interface ToolRegistryListInput {
   runId: string;
@@ -63,3 +63,4 @@ export function createStaticToolRegistry(definitions: readonly ToolDefinition[])
     },
   };
 }
+

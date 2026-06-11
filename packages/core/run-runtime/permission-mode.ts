@@ -1,5 +1,5 @@
-import type { PermissionMode, PermissionModeState } from '@megumi/shared/permission-snapshot-contracts';
-import { PermissionModeSchema } from '@megumi/shared/permission-snapshot-contracts';
+﻿import type { PermissionMode, PermissionModeState } from '@megumi/shared/permission';
+import { PermissionModeSchema } from '@megumi/shared/permission';
 
 export interface ResolvePermissionModeStateInput {
   permissionMode?: string;
@@ -56,3 +56,4 @@ export function createPermissionModeRuntimeInstruction(
     instruction: 'Default mode: read-only project context may proceed; writes and commands require ask-first policy handling.',
   };
 }
+

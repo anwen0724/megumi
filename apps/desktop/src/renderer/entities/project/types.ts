@@ -1,4 +1,4 @@
-import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project-contracts';
+﻿import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project';
 
 export interface Project {
   id: string;
@@ -23,3 +23,4 @@ export function projectFromRecord(record: ProjectRecord): Project {
     lastOpenedAt: record.lastOpenedAt,
   };
 }
+

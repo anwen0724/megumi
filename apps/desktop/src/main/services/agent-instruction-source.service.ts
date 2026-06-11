@@ -1,7 +1,7 @@
-import { promises as fs } from 'node:fs';
+﻿import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { TextDecoder } from 'node:util';
-import type { AgentInstructionSourceSnapshot } from '@megumi/shared/model-input-context-contracts';
+import type { AgentInstructionSourceSnapshot } from '@megumi/shared/model';
 
 export const AGENT_INSTRUCTION_SOURCE_FILE = 'AGENTS.md';
 export const AGENT_INSTRUCTION_SOURCE_HARD_CAP_BYTES = 64 * 1024;
@@ -129,3 +129,4 @@ function decodeUtf8Prefix(buffer: Buffer, maxBytes: number): string {
 
   return '';
 }
+

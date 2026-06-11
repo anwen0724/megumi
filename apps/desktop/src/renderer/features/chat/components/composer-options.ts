@@ -1,5 +1,5 @@
-import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
-import type { ProviderId } from '@megumi/shared/provider-contracts';
+﻿import type { PermissionMode } from '@megumi/shared/permission';
+import type { ProviderId } from '@megumi/shared/provider';
 
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel =
@@ -54,3 +54,4 @@ export function getComposerModelLabel(model: string): string {
 export function getProviderIdForModel(model: ComposerModel): ProviderId {
   return COMPOSER_MODEL_OPTIONS.find((option) => option.value === model)?.providerId ?? 'deepseek';
 }
+

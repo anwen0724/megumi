@@ -1,12 +1,12 @@
-import type { MegumiDatabase } from '../connection';
+﻿import type { MegumiDatabase } from '../connection';
 import type {
   Artifact,
   ArtifactRelation,
   ArtifactSourceRef,
   ArtifactStatus,
   ArtifactVersion,
-} from '@megumi/shared/artifact-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+} from '@megumi/shared/artifact';
+import type { JsonObject } from '@megumi/shared/primitives';
 
 interface ArtifactRow { artifact_json: string; metadata_json: string | null }
 interface VersionRow { version_json: string }
@@ -243,3 +243,4 @@ function toRelationRow(relation: ArtifactRelation) {
     relation_json: stringifyJson(relation),
   };
 }
+

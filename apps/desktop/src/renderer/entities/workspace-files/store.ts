@@ -1,9 +1,9 @@
-import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+﻿import { create } from 'zustand';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type {
   WorkspaceDirectoryEntry,
   WorkspaceFilesListPayload,
-} from '@megumi/shared/workspace-file-contracts';
+} from '@megumi/shared/workspace';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,
@@ -110,3 +110,4 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
   setSelectedPath: (path) => set({ selectedPath: path }),
   reset: () => set(initialState),
 }));
+

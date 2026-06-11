@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,19 +19,19 @@ import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/serv
 import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session-compaction-orchestrator.service';
 import { PermissionSnapshotService } from '@megumi/desktop/main/services/permission-snapshot.service';
 import type { ChatStreamEvent } from '@megumi/shared';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { ModelInputContextSourceKind } from '@megumi/shared/model-input-context-contracts';
-import type { RunContext } from '@megumi/shared/run-context-contracts';
-import type { RunAction } from '@megumi/shared/session-run-contracts';
-import type { SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
-import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { ModelInputContextSourceKind } from '@megumi/shared/model';
+import type { RunContext } from '@megumi/shared/run';
+import type { RunAction } from '@megumi/shared/session';
+import type { SessionSourceEntry } from '@megumi/shared/session';
+import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeError } from '@megumi/shared/runtime';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
   WorkspaceChangeSummary,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 
 let db: Database.Database | null = null;
 
@@ -5756,5 +5756,6 @@ describe('SessionRunService', () => {
     ]);
   });
 });
+
 
 

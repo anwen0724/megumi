@@ -1,5 +1,5 @@
-import type { InputIntentCommandMetadata } from '@megumi/shared/input-command-contracts';
-import type { PermissionModeSelectionSource } from '@megumi/shared/permission-mode-contracts';
+﻿import type { InputIntentCommandMetadata } from '@megumi/shared/input-command';
+import type { PermissionModeSelectionSource } from '@megumi/shared/permission';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 
 export type ComposerStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
@@ -22,3 +22,4 @@ export interface ComposerProps {
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
 }
+

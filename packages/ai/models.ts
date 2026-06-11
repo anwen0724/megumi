@@ -1,11 +1,11 @@
-import type { ModelId } from '@megumi/shared/model-contracts';
-import type { ProviderId } from '@megumi/shared/provider-contracts';
+﻿import type { ModelId } from '@megumi/shared/model';
+import type { ProviderId } from '@megumi/shared/provider';
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   MODEL_CATALOG,
   getDefaultModelId,
   getModelsForProvider,
-} from '@megumi/shared/model-contracts';
+} from '@megumi/shared/model';
 
 export interface AiProviderDefaults {
   baseUrl?: string;
@@ -32,3 +32,4 @@ export {
   getDefaultModelId,
   getModelsForProvider,
 };
+

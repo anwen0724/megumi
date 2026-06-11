@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+﻿import fs from 'fs-extra';
 import path from 'node:path';
 import {
   PathSandboxViolationError,
@@ -10,7 +10,7 @@ import type {
   WorkspaceDirectoryEntry,
   WorkspaceFilesListData,
   WorkspaceFilesListPayload,
-} from '@megumi/shared/workspace-file-contracts';
+} from '@megumi/shared/workspace';
 
 export const DEFAULT_WORKSPACE_FILE_IGNORE_NAMES = [
   '.git',
@@ -201,3 +201,4 @@ function isAbsoluteOrDriveQualifiedPath(directoryPath: string): boolean {
     /^[a-zA-Z]:/.test(directoryPath)
   );
 }
+

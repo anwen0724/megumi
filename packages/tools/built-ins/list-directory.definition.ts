@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ToolDefinition } from '@megumi/shared/tool';
 
 export const listDirectoryDefinition: ToolDefinition = {
   name: 'list_directory',
@@ -38,3 +38,4 @@ export const listDirectoryDefinition: ToolDefinition = {
   sideEffect: 'none',
   availability: { status: 'available' },
 };
+

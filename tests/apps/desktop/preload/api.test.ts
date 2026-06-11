@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 const { invoke, on, removeListener } = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -51,7 +51,7 @@ describe('preload api', () => {
   });
 
   it('exposes provider methods on shared IPC channels with runtime requests', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');
 
     invoke.mockResolvedValue({
@@ -80,7 +80,7 @@ describe('preload api', () => {
   });
 
   it('converts rejected provider invokes to ipc_invoke_failed results', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');
 
     invoke.mockRejectedValue(new Error('Error invoking remote ' + 'method provider:list: stack trace sk-test-secret'));
@@ -111,7 +111,7 @@ describe('preload api', () => {
   });
 
   it('creates a debug id for rejected invokes when request context has no debug id', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');
     const request = createRequest(IPC_CHANNELS.provider.list, {});
     const { debugId: _debugId, ...contextWithoutDebugId } = request.context;
@@ -142,7 +142,7 @@ describe('preload api', () => {
   });
 
   it('exposes session message, run event, runtime event, and chat stream APIs without old chat or agent namespaces', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');
     const sendPayload = {
       providerId: 'deepseek' as const,
@@ -235,7 +235,7 @@ describe('preload api', () => {
   });
 
   it('exposes session.timeline.list through the typed preload API', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');
     const request = createRequest(IPC_CHANNELS.session.timeline.list, {
       projectId: 'project-1',
@@ -259,7 +259,7 @@ describe('preload api', () => {
   });
 
   it('invokes project runtime IPC channels through preload API', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');
 
     invoke.mockResolvedValue({
@@ -276,7 +276,7 @@ describe('preload api', () => {
   });
 
   it('keeps window controls as lightweight shell ipc', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');
 
     invoke.mockResolvedValue(undefined);
@@ -290,3 +290,4 @@ describe('preload api', () => {
     expect(invoke).toHaveBeenNthCalledWith(3, IPC_CHANNELS.window.close);
   });
 });
+

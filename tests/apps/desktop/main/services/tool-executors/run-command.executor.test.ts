@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import {
   createRunCommandExecutor,
   type SpawnLike,
@@ -310,3 +310,4 @@ function emitOutputChunks(output: string | OutputChunk[], listener: (chunk: Buff
     listener(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8'));
   }
 }
+

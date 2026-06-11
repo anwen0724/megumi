@@ -1,9 +1,9 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { ToolService } from '@megumi/desktop/main/services/tool.service';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
-import { createRuntimeEvent } from '@megumi/shared/runtime-event-factory';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { createRuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 describe('ToolService', () => {
   it('lists built-in tool definitions without executing them', () => {
@@ -239,3 +239,4 @@ function createApprovalRequest() {
     createdAt: '2026-05-20T00:00:02.000Z',
   } as const;
 }
+

@@ -1,6 +1,6 @@
-import { BrowserWindow, ipcMain } from 'electron';
+﻿import { BrowserWindow, ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 
 function getSenderWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
   return BrowserWindow.fromWebContents(event.sender);
@@ -30,3 +30,4 @@ export function registerWindowHandlers(): void {
     getSenderWindow(event)?.close();
   });
 }
+

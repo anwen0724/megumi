@@ -1,13 +1,13 @@
-import {
+﻿import {
   createChatStreamEvent,
   type AssistantTextPhase,
   type ChatStreamApprovalScope,
   type ChatStreamEvent,
   type ChatStreamKind,
 } from '@megumi/shared';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace-change-contracts';
+import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace';
 
 export interface ChatStreamEventSink {
   publish(event: ChatStreamEvent): void;
@@ -1174,3 +1174,4 @@ function isRuntimeError(value: unknown): value is RuntimeError {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+

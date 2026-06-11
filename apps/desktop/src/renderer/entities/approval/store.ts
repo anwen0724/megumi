@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { ApprovalRequest, ApprovalStatus } from '@megumi/shared/tool-contracts';
+﻿import { create } from 'zustand';
+import type { ApprovalRequest, ApprovalStatus } from '@megumi/shared/tool';
 
 export interface ApprovalState {
   approvalRequestsById: Record<string, ApprovalRequest>;
@@ -42,3 +42,4 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
   reset: () => set({ approvalRequestsById: {} }),
 }));
+

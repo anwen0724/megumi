@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { createStaticToolRegistry } from '@megumi/tools/registry';
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+import type { ToolDefinition } from '@megumi/shared/tool';
 
 const readTool: ToolDefinition = {
   name: 'read_file',
@@ -105,3 +105,4 @@ describe('createStaticToolRegistry', () => {
     expect(() => createStaticToolRegistry([readTool, readTool])).toThrow(/Duplicate tool name/);
   });
 });
+

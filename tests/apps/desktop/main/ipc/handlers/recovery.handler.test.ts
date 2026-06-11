@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerRecoveryHandlers } from '@megumi/desktop/main/ipc/handlers/recovery.handler';
 import type { RecoveryService } from '@megumi/desktop/main/services/recovery.service';
 
@@ -146,3 +146,4 @@ describe('registerRecoveryHandlers', () => {
     expect(restoreResponse.data.result.restoreResultId).toBe('workspace-restore-result-1');
   });
 });
+

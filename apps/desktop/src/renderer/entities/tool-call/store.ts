@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+﻿import { create } from 'zustand';
+import type { ToolExecution } from '@megumi/shared/tool';
 
 export interface ToolCallState {
   toolCallsById: Record<string, ToolExecution>;
@@ -24,3 +24,4 @@ export const useToolCallStore = create<ToolCallState>((set, get) => ({
     .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt)),
   reset: () => set({ toolCallsById: {} }),
 }));
+

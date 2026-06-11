@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createContextPatchObservation,
   createContextUpdateInputPreview,
   isContextPatchObservation,
 } from '@megumi/core/run-runtime/context';
-import type { ContextPatch } from '@megumi/shared/run-context-contracts';
+import type { ContextPatch } from '@megumi/shared/run';
 
 const patch: ContextPatch = {
   patchId: 'patch-1',
@@ -63,3 +63,4 @@ describe('run runtime context helpers', () => {
     })).toBe(false);
   });
 });
+

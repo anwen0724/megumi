@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -38,13 +38,13 @@ describe('timeline history commit boundaries', () => {
     expect(shared).not.toContain('electron');
     expect(shared).not.toContain('window.megumi');
     expect(shared).not.toContain('apps/desktop');
-    expect(rendererWrapper).toContain('@megumi/shared/chat-stream-to-timeline-projection');
+    expect(rendererWrapper).toContain('@megumi/shared/timeline');
   });
 
   it('does not let main import renderer chat-stream projection code', () => {
     const source = read('apps/desktop/src/main/services/timeline-history-commit-projector.service.ts');
 
-    expect(source).toContain('@megumi/shared/chat-stream-to-timeline-projection');
+    expect(source).toContain('@megumi/shared/timeline');
     expect(source).not.toContain('features/chat-stream');
     expect(source).not.toContain('apps/desktop/src/renderer');
   });
@@ -89,3 +89,4 @@ describe('timeline history commit boundaries', () => {
     expect(source).not.toContain('assistant.text.delta');
   });
 });
+

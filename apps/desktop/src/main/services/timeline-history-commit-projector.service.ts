@@ -1,6 +1,6 @@
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import { reduceChatStreamEvent } from '@megumi/shared/chat-stream-to-timeline-projection';
-import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
+﻿import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import { reduceChatStreamEvent } from '@megumi/shared/timeline';
+import type { TimelineMessage } from '@megumi/shared/timeline';
 import type { ChatStreamEventSink } from './chat-stream-event-adapter.service';
 
 export interface TimelineCommitDiagnostic {
@@ -179,3 +179,4 @@ function previewFromMessages(messages: TimelineMessage[]): string | undefined {
 
   return answer.text.slice(0, 160);
 }
+

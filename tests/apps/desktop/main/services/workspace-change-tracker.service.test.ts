@@ -1,12 +1,12 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
   WorkspaceCheckpoint,
   WorkspaceSnapshotContent,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 import {
   WorkspaceChangeTrackerService,
   type WorkspaceChangeTrackerRepositoryPort,
@@ -462,3 +462,4 @@ function createDeferred<T>() {
   });
   return { promise, resolve };
 }
+

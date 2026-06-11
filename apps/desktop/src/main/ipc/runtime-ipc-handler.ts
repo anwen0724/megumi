@@ -1,22 +1,22 @@
-import type { IpcMainInvokeEvent } from 'electron';
+﻿import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
-import type { JsonObject } from '@megumi/shared/json';
+import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   BusinessIpcChannel,
   RuntimeIpcRequest,
   RuntimeIpcResult,
-} from '@megumi/shared/ipc-contracts';
-import { RuntimeIpcRequestIdSchema } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
-import { sanitizeZodIssues } from '@megumi/shared/ipc-errors';
-import type { RuntimeContext } from '@megumi/shared/runtime-context';
+} from '@megumi/shared/ipc';
+import { RuntimeIpcRequestIdSchema } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
+import { sanitizeZodIssues } from '@megumi/shared/ipc';
+import type { RuntimeContext } from '@megumi/shared/runtime';
 import {
   RuntimeContextSchema,
   createRuntimeDebugId,
   createRuntimeTraceId,
-} from '@megumi/shared/runtime-context';
+} from '@megumi/shared/runtime';
 import { normalizeRuntimeError } from '@megumi/core/runtime-exception';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { RuntimeError } from '@megumi/shared/runtime';
 import {
   redactRuntimeDetails,
   redactRuntimeMessage,
@@ -271,3 +271,4 @@ function extractRawContext(rawRequest: unknown): unknown {
 
   return undefined;
 }
+

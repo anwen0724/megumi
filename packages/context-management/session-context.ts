@@ -1,12 +1,12 @@
-import type {
+﻿import type {
   ModelInputContextExcludedSource,
-} from '@megumi/shared/model-input-context-contracts';
+} from '@megumi/shared/model';
 import type {
   SessionContextInput,
   SessionHistoryEntry,
   SessionRuntimeFact,
   SessionSummaryEntry,
-} from '@megumi/shared/session-context-contracts';
+} from '@megumi/shared/session';
 import type { ModelInputContextPartDraft } from './context-budget';
 
 export interface BuildSessionContextPartsInput {
@@ -127,3 +127,4 @@ function stableHash(value: string): string {
 
   return (hash >>> 0).toString(36);
 }
+

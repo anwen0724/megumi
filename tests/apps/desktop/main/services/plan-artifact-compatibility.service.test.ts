@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { PlanArtifactCompatibilityService } from '@megumi/desktop/main/services/plan-artifact-compatibility.service';
 import type { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission-snapshot-contracts';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
 
 function createRepository(): Pick<ArtifactRepository, 'getArtifact' | 'saveArtifact'> {
   const artifacts = new Map<string, any>();
@@ -74,3 +74,4 @@ describe('PlanArtifactCompatibilityService', () => {
     });
   });
 });
+

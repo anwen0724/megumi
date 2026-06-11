@@ -1,9 +1,9 @@
-import type {
+﻿import type {
   WorkspaceChangedFile,
   WorkspaceChangeFooterFact,
   WorkspaceChangeSet,
   WorkspaceChangeSummary,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 
 export interface WorkspaceChangeFooterProjectorWorkspaceChangePort {
   listChangeSetsByRun(runId: string): WorkspaceChangeSet[];
@@ -89,3 +89,4 @@ export function isWorkspaceChangeFooterProjectorPort(
     && 'getChangeSummary' in value
     && 'listChangedFilesByChangeSet' in value;
 }
+

@@ -1,10 +1,10 @@
-import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
+﻿import type { PermissionMode } from '@megumi/shared/permission';
 import type {
   PermissionClassifierLabel,
   ToolCapability,
   ToolPolicyDecisionValue,
   ToolSideEffect,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 import type { CommandClassifierLabel } from './command-classifier';
 
 export interface PermissionClassifierInput {
@@ -124,3 +124,4 @@ function isAutoAllowedCommand(
     || commandLabel === 'git_read'
     || commandLabel === 'verification';
 }
+

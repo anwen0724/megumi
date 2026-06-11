@@ -1,7 +1,7 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { RuntimeError } from '@megumi/shared/runtime';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
@@ -11,7 +11,7 @@ import type {
   WorkspaceRestoreRequest,
   WorkspaceRestoreResult,
   WorkspaceSnapshotContent,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 
 import { assertOrdinaryProjectPath } from './tool-executors';
 
@@ -641,3 +641,4 @@ function groupChangedFilesByProjectPath(changedFiles: WorkspaceChangedFile[]): W
 
   return Array.from(paths.values());
 }
+

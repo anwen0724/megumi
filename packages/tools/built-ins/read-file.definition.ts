@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ToolDefinition } from '@megumi/shared/tool';
 
 export const readFileDefinition: ToolDefinition = {
   name: 'read_file',
@@ -28,3 +28,4 @@ export const readFileDefinition: ToolDefinition = {
   sideEffect: 'none',
   availability: { status: 'available' },
 };
+

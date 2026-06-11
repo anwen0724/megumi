@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
+﻿import type { ReactNode } from 'react';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline';
 import { TimelineMessage } from '../components/TimelineMessage';
 import { WorkspaceChangeFooter } from '../components/WorkspaceChangeFooter';
 import { BottomSpacer } from './BottomSpacer';
@@ -62,3 +62,4 @@ export function MessageColumn({
     </div>
   );
 }
+

@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import { createWriteFileExecutor } from '@megumi/desktop/main/services/tool-executors/write-file.executor';
 
 describe('WriteFileExecutor', () => {
@@ -85,3 +85,4 @@ function fakeFileSystem(files: Map<string, string>, madeDirectories: string[] = 
     },
   };
 }
+

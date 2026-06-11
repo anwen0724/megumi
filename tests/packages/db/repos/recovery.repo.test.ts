@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
@@ -10,7 +10,7 @@ import type {
   ResumeRequest,
   RetryRequest,
   CheckpointRestoreRecord,
-} from '@megumi/shared/recovery-contracts';
+} from '@megumi/shared/recovery';
 
 function createRepository(): RecoveryRepository {
   const database = createDatabase(':memory:');
@@ -327,3 +327,4 @@ describe('RecoveryRepository', () => {
     })).toEqual([]);
   });
 });
+

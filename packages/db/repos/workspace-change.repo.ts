@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
+﻿import { createHash } from 'node:crypto';
 
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+import type { RuntimeError } from '@megumi/shared/runtime';
 import {
   WorkspaceChangedFileSchema,
   WorkspaceChangeSetSchema,
@@ -18,7 +18,7 @@ import {
   type WorkspaceRestoreRequest,
   type WorkspaceRestoreResult,
   type WorkspaceSnapshotContent,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 
 import type { MegumiDatabase } from '../connection';
 
@@ -1443,3 +1443,4 @@ function parseOptionalJson(value: string | null): unknown | undefined {
 function stringifyOptionalJson(value: unknown | undefined): string | null {
   return value === undefined ? null : JSON.stringify(value);
 }
+

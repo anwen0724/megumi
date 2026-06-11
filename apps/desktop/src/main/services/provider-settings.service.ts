@@ -1,9 +1,9 @@
-import {
+﻿import {
   type ProviderId,
   type ProviderPublicStatus,
   type ProviderSettings,
   type SecretRef,
-} from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/provider';
 import { buildProviderApiKeySecretRef } from '@megumi/security/secret-policy';
 
 export interface ProviderSettingsRepositoryPort {
@@ -153,3 +153,4 @@ export class ProviderSettingsService {
     return Boolean(this.env[envKey]?.trim());
   }
 }
+

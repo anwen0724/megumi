@@ -1,4 +1,4 @@
-import { evaluatePermissionPolicy } from '@megumi/security/tool-policy';
+﻿import { evaluatePermissionPolicy } from '@megumi/security/tool-policy';
 import { validateToolInput } from '@megumi/tools/validation';
 import type { ToolRegistry } from '@megumi/tools/registry';
 import type {
@@ -8,9 +8,9 @@ import type {
   ToolApprovalResumePort,
   ToolCallHandlerPort,
 } from '@megumi/core/run-runtime/tool-loop';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { MergedPermissionSettings } from '@megumi/shared/permission-settings-contracts';
-import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { MergedPermissionSettings } from '@megumi/shared/permission';
+import type { PermissionMode } from '@megumi/shared/permission';
 import {
   createApprovalRequestedEvent,
   createPermissionDecisionCreatedEvent,
@@ -22,16 +22,16 @@ import {
   createToolExecutionRequestedEvent,
   createToolExecutionStartedEvent,
   createToolResultCreatedEvent,
-} from '@megumi/shared/runtime-event-factory';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/runtime';
+import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
   ToolExecution,
   ToolResult,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 import type { ProjectToolExecutor } from './project-tool-executor.service';
 import type { WorkspaceChangeExecutionScope } from './workspace-change-tracker.service';
 
@@ -757,3 +757,4 @@ function saveImmediateToolError(
     createdAt: options.now(),
   });
 }
+

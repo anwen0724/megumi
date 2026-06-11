@@ -1,12 +1,12 @@
-import type {
+﻿import type {
   SandboxRequirement,
   ToolCall,
   ToolDefinition,
   ToolError,
   ToolPolicyDecision,
   ToolResult,
-} from '@megumi/shared/tool-contracts';
-import type { RuntimeContext } from '@megumi/shared/runtime-context';
+} from '@megumi/shared/tool';
+import type { RuntimeContext } from '@megumi/shared/runtime';
 
 export interface HostToolExecutionInput {
   toolCall: ToolCall;
@@ -20,3 +20,4 @@ export interface HostToolExecutionInput {
 export interface HostToolExecutor {
   execute(input: HostToolExecutionInput): Promise<ToolResult | ToolError>;
 }
+

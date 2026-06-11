@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+﻿import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '../../../entities/session/store';
-import { AGENT_DESCRIPTIONS, AGENT_LABELS, AGENT_TYPES, type AgentType } from '@megumi/shared/agent-contracts';
+import { AGENT_DESCRIPTIONS, AGENT_LABELS, AGENT_TYPES, type AgentType } from '@megumi/shared/session';
 
 const AGENT_COLORS: Record<AgentType, string> = {
   analyst: 'bg-green-500',
@@ -77,3 +77,4 @@ export default function AgentSwitcher() {
     </div>
   );
 }
+

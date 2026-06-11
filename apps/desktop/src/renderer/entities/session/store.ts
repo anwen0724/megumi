@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { AgentType } from '@megumi/shared/agent-contracts';
+﻿import { create } from 'zustand';
+import type { AgentType } from '@megumi/shared/session';
 import { createLocalSession, type LocalRendererSession } from './session-factory';
 
 interface CreateLocalSessionInput {
@@ -50,3 +50,4 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     ),
   })),
 }));
+

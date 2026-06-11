@@ -1,13 +1,13 @@
-import { createHash, randomUUID } from 'node:crypto';
+﻿import { createHash, randomUUID } from 'node:crypto';
 
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeKind,
   WorkspaceChangeSet,
   WorkspaceCheckpoint,
   WorkspaceSnapshotContent,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 
 import {
   assertOrdinaryProjectPath,
@@ -425,3 +425,4 @@ function isEnoentError(error: unknown): boolean {
     && 'code' in error
     && (error as NodeJS.ErrnoException).code === 'ENOENT';
 }
+

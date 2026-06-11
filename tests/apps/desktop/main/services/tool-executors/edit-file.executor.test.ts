@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import { createEditFileExecutor } from '@megumi/desktop/main/services/tool-executors/edit-file.executor';
 
 describe('EditFileExecutor', () => {
@@ -79,3 +79,4 @@ function fakeFileSystem(files: Map<string, string>) {
     },
   };
 }
+

@@ -1,8 +1,8 @@
-import type {
+﻿import type {
   ModelInputContext,
   ModelInputContextPart,
   ToolContinuationPart,
-} from '@megumi/shared/model-input-context-contracts';
+} from '@megumi/shared/model';
 import type { OpenAICompatibleMessage, OpenAICompatibleToolCall } from '../types';
 
 export function mapModelInputContextToOpenAICompatibleMessages(
@@ -168,3 +168,4 @@ function mapModelInputContextPartToOpenAICompatibleMessage(
       };
   }
 }
+

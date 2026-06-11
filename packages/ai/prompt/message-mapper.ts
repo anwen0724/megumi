@@ -1,5 +1,5 @@
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { ToolDefinition } from '@megumi/shared/tool';
 import type {
   OpenAICompatibleChatCompletionRequestBody,
   OpenAICompatibleToolDefinition,
@@ -36,3 +36,4 @@ function mapToolDefinition(tool: ToolDefinition): OpenAICompatibleToolDefinition
     },
   };
 }
+

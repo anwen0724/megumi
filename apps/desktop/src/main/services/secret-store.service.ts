@@ -1,8 +1,8 @@
-import { safeStorage } from 'electron';
+﻿import { safeStorage } from 'electron';
 import fs from 'fs-extra';
 import path from 'path';
 import { isSecretRef } from '@megumi/security/secret-policy';
-import type { SecretRef } from '@megumi/shared/provider-contracts';
+import type { SecretRef } from '@megumi/shared/provider';
 
 export interface SecretStoreSafeStorage {
   isEncryptionAvailable(): boolean;
@@ -98,3 +98,4 @@ export function createElectronSecretStoreService(userDataPath: string): SecretSt
     fileSystem: fs,
   });
 }
+

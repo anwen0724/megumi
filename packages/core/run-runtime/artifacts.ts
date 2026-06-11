@@ -1,9 +1,9 @@
-import type { RunAction, RunObservation } from '@megumi/shared/session-run-contracts';
-import type { ArtifactContentType, ArtifactKind } from '@megumi/shared/artifact-contracts';
+﻿import type { RunAction, RunObservation } from '@megumi/shared/session';
+import type { ArtifactContentType, ArtifactKind } from '@megumi/shared/artifact';
 import type {
   ArtifactReferencedPayload,
   ArtifactVersionCreatedPayload,
-} from '@megumi/shared/runtime-events';
+} from '@megumi/shared/runtime';
 
 export interface ArtifactActionInputPreviewInput {
   artifactKind: ArtifactKind;
@@ -86,3 +86,4 @@ function readString(value: Record<string, unknown>, key: string): string | undef
   const item = value[key];
   return typeof item === 'string' && item.length > 0 ? item : undefined;
 }
+

@@ -1,17 +1,17 @@
-import type {
+﻿import type {
   RunAction,
   RunObservation,
   Run,
   RunStep,
   SessionMessage,
-} from '@megumi/shared/session-run-contracts';
+} from '@megumi/shared/session';
 import type {
   RunContext,
   ContextPatch,
-} from '@megumi/shared/run-context-contracts';
-import type { PermissionModeState } from '@megumi/shared/permission-snapshot-contracts';
-import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/run';
+import type { PermissionModeState } from '@megumi/shared/permission';
+import { createRuntimeDebugId } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface RunClock {
   now(): string;
@@ -92,3 +92,4 @@ export function createDefaultRunIds(): RunIdFactory {
     debugId: createRuntimeDebugId,
   };
 }
+

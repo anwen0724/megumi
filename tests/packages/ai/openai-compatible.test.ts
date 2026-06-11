@@ -1,9 +1,9 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
-import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
-import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
-import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model';
+import { RuntimeEventSchema } from '@megumi/shared/runtime';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
 import type { AiModelStepAdapterRequest, FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
 
@@ -868,3 +868,4 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 });
+

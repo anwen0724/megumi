@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   CancelReason,
   CancelScope,
   CheckpointBoundary,
@@ -7,9 +7,9 @@ import type {
   ResumeReason,
   RetryKind,
   RetryReason,
-} from '@megumi/shared/recovery-contracts';
-import type { RunObservation } from '@megumi/shared/session-run-contracts';
-import type { RuntimeEventPayloadByType } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/recovery';
+import type { RunObservation } from '@megumi/shared/session';
+import type { RuntimeEventPayloadByType } from '@megumi/shared/runtime';
 
 interface BaseObservationInput {
   observationId: string;
@@ -145,3 +145,4 @@ function readString(metadata: Record<string, unknown>, key: string): string {
   }
   return value;
 }
+

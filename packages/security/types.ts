@@ -1,4 +1,4 @@
-import type { ProviderId, SecretRef } from '@megumi/shared/provider-contracts';
+﻿import type { ProviderId, SecretRef } from '@megumi/shared/provider';
 
 export type SecretKind = 'provider-api-key';
 
@@ -13,3 +13,4 @@ export interface RedactionOptions {
   visiblePrefix?: number;
   visibleSuffix?: number;
 }
+

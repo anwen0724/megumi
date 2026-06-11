@@ -1,4 +1,4 @@
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RendererRunSummary } from '../../entities/run/store';
 
 export type ProcessingDisclosureStatus = 'running' | 'completed' | 'failed' | 'cancelled';
@@ -284,3 +284,4 @@ export function createProcessingDisclosureModel({
     completedEntries,
   };
 }
+

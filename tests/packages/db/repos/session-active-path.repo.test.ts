@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -6,11 +6,11 @@ import { createDatabase } from '@megumi/db/connection';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
+import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
   SessionRetryAttempt,
   SessionSourceEntry,
-} from '@megumi/shared/session-active-path-contracts';
+} from '@megumi/shared/session';
 
 let db: Database.Database | null = null;
 
@@ -704,3 +704,4 @@ describe('SessionActivePathRepository', () => {
     );
   });
 });
+

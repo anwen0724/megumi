@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkspaceChangeFooterProjectorService } from '@megumi/desktop/main/services/workspace-change-footer-projector.service';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
   WorkspaceChangeSummary,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 
 describe('WorkspaceChangeFooterProjectorService', () => {
   it('projects finalized workspace change sets into UI-safe footer facts', () => {
@@ -164,3 +164,4 @@ function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile>): Workspa
     updatedAt: overrides.updatedAt ?? '2026-06-06T10:00:00.000Z',
   };
 }
+

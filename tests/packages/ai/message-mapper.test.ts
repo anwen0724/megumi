@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import * as messageMapper from '@megumi/ai/prompt/message-mapper';
 import { AI_PROVIDER_DEFAULTS } from '@megumi/ai/models';
-import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
-import type { ToolDefinition, ToolResult, ToolCall } from '@megumi/shared/tool-contracts';
+import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model';
+import type { ToolDefinition, ToolResult, ToolCall } from '@megumi/shared/tool';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
 
@@ -334,3 +334,4 @@ describe('OpenAI-compatible message mapper', () => {
     });
   });
 });
+

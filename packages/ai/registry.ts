@@ -1,4 +1,4 @@
-import type { ProviderId } from '@megumi/shared/provider-contracts';
+﻿import type { ProviderId } from '@megumi/shared/provider';
 import { createAnthropicAdapter } from './providers/anthropic';
 import { createDeepSeekAdapter } from './providers/deepseek';
 import { createOpenAIAdapter } from './providers/openai';
@@ -40,3 +40,4 @@ export function createAiProviderRegistry(options: AiProviderRegistryOptions = {}
     createAnthropicAdapter({ clock: options.clock }),
   ]);
 }
+

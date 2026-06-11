@@ -1,9 +1,9 @@
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+﻿import type { RuntimeError } from '@megumi/shared/runtime';
 import type {
   ToolExecution,
   ToolError,
   ToolResult,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 
 export interface NormalizeToolResultInput {
   toolResultId: ToolResult['toolResultId'];
@@ -83,3 +83,4 @@ function isRuntimeErrorLike(value: unknown): value is RuntimeError {
     && 'retryable' in value
     && 'source' in value;
 }
+

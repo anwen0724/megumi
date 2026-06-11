@@ -1,4 +1,4 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import {
   classifyProjectPath,
   isProtectedProjectPath,
@@ -6,7 +6,7 @@ import {
 } from '@megumi/security/project-boundary-policy';
 import { redactRuntimeMessage } from '@megumi/security/redaction';
 import { normalizeToolResult } from '@megumi/tools/normalization';
-import type { ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
+import type { ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { WorkspaceChangeTrackerService } from '../workspace-change-tracker.service';
 import type { SpawnLike } from './run-command.executor';
 
@@ -297,3 +297,4 @@ export { createSearchTextExecutor } from './search-text.executor';
 export { createEditFileExecutor } from './edit-file.executor';
 export { createWriteFileExecutor } from './write-file.executor';
 export { createRunCommandExecutor } from './run-command.executor';
+

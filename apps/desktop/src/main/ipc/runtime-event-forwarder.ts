@@ -1,6 +1,6 @@
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { RuntimeEventSchema } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { redactRuntimeValue } from '@megumi/security/redaction';
 import {
   noopRuntimeLogger,
@@ -60,3 +60,4 @@ function eventDiagnostics(event: unknown): Record<string, unknown> {
     source: value.source,
   }) as Record<string, unknown>;
 }
+

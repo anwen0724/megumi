@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkspaceRootAuthorizer } from '@megumi/desktop/main/services/workspace-root-authorization.service';
-import type { Session } from '@megumi/shared/session-run-contracts';
+import type { Session } from '@megumi/shared/session';
 
 function createSession(workspacePath: string): Session {
   return {
@@ -50,3 +50,4 @@ describe('workspace root authorization', () => {
     expect(listAuthorizedWorkspaceRoots).toHaveBeenCalled();
   });
 });
+

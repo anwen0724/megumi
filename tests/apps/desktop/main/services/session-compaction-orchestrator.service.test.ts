@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { SessionCompactionEntry } from '@megumi/shared/session-compaction-contracts';
-import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
-import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { SessionCompactionEntry } from '@megumi/shared/session';
+import type { SessionContextInput } from '@megumi/shared/session';
+import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
 import {
   SessionCompactionOrchestrator,
@@ -689,3 +689,4 @@ describe('SessionCompactionOrchestrator', () => {
     expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-leaf-at-start');
   });
 });
+

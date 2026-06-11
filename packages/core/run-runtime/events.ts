@@ -1,9 +1,9 @@
-import type {
+﻿import type {
   RunAction,
   RunObservation,
   Run,
   RunStep,
-} from '@megumi/shared/session-run-contracts';
+} from '@megumi/shared/session';
 import {
   createContextEffectiveUpdatedEvent as createRuntimeContextEffectiveUpdatedEvent,
   createContextPatchAppliedEvent as createRuntimeContextPatchAppliedEvent,
@@ -14,15 +14,15 @@ import {
   createRuntimeRunCancelRequestedEvent,
   createRuntimeRunResumeRequestedEvent,
   createRuntimeRunRetryRequestedEvent,
-} from '@megumi/shared/runtime-event-factory';
+} from '@megumi/shared/runtime';
 import type {
   ContextEffectiveUpdatedPayload,
   ContextPatchAppliedPayload,
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
-} from '@megumi/shared/run-context-contracts';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent, RuntimeEventPayloadByType } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/run';
+import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeEvent, RuntimeEventPayloadByType } from '@megumi/shared/runtime';
 
 interface BaseEventInput {
   eventId: string;
@@ -324,3 +324,4 @@ export function createArtifactReferencedEvent(
 ): RuntimeEvent {
   return createRuntimeArtifactReferencedEvent({ ...input, source: 'core' }, payload);
 }
+

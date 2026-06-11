@@ -1,10 +1,10 @@
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeContext } from '@megumi/shared/runtime-context';
+﻿import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeContext } from '@megumi/shared/runtime';
 import type {
   ProviderId,
   ProviderSettings,
   SecretRef,
-} from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/provider';
 import type { ProviderRuntimeConfig } from '@megumi/ai/types';
 import { buildProviderApiKeySecretRef } from '@megumi/security/secret-policy';
 import { MegumiHomeConfigParseError } from './megumi-home-config.service';
@@ -204,3 +204,4 @@ export class ProviderRuntimeService {
     });
   }
 }
+

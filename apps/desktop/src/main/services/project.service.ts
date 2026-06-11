@@ -1,4 +1,4 @@
-import type { ProjectRepository } from '@megumi/db/repos/project.repo';
+﻿import type { ProjectRepository } from '@megumi/db/repos/project.repo';
 import type {
   ProjectListData,
   ProjectOpenData,
@@ -7,7 +7,7 @@ import type {
   ProjectRemoveData,
   ProjectRemovePayload,
   ProjectUseExistingData,
-} from '@megumi/shared/project-contracts';
+} from '@megumi/shared/project';
 
 type NodePlatform = NodeJS.Platform;
 
@@ -143,3 +143,4 @@ export function createProjectService(options: CreateProjectServiceOptions): Proj
     },
   };
 }
+

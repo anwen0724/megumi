@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 
 import { createRecoveryService } from '@megumi/desktop/main/services/recovery.service';
 import type { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
@@ -9,11 +9,11 @@ import type {
   ResumeRequest,
   RetryRequest,
   CheckpointRestoreRecord,
-} from '@megumi/shared/recovery-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { SessionInterruptedRunMarker } from '@megumi/shared/session-active-path-contracts';
-import type { WorkspaceRestoreData } from '@megumi/shared/ipc-schemas';
-import type { WorkspaceChangeSummary } from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/recovery';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { SessionInterruptedRunMarker } from '@megumi/shared/session';
+import type { WorkspaceRestoreData } from '@megumi/shared/ipc';
+import type { WorkspaceChangeSummary } from '@megumi/shared/workspace';
 
 function createRepository(input: {
   recoverableRuns?: RecoverableRunSummary[];
@@ -345,3 +345,4 @@ describe('RecoveryService', () => {
     expect(appendedEvents).not.toContain('src/app.ts');
   });
 });
+

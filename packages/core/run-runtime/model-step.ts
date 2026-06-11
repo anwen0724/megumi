@@ -1,13 +1,13 @@
-import type { RunAction, RunObservation, RunStep } from '@megumi/shared/session-run-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+﻿import type { RunAction, RunObservation, RunStep } from '@megumi/shared/session';
+import type { JsonObject } from '@megumi/shared/primitives';
 import type { AiModelStepPort } from '../ports/ai-port';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { normalizeRuntimeError } from '../runtime-exception';
 import {
   createRunCancelledEvent,
   createRunFailedEvent,
-} from '@megumi/shared/runtime-event-factory';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface CreateModelStepInputPreviewInput {
   providerId?: string;
@@ -119,3 +119,4 @@ export async function* runModelStep(input: RunModelStepInput): AsyncIterable<Run
     });
   }
 }
+

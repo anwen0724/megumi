@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
   TimelineHistoryCommitProjectorService,
@@ -10,7 +10,7 @@ import type {
   ProcessDisclosureBlock,
   TimelineAssistantMessage,
   TimelineMessage,
-} from '@megumi/shared/timeline-message-blocks';
+} from '@megumi/shared/timeline';
 
 type CommitInput = Parameters<TimelineHistoryCommitRepository['commitRunTimeline']>[0];
 type CommitDiagnostic = Parameters<TimelineHistoryCommitRepository['recordCommitDiagnostic']>[0];
@@ -470,3 +470,4 @@ describe('TimelineHistoryCommitProjectorService', () => {
     });
   });
 });
+

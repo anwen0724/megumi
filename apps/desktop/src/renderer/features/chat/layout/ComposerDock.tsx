@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef } from 'react';
-import type { ApprovalRequest } from '@megumi/shared/tool-contracts';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
+﻿import { useLayoutEffect, useRef } from 'react';
+import type { ApprovalRequest } from '@megumi/shared/tool';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
@@ -111,3 +111,4 @@ export function ComposerDock({
     </div>
   );
 }
+

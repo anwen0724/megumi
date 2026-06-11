@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+﻿import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabase, type MegumiDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
@@ -11,7 +11,7 @@ import type {
   MemoryRecord,
   MemorySettings,
   MemorySourceRef,
-} from '@megumi/shared/memory-contracts';
+} from '@megumi/shared/memory';
 
 const now = '2026-05-16T00:00:00.000Z';
 let database: MegumiDatabase | undefined;
@@ -142,3 +142,4 @@ describe('MemoryRepository', () => {
     expect(repo.listAuditLogs({ targetKind: 'memory', targetId: memory.memoryId })).toHaveLength(1);
   });
 });
+

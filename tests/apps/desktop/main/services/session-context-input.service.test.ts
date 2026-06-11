@@ -1,13 +1,13 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { SessionContextInputService } from '@megumi/desktop/main/services/session-context-input.service';
-import type { ModelInputContextSourceKind, ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { SessionMessage } from '@megumi/shared/session-run-contracts';
+import type { ModelInputContextSourceKind, ModelInputContextSourceRef } from '@megumi/shared/model';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { SessionMessage } from '@megumi/shared/session';
 
 let db: Database.Database | null = null;
 
@@ -621,3 +621,4 @@ describe('SessionContextInputService', () => {
     expect(JSON.stringify(input)).not.toContain('Off-path fallback message');
   });
 });
+

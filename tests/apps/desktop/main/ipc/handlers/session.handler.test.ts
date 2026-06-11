@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SessionMessage } from '@megumi/shared/session-run-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { SessionMessage } from '@megumi/shared/session';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 const { handle } = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -69,7 +69,7 @@ describe('registerSessionHandlers', () => {
   });
 
   it('registers primary session IPC handlers', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
 
     registerSessionHandlers(createSessionServiceMock());
@@ -84,7 +84,7 @@ describe('registerSessionHandlers', () => {
   });
 
   it('returns persisted messages for a session', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
     const messages: SessionMessage[] = [
       {
@@ -124,7 +124,7 @@ describe('registerSessionHandlers', () => {
   });
 
   it('registers a timeline history list handler returning canonical TimelineMessage records', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
     const service = createSessionServiceMock({
       listTimelineMessagesBySession: vi.fn(() => ({
@@ -165,7 +165,7 @@ describe('registerSessionHandlers', () => {
   });
 
   it('sends session messages and forwards runtime events', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
     const eventSender = { send: vi.fn() };
     const runtimeEvent = {
@@ -226,7 +226,7 @@ describe('registerSessionHandlers', () => {
   });
 
   it('creates and cancels branch drafts through session IPC', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerSessionHandlers } = await import('@megumi/desktop/main/ipc/handlers/session.handler');
     const eventSender = { send: vi.fn() };
     const service = createSessionServiceMock({
@@ -290,3 +290,4 @@ describe('registerSessionHandlers', () => {
     expect(cancelResult.data.cancelled).toBe(true);
   });
 });
+

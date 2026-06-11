@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+﻿import { describe, expect, it, vi } from 'vitest';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerMemoryHandlers } from '@megumi/desktop/main/ipc/handlers/memory.handler';
 import { runtimeOperationNameFromChannel } from '@megumi/desktop/main/ipc/runtime-operation-name';
 
@@ -115,3 +115,4 @@ describe('memory runtime operation names', () => {
     );
   });
 });
+

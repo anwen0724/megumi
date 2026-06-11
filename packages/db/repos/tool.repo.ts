@@ -1,4 +1,4 @@
-import type { MegumiDatabase } from '../connection';
+﻿import type { MegumiDatabase } from '../connection';
 import type {
   ApprovalRecord,
   ApprovalRequest,
@@ -7,7 +7,7 @@ import type {
   ToolExecution,
   ToolObservation,
   ToolResult,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 
 interface ToolCallRow { tool_call_json: string }
 interface ToolExecutionRow { tool_execution_json: string }
@@ -417,3 +417,4 @@ export class ToolRepository {
 function stringifyJson(value: unknown): string {
   return JSON.stringify(value);
 }
+

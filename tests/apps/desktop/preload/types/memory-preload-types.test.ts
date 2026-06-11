@@ -1,9 +1,9 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expectTypeOf, it } from 'vitest';
 
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
-import type { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest, RuntimeIpcResult } from '@megumi/shared/ipc-contracts';
+import type { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest, RuntimeIpcResult } from '@megumi/shared/ipc';
 import type {
   MemoryCandidateAcceptData,
   MemoryCandidateAcceptPayload,
@@ -13,7 +13,7 @@ import type {
   MemoryRecallPreviewPayload,
   MemorySettingsData,
   MemorySettingsGetPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 
 describe('memory preload types', () => {
   it('exposes primary memory API under window.megumi.memory', () => {
@@ -43,3 +43,4 @@ describe('memory preload types', () => {
     >();
   });
 });
+

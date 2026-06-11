@@ -1,6 +1,6 @@
-import type { RunId } from '@megumi/shared/ids';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import type { RunId } from '@megumi/shared/primitives';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface AiPortStreamModelStepInput {
   request: ModelStepRuntimeRequest;
@@ -14,3 +14,4 @@ export interface AiPortStreamModelStepInput {
 export interface AiModelStepPort {
   streamModelStep(input: AiPortStreamModelStepInput): AsyncIterable<RuntimeEvent>;
 }
+

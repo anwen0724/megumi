@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProviderPublicStatus } from '@megumi/shared/provider-contracts';
+import type { ProviderPublicStatus } from '@megumi/shared/provider';
 
 const { handle } = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -32,7 +32,7 @@ describe('registerProviderHandlers', () => {
   });
 
   it('registers provider IPC handlers', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
 
     registerProviderHandlers({
@@ -50,7 +50,7 @@ describe('registerProviderHandlers', () => {
   });
 
   it('returns renderer-safe provider statuses in a runtime envelope', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const statuses: ProviderPublicStatus[] = [
       {
@@ -91,7 +91,7 @@ describe('registerProviderHandlers', () => {
   });
 
   it('returns config_invalid for invalid Megumi Home config', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { MegumiHomeConfigParseError } = await import('@megumi/desktop/main/services/megumi-home-config.service');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const configPath = 'C:/Users/anwen/.megumi/config.json';
@@ -137,7 +137,7 @@ describe('registerProviderHandlers', () => {
   });
 
   it('rejects invalid update requests before calling the service', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const service = {
       getProviderSettings: vi.fn(),
@@ -161,7 +161,7 @@ describe('registerProviderHandlers', () => {
   });
 
   it('updates provider settings through the service', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const service = {
       getProviderSettings: vi.fn(),
@@ -195,7 +195,7 @@ describe('registerProviderHandlers', () => {
   });
 
   it('returns a safe update error instead of rejecting', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const service = {
       getProviderSettings: vi.fn(),
@@ -227,7 +227,7 @@ describe('registerProviderHandlers', () => {
   });
 
   it('sets and deletes API keys without returning plaintext', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const service = {
       getProviderSettings: vi.fn(),
@@ -270,3 +270,4 @@ describe('registerProviderHandlers', () => {
     expect(JSON.stringify(repeatedResult)).not.toContain('test-api-key-fixture');
   });
 });
+

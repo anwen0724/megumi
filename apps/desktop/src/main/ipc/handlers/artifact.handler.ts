@@ -1,8 +1,8 @@
-import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
-import type { JsonObject } from '@megumi/shared/json';
+﻿import { ipcMain } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
+import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   ArtifactGetData,
   ArtifactGetPayload,
@@ -17,7 +17,7 @@ import type {
   ArtifactVersionCreatePayload,
   ArtifactVersionGetData,
   ArtifactVersionGetPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import {
   ArtifactGetRequestSchema,
   ArtifactListByRunRequestSchema,
@@ -26,7 +26,7 @@ import {
   ArtifactStatusUpdateRequestSchema,
   ArtifactVersionCreateRequestSchema,
   ArtifactVersionGetRequestSchema,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import type { ArtifactService } from '../../services/artifact.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
@@ -149,3 +149,4 @@ function mapArtifactIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+

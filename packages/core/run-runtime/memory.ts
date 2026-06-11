@@ -1,7 +1,7 @@
-import type { RunContextSource } from '@megumi/shared/run-context-contracts';
-import type { RunAction } from '@megumi/shared/session-run-contracts';
-import type { JsonObject } from '@megumi/shared/json';
-import type { MemoryRecallResult } from '@megumi/shared/memory-contracts';
+﻿import type { RunContextSource } from '@megumi/shared/run';
+import type { RunAction } from '@megumi/shared/session';
+import type { JsonObject } from '@megumi/shared/primitives';
+import type { MemoryRecallResult } from '@megumi/shared/memory';
 
 export type MemoryUpdateOperation =
   | 'candidate_proposed'
@@ -79,3 +79,4 @@ export function createMemoryRecallContextSource(result: MemoryRecallResult, load
     },
   };
 }
+

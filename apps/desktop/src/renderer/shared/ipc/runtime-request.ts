@@ -1,9 +1,9 @@
-import type { BusinessIpcChannel, RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
+﻿import type { BusinessIpcChannel, RuntimeIpcRequest } from '@megumi/shared/ipc';
 import {
   createRuntimeContext,
   createRuntimeTraceId,
   type RuntimeContext,
-} from '@megumi/shared/runtime-context';
+} from '@megumi/shared/runtime';
 import { rendererRuntimeOperationNameFromChannel } from './runtime-operation-name';
 
 export interface CreateRendererRuntimeIpcRequestOptions {
@@ -68,3 +68,4 @@ function createRendererRequestId(): string {
 
   return `ipc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
+

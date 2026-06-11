@@ -1,10 +1,10 @@
 ﻿// @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline-message-blocks';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
@@ -1859,3 +1859,4 @@ describe('useSessionTimeline', () => {
     expect(JSON.stringify(messages)).not.toContain('Committed stale text');
   });
 });
+

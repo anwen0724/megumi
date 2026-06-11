@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import { createReadFileExecutor } from '@megumi/desktop/main/services/tool-executors/read-file.executor';
 
 describe('ReadFileExecutor', () => {
@@ -108,3 +108,4 @@ function fakeFileSystem(files: Map<string, string>) {
     },
   };
 }
+

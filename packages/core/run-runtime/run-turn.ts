@@ -1,12 +1,12 @@
-import type {
+﻿import type {
   RunAction,
   RunObservation,
   Run,
   RunStep,
-} from '@megumi/shared/session-run-contracts';
-import type { PermissionModeState } from '@megumi/shared/permission-snapshot-contracts';
-import type { JsonObject } from '@megumi/shared/json';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/session';
+import type { PermissionModeState } from '@megumi/shared/permission';
+import type { JsonObject } from '@megumi/shared/primitives';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { normalizeRuntimeError } from '../runtime-exception';
 import {
   createContextUpdateInputPreview,
@@ -546,3 +546,4 @@ function isApprovalWaitObservation(observation: RunObservation): boolean {
     && observation.kind === 'approval_requested'
     && observation.metadata?.status === 'pending';
 }
+

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabase, type MegumiDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
@@ -9,7 +9,7 @@ import {
 import type {
   TimelineAssistantMessage,
   TimelineUserMessage,
-} from '@megumi/shared/timeline-message-blocks';
+} from '@megumi/shared/timeline';
 
 let db: MegumiDatabase | null = null;
 
@@ -285,3 +285,4 @@ describe('TimelineMessageRepository', () => {
     ).toThrow(/FOREIGN KEY constraint failed/);
   });
 });
+

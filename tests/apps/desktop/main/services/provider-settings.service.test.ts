@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_PROVIDER_SETTINGS,
   type ProviderId,
   type ProviderSettings,
   type SecretRef,
-} from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/provider';
 import { buildProviderApiKeySecretRef } from '@megumi/security/secret-policy';
 import {
   ProviderSettingsService,
@@ -283,3 +283,4 @@ describe('ProviderSettingsService', () => {
     expect(JSON.stringify(deepseek)).not.toContain('sk-custom-env');
   });
 });
+

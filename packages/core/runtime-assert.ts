@@ -1,4 +1,4 @@
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
+﻿import type { RuntimeError } from '@megumi/shared/runtime';
 import { RuntimeException } from './runtime-exception';
 
 export function throwRuntimeError(error: RuntimeError): never {
@@ -13,3 +13,4 @@ export function assertRuntime(
     throwRuntimeError(error);
   }
 }
+

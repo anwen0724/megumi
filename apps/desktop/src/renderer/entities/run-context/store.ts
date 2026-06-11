@@ -1,9 +1,9 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import type {
   RunContext,
   RunContextSource,
-} from '@megumi/shared/run-context-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/run';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 interface RunContextState {
   baselineByRun: Record<string, RunContext>;
@@ -70,3 +70,4 @@ export const useRunContextStore = create<RunContextState>((set) => ({
     lastError: null,
   }),
 }));
+

@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,8 +6,8 @@ import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store'
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { ChatPage } from '@megumi/desktop/renderer/features/chat';
@@ -15,12 +15,12 @@ import {
   chatStreamSessionKey,
   useChatStreamStore,
 } from '@megumi/desktop/renderer/features/chat-stream';
-import type { ApprovalRequest, ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ToolExecution } from '@megumi/shared/tool';
 import type {
   TimelineAssistantMessage,
   TimelineMessage,
   TimelineUserMessage,
-} from '@megumi/shared/timeline-message-blocks';
+} from '@megumi/shared/timeline';
 
 let runtimeEventCallback: ((event: RuntimeEvent) => void) | null = null;
 let runtimeSequence = 1;
@@ -1672,3 +1672,4 @@ describe('ChatPage flow', () => {
     expect(screen.getAllByText('Read docs now')).toHaveLength(1);
   });
 });
+

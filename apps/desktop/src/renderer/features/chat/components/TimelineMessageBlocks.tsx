@@ -1,9 +1,9 @@
-import type {
+﻿import type {
   AnswerTextBlock,
   BranchSeparatorBlock,
   TimelineMessage as CanonicalTimelineMessage,
   UserTimelineBlock,
-} from '@megumi/shared/timeline-message-blocks';
+} from '@megumi/shared/timeline';
 import { TimelineMarkdown } from './TimelineMarkdown';
 import { ProcessDisclosureBlockView } from './ProcessDisclosureBlockView';
 
@@ -71,3 +71,4 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
     </div>
   );
 }
+

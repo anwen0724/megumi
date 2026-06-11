@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared/ipc/runtime-request';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 
@@ -36,3 +36,4 @@ describe('artifact preload API shape', () => {
     }));
   });
 });
+

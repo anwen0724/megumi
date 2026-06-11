@@ -1,7 +1,7 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createModelMessageObservation,
   createModelStepInputPreview,
@@ -125,4 +125,5 @@ describe('run model step foundation', () => {
     expect(events.map((event) => event.sequence)).toEqual([1, 2]);
   });
 });
+
 

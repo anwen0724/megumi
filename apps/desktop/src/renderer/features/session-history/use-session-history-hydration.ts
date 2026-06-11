@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { Run } from '@megumi/shared/session-run-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import { useCallback } from 'react';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { Run } from '@megumi/shared/session';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore } from '../../entities/chat-ui/store';
 import { useProjectStore } from '../../entities/project/store';
@@ -132,3 +132,4 @@ export function useSessionHistoryHydration() {
     hydrateSessionTimeline,
   };
 }
+

@@ -1,4 +1,4 @@
-import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
+﻿import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import {
   PermissionModeStateSchema,
   type ImplementationPlanArtifactRecord,
@@ -6,7 +6,7 @@ import {
   type PermissionModeState,
   type PermissionSnapshotRecord,
   type RunSourcePlanRelation,
-} from '@megumi/shared/permission-snapshot-contracts';
+} from '@megumi/shared/permission';
 
 export interface PermissionSnapshotServiceIds {
   permissionSnapshotId(): string;
@@ -131,3 +131,4 @@ function normalizePermissionModeState(input: PermissionModeState | string): Perm
 
   return PermissionModeStateSchema.parse(input);
 }
+

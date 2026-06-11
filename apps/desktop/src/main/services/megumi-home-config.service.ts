@@ -1,4 +1,4 @@
-import fs from 'fs-extra';
+﻿import fs from 'fs-extra';
 import {
   type MegumiHomeConfig,
   type MegumiProviderConfig,
@@ -8,7 +8,7 @@ import {
   PROVIDER_IDS,
   type ProviderId,
   type ProviderSettings,
-} from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/provider';
 
 export interface MegumiHomeConfigFileSystem {
   readJson(filePath: string): Promise<unknown>;
@@ -153,3 +153,4 @@ export class MegumiHomeConfigService {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+

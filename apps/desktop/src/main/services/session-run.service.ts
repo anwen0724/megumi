@@ -1,4 +1,4 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import {
   buildModelStepInputContextFromSources,
   createModelStepInputContextId,
@@ -27,26 +27,26 @@ import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelStepRuntimeConstraintInput } from '@megumi/context-management/model-step-input-context';
 import type {
   RunContext,
   ModelCapabilitySummary,
-} from '@megumi/shared/run-context-contracts';
+} from '@megumi/shared/run';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContextSourceRef,
-} from '@megumi/shared/model-input-context-contracts';
-import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
-import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session-run-contracts';
-import type { SessionActivePath, SessionBranchMarker, SessionSourceEntry } from '@megumi/shared/session-active-path-contracts';
+} from '@megumi/shared/model';
+import type { SessionContextInput } from '@megumi/shared/session';
+import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
+import type { SessionActivePath, SessionBranchMarker, SessionSourceEntry } from '@megumi/shared/session';
 import {
   isPermissionMode,
   type PermissionMode,
   type PermissionModeSnapshot,
   type PermissionModeSelectionSource,
-} from '@megumi/shared/permission-mode-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+} from '@megumi/shared/permission';
+import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   RunStartPayload,
   PlanStatusUpdatePayload,
@@ -56,22 +56,22 @@ import type {
   SessionMessageSendPayload,
   SessionTimelineListData,
   SessionTimelineListPayload,
-} from '@megumi/shared/ipc-schemas';
-import { createChatStreamEvent } from '@megumi/shared/chat-stream-event-factory';
-import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+} from '@megumi/shared/ipc';
+import { createChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { TimelineMessage } from '@megumi/shared/timeline';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   ImplementationPlanArtifactRecord,
   PermissionModeState,
   PermissionSnapshotRecord,
-} from '@megumi/shared/permission-snapshot-contracts';
-import type { RuntimeContext } from '@megumi/shared/runtime-context';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/permission';
+import type { RuntimeContext } from '@megumi/shared/runtime';
+import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   InputIntentCommandMetadataSchema,
   type InputIntentCommandMetadata,
-} from '@megumi/shared/input-command-contracts';
+} from '@megumi/shared/input-command';
 import {
   createRuntimeEvent,
   createSessionActiveLeafChangedEvent,
@@ -79,14 +79,14 @@ import {
   createSessionBranchMarkerCreatedEvent,
   createToolResultCreatedEvent,
   createWorkspaceChangesDetectedBeforeRetryEvent,
-} from '@megumi/shared/runtime-event-factory';
-import type { SessionRetryAttempt } from '@megumi/shared/session-active-path-contracts';
-import type { ToolDefinition, ToolResult } from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/runtime';
+import type { SessionRetryAttempt } from '@megumi/shared/session';
+import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
   WorkspaceChangeSummary,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 import { PermissionSnapshotService } from './permission-snapshot.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 import {
@@ -3176,4 +3176,5 @@ export function createDefaultSessionRunService(
     agentInstructionSourceService: options.agentInstructionSourceService ?? new AgentInstructionSourceService(),
   });
 }
+
 

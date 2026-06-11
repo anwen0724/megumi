@@ -1,8 +1,8 @@
-import { ipcMain } from 'electron';
+﻿import { ipcMain } from 'electron';
 import type { z } from 'zod';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   ProjectListData,
   ProjectListPayload,
@@ -12,13 +12,13 @@ import type {
   ProjectRemovePayload,
   ProjectUseExistingData,
   ProjectUseExistingPayload,
-} from '@megumi/shared/project-contracts';
+} from '@megumi/shared/project';
 import {
   ProjectListRequestSchema,
   ProjectOpenRequestSchema,
   ProjectRemoveRequestSchema,
   ProjectUseExistingRequestSchema,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import type { ProjectService } from '../../services/project.service';
 import { ProjectPathValidationError } from '../../services/project.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
@@ -120,3 +120,4 @@ function mapProjectIpcError(error: unknown): RuntimeIpcError {
     source: 'main',
   };
 }
+

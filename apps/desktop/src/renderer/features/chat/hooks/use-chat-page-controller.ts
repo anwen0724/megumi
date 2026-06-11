@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApprovalResolvePayload, WorkspaceRestoreData } from '@megumi/shared/ipc-schemas';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline-message-blocks';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ApprovalResolvePayload, WorkspaceRestoreData } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline';
 import { type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
@@ -478,3 +478,4 @@ export function useChatPageController() {
       canShowUserMessageActions(message, timelineMessages, userActionsBlocked),
   };
 }
+

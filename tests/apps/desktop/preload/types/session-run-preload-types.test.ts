@@ -1,8 +1,8 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared/ipc/runtime-request';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 
@@ -128,8 +128,9 @@ describe('session and run preload API shape', () => {
   it('keeps session send preload types anchored to shared ipc schemas', () => {
     const source = readFileSync(join(process.cwd(), 'apps/desktop/src/preload/types.ts'), 'utf8');
 
-    expect(source).toContain("from '@megumi/shared/ipc-schemas'");
+    expect(source).toContain("from '@megumi/shared/ipc'");
     expect(source).toContain('SessionMessageSendData');
     expect(source).toContain('SessionMessageSendPayload');
   });
 });
+

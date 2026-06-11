@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ToolDefinition } from '@megumi/shared/tool';
 
 export const searchTextDefinition: ToolDefinition = {
   name: 'search_text',
@@ -39,3 +39,4 @@ export const searchTextDefinition: ToolDefinition = {
   sideEffect: 'none',
   availability: { status: 'available' },
 };
+

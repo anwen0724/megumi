@@ -1,5 +1,5 @@
-import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
-import type { MergedPermissionSettings } from '@megumi/shared/permission-settings-contracts';
+﻿import type { PermissionMode } from '@megumi/shared/permission';
+import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type {
   PermissionDecision,
   PermissionDecisionSource,
@@ -11,7 +11,7 @@ import type {
   ToolPolicyDecision,
   ToolPolicyDecisionValue,
   ToolRiskLevel,
-} from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/tool';
 import { classifyCommand, type CommandClassifierLabel } from './command-classifier';
 import {
   createRuleBasedPermissionClassifier,
@@ -571,3 +571,4 @@ function escalateRisk(current: ToolRiskLevel, minimum: ToolRiskLevel): ToolRiskL
 }
 
 export type { ToolPolicyDecision };
+

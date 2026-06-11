@@ -1,7 +1,7 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline-message-blocks';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline';
 import {
   chatStreamSessionKey,
   useChatStreamStore,
@@ -677,3 +677,4 @@ describe('chat stream store', () => {
     expect(useChatStreamStore.getState().sessions).toEqual({});
   });
 });
+

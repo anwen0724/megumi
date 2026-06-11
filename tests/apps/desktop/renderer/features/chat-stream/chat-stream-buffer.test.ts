@@ -1,6 +1,6 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { createChatStreamBuffer } from '@megumi/desktop/renderer/features/chat-stream/chat-stream-buffer';
 
 function event(input: Partial<ChatStreamEvent> & Pick<ChatStreamEvent, 'eventType' | 'seq'>): ChatStreamEvent {
@@ -209,3 +209,4 @@ describe('chat stream buffer', () => {
     expect(applied).toEqual([]);
   });
 });
+

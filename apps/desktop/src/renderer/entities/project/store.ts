@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import type { ProjectRecord } from '@megumi/shared/project-contracts';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+﻿import { create } from 'zustand';
+import type { ProjectRecord } from '@megumi/shared/project';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import { projectFromRecord, type Project } from './types';
 import { useSessionStore } from '../../entities/session/store';
@@ -139,3 +139,4 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return result.data.removed;
   },
 }));
+

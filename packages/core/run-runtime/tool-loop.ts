@@ -1,16 +1,16 @@
-import {
+﻿import {
   buildModelStepInputContextFromSources,
   createModelStepInputContextId,
 } from '@megumi/context-management/model-step-input-context';
-import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
-import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime-events';
-import { RuntimeEventSchema } from '@megumi/shared/runtime-event-schemas';
+import type { ModelInputContext } from '@megumi/shared/model';
+import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime';
+import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import {
   createRunFailedEvent,
   createToolResultCreatedEvent,
-} from '@megumi/shared/runtime-event-factory';
-import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool-contracts';
+} from '@megumi/shared/runtime';
+import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { AiModelStepPort } from '../ports/ai-port';
 import { runModelStep } from './model-step';
 
@@ -381,3 +381,4 @@ function createToolResultSummary(toolResult: ToolResult): string {
 
   return toolResult.kind;
 }
+

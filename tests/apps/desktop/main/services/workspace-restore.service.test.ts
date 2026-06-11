@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { createHash } from 'node:crypto';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ import type {
   WorkspaceRestoreRequest,
   WorkspaceRestoreResult,
   WorkspaceSnapshotContent,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 import {
   WorkspaceRestoreService,
   type WorkspaceRestoreFileSystem,
@@ -1382,3 +1382,4 @@ function fakeClock(values: string[]) {
     },
   };
 }
+

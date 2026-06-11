@@ -1,7 +1,7 @@
-import type {
+﻿import type {
   RuntimeError,
   RuntimeErrorSource,
-} from '@megumi/shared/runtime-errors';
+} from '@megumi/shared/runtime';
 
 export interface RuntimeExceptionOptions {
   cause?: unknown;
@@ -46,3 +46,4 @@ export function normalizeRuntimeError(
     debugId: options.debugId,
   };
 }
+

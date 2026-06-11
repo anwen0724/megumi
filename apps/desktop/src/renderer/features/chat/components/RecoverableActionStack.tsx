@@ -1,4 +1,4 @@
-import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
+﻿import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import { Button } from '../../../shared/ui';
 import { recoverableActionsFor } from '../hooks/use-chat-page-controller';
 
@@ -52,3 +52,4 @@ export function RecoverableActionStack({
     </section>
   );
 }
+

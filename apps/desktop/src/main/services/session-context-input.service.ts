@@ -1,17 +1,17 @@
-import type {
+﻿import type {
   ModelInputContextSourceKind,
   ModelInputContextSourceRef,
-} from '@megumi/shared/model-input-context-contracts';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { SessionCompactionEntry } from '@megumi/shared/session-compaction-contracts';
+} from '@megumi/shared/model';
+import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { SessionCompactionEntry } from '@megumi/shared/session';
 import type {
   Run,
   RunStep,
   Session,
   SessionMessage,
-} from '@megumi/shared/session-run-contracts';
-import type { SessionActivePath } from '@megumi/shared/session-active-path-contracts';
+} from '@megumi/shared/session';
+import type { SessionActivePath } from '@megumi/shared/session';
 import type {
   SessionContextInput,
   SessionHistoryEntry,
@@ -20,7 +20,7 @@ import type {
   SessionRuntimeFactKind,
   SessionRuntimeFactSeverity,
   SessionSummaryEntry,
-} from '@megumi/shared/session-context-contracts';
+} from '@megumi/shared/session';
 
 export interface SessionContextInputRepository {
   getSession(sessionId: string): Session | undefined;
@@ -505,3 +505,4 @@ function stableHash(value: string): string {
 
   return (hash >>> 0).toString(36);
 }
+

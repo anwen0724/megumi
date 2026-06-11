@@ -1,11 +1,11 @@
-import type { RunObservation } from '@megumi/shared/session-run-contracts';
+﻿import type { RunObservation } from '@megumi/shared/session';
 import type {
   ContextPatch,
   ContextPatchAppliedPayload,
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
-} from '@megumi/shared/run-context-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+} from '@megumi/shared/run';
+import type { JsonObject } from '@megumi/shared/primitives';
 
 export function createContextUpdateInputPreview(patch: ContextPatch): ContextPatchRequestedPayload {
   return {
@@ -92,3 +92,4 @@ export function toContextPatchRejectedPayload(observation: RunObservation): Cont
     rejectionReason,
   };
 }
+

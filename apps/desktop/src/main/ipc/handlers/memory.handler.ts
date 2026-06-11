@@ -1,6 +1,6 @@
-import type { IpcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+﻿import type { IpcMain } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import {
   MemoryAccessLogsListRequestSchema,
   MemoryArchiveRequestSchema,
@@ -19,7 +19,7 @@ import {
   MemorySettingsUpdateRequestSchema,
   MemorySourceRefsListRequestSchema,
   MemoryUpdateRequestSchema,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import type { MemoryService } from '../../services/memory.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
@@ -233,3 +233,4 @@ function mapMemoryIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+

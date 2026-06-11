@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +13,7 @@ describe('run context and model input boundaries', () => {
   it('keeps context-management independent from full RunContext', () => {
     const source = read('packages/context-management/model-step-input-context.ts');
 
-    expect(source).not.toContain('@megumi/shared/run-context-contracts');
+    expect(source).not.toContain('@megumi/shared/run');
     expect(source).not.toContain('RunContext');
     expect(source).not.toContain('runContext?:');
     expect(source).not.toContain('input.runContext');
@@ -64,3 +64,4 @@ describe('run context and model input boundaries', () => {
     expect(providerSource).not.toContain('input-command-contracts');
   });
 });
+

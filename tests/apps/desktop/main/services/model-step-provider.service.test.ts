@@ -1,8 +1,8 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { ModelInputContext } from '@megumi/shared/model';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ProviderRuntimeConfig } from '@megumi/ai/types';
 import {
   ModelStepProviderService,
@@ -322,3 +322,4 @@ describe('ModelStepProviderService', () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 });
+

@@ -1,18 +1,18 @@
-import { ipcMain } from 'electron';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission-snapshot-contracts';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+﻿import { ipcMain } from 'electron';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   PlanByRunGetData,
   PlanByRunGetPayload,
   PlanStatusUpdateData,
   PlanStatusUpdatePayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import {
   PlanByRunGetRequestSchema,
   PlanStatusUpdateRequestSchema,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import type { PermissionSnapshotService } from '../../services/permission-snapshot.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
@@ -74,4 +74,5 @@ function mapPlanIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

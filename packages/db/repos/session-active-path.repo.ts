@@ -1,5 +1,5 @@
-import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+﻿import type { ModelInputContextSourceRef } from '@megumi/shared/model';
+import type { JsonObject } from '@megumi/shared/primitives';
 import {
   SessionActiveLeafSchema,
   SessionActivePathSchema,
@@ -13,7 +13,7 @@ import {
   type SessionInterruptedRunMarker,
   type SessionRetryAttempt,
   type SessionSourceEntry,
-} from '@megumi/shared/session-active-path-contracts';
+} from '@megumi/shared/session';
 
 import type { MegumiDatabase } from '../connection';
 
@@ -613,3 +613,4 @@ function parseJson<T = unknown>(value: string): T {
 function parseOptionalJson(value: string | null): JsonObject | undefined {
   return value ? parseJson<JsonObject>(value) : undefined;
 }
+

@@ -1,4 +1,4 @@
-import type { ChatTokenUsagePayload } from '@megumi/shared/runtime-events';
+﻿import type { ChatTokenUsagePayload } from '@megumi/shared/runtime';
 
 export interface OpenAICompatibleStreamChunk {
   choices?: Array<{
@@ -146,3 +146,4 @@ function* parseSsePart(part: string): Iterable<OpenAICompatibleStreamResult> {
     }
   }
 }
+

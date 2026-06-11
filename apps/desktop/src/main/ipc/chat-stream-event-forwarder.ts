@@ -1,6 +1,6 @@
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import { ChatStreamEventSchema } from '@megumi/shared/chat-stream-event-schemas';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { ChatStreamEventSchema } from '@megumi/shared/chat-stream';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { redactRuntimeValue } from '@megumi/security/redaction';
 import {
   noopRuntimeLogger,
@@ -60,3 +60,4 @@ function eventDiagnostics(event: unknown): Record<string, unknown> {
     seq: value.seq,
   }) as Record<string, unknown>;
 }
+

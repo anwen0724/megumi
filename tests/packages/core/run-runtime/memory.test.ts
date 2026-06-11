@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createMemoryUpdateActionInputPreview,
   createMemoryUpdateIntent,
   createMemoryRecallContextSource,
   selectMemoryRecallIdsForContext,
 } from '@megumi/core/run-runtime/memory';
-import type { MemoryRecallResult } from '@megumi/shared/memory-contracts';
+import type { MemoryRecallResult } from '@megumi/shared/memory';
 
 const now = '2026-05-16T00:00:00.000Z';
 
@@ -76,3 +76,4 @@ describe('core memory runtime helpers', () => {
     });
   });
 });
+

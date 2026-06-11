@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { createMemoryService } from '../../../../../apps/desktop/src/main/services/memory.service';
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 const now = '2026-05-16T00:00:00.000Z';
 
@@ -161,3 +161,4 @@ describe('MemoryService', () => {
     }
   });
 });
+

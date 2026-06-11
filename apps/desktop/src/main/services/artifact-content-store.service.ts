@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
+﻿import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ArtifactContentRef } from '@megumi/shared/artifact-contracts';
+import type { ArtifactContentRef } from '@megumi/shared/artifact';
 
 export interface ArtifactContentStoreOptions {
   artifactRoot: string;
@@ -90,3 +90,4 @@ function extensionForMimeType(mimeType: string): string {
   }
   return '.txt';
 }
+

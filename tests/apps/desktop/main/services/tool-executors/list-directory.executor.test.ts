@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 import { createListDirectoryExecutor } from '@megumi/desktop/main/services/tool-executors/list-directory.executor';
 
 describe('ListDirectoryExecutor', () => {
@@ -81,3 +81,4 @@ function fakeFileSystem(files: Map<string, string>) {
     },
   };
 }
+
