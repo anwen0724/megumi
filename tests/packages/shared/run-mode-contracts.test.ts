@@ -54,6 +54,7 @@ describe('run-mode-contracts compatibility shim', () => {
       'local',
       'system',
       'workflow_default',
+      'intent_default',
     ]);
 
     expect(PermissionModeSnapshotSchema.parse({
@@ -67,5 +68,11 @@ describe('run-mode-contracts compatibility shim', () => {
       source: 'workflow_default',
       createdAt: '2026-05-20T00:00:00.000Z',
     }).source).toBe('workflow_default');
+
+    expect(PermissionModeSnapshotSchema.parse({
+      permissionMode: 'plan',
+      source: 'intent_default',
+      createdAt: '2026-05-20T00:00:00.000Z',
+    }).source).toBe('intent_default');
   });
 });

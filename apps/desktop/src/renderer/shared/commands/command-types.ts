@@ -3,7 +3,7 @@ import type {
   InputCommandKind,
   InputCommandSource,
   InputPromptSource,
-} from '@megumi/shared/input-command-contracts';
+} from '@megumi/shared';
 
 export type CommandKind = InputCommandKind;
 export type CommandSource = InputCommandSource;
