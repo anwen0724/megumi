@@ -10,6 +10,7 @@ export const PERMISSION_MODE_SELECTION_SOURCES = [
   'local',
   'system',
   'workflow_default',
+  'intent_default',
 ] as const;
 export type PermissionModeSelectionSource = (typeof PERMISSION_MODE_SELECTION_SOURCES)[number];
 

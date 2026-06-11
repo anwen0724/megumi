@@ -8,6 +8,7 @@ import * as Shared from '@megumi/shared';
 import {
   ACTIVE_PERMISSION_MODES,
   PermissionModeSchema,
+  PermissionModeSelectionSourceSchema,
   PermissionModeSnapshotSchema,
   isPermissionMode,
 } from '@megumi/shared/permission-mode-contracts';
@@ -76,5 +77,10 @@ describe('permission-mode-contracts', () => {
     expect(isPermissionMode('default')).toBe(true);
     expect(isPermissionMode('auto')).toBe(true);
     expect(isPermissionMode('chat')).toBe(false);
+  });
+
+  it('includes intent_default as the new command-derived permission source while keeping legacy workflow_default temporarily', () => {
+    expect(PermissionModeSelectionSourceSchema.parse('intent_default')).toBe('intent_default');
+    expect(PermissionModeSelectionSourceSchema.parse('workflow_default')).toBe('workflow_default');
   });
 });
