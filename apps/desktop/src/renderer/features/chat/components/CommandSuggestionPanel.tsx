@@ -1,4 +1,4 @@
-import type { CommandDefinition } from '../../workflow-commands';
+import type { CommandDefinition } from '../../input-commands';
 
 interface CommandSuggestionPanelProps {
   suggestions: CommandDefinition[];

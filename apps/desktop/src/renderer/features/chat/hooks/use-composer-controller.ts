@@ -6,10 +6,10 @@ import {
 import type { ComposerProps, ComposerSubmitPayload } from '../components/composer-types';
 import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 import {
-  createWorkflowCommandSubmitPayload,
-  listWorkflowCommandSuggestions,
+  createInputCommandSubmitPayload,
+  listInputCommandSuggestions,
   type CommandDefinition,
-} from '../../workflow-commands';
+} from '../../input-commands';
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -19,11 +19,11 @@ function createComposerSubmitPayload(input: {
   permissionMode: ComposerPermissionMode;
   model: ComposerModel;
 }): ComposerSubmitPayload {
-  const workflowPayload = createWorkflowCommandSubmitPayload(input.message);
+  const inputCommandPayload = createInputCommandSubmitPayload(input.message);
 
-  if (workflowPayload) {
+  if (inputCommandPayload) {
     return {
-      ...workflowPayload,
+      ...inputCommandPayload,
       model: input.model,
     };
   }
@@ -59,7 +59,7 @@ export function useComposerController({
   const canSend = trimmedValue.length > 0 && !sendLocked;
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
-  const commandSuggestions = listWorkflowCommandSuggestions(value);
+  const commandSuggestions = listInputCommandSuggestions(value);
   const showCommandAutocomplete =
     commandSuggestions.length > 0 &&
     commandAutocompleteDismissedFor !== value &&
