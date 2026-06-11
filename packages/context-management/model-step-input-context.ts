@@ -59,8 +59,8 @@ export interface BuildModelStepInputContextFromSourcesInput {
   currentMessage?: SessionMessage;
   sessionContext?: SessionContextInput;
   runtimeConstraints?: ModelStepRuntimeConstraintInput[];
-  modeSnapshot?: PermissionModeSnapshot;
-  modeSnapshotRef?: string;
+  permissionSnapshot?: PermissionModeSnapshot;
+  permissionSnapshotRef?: string;
   inputIntent?: InputIntentCommandMetadata;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
@@ -299,21 +299,21 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
     }
   }
 
-  if (input.modeSnapshot) {
+  if (input.permissionSnapshot) {
     parts.push({
-      partId: `part:runtime:permission-mode:${input.modeSnapshotRef ?? input.runId}`,
+      partId: `part:runtime:permission-mode:${input.permissionSnapshotRef ?? input.runId}`,
       kind: 'runtime_constraint',
       constraintKind: 'permission_mode',
-      text: `Permission mode is ${input.modeSnapshot.permissionMode}.`,
+      text: `Permission mode is ${input.permissionSnapshot.permissionMode}.`,
       sourceRefs: [{
-        sourceId: `permission-mode:${input.modeSnapshotRef ?? input.runId}`,
+        sourceId: `permission-mode:${input.permissionSnapshotRef ?? input.runId}`,
         sourceKind: 'permission_mode',
-        sourceUri: `permission-mode://${input.modeSnapshotRef ?? input.runId}`,
-        loadedAt: input.modeSnapshot.createdAt,
+        sourceUri: `permission-mode://${input.permissionSnapshotRef ?? input.runId}`,
+        loadedAt: input.permissionSnapshot.createdAt,
       }],
       priority: 90,
       metadata: {
-        source: input.modeSnapshot.source,
+        source: input.permissionSnapshot.source,
       },
     });
   }

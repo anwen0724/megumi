@@ -59,6 +59,7 @@ import {
   RunListBySessionRequestSchema,
   RunResumeRequestSchema,
   RunRetryRequestSchema,
+  RunStartPayloadSchema,
   WorkspaceRestoreRequestSchema,
   WorkspaceRestoreResultSchema,
   SessionCreateRequestSchema,
@@ -888,6 +889,44 @@ describe('session run ipc contracts', () => {
         source: 'renderer',
       },
     }).payload.runId).toBe('run:plan');
+  });
+
+  it('parses run start payloads with canonical permission mode state', () => {
+    const payload = RunStartPayloadSchema.parse({
+      sessionId: 'session-1',
+      goal: 'Write a plan',
+      mode: 'plan',
+      permissionModeState: {
+        permissionMode: 'plan',
+        source: 'user',
+      },
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    expect(payload.permissionModeState).toEqual({
+      permissionMode: 'plan',
+      source: 'user',
+    });
+    expect(payload).not.toHaveProperty('modeSnapshot');
+  });
+
+  it('maps legacy run start mode snapshots to permission mode state', () => {
+    const payload = RunStartPayloadSchema.parse({
+      sessionId: 'session-1',
+      goal: 'Write a plan',
+      mode: 'plan',
+      modeSnapshot: {
+        permissionMode: 'plan',
+        source: 'user',
+      },
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    expect(payload.permissionModeState).toEqual({
+      permissionMode: 'plan',
+      source: 'user',
+    });
+    expect(payload).not.toHaveProperty('modeSnapshot');
   });
 });
 

@@ -249,12 +249,12 @@ describe('buildModelStepInputContextFromSources', () => {
       },
       runtimeConstraints: [projectBoundaryConstraint()],
       budgetPolicy: budgetPolicy(),
-      modeSnapshot: {
+      permissionSnapshot: {
         permissionMode: 'plan',
         source: 'user',
         createdAt: builtAt,
       },
-      modeSnapshotRef: 'mode-snapshot:1',
+      permissionSnapshotRef: 'permission-snapshot:1',
       toolCalls: [toolCall()],
       toolResults: [toolResult()],
       providerStates: [providerState()],
@@ -286,7 +286,7 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.trace.selectedSources.map((source) => source.sourceId)).toEqual(expect.arrayContaining([
       'session-message:message:history-user',
       'runtime-constraint:run-context:1:project-boundary',
-      'permission-mode:mode-snapshot:1',
+      'permission-mode:permission-snapshot:1',
       'tool-call:tool-call:1',
       'tool-result:tool-result:1',
       'provider-state:model-step:1:0',

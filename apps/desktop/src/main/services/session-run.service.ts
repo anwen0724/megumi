@@ -1253,8 +1253,8 @@ export class SessionRunService {
         keepRecentTokens: Number.MAX_SAFE_INTEGER,
       },
       ...(input.permissionSnapshot ? {
-        modeSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-        modeSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
+        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
       } : {}),
     });
     const compactionPromise = this.sessionCompactionOrchestrator
@@ -1334,8 +1334,8 @@ export class SessionRunService {
       ...(input.inputIntent ? { inputIntent: input.inputIntent } : {}),
       budgetPolicy,
       ...(input.permissionSnapshot ? {
-        modeSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-        modeSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
+        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
       } : {}),
     });
     const request: ModelStepRuntimeRequest = {

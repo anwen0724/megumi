@@ -20,6 +20,7 @@ import {
   ImplementationPlanArtifactRecordSchema,
   ImplementationPlanArtifactStatusSchema,
 } from './run-mode-contracts';
+import { PermissionModeStateSchema } from './permission-snapshot-contracts';
 import {
   ApprovalScopeSchema,
   ApprovalRecordSchema,
@@ -340,11 +341,18 @@ export const RunStartPayloadSchema = z
     triggerMessageId: z.string().min(1).optional(),
     goal: z.string().min(1),
     mode: z.string().min(1),
+    permissionModeState: PermissionModeStateSchema.optional(),
     modeSnapshot: RunModeSchema.optional(),
     sourcePlanId: z.string().min(1).optional(),
     createdAt: IsoDateTimeSchema,
   })
-  .strict();
+  .strict()
+  .transform(({ modeSnapshot, ...payload }) => ({
+    ...payload,
+    ...(payload.permissionModeState ?? modeSnapshot
+      ? { permissionModeState: payload.permissionModeState ?? modeSnapshot }
+      : {}),
+  }));
 
 export const RunStartDataSchema = z
   .object({
