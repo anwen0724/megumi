@@ -485,7 +485,7 @@ describe('useSessionTimeline', () => {
     expect(useChatUiStore.getState().agentStatus).toBe('idle');
   });
 
-  it('sends workflow metadata and permission source for /review commands', async () => {
+  it('sends intent metadata and permission source for /review commands', async () => {
     installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
 
@@ -493,8 +493,14 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: '/review 当前改动',
         permissionMode: 'plan',
-        permissionSource: 'workflow_default',
+        permissionSource: 'intent_default',
         model: 'deepseek-v4-flash',
+        intent: {
+          intentName: 'code_review',
+          source: 'core_command',
+          commandName: 'review',
+          argsText: '当前改动',
+        },
         workflow: {
           intent: 'code_review',
           source: 'builtin_command',
@@ -509,7 +515,13 @@ describe('useSessionTimeline', () => {
         message: expect.objectContaining({ content: '/review 当前改动' }),
         context: expect.objectContaining({
           permissionMode: 'plan',
-          permissionSource: 'workflow_default',
+          permissionSource: 'intent_default',
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
           workflow: {
             intent: 'code_review',
             source: 'builtin_command',
