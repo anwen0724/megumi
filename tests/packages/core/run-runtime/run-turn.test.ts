@@ -278,9 +278,9 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'default',
-      modeSnapshotRef: 'mode-snapshot:default',
-      modeSnapshot: {
+      permissionMode: 'default',
+      permissionSnapshotRef: 'permission-snapshot:default',
+      permissionModeState: {
         permissionMode: 'default',
         source: 'user',
       },
@@ -307,7 +307,7 @@ describe('run runtime lifecycle events', () => {
     });
 
     expect(result.run.mode).toBe('default');
-    expect(result.run.modeSnapshotRef).toBe('mode-snapshot:default');
+    expect(result.run.permissionSnapshotRef).toBe('permission-snapshot:default');
     expect(result.run.sourcePlanId).toBe('plan:accepted');
     expect(result.run.metadata).toEqual({
       permissionMode: 'default',
@@ -319,9 +319,9 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'plan',
-      modeSnapshotRef: 'mode-snapshot:plan',
-      modeSnapshot: {
+      permissionMode: 'plan',
+      permissionSnapshotRef: 'permission-snapshot:plan',
+      permissionModeState: {
         permissionMode: 'plan',
         source: 'user',
       },

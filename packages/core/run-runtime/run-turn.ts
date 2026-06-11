@@ -4,7 +4,7 @@ import type {
   Run,
   RunStep,
 } from '@megumi/shared/session-run-contracts';
-import type { RunMode } from '@megumi/shared/run-mode-contracts';
+import type { PermissionModeState } from '@megumi/shared/permission-snapshot-contracts';
 import type { JsonObject } from '@megumi/shared/json';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import { normalizeRuntimeError } from '../runtime-exception';
@@ -48,8 +48,8 @@ import {
 } from './types';
 import {
   createPermissionModeRuntimeInstruction,
-  resolveRunModeSnapshot,
-} from './run-mode';
+  resolvePermissionModeState,
+} from './permission-mode';
 
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   const clock = input.clock ?? defaultRunClock;
@@ -67,11 +67,11 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   };
   const runId = ids.runId();
   const createdAt = clock.now();
-  const resolvedMode = resolveRunModeSnapshot({
-    mode: input.mode,
-    modeSnapshot: input.modeSnapshot,
+  const resolvedPermissionModeState = resolvePermissionModeState({
+    permissionMode: input.permissionMode ?? input.mode,
+    permissionModeState: input.permissionModeState,
   });
-  const runModeInstruction = createPermissionModeRuntimeInstruction(resolvedMode);
+  const permissionModeInstruction = createPermissionModeRuntimeInstruction(resolvedPermissionModeState);
   const actionKind = input.actionKind ?? (input.contextPatch ? 'update_context' : 'emit_message');
   const stepKind = stepKindForAction(actionKind);
 
@@ -79,14 +79,14 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     runId,
     sessionId: input.sessionId,
     ...(input.triggerMessageId ? { triggerMessageId: input.triggerMessageId } : {}),
-    mode: resolvedMode.permissionMode,
-    ...(input.modeSnapshotRef ? { modeSnapshotRef: input.modeSnapshotRef } : {}),
+    mode: resolvedPermissionModeState.permissionMode,
+    ...(input.permissionSnapshotRef ? { permissionSnapshotRef: input.permissionSnapshotRef } : {}),
     goal: input.goal,
     status: 'queued',
     createdAt,
     ...(input.sourcePlanId ? { sourcePlanId: input.sourcePlanId } : {}),
     metadata: {
-      permissionMode: runModeInstruction.permissionMode,
+      permissionMode: permissionModeInstruction.permissionMode,
     } satisfies JsonObject,
   };
 
@@ -97,7 +97,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     sessionId: input.sessionId,
     sequence: nextSequence(),
     createdAt,
-    mode: input.mode,
+    mode: input.permissionMode ?? input.mode ?? resolvedPermissionModeState.permissionMode,
     goal: input.goal,
     ...(input.triggerMessageId ? { triggerMessageId: input.triggerMessageId } : {}),
   }));
@@ -155,7 +155,9 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
 
   const actionInputPreview: RunAction['inputPreview'] | undefined = input.contextPatch
     ? createContextUpdateInputPreview(input.contextPatch) as unknown as RunAction['inputPreview']
-    : input.actionInput ?? input.actionInputPreview ?? createDefaultRunModeActionInputPreview(resolvedMode);
+    : input.actionInput
+      ?? input.actionInputPreview
+      ?? createDefaultPermissionModeActionInputPreview(resolvedPermissionModeState);
 
   let action: RunAction = {
     actionId: ids.actionId(),
@@ -485,9 +487,11 @@ function createRecoveryObservationForAction(
   return undefined;
 }
 
-function createDefaultRunModeActionInputPreview(mode: RunMode): RunAction['inputPreview'] | undefined {
+function createDefaultPermissionModeActionInputPreview(
+  state: PermissionModeState,
+): RunAction['inputPreview'] | undefined {
   return {
-    permissionMode: mode.permissionMode,
+    permissionMode: state.permissionMode,
   };
 }
 

@@ -9,7 +9,7 @@ import type {
   RunContext,
   ContextPatch,
 } from '@megumi/shared/run-context-contracts';
-import type { RunMode } from '@megumi/shared/run-mode-contracts';
+import type { PermissionModeState } from '@megumi/shared/permission-snapshot-contracts';
 import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 
@@ -47,9 +47,10 @@ export interface RunHostBoundaryPort {
 export interface RunTurnInput {
   sessionId: string;
   triggerMessageId?: string;
-  mode: string;
-  modeSnapshot?: RunMode;
-  modeSnapshotRef?: string;
+  permissionMode?: string;
+  permissionModeState?: PermissionModeState;
+  permissionSnapshotRef?: string;
+  mode?: string;
   sourcePlanId?: string;
   goal: string;
   actionKind?: RunAction['kind'];
