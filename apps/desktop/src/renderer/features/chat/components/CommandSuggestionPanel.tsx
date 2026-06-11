@@ -1,4 +1,4 @@
-import type { CommandDefinition } from '../../input-commands';
+import type { CommandDefinition } from '../../input';
 
 interface CommandSuggestionPanelProps {
   suggestions: CommandDefinition[];

@@ -31,6 +31,7 @@ import {
   PermissionModeSelectionSourceSchema,
 } from '../permission/mode-contracts';
 import { InputIntentCommandMetadataSchema } from '../input/command-contracts';
+import { InputPreprocessingResultSchema } from '../input/preprocessing-contracts';
 import {
   CancelRequestSchema,
   RecoverableRunSummarySchema,
@@ -227,6 +228,7 @@ export const SessionMessageRuntimeContextSchema = z
     permissionMode: PermissionModeSchema.optional(),
     permissionSource: PermissionModeSelectionSourceSchema.optional(),
     intent: InputIntentCommandMetadataSchema.optional(),
+    preprocessing: InputPreprocessingResultSchema.optional(),
   })
   .strict()
   .superRefine((context, refinement) => {

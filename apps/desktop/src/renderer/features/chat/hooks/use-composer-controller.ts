@@ -6,10 +6,10 @@ import {
 import type { ComposerProps, ComposerSubmitPayload } from '../components/composer-types';
 import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 import {
-  createInputCommandSubmitPayload,
+  createInputPreprocessingSubmitPayload,
   listInputCommandSuggestions,
   type CommandDefinition,
-} from '../../input-commands';
+} from '../../input';
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -19,11 +19,12 @@ function createComposerSubmitPayload(input: {
   permissionMode: ComposerPermissionMode;
   model: ComposerModel;
 }): ComposerSubmitPayload {
-  const inputCommandPayload = createInputCommandSubmitPayload(input.message);
+  const inputCommandPayload = createInputPreprocessingSubmitPayload(input.message);
 
   if (inputCommandPayload) {
     return {
       ...inputCommandPayload,
+      permissionMode: inputCommandPayload.permissionMode ?? input.permissionMode,
       model: input.model,
     };
   }

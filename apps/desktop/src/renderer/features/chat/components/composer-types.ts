@@ -1,4 +1,8 @@
-﻿import type { InputIntentCommandMetadata } from '@megumi/shared/input-command';
+// Defines the public Composer payload shape consumed by chat timeline orchestration.
+import type {
+  InputIntentCommandMetadata,
+  InputPreprocessingResult,
+} from '@megumi/shared/input';
 import type { PermissionModeSelectionSource } from '@megumi/shared/permission';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 
@@ -10,6 +14,7 @@ export interface ComposerSubmitPayload {
   permissionSource?: PermissionModeSelectionSource;
   model: ComposerModel;
   intent?: InputIntentCommandMetadata;
+  preprocessing?: InputPreprocessingResult;
 }
 
 export interface ComposerProps {
@@ -22,4 +27,3 @@ export interface ComposerProps {
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
 }
-
