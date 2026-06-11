@@ -273,7 +273,7 @@ describe('run runtime lifecycle events', () => {
     expect(JSON.stringify(events)).not.toContain('raw full prompt');
   });
 
-  it('persists mode snapshot refs and source plan ids on the run', async () => {
+  it('persists permission snapshot refs and source plan ids on the run', async () => {
     const { sink } = createSink();
 
     const result = await runTurn({
@@ -350,6 +350,44 @@ describe('run runtime lifecycle events', () => {
     expect(result.action.kind).toBe('emit_message');
     expect(result.action.inputPreview).toEqual({
       permissionMode: 'plan',
+    });
+  });
+
+  it('uses resolved permission mode state consistently for run.created events', async () => {
+    const { sink, events } = createSink();
+
+    const result = await runTurn({
+      sessionId: 'session-1',
+      permissionMode: 'default',
+      permissionSnapshotRef: 'permission-snapshot:plan',
+      permissionModeState: {
+        permissionMode: 'plan',
+        source: 'intent_default',
+      },
+      goal: 'Review the project',
+      lifecycle: sink,
+      hostBoundary: {
+        handleAction: (action) => ({
+          observationId: 'observation-1',
+          runId: action.runId,
+          stepId: action.stepId,
+          actionId: action.actionId,
+          source: 'runtime',
+          kind: 'message_emitted',
+          receivedAt: '2026-05-15T00:00:00.000Z',
+          summary: 'Message emitted',
+        }),
+      },
+      clock: { now: () => '2026-05-15T00:00:00.000Z' },
+      ids: {
+        ...ids,
+        eventId: () => `event-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+
+    expect(result.run.mode).toBe('plan');
+    expect(events.find((event) => event.eventType === 'run.created')?.payload).toMatchObject({
+      mode: 'plan',
     });
   });
 

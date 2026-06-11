@@ -97,7 +97,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     sessionId: input.sessionId,
     sequence: nextSequence(),
     createdAt,
-    mode: input.permissionMode ?? resolvedPermissionModeState.permissionMode,
+    mode: resolvedPermissionModeState.permissionMode,
     goal: input.goal,
     ...(input.triggerMessageId ? { triggerMessageId: input.triggerMessageId } : {}),
   }));
