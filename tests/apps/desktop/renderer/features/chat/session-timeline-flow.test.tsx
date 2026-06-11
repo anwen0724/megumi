@@ -501,6 +501,24 @@ describe('useSessionTimeline', () => {
           commandName: 'review',
           argsText: '当前改动',
         },
+        preprocessing: {
+          originalText: '/review 当前改动',
+          effectiveUserText: '当前改动',
+          entries: [
+            {
+              kind: 'intent',
+              sourceId: 'input:intent:review',
+              sourceName: '/review',
+              visibility: 'model_visible',
+              instructionText: 'Current input comes from the review intent.',
+              intentId: 'review',
+              commandName: 'review',
+              defaultPermissionMode: 'plan',
+              defaultPermissionSource: 'intent_default',
+            },
+          ],
+          diagnostics: [],
+        },
       });
     });
 
@@ -514,6 +532,16 @@ describe('useSessionTimeline', () => {
             commandName: 'review',
             argsText: '当前改动',
           },
+          preprocessing: expect.objectContaining({
+            originalText: '/review 当前改动',
+            effectiveUserText: '当前改动',
+            entries: [
+              expect.objectContaining({
+                kind: 'intent',
+                intentId: 'review',
+              }),
+            ],
+          }),
         }),
       }),
     }));

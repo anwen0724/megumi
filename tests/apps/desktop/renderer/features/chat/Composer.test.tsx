@@ -165,11 +165,14 @@ describe('Composer', () => {
 
     expect(screen.getByRole('listbox', { name: 'Command suggestions' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: '/review Review code in the current project' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '/summary Summarize the current session' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '/write-doc Write or update project documentation' })).toBeInTheDocument();
 
     await userEvent.clear(input);
-    await userEvent.type(input, '/re');
+    await userEvent.type(input, '/su');
 
-    expect(screen.getByRole('option', { name: '/review Review code in the current project' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '/summary Summarize the current session' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '/review Review code in the current project' })).not.toBeInTheDocument();
   });
 
   it('uses case-sensitive command autocomplete filtering', async () => {
@@ -221,6 +224,19 @@ describe('Composer', () => {
         commandName: 'review',
         argsText: '当前改动',
       },
+      preprocessing: expect.objectContaining({
+        originalText: '/review 当前改动',
+        effectiveUserText: '当前改动',
+        entries: [
+          expect.objectContaining({
+            kind: 'intent',
+            intentId: 'review',
+            commandName: 'review',
+            defaultPermissionMode: 'plan',
+            defaultPermissionSource: 'intent_default',
+          }),
+        ],
+      }),
     }));
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
   });
@@ -261,8 +277,77 @@ describe('Composer', () => {
         commandName: 'review',
         argsText: '当前改动',
       },
+      preprocessing: expect.objectContaining({
+        originalText: '/review 当前改动',
+        effectiveUserText: '当前改动',
+        entries: [
+          expect.objectContaining({
+            kind: 'intent',
+            intentId: 'review',
+            commandName: 'review',
+            defaultPermissionMode: 'plan',
+            defaultPermissionSource: 'intent_default',
+          }),
+        ],
+      }),
     }));
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
+  });
+
+  it('submits /summary as prompt-template preprocessing without changing the selected permission mode', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'accept_edits');
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/summary');
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      message: '/summary',
+      permissionMode: 'accept_edits',
+      preprocessing: expect.objectContaining({
+        originalText: '/summary',
+        effectiveUserText: '总结当前会话',
+        entries: [
+          expect.objectContaining({
+            kind: 'prompt_template',
+            templateId: 'summary',
+            commandName: 'summary',
+            templateSource: 'builtin',
+          }),
+        ],
+      }),
+    }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('permissionSource');
+  });
+
+  it('submits /write-doc as skill preprocessing without changing the selected permission mode', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer onSubmit={onSubmit} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'plan');
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/write-doc docs/architecture.md');
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      message: '/write-doc docs/architecture.md',
+      permissionMode: 'plan',
+      preprocessing: expect.objectContaining({
+        originalText: '/write-doc docs/architecture.md',
+        effectiveUserText: 'docs/architecture.md',
+        entries: [
+          expect.objectContaining({
+            kind: 'skill',
+            skillId: 'write-doc',
+            commandName: 'write-doc',
+            skillSource: 'builtin',
+          }),
+        ],
+      }),
+    }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('permissionSource');
   });
 
   it('keeps unknown slash commands as ordinary messages', async () => {

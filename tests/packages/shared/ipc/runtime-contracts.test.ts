@@ -690,6 +690,59 @@ describe('provider and chat ipc schemas', () => {
     expect(parsed.payload.context?.permissionSource).toBe('intent_default');
   });
 
+  it('accepts input preprocessing metadata on session message runtime context', () => {
+    const parsed = SessionMessageSendRequestSchema.parse({
+      requestId: 'request:input-preprocessing-summary',
+      payload: {
+        sessionId: 'session:1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'client-message:summary',
+          content: '/summary',
+          createdAt: '2026-06-11T00:00:00.000Z',
+        },
+        context: {
+          permissionMode: 'default',
+          preprocessing: {
+            originalText: '/summary',
+            effectiveUserText: '总结当前会话',
+            entries: [
+              {
+                kind: 'prompt_template',
+                sourceId: 'input:prompt-template:summary',
+                sourceName: '/summary',
+                visibility: 'model_visible',
+                instructionText: '请总结当前会话。',
+                templateId: 'summary',
+                commandName: 'summary',
+                templateSource: 'builtin',
+              },
+            ],
+            diagnostics: [],
+          },
+        },
+        createdAt: '2026-06-11T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.message.send,
+        createdAt: '2026-06-11T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(parsed.payload.context?.preprocessing).toMatchObject({
+      originalText: '/summary',
+      effectiveUserText: '总结当前会话',
+      entries: [
+        expect.objectContaining({
+          kind: 'prompt_template',
+          templateId: 'summary',
+        }),
+      ],
+    });
+  });
+
   it('rejects legacy workflow metadata on session message runtime context', () => {
     expect(() => SessionMessageSendRequestSchema.parse({
       requestId: 'request:workflow-review',
