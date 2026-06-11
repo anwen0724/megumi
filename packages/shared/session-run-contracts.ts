@@ -150,6 +150,8 @@ export interface Run {
   agentDefinitionId?: AgentDefinitionId | string;
   agentConfigSnapshotRef?: AgentConfigSnapshotRef | string;
   mode: string;
+  permissionSnapshotRef?: string;
+  /** Compatibility input only. New code must use permissionSnapshotRef. */
   modeSnapshotRef?: string;
   goal: string;
   status: RunStatus;
@@ -244,6 +246,7 @@ export const RunSchema = z
     agentDefinitionId: IdSchema.optional(),
     agentConfigSnapshotRef: IdSchema.optional(),
     mode: z.string().min(1),
+    permissionSnapshotRef: z.string().min(1).optional(),
     modeSnapshotRef: z.string().min(1).optional(),
     goal: z.string().min(1),
     status: RunStatusSchema,
@@ -256,7 +259,11 @@ export const RunSchema = z
     policySnapshotRef: IdSchema.optional(),
     metadata: OptionalJsonObjectSchema,
   })
-  .strict() satisfies z.ZodType<Run>;
+  .strict()
+  .transform((run) => ({
+    ...run,
+    permissionSnapshotRef: run.permissionSnapshotRef ?? run.modeSnapshotRef,
+  })) satisfies z.ZodType<Run>;
 
 export const RunStepSchema = z
   .object({

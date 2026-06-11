@@ -21,6 +21,31 @@ afterEach(() => {
 });
 
 describe('SessionRunRepository', () => {
+  it('persists permissionSnapshotRef through the existing mode_snapshot_ref column', () => {
+    const repository = createRepo();
+    repository.saveSession({
+      sessionId: 'session:permission-snapshot',
+      title: 'Session',
+      status: 'active',
+      createdAt: '2026-06-11T00:00:00.000Z',
+      updatedAt: '2026-06-11T00:00:00.000Z',
+    });
+
+    repository.saveRun({
+      runId: 'run:permission-snapshot',
+      sessionId: 'session:permission-snapshot',
+      mode: 'plan',
+      permissionSnapshotRef: 'permission-snapshot:1',
+      goal: 'Review code',
+      status: 'running',
+      createdAt: '2026-06-11T00:00:00.000Z',
+    });
+
+    expect(repository.getRun('run:permission-snapshot')).toMatchObject({
+      permissionSnapshotRef: 'permission-snapshot:1',
+    });
+  });
+
   it('saves and reads session, message, run, step, action, and observation facts', () => {
     const repo = createRepo();
 

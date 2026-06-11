@@ -144,6 +144,32 @@ describe('session run contracts', () => {
     });
   });
 
+  it('uses permissionSnapshotRef as the domain field while accepting legacy modeSnapshotRef input', () => {
+    expect(RunSchema.parse({
+      runId: 'run:1',
+      sessionId: 'session:1',
+      mode: 'plan',
+      permissionSnapshotRef: 'permission-snapshot:1',
+      goal: 'Review code',
+      status: 'running',
+      createdAt: '2026-06-11T00:00:00.000Z',
+    })).toMatchObject({
+      permissionSnapshotRef: 'permission-snapshot:1',
+    });
+
+    expect(RunSchema.parse({
+      runId: 'run:2',
+      sessionId: 'session:1',
+      mode: 'plan',
+      modeSnapshotRef: 'mode-snapshot:legacy',
+      goal: 'Legacy run',
+      status: 'running',
+      createdAt: '2026-06-11T00:00:00.000Z',
+    })).toMatchObject({
+      permissionSnapshotRef: 'mode-snapshot:legacy',
+    });
+  });
+
   it('uses session and run as the primary shared lifecycle names', () => {
     expect(SessionSchema.parse({
       sessionId: 'session-1',
