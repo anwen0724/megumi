@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest';
+import { createDatabase } from '@megumi/db/connection';
+import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
+
+function createTestDatabase() {
+  const database = createDatabase(':memory:');
+  migrateDatabase(database);
+  return database;
+}
+
+function seedRun(database: ReturnType<typeof createTestDatabase>, runId = 'run:1') {
+  const lifecycle = new SessionRunRepository(database);
+  lifecycle.saveSession({
+    sessionId: 'session:1',
+    title: 'Session',
+    status: 'active',
+    createdAt: '2026-05-15T00:00:00.000Z',
+    updatedAt: '2026-05-15T00:00:00.000Z',
+  });
+  lifecycle.saveRun({
+    runId,
+    sessionId: 'session:1',
+    mode: 'plan',
+    goal: 'Write a plan',
+    status: 'queued',
+    createdAt: '2026-05-15T00:00:00.000Z',
+  });
+}
+
+describe('PermissionSnapshotRepository', () => {
+  it('saves and loads a permission snapshot by run id using existing DB tables', () => {
+    const database = createTestDatabase();
+    seedRun(database);
+    const repo = new PermissionSnapshotRepository(database);
+
+    repo.savePermissionSnapshot({
+      permissionSnapshotId: 'permission-snapshot:1',
+      runId: 'run:1',
+      permissionLabel: 'plan',
+      permissionModeState: {
+        permissionMode: 'plan',
+        source: 'intent_default',
+      },
+      createdAt: '2026-05-15T00:00:00.000Z',
+      metadata: { source: 'test' },
+    });
+
+    expect(repo.getPermissionSnapshotByRun('run:1')).toEqual({
+      permissionSnapshotId: 'permission-snapshot:1',
+      runId: 'run:1',
+      permissionLabel: 'plan',
+      permissionModeState: {
+        permissionMode: 'plan',
+        source: 'intent_default',
+      },
+      createdAt: '2026-05-15T00:00:00.000Z',
+      metadata: { source: 'test' },
+    });
+  });
+
+  it('keeps implementation plan persistence behavior unchanged', () => {
+    const database = createTestDatabase();
+    seedRun(database);
+    const repo = new PermissionSnapshotRepository(database);
+
+    repo.saveImplementationPlan({
+      planArtifactId: 'plan:1',
+      producingRunId: 'run:1',
+      title: 'Plan',
+      status: 'proposed',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+      metadata: { summary: 'metadata only' },
+    });
+
+    expect(repo.getImplementationPlan('plan:1')).toMatchObject({
+      planArtifactId: 'plan:1',
+      status: 'proposed',
+      metadata: { summary: 'metadata only' },
+    });
+  });
+});
