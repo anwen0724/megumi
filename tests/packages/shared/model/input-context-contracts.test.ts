@@ -470,6 +470,75 @@ describe('ModelInputContext contracts', () => {
     expect(JSON.stringify(context)).not.toContain('rawProviderBody');
   });
 
+  it('parses input-derived source refs for prompt template, skill, and hook instructions', () => {
+    const context = ModelInputContextSchema.parse({
+      contextId: 'model-input-context:input-derived',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      parts: [
+        {
+          partId: 'part:input-template:summary',
+          kind: 'instruction',
+          instructionKind: 'prompt_template',
+          text: 'Summarize the current session.',
+          sourceRefs: [sourceRef('input-template:summary', 'input_prompt_template')],
+          priority: 92,
+          tokenEstimate: 6,
+          budgetStatus: 'included_full',
+        },
+        {
+          partId: 'part:input-skill:write-doc',
+          kind: 'instruction',
+          instructionKind: 'skill',
+          text: 'Use the documentation writing method.',
+          sourceRefs: [sourceRef('input-skill:write-doc', 'input_skill')],
+          priority: 92,
+          tokenEstimate: 6,
+          budgetStatus: 'included_full',
+        },
+        {
+          partId: 'part:input-hook:default',
+          kind: 'instruction',
+          instructionKind: 'input_hook',
+          text: 'Input hook transformed the submitted text.',
+          sourceRefs: [sourceRef('input-hook:default', 'input_hook')],
+          priority: 88,
+          tokenEstimate: 6,
+          budgetStatus: 'included_full',
+        },
+      ],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        keepRecentTokens: 4096,
+        inputTokenEstimate: 18,
+        partBudgets: [
+          { partId: 'part:input-template:summary', tokenEstimate: 6, budgetStatus: 'included_full' },
+          { partId: 'part:input-skill:write-doc', tokenEstimate: 6, budgetStatus: 'included_full' },
+          { partId: 'part:input-hook:default', tokenEstimate: 6, budgetStatus: 'included_full' },
+        ],
+      },
+      trace: {
+        buildReason: 'initial_model_step',
+        selectedSources: [
+          { sourceId: 'input-template:summary', reason: 'input_prompt_template' },
+          { sourceId: 'input-skill:write-doc', reason: 'input_skill' },
+          { sourceId: 'input-hook:default', reason: 'input_hook' },
+        ],
+        excludedSources: [],
+      },
+      builtAt,
+    });
+
+    expect(context.parts.map((part) => part.sourceRefs[0]?.sourceKind)).toEqual([
+      'input_prompt_template',
+      'input_skill',
+      'input_hook',
+    ]);
+  });
+
   it('exports stable model input context constants', () => {
     expect(MODEL_INPUT_CONTEXT_PART_KINDS).toEqual([
       'instruction',
@@ -495,6 +564,9 @@ describe('ModelInputContext contracts', () => {
       'developer',
       'user',
       'intent',
+      'prompt_template',
+      'skill',
+      'input_hook',
     ]);
     expect(() => ModelInputInstructionKindSchema.parse('workflow')).toThrow();
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toEqual([
@@ -520,6 +592,9 @@ describe('ModelInputContext contracts', () => {
       'project_boundary',
       'runtime_constraint',
       'input_intent',
+      'input_prompt_template',
+      'input_skill',
+      'input_hook',
       'external_resource',
       'other',
     ]);

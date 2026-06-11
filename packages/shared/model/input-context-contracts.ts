@@ -40,6 +40,9 @@ export const MODEL_INPUT_CONTEXT_SOURCE_KINDS = [
   'project_boundary',
   'runtime_constraint',
   'input_intent',
+  'input_prompt_template',
+  'input_skill',
+  'input_hook',
   'external_resource',
   'other',
 ] as const;
@@ -61,7 +64,17 @@ export const AGENT_INSTRUCTION_SOURCE_STATUSES = [
 ] as const;
 export type AgentInstructionSourceStatus = (typeof AGENT_INSTRUCTION_SOURCE_STATUSES)[number];
 
-export const MODEL_INPUT_INSTRUCTION_KINDS = ['system', 'project', 'mode', 'developer', 'user', 'intent'] as const;
+export const MODEL_INPUT_INSTRUCTION_KINDS = [
+  'system',
+  'project',
+  'mode',
+  'developer',
+  'user',
+  'intent',
+  'prompt_template',
+  'skill',
+  'input_hook',
+] as const;
 export const ModelInputInstructionKindSchema = z.enum(MODEL_INPUT_INSTRUCTION_KINDS);
 export type ModelInputInstructionKind = (typeof MODEL_INPUT_INSTRUCTION_KINDS)[number];
 

@@ -123,11 +123,14 @@ describe('Composer', () => {
     render(<Composer onSubmit={() => undefined} />);
 
     const toolbar = screen.getByTestId('composer-toolbar');
+    const inputPanel = screen.getByTestId('composer-input-panel');
     const leftControls = toolbar.firstElementChild;
     const rightControls = screen.getByTestId('composer-actions');
 
     expect(screen.getByRole('button', { name: 'Choose context' })).toHaveTextContent('Context');
-    expect(screen.getByTestId('composer-input-panel')).toHaveClass('border-b');
+    expect(inputPanel).toHaveClass('px-4');
+    expect(inputPanel).toHaveClass('py-3');
+    expect(inputPanel).not.toHaveClass('border-b');
     expect(toolbar).toHaveClass('justify-between');
     expect(toolbar).toHaveClass('flex-nowrap');
     expect(leftControls).toHaveTextContent('Context');
