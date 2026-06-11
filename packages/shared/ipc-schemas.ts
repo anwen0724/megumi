@@ -30,6 +30,7 @@ import {
   PermissionModeSchema,
   PermissionModeSelectionSourceSchema,
 } from './permission-mode-contracts';
+import { InputIntentCommandMetadataSchema } from './input-command-contracts';
 import { WorkflowCommandMetadataSchema } from './workflow-command-contracts';
 import {
   CancelRequestSchema,
@@ -226,9 +227,19 @@ export const SessionMessageRuntimeContextSchema = z
     sessionTitle: z.string().min(1).optional(),
     permissionMode: PermissionModeSchema.optional(),
     permissionSource: PermissionModeSelectionSourceSchema.optional(),
+    intent: InputIntentCommandMetadataSchema.optional(),
     workflow: WorkflowCommandMetadataSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((context, refinement) => {
+    if (context.intent?.intentName === 'code_review' && context.intent.commandName !== 'review') {
+      refinement.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Code review intent metadata must use the review command.',
+        path: ['intent', 'commandName'],
+      });
+    }
+  });
 
 export const SessionMessageSendPayloadSchema = z
   .object({

@@ -649,7 +649,47 @@ describe('provider and chat ipc schemas', () => {
     expect(parsed.payload.context?.permissionMode).toBe('plan');
   });
 
-  it('accepts code review workflow metadata on session message runtime context', () => {
+  it('accepts code review intent metadata on session message runtime context', () => {
+    const parsed = SessionMessageSendRequestSchema.parse({
+      requestId: 'request:intent-review',
+      payload: {
+        sessionId: 'session:1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'client-message:1',
+          content: '/review 当前改动',
+          createdAt: '2026-06-08T00:00:00.000Z',
+        },
+        context: {
+          permissionMode: 'plan',
+          permissionSource: 'intent_default',
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+        createdAt: '2026-06-08T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.message.send,
+        createdAt: '2026-06-08T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+
+    expect(parsed.payload.context?.intent).toEqual({
+      intentName: 'code_review',
+      source: 'core_command',
+      commandName: 'review',
+      argsText: '当前改动',
+    });
+    expect(parsed.payload.context?.permissionSource).toBe('intent_default');
+  });
+
+  it('temporarily accepts legacy code review workflow metadata on session message runtime context', () => {
     const parsed = SessionMessageSendRequestSchema.parse({
       requestId: 'request:workflow-review',
       payload: {
@@ -700,6 +740,36 @@ describe('provider and chat ipc schemas', () => {
           workflow: {
             intent: 'code_review',
             source: 'builtin_command',
+            commandName: 'reviewx',
+            argsText: '当前改动',
+          },
+        },
+        createdAt: '2026-06-08T00:00:00.000Z',
+      },
+      meta: {
+        channel: IPC_CHANNELS.session.message.send,
+        createdAt: '2026-06-08T00:00:00.000Z',
+        source: 'renderer',
+      },
+    })).toThrow();
+  });
+
+  it('rejects mismatched code review intent metadata in session message runtime context', () => {
+    expect(() => SessionMessageSendRequestSchema.parse({
+      requestId: 'request:intent-review',
+      payload: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        message: {
+          id: 'client-message:1',
+          content: '/review 当前改动',
+          createdAt: '2026-06-08T00:00:00.000Z',
+        },
+        context: {
+          permissionMode: 'plan',
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
             commandName: 'reviewx',
             argsText: '当前改动',
           },
