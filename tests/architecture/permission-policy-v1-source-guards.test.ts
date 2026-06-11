@@ -10,7 +10,7 @@ function read(relativePath: string): string {
 
 describe('permission policy v1 source guards', () => {
   it('keeps permission modes limited to the 05 target posture set', () => {
-    const source = read('packages/shared/permission-mode-contracts.ts');
+    const source = read('packages/shared/permission/mode-contracts.ts');
 
     expect(source).toContain("'default'");
     expect(source).toContain("'accept_edits'");
@@ -43,7 +43,7 @@ describe('permission policy v1 source guards', () => {
   });
 
   it('keeps project settings locations explicit', () => {
-    const settings = read('apps/desktop/src/main/services/permission-settings.service.ts');
+    const settings = read('apps/desktop/src/main/services/security/permission-settings.service.ts');
 
     expect(settings).toContain("'.megumi'");
     expect(settings).toContain("'settings.json'");

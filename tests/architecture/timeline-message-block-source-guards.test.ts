@@ -10,12 +10,12 @@ function read(path: string): string {
 }
 
 const TIMELINE_CONTRACT_FILES = [
-  'packages/shared/timeline-message-blocks.ts',
-  'packages/shared/timeline-message-block-schemas.ts',
+  'packages/shared/timeline/message-blocks.ts',
+  'packages/shared/timeline/message-block-schemas.ts',
 ];
 
 function timelineRolesBody(): string {
-  const contract = read('packages/shared/timeline-message-blocks.ts');
+  const contract = read('packages/shared/timeline/message-blocks.ts');
   const match = /export const TIMELINE_MESSAGE_ROLES\s*=\s*\[(?<body>[\s\S]*?)\]\s*as const;/m.exec(
     contract,
   );

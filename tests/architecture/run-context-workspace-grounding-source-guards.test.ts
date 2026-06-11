@@ -55,7 +55,7 @@ describe('run context workspace grounding source guards', () => {
 
   it('keeps core context runtime free of Host privileges and concrete persistence', () => {
     const offenders = filesUnder('packages/core')
-      .filter((file) => projectPath(file).includes('run-runtime'))
+      .filter((file) => projectPath(file).includes('agent-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process|node:http|node:https|node:net)/.test(source);
@@ -97,8 +97,8 @@ describe('run context workspace grounding source guards', () => {
       ...filesUnder('packages/db'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
-    ].filter((file) => /run-context|context\.handler|context.service|run-runtime/.test(projectPath(file)))
-      .filter((file) => projectPath(file) !== 'packages/core/run-runtime/tool-loop.ts');
+    ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)))
+      .filter((file) => projectPath(file) !== 'packages/core/agent-runtime/agent-loop.ts');
 
     const forbiddenPatterns = [
       /tool registry/i,
@@ -127,7 +127,7 @@ describe('run context workspace grounding source guards', () => {
     const contextFiles = [
       ...filesUnder('packages'),
       ...filesUnder('apps/desktop/src'),
-    ].filter((file) => /run-context|context\.handler|context.service|run-runtime/.test(projectPath(file)));
+    ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)));
 
     const forbiddenPatterns = [
       /raw full prompt/i,

@@ -56,7 +56,7 @@ describe('session run foundation source guards', () => {
 
   it('keeps packages/core run runtime free of Host privileges and concrete persistence', () => {
     const offenders = filesUnder('packages/core')
-      .filter((file) => projectPath(file).includes('run-runtime'))
+      .filter((file) => projectPath(file).includes('agent-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process)/.test(source);
@@ -66,13 +66,11 @@ describe('session run foundation source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps run runtime implementation under the run-runtime path', () => {
-    const runRuntimeFiles = filesUnder('packages/core/run-runtime');
-    expect(runRuntimeFiles.length).toBeGreaterThan(0);
-    const activeAgentRuntimeFiles = filesUnder('packages/core/agent-runtime')
-      .filter((file) => !readProjectFile(file).includes("from '../run-runtime/"));
+  it('keeps agent runtime implementation under the agent-runtime path', () => {
+    const agentRuntimeFiles = filesUnder('packages/core/agent-runtime');
 
-    expect(activeAgentRuntimeFiles.map(projectPath)).toEqual([]);
+    expect(agentRuntimeFiles.length).toBeGreaterThan(0);
+    expect(existsSync(join(ROOT, 'packages/core/run-runtime'))).toBe(false);
   });
 
   it('keeps renderer lifecycle code behind typed preload and away from core or DB', () => {
@@ -88,7 +86,7 @@ describe('session run foundation source guards', () => {
   });
 
   it('does not define plan as an AgentAction kind', () => {
-    const contracts = readProjectFile(join(ROOT, 'packages/shared/session-run-contracts.ts'));
+    const contracts = readProjectFile(join(ROOT, 'packages/shared/session/run-contracts.ts'));
 
     expect(contracts).toContain("'emit_message'");
     expect(contracts).not.toMatch(/RUN_ACTION_KINDS[\s\S]*['"]plan['"]/);
@@ -98,9 +96,9 @@ describe('session run foundation source guards', () => {
     const obsoleteRuntimeErrorField = ['recover', 'able'].join('');
     const obsoleteRuntimeErrorFieldPattern = new RegExp(`\\b${obsoleteRuntimeErrorField}\\??\\s*:`);
     const runtimeErrorContractFiles = [
-      join(ROOT, 'packages/shared/runtime-errors.ts'),
-      join(ROOT, 'packages/shared/ipc-errors.ts'),
-      join(ROOT, 'packages/core/runtime-exception.ts'),
+      join(ROOT, 'packages/shared/runtime/errors.ts'),
+      join(ROOT, 'packages/shared/ipc/errors.ts'),
+      join(ROOT, 'packages/core/agent-runtime/errors.ts'),
     ];
 
     const offenders = runtimeErrorContractFiles
@@ -117,7 +115,7 @@ describe('session run foundation source guards', () => {
       ...filesUnder('packages/db'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
-    ].filter((file) => /session-run|run-runtime|agent\.handler/.test(projectPath(file)));
+    ].filter((file) => /session-run|agent-runtime|agent\.handler/.test(projectPath(file)));
 
     const forbiddenPatterns = [
       /workspace context packing/i,

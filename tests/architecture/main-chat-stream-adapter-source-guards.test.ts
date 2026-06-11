@@ -11,7 +11,7 @@ function read(path: string): string {
 
 describe('main chat stream adapter source guards', () => {
   it('keeps ChatStreamEvent adapter in main and out of renderer', () => {
-    const adapter = read('apps/desktop/src/main/services/chat-stream-event-adapter.service.ts');
+    const adapter = read('apps/desktop/src/main/services/runtime/chat-stream-event-adapter.service.ts');
 
     expect(adapter).toContain('ChatStreamEventSink');
     expect(adapter).toContain('RuntimeEvent');
@@ -22,7 +22,7 @@ describe('main chat stream adapter source guards', () => {
   });
 
   it('does not replace SessionRunService runtime event stream with ChatStreamEvent', () => {
-    const source = read('apps/desktop/src/main/services/session-run.service.ts');
+    const source = read('apps/desktop/src/main/services/session/session-run.service.ts');
 
     expect(source).toContain('events: AsyncIterable<RuntimeEvent>');
     expect(source).toContain('chatStreamEventSink');
@@ -31,8 +31,8 @@ describe('main chat stream adapter source guards', () => {
 
   it('does not introduce assistant answer event naming in runtime adapter path', () => {
     for (const file of [
-      'apps/desktop/src/main/services/chat-stream-event-adapter.service.ts',
-      'apps/desktop/src/main/services/session-run.service.ts',
+      'apps/desktop/src/main/services/runtime/chat-stream-event-adapter.service.ts',
+      'apps/desktop/src/main/services/session/session-run.service.ts',
       'packages/ai/providers/openai-compatible.ts',
     ]) {
       expect(read(file)).not.toContain('assistant.answer.');

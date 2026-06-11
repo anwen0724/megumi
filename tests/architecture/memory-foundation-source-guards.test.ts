@@ -40,7 +40,7 @@ describe('memory foundation boundaries', () => {
   });
 
   it('keeps core memory helpers free from Host and persistence dependencies', () => {
-    const files = productionFilesUnder('packages', 'core', 'run-runtime');
+    const files = productionFilesUnder('packages', 'core', 'agent-runtime');
     expect(offenders(files, /memory\.service|MemoryRepository|@megumi\/db|from ['"]electron['"]|from ['"]node:fs['"]|from ['"]fs['"]|apps\//)).toEqual([]);
   });
 

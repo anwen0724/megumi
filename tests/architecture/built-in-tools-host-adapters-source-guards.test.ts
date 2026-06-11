@@ -54,7 +54,7 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps Host execution behind PermissionPolicy', () => {
-    const handler = read('apps/desktop/src/main/services/tool-call-handler.service.ts');
+    const handler = read('apps/desktop/src/main/services/tool/tool-call-handler.service.ts');
     const handleSingleToolCall = functionSection(handler, 'handleSingleToolCall', 'runtimeEventBase');
     const policyIndex = handleSingleToolCall.indexOf('evaluatePermissionPolicy({');
     const executeIndex = handleSingleToolCall.indexOf('projectExecutor.executeToolExecution');
@@ -67,7 +67,7 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
-    const handler = read('apps/desktop/src/main/services/tool-call-handler.service.ts');
+    const handler = read('apps/desktop/src/main/services/tool/tool-call-handler.service.ts');
     const resumeToolApproval = functionSection(handler, 'resumeToolApproval', 'handleSingleToolCall');
     const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
     const getToolExecutionIndex = resumeToolApproval.indexOf('repository.getToolExecution(approvalRequest.toolExecutionId)');
@@ -96,9 +96,9 @@ describe('built-in tools and host adapters source guards', () => {
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {
     const combined = [
       ...listSourceFiles('packages/tools/built-ins'),
-      'apps/desktop/src/main/services/tool-call-handler.service.ts',
-      'apps/desktop/src/main/services/project-tool-executor.service.ts',
-      ...listSourceFiles('apps/desktop/src/main/services/tool-executors'),
+      'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
+      'apps/desktop/src/main/services/tool/project-tool-executor.service.ts',
+      ...listSourceFiles('apps/desktop/src/main/services/tool/tool-executors'),
     ].map(read).join('\n');
 
     expect(combined).not.toContain('bypassPermissions');

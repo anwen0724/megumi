@@ -5,9 +5,9 @@ import { join } from 'node:path';
 const root = process.cwd();
 
 const recoveryProductionFiles = [
-  'packages/shared/recovery-contracts.ts',
-  'packages/core/run-runtime/recovery.ts',
-  'apps/desktop/src/main/services/recovery.service.ts',
+  'packages/shared/recovery/contracts.ts',
+  'packages/core/agent-runtime/recovery-observation-mapper.ts',
+  'apps/desktop/src/main/services/runtime/recovery.service.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/renderer/entities/recovery/store.ts',
 ];
@@ -43,16 +43,16 @@ describe('recovery foundation source guards', () => {
 
   it('does not add recoverable to RuntimeError model', () => {
     const runtimeContractFiles = [
-      'packages/shared/runtime-errors.ts',
-      'packages/shared/ipc-errors.ts',
-      'packages/core/runtime-exception.ts',
+      'packages/shared/runtime/errors.ts',
+      'packages/shared/ipc/errors.ts',
+      'packages/core/agent-runtime/errors.ts',
     ];
 
     expect(offenders(/\brecoverable\b/, runtimeContractFiles)).toEqual([]);
   });
 
   it('keeps core recovery platform independent', () => {
-    const coreRecovery = read('packages/core/run-runtime/recovery.ts');
+    const coreRecovery = read('packages/core/agent-runtime/recovery-observation-mapper.ts');
 
     expect(coreRecovery).not.toMatch(/from ['"]electron['"]/);
     expect(coreRecovery).not.toMatch(/from ['"]node:fs['"]/);

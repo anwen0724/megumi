@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -20,7 +20,7 @@ describe('run context and model input boundaries', () => {
   });
 
   it('keeps RunContext free of final budget result fields', () => {
-    const source = read('packages/shared/run-context-contracts.ts');
+    const source = read('packages/shared/run/context-contracts.ts');
 
     expect(source).toContain('contextBudgetPolicy: ContextBudgetPolicySchema');
     expect(source).not.toContain('ContextBudgetSchema');
@@ -29,7 +29,7 @@ describe('run context and model input boundaries', () => {
   });
 
   it('keeps ModelStepRuntimeRequest inputContext as the only prompt carrier', () => {
-    const source = read('packages/shared/model-step-contracts.ts');
+    const source = read('packages/shared/model/step-contracts.ts');
 
     expect(source).toContain('inputContext: ModelInputContext');
     expect(source).not.toMatch(/\bmessages\?:/);
@@ -42,7 +42,7 @@ describe('run context and model input boundaries', () => {
 
   it('keeps main as the RunContext to ModelInputContext adapter', () => {
     const contextManagement = read('packages/context-management/model-step-input-context.ts');
-    const sessionRun = read('apps/desktop/src/main/services/session-run.service.ts');
+    const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
 
     expect(contextManagement).toContain('runtimeConstraints?: ModelStepRuntimeConstraintInput[]');
     expect(contextManagement).toMatch(/\bpermissionSnapshot\?:/);
@@ -64,4 +64,3 @@ describe('run context and model input boundaries', () => {
     expect(providerSource).not.toContain('input-command-contracts');
   });
 });
-

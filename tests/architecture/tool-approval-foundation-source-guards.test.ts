@@ -14,8 +14,8 @@ const productionRoots = [
 
 const concreteToolBoundaryTargets = [
   join(process.cwd(), 'packages/tools'),
-  join(process.cwd(), 'packages/core/run-runtime'),
-  join(process.cwd(), 'apps/desktop/src/main/services/tool.service.ts'),
+  join(process.cwd(), 'packages/core/agent-runtime'),
+  join(process.cwd(), 'apps/desktop/src/main/services/tool/tool.service.ts'),
   join(process.cwd(), 'apps/desktop/src/main/ipc/handlers/tool.handler.ts'),
   join(process.cwd(), 'apps/desktop/src/preload/api.ts'),
   join(process.cwd(), 'apps/desktop/src/preload/types.ts'),
@@ -89,7 +89,7 @@ describe('tool approval foundation source guards', () => {
       'apps/desktop/src/renderer/features/chat/components/composer-options.ts',
       'apps/desktop/src/renderer/features/chat/components/Composer.tsx',
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
-      'packages/shared/ipc-schemas.ts',
+      'packages/shared/ipc/schemas.ts',
     ];
 
     for (const file of files) {
@@ -104,7 +104,7 @@ describe('tool approval foundation source guards', () => {
   });
 
   it('does not keep bypass or stronger approval policy decisions in v1 tool contracts', () => {
-    const source = readFileSync(join(process.cwd(), 'packages/shared/tool-contracts.ts'), 'utf8');
+    const source = readFileSync(join(process.cwd(), 'packages/shared/tool/contracts.ts'), 'utf8');
 
     expect(source).not.toContain('bypass_permissions');
     expect(source).not.toContain('require_sandbox');

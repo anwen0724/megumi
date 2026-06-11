@@ -29,7 +29,7 @@ function sourceUnder(relativeDirectory: string): string {
 
 describe('provider tool call model loop source guards', () => {
   it('keeps provider loop centered on ToolCall, ToolResult, and ToolExecution events', () => {
-    const toolLoop = read('packages/core/run-runtime/tool-loop.ts');
+    const toolLoop = read('packages/core/agent-runtime/agent-loop.ts');
 
     expect(toolLoop).toContain('ToolCallHandlerPort');
     expect(toolLoop).toContain('ToolExecution');
@@ -39,8 +39,8 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('does not reintroduce RunAction.call_tool as the model tool path', () => {
-    const sessionRun = read('apps/desktop/src/main/services/session-run.service.ts');
-    const toolLoop = read('packages/core/run-runtime/tool-loop.ts');
+    const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
+    const toolLoop = read('packages/core/agent-runtime/agent-loop.ts');
 
     expect(sessionRun).not.toContain("actionKind: 'call_tool'");
     expect(toolLoop).not.toContain('RunAction');
@@ -48,8 +48,8 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('does not implement real built-in tools or permission policy in Plan 2 code paths', () => {
-    const toolLoop = read('packages/core/run-runtime/tool-loop.ts');
-    const sessionRun = read('apps/desktop/src/main/services/session-run.service.ts');
+    const toolLoop = read('packages/core/agent-runtime/agent-loop.ts');
+    const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
 
     expect(toolLoop).not.toContain('readFileSync');
     expect(toolLoop).not.toContain('writeFileSync');
@@ -65,9 +65,9 @@ describe('provider tool call model loop source guards', () => {
       'packages/ai/providers/openai-compatible.ts',
       'packages/ai/providers/anthropic.ts',
       'packages/core/ports/ai-port.ts',
-      'packages/core/run-runtime/tool-loop.ts',
-      'apps/desktop/src/main/services/model-step-provider.service.ts',
-      'apps/desktop/src/main/services/session-run.service.ts',
+      'packages/core/agent-runtime/agent-loop.ts',
+      'apps/desktop/src/main/services/runtime/model-step-provider.service.ts',
+      'apps/desktop/src/main/services/session/session-run.service.ts',
     ];
 
     for (const file of files) {
@@ -82,7 +82,7 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('keeps ModelStepRuntimeRequest centered on inputContext', () => {
-    const source = read('packages/shared/model-step-contracts.ts');
+    const source = read('packages/shared/model/step-contracts.ts');
     const legacyToolCallArrayPattern = new RegExp(String.raw`\btool` + String.raw`Uses\?:\s*Tool` + String.raw`Use\[\]`);
 
     expect(source).toContain('inputContext: ModelInputContext');
@@ -113,7 +113,7 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('keeps the core tool loop free of active path persistence concerns', () => {
-    const source = read('packages/core/run-runtime/tool-loop.ts');
+    const source = read('packages/core/agent-runtime/agent-loop.ts');
 
     expect(source).not.toContain('Session' + 'ActivePathRepository');
     expect(source).not.toContain('session_' + 'source_entries');

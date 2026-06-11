@@ -11,7 +11,7 @@ function readProjectFile(path: string): string {
 
 describe('agent action permission tools v1 source guards', () => {
   it('keeps permission mode contracts on the v1 target posture set without legacy task taxonomy', () => {
-    const source = readProjectFile('packages/shared/permission-mode-contracts.ts');
+    const source = readProjectFile('packages/shared/permission/mode-contracts.ts');
 
     expect(source).toContain("['default', 'accept_edits', 'plan', 'auto']");
     expect(source).not.toContain('TaskIntent');
@@ -26,7 +26,7 @@ describe('agent action permission tools v1 source guards', () => {
   });
 
   it('keeps tool executions linked to model-side ToolCall with optional Host maintenance action ids', () => {
-    const source = readProjectFile('packages/shared/tool-contracts.ts');
+    const source = readProjectFile('packages/shared/tool/contracts.ts');
 
     expect(source).toContain('toolCallId: ToolCallId | string');
     expect(source).toContain('toolExecutionId: ToolExecutionId | string');

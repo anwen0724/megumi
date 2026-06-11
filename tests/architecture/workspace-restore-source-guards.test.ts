@@ -29,18 +29,18 @@ const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/index.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/main/ipc/register-handlers.ts',
-  'apps/desktop/src/main/services/recovery.service.ts',
-  'apps/desktop/src/main/services/session-run.service.ts',
-  'apps/desktop/src/main/services/workspace-change-tracker.service.ts',
-  'apps/desktop/src/main/services/workspace-restore.service.ts',
+  'apps/desktop/src/main/services/runtime/recovery.service.ts',
+  'apps/desktop/src/main/services/session/session-run.service.ts',
+  'apps/desktop/src/main/services/workspace/workspace-change-tracker.service.ts',
+  'apps/desktop/src/main/services/workspace/workspace-restore.service.ts',
   'packages/db/repos/workspace-change.repo.ts',
   'packages/db/schema/migrations.ts',
-  'packages/shared/ipc-schemas.ts',
-  'packages/shared/recovery-contracts.ts',
-  'packages/shared/runtime-event-factory.ts',
-  'packages/shared/runtime-event-schemas.ts',
-  'packages/shared/runtime-events.ts',
-  'packages/shared/workspace-change-contracts.ts',
+  'packages/shared/ipc/schemas.ts',
+  'packages/shared/recovery/contracts.ts',
+  'packages/shared/runtime/event-factory.ts',
+  'packages/shared/runtime/event-schemas.ts',
+  'packages/shared/runtime/events.ts',
+  'packages/shared/workspace/change-contracts.ts',
 ]);
 
 const forbiddenRestoreRoots = [
@@ -62,17 +62,17 @@ const rawContentTerms = [
 ];
 
 const runtimeAndIpcSchemaFiles = [
-  'packages/shared/runtime-events.ts',
-  'packages/shared/runtime-event-schemas.ts',
-  'packages/shared/runtime-event-factory.ts',
-  'packages/shared/ipc-schemas.ts',
+  'packages/shared/runtime/events.ts',
+  'packages/shared/runtime/event-schemas.ts',
+  'packages/shared/runtime/event-factory.ts',
+  'packages/shared/ipc/schemas.ts',
 ];
 
-const runCommandExecutorPath = 'apps/desktop/src/main/services/tool-executors/run-command.executor.ts';
+const runCommandExecutorPath = 'apps/desktop/src/main/services/tool/tool-executors/run-command.executor.ts';
 const runCommandPathFiles = [
   runCommandExecutorPath,
-  'apps/desktop/src/main/services/project-tool-executor.service.ts',
-  'apps/desktop/src/main/services/tool-call-handler.service.ts',
+  'apps/desktop/src/main/services/tool/project-tool-executor.service.ts',
+  'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
 ];
 
 describe('workspace restore source guards', () => {
@@ -117,7 +117,7 @@ describe('workspace restore source guards', () => {
   });
 
   it('keeps WorkspaceRestoreService free of git and stash commands', () => {
-    const source = read('apps/desktop/src/main/services/workspace-restore.service.ts');
+    const source = read('apps/desktop/src/main/services/workspace/workspace-restore.service.ts');
 
     expect(source).not.toContain('child_process');
     expect(source).not.toContain('simple-git');
