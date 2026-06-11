@@ -15,7 +15,6 @@ export * from './permission-snapshot-contracts';
 export * from './run-mode-contracts';
 export * from './permission-mode-contracts';
 export * from './input-command-contracts';
-export * from './workflow-command-contracts';
 export * from './permission-settings-contracts';
 export * from './recovery-contracts';
 export * from './artifact-contracts';

@@ -73,10 +73,6 @@ import {
   type InputIntentCommandMetadata,
 } from '@megumi/shared/input-command-contracts';
 import {
-  WorkflowCommandMetadataSchema,
-  type WorkflowCommandMetadata,
-} from '@megumi/shared/workflow-command-contracts';
-import {
   createRuntimeEvent,
   createSessionActiveLeafChangedEvent,
   createSessionBranchDraftCancelledEvent,
@@ -524,9 +520,7 @@ export class SessionRunService {
     const createdAt = input.payload.createdAt;
     const currentUserMessage = currentUserChatMessage(input.payload);
     const inputIntent = normalizeInputIntentMetadata(input.payload.context?.intent);
-    const workflow = normalizeWorkflowMetadata(input.payload.context?.workflow);
-    const effectiveInputIntent = inputIntent ?? inputIntentFromWorkflowMetadata(workflow);
-    const intentDefaultPermission = defaultPermissionForInputIntent(effectiveInputIntent);
+    const intentDefaultPermission = defaultPermissionForInputIntent(inputIntent);
     const permissionMode = intentDefaultPermission?.permissionMode
       ?? input.payload.context?.permissionMode
       ?? 'default';
@@ -535,8 +529,7 @@ export class SessionRunService {
       ?? 'user';
     const mode = permissionMode;
     const inputMetadata = sessionMessageInputMetadata({
-      intent: effectiveInputIntent,
-      workflow,
+      intent: inputIntent,
     });
 
     if (!currentUserMessage) {
@@ -652,7 +645,7 @@ export class SessionRunService {
         userMessage,
         currentUserMessage,
         permissionMode,
-        ...(effectiveInputIntent ? { inputIntent: effectiveInputIntent } : {}),
+        ...(inputIntent ? { inputIntent } : {}),
         ...(permissionSnapshot ? { permissionSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
@@ -2934,16 +2927,7 @@ function toModelVisiblePermissionSnapshot(
 }
 
 function getRunStartPermissionModeState(payload: RunStartPayload): PermissionModeState | undefined {
-  const legacyPayload = payload as RunStartPayload & { modeSnapshot?: PermissionModeState };
-  return payload.permissionModeState ?? legacyPayload.modeSnapshot;
-}
-
-function normalizeWorkflowMetadata(value: unknown): WorkflowCommandMetadata | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  return WorkflowCommandMetadataSchema.parse(value);
+  return payload.permissionModeState;
 }
 
 function normalizeInputIntentMetadata(input: unknown): InputIntentCommandMetadata | undefined {
@@ -2952,25 +2936,6 @@ function normalizeInputIntentMetadata(input: unknown): InputIntentCommandMetadat
   }
 
   return InputIntentCommandMetadataSchema.parse(input);
-}
-
-function inputIntentFromWorkflowMetadata(
-  workflow: WorkflowCommandMetadata | undefined,
-): InputIntentCommandMetadata | undefined {
-  if (!workflow) {
-    return undefined;
-  }
-
-  if (workflow.intent === 'code_review') {
-    return {
-      intentName: 'code_review',
-      source: 'core_command',
-      commandName: workflow.commandName,
-      argsText: workflow.argsText,
-    };
-  }
-
-  return undefined;
 }
 
 function defaultPermissionForInputIntent(
@@ -2988,16 +2953,11 @@ function defaultPermissionForInputIntent(
 
 function sessionMessageInputMetadata(input: {
   intent?: InputIntentCommandMetadata;
-  workflow?: WorkflowCommandMetadata;
 }): JsonObject | undefined {
   const metadata: JsonObject = {};
 
   if (input.intent) {
     metadata.intent = input.intent as unknown as JsonObject;
-  }
-
-  if (input.workflow) {
-    metadata.workflow = input.workflow as unknown as JsonObject;
   }
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;

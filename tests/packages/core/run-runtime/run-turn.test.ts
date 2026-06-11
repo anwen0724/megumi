@@ -78,7 +78,7 @@ describe('run runtime lifecycle events', () => {
     const result = await runTurn({
       sessionId: 'session-1',
       triggerMessageId: 'message-1',
-      mode: 'default',
+      permissionMode: 'default',
       goal: 'Answer the user',
       lifecycle: sink,
       hostBoundary: {
@@ -138,7 +138,7 @@ describe('run runtime lifecycle events', () => {
     const result = await runTurn({
       sessionId: 'session-1',
       triggerMessageId: 'message-1',
-      mode: 'default',
+      permissionMode: 'default',
       goal: 'Answer the user',
       lifecycle: sink,
       hostBoundary: {
@@ -172,7 +172,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'default',
+      permissionMode: 'default',
       goal: 'Fail safely',
       lifecycle: sink,
       hostBoundary: {
@@ -213,7 +213,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'default',
+      permissionMode: 'default',
       goal: 'Use workspace context',
       actionKind: 'update_context',
       contextPatch: {
@@ -358,7 +358,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'default',
+      permissionMode: 'default',
       goal: 'Save recovery state',
       actionKind: 'save_checkpoint',
       actionInput: {
@@ -395,7 +395,7 @@ describe('run runtime lifecycle events', () => {
 
     const result = await runTurn({
       sessionId: 'session-1',
-      mode: 'default',
+      permissionMode: 'default',
       goal: 'Cancel the run',
       actionKind: 'cancel',
       actionInput: {
@@ -425,7 +425,7 @@ describe('run runtime lifecycle events', () => {
     const { sink } = createSink();
     const result = await runTurn({
       sessionId: 'session:artifact',
-      mode: 'default',
+      permissionMode: 'default',
       goal: 'Reference report',
       actionKind: 'create_artifact',
       actionInputPreview: {

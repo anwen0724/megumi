@@ -151,8 +151,6 @@ export interface Run {
   agentConfigSnapshotRef?: AgentConfigSnapshotRef | string;
   mode: string;
   permissionSnapshotRef?: string;
-  /** Compatibility input only. New code must use permissionSnapshotRef. */
-  modeSnapshotRef?: string;
   goal: string;
   status: RunStatus;
   createdAt: IsoDateTime;
@@ -247,7 +245,6 @@ export const RunSchema = z
     agentConfigSnapshotRef: IdSchema.optional(),
     mode: z.string().min(1),
     permissionSnapshotRef: z.string().min(1).optional(),
-    modeSnapshotRef: z.string().min(1).optional(),
     goal: z.string().min(1),
     status: RunStatusSchema,
     createdAt: IsoDateTimeSchema,
@@ -259,13 +256,7 @@ export const RunSchema = z
     policySnapshotRef: IdSchema.optional(),
     metadata: OptionalJsonObjectSchema,
   })
-  .strict()
-  .transform((run) => ({
-    ...run,
-    ...(run.permissionSnapshotRef ?? run.modeSnapshotRef
-      ? { permissionSnapshotRef: run.permissionSnapshotRef ?? run.modeSnapshotRef }
-      : {}),
-  })) satisfies z.ZodType<Run>;
+  .strict() satisfies z.ZodType<Run>;
 
 export const RunStepSchema = z
   .object({

@@ -50,7 +50,6 @@ export interface RunTurnInput {
   permissionMode?: string;
   permissionModeState?: PermissionModeState;
   permissionSnapshotRef?: string;
-  mode?: string;
   sourcePlanId?: string;
   goal: string;
   actionKind?: RunAction['kind'];

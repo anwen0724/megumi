@@ -31,7 +31,6 @@ import {
   PermissionModeSelectionSourceSchema,
 } from './permission-mode-contracts';
 import { InputIntentCommandMetadataSchema } from './input-command-contracts';
-import { WorkflowCommandMetadataSchema } from './workflow-command-contracts';
 import {
   CancelRequestSchema,
   RecoverableRunSummarySchema,
@@ -228,7 +227,6 @@ export const SessionMessageRuntimeContextSchema = z
     permissionMode: PermissionModeSchema.optional(),
     permissionSource: PermissionModeSelectionSourceSchema.optional(),
     intent: InputIntentCommandMetadataSchema.optional(),
-    workflow: WorkflowCommandMetadataSchema.optional(),
   })
   .strict()
   .superRefine((context, refinement) => {
@@ -341,17 +339,10 @@ export const RunStartPayloadSchema = z
     goal: z.string().min(1),
     mode: z.string().min(1),
     permissionModeState: PermissionModeStateSchema.optional(),
-    modeSnapshot: PermissionModeStateSchema.optional(),
     sourcePlanId: z.string().min(1).optional(),
     createdAt: IsoDateTimeSchema,
   })
-  .strict()
-  .transform(({ modeSnapshot, ...payload }) => ({
-    ...payload,
-    ...(payload.permissionModeState ?? modeSnapshot
-      ? { permissionModeState: payload.permissionModeState ?? modeSnapshot }
-      : {}),
-  }));
+  .strict();
 
 export const RunStartDataSchema = z
   .object({

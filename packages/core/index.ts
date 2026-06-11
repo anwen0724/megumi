@@ -7,7 +7,6 @@ export * from './run-runtime/model-step';
 export * from './run-runtime/tool-loop';
 export * from './run-runtime/recovery';
 export * from './run-runtime/permission-mode';
-export * from './run-runtime/run-mode';
 export * from './run-runtime/run-turn';
 export * from './run-runtime/types';
 export * from './runtime-exception';

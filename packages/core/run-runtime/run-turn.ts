@@ -68,7 +68,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   const runId = ids.runId();
   const createdAt = clock.now();
   const resolvedPermissionModeState = resolvePermissionModeState({
-    permissionMode: input.permissionMode ?? input.mode,
+    permissionMode: input.permissionMode,
     permissionModeState: input.permissionModeState,
   });
   const permissionModeInstruction = createPermissionModeRuntimeInstruction(resolvedPermissionModeState);
@@ -97,7 +97,7 @@ export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
     sessionId: input.sessionId,
     sequence: nextSequence(),
     createdAt,
-    mode: input.permissionMode ?? input.mode ?? resolvedPermissionModeState.permissionMode,
+    mode: input.permissionMode ?? resolvedPermissionModeState.permissionMode,
     goal: input.goal,
     ...(input.triggerMessageId ? { triggerMessageId: input.triggerMessageId } : {}),
   }));

@@ -3,7 +3,6 @@ import { PermissionModeSchema } from '@megumi/shared/permission-snapshot-contrac
 
 export interface ResolvePermissionModeStateInput {
   permissionMode?: string;
-  mode?: string;
   permissionModeState?: PermissionModeState;
 }
 
@@ -21,7 +20,7 @@ export function resolvePermissionModeState(input: ResolvePermissionModeStateInpu
   }
 
   return {
-    permissionMode: PermissionModeSchema.parse(input.permissionMode ?? input.mode ?? 'default'),
+    permissionMode: PermissionModeSchema.parse(input.permissionMode ?? 'default'),
     source: 'system',
   };
 }
