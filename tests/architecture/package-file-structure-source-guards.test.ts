@@ -53,6 +53,12 @@ describe('package and file structure source guards', () => {
   it('keeps shared contracts in semantic domain directories', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/runtime/events.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/tool/contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/shared/input/contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/shared/input/command-contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/shared/input/preprocessing-contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/shared/hook/contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/shared/skill/contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/shared/prompt-template/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/session/agent-profile-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/agent'))).toBe(false);
 
@@ -104,6 +110,14 @@ describe('package and file structure source guards', () => {
       /@megumi\/shared\/workspace-change-contracts/,
       /@megumi\/shared\/workspace-file-contracts/,
     ])).toEqual([]);
+  });
+
+  it('keeps input command compatibility isolated to the temporary shared shim', () => {
+    const compatibilityShim = read('packages/shared/input-command/contracts.ts');
+
+    expect(compatibilityShim).toContain("export * from '../input/command-contracts'");
+    expect(compatibilityShim).not.toContain("from 'zod'");
+    expect(compatibilityShim).not.toContain('InputPreprocessingResultSchema');
   });
 
   it('keeps core runtime under agent-runtime and off old runtime helper paths', () => {
