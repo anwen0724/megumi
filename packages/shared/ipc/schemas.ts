@@ -30,7 +30,7 @@ import {
   PermissionModeSchema,
   PermissionModeSelectionSourceSchema,
 } from '../permission/mode-contracts';
-import { InputIntentCommandMetadataSchema } from '../input-command/contracts';
+import { InputIntentCommandMetadataSchema } from '../input/command-contracts';
 import {
   CancelRequestSchema,
   RecoverableRunSummarySchema,
