@@ -101,6 +101,15 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toMatch(/\bModelStepPromptRequest\b/);
   });
 
+  it('keeps provider adapters free of input command contracts and intent dispatch semantics', () => {
+    const source = sourceUnder('packages/ai');
+
+    expect(source).not.toContain('input-command-contracts');
+    expect(source).not.toContain('InputIntentCommandMetadata');
+    expect(source).not.toContain('dispatchCommandText');
+    expect(source).not.toContain('BUILT_IN_INPUT_COMMAND');
+  });
+
   it('keeps the core tool loop free of active path persistence concerns', () => {
     const source = read('packages/core/run-runtime/tool-loop.ts');
 

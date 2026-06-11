@@ -115,6 +115,7 @@ describe('Command system source guards', () => {
       /dispatchCommandText/,
       /BUILT_IN_INPUT_COMMAND/,
       /listCommandSuggestions/,
+      /workflow-command-contracts/,
       /\/review\b/,
     ])).toEqual([]);
   });

@@ -158,6 +158,71 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
     ]);
   });
 
+  it('materializes intent instruction text without exposing trace-only metadata as provider text', () => {
+    const messages = mapModelInputContextToOpenAICompatibleMessages({
+      contextId: 'model-input-context:intent',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      builtAt: '2026-06-11T00:00:00.000Z',
+      parts: [{
+        partId: 'part:instruction:intent:review',
+        kind: 'instruction',
+        instructionKind: 'intent',
+        text: 'Input intent: code_review.\nCommand: /review.\nArguments: 当前改动.',
+        sourceRefs: [{
+          sourceId: 'input-intent:review',
+          sourceKind: 'input_intent',
+          sourceUri: 'input-intent://review',
+          loadedAt: '2026-06-11T00:00:00.000Z',
+          metadata: {
+            commandName: 'review',
+            traceOnlySecret: 'TRACE_ONLY_METADATA_SHOULD_NOT_APPEAR',
+          },
+        }],
+        priority: 95,
+        tokenEstimate: 12,
+        budgetStatus: 'included_full',
+        metadata: {
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+          traceOnlySecret: 'TRACE_ONLY_METADATA_SHOULD_NOT_APPEAR',
+        },
+      }],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        keepRecentTokens: 4096,
+        inputTokenEstimate: 12,
+        partBudgets: [{
+          partId: 'part:instruction:intent:review',
+          tokenEstimate: 12,
+          budgetStatus: 'included_full',
+        }],
+      },
+      trace: {
+        buildReason: 'initial_model_step',
+        selectedSources: [{
+          sourceId: 'input-intent:review',
+          reason: 'instruction',
+        }],
+        excludedSources: [],
+        budgetWarnings: [],
+      },
+    });
+
+    expect(messages).toEqual([{
+      role: 'system',
+      content: 'Input intent: code_review.\nCommand: /review.\nArguments: 当前改动.',
+    }]);
+    expect(JSON.stringify(messages)).not.toContain('TRACE_ONLY_METADATA_SHOULD_NOT_APPEAR');
+  });
+
   it('does not consume tool result parts without structured replay content as native tool messages', () => {
     const context = buildModelInputContext({
       contextId: 'model-input-context:missing-tool-result-content',

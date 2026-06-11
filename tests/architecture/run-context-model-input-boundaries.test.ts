@@ -48,4 +48,14 @@ describe('run context and model input boundaries', () => {
     expect(sessionRun).toContain('runtimeConstraintsFromRunContext');
     expect(sessionRun).toMatch(/context\??\.contextBudgetPolicy/);
   });
+
+  it('keeps input intent materialization in context-management and out of provider adapters', () => {
+    const contextSource = read('packages/context-management/model-step-input-context.ts');
+    const providerSource = read('packages/ai/prompt/model-input-context-mapper.ts');
+
+    expect(contextSource).toContain('inputIntent');
+    expect(contextSource).toContain("instructionKind: 'intent'");
+    expect(providerSource).not.toContain('InputIntentCommandMetadata');
+    expect(providerSource).not.toContain('input-command-contracts');
+  });
 });
