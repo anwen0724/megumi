@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ToolDefinition } from '@megumi/shared/tool';
 
 export const runCommandDefinition: ToolDefinition = {
   name: 'run_command',
@@ -36,3 +36,4 @@ export const runCommandDefinition: ToolDefinition = {
   sideEffect: 'execute_command',
   availability: { status: 'available' },
 };
+

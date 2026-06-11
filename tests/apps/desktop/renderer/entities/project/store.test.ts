@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import type { Project } from '@megumi/desktop/renderer/entities/project/types';
@@ -154,3 +154,4 @@ describe('useProjectStore', () => {
     expect(useProjectStore.getState().loading).toBe(false);
   });
 });
+

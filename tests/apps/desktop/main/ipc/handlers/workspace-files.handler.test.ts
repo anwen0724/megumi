@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { PathSandboxViolationError } from '@megumi/security/sandbox-policy';
 import { registerWorkspaceFilesHandlers } from '@megumi/desktop/main/ipc/handlers/workspace-files.handler';
 
@@ -197,3 +197,4 @@ function createWorkspaceFilesRequest() {
     },
   };
 }
+

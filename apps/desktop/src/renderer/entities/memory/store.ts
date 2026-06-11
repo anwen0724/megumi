@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+﻿import { create } from 'zustand';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type {
   MemoryAccessLogsListPayload,
   MemoryAccessLogsListData,
@@ -14,7 +14,7 @@ import type {
   MemoryRecallPreviewData,
   MemoryRecallPreviewPayload,
   MemorySettingsData,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import type {
   MemoryAccessLog,
   MemoryCandidate,
@@ -23,7 +23,7 @@ import type {
   MemoryRecord,
   MemorySettings,
   MemorySourceRef,
-} from '@megumi/shared/memory-contracts';
+} from '@megumi/shared/memory';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc/runtime-request';
 
 interface RecallPreviewState {
@@ -193,3 +193,4 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
 }));
+

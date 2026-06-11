@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
-import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace-change-contracts';
+import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace';
 
 describe('WorkspaceChangeFooter', () => {
   it('renders renderer-owned Chinese copy from structured workspace change facts', async () => {
@@ -98,3 +98,4 @@ function workspaceChangeFooter(): WorkspaceChangeFooterFact {
     }],
   };
 }
+

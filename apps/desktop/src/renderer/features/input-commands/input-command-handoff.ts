@@ -1,6 +1,6 @@
-import type { PermissionModeSelectionSource } from '@megumi/shared/permission-mode-contracts';
-import type { InputIntentCommandMetadata } from '@megumi/shared/input-command-contracts';
-import { createCodeReviewInputIntentMetadata } from '@megumi/shared/input-command-contracts';
+﻿import type { PermissionModeSelectionSource } from '@megumi/shared/permission';
+import type { InputIntentCommandMetadata } from '@megumi/shared/input-command';
+import { createCodeReviewInputIntentMetadata } from '@megumi/shared/input-command';
 import {
   dispatchCommandText,
   listCommandSuggestions,
@@ -33,3 +33,4 @@ export function createInputCommandSubmitPayload(message: string): InputCommandSu
 
   return null;
 }
+

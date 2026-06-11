@@ -1,5 +1,5 @@
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { BusinessIpcChannel } from '@megumi/shared/ipc-contracts';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { BusinessIpcChannel } from '@megumi/shared/ipc';
 
 export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChannel): string {
   switch (channel) {
@@ -101,3 +101,4 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return (channel as string).replaceAll(':', '.');
   }
 }
+

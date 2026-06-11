@@ -1,6 +1,6 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { dispatchChatStreamEvent } from '@megumi/desktop/renderer/features/chat-stream/chat-stream-dispatcher';
 import {
   chatStreamSessionKey,
@@ -66,3 +66,4 @@ describe('dispatchChatStreamEvent', () => {
     expect(useChatStreamStore.getState().sessions).toEqual({});
   });
 });
+

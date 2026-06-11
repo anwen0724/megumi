@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+﻿import { beforeEach, describe, expect, it } from 'vitest';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
-import type { ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolExecution } from '@megumi/shared/tool';
 
 const toolCall: ToolExecution = {
   toolExecutionId: 'tool-execution-1',
@@ -65,3 +65,4 @@ describe('useToolCallStore', () => {
     ]);
   });
 });
+

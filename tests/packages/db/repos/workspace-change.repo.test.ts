@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { createHash } from 'node:crypto';
 
 import Database from 'better-sqlite3';
@@ -14,7 +14,7 @@ import type {
   WorkspaceRestoreRequest,
   WorkspaceRestoreResult,
   WorkspaceSnapshotContent,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 
 let db: Database.Database | null = null;
 
@@ -1169,3 +1169,4 @@ function hash(value: string): string {
 function byteLength(value: string): number {
   return Buffer.byteLength(value, 'utf8');
 }
+

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { ApprovalRequest, ApprovalScope } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest, ApprovalScope } from '@megumi/shared/tool';
 import { Badge, Button, Panel } from '../../shared/ui';
 
 export interface ApprovalCardResolvePayload {
@@ -72,3 +72,4 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
     </Panel>
   );
 }
+

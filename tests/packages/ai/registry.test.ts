@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { createAiProviderRegistry } from '@megumi/ai/registry';
 import type { FetchLike, ProviderRuntimeConfig } from '@megumi/ai/types';
 
@@ -125,3 +125,4 @@ describe('AI provider registry', () => {
     ]);
   });
 });
+

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { handle, fromWebContents } = vi.hoisted(() => ({
@@ -19,7 +19,7 @@ describe('registerWindowHandlers', () => {
   });
 
   it('registers clean window control IPC handlers', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerWindowHandlers } = await import('@megumi/desktop/main/ipc/handlers/window.handler');
 
     registerWindowHandlers();
@@ -30,7 +30,7 @@ describe('registerWindowHandlers', () => {
   });
 
   it('minimizes the sender window', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerWindowHandlers } = await import('@megumi/desktop/main/ipc/handlers/window.handler');
     const minimize = vi.fn();
     const sender = {};
@@ -46,7 +46,7 @@ describe('registerWindowHandlers', () => {
   });
 
   it('maximizes a restored sender window', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerWindowHandlers } = await import('@megumi/desktop/main/ipc/handlers/window.handler');
     const maximize = vi.fn();
     const unmaximize = vi.fn();
@@ -66,7 +66,7 @@ describe('registerWindowHandlers', () => {
   });
 
   it('restores a maximized sender window', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerWindowHandlers } = await import('@megumi/desktop/main/ipc/handlers/window.handler');
     const maximize = vi.fn();
     const unmaximize = vi.fn();
@@ -86,7 +86,7 @@ describe('registerWindowHandlers', () => {
   });
 
   it('closes the sender window', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerWindowHandlers } = await import('@megumi/desktop/main/ipc/handlers/window.handler');
     const close = vi.fn();
 
@@ -99,3 +99,4 @@ describe('registerWindowHandlers', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 });
+

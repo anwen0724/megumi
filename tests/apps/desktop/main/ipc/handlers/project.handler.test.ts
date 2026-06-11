@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerProjectHandlers } from '@megumi/desktop/main/ipc/handlers/project.handler';
 
 vi.mock('electron', () => ({
@@ -106,3 +106,4 @@ describe('registerProjectHandlers', () => {
     });
   });
 });
+

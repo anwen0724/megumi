@@ -1,9 +1,9 @@
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import type { ModelId } from '@megumi/shared/model-contracts';
-import type { ProviderId, ProviderKind } from '@megumi/shared/provider-contracts';
-import type { RunId } from '@megumi/shared/ids';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+﻿import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { ModelId } from '@megumi/shared/model';
+import type { ProviderId, ProviderKind } from '@megumi/shared/provider';
+import type { RunId } from '@megumi/shared/primitives';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { JsonObject } from '@megumi/shared/primitives';
 
 export interface ProviderRuntimeConfig {
   providerId: ProviderId;
@@ -82,3 +82,4 @@ export interface OpenAICompatibleAdapterOptions {
 export const systemClock: Clock = {
   now: () => new Date().toISOString(),
 };
+

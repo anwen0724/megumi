@@ -1,12 +1,12 @@
-import type { MegumiDatabase } from '../connection';
+﻿import type { MegumiDatabase } from '../connection';
 import type {
   ImplementationPlanArtifactRecord,
   ImplementationPlanArtifactStatus,
   PermissionModeState,
   PermissionSnapshotRecord,
   RunSourcePlanRelation,
-} from '@megumi/shared/permission-snapshot-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+} from '@megumi/shared/permission';
+import type { JsonObject } from '@megumi/shared/primitives';
 
 type Nullable<T> = T | null;
 
@@ -257,3 +257,4 @@ function fromSourcePlanRelationRow(row: SourcePlanRelationRow): RunSourcePlanRel
     ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
   };
 }
+

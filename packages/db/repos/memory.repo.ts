@@ -1,4 +1,4 @@
-import type { MegumiDatabase } from '../connection';
+﻿import type { MegumiDatabase } from '../connection';
 import type {
   MemoryAccessLog,
   MemoryAuditLog,
@@ -12,7 +12,7 @@ import type {
   MemoryRecordStatus,
   MemorySettings,
   MemorySourceRef,
-} from '@megumi/shared/memory-contracts';
+} from '@megumi/shared/memory';
 
 interface JsonRow<TColumn extends string> { [key: string]: string }
 
@@ -400,3 +400,4 @@ function toAuditLogRow(auditLog: MemoryAuditLog) {
     audit_log_json: stringifyJson(auditLog),
   };
 }
+

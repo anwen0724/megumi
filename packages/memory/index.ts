@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   MemoryCandidate,
   MemoryKind,
   MemoryPolicy,
@@ -9,7 +9,7 @@ import type {
   MemoryScope,
   MemorySourceKind,
   MemorySourceRef,
-} from '@megumi/shared/memory-contracts';
+} from '@megumi/shared/memory';
 
 const MAX_SUMMARY_LENGTH = 500;
 const MAX_CONTENT_PREVIEW_LENGTH = 1000;
@@ -207,3 +207,4 @@ function normalizeForSearch(value: string): string {
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
+

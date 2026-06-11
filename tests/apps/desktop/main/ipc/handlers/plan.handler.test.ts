@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerPlanHandlers } from '@megumi/desktop/main/ipc/handlers/plan.handler';
 
 vi.mock('electron', () => ({
@@ -40,3 +40,4 @@ describe('registerPlanHandlers', () => {
     );
   });
 });
+

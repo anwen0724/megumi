@@ -65,7 +65,7 @@ describe('09 session run integration final source guards', () => {
       'packages/shared/agent-run-mode-contracts.ts',
       'packages/shared/agent-recovery-contracts.ts',
       'packages/core/agent-runtime/run-agent-turn.ts',
-      'packages/core/agent-runtime/types.ts',
+      'packages/core/run-runtime/types.ts',
       'packages/core/agent-runtime/events.ts',
       'packages/db/repos/agent-lifecycle.repo.ts',
       'packages/db/repos/agent-context.repo.ts',
@@ -114,9 +114,9 @@ describe('09 session run integration final source guards', () => {
   });
 
   it('keeps runtime foundation semantics intact', () => {
-    const runtimeEvents = source('packages/shared/runtime-events.ts');
-    const runtimeErrors = source('packages/shared/runtime-errors.ts');
-    const ipcContracts = source('packages/shared/ipc-contracts.ts');
+    const runtimeEvents = source('packages/shared/runtime/events.ts');
+    const runtimeErrors = source('packages/shared/runtime/errors.ts');
+    const ipcContracts = source('packages/shared/ipc/contracts.ts');
 
     expect(runtimeEvents).toContain('eventType');
     expect(runtimeEvents).not.toMatch(/\btype:\s*RuntimeEventType\b/);

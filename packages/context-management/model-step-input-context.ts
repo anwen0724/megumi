@@ -1,5 +1,5 @@
-import type { JsonObject, JsonValue } from '@megumi/shared/json';
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
+﻿import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,
@@ -7,13 +7,13 @@ import type {
   ModelInputContextPart,
   ModelInputContextSourceRef,
   ModelInputContextTruncation,
-} from '@megumi/shared/model-input-context-contracts';
-import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
-import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-contracts';
-import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
-import type { SessionMessage } from '@megumi/shared/session-run-contracts';
-import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
-import type { InputIntentCommandMetadata } from '@megumi/shared/input-command-contracts';
+} from '@megumi/shared/model';
+import type { ModelStepProviderState } from '@megumi/shared/model';
+import type { PermissionModeSnapshot } from '@megumi/shared/permission';
+import type { SessionContextInput } from '@megumi/shared/session';
+import type { SessionMessage } from '@megumi/shared/session';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool';
+import type { InputIntentCommandMetadata } from '@megumi/shared/input-command';
 import type { ModelInputContextPartDraft } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
 import { buildSessionContextParts } from './session-context';
@@ -488,3 +488,4 @@ function stringifyJsonValue(value: JsonValue): string {
     return '[unserializable structured content]';
   }
 }
+

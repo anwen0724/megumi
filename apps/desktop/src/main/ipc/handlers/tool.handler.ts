@@ -1,7 +1,7 @@
-import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+﻿import { ipcMain } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   ApprovalResolveData,
   ApprovalResolvePayload,
@@ -9,14 +9,14 @@ import type {
   ToolExecutionGetPayload,
   ToolDefinitionsListData,
   ToolDefinitionsListPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import {
   ApprovalResolveRequestSchema,
   ToolExecutionGetRequestSchema,
   ToolDefinitionsListRequestSchema,
-} from '@megumi/shared/ipc-schemas';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
-import type { ToolService } from '../../services/tool.service';
+} from '@megumi/shared/ipc';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import type { ToolService } from '../../services/tool/tool.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
@@ -99,3 +99,5 @@ function mapToolIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
+

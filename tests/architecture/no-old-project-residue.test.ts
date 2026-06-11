@@ -72,34 +72,34 @@ const forbiddenTerms = [
 ];
 
 const allowedCurrentLifecycleTerms = new Map<string, string[]>([
-  ['packages/shared/session-run-contracts.ts', [
+  ['packages/shared/session/run-contracts.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
-  ['packages/shared/session-run-contracts.ts', [
+  ['packages/shared/session/run-contracts.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
-  ['packages/shared/timeline-message-blocks.ts', [
+  ['packages/shared/timeline/message-blocks.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
-  ['packages/shared/timeline-message-block-schemas.ts', [
+  ['packages/shared/timeline/message-block-schemas.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
-  ['tests/packages/shared/timeline-message-blocks.test.ts', [
+  ['tests/packages/shared/timeline/message-blocks.test.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
   ['tests/architecture/timeline-message-block-source-guards.test.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
-  ['packages/shared/permission-snapshot-contracts.ts', [
+  ['packages/shared/permission/snapshot-contracts.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
-  ['packages/shared/artifact-contracts.ts', [
+  ['packages/shared/artifact/contracts.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
-  ['tests/packages/shared/artifact-contracts.test.ts', [
+  ['tests/packages/shared/artifact/contracts.test.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
-  ['packages/shared/project-contracts.ts', [
+  ['packages/shared/project/contracts.ts', [
     joinForbidden('PROJECT', '_'),
   ]],
   ['tests/apps/desktop/renderer/shell/AppBody.test.tsx', [

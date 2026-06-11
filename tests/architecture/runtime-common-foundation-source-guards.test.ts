@@ -65,14 +65,14 @@ const sourceFiles = [...packageSourceFiles, ...desktopSourceFiles];
 const oldBridgeNamePattern = new RegExp(`\\b${['dev', 'flow'].join('')}\\b`);
 const obsoleteRuntimeErrorFieldPattern = new RegExp(`\\b${['recover', 'able'].join('')}\\??\\s*:`);
 const runtimeErrorContractFiles = [
-  'packages/shared/runtime-errors.ts',
-  'packages/shared/ipc-errors.ts',
-  'packages/core/runtime-exception.ts',
+  'packages/shared/runtime/errors.ts',
+  'packages/shared/ipc/errors.ts',
+  'packages/core/agent-runtime/errors.ts',
 ];
 
 describe('Runtime Common Foundation source guards', () => {
   it('keeps RuntimeError on severity and retryable fields without obsolete aliases', () => {
-    const runtimeErrorsSource = readProjectFile('packages/shared/runtime-errors.ts');
+    const runtimeErrorsSource = readProjectFile('packages/shared/runtime/errors.ts');
 
     expect(runtimeErrorsSource).toContain('severity');
     expect(runtimeErrorsSource).toContain('retryable');
@@ -80,8 +80,8 @@ describe('Runtime Common Foundation source guards', () => {
   });
 
   it('keeps runtime event names and channel stable', () => {
-    const runtimeEventsSource = readProjectFile('packages/shared/runtime-events.ts');
-    const ipcChannelsSource = readProjectFile('packages/shared/ipc-channels.ts');
+    const runtimeEventsSource = readProjectFile('packages/shared/runtime/events.ts');
+    const ipcChannelsSource = readProjectFile('packages/shared/ipc/channels.ts');
 
     expect(runtimeEventsSource).toContain("'run.started'");
     expect(runtimeEventsSource).toContain("'assistant.output.delta'");
@@ -127,7 +127,7 @@ describe('Runtime Common Foundation source guards', () => {
     const invalidImports = sharedFiles.filter((file) => {
       const text = readProjectFile(file);
       return /from ['"]@megumi\/(?!shared\b)[^'"]+['"]/.test(text)
-        || /from ['"]\.\.\/(core|ai|tools|memory|db|security)[^'"]*['"]/.test(text);
+        || /from ['"]\.\.\/\.\.\/(core|ai|tools|memory|db|security)[^'"]*['"]/.test(text);
     });
 
     expect(invalidImports).toEqual([]);

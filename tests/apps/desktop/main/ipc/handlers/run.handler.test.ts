@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Run } from '@megumi/shared/session-run-contracts';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { Run } from '@megumi/shared/session';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 const { handle } = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -18,7 +18,7 @@ describe('registerRunHandlers', () => {
   });
 
   it('registers run event list handler', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerRunHandlers } = await import('@megumi/desktop/main/ipc/handlers/run.handler');
 
     registerRunHandlers({
@@ -31,7 +31,7 @@ describe('registerRunHandlers', () => {
   });
 
   it('returns persisted runs for a session', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerRunHandlers } = await import('@megumi/desktop/main/ipc/handlers/run.handler');
     const runs: Run[] = [
       {
@@ -72,7 +72,7 @@ describe('registerRunHandlers', () => {
   });
 
   it('returns runtime events for a run', async () => {
-    const { IPC_CHANNELS } = await import('@megumi/shared/ipc-channels');
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerRunHandlers } = await import('@megumi/desktop/main/ipc/handlers/run.handler');
     const events: RuntimeEvent[] = [
       {
@@ -120,3 +120,4 @@ describe('registerRunHandlers', () => {
     expect(service.listRuntimeEventsByRun).toHaveBeenCalledWith('run-1');
   });
 });
+

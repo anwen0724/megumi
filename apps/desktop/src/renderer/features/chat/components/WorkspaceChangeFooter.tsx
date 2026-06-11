@@ -1,9 +1,9 @@
-import { FileText, RotateCcw } from 'lucide-react';
+﻿import { FileText, RotateCcw } from 'lucide-react';
 import type {
   WorkspaceChangeFooterChangeSet,
   WorkspaceChangeFooterFact,
   WorkspaceChangeFooterFile,
-} from '@megumi/shared/workspace-change-contracts';
+} from '@megumi/shared/workspace';
 import { Button } from '../../../shared/ui';
 
 interface WorkspaceChangeFooterProps {
@@ -171,3 +171,4 @@ function fileStatusText(file: WorkspaceChangeFooterFile): string {
   }
   return '无变更';
 }
+

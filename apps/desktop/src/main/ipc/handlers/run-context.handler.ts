@@ -1,19 +1,19 @@
-import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+﻿import { ipcMain } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   RunContextBaselineGetData,
   RunContextBaselineGetPayload,
   RunContextSourcesListData,
   RunContextSourcesListPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import {
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
-} from '@megumi/shared/ipc-schemas';
-import type { RunContextService } from '../../services/run-context.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+} from '@megumi/shared/ipc';
+import type { RunContextService } from '../../services/runtime/run-context.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type RunContextHandlersService = Pick<
@@ -79,3 +79,5 @@ function mapRunContextIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
+

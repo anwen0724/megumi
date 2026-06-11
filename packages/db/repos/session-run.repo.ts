@@ -1,4 +1,4 @@
-import type { MegumiDatabase } from '../connection';
+﻿import type { MegumiDatabase } from '../connection';
 import type {
   RunAction,
   RunObservation,
@@ -6,20 +6,20 @@ import type {
   Session,
   RunStep,
   SessionMessage,
-} from '@megumi/shared/session-run-contracts';
+} from '@megumi/shared/session';
 import {
   SessionCompactionEntrySchema,
   type SessionCompactionEntry,
-} from '@megumi/shared/session-compaction-contracts';
+} from '@megumi/shared/session';
 import {
   SessionActiveLeafSchema,
   SessionSourceEntrySchema,
   type SessionActiveLeaf,
   type SessionSourceEntry,
-} from '@megumi/shared/session-active-path-contracts';
-import type { JsonObject } from '@megumi/shared/json';
-import type { RuntimeError } from '@megumi/shared/runtime-errors';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+} from '@megumi/shared/session';
+import type { JsonObject } from '@megumi/shared/primitives';
+import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 type Nullable<T> = T | null;
 
@@ -879,3 +879,4 @@ function fromObservationRow(row: ObservationRow): RunObservation {
     ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
   };
 }
+

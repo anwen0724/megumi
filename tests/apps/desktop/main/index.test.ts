@@ -293,7 +293,7 @@ vi.mock('@megumi/desktop/main/config/env', () => ({
   loadEnvFile: mocks.loadEnvFile,
 }));
 
-vi.mock('@megumi/desktop/main/services/megumi-home.service', () => ({
+vi.mock('@megumi/desktop/main/services/project/megumi-home.service', () => ({
   initializeElectronMegumiHomeSync: mocks.initializeElectronMegumiHomeSync,
 }));
 
@@ -313,11 +313,11 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
   createMainWindow: mocks.createMainWindow,
 }));
 
-vi.mock('@megumi/desktop/main/services/session-run.service', () => ({
+vi.mock('@megumi/desktop/main/services/session/session-run.service', () => ({
   SessionRunService: mocks.SessionRunService,
 }));
 
-vi.mock('@megumi/desktop/main/services/model-step-provider.service', () => ({
+vi.mock('@megumi/desktop/main/services/runtime/model-step-provider.service', () => ({
   createModelStepProviderService: mocks.createModelStepProviderService,
 }));
 
@@ -325,36 +325,36 @@ vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({
   getDefaultProviderService: mocks.getDefaultProviderService,
 }));
 
-vi.mock('@megumi/desktop/main/services/secret-store.service', () => ({
+vi.mock('@megumi/desktop/main/services/security/secret-store.service', () => ({
   createElectronSecretStoreService: mocks.createElectronSecretStoreService,
 }));
 
-vi.mock('@megumi/desktop/main/services/megumi-home-config.service', () => ({
+vi.mock('@megumi/desktop/main/services/project/megumi-home-config.service', () => ({
   MegumiHomeConfigService: mocks.MegumiHomeConfigService,
 }));
 
-vi.mock('@megumi/desktop/main/services/provider-runtime.service', () => ({
+vi.mock('@megumi/desktop/main/services/provider/provider-runtime.service', () => ({
   ProviderRuntimeService: mocks.ProviderRuntimeService,
 }));
 
-vi.mock('@megumi/desktop/main/services/run-context.service', () => ({
+vi.mock('@megumi/desktop/main/services/runtime/run-context.service', () => ({
   createDefaultRunContextService: mocks.createDefaultRunContextService,
 }));
 
-vi.mock('@megumi/desktop/main/services/tool.service', () => ({
+vi.mock('@megumi/desktop/main/services/tool/tool.service', () => ({
   ToolService: mocks.ToolService,
   createDefaultToolService: mocks.createDefaultToolService,
 }));
 
-vi.mock('@megumi/desktop/main/services/recovery.service', () => ({
+vi.mock('@megumi/desktop/main/services/runtime/recovery.service', () => ({
   createRecoveryService: mocks.createRecoveryService,
 }));
 
-vi.mock('@megumi/desktop/main/services/workspace-restore.service', () => ({
+vi.mock('@megumi/desktop/main/services/workspace/workspace-restore.service', () => ({
   WorkspaceRestoreService: mocks.WorkspaceRestoreService,
 }));
 
-vi.mock('@megumi/desktop/main/services/workspace-files.service', () => ({
+vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () => ({
   createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
 
@@ -386,7 +386,7 @@ vi.mock('@megumi/db/repos/permission-snapshot.repo', () => ({
   PermissionSnapshotRepository: mocks.PermissionSnapshotRepository,
 }));
 
-vi.mock('@megumi/desktop/main/services/permission-snapshot.service', () => ({
+vi.mock('@megumi/desktop/main/services/security/permission-snapshot.service', () => ({
   PermissionSnapshotService: mocks.PermissionSnapshotService,
 }));
 
@@ -398,23 +398,23 @@ vi.mock('@megumi/db/repos/memory.repo', () => ({
   MemoryRepository: mocks.MemoryRepository,
 }));
 
-vi.mock('@megumi/desktop/main/services/artifact-content-store.service', () => ({
+vi.mock('@megumi/desktop/main/services/artifact/artifact-content-store.service', () => ({
   ArtifactContentStore: mocks.ArtifactContentStore,
 }));
 
-vi.mock('@megumi/desktop/main/services/artifact.service', () => ({
+vi.mock('@megumi/desktop/main/services/artifact/artifact.service', () => ({
   ArtifactService: mocks.ArtifactService,
 }));
 
-vi.mock('@megumi/desktop/main/services/memory.service', () => ({
+vi.mock('@megumi/desktop/main/services/memory/memory.service', () => ({
   createMemoryService: mocks.createMemoryService,
 }));
 
-vi.mock('@megumi/desktop/main/services/plan-artifact-compatibility.service', () => ({
+vi.mock('@megumi/desktop/main/services/artifact/plan-artifact-compatibility.service', () => ({
   PlanArtifactCompatibilityService: mocks.PlanArtifactCompatibilityService,
 }));
 
-vi.mock('@megumi/desktop/main/services/project.service', () => ({
+vi.mock('@megumi/desktop/main/services/project/project.service', () => ({
   createProjectService: mocks.createProjectService,
 }));
 
@@ -663,4 +663,5 @@ describe('main runtime logger composition', () => {
     expect(logText).not.toContain('Bearer sk-runtime-secret');
   });
 });
+
 

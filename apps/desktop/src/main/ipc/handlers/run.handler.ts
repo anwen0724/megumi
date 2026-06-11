@@ -1,16 +1,16 @@
-import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+﻿import { ipcMain } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   RunEventsListData,
   RunEventsListPayload,
   RunListBySessionData,
   RunListBySessionPayload,
-} from '@megumi/shared/ipc-schemas';
-import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megumi/shared/ipc-schemas';
-import type { SessionRunService } from '../../services/session-run.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+} from '@megumi/shared/ipc';
+import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megumi/shared/ipc';
+import type { SessionRunService } from '../../services/session/session-run.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type RunHandlersService = Pick<SessionRunService, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
@@ -63,3 +63,5 @@ function mapRunIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
+

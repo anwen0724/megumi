@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { forwardRuntimeEvents } from '@megumi/desktop/main/ipc/runtime-event-forwarder';
 
 const runtimeContext = {
@@ -141,3 +141,4 @@ describe('forwardRuntimeEvents', () => {
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain('sk-send-secret');
   });
 });
+

@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   CancelRequest,
   Checkpoint,
   RecoverableRunSummary,
@@ -7,16 +7,16 @@ import type {
   RetryRequest,
   CheckpointRestoreRecord,
   CheckpointStatus,
-} from '@megumi/shared/recovery-contracts';
+} from '@megumi/shared/recovery';
 import {
   RecoverableRunSummarySchema,
-} from '@megumi/shared/recovery-contracts';
+} from '@megumi/shared/recovery';
 import {
   SessionInterruptedRunMarkerSchema,
   type SessionInterruptedRunMarker,
   type SessionInterruptedRunPreviousStatus,
   type SessionInterruptedRunReason,
-} from '@megumi/shared/session-active-path-contracts';
+} from '@megumi/shared/session';
 import type { MegumiDatabase } from '../connection';
 
 interface CheckpointRow { checkpoint_json: string }
@@ -376,3 +376,4 @@ function recoverableReasonFor(
   }
   return status as RecoverableRunReason;
 }
+

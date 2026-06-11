@@ -1,5 +1,5 @@
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { createRunFailedEvent } from '@megumi/shared/runtime-event-factory';
+﻿import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { createRunFailedEvent } from '@megumi/shared/runtime';
 import type {
   AiModelStepAdapterRequest,
   AiProviderAdapter,
@@ -43,3 +43,4 @@ export function createAnthropicAdapter(options: AnthropicAdapterOptions = {}): A
     },
   };
 }
+

@@ -1,7 +1,7 @@
 ﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { ProviderPublicStatus } from '@megumi/shared/provider-contracts';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { ProviderPublicStatus } from '@megumi/shared/provider';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 
 const providers: ProviderPublicStatus[] = [
@@ -191,3 +191,4 @@ describe('useProviderStore', () => {
     expect(JSON.stringify(useProviderStore.getState())).not.toContain('sk-test-secret');
   });
 });
+

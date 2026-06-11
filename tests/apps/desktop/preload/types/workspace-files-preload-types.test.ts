@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ipcRenderer } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared/ipc/runtime-request';
 import { api as preloadApi } from '@megumi/desktop/preload/api';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
@@ -116,3 +116,4 @@ describe('workspace files preload API shape', () => {
     );
   });
 });
+

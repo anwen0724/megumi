@@ -1,10 +1,10 @@
-import { normalizeRuntimeError } from '@megumi/core/runtime-exception';
-import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
+﻿import { normalizeRuntimeError } from '@megumi/core/agent-runtime';
+import { createRuntimeDebugId } from '@megumi/shared/runtime';
 import { redactRuntimeValue } from '@megumi/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/runtime-logger.service';
+} from '../services/runtime/runtime-logger.service';
 
 type RuntimeProcessEventName = 'uncaughtException' | 'unhandledRejection';
 
@@ -46,3 +46,6 @@ function createDetails(
     }),
   }) as Record<string, unknown>;
 }
+
+
+

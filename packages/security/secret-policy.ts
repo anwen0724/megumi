@@ -1,9 +1,9 @@
-import {
+﻿import {
   isProviderId,
   type ProviderId,
   type SecretRef,
   type SecretScope,
-} from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/provider';
 
 const PROVIDER_API_KEY_SCOPE: SecretScope = 'provider-api-key';
 
@@ -32,3 +32,4 @@ export function isSecretRef(value: unknown): value is SecretRef {
 export function isProviderApiKeySecretRef(value: unknown, providerId: ProviderId): value is SecretRef {
   return isSecretRef(value) && value.providerId === providerId && value.scope === PROVIDER_API_KEY_SCOPE;
 }
+

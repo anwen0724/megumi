@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerToolHandlers } from '@megumi/desktop/main/ipc/handlers/tool.handler';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
@@ -141,3 +141,4 @@ describe('registerToolHandlers', () => {
     });
   });
 });
+

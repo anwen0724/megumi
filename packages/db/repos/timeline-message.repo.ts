@@ -1,7 +1,7 @@
-import type { MegumiDatabase } from '../connection';
-import { TimelineMessageSchema } from '@megumi/shared/timeline-message-block-schemas';
-import type { JsonObject } from '@megumi/shared/json';
-import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
+﻿import type { MegumiDatabase } from '../connection';
+import { TimelineMessageSchema } from '@megumi/shared/timeline';
+import type { JsonObject } from '@megumi/shared/primitives';
+import type { TimelineMessage } from '@megumi/shared/timeline';
 
 type Nullable<T> = T | null;
 
@@ -390,3 +390,4 @@ function fromTimelineCommitDiagnosticRow(
     ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
   };
 }
+

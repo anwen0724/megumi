@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ToolDefinition } from '@megumi/shared/tool';
 import { createStaticToolRegistry } from '../registry';
 import { editFileDefinition } from './edit-file.definition';
 import { globDefinition } from './glob.definition';
@@ -45,3 +45,4 @@ export const BUILT_IN_TOOL_DEFINITIONS: ToolDefinition[] = deepFreeze([
 export function createBuiltInToolRegistry() {
   return createStaticToolRegistry(BUILT_IN_TOOL_DEFINITIONS.map(cloneToolDefinition));
 }
+

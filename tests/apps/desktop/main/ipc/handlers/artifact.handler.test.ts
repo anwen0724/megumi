@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+﻿import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerArtifactHandlers } from '@megumi/desktop/main/ipc/handlers/artifact.handler';
 
 vi.mock('electron', () => ({
@@ -43,3 +43,4 @@ describe('registerArtifactHandlers', () => {
     );
   });
 });
+

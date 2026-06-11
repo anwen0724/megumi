@@ -1,26 +1,26 @@
-import { ipcMain } from 'electron';
+﻿import { ipcMain } from 'electron';
 import path from 'path';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import {
   ProviderApiKeyRequestSchema,
   ProviderDeleteApiKeyRequestSchema,
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
-} from '@megumi/shared/ipc-schemas';
-import type { ProviderId, ProviderPublicStatus, ProviderSettings } from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/ipc';
+import type { ProviderId, ProviderPublicStatus, ProviderSettings } from '@megumi/shared/provider';
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { ProviderSettingsRepository } from '@megumi/db/repos/provider-settings.repo';
 import {
   MegumiHomeConfigParseError,
   MegumiHomeConfigService,
-} from '@megumi/desktop/main/services/megumi-home-config.service';
-import { initializeElectronMegumiHomeSync } from '@megumi/desktop/main/services/megumi-home.service';
-import { ProviderSettingsService, type ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/provider-settings.service';
-import { createElectronSecretStoreService } from '@megumi/desktop/main/services/secret-store.service';
+} from '@megumi/desktop/main/services/project/megumi-home-config.service';
+import { initializeElectronMegumiHomeSync } from '@megumi/desktop/main/services/project/megumi-home.service';
+import { ProviderSettingsService, type ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/provider/provider-settings.service';
+import { createElectronSecretStoreService } from '@megumi/desktop/main/services/security/secret-store.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 
 export interface ProviderHandlersService {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;
@@ -144,3 +144,6 @@ export function getDefaultProviderService(): ProviderHandlersService {
 
   return defaultProviderService;
 }
+
+
+

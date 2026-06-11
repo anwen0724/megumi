@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
-import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact-contracts';
+import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');
@@ -111,3 +111,4 @@ describe('ArtifactRepository', () => {
     expect(JSON.stringify(updated)).not.toContain('"accepted"');
   });
 });
+

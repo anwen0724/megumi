@@ -1,12 +1,12 @@
-import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
-import type { ModelInputContext } from '@megumi/shared/model-input-context-contracts';
-import type { ModelInputContextSourceRef } from '@megumi/shared/model-input-context-contracts';
+﻿import type { ContextBudgetPolicy } from '@megumi/shared/context';
+import type { ModelInputContext } from '@megumi/shared/model';
+import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
   SessionContextInput,
   SessionHistoryEntry,
   SessionRuntimeFact,
   SessionSummaryEntry,
-} from '@megumi/shared/session-context-contracts';
+} from '@megumi/shared/session';
 import { estimateModelInputContextTokens } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
 
@@ -283,3 +283,4 @@ function truncateRuntimeFactText(text: string): string {
 
   return `${text.slice(0, RUNTIME_FACT_MAX_CHARS)}\n[truncated]`;
 }
+

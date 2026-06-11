@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RendererRunSummary } from '@megumi/desktop/renderer/entities/run/store';
 import {
   createProcessingDisclosureModel,
@@ -164,3 +164,4 @@ describe('processing disclosure projection', () => {
     expect(cancelled!.completedEntries.at(-1)?.label).toBe('已取消：User stopped the run.');
   });
 });
+

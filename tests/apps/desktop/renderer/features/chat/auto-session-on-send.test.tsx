@@ -1,7 +1,7 @@
 ﻿// @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { Project } from '@megumi/desktop/renderer/entities/project/types';
 import type { LocalRendererSession } from '@megumi/desktop/renderer/entities/session/session-factory';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
@@ -244,3 +244,4 @@ describe('auto session on first send', () => {
     expectCanonicalUserMessage('session-existing', 'This should not rename the session');
   });
 });
+

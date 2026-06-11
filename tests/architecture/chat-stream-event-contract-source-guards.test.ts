@@ -10,7 +10,7 @@ function read(path: string): string {
 }
 
 function chatStreamEventBaseBody(): string {
-  const contract = read('packages/shared/chat-stream-events.ts');
+  const contract = read('packages/shared/chat-stream/events.ts');
   const match = /export interface ChatStreamEventBase\s*\{(?<body>[\s\S]*?)\n\}/.exec(contract);
 
   expect(match?.groups?.body).toBeDefined();
@@ -18,14 +18,14 @@ function chatStreamEventBaseBody(): string {
 }
 
 const CHAT_STREAM_CONTRACT_FILES = [
-  'packages/shared/chat-stream-events.ts',
-  'packages/shared/chat-stream-event-schemas.ts',
-  'packages/shared/chat-stream-event-factory.ts',
+  'packages/shared/chat-stream/events.ts',
+  'packages/shared/chat-stream/event-schemas.ts',
+  'packages/shared/chat-stream/event-factory.ts',
 ];
 
 describe('chat stream event contract source guards', () => {
   it('uses assistant text phase events instead of assistant answer events', () => {
-    const contract = read('packages/shared/chat-stream-events.ts');
+    const contract = read('packages/shared/chat-stream/events.ts');
 
     for (const eventType of [
       'assistant.text.started',

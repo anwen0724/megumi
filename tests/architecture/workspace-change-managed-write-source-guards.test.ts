@@ -29,7 +29,7 @@ describe('workspace change managed write source guards', () => {
 
   it('does not make run_command restorable in production code', () => {
     const trackerSource = fs.readFileSync(
-      path.join(repoRoot, 'apps/desktop/src/main/services/workspace-change-tracker.service.ts'),
+      path.join(repoRoot, 'apps/desktop/src/main/services/workspace/workspace-change-tracker.service.ts'),
       'utf8',
     );
     expect(trackerSource).toContain("MANAGED_FILE_TOOL_NAMES = new Set(['edit_file', 'write_file'])");
@@ -48,9 +48,9 @@ describe('workspace change managed write source guards', () => {
 
   it('keeps run_command executor path away from workspace restore record writes', () => {
     const files = [
-      'apps/desktop/src/main/services/tool-executors/run-command.executor.ts',
-      'apps/desktop/src/main/services/project-tool-executor.service.ts',
-      'apps/desktop/src/main/services/tool-call-handler.service.ts',
+      'apps/desktop/src/main/services/tool/tool-executors/run-command.executor.ts',
+      'apps/desktop/src/main/services/tool/project-tool-executor.service.ts',
+      'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
     ];
     const forbidden = [
       'saveRestoreRequest',

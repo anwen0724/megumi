@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { ipcRenderer } from 'electron';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import { api as preloadApi } from '@megumi/desktop/preload/api';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest, RuntimeIpcResult } from '@megumi/shared/ipc-contracts';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest, RuntimeIpcResult } from '@megumi/shared/ipc';
 import type {
   RecoverableRunListData,
   RecoverableRunListPayload,
@@ -19,7 +19,7 @@ import type {
   WorkspaceRestorePayload,
   WorkspaceFileOpenData,
   WorkspaceFileOpenPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 
 vi.mock('electron', () => ({
   ipcRenderer: {
@@ -124,3 +124,4 @@ describe('recovery preload types', () => {
     );
   });
 });
+

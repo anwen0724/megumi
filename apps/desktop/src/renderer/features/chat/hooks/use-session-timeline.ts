@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
@@ -484,3 +484,4 @@ export function useSessionTimeline() {
     cancelBranchDraft,
   };
 }
+

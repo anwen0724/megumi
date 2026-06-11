@@ -1,17 +1,17 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   evaluatePermissionPolicy,
   evaluateToolPolicy,
   type EvaluatePermissionPolicyInput,
 } from '@megumi/security/tool-policy';
-import type { JsonObject } from '@megumi/shared/json';
-import type { PermissionMode } from '@megumi/shared/permission-mode-contracts';
-import type { MergedPermissionSettings } from '@megumi/shared/permission-settings-contracts';
+import type { JsonObject } from '@megumi/shared/primitives';
+import type { PermissionMode } from '@megumi/shared/permission';
+import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type {
   PermissionClassifier,
   PermissionClassifierResult,
 } from '@megumi/security/permission-classifier';
-import type { ToolExecution, ToolDefinition } from '@megumi/shared/tool-contracts';
+import type { ToolExecution, ToolDefinition } from '@megumi/shared/tool';
 
 const projectRoot = 'C:/all/work/study/megumi';
 const evaluatedAt = '2026-05-20T00:00:00.000Z';
@@ -640,3 +640,4 @@ describe('evaluatePermissionPolicy', () => {
     expect(evaluatePermissionPolicy(input).decision).toBe('allow');
   });
 });
+

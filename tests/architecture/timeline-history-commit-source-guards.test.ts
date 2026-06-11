@@ -30,7 +30,7 @@ function sourceUnder(relativeDirectory: string): string {
 
 describe('timeline history commit boundaries', () => {
   it('keeps the pure chat stream projection in packages/shared', () => {
-    const shared = read('packages/shared/chat-stream-to-timeline-projection.ts');
+    const shared = read('packages/shared/timeline/chat-stream-projection.ts');
     const rendererWrapper = read('apps/desktop/src/renderer/features/chat-stream/chat-stream-projection.ts');
 
     expect(shared).toContain('reduceChatStreamEvent');
@@ -38,19 +38,19 @@ describe('timeline history commit boundaries', () => {
     expect(shared).not.toContain('electron');
     expect(shared).not.toContain('window.megumi');
     expect(shared).not.toContain('apps/desktop');
-    expect(rendererWrapper).toContain('@megumi/shared/chat-stream-to-timeline-projection');
+    expect(rendererWrapper).toContain('@megumi/shared/timeline');
   });
 
   it('does not let main import renderer chat-stream projection code', () => {
-    const source = read('apps/desktop/src/main/services/timeline-history-commit-projector.service.ts');
+    const source = read('apps/desktop/src/main/services/session/timeline-history-commit-projector.service.ts');
 
-    expect(source).toContain('@megumi/shared/chat-stream-to-timeline-projection');
+    expect(source).toContain('@megumi/shared/timeline');
     expect(source).not.toContain('features/chat-stream');
     expect(source).not.toContain('apps/desktop/src/renderer');
   });
 
   it('keeps renderer timeline history on timeline repository instead of flat session messages', () => {
-    const source = read('apps/desktop/src/main/services/session-run.service.ts');
+    const source = read('apps/desktop/src/main/services/session/session-run.service.ts');
 
     expect(source).toContain('timelineMessageRepository.listCommittedMessagesBySession(input)');
     expect(source).not.toContain('timelineMessagesFromPersistedMessages');
@@ -81,7 +81,7 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('keeps persistence failure out of timeline answer/process blocks', () => {
-    const source = read('apps/desktop/src/main/services/timeline-history-commit-projector.service.ts');
+    const source = read('apps/desktop/src/main/services/session/timeline-history-commit-projector.service.ts');
 
     expect(source).toContain('recordCommitDiagnostic');
     expect(source).not.toContain('AnswerTextBlock');

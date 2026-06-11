@@ -1,6 +1,6 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 
 function createDeferred<T>() {
@@ -296,3 +296,4 @@ describe('useWorkspaceFilesStore', () => {
     expect(useWorkspaceFilesStore.getState().loadingDirectories).not.toContain('apps');
   });
 });
+

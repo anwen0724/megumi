@@ -2,10 +2,10 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildModelStepInputContextFromSources, createModelStepInputContextId } from '@megumi/context-management';
-import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
-import type { SessionMessage } from '@megumi/shared/session-run-contracts';
-import type { ModelStepProviderState } from '@megumi/shared/model-step-contracts';
-import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
+import type { SessionContextInput } from '@megumi/shared/session';
+import type { SessionMessage } from '@megumi/shared/session';
+import type { ModelStepProviderState } from '@megumi/shared/model';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
 
@@ -1006,3 +1006,4 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(JSON.stringify(context.parts)).not.toContain('# Old rules');
   });
 });
+

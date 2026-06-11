@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createDefaultMemoryPolicy,
   createMemoryCandidateDraft,
@@ -6,7 +6,7 @@ import {
   scoreMemoryRecordForRecall,
   selectMemoryRecallResults,
 } from '@megumi/memory';
-import type { MemoryRecord, MemorySourceRef } from '@megumi/shared/memory-contracts';
+import type { MemoryRecord, MemorySourceRef } from '@megumi/shared/memory';
 
 const now = '2026-05-16T00:00:00.000Z';
 
@@ -101,3 +101,4 @@ describe('memory engine', () => {
     expect(results[0].contentPreview).toBe('spec brief plans workflow');
   });
 });
+

@@ -1,10 +1,10 @@
 ﻿// @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
@@ -345,3 +345,4 @@ describe('right workspace panel session run sync', () => {
     expect(screen.queryByText('Runtime chat failed for "please fail this run".')).not.toBeInTheDocument();
   });
 });
+

@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDER_SETTINGS, type ProviderSettings } from '@megumi/shared/provider-contracts';
+import { DEFAULT_PROVIDER_SETTINGS, type ProviderSettings } from '@megumi/shared/provider';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { ProviderSettingsRepository } from '@megumi/db/repos/provider-settings.repo';
 
@@ -110,3 +110,4 @@ describe('ProviderSettingsRepository', () => {
     expect(repo.get('deepseek')).toBeUndefined();
   });
 });
+

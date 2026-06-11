@@ -1,11 +1,11 @@
-import type { MegumiDatabase } from '../connection';
+﻿import type { MegumiDatabase } from '../connection';
 import {
   DEFAULT_PROVIDER_SETTINGS,
   isProviderId,
   type ProviderId,
   type ProviderSettings,
   type SecretRef,
-} from '@megumi/shared/provider-contracts';
+} from '@megumi/shared/provider';
 
 interface ProviderSettingsRow {
   id: string;
@@ -227,3 +227,4 @@ export class ProviderSettingsRepository {
     };
   }
 }
+

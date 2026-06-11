@@ -1,11 +1,11 @@
 ﻿// @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { SessionMessageSendPayload } from '@megumi/shared/ipc-schemas';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
@@ -633,3 +633,4 @@ describe('interaction baseline acceptance', () => {
     expect(useChatUiStore.getState().lastError).toBe('Runtime chat failed for "please fail this run".');
   });
 });
+

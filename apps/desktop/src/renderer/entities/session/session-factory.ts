@@ -1,4 +1,4 @@
-import type { AgentType } from '@megumi/shared/agent-contracts';
+﻿import type { AgentType } from '@megumi/shared/session';
 
 export interface LocalRendererSession {
   id: string;
@@ -43,3 +43,4 @@ export function createLocalSession({
     updatedAt: now,
   };
 }
+

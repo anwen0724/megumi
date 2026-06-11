@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { expectTypeOf, describe, it } from 'vitest';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 import type {
@@ -10,9 +10,9 @@ import type {
   ProjectRemovePayload,
   ProjectUseExistingData,
   ProjectUseExistingPayload,
-} from '@megumi/shared/project-contracts';
-import type { RuntimeIpcRequest, RuntimeIpcResult } from '@megumi/shared/ipc-contracts';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+} from '@megumi/shared/project';
+import type { RuntimeIpcRequest, RuntimeIpcResult } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 
 describe('project preload types', () => {
   it('exposes typed project API methods', () => {
@@ -45,3 +45,4 @@ describe('project preload types', () => {
     >();
   });
 });
+

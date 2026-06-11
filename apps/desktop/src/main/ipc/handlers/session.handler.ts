@@ -1,7 +1,7 @@
-import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
+﻿import { ipcMain } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   SessionCreateData,
   SessionCreatePayload,
@@ -18,7 +18,7 @@ import type {
   SessionMessageSendPayload,
   SessionTimelineListData,
   SessionTimelineListPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 import {
   SessionBranchDraftCancelRequestSchema,
   SessionBranchDraftCreateRequestSchema,
@@ -28,9 +28,9 @@ import {
   SessionMessageCancelRequestSchema,
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
-} from '@megumi/shared/ipc-schemas';
-import type { SessionRunService } from '../../services/session-run.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+} from '@megumi/shared/ipc';
+import type { SessionRunService } from '../../services/session/session-run.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
@@ -213,3 +213,5 @@ async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {
     yield item;
   }
 }
+
+

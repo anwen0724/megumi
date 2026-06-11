@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerRunContextHandlers } from '@megumi/desktop/main/ipc/handlers/run-context.handler';
 
 vi.mock('electron', () => ({
@@ -41,3 +41,4 @@ describe('registerRunContextHandlers', () => {
     );
   });
 });
+

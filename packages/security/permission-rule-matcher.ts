@@ -1,4 +1,4 @@
-import type { JsonValue } from '@megumi/shared/json';
+﻿import type { JsonValue } from '@megumi/shared/primitives';
 
 export interface PermissionRuleMatchInput {
   toolName: string;
@@ -87,3 +87,4 @@ function globToRegExp(pattern: string): RegExp {
 function escapeRegExp(value: string): string {
   return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
 }
+

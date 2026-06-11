@@ -62,7 +62,7 @@ describe('run modes and plan artifact source guards', () => {
 
   it('keeps core run mode runtime free of Host privileges and concrete persistence', () => {
     const offenders = filesUnder('packages/core')
-      .filter((file) => projectPath(file).includes('run-runtime'))
+      .filter((file) => projectPath(file).includes('agent-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process|node:http|node:https|node:net)/.test(source);
@@ -73,14 +73,14 @@ describe('run modes and plan artifact source guards', () => {
   });
 
   it('does not define plan as an AgentAction kind', () => {
-    const contracts = readProjectFile(join(ROOT, 'packages/shared/session-run-contracts.ts'));
+    const contracts = readProjectFile(join(ROOT, 'packages/shared/session/run-contracts.ts'));
 
     expect(contracts).toContain("'create_artifact'");
     expect(contracts).not.toMatch(/RUN_ACTION_KINDS[\s\S]*['"]plan['"]/);
   });
 
   it('keeps active permission modes aligned with 05 target posture set', () => {
-    const source = readProjectFile(join(ROOT, 'packages/shared/permission-mode-contracts.ts'));
+    const source = readProjectFile(join(ROOT, 'packages/shared/permission/mode-contracts.ts'));
 
     expect(source).toContain("export const ACTIVE_PERMISSION_MODES = ['default', 'accept_edits', 'plan', 'auto'] as const");
     expect(source).not.toContain("'bypass_permissions'");

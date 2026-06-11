@@ -1,4 +1,4 @@
-import type { ContextBudgetPolicy, ContextBudgetWarning } from '@megumi/shared/context-budget-contracts';
+﻿import type { ContextBudgetPolicy, ContextBudgetWarning } from '@megumi/shared/context';
 import type {
   CurrentTurnPart,
   InstructionPart,
@@ -13,7 +13,7 @@ import type {
   RuntimeConstraintPart,
   SessionPart,
   ToolContinuationPart,
-} from '@megumi/shared/model-input-context-contracts';
+} from '@megumi/shared/model';
 
 type DraftFields = {
   truncationHint?: ModelInputContextTruncation;
@@ -338,3 +338,4 @@ function textForDraft(draft: ModelInputContextPartDraft): string {
 function textForPart(part: ModelInputContextPart): string {
   return part.text;
 }
+

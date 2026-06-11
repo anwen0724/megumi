@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+﻿import { beforeEach, describe, expect, it } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
-import type { ApprovalRequest } from '@megumi/shared/tool-contracts';
+import type { ApprovalRequest } from '@megumi/shared/tool';
 
 const approval: ApprovalRequest = {
   approvalRequestId: 'approval-1',
@@ -64,3 +64,4 @@ describe('useApprovalStore', () => {
     ]);
   });
 });
+

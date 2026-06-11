@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createToolInputValidationError,
   normalizeToolError,
   normalizeToolResult,
   validateToolInput,
 } from '@megumi/tools';
-import type { ToolDefinition, ToolExecution } from '@megumi/shared/tool-contracts';
+import type { ToolDefinition, ToolExecution } from '@megumi/shared/tool';
 
 const definition: ToolDefinition = {
   name: 'read_file',
@@ -98,3 +98,4 @@ describe('tool validation and normalization', () => {
     });
   });
 });
+

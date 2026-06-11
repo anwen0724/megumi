@@ -53,7 +53,7 @@ describe('context budget and model input chain boundaries', () => {
   it('keeps context-management independent from RunContext budget result inputs', () => {
     const source = read('packages/context-management/model-step-input-context.ts');
 
-    expect(source).not.toContain('@megumi/shared/run-context-contracts');
+    expect(source).not.toContain('@megumi/shared/run');
     expect(source).not.toContain('runContext?:');
     expect(source).not.toContain('input.runContext');
     expect(source).not.toContain('?.budget.modelContextWindow');

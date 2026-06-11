@@ -65,9 +65,9 @@ describe('runtime lifecycle cleanup final source guards', () => {
 
   it('keeps RunContext out of context-management and final budget fields out of RunContext', () => {
     const contextManagement = read('packages/context-management/model-step-input-context.ts');
-    const runContext = read('packages/shared/run-context-contracts.ts');
+    const runContext = read('packages/shared/run/context-contracts.ts');
 
-    expect(contextManagement).not.toContain('@megumi/shared/run-context-contracts');
+    expect(contextManagement).not.toContain('@megumi/shared/run');
     expect(contextManagement).not.toContain('runContext?:');
     expect(contextManagement).not.toContain('input.runContext');
     expect(runContext).toContain('contextBudgetPolicy: ContextBudgetPolicySchema');
@@ -76,7 +76,7 @@ describe('runtime lifecycle cleanup final source guards', () => {
   });
 
   it('keeps model step runtime requests centered on inputContext', () => {
-    const source = read('packages/shared/model-step-contracts.ts');
+    const source = read('packages/shared/model/step-contracts.ts');
 
     expect(source).toContain('inputContext: ModelInputContext');
     expect(source).not.toMatch(/\bmessages\?:/);

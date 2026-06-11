@@ -1,7 +1,7 @@
-import type { JsonObject, JsonValue } from '@megumi/shared/json';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { RuntimeErrorCode } from '@megumi/shared/runtime-errors';
-import type { ChatTokenUsagePayload, RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { RuntimeErrorCode } from '@megumi/shared/runtime';
+import type { ChatTokenUsagePayload, RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createModelStepProviderStateRecordedEvent,
   createModelStepStartedEvent,
@@ -13,7 +13,7 @@ import {
   createRunCancelledEvent,
   createRunFailedEvent,
   createToolCallCreatedEvent,
-} from '@megumi/shared/runtime-event-factory';
+} from '@megumi/shared/runtime';
 import { mapModelStepToOpenAICompatibleRequest } from '../prompt/message-mapper';
 import { parseOpenAICompatibleSseStream } from '../stream';
 import {
@@ -575,3 +575,4 @@ function errorMessageForCode(code: RuntimeErrorCode): string {
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
+

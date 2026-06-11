@@ -1,11 +1,11 @@
-import type { MegumiDatabase } from '../connection';
+﻿import type { MegumiDatabase } from '../connection';
 import type {
   RunContext,
   ContextPatch,
   RunContextSource,
   RunContextBuild,
-} from '@megumi/shared/run-context-contracts';
-import type { JsonObject } from '@megumi/shared/json';
+} from '@megumi/shared/run';
+import type { JsonObject } from '@megumi/shared/primitives';
 
 interface BaselineRow {
   context_json: string;
@@ -209,3 +209,4 @@ function assertSafeBuildMetadata(metadata: JsonObject | undefined): void {
     throw new Error('Unsafe context snapshot metadata cannot be persisted.');
   }
 }
+

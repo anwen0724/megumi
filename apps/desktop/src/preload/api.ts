@@ -1,14 +1,14 @@
-import { ipcRenderer } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream-events';
-import type { RuntimeEvent } from '@megumi/shared/runtime-events';
+﻿import { ipcRenderer } from 'electron';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   BusinessIpcChannel,
   RuntimeIpcRequest,
   RuntimeIpcResult,
-} from '@megumi/shared/ipc-contracts';
-import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
-import { createRuntimeDebugId } from '@megumi/shared/runtime-context';
+} from '@megumi/shared/ipc';
+import type { RuntimeIpcError } from '@megumi/shared/ipc';
+import { createRuntimeDebugId } from '@megumi/shared/runtime';
 import type {
   ProjectListData,
   ProjectListPayload,
@@ -18,7 +18,7 @@ import type {
   ProjectRemovePayload,
   ProjectUseExistingData,
   ProjectUseExistingPayload,
-} from '@megumi/shared/project-contracts';
+} from '@megumi/shared/project';
 import type {
   ArtifactGetData,
   ArtifactGetPayload,
@@ -110,7 +110,7 @@ import type {
   WorkspaceFileOpenPayload,
   WorkspaceFilesListData,
   WorkspaceFilesListPayload,
-} from '@megumi/shared/ipc-schemas';
+} from '@megumi/shared/ipc';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyData = Record<string, never>;
@@ -448,3 +448,4 @@ export const api = {
     },
   },
 };
+

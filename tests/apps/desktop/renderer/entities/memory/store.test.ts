@@ -1,7 +1,7 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 
 const now = '2026-05-16T00:00:00.000Z';
@@ -108,3 +108,4 @@ describe('useMemoryStore', () => {
     );
   });
 });
+

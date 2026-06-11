@@ -1,5 +1,5 @@
-import type { JsonObject } from '@megumi/shared/json';
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { JsonObject } from '@megumi/shared/primitives';
+import type { ToolDefinition } from '@megumi/shared/tool';
 
 export type ToolInputValidationResult =
   | { ok: true; value: unknown }
@@ -54,3 +54,4 @@ function matchesJsonSchemaType(value: unknown, expectedType: string): boolean {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+

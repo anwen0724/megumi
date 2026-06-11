@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createRecoveryStore,
   type RecoveryApi,
 } from '@megumi/desktop/renderer/entities/recovery/store';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery-contracts';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 
 describe('recovery renderer store', () => {
   let api: RecoveryApi;
@@ -85,3 +85,4 @@ describe('recovery renderer store', () => {
     expect(store.getState().lastRequest?.runId).toBe('run_123');
   });
 });
+

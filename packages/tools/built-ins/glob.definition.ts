@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '@megumi/shared/tool-contracts';
+﻿import type { ToolDefinition } from '@megumi/shared/tool';
 
 export const globDefinition: ToolDefinition = {
   name: 'glob',
@@ -32,3 +32,4 @@ export const globDefinition: ToolDefinition = {
   sideEffect: 'none',
   availability: { status: 'available' },
 };
+

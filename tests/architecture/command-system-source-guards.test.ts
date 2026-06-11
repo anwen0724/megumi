@@ -104,9 +104,9 @@ describe('Command system source guards', () => {
 
   it('keeps main runtime free of raw slash command parsing', () => {
     expect(offenders([
-      'apps/desktop/src/main/services/session-run.service.ts',
-      'apps/desktop/src/main/services/model-step-provider.service.ts',
-      'apps/desktop/src/main/services/provider-runtime.service.ts',
+      'apps/desktop/src/main/services/session/session-run.service.ts',
+      'apps/desktop/src/main/services/runtime/model-step-provider.service.ts',
+      'apps/desktop/src/main/services/provider/provider-runtime.service.ts',
     ], [
       /parseSlashCommand/,
       /dispatchCommandText/,
@@ -137,7 +137,7 @@ describe('Command system source guards', () => {
       /\bpayload\.workflow\b/,
     ];
     const allowed = new Set([
-      'packages/shared/memory-contracts.ts',
+      'packages/shared/memory/contracts.ts',
       'packages/memory/index.ts',
     ]);
 
@@ -153,7 +153,7 @@ describe('Command system source guards', () => {
   });
 
   it('keeps review out of permission mode contracts and exposes intent_default as a command-derived permission source', () => {
-    const permissionModeContracts = source('packages/shared/permission-mode-contracts.ts');
+    const permissionModeContracts = source('packages/shared/permission/mode-contracts.ts');
 
     expect(permissionModeContracts).not.toMatch(/ACTIVE_PERMISSION_MODES[\s\S]*review/);
     expect(permissionModeContracts).toContain('intent_default');
