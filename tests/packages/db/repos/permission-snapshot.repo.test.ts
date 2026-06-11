@@ -30,7 +30,7 @@ function seedRun(database: ReturnType<typeof createTestDatabase>, runId = 'run:1
 }
 
 describe('PermissionSnapshotRepository', () => {
-  it('saves and loads a permission snapshot by run id using existing DB tables', () => {
+  it('saves and loads a permission snapshot by run id using permission_snapshots storage', () => {
     const database = createTestDatabase();
     seedRun(database);
     const repo = new PermissionSnapshotRepository(database);
@@ -45,6 +45,21 @@ describe('PermissionSnapshotRepository', () => {
       },
       createdAt: '2026-05-15T00:00:00.000Z',
       metadata: { source: 'test' },
+    });
+
+    expect(database.prepare(`
+      SELECT permission_snapshot_id, permission_label, permission_mode_state_json, permission_mode, permission_source
+      FROM permission_snapshots
+      WHERE run_id = ?
+    `).get('run:1')).toEqual({
+      permission_snapshot_id: 'permission-snapshot:1',
+      permission_label: 'plan',
+      permission_mode_state_json: JSON.stringify({
+        permissionMode: 'plan',
+        source: 'intent_default',
+      }),
+      permission_mode: 'plan',
+      permission_source: 'intent_default',
     });
 
     expect(repo.getPermissionSnapshotByRun('run:1')).toEqual({

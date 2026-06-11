@@ -59,14 +59,14 @@ export class RecoveryRepository {
     this.database.prepare(`
       INSERT INTO checkpoints (
         checkpoint_id, run_id, step_id, action_id, reason, status, boundary,
-        sequence, schema_version, created_at, created_by, mode_snapshot_ref,
+        sequence, schema_version, created_at, created_by, permission_snapshot_ref,
         context_build_ref, policy_snapshot_ref, tool_registry_snapshot_ref,
         approval_request_id, tool_call_id, parent_checkpoint_id,
         side_effect_refs_json, resume_cursor, state_summary, state_ref,
         metadata_json, checkpoint_json
       ) VALUES (
         @checkpoint_id, @run_id, @step_id, @action_id, @reason, @status, @boundary,
-        @sequence, @schema_version, @created_at, @created_by, @mode_snapshot_ref,
+        @sequence, @schema_version, @created_at, @created_by, @permission_snapshot_ref,
         @context_build_ref, @policy_snapshot_ref, @tool_registry_snapshot_ref,
         @approval_request_id, @tool_call_id, @parent_checkpoint_id,
         @side_effect_refs_json, @resume_cursor, @state_summary, @state_ref,
@@ -88,7 +88,7 @@ export class RecoveryRepository {
       schema_version: checkpoint.schemaVersion,
       created_at: checkpoint.createdAt,
       created_by: checkpoint.createdBy,
-      mode_snapshot_ref: checkpoint.modeSnapshotRef ?? null,
+      permission_snapshot_ref: checkpoint.permissionSnapshotRef ?? null,
       context_build_ref: checkpoint.contextBuildRef ?? null,
       policy_snapshot_ref: checkpoint.policySnapshotRef ?? null,
       tool_registry_snapshot_ref: checkpoint.toolRegistrySnapshotRef ?? null,

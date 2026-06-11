@@ -43,7 +43,7 @@ function checkpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
     schemaVersion: 1,
     createdAt: overrides.createdAt ?? '2026-05-16T10:00:00.000Z',
     createdBy: overrides.createdBy ?? 'runtime',
-    modeSnapshotRef: overrides.modeSnapshotRef,
+    permissionSnapshotRef: overrides.permissionSnapshotRef,
     contextBuildRef: overrides.contextBuildRef,
     policySnapshotRef: overrides.policySnapshotRef,
     toolRegistrySnapshotRef: overrides.toolRegistrySnapshotRef,

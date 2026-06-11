@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe('SessionRunRepository', () => {
-  it('persists permissionSnapshotRef through the existing mode_snapshot_ref column', () => {
+  it('persists permissionSnapshotRef through the permission_snapshot_ref column', () => {
     const repository = createRepo();
     repository.saveSession({
       sessionId: 'session:permission-snapshot',
@@ -31,8 +31,8 @@ describe('SessionRunRepository', () => {
       updatedAt: '2026-06-11T00:00:00.000Z',
     });
 
-    repository.saveRun({
-      runId: 'run:permission-snapshot',
+    const run = repository.saveRun({
+      runId: 'run:permission-ref',
       sessionId: 'session:permission-snapshot',
       mode: 'plan',
       permissionSnapshotRef: 'permission-snapshot:1',
@@ -41,8 +41,10 @@ describe('SessionRunRepository', () => {
       createdAt: '2026-06-11T00:00:00.000Z',
     });
 
-    expect(repository.getRun('run:permission-snapshot')).toMatchObject({
-      permissionSnapshotRef: 'permission-snapshot:1',
+    expect(run.permissionSnapshotRef).toBe('permission-snapshot:1');
+    expect(db?.prepare('SELECT permission_snapshot_ref FROM runs WHERE run_id = ?')
+      .get('run:permission-ref')).toEqual({
+      permission_snapshot_ref: 'permission-snapshot:1',
     });
   });
 

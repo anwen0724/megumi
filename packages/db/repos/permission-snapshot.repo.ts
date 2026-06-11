@@ -11,12 +11,12 @@ import type { JsonObject } from '@megumi/shared/json';
 type Nullable<T> = T | null;
 
 interface PermissionSnapshotRow {
-  mode_snapshot_id: string;
+  permission_snapshot_id: string;
   run_id: string;
-  mode_label: string;
-  mode_json: string;
+  permission_label: string;
+  permission_mode_state_json: string;
   permission_mode: string;
-  selection_source: Nullable<string>;
+  permission_source: Nullable<string>;
   created_at: string;
   metadata_json: Nullable<string>;
 }
@@ -47,18 +47,18 @@ export class PermissionSnapshotRepository {
 
   savePermissionSnapshot(snapshot: PermissionSnapshotRecord): PermissionSnapshotRecord {
     this.database.prepare(`
-      INSERT INTO run_mode_snapshots (
-        mode_snapshot_id, run_id, mode_label, mode_json, permission_mode,
-        selection_source, created_at, metadata_json
+      INSERT INTO permission_snapshots (
+        permission_snapshot_id, run_id, permission_label, permission_mode_state_json,
+        permission_mode, permission_source, created_at, metadata_json
       ) VALUES (
-        @mode_snapshot_id, @run_id, @mode_label, @mode_json, @permission_mode,
-        @selection_source, @created_at, @metadata_json
+        @permission_snapshot_id, @run_id, @permission_label, @permission_mode_state_json,
+        @permission_mode, @permission_source, @created_at, @metadata_json
       )
-      ON CONFLICT(mode_snapshot_id) DO UPDATE SET
-        mode_label = excluded.mode_label,
-        mode_json = excluded.mode_json,
+      ON CONFLICT(permission_snapshot_id) DO UPDATE SET
+        permission_label = excluded.permission_label,
+        permission_mode_state_json = excluded.permission_mode_state_json,
         permission_mode = excluded.permission_mode,
-        selection_source = excluded.selection_source,
+        permission_source = excluded.permission_source,
         metadata_json = excluded.metadata_json
     `).run(toPermissionSnapshotRow(snapshot));
 
@@ -67,14 +67,14 @@ export class PermissionSnapshotRepository {
 
   getPermissionSnapshot(permissionSnapshotId: string): PermissionSnapshotRecord | undefined {
     const row = this.database
-      .prepare('SELECT * FROM run_mode_snapshots WHERE mode_snapshot_id = ?')
+      .prepare('SELECT * FROM permission_snapshots WHERE permission_snapshot_id = ?')
       .get(permissionSnapshotId) as PermissionSnapshotRow | undefined;
     return row ? fromPermissionSnapshotRow(row) : undefined;
   }
 
   getPermissionSnapshotByRun(runId: string): PermissionSnapshotRecord | undefined {
     const row = this.database
-      .prepare('SELECT * FROM run_mode_snapshots WHERE run_id = ?')
+      .prepare('SELECT * FROM permission_snapshots WHERE run_id = ?')
       .get(runId) as PermissionSnapshotRow | undefined;
     return row ? fromPermissionSnapshotRow(row) : undefined;
   }
@@ -186,12 +186,12 @@ function parseJson<T>(value: string | null): T | undefined {
 
 function toPermissionSnapshotRow(snapshot: PermissionSnapshotRecord): PermissionSnapshotRow {
   return {
-    mode_snapshot_id: snapshot.permissionSnapshotId,
+    permission_snapshot_id: snapshot.permissionSnapshotId,
     run_id: snapshot.runId,
-    mode_label: snapshot.permissionLabel,
-    mode_json: stringifyJson(snapshot.permissionModeState),
+    permission_label: snapshot.permissionLabel,
+    permission_mode_state_json: stringifyJson(snapshot.permissionModeState),
     permission_mode: snapshot.permissionModeState.permissionMode,
-    selection_source: snapshot.permissionModeState.source ?? null,
+    permission_source: snapshot.permissionModeState.source ?? null,
     created_at: snapshot.createdAt,
     metadata_json: snapshot.metadata ? stringifyJson(snapshot.metadata) : null,
   };
@@ -199,10 +199,10 @@ function toPermissionSnapshotRow(snapshot: PermissionSnapshotRecord): Permission
 
 function fromPermissionSnapshotRow(row: PermissionSnapshotRow): PermissionSnapshotRecord {
   return {
-    permissionSnapshotId: row.mode_snapshot_id,
+    permissionSnapshotId: row.permission_snapshot_id,
     runId: row.run_id,
-    permissionLabel: row.mode_label,
-    permissionModeState: JSON.parse(row.mode_json) as PermissionModeState,
+    permissionLabel: row.permission_label,
+    permissionModeState: JSON.parse(row.permission_mode_state_json) as PermissionModeState,
     createdAt: row.created_at,
     ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
   };

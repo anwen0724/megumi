@@ -273,7 +273,7 @@ function seedActivePathOwnershipBase(database: Database.Database): void {
     INSERT INTO runs (
       run_id,
       session_id,
-      mode,
+      permission_mode,
       goal,
       status,
       created_at
@@ -387,6 +387,15 @@ describe('provider settings migrations', () => {
       'timeline_messages',
       'timeline_run_commits',
       'timeline_commit_diagnostics',
+    ]));
+
+    const runColumns = tableColumns(database, 'runs').map((column) => column.name);
+    expect(runColumns).toEqual(expect.arrayContaining([
+      'permission_mode',
+      'permission_snapshot_ref',
+    ]));
+    expect(runColumns).not.toEqual(expect.arrayContaining([
+      'mode_snapshot_ref',
     ]));
 
     const indexes = database
@@ -1210,7 +1219,7 @@ describe('provider settings migrations', () => {
       INSERT INTO runs (
         run_id,
         session_id,
-        mode,
+        permission_mode,
         goal,
         status,
         created_at
@@ -1857,7 +1866,7 @@ describe('provider settings migrations', () => {
     ]);
   });
 
-  it('creates run mode and implementation plan tables', () => {
+  it('creates permission snapshot and implementation plan tables', () => {
     const database = createTestDb();
     migrateDatabase(database);
 
@@ -1865,7 +1874,7 @@ describe('provider settings migrations', () => {
       SELECT name FROM sqlite_master
       WHERE type = 'table'
       AND name IN (
-        'run_mode_snapshots',
+        'permission_snapshots',
         'implementation_plan_artifacts',
         'run_source_plans'
       )
@@ -1874,12 +1883,27 @@ describe('provider settings migrations', () => {
 
     expect(tables.map((row) => row.name)).toEqual([
       'implementation_plan_artifacts',
-      'run_mode_snapshots',
+      'permission_snapshots',
       'run_source_plans',
     ]);
+
+    expect(tables.map((row) => row.name)).not.toContain('run_mode_snapshots');
+
+    expect(tableColumns(database, 'permission_snapshots').map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        'permission_snapshot_id',
+        'run_id',
+        'permission_label',
+        'permission_mode_state_json',
+        'permission_mode',
+        'permission_source',
+        'created_at',
+        'metadata_json',
+      ]),
+    );
   });
 
-  it('indexes run mode and source plan lookup paths', () => {
+  it('indexes permission snapshot and source plan lookup paths', () => {
     const database = createTestDb();
     migrateDatabase(database);
 
@@ -1887,7 +1911,7 @@ describe('provider settings migrations', () => {
       SELECT name FROM sqlite_master
       WHERE type = 'index'
       AND name IN (
-        'idx_run_mode_snapshots_run_id',
+        'idx_permission_snapshots_run_id',
         'idx_implementation_plan_artifacts_producing_run_id',
         'idx_run_source_plans_source_plan_id'
       )
@@ -1896,7 +1920,7 @@ describe('provider settings migrations', () => {
 
     expect(indexes.map((row) => row.name)).toEqual([
       'idx_implementation_plan_artifacts_producing_run_id',
-      'idx_run_mode_snapshots_run_id',
+      'idx_permission_snapshots_run_id',
       'idx_run_source_plans_source_plan_id',
     ]);
   });
@@ -1939,7 +1963,7 @@ describe('provider settings migrations', () => {
       'schema_version',
       'created_at',
       'created_by',
-      'mode_snapshot_ref',
+      'permission_snapshot_ref',
       'context_build_ref',
       'policy_snapshot_ref',
       'tool_registry_snapshot_ref',
@@ -1952,6 +1976,10 @@ describe('provider settings migrations', () => {
       'state_ref',
       'metadata_json',
       'checkpoint_json',
+    ]));
+
+    expect(checkpointColumns.map((column) => column.name)).not.toEqual(expect.arrayContaining([
+      'mode_snapshot_ref',
     ]));
 
     const indexes = database
@@ -2240,7 +2268,7 @@ describe('provider settings migrations', () => {
       INSERT INTO sessions (session_id, title, status, created_at, updated_at)
       VALUES ('session-workspace', 'Workspace changes', 'active', '2026-06-05T10:00:00.000Z', '2026-06-05T10:00:00.000Z');
 
-      INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
+      INSERT INTO runs (run_id, session_id, permission_mode, goal, status, created_at)
       VALUES ('run-workspace', 'session-workspace', 'chat', 'Change file', 'completed', '2026-06-05T10:01:00.000Z');
 
       INSERT INTO run_steps (step_id, run_id, kind, status)

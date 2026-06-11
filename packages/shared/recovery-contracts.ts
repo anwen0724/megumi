@@ -138,7 +138,7 @@ export const CheckpointSchema = z.object({
   schemaVersion: z.number().int().positive(),
   createdAt: IsoDateTimeSchema,
   createdBy: CheckpointCreatedBySchema,
-  modeSnapshotRef: z.string().min(1).optional(),
+  permissionSnapshotRef: z.string().min(1).optional(),
   contextBuildRef: z.string().min(1).optional(),
   policySnapshotRef: z.string().min(1).optional(),
   toolRegistrySnapshotRef: z.string().min(1).optional(),

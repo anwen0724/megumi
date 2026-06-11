@@ -34,7 +34,7 @@ describe('recovery contracts', () => {
       schemaVersion: 1,
       createdAt: '2026-05-16T10:00:00.000Z',
       createdBy: 'runtime',
-      modeSnapshotRef: 'mode_snapshot_123',
+      permissionSnapshotRef: 'permission-snapshot:1',
       contextBuildRef: 'context_build_123',
       policySnapshotRef: 'policy_snapshot_123',
       toolRegistrySnapshotRef: 'tool_registry_123',
@@ -57,6 +57,7 @@ describe('recovery contracts', () => {
     });
 
     expect(checkpoint.reason).toBe('before_approval_wait');
+    expect(checkpoint.permissionSnapshotRef).toBe('permission-snapshot:1');
     expect(checkpoint.sideEffectRefs[0]?.reversible).toBe(false);
   });
 

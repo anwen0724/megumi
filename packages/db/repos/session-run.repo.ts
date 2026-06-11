@@ -54,8 +54,8 @@ interface RunRow {
   trigger_message_id: Nullable<string>;
   agent_definition_id: Nullable<string>;
   agent_config_snapshot_ref: Nullable<string>;
-  mode: string;
-  mode_snapshot_ref: Nullable<string>;
+  permission_mode: string;
+  permission_snapshot_ref: Nullable<string>;
   goal: string;
   status: Run['status'];
   created_at: string;
@@ -347,19 +347,19 @@ export class SessionRunRepository {
     this.database.prepare(`
       INSERT INTO runs (
         run_id, session_id, trigger_message_id, agent_definition_id, agent_config_snapshot_ref,
-        mode, mode_snapshot_ref, goal, status, created_at, started_at, completed_at,
+        permission_mode, permission_snapshot_ref, goal, status, created_at, started_at, completed_at,
         cancelled_at, error_json, source_plan_id, policy_snapshot_ref, metadata_json
       ) VALUES (
         @run_id, @session_id, @trigger_message_id, @agent_definition_id, @agent_config_snapshot_ref,
-        @mode, @mode_snapshot_ref, @goal, @status, @created_at, @started_at, @completed_at,
+        @permission_mode, @permission_snapshot_ref, @goal, @status, @created_at, @started_at, @completed_at,
         @cancelled_at, @error_json, @source_plan_id, @policy_snapshot_ref, @metadata_json
       )
       ON CONFLICT(run_id) DO UPDATE SET
         trigger_message_id = excluded.trigger_message_id,
         agent_definition_id = excluded.agent_definition_id,
         agent_config_snapshot_ref = excluded.agent_config_snapshot_ref,
-        mode = excluded.mode,
-        mode_snapshot_ref = excluded.mode_snapshot_ref,
+        permission_mode = excluded.permission_mode,
+        permission_snapshot_ref = excluded.permission_snapshot_ref,
         goal = excluded.goal,
         status = excluded.status,
         started_at = excluded.started_at,
@@ -720,8 +720,8 @@ function toRunRow(run: Run): RunRow {
     trigger_message_id: run.triggerMessageId ?? null,
     agent_definition_id: run.agentDefinitionId ?? null,
     agent_config_snapshot_ref: run.agentConfigSnapshotRef ?? null,
-    mode: run.mode,
-    mode_snapshot_ref: run.permissionSnapshotRef ?? run.modeSnapshotRef ?? null,
+    permission_mode: run.mode,
+    permission_snapshot_ref: run.permissionSnapshotRef ?? null,
     goal: run.goal,
     status: run.status,
     created_at: run.createdAt,
@@ -742,8 +742,8 @@ function fromRunRow(row: RunRow): Run {
     ...(row.trigger_message_id ? { triggerMessageId: row.trigger_message_id } : {}),
     ...(row.agent_definition_id ? { agentDefinitionId: row.agent_definition_id } : {}),
     ...(row.agent_config_snapshot_ref ? { agentConfigSnapshotRef: row.agent_config_snapshot_ref } : {}),
-    mode: row.mode,
-    ...(row.mode_snapshot_ref ? { permissionSnapshotRef: row.mode_snapshot_ref } : {}),
+    mode: row.permission_mode,
+    ...(row.permission_snapshot_ref ? { permissionSnapshotRef: row.permission_snapshot_ref } : {}),
     goal: row.goal,
     status: row.status,
     createdAt: row.created_at,

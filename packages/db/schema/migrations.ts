@@ -244,8 +244,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       trigger_message_id TEXT,
       agent_definition_id TEXT,
       agent_config_snapshot_ref TEXT,
-      mode TEXT NOT NULL,
-      mode_snapshot_ref TEXT,
+      permission_mode TEXT NOT NULL,
+      permission_snapshot_ref TEXT,
       goal TEXT NOT NULL,
       status TEXT NOT NULL,
       created_at TEXT NOT NULL,
@@ -695,13 +695,13 @@ export function migrateDatabase(database: MegumiDatabase): void {
   `);
 
   database.exec(`
-    CREATE TABLE IF NOT EXISTS run_mode_snapshots (
-      mode_snapshot_id TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS permission_snapshots (
+      permission_snapshot_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL UNIQUE,
-      mode_label TEXT NOT NULL,
-      mode_json TEXT NOT NULL,
+      permission_label TEXT NOT NULL,
+      permission_mode_state_json TEXT NOT NULL,
       permission_mode TEXT NOT NULL,
-      selection_source TEXT,
+      permission_source TEXT,
       created_at TEXT NOT NULL,
       metadata_json TEXT,
       FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
@@ -913,7 +913,7 @@ export function migrateDatabase(database: MegumiDatabase): void {
       schema_version INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       created_by TEXT NOT NULL,
-      mode_snapshot_ref TEXT,
+      permission_snapshot_ref TEXT,
       context_build_ref TEXT,
       policy_snapshot_ref TEXT,
       tool_registry_snapshot_ref TEXT,
@@ -1499,8 +1499,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_run_context_builds_run_id
     ON run_context_builds(run_id);
 
-    CREATE INDEX IF NOT EXISTS idx_run_mode_snapshots_run_id
-    ON run_mode_snapshots(run_id);
+    CREATE INDEX IF NOT EXISTS idx_permission_snapshots_run_id
+    ON permission_snapshots(run_id);
 
     CREATE INDEX IF NOT EXISTS idx_implementation_plan_artifacts_producing_run_id
     ON implementation_plan_artifacts(producing_run_id);
