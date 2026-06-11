@@ -461,7 +461,7 @@ function seedLifecycle(database: Database.Database): void {
     VALUES ('session-1', 'Tool session', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
   `).run();
   database.prepare(`
-    INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
+    INSERT INTO runs (run_id, session_id, permission_mode, goal, status, created_at)
     VALUES ('run-1', 'session-1', 'default', 'Use tool', 'running', '2026-05-20T00:00:00.000Z')
   `).run();
   database.prepare(`
@@ -507,7 +507,7 @@ function seedRunAction(database: Database.Database): void {
 
 function seedSecondRunStep(database: Database.Database): void {
   database.prepare(`
-    INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
+    INSERT INTO runs (run_id, session_id, permission_mode, goal, status, created_at)
     VALUES ('run-2', 'session-1', 'default', 'Use another tool', 'running', '2026-05-20T00:00:00.000Z')
   `).run();
   database.prepare(`

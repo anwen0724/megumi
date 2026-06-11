@@ -34,7 +34,7 @@ function seedSessionAndRun(runId = 'run-1'): void {
   );
   db!.prepare(`
     INSERT INTO runs (
-      run_id, session_id, mode, goal, status, created_at
+      run_id, session_id, permission_mode, goal, status, created_at
     ) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(run_id) DO NOTHING
   `).run(

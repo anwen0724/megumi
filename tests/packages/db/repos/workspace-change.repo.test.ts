@@ -1006,7 +1006,7 @@ function seedLifecycle(database: Database.Database): void {
       ('session-1', 'Workspace change session', 'active', '2026-06-05T09:00:00.000Z', '2026-06-05T09:00:00.000Z'),
       ('session-2', 'Other workspace change session', 'active', '2026-06-05T09:00:00.000Z', '2026-06-05T09:00:00.000Z');
 
-    INSERT INTO runs (run_id, session_id, mode, goal, status, created_at)
+    INSERT INTO runs (run_id, session_id, permission_mode, goal, status, created_at)
     VALUES
       ('run-1', 'session-1', 'chat', 'Change a file', 'running', '2026-06-05T09:01:00.000Z'),
       ('run-2', 'session-2', 'chat', 'Change another file', 'running', '2026-06-05T09:01:00.000Z');

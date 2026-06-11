@@ -486,7 +486,7 @@ describe('useSessionTimeline', () => {
   });
 
   it('sends intent metadata and permission source for /review commands', async () => {
-    installMegumiMock();
+    const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
 
     await act(async () => {
@@ -517,7 +517,7 @@ describe('useSessionTimeline', () => {
         }),
       }),
     }));
-    expect(window.megumi.session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('workflow');
+    expect(session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('workflow');
   });
 
   it('does not synthesize artifact state from completed runtime chat output', async () => {
