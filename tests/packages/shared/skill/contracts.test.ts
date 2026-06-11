@@ -1,3 +1,4 @@
+// Verifies the minimal shared Skill System invocation contracts.
 import { describe, expect, it } from 'vitest';
 import {
   SkillInvocationMetadataSchema,

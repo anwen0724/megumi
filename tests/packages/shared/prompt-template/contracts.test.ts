@@ -1,3 +1,4 @@
+// Verifies the minimal shared Prompt Template System invocation contracts.
 import { describe, expect, it } from 'vitest';
 import {
   PromptTemplateInvocationMetadataSchema,

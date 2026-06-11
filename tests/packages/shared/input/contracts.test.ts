@@ -1,3 +1,4 @@
+// Verifies the public shared Input System contracts used across renderer and runtime boundaries.
 import { describe, expect, it } from 'vitest';
 import {
   InputCommandDefinitionSchema,

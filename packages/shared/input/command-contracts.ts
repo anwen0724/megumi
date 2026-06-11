@@ -75,23 +75,6 @@ export const InputPipelineHandoffSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 
-export const InputInterceptResultSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('pass') }).strict(),
-  z
-    .object({
-      kind: z.literal('transform'),
-      text: z.string(),
-      metadata: JsonObjectSchema.optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('handled'),
-      reason: z.string().min(1),
-    })
-    .strict(),
-]);
-
 export type InputCommandKind = z.infer<typeof InputCommandKindSchema>;
 export type InputCommandSource = z.infer<typeof InputCommandSourceSchema>;
 export type InputPromptSource = z.infer<typeof InputPromptSourceSchema>;
@@ -102,7 +85,6 @@ export type InputCommandSuggestion = z.infer<typeof InputCommandSuggestionSchema
 export type InputIntentCommandMetadata = z.infer<typeof InputIntentCommandMetadataSchema>;
 export type DefaultInputPermission = z.infer<typeof DefaultInputPermissionSchema>;
 export type InputPipelineHandoff = z.infer<typeof InputPipelineHandoffSchema>;
-export type InputInterceptResult = z.infer<typeof InputInterceptResultSchema>;
 
 export function createCodeReviewInputIntentMetadata(argsText: string): InputIntentCommandMetadata {
   return {

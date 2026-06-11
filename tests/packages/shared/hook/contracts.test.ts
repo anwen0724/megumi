@@ -1,3 +1,4 @@
+// Verifies the minimal shared Hook System contracts without requiring a hook runtime.
 import { describe, expect, it } from 'vitest';
 import {
   InputHookInvocationSchema,
