@@ -13,8 +13,8 @@ import {
   PlanByRunGetRequestSchema,
   PlanStatusUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { PermissionSnapshotService } from '../../services/permission-snapshot.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { PermissionSnapshotService } from '../../services/security/permission-snapshot.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type PlanHandlersService = Pick<
@@ -74,5 +74,6 @@ function mapPlanIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 
 

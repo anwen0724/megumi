@@ -14,8 +14,8 @@ import {
   WorkspaceFileOpenRequestSchema,
   WorkspaceFilesListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { WorkspaceFilesService } from '../../services/workspace-files.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { WorkspaceFilesService } from '../../services/workspace/workspace-files.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type WorkspaceFilesHandlersService = Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
@@ -79,4 +79,5 @@ function mapWorkspaceFilesIpcError(error: unknown): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

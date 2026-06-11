@@ -20,8 +20,8 @@ import {
   WorkspaceRestorePayloadSchema,
   WorkspaceRestoreRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RecoveryService } from '../../services/recovery.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { RecoveryService } from '../../services/runtime/recovery.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export interface RegisterRecoveryHandlersOptions {
@@ -104,4 +104,5 @@ function mapRecoveryIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

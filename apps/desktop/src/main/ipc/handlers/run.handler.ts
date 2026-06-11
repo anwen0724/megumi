@@ -9,8 +9,8 @@ import type {
   RunListBySessionPayload,
 } from '@megumi/shared/ipc';
 import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megumi/shared/ipc';
-import type { SessionRunService } from '../../services/session-run.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { SessionRunService } from '../../services/session/session-run.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type RunHandlersService = Pick<SessionRunService, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
@@ -63,4 +63,5 @@ function mapRunIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

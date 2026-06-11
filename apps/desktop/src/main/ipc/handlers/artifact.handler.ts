@@ -27,8 +27,8 @@ import {
   ArtifactVersionCreateRequestSchema,
   ArtifactVersionGetRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ArtifactService } from '../../services/artifact.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { ArtifactService } from '../../services/artifact/artifact.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type ArtifactHandlersService = Pick<
@@ -149,4 +149,5 @@ function mapArtifactIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

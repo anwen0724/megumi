@@ -5,7 +5,7 @@ import { redactRuntimeValue } from '@megumi/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/runtime-logger.service';
+} from '../services/runtime/runtime-logger.service';
 
 export interface RuntimeEventSender {
   send(channel: string, event: RuntimeEvent): void;
@@ -60,4 +60,5 @@ function eventDiagnostics(event: unknown): Record<string, unknown> {
     source: value.source,
   }) as Record<string, unknown>;
 }
+
 

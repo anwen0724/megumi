@@ -25,7 +25,7 @@ import {
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/runtime-logger.service';
+} from '../services/runtime/runtime-logger.service';
 import { runtimeOperationNameFromChannel } from './runtime-operation-name';
 
 export interface RuntimeIpcHandlerOptions<
@@ -271,5 +271,6 @@ function extractRawContext(rawRequest: unknown): unknown {
 
   return undefined;
 }
+
 
 

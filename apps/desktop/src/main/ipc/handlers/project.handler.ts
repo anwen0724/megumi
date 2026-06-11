@@ -19,9 +19,9 @@ import {
   ProjectRemoveRequestSchema,
   ProjectUseExistingRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ProjectService } from '../../services/project.service';
-import { ProjectPathValidationError } from '../../services/project.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { ProjectService } from '../../services/project/project.service';
+import { ProjectPathValidationError } from '../../services/project/project.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type ProjectHandlersService = Pick<
@@ -120,4 +120,5 @@ function mapProjectIpcError(error: unknown): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

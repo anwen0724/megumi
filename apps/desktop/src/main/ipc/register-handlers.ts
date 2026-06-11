@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+﻿import { ipcMain } from 'electron';
 import { registerWindowHandlers } from './handlers/window.handler';
 import { registerProviderHandlers } from './handlers/provider.handler';
 import { registerSessionHandlers, type SessionHandlersService } from './handlers/session.handler';
@@ -32,8 +32,8 @@ import {
   registerWorkspaceFilesHandlers,
   type WorkspaceFilesHandlersService,
 } from './handlers/workspace-files.handler';
-import type { RecoveryService } from '../services/recovery.service';
-import type { RuntimeLogger } from '../services/runtime-logger.service';
+import type { RecoveryService } from '../services/runtime/recovery.service';
+import type { RuntimeLogger } from '../services/runtime/runtime-logger.service';
 
 export interface RegisterAllHandlersOptions {
   logger?: RuntimeLogger;
@@ -93,3 +93,4 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
     registerWorkspaceFilesHandlers(options.workspaceFilesService, { logger: options.logger });
   }
 }
+

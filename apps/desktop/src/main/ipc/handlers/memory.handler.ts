@@ -21,8 +21,8 @@ import {
   MemoryUpdateRequestSchema,
 } from '@megumi/shared/ipc';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
-import type { MemoryService } from '../../services/memory.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { MemoryService } from '../../services/memory/memory.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 
 export type MemoryHandlersService = Pick<
   MemoryService,
@@ -233,4 +233,5 @@ function mapMemoryIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

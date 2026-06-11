@@ -15,41 +15,41 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createChatStreamEvent } from '@megumi/shared/chat-stream';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
-import { initializeElectronMegumiHomeSync } from './services/megumi-home.service';
+import { initializeElectronMegumiHomeSync } from './services/project/megumi-home.service';
 import { registerAllHandlers } from './ipc/register-handlers';
 import { createMainWindow } from './app/create-window';
 import { registerAppLifecycle } from './app/lifecycle';
 import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-errors';
-import { createRuntimeJsonlLoggerForMegumiHome } from './services/runtime-logger.service';
-import { SessionRunService, type SessionRunToolRuntimeFactory } from './services/session-run.service';
+import { createRuntimeJsonlLoggerForMegumiHome } from './services/runtime/runtime-logger.service';
+import { SessionRunService, type SessionRunToolRuntimeFactory } from './services/session/session-run.service';
 import { forwardChatStreamEvent } from './ipc/chat-stream-event-forwarder';
-import { createModelStepProviderService } from './services/model-step-provider.service';
-import { MegumiHomeConfigService } from './services/megumi-home-config.service';
-import { ProviderRuntimeService } from './services/provider-runtime.service';
-import { createElectronSecretStoreService } from './services/secret-store.service';
-import { PermissionSnapshotService } from './services/permission-snapshot.service';
-import { createDefaultRunContextService } from './services/run-context.service';
-import { ToolService } from './services/tool.service';
-import { createToolCallHandlerService } from './services/tool-call-handler.service';
-import { createProjectToolExecutor } from './services/project-tool-executor.service';
-import { WorkspaceChangeTrackerService } from './services/workspace-change-tracker.service';
-import { WorkspaceRestoreService } from './services/workspace-restore.service';
-import { createPermissionSettingsService } from './services/permission-settings.service';
-import { createRecoveryService } from './services/recovery.service';
-import { ArtifactContentStore } from './services/artifact-content-store.service';
-import { ArtifactService } from './services/artifact.service';
-import { createMemoryService } from './services/memory.service';
-import { PlanArtifactCompatibilityService } from './services/plan-artifact-compatibility.service';
-import { TimelineHistoryCommitProjectorService } from './services/timeline-history-commit-projector.service';
-import { AgentInstructionSourceService } from './services/agent-instruction-source.service';
+import { createModelStepProviderService } from './services/runtime/model-step-provider.service';
+import { MegumiHomeConfigService } from './services/project/megumi-home-config.service';
+import { ProviderRuntimeService } from './services/provider/provider-runtime.service';
+import { createElectronSecretStoreService } from './services/security/secret-store.service';
+import { PermissionSnapshotService } from './services/security/permission-snapshot.service';
+import { createDefaultRunContextService } from './services/runtime/run-context.service';
+import { ToolService } from './services/tool/tool.service';
+import { createToolCallHandlerService } from './services/tool/tool-call-handler.service';
+import { createProjectToolExecutor } from './services/tool/project-tool-executor.service';
+import { WorkspaceChangeTrackerService } from './services/workspace/workspace-change-tracker.service';
+import { WorkspaceRestoreService } from './services/workspace/workspace-restore.service';
+import { createPermissionSettingsService } from './services/security/permission-settings.service';
+import { createRecoveryService } from './services/runtime/recovery.service';
+import { ArtifactContentStore } from './services/artifact/artifact-content-store.service';
+import { ArtifactService } from './services/artifact/artifact.service';
+import { createMemoryService } from './services/memory/memory.service';
+import { PlanArtifactCompatibilityService } from './services/artifact/plan-artifact-compatibility.service';
+import { TimelineHistoryCommitProjectorService } from './services/session/timeline-history-commit-projector.service';
+import { AgentInstructionSourceService } from './services/session/agent-instruction-source.service';
 import fs from 'fs-extra';
 import { BrowserWindow, dialog } from 'electron';
 import { ProjectRepository } from '@megumi/db/repos/project.repo';
-import { createProjectService } from './services/project.service';
-import { createWorkspaceFilesService } from './services/workspace-files.service';
-import { createWorkspaceRootAuthorizer } from './services/workspace-root-authorization.service';
+import { createProjectService } from './services/project/project.service';
+import { createWorkspaceFilesService } from './services/workspace/workspace-files.service';
+import { createWorkspaceRootAuthorizer } from './services/security/workspace-root-authorization.service';
 import { getDefaultProviderService } from './ipc/handlers/provider.handler';
-import { createWorkspaceChangeFooterProjectorService } from './services/workspace-change-footer-projector.service';
+import { createWorkspaceChangeFooterProjectorService } from './services/workspace/workspace-change-footer-projector.service';
 
 loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
@@ -300,5 +300,6 @@ registerAppLifecycle({
 function nextPersistedRuntimeSequence(events: RuntimeEvent[]): number {
   return events.reduce((maxSequence, event) => Math.max(maxSequence, event.sequence), 0) + 1;
 }
+
 
 

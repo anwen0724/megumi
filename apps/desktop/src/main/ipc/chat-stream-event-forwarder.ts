@@ -5,7 +5,7 @@ import { redactRuntimeValue } from '@megumi/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/runtime-logger.service';
+} from '../services/runtime/runtime-logger.service';
 
 export interface ChatStreamEventSender {
   send(channel: string, event: ChatStreamEvent): void;
@@ -60,4 +60,5 @@ function eventDiagnostics(event: unknown): Record<string, unknown> {
     seq: value.seq,
   }) as Record<string, unknown>;
 }
+
 

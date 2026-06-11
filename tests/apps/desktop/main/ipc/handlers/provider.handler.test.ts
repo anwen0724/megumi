@@ -92,7 +92,7 @@ describe('registerProviderHandlers', () => {
 
   it('returns config_invalid for invalid Megumi Home config', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
-    const { MegumiHomeConfigParseError } = await import('@megumi/desktop/main/services/megumi-home-config.service');
+    const { MegumiHomeConfigParseError } = await import('@megumi/desktop/main/services/project/megumi-home-config.service');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const configPath = 'C:/Users/anwen/.megumi/config.json';
     const service = {
@@ -270,4 +270,5 @@ describe('registerProviderHandlers', () => {
     expect(JSON.stringify(repeatedResult)).not.toContain('test-api-key-fixture');
   });
 });
+
 

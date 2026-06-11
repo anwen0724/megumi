@@ -15,8 +15,8 @@ import {
   ToolExecutionGetRequestSchema,
   ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
-import type { ToolService } from '../../services/tool.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import type { ToolService } from '../../services/tool/tool.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
@@ -99,4 +99,5 @@ function mapToolIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 

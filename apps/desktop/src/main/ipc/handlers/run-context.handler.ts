@@ -12,8 +12,8 @@ import {
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RunContextService } from '../../services/run-context.service';
-import type { RuntimeLogger } from '../../services/runtime-logger.service';
+import type { RunContextService } from '../../services/runtime/run-context.service';
+import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type RunContextHandlersService = Pick<
@@ -79,4 +79,5 @@ function mapRunContextIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+
 
