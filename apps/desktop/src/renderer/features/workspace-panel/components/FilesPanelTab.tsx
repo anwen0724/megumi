@@ -103,11 +103,11 @@ export function FilesPanelTab() {
   }, [loadDirectory, project?.repoPath, project?.status]);
 
   if (!project) {
-    return <p className="text-sm text-[var(--color-text-muted)]">No workspace selected</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">No project selected</p>;
   }
 
   if (project.status === 'missing') {
-    return <p className="text-sm text-[var(--color-text-muted)]">Workspace folder is missing</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">Project folder is missing</p>;
   }
 
   if (loading && rootEntries.length === 0) {
@@ -125,7 +125,7 @@ export function FilesPanelTab() {
   const workspaceRoot = project.repoPath;
 
   return (
-    <nav aria-label="Workspace files">
+    <nav aria-label="Project files">
       <ul className="space-y-1">
         {rootEntries.map((entry) => (
           <FileRow key={entry.relativePath} entry={entry} workspaceRoot={workspaceRoot} />

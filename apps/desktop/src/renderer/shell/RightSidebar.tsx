@@ -27,7 +27,7 @@ function SidebarToolButton({ icon: Icon, title, description, onClick }: SidebarT
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Open ${title} workspace view`}
+      aria-label={`Open ${title} project view`}
       className={cx(
         'flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left transition',
         'hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-elevated)]',
@@ -52,8 +52,8 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
   const currentProject = useProjectStore((state) =>
     state.projects.find((project) => project.id === state.currentProjectId) ?? null
   );
-  const workspacePath = currentProject?.repoPath ?? 'No workspace selected';
-  const workspaceLabel = currentProject?.name ?? 'No workspace selected';
+  const workspacePath = currentProject?.repoPath ?? 'No project selected';
+  const workspaceLabel = currentProject?.name ?? 'No project selected';
   const isDetailView = activeView !== 'workspace';
 
   useEffect(() => {
@@ -100,13 +100,13 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
       >
         <div className="flex min-w-0 items-start gap-2">
           {isDetailView ? (
-            <IconButton label="Back to Workspace" onClick={() => setActiveView('workspace')} size="sm" variant="ghost">
+            <IconButton label="Back to Project" onClick={() => setActiveView('workspace')} size="sm" variant="ghost">
               <ChevronLeft size={16} aria-hidden="true" />
             </IconButton>
           ) : null}
           <div className="min-w-0">
             <PanelTitle>
-              {activeView === 'workspace' ? 'Workspace' : null}
+              {activeView === 'workspace' ? 'Project' : null}
               {activeView === 'files' ? 'Files' : null}
               {activeView === 'artifacts' ? 'Artifacts' : null}
             </PanelTitle>
@@ -117,7 +117,7 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
             ) : null}
           </div>
         </div>
-        <IconButton label="Close workspace sidebar" onClick={onClose} size="sm" variant="ghost">
+        <IconButton label="Close project sidebar" onClick={onClose} size="sm" variant="ghost">
           <PanelRightClose size={16} aria-hidden="true" />
         </IconButton>
       </div>

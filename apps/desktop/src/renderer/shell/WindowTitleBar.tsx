@@ -1,23 +1,14 @@
-import { Minus, PanelRightClose, PanelRightOpen, Square, X } from 'lucide-react';
+import { Minus, Square, X } from 'lucide-react';
 import { IconButton, cx } from '../shared/ui';
 import { windowControls } from '../shared/ipc/client';
 
 interface WindowTitleBarProps {
-  title: string;
   className?: string;
-  workspaceSidebarOpen?: boolean;
-  onToggleWorkspaceSidebar?: () => void;
 }
 
 export function WindowTitleBar({
-  title,
   className,
-  workspaceSidebarOpen,
-  onToggleWorkspaceSidebar,
 }: WindowTitleBarProps) {
-  const hasWorkspaceSidebarToggle = typeof onToggleWorkspaceSidebar === 'function';
-  const WorkspaceSidebarIcon = workspaceSidebarOpen ? PanelRightClose : PanelRightOpen;
-
   return (
     <header
       data-testid="window-titlebar"
@@ -27,24 +18,10 @@ export function WindowTitleBar({
       )}
     >
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-[var(--color-text)]">{title}</p>
+        <p className="truncate text-sm font-semibold text-[var(--color-text)]">Megumi</p>
       </div>
 
       <div data-testid="window-titlebar-controls" className="app-no-drag flex items-center gap-2">
-        {hasWorkspaceSidebarToggle ? (
-          <IconButton
-            label={workspaceSidebarOpen ? 'Close workspace sidebar' : 'Open workspace sidebar'}
-            onClick={onToggleWorkspaceSidebar}
-            size="sm"
-            variant={workspaceSidebarOpen ? 'secondary' : 'ghost'}
-            aria-expanded={workspaceSidebarOpen ? 'true' : 'false'}
-            aria-controls="right-sidebar"
-            className="h-7 w-8 rounded-sm"
-          >
-            <WorkspaceSidebarIcon size={15} aria-hidden="true" />
-          </IconButton>
-        ) : null}
-
         <div className="flex items-center gap-1">
           <IconButton
             label="Minimize window"

@@ -100,7 +100,7 @@ export function LeftSidebar({
         data-testid="left-sidebar"
         className="w-14 shrink-0 overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] transition-[width] duration-200 ease-out"
       >
-        <nav aria-label="Primary workspace navigation" className="flex h-full flex-col items-center gap-3 py-3">
+        <nav aria-label="Primary project navigation" className="flex h-full flex-col items-center gap-3 py-3">
           <IconButton label="Expand sidebar" onClick={onToggleCollapsed} size="sm">
             <PanelLeftOpen size={16} aria-hidden="true" />
           </IconButton>
@@ -125,30 +125,32 @@ export function LeftSidebar({
       data-testid="left-sidebar"
       className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] transition-[width] duration-200 ease-out"
     >
-      <div className="flex items-center justify-between px-4 py-3.5">
-        <p className="truncate text-sm font-semibold text-[var(--color-text)]">Megumi</p>
-        <IconButton label="Collapse sidebar" onClick={onToggleCollapsed} size="sm" className="ml-3">
+      <div className="flex h-12 items-center justify-between px-3">
+        <span className="truncate text-sm font-semibold text-[var(--color-text)]">Chats</span>
+        <IconButton label="Collapse sidebar" onClick={onToggleCollapsed} size="sm">
           <ChevronLeft size={16} aria-hidden="true" />
         </IconButton>
       </div>
 
-      <nav aria-label="Primary workspace navigation" className="flex-1 overflow-y-auto px-3 py-2.5">
-        <Button onClick={onCreateSession} variant="primary" size="sm" className="mb-3 w-full justify-start">
-          <MessageSquarePlus size={15} aria-hidden="true" />
-          New session
-        </Button>
+      <nav aria-label="Primary project navigation" className="flex-1 overflow-y-auto px-3 py-1">
+        <div className="mb-5 space-y-1">
+          <Button onClick={onCreateSession} variant="primary" size="md" className="w-full justify-start">
+            <MessageSquarePlus size={15} aria-hidden="true" />
+            New session
+          </Button>
 
-        <button
-          type="button"
-          className="mb-5 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-        >
-          <ClipboardList size={15} aria-hidden="true" />
-          Task plan
-        </button>
+          <button
+            type="button"
+            className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-medium text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
+          >
+            <ClipboardList size={15} aria-hidden="true" />
+            Task plan
+          </button>
+        </div>
 
         <section aria-label="Projects">
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--color-text-muted)]">项目</span>
+            <span className="text-xs font-semibold text-[var(--color-text-muted)]">Projects</span>
             <div ref={menuRef} className="relative">
               <IconButton
                 label="Project actions"
@@ -173,7 +175,7 @@ export function LeftSidebar({
                       closeMenu();
                     }}
                   >
-                    使用已有项目
+                    Open project
                   </button>
                   <button
                     type="button"
@@ -182,7 +184,7 @@ export function LeftSidebar({
                     aria-disabled="true"
                     className="flex w-full items-center px-3 py-2 text-left text-sm text-[var(--color-text-muted)] transition disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    新建项目
+                    New project
                   </button>
                   <button
                     type="button"
@@ -194,7 +196,7 @@ export function LeftSidebar({
                       closeMenu();
                     }}
                   >
-                    管理项目
+                    Manage projects
                   </button>
                 </div>
               ) : null}
@@ -271,7 +273,7 @@ export function LeftSidebar({
         </section>
       </nav>
 
-      <div className="border-t border-[var(--color-border)] p-3">
+      <div className="p-3">
         <button
           type="button"
           onClick={onOpenSettings}

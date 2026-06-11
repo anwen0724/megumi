@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ContextPanelTab } from '@megumi/desktop/renderer/features/workspace-panel';
@@ -24,7 +24,7 @@ describe('ContextPanelTab', () => {
   it('renders empty state when no project is selected', () => {
     render(<ContextPanelTab />);
 
-    expect(screen.getByText('No workspace selected')).toBeInTheDocument();
+    expect(screen.getByText('No project selected')).toBeInTheDocument();
   });
 
   it('renders selected project context', () => {

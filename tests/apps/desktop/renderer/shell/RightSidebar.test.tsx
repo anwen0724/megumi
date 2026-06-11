@@ -63,7 +63,7 @@ describe('RightSidebar', () => {
 
     expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Expand workspace panel' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open project sidebar' })).not.toBeInTheDocument();
   });
 
   it('mounts before entering the expanded open state', () => {
@@ -93,9 +93,9 @@ describe('RightSidebar', () => {
     render(<RightSidebar open onClose={() => undefined} />);
 
     expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Artifacts workspace view' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files project view' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Artifacts project view' })).toBeInTheDocument();
     expect(screen.queryByText('Tools')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
@@ -107,7 +107,7 @@ describe('RightSidebar', () => {
   it('shows Files inside the full workspace sidebar and can return to Workspace', async () => {
     render(<RightSidebar open onClose={() => undefined} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open Files project view' }));
 
     expect(screen.getByRole('heading', { name: 'Files' })).toBeInTheDocument();
     expect(screen.getByText('Megumi')).toBeInTheDocument();
@@ -115,16 +115,16 @@ describe('RightSidebar', () => {
     expect(await screen.findByText('No files found')).toBeInTheDocument();
     expect(screen.queryByText('Tools')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Back to Workspace' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Back to Project' }));
 
-    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files project view' })).toBeInTheDocument();
   });
 
   it('shows Artifacts inside the full workspace sidebar', async () => {
     render(<RightSidebar open onClose={() => undefined} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open Artifacts project view' }));
 
     expect(screen.getByRole('heading', { name: 'Artifacts' })).toBeInTheDocument();
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('RightSidebar', () => {
 
     render(<RightSidebar open onClose={onClose} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Close workspace sidebar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close project sidebar' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });

@@ -213,8 +213,11 @@ describe('App shell layout contract', () => {
     expect(appBody).toHaveClass('flex-1');
     expect(mainContent).toHaveClass('min-w-[var(--main-content-width)]');
     expect(mainContent).toHaveClass('overflow-hidden');
-    expect(within(titlebar).getByText('Planning the UI')).toBeInTheDocument();
+    expect(within(titlebar).getByText('Megumi')).toBeInTheDocument();
+    expect(within(titlebar).queryByText('Planning the UI')).not.toBeInTheDocument();
     expect(within(titlebar).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('main-content-header')).getByText('Planning the UI')).toBeInTheDocument();
+    expect(within(screen.getByTestId('main-content-header')).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Megumi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Review notes/ })).toBeInTheDocument();
@@ -222,7 +225,7 @@ describe('App shell layout contract', () => {
     expect(within(screen.getByTestId('chat-page-root')).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chat-page-root')).getByRole('log', { name: 'Chat timeline' })).toBeInTheDocument();
     expect(within(screen.getByTestId('chat-page-root')).queryByLabelText('New session project: Megumi')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open project sidebar' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
@@ -448,7 +451,7 @@ describe('App shell layout contract', () => {
     expect(useSessionStore.getState().activeSessionId).toBe('session-2');
   });
 
-  it('opens the owning project when selecting a session from another project', async () => {
+  it('selects the owning project without reopening it when selecting a session from another project', async () => {
     const projectB = {
       id: 'project-2',
       name: 'Other',
@@ -502,7 +505,8 @@ describe('App shell layout contract', () => {
     await userEvent.click(screen.getByRole('button', { name: /Other project session/ }));
 
     await waitFor(() => expect(useSessionStore.getState().activeSessionId).toBe('session-3'));
-    expect(openProject).toHaveBeenCalledWith('project-2');
+    expect(useProjectStore.getState().currentProjectId).toBe('project-2');
+    expect(openProject).not.toHaveBeenCalled();
   });
 
   it('collapses and expands the left sidebar while keeping new-session access in the rail', async () => {
@@ -555,7 +559,8 @@ describe('App shell layout contract', () => {
     });
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-page-root')).toBeInTheDocument();
-    expect(within(screen.getByTestId('window-titlebar')).getByText('Review notes')).toBeInTheDocument();
+    expect(within(screen.getByTestId('window-titlebar')).queryByText('Review notes')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('main-content-header')).getByText('Review notes')).toBeInTheDocument();
   });
 
   it('leaves settings when creating a new draft session from the left sidebar', async () => {
@@ -633,17 +638,17 @@ describe('App shell layout contract', () => {
     expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Expand workspace panel' })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open project sidebar' }));
 
     expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('app-body')).toContainElement(screen.getByTestId('main-content'));
     expect(screen.getByTestId('app-body')).toContainElement(screen.getByTestId('right-sidebar'));
     expect(screen.getByTestId('chat-page-root')).not.toContainElement(screen.getByTestId('right-sidebar'));
-    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files project view' })).toBeInTheDocument();
     expect(screen.queryByText('Tools')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open Files project view' }));
 
     expect(screen.getByRole('heading', { name: 'Files' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
@@ -651,7 +656,7 @@ describe('App shell layout contract', () => {
 
     await userEvent.click(
       within(screen.getByTestId('right-sidebar')).getByRole('button', {
-        name: 'Close workspace sidebar',
+        name: 'Close project sidebar',
       }),
     );
 
@@ -663,20 +668,20 @@ describe('App shell layout contract', () => {
     fireEvent.transitionEnd(closingPanel);
 
     expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Open project sidebar' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('closes the workspace sidebar when opening settings', async () => {
     renderShell();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open project sidebar' }));
     expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
 
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
     expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open project sidebar' })).not.toBeInTheDocument();
   });
 
   it('hides the workspace sidebar toggle while settings is open and restores it after Done', async () => {
@@ -684,14 +689,14 @@ describe('App shell layout contract', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open workspace sidebar' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Close workspace sidebar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open project sidebar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close project sidebar' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-page-root')).toBeInTheDocument();
     expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open workspace sidebar' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Open project sidebar' })).toHaveAttribute('aria-expanded', 'false');
   });
 });

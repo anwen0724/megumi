@@ -353,8 +353,8 @@ describe('ChatPage flow', () => {
   it('renders the open workspace welcome state when no project is selected, with composer controls available', () => {
     render(<ChatPage />);
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
-    expect(screen.getByText('Open a workspace to get started.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open workspace' })).toBeInTheDocument();
+    expect(screen.getByText('Open a project to get started.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open project' })).toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toBeInTheDocument();
     expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
@@ -1289,11 +1289,11 @@ describe('ChatPage flow', () => {
     }));
   });
 
-  it('calls useExistingProject when the Open workspace button is clicked', async () => {
+  it('calls useExistingProject when the Open project button is clicked', async () => {
     installMegumiMock();
     render(<ChatPage />);
 
-    const openButton = screen.getByRole('button', { name: 'Open workspace' });
+    const openButton = screen.getByRole('button', { name: 'Open project' });
     expect(openButton).toBeInTheDocument();
 
     await userEvent.click(openButton);
@@ -1323,9 +1323,9 @@ describe('ChatPage flow', () => {
     render(<ChatPage />);
 
     expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
-    expect(screen.getByText('Megumi is ready to help with this workspace.')).toBeInTheDocument();
+    expect(screen.queryByText('Megumi is ready to help with this project.')).not.toBeInTheDocument();
     expect(screen.getByText('/home/user/test')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open workspace' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open project' })).not.toBeInTheDocument();
   });
 
   it('renders canonical chat stream messages as the live timeline source', () => {

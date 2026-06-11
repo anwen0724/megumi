@@ -6,17 +6,7 @@ import { useSessionHistoryHydration } from '../features/session-history/use-sess
 import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
 
-interface UseAppBodyControllerInput {
-  onTitleChange: (title: string) => void;
-  onWorkspaceSidebarToggleChange: (handler: (() => void) | undefined) => void;
-  onWorkspaceSidebarOpenChange: (open: boolean) => void;
-}
-
-export function useAppBodyController({
-  onTitleChange,
-  onWorkspaceSidebarToggleChange,
-  onWorkspaceSidebarOpenChange,
-}: UseAppBodyControllerInput) {
+export function useAppBodyController() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -29,7 +19,7 @@ export function useAppBodyController({
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
-  const titlebarTitle = activeSession?.title ?? 'New session';
+  const pageTitle = settingsOpen ? 'Settings' : activeSession?.title ?? 'New session';
 
   useEffect(() => {
     void (async () => {
@@ -85,7 +75,7 @@ export function useAppBodyController({
     }
 
     if (selectedSession.projectId !== currentProjectId) {
-      await useProjectStore.getState().openProject(selectedSession.projectId);
+      useProjectStore.getState().setCurrentProject(selectedSession.projectId);
     }
     setSettingsOpen(false);
     setActiveSession(sessionId);
@@ -125,23 +115,11 @@ export function useAppBodyController({
     setRightSidebarOpen((value) => !value);
   }, []);
 
-  useEffect(() => {
-    onTitleChange(settingsOpen ? 'Settings' : titlebarTitle);
-  }, [onTitleChange, settingsOpen, titlebarTitle]);
-
-  useEffect(() => {
-    onWorkspaceSidebarOpenChange(rightSidebarOpen);
-  }, [onWorkspaceSidebarOpenChange, rightSidebarOpen]);
-
-  useEffect(() => {
-    onWorkspaceSidebarToggleChange(settingsOpen ? undefined : toggleWorkspaceSidebar);
-    return () => onWorkspaceSidebarToggleChange(undefined);
-  }, [onWorkspaceSidebarToggleChange, settingsOpen, toggleWorkspaceSidebar]);
-
   return {
     sidebarCollapsed,
     rightSidebarOpen,
     settingsOpen,
+    pageTitle,
     projects,
     sidebarProjects,
     setSidebarCollapsed,
@@ -154,5 +132,6 @@ export function useAppBodyController({
     handleRemoveProject,
     openSettings,
     closeSettings,
+    toggleRightSidebar: toggleWorkspaceSidebar,
   };
 }

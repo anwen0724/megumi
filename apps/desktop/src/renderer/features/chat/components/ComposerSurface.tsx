@@ -65,7 +65,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
       className="pointer-events-auto mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
     >
       <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
-        <div data-testid="composer-input-panel" className="border-b border-[var(--color-border)] px-4 py-3">
+        <div data-testid="composer-input-panel" className="px-4 py-3">
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi
           </label>

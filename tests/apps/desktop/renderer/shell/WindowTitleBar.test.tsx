@@ -22,7 +22,7 @@ vi.mock('@megumi/desktop/renderer/shared/ipc/client', () => ({
 function renderTitleBar() {
   return render(
     <ThemeProvider>
-      <WindowTitleBar title="Planning the UI" />
+      <WindowTitleBar />
     </ThemeProvider>,
   );
 }
@@ -34,11 +34,13 @@ describe('WindowTitleBar', () => {
     close.mockReset();
   });
 
-  it('renders only the current session title and window controls', () => {
+  it('renders the app brand and window controls', () => {
     renderTitleBar();
 
-    expect(screen.getByText('Planning the UI')).toBeInTheDocument();
+    expect(screen.getByText('Megumi')).toBeInTheDocument();
     expect(screen.queryByText('Warm agent workspace')).not.toBeInTheDocument();
+    expect(screen.queryByText('Planning the UI')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open project sidebar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Switch to .* theme/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Minimize window' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Maximize or restore window' })).toBeInTheDocument();
@@ -64,38 +66,10 @@ describe('WindowTitleBar', () => {
     expect(screen.getByTestId('window-titlebar-controls')).toHaveClass('app-no-drag');
   });
 
-  it('renders a workspace sidebar toggle when shell handlers are provided', async () => {
-    const onToggleWorkspaceSidebar = vi.fn();
-    render(
-      <ThemeProvider>
-        <WindowTitleBar
-          title="Planning the UI"
-          workspaceSidebarOpen={false}
-          onToggleWorkspaceSidebar={onToggleWorkspaceSidebar}
-        />
-      </ThemeProvider>,
-    );
+  it('does not own the project sidebar toggle', () => {
+    renderTitleBar();
 
-    const toggle = screen.getByRole('button', { name: 'Open workspace sidebar' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-
-    await userEvent.click(toggle);
-
-    expect(onToggleWorkspaceSidebar).toHaveBeenCalledTimes(1);
-  });
-
-  it('updates the workspace sidebar toggle state when open', () => {
-    render(
-      <ThemeProvider>
-        <WindowTitleBar
-          title="Planning the UI"
-          workspaceSidebarOpen
-          onToggleWorkspaceSidebar={() => undefined}
-        />
-      </ThemeProvider>,
-    );
-
-    const toggle = screen.getByRole('button', { name: 'Close workspace sidebar' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByRole('button', { name: 'Open project sidebar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close project sidebar' })).not.toBeInTheDocument();
   });
 });

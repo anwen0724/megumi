@@ -13,7 +13,7 @@ export function ContextPanelTab() {
   }
 
   if (!currentProject) {
-    return <p className="text-sm text-[var(--color-text-muted)]">No workspace selected</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">No project selected</p>;
   }
 
   return (

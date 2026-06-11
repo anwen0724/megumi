@@ -3,22 +3,8 @@ import { MainContent } from './MainContent';
 import { RightSidebar } from './RightSidebar';
 import { useAppBodyController } from './use-app-body-controller';
 
-interface AppBodyProps {
-  onTitleChange: (title: string) => void;
-  onWorkspaceSidebarToggleChange: (handler: (() => void) | undefined) => void;
-  onWorkspaceSidebarOpenChange: (open: boolean) => void;
-}
-
-export function AppBody({
-  onTitleChange,
-  onWorkspaceSidebarToggleChange,
-  onWorkspaceSidebarOpenChange,
-}: AppBodyProps) {
-  const controller = useAppBodyController({
-    onTitleChange,
-    onWorkspaceSidebarOpenChange,
-    onWorkspaceSidebarToggleChange,
-  });
+export function AppBody() {
+  const controller = useAppBodyController();
 
   return (
     <div data-testid="app-body" className="flex min-h-0 flex-1 overflow-hidden">
@@ -39,7 +25,13 @@ export function AppBody({
         onOpenProject={controller.handleOpenProject}
         onRemoveProject={controller.handleRemoveProject}
       />
-      <MainContent settingsOpen={controller.settingsOpen} onCloseSettings={controller.closeSettings} />
+      <MainContent
+        title={controller.pageTitle}
+        settingsOpen={controller.settingsOpen}
+        rightSidebarOpen={controller.rightSidebarOpen}
+        onToggleRightSidebar={controller.toggleRightSidebar}
+        onCloseSettings={controller.closeSettings}
+      />
       {!controller.settingsOpen ? (
         <RightSidebar open={controller.rightSidebarOpen} onClose={() => controller.setRightSidebarOpen(false)} />
       ) : null}

@@ -30,10 +30,11 @@ describe('LeftSidebar', () => {
   it('renders simplified navigation with project tree when expanded', () => {
     render(<LeftSidebar {...defaultProps} />);
 
-    expect(screen.getByText('Megumi')).toBeInTheDocument();
+    expect(screen.queryByText('Megumi')).not.toBeInTheDocument();
+    expect(screen.getByText('Chats')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Task plan' })).toBeInTheDocument();
-    expect(screen.getByText('项目')).toBeInTheDocument();
+    expect(screen.getByText('Projects')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'megumi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open session 了解项目/ })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('1 天')).toBeInTheDocument();
@@ -75,7 +76,7 @@ describe('LeftSidebar', () => {
       />,
     );
 
-    expect(screen.getByRole('navigation', { name: 'Primary workspace navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary project navigation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Task plan' })).toBeInTheDocument();
     expect(screen.queryByText('了解项目')).not.toBeInTheDocument();
@@ -215,17 +216,17 @@ describe('LeftSidebar', () => {
     // Open project menu
     await userEvent.click(screen.getByRole('button', { name: 'Project actions' }));
 
-    expect(screen.getByRole('menuitem', { name: '使用已有项目' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: '新建项目' })).toBeDisabled();
-    expect(screen.getByRole('menuitem', { name: '管理项目' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Open project' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'New project' })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: 'Manage projects' })).toBeInTheDocument();
 
     // Click use existing project
-    await userEvent.click(screen.getByRole('menuitem', { name: '使用已有项目' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open project' }));
     expect(onUseExistingProject).toHaveBeenCalledTimes(1);
 
     // Click manage projects
     await userEvent.click(screen.getByRole('button', { name: 'Project actions' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: '管理项目' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Manage projects' }));
     expect(onManageProjects).toHaveBeenCalledTimes(1);
   });
 

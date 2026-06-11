@@ -539,20 +539,20 @@ describe('interaction baseline acceptance', () => {
     expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-pro for the interaction baseline.');
     expect(await screen.findByText('Runtime response from deepseek-v4-pro for the interaction baseline.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
-    expect(screen.getByRole('heading', { name: 'Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Files workspace view' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open project sidebar' }));
+    expect(screen.getByRole('heading', { name: 'Project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Files project view' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Tasks' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
-    expect(screen.queryByText('No workspace selected')).not.toBeInTheDocument();
+    expect(screen.queryByText('No project selected')).not.toBeInTheDocument();
 
     expect(screen.getAllByText('Megumi').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Runtime chat request')).not.toBeInTheDocument();
     expect(screen.queryByText('Mock agent run')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts project view' }));
 
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
 
@@ -576,14 +576,14 @@ describe('interaction baseline acceptance', () => {
       'Runtime response from deepseek-v4-flash for the visible conversation.',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts workspace view' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Workspace' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open Files workspace view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open project sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Artifacts project view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Files project view' }));
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close workspace sidebar' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Open workspace sidebar' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close project sidebar' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Open project sidebar' }));
 
     expectCanonicalUserText('Keep the conversation visible');
     expectCanonicalAssistantAnswer('Runtime response from deepseek-v4-flash for the visible conversation.');

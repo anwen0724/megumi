@@ -35,7 +35,6 @@ export function WelcomeChat({
           <FolderOpen className="h-7 w-7" aria-hidden="true" />
         </div>
         <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">Welcome to Megumi</h1>
-        <p className="mt-3 text-sm text-[var(--color-text-secondary)]">Megumi is ready to help with this workspace.</p>
         {currentProject ? (
           <div className="relative mt-5 inline-flex flex-col items-center gap-2 text-sm">
             <button
@@ -82,10 +81,10 @@ export function WelcomeChat({
         ) : (
           <>
             <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-              Open a workspace to get started.
+              Open a project to get started.
             </p>
             <Button type="button" variant="secondary" onClick={onOpenWorkspace} className="mt-4">
-              Open workspace
+              Open project
             </Button>
           </>
         )}

@@ -119,14 +119,14 @@ describe('FilesPanelTab', () => {
 
     render(<FilesPanelTab />);
 
-    expect(screen.getByText('Workspace folder is missing')).toBeInTheDocument();
+    expect(screen.getByText('Project folder is missing')).toBeInTheDocument();
     expect(list).not.toHaveBeenCalled();
   });
 
   it('renders an empty state when no workspace is selected', () => {
     render(<FilesPanelTab />);
 
-    expect(screen.getByText('No workspace selected')).toBeInTheDocument();
+    expect(screen.getByText('No project selected')).toBeInTheDocument();
   });
 
   it('loads the selected project root and renders workspace entries', async () => {
@@ -137,7 +137,7 @@ describe('FilesPanelTab', () => {
 
     expect(await screen.findByText('apps')).toBeInTheDocument();
     expect(screen.getByText('README.md')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Workspace files' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Project files' })).toBeInTheDocument();
     expect(list).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         workspaceRoot: 'C:/all/work/study/megumi',
