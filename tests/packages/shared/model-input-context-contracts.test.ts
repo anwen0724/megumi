@@ -85,18 +85,18 @@ describe('ModelInputContext contracts', () => {
           budgetStatus: 'included_full',
         },
         {
-          partId: 'part:instruction:workflow:review',
+          partId: 'part:instruction:intent:review',
           kind: 'instruction',
-          instructionKind: 'workflow',
-          text: 'Workflow intent: code_review.',
-          sourceRefs: [sourceRef('workflow-command:review', 'runtime_constraint')],
+          instructionKind: 'intent',
+          text: 'Input intent: code_review.',
+          sourceRefs: [sourceRef('input-intent:review', 'input_intent')],
           priority: 95,
           tokenEstimate: 4,
           budgetStatus: 'included_full',
           metadata: {
-            workflow: {
-              intent: 'code_review',
-              source: 'builtin_command',
+            intent: {
+              intentName: 'code_review',
+              source: 'core_command',
               commandName: 'review',
               argsText: '当前改动',
             },
@@ -115,7 +115,7 @@ describe('ModelInputContext contracts', () => {
           { partId: 'part:session:1', tokenEstimate: 10, budgetStatus: 'included_reduced' },
           { partId: 'part:tool:1', tokenEstimate: 8, budgetStatus: 'included_full' },
           { partId: 'part:runtime:1', tokenEstimate: 6, budgetStatus: 'included_full' },
-          { partId: 'part:instruction:workflow:review', tokenEstimate: 4, budgetStatus: 'included_full' },
+          { partId: 'part:instruction:intent:review', tokenEstimate: 4, budgetStatus: 'included_full' },
         ],
       },
       trace: {
@@ -493,6 +493,7 @@ describe('ModelInputContext contracts', () => {
       'mode',
       'developer',
       'user',
+      'intent',
       'workflow',
     ]);
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toEqual([
@@ -517,6 +518,7 @@ describe('ModelInputContext contracts', () => {
       'permission_mode',
       'project_boundary',
       'runtime_constraint',
+      'input_intent',
       'external_resource',
       'other',
     ]);

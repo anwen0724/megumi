@@ -702,7 +702,7 @@ describe('buildModelStepInputContextFromSources', () => {
     });
   });
 
-  it('adds workflow instruction metadata after project instructions and before runtime constraints', () => {
+  it('adds intent instruction metadata after project instructions and before runtime constraints', () => {
     const context = buildModelStepInputContextFromSources({
       contextId: 'model-input-context:workflow-instruction',
       sessionId: 'session:1',
@@ -723,9 +723,9 @@ describe('buildModelStepInputContextFromSources', () => {
         hardCapBytes: 65536,
         truncated: false,
       }],
-      workflow: {
-        intent: 'code_review',
-        source: 'builtin_command',
+      inputIntent: {
+        intentName: 'code_review',
+        source: 'core_command',
         commandName: 'review',
         argsText: '当前改动',
       },
@@ -741,31 +741,31 @@ describe('buildModelStepInputContextFromSources', () => {
     ]);
     expect(context.parts[1]).toMatchObject({
       kind: 'instruction',
-      instructionKind: 'workflow',
-      text: expect.stringContaining('Workflow intent: code_review'),
+      instructionKind: 'intent',
+      text: expect.stringContaining('Input intent: code_review'),
       sourceRefs: [{
-        sourceId: 'workflow-command:review',
-        sourceKind: 'runtime_constraint',
-        sourceUri: 'workflow-command://review',
+        sourceId: 'input-intent:review',
+        sourceKind: 'input_intent',
+        sourceUri: 'input-intent://review',
         loadedAt: builtAt,
         metadata: {
-          intent: 'code_review',
-          source: 'builtin_command',
+          intentName: 'code_review',
+          source: 'core_command',
           commandName: 'review',
           argsText: '当前改动',
         },
       }],
       metadata: {
-        workflow: {
-          intent: 'code_review',
-          source: 'builtin_command',
+        intent: {
+          intentName: 'code_review',
+          source: 'core_command',
           commandName: 'review',
           argsText: '当前改动',
         },
       },
     });
     expect(context.trace.selectedSources).toContainEqual({
-      sourceId: 'workflow-command:review',
+      sourceId: 'input-intent:review',
       reason: 'instruction',
     });
   });

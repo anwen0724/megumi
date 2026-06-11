@@ -13,7 +13,7 @@ import type { PermissionModeSnapshot } from '@megumi/shared/permission-mode-cont
 import type { SessionContextInput } from '@megumi/shared/session-context-contracts';
 import type { SessionMessage } from '@megumi/shared/session-run-contracts';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool-contracts';
-import type { WorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
+import type { InputIntentCommandMetadata } from '@megumi/shared/input-command-contracts';
 import type { ModelInputContextPartDraft } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
 import { buildSessionContextParts } from './session-context';
@@ -61,7 +61,7 @@ export interface BuildModelStepInputContextFromSourcesInput {
   runtimeConstraints?: ModelStepRuntimeConstraintInput[];
   modeSnapshot?: PermissionModeSnapshot;
   modeSnapshotRef?: string;
-  workflow?: WorkflowCommandMetadata;
+  inputIntent?: InputIntentCommandMetadata;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
@@ -74,7 +74,7 @@ export function buildModelStepInputContextFromSources(
   const toolParts = toolContinuationParts(input);
   const instructionSources = input.instructionSources ?? [];
   const nextInstructionParts = instructionParts(instructionSources);
-  const workflowParts = workflowInstructionParts(input.workflow, input.builtAt);
+  const intentParts = intentInstructionParts(input.inputIntent, input.builtAt);
   const instructionExcludedSources = instructionExcludedSourcesFor(input.instructionSources ?? []);
   const sessionContextResult = buildSessionContextParts({
     input: input.sessionContext,
@@ -87,17 +87,17 @@ export function buildModelStepInputContextFromSources(
   const parts: ModelInputContextPartDraft[] = input.baseInputContext
     ? [
         ...nextInstructionParts,
-        ...workflowParts,
+        ...intentParts,
         ...input.baseInputContext.parts.filter((part) => (
           part.kind !== 'tool_continuation'
           && !(input.instructionSources && part.kind === 'instruction' && part.instructionKind === 'project')
-          && !(input.workflow && part.kind === 'instruction' && part.instructionKind === 'workflow')
+          && !(input.inputIntent && part.kind === 'instruction' && part.instructionKind === 'intent')
         )).map(draftFromFinalPart),
         ...toolParts,
       ]
     : [
         ...nextInstructionParts,
-        ...workflowParts,
+        ...intentParts,
         ...runtimeConstraintParts(input),
         ...sessionContextResult.parts,
         ...toolParts,
@@ -203,34 +203,34 @@ function instructionSourceRef(source: AgentInstructionSourceSnapshot): ModelInpu
   };
 }
 
-function workflowInstructionParts(
-  workflow: WorkflowCommandMetadata | undefined,
+function intentInstructionParts(
+  intent: InputIntentCommandMetadata | undefined,
   builtAt: string,
 ): ModelInputContextPartDraft[] {
-  if (!workflow) {
+  if (!intent) {
     return [];
   }
 
-  const workflowMetadata = workflow as unknown as JsonObject;
+  const intentMetadata = intent as unknown as JsonObject;
   return [{
-    partId: `part:instruction:workflow:${workflow.commandName}`,
+    partId: `part:instruction:intent:${intent.commandName}`,
     kind: 'instruction',
-    instructionKind: 'workflow',
+    instructionKind: 'intent',
     text: [
-      `Workflow intent: ${workflow.intent}.`,
-      `Command: /${workflow.commandName}.`,
-      workflow.argsText ? `Arguments: ${workflow.argsText}.` : undefined,
+      `Input intent: ${intent.intentName}.`,
+      `Command: /${intent.commandName}.`,
+      intent.argsText ? `Arguments: ${intent.argsText}.` : undefined,
     ].filter((line): line is string => Boolean(line)).join('\n'),
     sourceRefs: [{
-      sourceId: `workflow-command:${workflow.commandName}`,
-      sourceKind: 'runtime_constraint',
-      sourceUri: `workflow-command://${workflow.commandName}`,
+      sourceId: `input-intent:${intent.commandName}`,
+      sourceKind: 'input_intent',
+      sourceUri: `input-intent://${intent.commandName}`,
       loadedAt: builtAt,
-      metadata: workflowMetadata,
+      metadata: intentMetadata,
     }],
     priority: 95,
     metadata: {
-      workflow: workflowMetadata,
+      intent: intentMetadata,
     },
   }];
 }
