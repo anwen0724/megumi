@@ -1,7 +1,7 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
-import { runTurn } from '@megumi/core/run-runtime/run-turn';
-import { createRunCreatedEvent } from '@megumi/core/run-runtime/events';
-import type { RunLifecycleSink } from '@megumi/core/run-runtime/types';
+import { runTurn } from '@megumi/core/agent-runtime';
+import { createRunCreatedEvent } from '@megumi/core/agent-runtime';
+import type { RunLifecycleSink } from '@megumi/core/agent-runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 function createSink() {
@@ -501,4 +501,5 @@ describe('run runtime lifecycle events', () => {
     expect(result.events.map((event) => event.eventType)).toContain('artifact.referenced');
   });
 });
+
 

@@ -4,7 +4,7 @@ import {
   createMemoryUpdateIntent,
   createMemoryRecallContextSource,
   selectMemoryRecallIdsForContext,
-} from '@megumi/core/run-runtime/memory';
+} from '@megumi/core/agent-runtime';
 import type { MemoryRecallResult } from '@megumi/shared/memory';
 
 const now = '2026-05-16T00:00:00.000Z';
@@ -76,4 +76,5 @@ describe('core memory runtime helpers', () => {
     });
   });
 });
+
 

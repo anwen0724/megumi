@@ -4,11 +4,11 @@ import { buildModelStepInputContextFromSources } from '@megumi/context-managemen
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
-import { runModelToolLoop } from '@megumi/core/run-runtime/tool-loop';
+import { runModelToolLoop } from '@megumi/core/agent-runtime';
 import type {
   PendingToolApproval,
   PendingToolApprovalContinuation,
-} from '@megumi/core/run-runtime/tool-loop';
+} from '@megumi/core/agent-runtime';
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   const output: T[] = [];
@@ -809,4 +809,5 @@ describe('run model tool loop', () => {
     });
   });
 });
+
 

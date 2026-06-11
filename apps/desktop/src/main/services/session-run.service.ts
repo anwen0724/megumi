@@ -3,8 +3,8 @@ import {
   buildModelStepInputContextFromSources,
   createModelStepInputContextId,
 } from '@megumi/context-management/model-step-input-context';
-import { runTurn } from '@megumi/core/run-runtime/run-turn';
-import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/run-runtime/types';
+import { runTurn } from '@megumi/core/agent-runtime';
+import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/agent-runtime';
 import {
   runModelToolLoop,
   type PendingToolApprovalContinuation,
@@ -12,7 +12,7 @@ import {
   type ToolApprovalResumeOutcome,
   type ToolApprovalResumePort,
   type ToolCallHandlerPort,
-} from '@megumi/core/run-runtime/tool-loop';
+} from '@megumi/core/agent-runtime';
 import {
   createRunCompletedEvent,
   createRunFailedEvent,
@@ -21,7 +21,7 @@ import {
   createStepCompletedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
-} from '@megumi/core/run-runtime/events';
+} from '@megumi/core/agent-runtime';
 import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
@@ -3176,5 +3176,6 @@ export function createDefaultSessionRunService(
     agentInstructionSourceService: options.agentInstructionSourceService ?? new AgentInstructionSourceService(),
   });
 }
+
 
 

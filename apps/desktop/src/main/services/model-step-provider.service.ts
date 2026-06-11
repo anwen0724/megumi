@@ -4,7 +4,7 @@ import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError, RuntimeErrorCode } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createRunFailedEvent } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '@megumi/core/runtime-exception';
+import { normalizeRuntimeError } from '@megumi/core/agent-runtime';
 import type {
   AiProviderAdapter,
   ProviderRuntimeConfig,
@@ -155,4 +155,5 @@ export function createModelStepProviderService(
     registry: createAiProviderRegistry(),
   });
 }
+
 

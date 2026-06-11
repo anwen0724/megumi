@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import {
   createCancelObservation,
@@ -7,7 +7,7 @@ import {
   createRetryObservation,
   isRecoveryObservation,
   toCheckpointCreatedPayload,
-} from '@megumi/core/run-runtime/recovery';
+} from '@megumi/core/agent-runtime';
 
 describe('core run recovery helpers', () => {
   it('creates checkpoint observations without raw state content', () => {
@@ -93,3 +93,4 @@ describe('core run recovery helpers', () => {
     ).toBe(true);
   });
 });
+

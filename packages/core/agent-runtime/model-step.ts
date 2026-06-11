@@ -2,7 +2,7 @@
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { AiModelStepPort } from '../ports/ai-port';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import { normalizeRuntimeError } from '../runtime-exception';
+import { normalizeRuntimeError } from './errors';
 import {
   createRunCancelledEvent,
   createRunFailedEvent,
@@ -119,4 +119,5 @@ export async function* runModelStep(input: RunModelStepInput): AsyncIterable<Run
     });
   }
 }
+
 

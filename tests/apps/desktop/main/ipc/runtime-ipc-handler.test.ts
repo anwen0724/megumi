@@ -1,7 +1,7 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { RuntimeException } from '@megumi/core/runtime-exception';
+import { RuntimeException } from '@megumi/core/agent-runtime';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRuntimeIpcRequestSchema } from '@megumi/shared/ipc';
 import { createRuntimeIpcHandler } from '@megumi/desktop/main/ipc/runtime-ipc-handler';
@@ -424,4 +424,5 @@ describe('createRuntimeIpcHandler', () => {
     expect(JSON.stringify(result)).not.toContain('stack');
   });
 });
+
 

@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import {
   createCheckpointCreatedEvent,
   createRunCancelRequestedEvent,
   createRunRetryRequestedEvent,
   createRunResumeRequestedEvent,
-} from '@megumi/core/run-runtime/events';
+} from '@megumi/core/agent-runtime';
 
 describe('core recovery runtime events', () => {
   it('creates recovery events with core source and required persistence', () => {
@@ -58,3 +58,4 @@ describe('core recovery runtime events', () => {
     ).toBe('run.retry.requested');
   });
 });
+

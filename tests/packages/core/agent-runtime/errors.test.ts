@@ -1,13 +1,13 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   RuntimeException,
   normalizeRuntimeError,
-} from '@megumi/core/runtime-exception';
+} from '@megumi/core/agent-runtime';
 import {
   assertRuntime,
   throwRuntimeError,
-} from '@megumi/core/runtime-assert';
+} from '@megumi/core/agent-runtime';
 
 describe('runtime exception foundation', () => {
   const runtimeError = {
@@ -103,3 +103,4 @@ describe('runtime exception foundation', () => {
     });
   });
 });
+

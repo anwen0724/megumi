@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createArtifactActionInputPreview,
   createArtifactReferenceObservation,
   toArtifactReferencedPayload,
   toArtifactVersionCreatedPayload,
-} from '@megumi/core/run-runtime/artifacts';
+} from '@megumi/core/agent-runtime';
 
 describe('core artifact runtime helpers', () => {
   it('creates safe artifact action input previews', () => {
@@ -72,3 +72,4 @@ describe('core artifact runtime helpers', () => {
     });
   });
 });
+

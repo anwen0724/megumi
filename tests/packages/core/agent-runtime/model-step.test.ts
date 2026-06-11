@@ -8,7 +8,7 @@ import {
   isModelMessageAction,
   isModelStep,
   runModelStep,
-} from '@megumi/core/run-runtime/model-step';
+} from '@megumi/core/agent-runtime';
 
 describe('run model step foundation', () => {
   it('describes model step input without provider execution', () => {
@@ -125,5 +125,6 @@ describe('run model step foundation', () => {
     expect(events.map((event) => event.sequence)).toEqual([1, 2]);
   });
 });
+
 
 

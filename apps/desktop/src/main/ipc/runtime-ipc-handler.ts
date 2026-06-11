@@ -15,7 +15,7 @@ import {
   createRuntimeDebugId,
   createRuntimeTraceId,
 } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '@megumi/core/runtime-exception';
+import { normalizeRuntimeError } from '@megumi/core/agent-runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import {
   redactRuntimeDetails,
@@ -271,4 +271,5 @@ function extractRawContext(rawRequest: unknown): unknown {
 
   return undefined;
 }
+
 

@@ -7,7 +7,7 @@ import type {
   ToolApprovalResumeOutcome,
   ToolApprovalResumePort,
   ToolCallHandlerPort,
-} from '@megumi/core/run-runtime/tool-loop';
+} from '@megumi/core/agent-runtime';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { PermissionMode } from '@megumi/shared/permission';
@@ -757,4 +757,5 @@ function saveImmediateToolError(
     createdAt: options.now(),
   });
 }
+
 

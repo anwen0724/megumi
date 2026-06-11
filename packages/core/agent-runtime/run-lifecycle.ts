@@ -7,13 +7,13 @@
 import type { PermissionModeState } from '@megumi/shared/permission';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '../runtime-exception';
+import { normalizeRuntimeError } from './errors';
 import {
   createContextUpdateInputPreview,
   toContextPatchAppliedPayload,
   toContextPatchRejectedPayload,
-} from './context';
-import { toArtifactReferencedPayload } from './artifacts';
+} from './context-observation-mapper';
+import { toArtifactReferencedPayload } from './artifact-observation-mapper';
 import {
   createActionRequestedEvent,
   createArtifactReferencedEvent,
@@ -33,12 +33,12 @@ import {
   createStepCreatedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
-} from './events';
+} from './runtime-event-factory';
 import {
   createCancelObservation,
   createCheckpointObservation,
   toCheckpointCreatedPayload,
-} from './recovery';
+} from './recovery-observation-mapper';
 import {
   createDefaultRunIds,
   defaultRunClock,
@@ -49,7 +49,7 @@ import {
 import {
   createPermissionModeRuntimeInstruction,
   resolvePermissionModeState,
-} from './permission-mode';
+} from './permission-instruction';
 
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   const clock = input.clock ?? defaultRunClock;
@@ -546,4 +546,5 @@ function isApprovalWaitObservation(observation: RunObservation): boolean {
     && observation.kind === 'approval_requested'
     && observation.metadata?.status === 'pending';
 }
+
 

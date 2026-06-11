@@ -3,7 +3,7 @@ import {
   createContextPatchObservation,
   createContextUpdateInputPreview,
   isContextPatchObservation,
-} from '@megumi/core/run-runtime/context';
+} from '@megumi/core/agent-runtime';
 import type { ContextPatch } from '@megumi/shared/run';
 
 const patch: ContextPatch = {
@@ -63,4 +63,5 @@ describe('run runtime context helpers', () => {
     })).toBe(false);
   });
 });
+
 
