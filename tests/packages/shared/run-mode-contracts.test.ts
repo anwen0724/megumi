@@ -8,28 +8,20 @@ import {
 } from '@megumi/shared/run-mode-contracts';
 
 describe('run-mode-contracts compatibility shim', () => {
-  it('re-exports the 05 permission posture model without legacy task taxonomy', () => {
+  it('re-exports permission snapshot contracts for legacy imports only', () => {
     expect(ACTIVE_PERMISSION_MODES).toEqual(['default', 'accept_edits', 'plan', 'auto']);
     expect(PermissionModeSchema.options).toEqual(['default', 'accept_edits', 'plan', 'auto']);
     expect(() => PermissionModeSchema.parse('chat')).toThrow();
     expect(() => PermissionModeSchema.parse('execute')).toThrow();
     expect(() => PermissionModeSchema.parse('review')).toThrow();
     expect(() => PermissionModeSchema.parse('bypass_permissions')).toThrow();
-  });
-
-  it('keeps RunModeSchema as a thin compatibility shape around permissionMode only', () => {
-    const mode = RunModeSchema.parse({
+    expect(RunModeSchema.parse({
+      permissionMode: 'auto',
+      source: 'user',
+    })).toEqual({
       permissionMode: 'auto',
       source: 'user',
     });
-
-    expect(mode).toEqual({
-      permissionMode: 'auto',
-      source: 'user',
-    });
-    expect(mode).not.toHaveProperty('taskIntent');
-    expect(mode).not.toHaveProperty('outputExpectation');
-    expect(mode).not.toHaveProperty('preset');
     expect(() => RunModeSchema.parse({
       permissionMode: 'auto',
       source: 'user',

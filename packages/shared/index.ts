@@ -11,6 +11,7 @@ export * from './model-input-context-contracts';
 export * from './context-budget-contracts';
 export { RUN_STATUSES, type RunStatus } from './session-run-contracts';
 export * from './run-context-contracts';
+export * from './permission-snapshot-contracts';
 export * from './run-mode-contracts';
 export * from './permission-mode-contracts';
 export * from './input-command-contracts';
