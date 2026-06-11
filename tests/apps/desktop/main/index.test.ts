@@ -1,5 +1,5 @@
 ﻿// @vitest-environment node
-import { readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -475,6 +475,21 @@ describe('main runtime logger composition', () => {
 
   afterEach(() => {
     rmSync(mocks.homePath, { recursive: true, force: true });
+  });
+
+  it('uses permission snapshot naming for service composition', () => {
+    const source = readFileSync(join(process.cwd(), 'apps/desktop/src/main/index.ts'), 'utf8');
+
+    expect(source).toContain('PermissionSnapshotRepository');
+    expect(source).toContain('PermissionSnapshotService');
+    expect(source).not.toContain('RunModeRepository');
+    expect(source).not.toContain('RunModeService');
+    expect(source).not.toContain('run-mode.service');
+  });
+
+  it('does not keep main run-mode compatibility shim files', () => {
+    expect(existsSync(join(process.cwd(), 'apps/desktop/src/main/services/run-mode.service.ts'))).toBe(false);
+    expect(existsSync(join(process.cwd(), 'packages/shared/run-mode-contracts.ts'))).toBe(false);
   });
 
   it('wires a Megumi Home JSONL runtime logger into process and IPC registration paths', async () => {
