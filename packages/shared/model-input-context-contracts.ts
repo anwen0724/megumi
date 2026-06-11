@@ -61,7 +61,8 @@ export const AGENT_INSTRUCTION_SOURCE_STATUSES = [
 ] as const;
 export type AgentInstructionSourceStatus = (typeof AGENT_INSTRUCTION_SOURCE_STATUSES)[number];
 
-export const MODEL_INPUT_INSTRUCTION_KINDS = ['system', 'project', 'mode', 'developer', 'user', 'intent', 'workflow'] as const;
+export const MODEL_INPUT_INSTRUCTION_KINDS = ['system', 'project', 'mode', 'developer', 'user', 'intent'] as const;
+export const ModelInputInstructionKindSchema = z.enum(MODEL_INPUT_INSTRUCTION_KINDS);
 export type ModelInputInstructionKind = (typeof MODEL_INPUT_INSTRUCTION_KINDS)[number];
 
 export const MODEL_INPUT_CURRENT_TURN_ROLES = ['user', 'host'] as const;
@@ -236,7 +237,7 @@ export interface ModelInputContextPartBase {
 
 export const InstructionPartSchema = ModelInputContextPartBaseSchema.extend({
   kind: z.literal('instruction'),
-  instructionKind: z.enum(MODEL_INPUT_INSTRUCTION_KINDS),
+  instructionKind: ModelInputInstructionKindSchema,
   text: NonEmptyTextSchema,
 }).strict();
 

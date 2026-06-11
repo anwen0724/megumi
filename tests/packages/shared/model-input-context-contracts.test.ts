@@ -6,6 +6,7 @@ import {
   MODEL_INPUT_CONTEXT_SOURCE_KINDS,
   MODEL_INPUT_INSTRUCTION_KINDS,
   MODEL_INPUT_SESSION_PART_KINDS,
+  ModelInputInstructionKindSchema,
   ModelInputContextSchema,
   type AgentInstructionSourceSnapshot,
   type ModelInputContext,
@@ -494,8 +495,8 @@ describe('ModelInputContext contracts', () => {
       'developer',
       'user',
       'intent',
-      'workflow',
     ]);
+    expect(() => ModelInputInstructionKindSchema.parse('workflow')).toThrow();
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toEqual([
       'system_instruction',
       'project_instruction',

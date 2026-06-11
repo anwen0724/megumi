@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   ACTIVE_PERMISSION_MODES,
   PermissionModeSchema,
-  PermissionModeSelectionSourceSchema,
   PermissionModeStateSchema,
   PermissionSnapshotRecordSchema,
   toPermissionModeSnapshot,
@@ -67,9 +66,11 @@ describe('permission-snapshot-contracts', () => {
     });
   });
 
-  it('keeps permission source compatibility until the legacy workflow source is removed later', () => {
-    expect(PermissionModeSelectionSourceSchema.parse('intent_default')).toBe('intent_default');
-    expect(PermissionModeSelectionSourceSchema.parse('workflow_default')).toBe('workflow_default');
+  it('rejects legacy workflow_default permission source', () => {
+    expect(() => PermissionModeStateSchema.parse({
+      permissionMode: 'plan',
+      source: 'workflow_default',
+    })).toThrow();
   });
 
   it('creates model-visible permission snapshots from permission mode state', () => {
