@@ -24,21 +24,17 @@ describe('runtime lifecycle docs source guards', () => {
 
   it('records that old local development DB data can be rebuilt instead of migrated', () => {
     const spec = read('.local-docs/specs/08-runtime-lifecycle-and-contract-cleanup/01-runtime-lifecycle-and-contract-cleanup.md');
-    const activeWork = read('.local-docs/status/active-work.md');
+    const implementedCapabilities = read('.local-docs/status/implemented-capabilities.md');
 
     expect(spec).toContain('如果旧开发库不兼容，接受重建本地开发 DB。');
-    expect(activeWork).toContain('旧本地开发 DB 如因 08 schema 或 RunContext JSON shape 变化不兼容，接受清空或重建');
+    expect(implementedCapabilities).toContain('旧开发库不兼容时接受重建本地开发 DB');
   });
 
   it('keeps project status aligned with completed 08 cleanup', () => {
-    const status = read('.local-docs/PROJECT' + '_STATUS.md');
-    const activeWork = read('.local-docs/status/active-work.md');
-    const milestoneHistory = read('.local-docs/status/milestone-history.md');
+    const implementedCapabilities = read('.local-docs/status/implemented-capabilities.md');
 
-    expect(status).toContain('08 Runtime Lifecycle and Contract Cleanup');
-    expect(status).toContain('ToolCall / ToolExecution');
-    expect(status).toContain('RunContext 职责收缩');
-    expect(activeWork).toContain('08 Runtime Lifecycle and Contract Cleanup');
-    expect(milestoneHistory).toContain('08 Runtime Lifecycle and Contract Cleanup');
+    expect(implementedCapabilities).toContain('08 Runtime Lifecycle and Contract Cleanup');
+    expect(implementedCapabilities).toContain('ToolCall / ToolExecution');
+    expect(implementedCapabilities).toContain('RunContext 职责收缩');
   });
 });
