@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/run-mode-contracts';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission-snapshot-contracts';
 import { IPC_CHANNELS } from '@megumi/shared/ipc-channels';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc-contracts';
 import type { RuntimeIpcError } from '@megumi/shared/ipc-errors';
@@ -13,12 +13,12 @@ import {
   PlanByRunGetRequestSchema,
   PlanStatusUpdateRequestSchema,
 } from '@megumi/shared/ipc-schemas';
-import type { RunModeService } from '../../services/run-mode.service';
+import type { PermissionSnapshotService } from '../../services/permission-snapshot.service';
 import type { RuntimeLogger } from '../../services/runtime-logger.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type PlanHandlersService = Pick<
-  RunModeService,
+  PermissionSnapshotService,
   'getPlanByRun' | 'updatePlanStatus'
 >;
 
@@ -74,3 +74,4 @@ function mapPlanIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
+

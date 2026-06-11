@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,19 +53,19 @@ const mocks = vi.hoisted(() => {
       this.listRuntimeEventsByRun = vi.fn(() => []);
       this.appendRuntimeEvent = vi.fn();
     }),
-    RunModeRepository: vi.fn(function RunModeRepository(
+    PermissionSnapshotRepository: vi.fn(function PermissionSnapshotRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
       this.database = database;
     }),
-    RunModeService: vi.fn(function RunModeService(
+    PermissionSnapshotService: vi.fn(function PermissionSnapshotService(
       this: { options?: unknown },
       options: unknown,
     ) {
       this.options = options;
       return {
-        createModeSnapshot: vi.fn(),
+        createPermissionSnapshot: vi.fn(),
         linkAcceptedSourcePlan: vi.fn(),
         createPlanRecordForRun: vi.fn(),
         getPlanByRun: vi.fn(),
@@ -382,12 +382,12 @@ vi.mock('@megumi/db/repos/session-run.repo', () => ({
   SessionRunRepository: mocks.SessionRunRepository,
 }));
 
-vi.mock('@megumi/db/repos/run-mode.repo', () => ({
-  RunModeRepository: mocks.RunModeRepository,
+vi.mock('@megumi/db/repos/permission-snapshot.repo', () => ({
+  PermissionSnapshotRepository: mocks.PermissionSnapshotRepository,
 }));
 
-vi.mock('@megumi/desktop/main/services/run-mode.service', () => ({
-  RunModeService: mocks.RunModeService,
+vi.mock('@megumi/desktop/main/services/permission-snapshot.service', () => ({
+  PermissionSnapshotService: mocks.PermissionSnapshotService,
 }));
 
 vi.mock('@megumi/db/repos/artifact.repo', () => ({
@@ -441,8 +441,8 @@ describe('main runtime logger composition', () => {
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
     mocks.SessionRunRepository.mockClear();
-    mocks.RunModeRepository.mockClear();
-    mocks.RunModeService.mockClear();
+    mocks.PermissionSnapshotRepository.mockClear();
+    mocks.PermissionSnapshotService.mockClear();
     mocks.SessionRunService.mockClear();
     mocks.createModelStepProviderService.mockClear();
     mocks.getDefaultProviderService.mockClear();
@@ -504,7 +504,7 @@ describe('main runtime logger composition', () => {
     expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.SessionRunRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.SessionActivePathRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.RunModeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.PermissionSnapshotRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.RecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.WorkspaceChangeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
@@ -517,8 +517,8 @@ describe('main runtime logger composition', () => {
     expect(mocks.PlanArtifactCompatibilityService).toHaveBeenCalledWith({
       repository: expect.any(Object),
     });
-    const runModeService = mocks.RunModeService.mock.results[0]?.value;
-    expect(mocks.RunModeService).toHaveBeenCalledWith(expect.objectContaining({
+    const permissionSnapshotService = mocks.PermissionSnapshotService.mock.results[0]?.value;
+    expect(mocks.PermissionSnapshotService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       planArtifactCompatibility,
     }));
@@ -540,7 +540,7 @@ describe('main runtime logger composition', () => {
     expect(mocks.SessionRunService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       activePathRepository,
-      runModeService,
+      permissionSnapshotService,
       contextService: runContextService,
       modelStepProvider: modelStepProviderService,
       chatStreamEventSink: expect.objectContaining({
@@ -648,3 +648,4 @@ describe('main runtime logger composition', () => {
     expect(logText).not.toContain('Bearer sk-runtime-secret');
   });
 });
+

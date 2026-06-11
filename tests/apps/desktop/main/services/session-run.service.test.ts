@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
-import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
+import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import {
@@ -17,7 +17,7 @@ import {
 } from '@megumi/desktop/main/services/session-run.service';
 import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/services/timeline-history-commit-projector.service';
 import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session-compaction-orchestrator.service';
-import { RunModeService } from '@megumi/desktop/main/services/run-mode.service';
+import { PermissionSnapshotService } from '@megumi/desktop/main/services/permission-snapshot.service';
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
 import type { ModelInputContextSourceKind } from '@megumi/shared/model-input-context-contracts';
@@ -140,20 +140,20 @@ function createServiceWithContextRecorder(records: unknown[]) {
   });
 }
 
-function createServiceWithRunModeRecorder(records: unknown[]) {
+function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
   return new SessionRunService({
     repository,
-    runModeService: {
-      createModeSnapshot: (input) => {
+    permissionSnapshotService: {
+      createPermissionSnapshot: (input) => {
         records.push({ type: 'snapshot', input });
         return {
-          modeSnapshotId: 'mode-snapshot:1',
+          permissionSnapshotId: 'permission-snapshot:1',
           runId: input.runId,
-          modeLabel: input.mode,
-          mode: input.modeSnapshot ?? {
+          permissionLabel: input.permissionMode,
+          permissionModeState: input.permissionModeState ?? {
             permissionMode: 'default',
             source: 'system',
           },
@@ -192,14 +192,14 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
   const repository = new SessionRunRepository(db);
   return new SessionRunService({
     repository,
-    runModeService: {
-      createModeSnapshot: (input) => {
+    permissionSnapshotService: {
+      createPermissionSnapshot: (input) => {
         records.push({ type: 'snapshot', input });
         return {
-          modeSnapshotId: 'mode-snapshot:1',
+          permissionSnapshotId: 'permission-snapshot:1',
           runId: input.runId,
-          modeLabel: input.mode,
-          mode: input.modeSnapshot ?? {
+          permissionLabel: input.permissionMode,
+          permissionModeState: input.permissionModeState ?? {
             permissionMode: 'plan',
             source: 'system',
           },
@@ -242,7 +242,7 @@ function createServiceWithModelStepStream(
   events: RuntimeEvent[] | ((request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[]),
   options?: {
   contextService?: SessionRunContextService;
-  runModeService?: SessionRunServiceOptions['runModeService'];
+  permissionSnapshotService?: SessionRunServiceOptions['permissionSnapshotService'];
   toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
   toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
   timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
@@ -259,7 +259,7 @@ function createServiceWithModelStepStream(
   return new SessionRunService({
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
-    ...(options?.runModeService ? { runModeService: options.runModeService } : {}),
+    ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
     ...(options?.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
@@ -2302,9 +2302,9 @@ describe('SessionRunService', () => {
     ]);
   });
 
-  it('passes mode snapshots and source plan ids into the core run', async () => {
+  it('passes permission snapshots and source plan ids into the core run', async () => {
     const records: unknown[] = [];
-    const service = createServiceWithRunModeRecorder(records);
+    const service = createServiceWithPermissionSnapshotRecorder(records);
     service.createSession({
       title: 'Session',
       createdAt: '2026-05-15T00:00:00.000Z',
@@ -2314,7 +2314,7 @@ describe('SessionRunService', () => {
       sessionId: 'session-1',
       goal: 'Execute plan',
       mode: 'default',
-      modeSnapshot: {
+      permissionModeState: {
         permissionMode: 'default',
         source: 'user',
       },
@@ -2322,7 +2322,7 @@ describe('SessionRunService', () => {
       createdAt: '2026-05-15T00:00:00.000Z',
     });
 
-    expect(result.run.modeSnapshotRef).toBe('mode-snapshot:1');
+    expect(result.run.permissionSnapshotRef).toBe('permission-snapshot:1');
     expect(result.run.sourcePlanId).toBe('plan:accepted');
     expect(records).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'snapshot' }),
@@ -2342,7 +2342,7 @@ describe('SessionRunService', () => {
       sessionId: 'session-1',
       goal: 'Write a plan',
       mode: 'plan',
-      modeSnapshot: {
+      permissionModeState: {
         permissionMode: 'plan',
         source: 'user',
       },
@@ -5265,18 +5265,18 @@ describe('SessionRunService', () => {
     expect(source).not.toContain('runContext:');
   });
 
-  it('creates run mode snapshots and passes them to model step requests for session messages', async () => {
+  it('creates permission snapshots and passes them to model step requests for session messages', async () => {
     const records: unknown[] = [];
     const requests: ModelStepRuntimeRequest[] = [];
     const service = createServiceWithModelStepStream([], {
-      runModeService: {
-        createModeSnapshot: (input) => {
+      permissionSnapshotService: {
+        createPermissionSnapshot: (input) => {
           records.push(input);
           return {
-            modeSnapshotId: 'mode-snapshot:1',
+            permissionSnapshotId: 'permission-snapshot:1',
             runId: input.runId,
-            modeLabel: input.mode,
-            mode: input.modeSnapshot ?? {
+            permissionLabel: input.permissionMode,
+            permissionModeState: input.permissionModeState ?? {
               permissionMode: 'plan',
               source: 'system',
             },
@@ -5323,12 +5323,12 @@ describe('SessionRunService', () => {
     expect(records).toEqual([
       expect.objectContaining({
         runId: 'run-1',
-        mode: 'plan',
+        permissionMode: 'plan',
         createdAt: '2026-05-17T00:00:00.000Z',
       }),
     ]);
     expect(requests[0]).not.toHaveProperty('modeSnapshot');
-    expect(requests[0]).not.toHaveProperty('modeSnapshotRef');
+    expect(requests[0]).not.toHaveProperty('permissionSnapshotRef');
     expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'runtime_constraint',
@@ -5342,14 +5342,14 @@ describe('SessionRunService', () => {
     const records: unknown[] = [];
     const requests: ModelStepRuntimeRequest[] = [];
     const service = createServiceWithModelStepStream([], {
-      runModeService: {
-        createModeSnapshot: (input) => {
+      permissionSnapshotService: {
+        createPermissionSnapshot: (input) => {
           records.push(input);
           return {
-            modeSnapshotId: 'mode-snapshot:workflow',
+            permissionSnapshotId: 'permission-snapshot:workflow',
             runId: input.runId,
-            modeLabel: input.mode,
-            mode: input.modeSnapshot ?? {
+            permissionLabel: input.permissionMode,
+            permissionModeState: input.permissionModeState ?? {
               permissionMode: 'default',
               source: 'system',
             },
@@ -5404,8 +5404,8 @@ describe('SessionRunService', () => {
     expect(records).toEqual([
       expect.objectContaining({
         runId: 'run-1',
-        mode: 'plan',
-        modeSnapshot: {
+        permissionMode: 'plan',
+        permissionModeState: {
           permissionMode: 'plan',
           source: 'intent_default',
         },
@@ -5425,8 +5425,8 @@ describe('SessionRunService', () => {
         constraintKind: 'permission_mode',
         sourceRefs: expect.arrayContaining([
           expect.objectContaining({
-            sourceId: 'permission-mode:mode-snapshot:workflow',
-            sourceUri: 'permission-mode://mode-snapshot:workflow',
+            sourceId: 'permission-mode:permission-snapshot:workflow',
+            sourceUri: 'permission-mode://permission-snapshot:workflow',
           }),
         ]),
       }),
@@ -5452,14 +5452,14 @@ describe('SessionRunService', () => {
     const records: unknown[] = [];
     const requests: ModelStepRuntimeRequest[] = [];
     const service = createServiceWithModelStepStream([], {
-      runModeService: {
-        createModeSnapshot: (input) => {
+      permissionSnapshotService: {
+        createPermissionSnapshot: (input) => {
           records.push(input);
           return {
-            modeSnapshotId: 'mode-snapshot:workflow',
+            permissionSnapshotId: 'permission-snapshot:workflow',
             runId: input.runId,
-            modeLabel: input.mode,
-            mode: input.modeSnapshot ?? {
+            permissionLabel: input.permissionMode,
+            permissionModeState: input.permissionModeState ?? {
               permissionMode: 'default',
               source: 'system',
             },
@@ -5512,8 +5512,8 @@ describe('SessionRunService', () => {
     expect(records).toEqual([
       expect.objectContaining({
         runId: 'run-1',
-        mode: 'plan',
-        modeSnapshot: {
+        permissionMode: 'plan',
+        permissionModeState: {
           permissionMode: 'plan',
           source: 'intent_default',
         },
@@ -5550,18 +5550,18 @@ describe('SessionRunService', () => {
     ]));
   });
 
-  it('saves session message run mode snapshots with the real run mode repository', async () => {
+  it('saves session message permission snapshots with the real permission snapshot repository', async () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const requests: ModelStepRuntimeRequest[] = [];
     const sessionRepository = new SessionRunRepository(db);
-    const runModeRepository = new RunModeRepository(db);
+    const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
     const service = new SessionRunService({
       repository: sessionRepository,
-      runModeService: new RunModeService({
-        repository: runModeRepository,
+      permissionSnapshotService: new PermissionSnapshotService({
+        repository: permissionSnapshotRepository,
         ids: {
-          modeSnapshotId: () => 'mode-snapshot:real-repo',
+          permissionSnapshotId: () => 'permission-snapshot:real-repo',
           planArtifactId: () => 'plan:real-repo',
         },
       }),
@@ -5615,29 +5615,29 @@ describe('SessionRunService', () => {
     }
 
     expect(requests[0]).not.toHaveProperty('modeSnapshot');
-    expect(requests[0]).not.toHaveProperty('modeSnapshotRef');
+    expect(requests[0]).not.toHaveProperty('permissionSnapshotRef');
     expect(sessionRepository.getRun('run-1')).toMatchObject({
       mode: 'plan',
-      modeSnapshotRef: 'mode-snapshot:real-repo',
+      permissionSnapshotRef: 'permission-snapshot:real-repo',
     });
-    expect(runModeRepository.getModeSnapshotByRun('run-1')).toMatchObject({
-      mode: expect.objectContaining({
+    expect(permissionSnapshotRepository.getPermissionSnapshotByRun('run-1')).toMatchObject({
+      permissionModeState: expect.objectContaining({
         permissionMode: 'plan',
       }),
     });
   });
 
-  it('persists intent metadata on session message run mode snapshots with the real repository', async () => {
+  it('persists intent metadata on session message permission snapshots with the real repository', async () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const sessionRepository = new SessionRunRepository(db);
-    const runModeRepository = new RunModeRepository(db);
+    const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
     const service = new SessionRunService({
       repository: sessionRepository,
-      runModeService: new RunModeService({
-        repository: runModeRepository,
+      permissionSnapshotService: new PermissionSnapshotService({
+        repository: permissionSnapshotRepository,
         ids: {
-          modeSnapshotId: () => 'mode-snapshot:workflow-real-repo',
+          permissionSnapshotId: () => 'permission-snapshot:workflow-real-repo',
           planArtifactId: () => 'plan:workflow-real-repo',
         },
       }),
@@ -5697,10 +5697,10 @@ describe('SessionRunService', () => {
 
     expect(sessionRepository.getRun('run-1')).toMatchObject({
       mode: 'plan',
-      modeSnapshotRef: 'mode-snapshot:workflow-real-repo',
+      permissionSnapshotRef: 'permission-snapshot:workflow-real-repo',
     });
-    expect(runModeRepository.getModeSnapshotByRun('run-1')).toMatchObject({
-      mode: {
+    expect(permissionSnapshotRepository.getPermissionSnapshotByRun('run-1')).toMatchObject({
+      permissionModeState: {
         permissionMode: 'plan',
         source: 'intent_default',
       },
@@ -5858,3 +5858,5 @@ describe('SessionRunService', () => {
     ]);
   });
 });
+
+

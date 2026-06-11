@@ -25,7 +25,7 @@ import {
 import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
-import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
+import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ContextBudgetPolicy } from '@megumi/shared/context-budget-contracts';
 import type { ModelStepRuntimeConstraintInput } from '@megumi/context-management/model-step-input-context';
@@ -60,7 +60,11 @@ import type {
 import { createChatStreamEvent } from '@megumi/shared/chat-stream-event-factory';
 import type { TimelineMessage } from '@megumi/shared/timeline-message-blocks';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model-step-contracts';
-import type { ImplementationPlanArtifactRecord, RunMode, RunModeSnapshot } from '@megumi/shared/run-mode-contracts';
+import type {
+  ImplementationPlanArtifactRecord,
+  PermissionModeState,
+  PermissionSnapshotRecord,
+} from '@megumi/shared/permission-snapshot-contracts';
 import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
@@ -87,7 +91,7 @@ import type {
   WorkspaceChangeSet,
   WorkspaceChangeSummary,
 } from '@megumi/shared/workspace-change-contracts';
-import { RunModeService } from './run-mode.service';
+import { PermissionSnapshotService } from './permission-snapshot.service';
 import type { MegumiHomePaths } from './megumi-home.service';
 import {
   createChatStreamEventAdapter,
@@ -214,9 +218,9 @@ interface ApprovalContinuationGroup {
 export interface SessionRunServiceOptions {
   repository: SessionRunRepository;
   contextService?: SessionRunContextService;
-  runModeService?: Pick<
-    RunModeService,
-    | 'createModeSnapshot'
+  permissionSnapshotService?: Pick<
+    PermissionSnapshotService,
+    | 'createPermissionSnapshot'
     | 'linkAcceptedSourcePlan'
     | 'createPlanRecordForRun'
     | 'getPlanByRun'
@@ -305,9 +309,9 @@ export class SessionRunService {
   private readonly repository: SessionRunRepository;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
-  private readonly runModeService?: Pick<
-    RunModeService,
-    | 'createModeSnapshot'
+  private readonly permissionSnapshotService?: Pick<
+    PermissionSnapshotService,
+    | 'createPermissionSnapshot'
     | 'linkAcceptedSourcePlan'
     | 'createPlanRecordForRun'
     | 'getPlanByRun'
@@ -342,7 +346,7 @@ export class SessionRunService {
     this.repository = options.repository;
     this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
-    this.runModeService = options.runModeService;
+    this.permissionSnapshotService = options.permissionSnapshotService;
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
@@ -420,15 +424,16 @@ export class SessionRunService {
   async startRun(payload: RunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }> {
     const session = this.repository.getSession(payload.sessionId);
     const runId = this.ids.runId();
-    const modeSnapshot = this.runModeService?.createModeSnapshot({
+    const permissionModeState = getRunStartPermissionModeState(payload);
+    const permissionSnapshot = this.permissionSnapshotService?.createPermissionSnapshot({
       runId,
-      mode: payload.mode,
-      modeSnapshot: payload.modeSnapshot,
+      permissionMode: payload.mode,
+      permissionModeState,
       createdAt: payload.createdAt,
     });
 
-    if (payload.sourcePlanId && this.runModeService) {
-      this.runModeService.linkAcceptedSourcePlan({
+    if (payload.sourcePlanId && this.permissionSnapshotService) {
+      this.permissionSnapshotService.linkAcceptedSourcePlan({
         runId,
         sourcePlanId: payload.sourcePlanId,
         linkedAt: payload.createdAt,
@@ -444,11 +449,11 @@ export class SessionRunService {
     const result = await runTurn({
       sessionId: payload.sessionId,
       ...(payload.triggerMessageId ? { triggerMessageId: payload.triggerMessageId } : {}),
-      mode: payload.mode,
-      ...(modeSnapshot ? {
-        modeSnapshot: modeSnapshot.mode,
-        modeSnapshotRef: modeSnapshot.modeSnapshotId,
-      } : payload.modeSnapshot ? { modeSnapshot: payload.modeSnapshot } : {}),
+      permissionMode: payload.mode,
+      ...(permissionSnapshot ? {
+        permissionModeState: permissionSnapshot.permissionModeState,
+        permissionSnapshotRef: permissionSnapshot.permissionSnapshotId,
+      } : permissionModeState ? { permissionModeState } : {}),
       ...(payload.sourcePlanId ? { sourcePlanId: payload.sourcePlanId } : {}),
       goal: payload.goal,
       clock: this.clock,
@@ -477,11 +482,11 @@ export class SessionRunService {
       hostBoundary: this.hostBoundary,
     });
 
-    if (modeSnapshot && this.runModeService && result.run.status === 'completed') {
-      this.runModeService.createPlanRecordForRun({
+    if (permissionSnapshot && this.permissionSnapshotService && result.run.status === 'completed') {
+      this.permissionSnapshotService.createPlanRecordForRun({
         runId,
         goal: payload.goal,
-        mode: modeSnapshot.mode,
+        permissionModeState: permissionSnapshot.permissionModeState,
         createdAt: result.run.completedAt ?? payload.createdAt,
       });
     }
@@ -490,11 +495,11 @@ export class SessionRunService {
   }
 
   getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined {
-    return this.requireRunModeService().getPlanByRun(runId);
+    return this.requirePermissionSnapshotService().getPlanByRun(runId);
   }
 
   updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord {
-    return this.requireRunModeService().updatePlanStatus(input);
+    return this.requirePermissionSnapshotService().updatePlanStatus(input);
   }
 
   async sendSessionMessage(input: {
@@ -563,17 +568,17 @@ export class SessionRunService {
       createdAt,
       startedAt: createdAt,
     });
-    const modeSnapshot = this.runModeService?.createModeSnapshot({
+    const permissionSnapshot = this.permissionSnapshotService?.createPermissionSnapshot({
       runId,
-      mode,
-      modeSnapshot: createPermissionModeRunMode(permissionMode, permissionSource),
+      permissionMode: mode,
+      permissionModeState: createPermissionModeState(permissionMode, permissionSource),
       ...(inputMetadata ? { metadata: inputMetadata } : {}),
       createdAt,
     });
-    const run = modeSnapshot
+    const run = permissionSnapshot
       ? this.repository.saveRun({
           ...initialRun,
-          modeSnapshotRef: modeSnapshot.modeSnapshotId,
+          permissionSnapshotRef: permissionSnapshot.permissionSnapshotId,
         })
       : initialRun;
     this.appendSourceAndMoveLeaf({
@@ -648,7 +653,7 @@ export class SessionRunService {
         currentUserMessage,
         permissionMode,
         ...(effectiveInputIntent ? { inputIntent: effectiveInputIntent } : {}),
-        ...(modeSnapshot ? { modeSnapshot } : {}),
+        ...(permissionSnapshot ? { permissionSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
     };
@@ -1186,7 +1191,7 @@ export class SessionRunService {
     currentUserMessage: SessionMessageSendCurrentMessage;
     permissionMode: PermissionMode;
     inputIntent?: InputIntentCommandMetadata;
-    modeSnapshot?: RunModeSnapshot;
+    permissionSnapshot?: PermissionSnapshotRecord;
     chatStreamAdapter?: ChatStreamEventAdapter;
   }): AsyncIterable<RuntimeEvent> {
     let lastSequence = 0;
@@ -1247,9 +1252,9 @@ export class SessionRunService {
         reservedOutputTokens: 0,
         keepRecentTokens: Number.MAX_SAFE_INTEGER,
       },
-      ...(input.modeSnapshot ? {
-        modeSnapshot: toPermissionModeSnapshot(input.modeSnapshot, input.payload.createdAt),
-        modeSnapshotRef: input.modeSnapshot.modeSnapshotId,
+      ...(input.permissionSnapshot ? {
+        modeSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+        modeSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
       } : {}),
     });
     const compactionPromise = this.sessionCompactionOrchestrator
@@ -1328,9 +1333,9 @@ export class SessionRunService {
       } : {}),
       ...(input.inputIntent ? { inputIntent: input.inputIntent } : {}),
       budgetPolicy,
-      ...(input.modeSnapshot ? {
-        modeSnapshot: toPermissionModeSnapshot(input.modeSnapshot, input.payload.createdAt),
-        modeSnapshotRef: input.modeSnapshot.modeSnapshotId,
+      ...(input.permissionSnapshot ? {
+        modeSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+        modeSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
       } : {}),
     });
     const request: ModelStepRuntimeRequest = {
@@ -2343,12 +2348,12 @@ export class SessionRunService {
     return this.agentInstructionSourceService.loadInstructionSources(input);
   }
 
-  private requireRunModeService(): NonNullable<SessionRunServiceOptions['runModeService']> {
-    if (!this.runModeService) {
-      throw new Error('Run mode service is not configured.');
+  private requirePermissionSnapshotService(): NonNullable<SessionRunServiceOptions['permissionSnapshotService']> {
+    if (!this.permissionSnapshotService) {
+      throw new Error('Permission snapshot service is not configured.');
     }
 
-    return this.runModeService;
+    return this.permissionSnapshotService;
   }
 
   private async *resumeApprovalContinuation(
@@ -2915,17 +2920,22 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function toPermissionModeSnapshot(
-  value: RunModeSnapshot | RunMode,
+function toModelVisiblePermissionSnapshot(
+  input: PermissionSnapshotRecord,
   requestCreatedAt: string,
 ): PermissionModeSnapshot {
-  const mode = 'mode' in value ? value.mode : value;
-
   return {
-    permissionMode: isPermissionMode(mode.permissionMode) ? mode.permissionMode : 'default',
-    source: mode.source ?? 'system',
-    createdAt: 'createdAt' in value ? value.createdAt : requestCreatedAt,
+    permissionMode: isPermissionMode(input.permissionModeState.permissionMode)
+      ? input.permissionModeState.permissionMode
+      : 'default',
+    source: input.permissionModeState.source ?? 'system',
+    createdAt: input.createdAt ?? requestCreatedAt,
   };
+}
+
+function getRunStartPermissionModeState(payload: RunStartPayload): PermissionModeState | undefined {
+  return (payload as RunStartPayload & { permissionModeState?: PermissionModeState }).permissionModeState
+    ?? payload.modeSnapshot;
 }
 
 function normalizeWorkflowMetadata(value: unknown): WorkflowCommandMetadata | undefined {
@@ -2993,10 +3003,10 @@ function sessionMessageInputMetadata(input: {
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
-function createPermissionModeRunMode(
+function createPermissionModeState(
   permissionMode: PermissionMode,
   source: PermissionModeSelectionSource,
-): RunMode {
+): PermissionModeState {
   return {
     permissionMode,
     source,
@@ -3194,15 +3204,16 @@ export function createDefaultSessionRunService(
 ): SessionRunService {
   const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
   migrateDatabase(database);
-  const runModeRepository = new RunModeRepository(database);
+  const permissionSnapshotRepository = new PermissionSnapshotRepository(database);
   const activePathRepository = new SessionActivePathRepository(database);
 
   return new SessionRunService({
     repository: new SessionRunRepository(database),
     activePathRepository,
-    runModeService: new RunModeService({ repository: runModeRepository }),
+    permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     agentInstructionSourceService: options.agentInstructionSourceService ?? new AgentInstructionSourceService(),
   });
 }
+

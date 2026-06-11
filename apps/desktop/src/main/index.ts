@@ -3,7 +3,7 @@ import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
-import { RunModeRepository } from '@megumi/db/repos/run-mode.repo';
+import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
@@ -27,7 +27,7 @@ import { createModelStepProviderService } from './services/model-step-provider.s
 import { MegumiHomeConfigService } from './services/megumi-home-config.service';
 import { ProviderRuntimeService } from './services/provider-runtime.service';
 import { createElectronSecretStoreService } from './services/secret-store.service';
-import { RunModeService } from './services/run-mode.service';
+import { PermissionSnapshotService } from './services/permission-snapshot.service';
 import { createDefaultRunContextService } from './services/run-context.service';
 import { ToolService } from './services/tool.service';
 import { createToolCallHandlerService } from './services/tool-call-handler.service';
@@ -75,8 +75,8 @@ const memoryRepository = new MemoryRepository(database);
 const planArtifactCompatibility = new PlanArtifactCompatibilityService({
   repository: artifactRepository,
 });
-const runModeService = new RunModeService({
-  repository: new RunModeRepository(database),
+const permissionSnapshotService = new PermissionSnapshotService({
+  repository: new PermissionSnapshotRepository(database),
   planArtifactCompatibility,
 });
 const providerSettingsService = getDefaultProviderService();
@@ -158,7 +158,7 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
 const sessionRunService = new SessionRunService({
   repository: sessionRunRepository,
   activePathRepository,
-  runModeService: runModeService,
+  permissionSnapshotService: permissionSnapshotService,
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
   agentInstructionSourceService,
@@ -300,3 +300,4 @@ registerAppLifecycle({
 function nextPersistedRuntimeSequence(events: RuntimeEvent[]): number {
   return events.reduce((maxSequence, event) => Math.max(maxSequence, event.sequence), 0) + 1;
 }
+
