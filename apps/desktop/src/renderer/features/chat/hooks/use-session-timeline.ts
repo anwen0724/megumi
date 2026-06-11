@@ -108,7 +108,6 @@ function createSessionMessageSendPayload(
       permissionMode: payload.permissionMode,
       ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
       ...(payload.intent ? { intent: payload.intent } : {}),
-      ...(payload.workflow ? { workflow: payload.workflow } : {}),
     },
     createdAt: messageCreatedAt,
   };

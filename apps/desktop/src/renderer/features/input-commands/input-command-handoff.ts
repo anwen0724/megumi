@@ -1,8 +1,6 @@
 import type { PermissionModeSelectionSource } from '@megumi/shared/permission-mode-contracts';
 import type { InputIntentCommandMetadata } from '@megumi/shared/input-command-contracts';
 import { createCodeReviewInputIntentMetadata } from '@megumi/shared/input-command-contracts';
-import type { WorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
-import { createCodeReviewWorkflowCommandMetadata } from '@megumi/shared/workflow-command-contracts';
 import {
   dispatchCommandText,
   listCommandSuggestions,
@@ -15,11 +13,6 @@ export interface InputCommandSubmitPayload {
   permissionMode: 'plan';
   permissionSource: PermissionModeSelectionSource;
   intent: InputIntentCommandMetadata;
-  /**
-   * Temporary IPC/runtime compatibility bridge.
-   * Plan 2 replaces the main/runtime context path with input intent metadata.
-   */
-  workflow: WorkflowCommandMetadata;
 }
 
 export function listInputCommandSuggestions(inputText: string): CommandDefinition[] {
@@ -35,7 +28,6 @@ export function createInputCommandSubmitPayload(message: string): InputCommandSu
       permissionMode: 'plan',
       permissionSource: 'intent_default',
       intent: createCodeReviewInputIntentMetadata(dispatch.argsText),
-      workflow: createCodeReviewWorkflowCommandMetadata(dispatch.argsText),
     };
   }
 

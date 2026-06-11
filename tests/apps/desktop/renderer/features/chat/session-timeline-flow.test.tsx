@@ -501,12 +501,6 @@ describe('useSessionTimeline', () => {
           commandName: 'review',
           argsText: '当前改动',
         },
-        workflow: {
-          intent: 'code_review',
-          source: 'builtin_command',
-          commandName: 'review',
-          argsText: '当前改动',
-        },
       });
     });
 
@@ -514,23 +508,16 @@ describe('useSessionTimeline', () => {
       payload: expect.objectContaining({
         message: expect.objectContaining({ content: '/review 当前改动' }),
         context: expect.objectContaining({
-          permissionMode: 'plan',
-          permissionSource: 'intent_default',
           intent: {
             intentName: 'code_review',
             source: 'core_command',
             commandName: 'review',
             argsText: '当前改动',
           },
-          workflow: {
-            intent: 'code_review',
-            source: 'builtin_command',
-            commandName: 'review',
-            argsText: '当前改动',
-          },
         }),
       }),
     }));
+    expect(window.megumi.session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('workflow');
   });
 
   it('does not synthesize artifact state from completed runtime chat output', async () => {

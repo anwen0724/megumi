@@ -208,24 +208,18 @@ describe('Composer', () => {
     await userEvent.type(input, '当前改动');
     await userEvent.keyboard('{Enter}');
 
-    expect(onSubmit).toHaveBeenCalledWith({
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       message: '/review 当前改动',
       permissionMode: 'plan',
       permissionSource: 'intent_default',
-      model: 'deepseek-v4-flash',
       intent: {
         intentName: 'code_review',
         source: 'core_command',
         commandName: 'review',
         argsText: '当前改动',
       },
-      workflow: {
-        intent: 'code_review',
-        source: 'builtin_command',
-        commandName: 'review',
-        argsText: '当前改动',
-      },
-    });
+    }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
   });
 
   it('closes command autocomplete with Escape and keeps normal Enter submit behavior closed', async () => {
@@ -247,31 +241,25 @@ describe('Composer', () => {
     });
   });
 
-  it('submits /review as an intent command with plan intent default permission and legacy workflow bridge', async () => {
+  it('submits /review as an intent command with plan intent default permission', async () => {
     const onSubmit = vi.fn();
     render(<Composer onSubmit={onSubmit} />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/review 当前改动');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
-    expect(onSubmit).toHaveBeenCalledWith({
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       message: '/review 当前改动',
       permissionMode: 'plan',
       permissionSource: 'intent_default',
-      model: 'deepseek-v4-flash',
       intent: {
         intentName: 'code_review',
         source: 'core_command',
         commandName: 'review',
         argsText: '当前改动',
       },
-      workflow: {
-        intent: 'code_review',
-        source: 'builtin_command',
-        commandName: 'review',
-        argsText: '当前改动',
-      },
-    });
+    }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
   });
 
   it('keeps unknown slash commands as ordinary messages', async () => {

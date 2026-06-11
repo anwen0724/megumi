@@ -47,4 +47,21 @@ describe('usePermissionSnapshotStore', () => {
     expect(usePermissionSnapshotStore.getState().isPermissionModeEnabled('accept_edits')).toBe(true);
     expect(usePermissionSnapshotStore.getState().isPermissionModeEnabled('auto')).toBe(true);
   });
+
+  it('clears permission snapshots by run', () => {
+    usePermissionSnapshotStore.getState().setPermissionSnapshot('run:1', {
+      permissionSnapshotId: 'permission-snapshot:1',
+      runId: 'run:1',
+      permissionLabel: 'plan',
+      permissionModeState: {
+        permissionMode: 'plan',
+        source: 'user',
+      },
+      createdAt: '2026-05-15T00:00:00.000Z',
+    });
+
+    usePermissionSnapshotStore.getState().clearPermissionSnapshotState();
+
+    expect(usePermissionSnapshotStore.getState().permissionSnapshotsByRun).toEqual({});
+  });
 });
