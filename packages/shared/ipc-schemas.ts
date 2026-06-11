@@ -16,11 +16,10 @@ import {
   RunContextSourceSchema,
 } from './run-context-contracts';
 import {
-  RunModeSchema,
   ImplementationPlanArtifactRecordSchema,
   ImplementationPlanArtifactStatusSchema,
-} from './run-mode-contracts';
-import { PermissionModeStateSchema } from './permission-snapshot-contracts';
+  PermissionModeStateSchema,
+} from './permission-snapshot-contracts';
 import {
   ApprovalScopeSchema,
   ApprovalRecordSchema,
@@ -342,7 +341,7 @@ export const RunStartPayloadSchema = z
     goal: z.string().min(1),
     mode: z.string().min(1),
     permissionModeState: PermissionModeStateSchema.optional(),
-    modeSnapshot: RunModeSchema.optional(),
+    modeSnapshot: PermissionModeStateSchema.optional(),
     sourcePlanId: z.string().min(1).optional(),
     createdAt: IsoDateTimeSchema,
   })

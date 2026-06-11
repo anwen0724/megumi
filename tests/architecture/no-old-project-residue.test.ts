@@ -93,6 +93,9 @@ const allowedCurrentLifecycleTerms = new Map<string, string[]>([
   ['packages/shared/run-mode-contracts.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
+  ['packages/shared/permission-snapshot-contracts.ts', [
+    joinForbidden('ARTIFACT', '_'),
+  ]],
   ['packages/shared/artifact-contracts.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],

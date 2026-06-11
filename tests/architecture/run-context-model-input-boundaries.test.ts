@@ -45,6 +45,9 @@ describe('run context and model input boundaries', () => {
     const sessionRun = read('apps/desktop/src/main/services/session-run.service.ts');
 
     expect(contextManagement).toContain('runtimeConstraints?: ModelStepRuntimeConstraintInput[]');
+    expect(contextManagement).toMatch(/\bpermissionSnapshot\?:/);
+    expect(contextManagement).toMatch(/\bpermissionSnapshotRef\?:/);
+    expect(contextManagement).not.toMatch(/\bmodeSnapshot\?:/);
     expect(sessionRun).toContain('runtimeConstraintsFromRunContext');
     expect(sessionRun).toMatch(/context\??\.contextBudgetPolicy/);
   });

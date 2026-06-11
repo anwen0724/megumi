@@ -124,4 +124,37 @@ describe('run modes and plan artifact source guards', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('keeps run-mode imports limited to compatibility shims and DB physical mappings', () => {
+    const allowed = new Set([
+      'packages/shared/run-mode-contracts.ts',
+      'packages/shared/index.ts',
+      'packages/db/repos/run-mode.repo.ts',
+      'packages/db/index.ts',
+      'packages/core/run-runtime/run-mode.ts',
+      'packages/core/index.ts',
+      'apps/desktop/src/main/services/run-mode.service.ts',
+      'apps/desktop/src/renderer/entities/run-mode/index.ts',
+      'apps/desktop/src/renderer/entities/run-mode/store.ts',
+    ]);
+    const forbiddenPatterns = [
+      /@megumi\/shared\/run-mode-contracts/,
+      /@megumi\/db\/repos\/run-mode\.repo/,
+      /services\/run-mode\.service/,
+      /\bRunMode(Service|Repository|Snapshot|State|Schema)\b/,
+      /\brunMode(Service|Repository)\b/,
+      /\bcreateModeSnapshot\b/,
+      /\bmodeSnapshotsByRun\b/,
+    ];
+
+    const offenders = [
+      ...filesUnder('packages'),
+      ...filesUnder('apps/desktop/src'),
+    ]
+      .filter((file) => !allowed.has(projectPath(file)))
+      .filter((file) => forbiddenPatterns.some((pattern) => pattern.test(readProjectFile(file))))
+      .map(projectPath);
+
+    expect(offenders).toEqual([]);
+  });
 });

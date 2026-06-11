@@ -262,7 +262,9 @@ export const RunSchema = z
   .strict()
   .transform((run) => ({
     ...run,
-    permissionSnapshotRef: run.permissionSnapshotRef ?? run.modeSnapshotRef,
+    ...(run.permissionSnapshotRef ?? run.modeSnapshotRef
+      ? { permissionSnapshotRef: run.permissionSnapshotRef ?? run.modeSnapshotRef }
+      : {}),
   })) satisfies z.ZodType<Run>;
 
 export const RunStepSchema = z

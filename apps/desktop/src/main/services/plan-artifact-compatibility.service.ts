@@ -1,5 +1,5 @@
 import type { Artifact, ArtifactStatus } from '@megumi/shared/artifact-contracts';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/run-mode-contracts';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission-snapshot-contracts';
 import type { JsonObject } from '@megumi/shared/json';
 import type { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 

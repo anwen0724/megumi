@@ -2934,8 +2934,8 @@ function toModelVisiblePermissionSnapshot(
 }
 
 function getRunStartPermissionModeState(payload: RunStartPayload): PermissionModeState | undefined {
-  return (payload as RunStartPayload & { permissionModeState?: PermissionModeState }).permissionModeState
-    ?? payload.modeSnapshot;
+  const legacyPayload = payload as RunStartPayload & { modeSnapshot?: PermissionModeState };
+  return payload.permissionModeState ?? legacyPayload.modeSnapshot;
 }
 
 function normalizeWorkflowMetadata(value: unknown): WorkflowCommandMetadata | undefined {
