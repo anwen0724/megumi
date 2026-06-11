@@ -27,6 +27,13 @@ function filesUnder(path: string): string[] {
   });
 }
 
+function productionSourceFiles(): string[] {
+  return [
+    ...filesUnder('packages'),
+    ...filesUnder('apps/desktop/src'),
+  ].filter((path) => !path.includes('/archive/'));
+}
+
 function offenders(paths: string[], forbidden: RegExp[]): string[] {
   const matches: string[] = [];
   for (const path of paths) {
@@ -120,12 +127,35 @@ describe('Command system source guards', () => {
     ])).toEqual([]);
   });
 
+  it('does not keep legacy workflow command bridge in production code', () => {
+    const forbidden = [
+      /workflow-command-contracts/,
+      /\bWorkflowCommand/,
+      /\bworkflow_default\b/,
+      /\bcontext\?\.workflow\b/,
+      /\bcontext\.workflow\b/,
+      /\bpayload\.workflow\b/,
+    ];
+    const allowed = new Set([
+      'packages/shared/memory-contracts.ts',
+      'packages/memory/index.ts',
+    ]);
+
+    for (const relative of productionSourceFiles()) {
+      if (allowed.has(relative)) {
+        continue;
+      }
+      const text = source(relative);
+      for (const pattern of forbidden) {
+        expect(text, `${relative} must not match ${pattern}`).not.toMatch(pattern);
+      }
+    }
+  });
+
   it('keeps review out of permission mode contracts and exposes intent_default as a command-derived permission source', () => {
     const permissionModeContracts = source('packages/shared/permission-mode-contracts.ts');
-    const runModeContracts = source('packages/shared/run-mode-contracts.ts');
 
     expect(permissionModeContracts).not.toMatch(/ACTIVE_PERMISSION_MODES[\s\S]*review/);
-    expect(runModeContracts).not.toMatch(/PermissionModeSchema[\s\S]*review/);
     expect(permissionModeContracts).toContain('intent_default');
   });
 

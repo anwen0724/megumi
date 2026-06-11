@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -40,10 +40,17 @@ function filesUnder(path: string): string[] {
   return listFiles(join(ROOT, path));
 }
 
+function productionSourceFiles(): string[] {
+  return [
+    ...filesUnder('packages'),
+    ...filesUnder('apps/desktop/src'),
+  ].filter((file) => !projectPath(file).includes('/archive/'));
+}
+
 describe('run modes and plan artifact source guards', () => {
-  it('keeps shared run mode contracts platform-independent', () => {
+  it('keeps permission snapshot contracts platform-independent', () => {
     const offenders = filesUnder('packages/shared')
-      .filter((file) => /run-mode-contracts|run-mode-contracts/.test(projectPath(file)))
+      .filter((file) => /permission-snapshot-contracts/.test(projectPath(file)))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/core|@megumi\/desktop|fs|node:fs|path|node:path)/.test(source);
@@ -125,36 +132,36 @@ describe('run modes and plan artifact source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps run-mode imports limited to compatibility shims and DB physical mappings', () => {
-    const allowed = new Set([
+  it('does not keep run-mode compatibility shims in production code', () => {
+    const forbiddenPaths = [
       'packages/shared/run-mode-contracts.ts',
-      'packages/shared/index.ts',
       'packages/db/repos/run-mode.repo.ts',
-      'packages/db/index.ts',
       'packages/core/run-runtime/run-mode.ts',
-      'packages/core/index.ts',
       'apps/desktop/src/main/services/run-mode.service.ts',
       'apps/desktop/src/renderer/entities/run-mode/index.ts',
       'apps/desktop/src/renderer/entities/run-mode/store.ts',
-    ]);
+    ];
+
+    for (const relative of forbiddenPaths) {
+      expect(existsSync(join(ROOT, relative)), `${relative} should be deleted`).toBe(false);
+    }
+
     const forbiddenPatterns = [
       /@megumi\/shared\/run-mode-contracts/,
       /@megumi\/db\/repos\/run-mode\.repo/,
       /services\/run-mode\.service/,
-      /\bRunMode(Service|Repository|Snapshot|State|Schema)\b/,
-      /\brunMode(Service|Repository)\b/,
-      /\bcreateModeSnapshot\b/,
-      /\bmodeSnapshotsByRun\b/,
+      /\bRunMode(Service|Repository|Snapshot|State|Schema)?\b/,
+      /\bmodeSnapshot(Ref)?\b/,
+      /\bmode_snapshot(_ref|_id)?\b/,
+      /\brun_mode_snapshots\b/,
     ];
 
-    const offenders = [
-      ...filesUnder('packages'),
-      ...filesUnder('apps/desktop/src'),
-    ]
-      .filter((file) => !allowed.has(projectPath(file)))
-      .filter((file) => forbiddenPatterns.some((pattern) => pattern.test(readProjectFile(file))))
-      .map(projectPath);
-
-    expect(offenders).toEqual([]);
+    for (const file of productionSourceFiles()) {
+      const relative = projectPath(file);
+      const text = readProjectFile(file);
+      for (const pattern of forbiddenPatterns) {
+        expect(text, `${relative} must not match ${pattern}`).not.toMatch(pattern);
+      }
+    }
   });
 });

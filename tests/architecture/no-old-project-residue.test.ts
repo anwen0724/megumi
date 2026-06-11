@@ -90,16 +90,10 @@ const allowedCurrentLifecycleTerms = new Map<string, string[]>([
   ['tests/architecture/timeline-message-block-source-guards.test.ts', [
     joinForbidden('MESSAGE', '_'),
   ]],
-  ['packages/shared/run-mode-contracts.ts', [
-    joinForbidden('ARTIFACT', '_'),
-  ]],
   ['packages/shared/permission-snapshot-contracts.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
   ['packages/shared/artifact-contracts.ts', [
-    joinForbidden('ARTIFACT', '_'),
-  ]],
-  ['tests/packages/shared/run-mode-contracts.test.ts', [
     joinForbidden('ARTIFACT', '_'),
   ]],
   ['tests/packages/shared/artifact-contracts.test.ts', [

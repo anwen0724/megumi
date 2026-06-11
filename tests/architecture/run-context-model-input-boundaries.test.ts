@@ -48,6 +48,8 @@ describe('run context and model input boundaries', () => {
     expect(contextManagement).toMatch(/\bpermissionSnapshot\?:/);
     expect(contextManagement).toMatch(/\bpermissionSnapshotRef\?:/);
     expect(contextManagement).not.toMatch(/\bmodeSnapshot\?:/);
+    expect(contextManagement).not.toMatch(/\bmodeSnapshotRef\?:/);
+    expect(contextManagement).not.toMatch(/workflow-command-contracts/);
     expect(sessionRun).toContain('runtimeConstraintsFromRunContext');
     expect(sessionRun).toMatch(/context\??\.contextBudgetPolicy/);
   });

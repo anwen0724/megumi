@@ -86,4 +86,15 @@ describe('runtime lifecycle cleanup final source guards', () => {
     expect(source).not.toMatch(/\bproviderStates\?:/);
     expect(source).not.toMatch(/\bmodeSnapshot\?:/);
   });
+
+  it('keeps legacy workflow and mode snapshot cleanup names out of production source', () => {
+    const source = allProductionSource();
+
+    expect(source).not.toMatch(/workflow-command-contracts/);
+    expect(source).not.toMatch(/\bWorkflowCommand/);
+    expect(source).not.toMatch(/\bworkflow_default\b/);
+    expect(source).not.toMatch(/\bmodeSnapshot(Ref)?\b/);
+    expect(source).not.toMatch(/\bmode_snapshot(_ref|_id)?\b/);
+    expect(source).not.toMatch(/\brun_mode_snapshots\b/);
+  });
 });

@@ -108,6 +108,8 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('InputIntentCommandMetadata');
     expect(source).not.toContain('dispatchCommandText');
     expect(source).not.toContain('BUILT_IN_INPUT_COMMAND');
+    expect(source).not.toContain('workflow-command-contracts');
+    expect(source).not.toContain('WorkflowCommand');
   });
 
   it('keeps the core tool loop free of active path persistence concerns', () => {
