@@ -5338,7 +5338,7 @@ describe('SessionRunService', () => {
     ]));
   });
 
-  it('normalizes code review workflow messages to plan mode with workflow default source', async () => {
+  it('normalizes code review intent messages to plan mode with intent default source', async () => {
     const records: unknown[] = [];
     const requests: ModelStepRuntimeRequest[] = [];
     const service = createServiceWithModelStepStream([], {
@@ -5386,6 +5386,114 @@ describe('SessionRunService', () => {
         context: {
           permissionMode: 'default',
           permissionSource: 'user',
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain the stream so the provider request is observed.
+    }
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        runId: 'run-1',
+        mode: 'plan',
+        modeSnapshot: {
+          permissionMode: 'plan',
+          source: 'intent_default',
+        },
+        metadata: {
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+      }),
+    ]);
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'permission_mode',
+        sourceRefs: expect.arrayContaining([
+          expect.objectContaining({
+            sourceId: 'permission-mode:mode-snapshot:workflow',
+            sourceUri: 'permission-mode://mode-snapshot:workflow',
+          }),
+        ]),
+      }),
+    ]));
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'instruction',
+        instructionKind: 'intent',
+        text: expect.stringContaining('Input intent: code_review'),
+        metadata: {
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
+      }),
+    ]));
+  });
+
+  it('converts legacy code review workflow metadata to input intent before context construction', async () => {
+    const records: unknown[] = [];
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([], {
+      runModeService: {
+        createModeSnapshot: (input) => {
+          records.push(input);
+          return {
+            modeSnapshotId: 'mode-snapshot:workflow',
+            runId: input.runId,
+            modeLabel: input.mode,
+            mode: input.modeSnapshot ?? {
+              permissionMode: 'default',
+              source: 'system',
+            },
+            createdAt: input.createdAt,
+            ...(input.metadata ? { metadata: input.metadata } : {}),
+          };
+        },
+        linkAcceptedSourcePlan: (input) => input,
+        createPlanRecordForRun: () => undefined,
+        getPlanByRun: () => undefined,
+        updatePlanStatus: () => {
+          throw new Error('not implemented');
+        },
+      },
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: '/review 当前改动',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        context: {
           workflow: {
             intent: 'code_review',
             source: 'builtin_command',
@@ -5407,9 +5515,15 @@ describe('SessionRunService', () => {
         mode: 'plan',
         modeSnapshot: {
           permissionMode: 'plan',
-          source: 'workflow_default',
+          source: 'intent_default',
         },
         metadata: {
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
           workflow: {
             intent: 'code_review',
             source: 'builtin_command',
@@ -5421,14 +5535,17 @@ describe('SessionRunService', () => {
     ]);
     expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        kind: 'runtime_constraint',
-        constraintKind: 'permission_mode',
-        sourceRefs: expect.arrayContaining([
-          expect.objectContaining({
-            sourceId: 'permission-mode:mode-snapshot:workflow',
-            sourceUri: 'permission-mode://mode-snapshot:workflow',
-          }),
-        ]),
+        kind: 'instruction',
+        instructionKind: 'intent',
+        text: expect.stringContaining('Input intent: code_review'),
+        metadata: {
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
+            commandName: 'review',
+            argsText: '当前改动',
+          },
+        },
       }),
     ]));
   });
@@ -5510,7 +5627,7 @@ describe('SessionRunService', () => {
     });
   });
 
-  it('persists workflow metadata on session message run mode snapshots with the real repository', async () => {
+  it('persists intent metadata on session message run mode snapshots with the real repository', async () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const sessionRepository = new SessionRunRepository(db);
@@ -5563,9 +5680,9 @@ describe('SessionRunService', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         }],
         context: {
-          workflow: {
-            intent: 'code_review',
-            source: 'builtin_command',
+          intent: {
+            intentName: 'code_review',
+            source: 'core_command',
             commandName: 'review',
             argsText: '当前改动',
           },
@@ -5585,12 +5702,12 @@ describe('SessionRunService', () => {
     expect(runModeRepository.getModeSnapshotByRun('run-1')).toMatchObject({
       mode: {
         permissionMode: 'plan',
-        source: 'workflow_default',
+        source: 'intent_default',
       },
       metadata: {
-        workflow: {
-          intent: 'code_review',
-          source: 'builtin_command',
+        intent: {
+          intentName: 'code_review',
+          source: 'core_command',
           commandName: 'review',
           argsText: '当前改动',
         },

@@ -65,6 +65,10 @@ import type { RuntimeContext } from '@megumi/shared/runtime-context';
 import type { RuntimeError } from '@megumi/shared/runtime-errors';
 import type { RuntimeEvent } from '@megumi/shared/runtime-events';
 import {
+  InputIntentCommandMetadataSchema,
+  type InputIntentCommandMetadata,
+} from '@megumi/shared/input-command-contracts';
+import {
   WorkflowCommandMetadataSchema,
   type WorkflowCommandMetadata,
 } from '@megumi/shared/workflow-command-contracts';
@@ -514,14 +518,21 @@ export class SessionRunService {
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
     const currentUserMessage = currentUserChatMessage(input.payload);
+    const inputIntent = normalizeInputIntentMetadata(input.payload.context?.intent);
     const workflow = normalizeWorkflowMetadata(input.payload.context?.workflow);
-    const permissionMode = workflow?.intent === 'code_review'
-      ? 'plan'
-      : input.payload.context?.permissionMode ?? 'default';
-    const permissionSource = workflow?.intent === 'code_review'
-      ? 'workflow_default'
-      : input.payload.context?.permissionSource ?? 'user';
+    const effectiveInputIntent = inputIntent ?? inputIntentFromWorkflowMetadata(workflow);
+    const intentDefaultPermission = defaultPermissionForInputIntent(effectiveInputIntent);
+    const permissionMode = intentDefaultPermission?.permissionMode
+      ?? input.payload.context?.permissionMode
+      ?? 'default';
+    const permissionSource = intentDefaultPermission?.source
+      ?? input.payload.context?.permissionSource
+      ?? 'user';
     const mode = permissionMode;
+    const inputMetadata = sessionMessageInputMetadata({
+      intent: effectiveInputIntent,
+      workflow,
+    });
 
     if (!currentUserMessage) {
       throw new Error('Session message send requires a user message.');
@@ -556,7 +567,7 @@ export class SessionRunService {
       runId,
       mode,
       modeSnapshot: createPermissionModeRunMode(permissionMode, permissionSource),
-      ...(workflow ? { metadata: { workflow } } : {}),
+      ...(inputMetadata ? { metadata: inputMetadata } : {}),
       createdAt,
     });
     const run = modeSnapshot
@@ -636,7 +647,7 @@ export class SessionRunService {
         userMessage,
         currentUserMessage,
         permissionMode,
-        ...(workflow ? { workflow } : {}),
+        ...(effectiveInputIntent ? { inputIntent: effectiveInputIntent } : {}),
         ...(modeSnapshot ? { modeSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
@@ -1174,7 +1185,7 @@ export class SessionRunService {
     userMessage: SessionMessage;
     currentUserMessage: SessionMessageSendCurrentMessage;
     permissionMode: PermissionMode;
-    workflow?: WorkflowCommandMetadata;
+    inputIntent?: InputIntentCommandMetadata;
     modeSnapshot?: RunModeSnapshot;
     chatStreamAdapter?: ChatStreamEventAdapter;
   }): AsyncIterable<RuntimeEvent> {
@@ -1230,7 +1241,7 @@ export class SessionRunService {
       ...(context ? {
         runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
       } : {}),
-      ...(input.workflow ? { workflow: input.workflow } : {}),
+      ...(input.inputIntent ? { inputIntent: input.inputIntent } : {}),
       budgetPolicy: {
         modelContextWindow: Number.MAX_SAFE_INTEGER,
         reservedOutputTokens: 0,
@@ -1315,7 +1326,7 @@ export class SessionRunService {
       ...(context ? {
         runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
       } : {}),
-      ...(input.workflow ? { workflow: input.workflow } : {}),
+      ...(input.inputIntent ? { inputIntent: input.inputIntent } : {}),
       budgetPolicy,
       ...(input.modeSnapshot ? {
         modeSnapshot: toPermissionModeSnapshot(input.modeSnapshot, input.payload.createdAt),
@@ -2923,6 +2934,63 @@ function normalizeWorkflowMetadata(value: unknown): WorkflowCommandMetadata | un
   }
 
   return WorkflowCommandMetadataSchema.parse(value);
+}
+
+function normalizeInputIntentMetadata(input: unknown): InputIntentCommandMetadata | undefined {
+  if (!input) {
+    return undefined;
+  }
+
+  return InputIntentCommandMetadataSchema.parse(input);
+}
+
+function inputIntentFromWorkflowMetadata(
+  workflow: WorkflowCommandMetadata | undefined,
+): InputIntentCommandMetadata | undefined {
+  if (!workflow) {
+    return undefined;
+  }
+
+  if (workflow.intent === 'code_review') {
+    return {
+      intentName: 'code_review',
+      source: 'core_command',
+      commandName: workflow.commandName,
+      argsText: workflow.argsText,
+    };
+  }
+
+  return undefined;
+}
+
+function defaultPermissionForInputIntent(
+  intent: InputIntentCommandMetadata | undefined,
+): { permissionMode: PermissionMode; source: Extract<PermissionModeSelectionSource, 'intent_default'> } | undefined {
+  if (intent?.intentName === 'code_review') {
+    return {
+      permissionMode: 'plan',
+      source: 'intent_default',
+    };
+  }
+
+  return undefined;
+}
+
+function sessionMessageInputMetadata(input: {
+  intent?: InputIntentCommandMetadata;
+  workflow?: WorkflowCommandMetadata;
+}): JsonObject | undefined {
+  const metadata: JsonObject = {};
+
+  if (input.intent) {
+    metadata.intent = input.intent as unknown as JsonObject;
+  }
+
+  if (input.workflow) {
+    metadata.workflow = input.workflow as unknown as JsonObject;
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 function createPermissionModeRunMode(
