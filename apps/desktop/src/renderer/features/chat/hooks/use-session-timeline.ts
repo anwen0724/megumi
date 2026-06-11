@@ -12,6 +12,9 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
 
+// Coordinates chat timeline submission, optimistic user messages, and runtime
+// event routing for the active session. It forwards typed context hints only.
+
 export interface BranchDraftState {
   branchMarkerId: string;
   projectId: string;
@@ -108,6 +111,8 @@ function createSessionMessageSendPayload(
       permissionMode: payload.permissionMode,
       ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
       ...(payload.intent ? { intent: payload.intent } : {}),
+      // Preprocessing is renderer-provided context metadata; Desktop Main is
+      // responsible for validating it before constructing model input.
       ...(payload.preprocessing ? { preprocessing: payload.preprocessing } : {}),
     },
     createdAt: messageCreatedAt,

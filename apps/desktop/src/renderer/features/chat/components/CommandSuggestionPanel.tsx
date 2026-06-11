@@ -1,3 +1,5 @@
+// Renders input command suggestions supplied by the renderer input feature.
+// It stays presentational and does not parse or dispatch command semantics.
 import type { CommandDefinition } from '../../input';
 
 interface CommandSuggestionPanelProps {

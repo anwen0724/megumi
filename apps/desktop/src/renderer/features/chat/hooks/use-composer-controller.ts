@@ -1,3 +1,5 @@
+// Owns Composer interaction state and builds renderer-side submit payloads.
+// Runtime validation remains in Desktop Main; this hook only prepares UI input.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import {
   type ComposerModel,
@@ -22,6 +24,8 @@ function createComposerSubmitPayload(input: {
   const inputCommandPayload = createInputPreprocessingSubmitPayload(input.message);
 
   if (inputCommandPayload) {
+    // Command-derived payloads can suggest a permission posture, but only
+    // Desktop Main can turn that suggestion into a trusted permission snapshot.
     return {
       ...inputCommandPayload,
       permissionMode: inputCommandPayload.permissionMode ?? input.permissionMode,
