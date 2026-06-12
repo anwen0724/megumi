@@ -43,6 +43,13 @@ export interface ApplyContextBudgetResult {
   parts: ModelInputContextPart[];
   budget: ModelInputContextBudget;
   trace: ModelInputContextTrace;
+  failure?: ApplyContextBudgetFailure;
+}
+
+export interface ApplyContextBudgetFailure {
+  code: 'context_required_over_budget';
+  reason: 'required_context_over_budget';
+  retryable: false;
 }
 
 interface EstimatedDraft {
@@ -70,6 +77,7 @@ export function applyContextBudget(input: ApplyContextBudgetInput): ApplyContext
   const keepIndexes = new Set(requiredParts.map((part) => part.index));
   const excludedSources: ModelInputContextExcludedSource[] = [...(input.preExcludedSources ?? [])];
   const budgetWarnings: ContextBudgetWarning[] = [];
+  let failure: ApplyContextBudgetFailure | undefined;
 
   let firstKeptPartId: string | undefined;
   let firstKeptSourceId: string | undefined;
@@ -84,6 +92,11 @@ export function applyContextBudget(input: ApplyContextBudgetInput): ApplyContext
       tokenEstimate: requiredTokenEstimate,
       availableInputTokens,
     });
+    failure = {
+      code: 'context_required_over_budget',
+      reason: 'required_context_over_budget',
+      retryable: false,
+    };
     excludePrunableParts(estimatedParts, excludedSources);
   } else {
     const remainingBudget = availableInputTokens - requiredTokenEstimate;
@@ -151,6 +164,7 @@ export function applyContextBudget(input: ApplyContextBudgetInput): ApplyContext
       ...(firstKeptSourceId ? { firstKeptSourceId } : {}),
       ...(budgetWarnings.length > 0 ? { budgetWarnings } : {}),
     },
+    ...(failure ? { failure } : {}),
   };
 }
 
@@ -239,12 +253,57 @@ function selectContextualParts(
     if (usedTokens + part.tokenEstimate <= tokenBudget) {
       kept.add(part.index);
       usedTokens += part.tokenEstimate;
+      continue;
+    }
+
+    const remainingTokens = tokenBudget - usedTokens;
+    const truncatedPart = truncateHighPriorityPartToBudget(part, remainingTokens);
+    if (truncatedPart) {
+      part.draft = truncatedPart.draft;
+      part.tokenEstimate = truncatedPart.tokenEstimate;
+      kept.add(part.index);
+      usedTokens += truncatedPart.tokenEstimate;
     }
   }
 
   return {
     kept: contextualParts.filter((part) => kept.has(part.index)),
     excluded: contextualParts.filter((part) => !kept.has(part.index)),
+  };
+}
+
+function truncateHighPriorityPartToBudget(
+  part: EstimatedDraft,
+  availableTokens: number,
+): EstimatedDraft | undefined {
+  if (availableTokens <= 0 || part.draft.budgetClass !== 'high_priority') {
+    return undefined;
+  }
+
+  const text = textForDraft(part.draft);
+  const maxChars = Math.max(0, availableTokens * 4);
+  if (text.length <= maxChars) {
+    return part;
+  }
+
+  const truncatedText = text.slice(0, maxChars).trimEnd();
+  if (truncatedText.length === 0) {
+    return undefined;
+  }
+
+  const includedTokenEstimate = estimateModelInputContextTokens(truncatedText);
+  return {
+    ...part,
+    tokenEstimate: includedTokenEstimate,
+    draft: {
+      ...part.draft,
+      text: truncatedText,
+      truncationHint: {
+        reason: 'context_budget_truncated',
+        originalTokenEstimate: part.tokenEstimate,
+        retainedTokenEstimate: includedTokenEstimate,
+      },
+    } as ModelInputContextPartDraft,
   };
 }
 

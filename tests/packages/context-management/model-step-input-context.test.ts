@@ -1280,25 +1280,34 @@ describe('buildModelStepInputContextFromSources', () => {
       currentMessage: message({ messageId: 'message:current' }),
     });
 
-    expect(context.parts.some((part) => part.kind === 'instruction')).toBe(false);
-    expect(context.trace.excludedSources).toContainEqual({
-      sourceRef: expect.objectContaining({
-        sourceId: 'project-instruction:AGENTS.md',
-        sourceKind: 'project_instruction',
-        metadata: expect.objectContaining({
-          status: 'included_truncated',
-          sizeBytes: 70000,
-          includedBytes: 65536,
-          hardCapBytes: 65536,
-          truncated: true,
-        }),
+    const instruction = context.parts.find((part) => part.kind === 'instruction');
+    expect(instruction).toMatchObject({
+      kind: 'instruction',
+      budgetStatus: 'included_truncated',
+      truncation: expect.objectContaining({
+        reason: 'context_budget_truncated',
       }),
-      reason: 'context_budget_exceeded',
-      budgetClass: 'high_priority',
-      partId: 'part:instruction:project:project-instruction:AGENTS.md',
+      sourceRefs: [
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            status: 'included_truncated',
+            reason: 'project_instruction_hard_cap_exceeded',
+            sizeBytes: 70000,
+            includedBytes: 65536,
+            hardCapBytes: 65536,
+            truncated: true,
+          }),
+        }),
+      ],
     });
-    expect(context.trace.selectedSources).not.toContainEqual(expect.objectContaining({
+    expect(context.trace.excludedSources).not.toContainEqual(expect.objectContaining({
+      reason: 'context_budget_exceeded',
+      partId: 'part:instruction:project:project-instruction:AGENTS.md',
+    }));
+    expect(context.trace.selectedSources).toContainEqual(expect.objectContaining({
       sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
+      budgetClass: 'high_priority',
     }));
   });
 
@@ -1405,6 +1414,7 @@ describe('buildModelStepInputContextFromSources', () => {
           instructionScope: 'project',
           instructionDepth: 0,
           status: 'unavailable',
+          reason: 'agent_instruction_no_project_root',
         },
         },
         reason: 'agent_instruction_no_project_root',
@@ -1420,6 +1430,7 @@ describe('buildModelStepInputContextFromSources', () => {
           instructionScope: 'project',
           instructionDepth: 0,
           status: 'missing',
+          reason: 'agent_instruction_missing',
         },
         },
         reason: 'agent_instruction_missing',
@@ -1435,6 +1446,7 @@ describe('buildModelStepInputContextFromSources', () => {
           instructionScope: 'project',
           instructionDepth: 0,
           status: 'read_failed',
+          reason: 'agent_instruction_read_failed',
         },
         },
         reason: 'agent_instruction_read_failed',

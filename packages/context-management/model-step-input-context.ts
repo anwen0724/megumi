@@ -374,6 +374,7 @@ function instructionSourceRef(source: AgentInstructionSourceSnapshot): ModelInpu
       includedBytes: source.includedBytes,
       hardCapBytes: source.hardCapBytes,
       truncated: source.truncated,
+      reason: source.reason,
     }),
   };
 }

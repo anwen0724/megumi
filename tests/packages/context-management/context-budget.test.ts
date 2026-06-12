@@ -148,6 +148,53 @@ describe('Context budget executor', () => {
     expect(result.trace.budgetWarnings).toBeUndefined();
   });
 
+  it('marks required context overflow as blocking instead of silently continuing', () => {
+    const result = applyContextBudget({
+      buildReason: 'initial_model_step',
+      policy: {
+        modelContextWindow: 40,
+        reservedOutputTokens: 10,
+        keepRecentTokens: 0,
+      },
+      parts: [
+        {
+          ...currentTurnPart(60, 'current:huge'),
+          sourceRefs: [sourceRef('current:huge', 'current_user_message')],
+        },
+      ],
+    });
+
+    expect(result.failure).toEqual({
+      code: 'context_required_over_budget',
+      reason: 'required_context_over_budget',
+      retryable: false,
+    });
+  });
+
+  it('truncates high-priority instruction before dropping it under budget pressure', () => {
+    const result = applyContextBudget({
+      buildReason: 'initial_model_step',
+      policy: {
+        modelContextWindow: 120,
+        reservedOutputTokens: 20,
+        keepRecentTokens: 0,
+      },
+      parts: [
+        currentTurnPart(10, 'current:1'),
+        {
+          ...instructionPart(200, 'instruction:project'),
+          budgetClass: 'high_priority',
+          priority: 90,
+        },
+      ],
+    });
+
+    const instruction = result.parts.find((part) => part.partId === 'part:instruction:project');
+    expect(instruction?.budgetStatus).toBe('included_truncated');
+    expect(instruction?.truncation?.reason).toBe('context_budget_truncated');
+    expect(result.trace.excludedSources).toEqual([]);
+  });
+
   it('includes all session history when total estimate fits even if history exceeds keepRecentTokens', () => {
     const result = applyContextBudget({
       buildReason: 'fits_despite_keep_recent_window',
@@ -260,7 +307,7 @@ describe('Context budget executor', () => {
     ]);
   });
 
-  it('allows explicit required false to keep project instructions prunable under 18.01 budget rules', () => {
+  it('truncates explicit non-required project instructions before pruning them under 18.01 budget rules', () => {
     const optionalProjectInstruction = {
       ...instructionPart(30, 'project-instruction:optional'),
       budgetClass: 'high_priority' as const,
@@ -283,16 +330,16 @@ describe('Context budget executor', () => {
 
     expect(result.parts.map((part) => part.partId)).toEqual([
       'part:current:1',
+      'part:project-instruction:optional',
       'part:history:recent',
     ]);
-    expect(result.trace.excludedSources).toEqual([
-      {
-        sourceRef: sourceRef('project-instruction:optional', 'project_instruction'),
-        reason: 'context_budget_exceeded',
-        budgetClass: 'high_priority',
-        partId: 'part:project-instruction:optional',
-      },
-    ]);
+    expect(result.parts.find((part) => part.partId === 'part:project-instruction:optional')).toMatchObject({
+      budgetStatus: 'included_truncated',
+      truncation: expect.objectContaining({
+        reason: 'context_budget_truncated',
+      }),
+    });
+    expect(result.trace.excludedSources).toEqual([]);
   });
 
   it('treats memory recall as contextual and prunes it before required current turn', () => {
