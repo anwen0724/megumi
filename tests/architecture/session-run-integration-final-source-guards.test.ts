@@ -127,4 +127,27 @@ describe('09 session run integration final source guards', () => {
     expect(ipcContracts).toContain('channel');
     expect(ipcContracts).not.toMatch(/\boperationName\b.*RuntimeIpcRequestMeta/);
   });
+
+  it('routes session-run model input construction through ModelStepInputBuildService', () => {
+    const sessionRun = source('apps/desktop/src/main/services/session/session-run.service.ts');
+
+    expect(sessionRun).toContain('ModelStepInputBuildService');
+    expect(sessionRun).toContain('modelStepInputBuildService');
+    expect(sessionRun).not.toContain('buildModelStepInputContextFromSources');
+    expect(sessionRun).not.toContain('createModelStepInputContextId');
+    expect(sessionRun).not.toContain('loadInstructionSourcesForModelStep');
+    expect(sessionRun).not.toContain("contextKind: 'preflight'");
+    expect(sessionRun).not.toContain('initial_model_step_preflight');
+  });
+
+  it('keeps formal context build source free of old preflight naming', () => {
+    const scannedFiles = [
+      'packages/context-management/session-compaction.ts',
+      'apps/desktop/src/main/services/session/session-run.service.ts',
+      'apps/desktop/src/main/services/session/session-compaction-orchestrator.service.ts',
+    ];
+    const offenders = scannedFiles.filter((path) => /\bpreflight\b/i.test(source(path)));
+
+    expect(offenders).toEqual([]);
+  });
 });

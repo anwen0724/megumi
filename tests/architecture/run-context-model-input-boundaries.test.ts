@@ -40,7 +40,7 @@ describe('run context and model input boundaries', () => {
     expect(source).not.toMatch(/\bmodeSnapshot\?:/);
   });
 
-  it('keeps main as the RunContext to ModelInputContext adapter', () => {
+  it('keeps main as the RunContext to ModelStep input build adapter', () => {
     const contextManagement = read('packages/context-management/model-step-input-context.ts');
     const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
 
@@ -50,7 +50,8 @@ describe('run context and model input boundaries', () => {
     expect(contextManagement).not.toMatch(/\bmodeSnapshot\?:/);
     expect(contextManagement).not.toMatch(/\bmodeSnapshotRef\?:/);
     expect(contextManagement).not.toMatch(/workflow-command-contracts/);
-    expect(sessionRun).toContain('runtimeConstraintsFromRunContext');
+    expect(sessionRun).toContain('ModelStepInputBuildService');
+    expect(sessionRun).toContain('modelStepInputBuildService');
     expect(sessionRun).toMatch(/context\??\.contextBudgetPolicy/);
   });
 
