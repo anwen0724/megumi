@@ -1,10 +1,14 @@
 ﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildModelStepInputContextFromSources, createModelStepInputContextId } from '@megumi/context-management';
+import {
+  buildModelStepInputContextFromBuildRequest,
+  buildModelStepInputContextFromSources,
+  createModelStepInputContextId,
+} from '@megumi/context-management';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionMessage } from '@megumi/shared/session';
-import type { ModelStepProviderState } from '@megumi/shared/model';
+import type { ModelInputContextBuildRequest, ModelStepProviderState } from '@megumi/shared/model';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
@@ -158,6 +162,55 @@ function budgetPolicy() {
   };
 }
 
+function buildRequestFixture(overrides: Partial<ModelInputContextBuildRequest> = {}): ModelInputContextBuildRequest {
+  return {
+    requestId: 'model-input-build:1',
+    contextId: 'model-input-context:build-request',
+    sessionId: 'session:1',
+    runId: 'run:1',
+    modelStepId: 'step:1',
+    projectId: 'project:1',
+    projectRoot: 'C:/all/work/study/megumi',
+    effectiveCwd: 'C:/all/work/study/megumi',
+    permissionMode: 'default',
+    permissionSnapshotRef: 'permission-snapshot:1',
+    currentTurn: {
+      messageId: 'message:current',
+      effectiveUserText: 'Summarize current context.',
+    },
+    activePath: {
+      activeLeafId: 'message:current',
+    },
+    modelTarget: {
+      providerId: 'openai-compatible',
+      modelId: 'deepseek-chat',
+      contextWindow: 8192,
+    },
+    availableToolsRef: 'tool-definitions:run:1',
+    availableCapabilitySummary: 'Available tools: read_file, search_text, run_command.',
+    runtimeFacts: [
+      {
+        factId: 'runtime-fact:project',
+        factKind: 'project_identity',
+        text: 'Project: Megumi.',
+        required: true,
+      },
+      {
+        factId: 'runtime-fact:cwd',
+        factKind: 'effective_cwd',
+        text: 'Current working directory: .',
+        required: true,
+      },
+    ],
+    memoryRecallSeed: {
+      queryText: 'Summarize current context.',
+    },
+    traceId: 'trace:model-input:1',
+    builtAt,
+    ...overrides,
+  };
+}
+
 function toolCall(): ToolCall {
   return {
     toolCallId: 'tool-call:1',
@@ -211,6 +264,83 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(contextId.length).toBeLessThanOrEqual(128);
     expect(contextId).toMatch(/^model-input-context:/);
     expect(contextId).toMatch(/:approval-resume$/);
+  });
+
+  it('builds required runtime constraints and current turn from ModelInputContextBuildRequest', () => {
+    const context = buildModelStepInputContextFromBuildRequest({
+      request: buildRequestFixture(),
+      budgetPolicy: budgetPolicy(),
+    });
+
+    expect(context.contextId).toBe('model-input-context:build-request');
+    expect(context.stepId).toBe('step:1');
+    expect(context.parts.filter((part) => part.kind === 'current_turn')).toEqual([
+      expect.objectContaining({
+        kind: 'current_turn',
+        text: 'Summarize current context.',
+        budgetClass: 'required',
+        sourceRefs: [
+          expect.objectContaining({
+            sourceKind: 'current_user_message',
+            sourceId: 'session-message:message:current',
+          }),
+        ],
+      }),
+    ]);
+    expect(context.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'available_capability_summary',
+        text: 'Available tools: read_file, search_text, run_command.',
+        budgetClass: 'required',
+      }),
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'effective_cwd',
+        text: 'Current working directory: .',
+        budgetClass: 'required',
+      }),
+    ]));
+    expect(context.trace.metadata).toMatchObject({
+      traceId: 'trace:model-input:1',
+      effectiveCwd: 'C:/all/work/study/megumi',
+      modelTarget: {
+        providerId: 'openai-compatible',
+        modelId: 'deepseek-chat',
+      },
+    });
+  });
+
+  it('materializes memory recall sources as contextual memory parts', () => {
+    const context = buildModelStepInputContextFromBuildRequest({
+      request: buildRequestFixture(),
+      memoryRecallSources: [
+        {
+          sourceId: 'memory-recall:preference',
+          text: 'User prefers concise Chinese answers.',
+          memoryIds: ['memory:preference:1'],
+          loadedAt: builtAt,
+        },
+      ],
+      budgetPolicy: budgetPolicy(),
+    });
+
+    expect(context.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'memory',
+        memoryKind: 'memory_recall',
+        text: 'User prefers concise Chinese answers.',
+        memoryIds: ['memory:preference:1'],
+        budgetClass: 'contextual',
+      }),
+    ]));
+    expect(context.trace.selectedSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceId: 'memory-recall:preference',
+        sourceKind: 'memory_recall',
+        budgetClass: 'contextual',
+      }),
+    ]));
   });
 
   it('builds current turn, session, runtime constraint, and tool continuation parts from explicit sources', () => {
@@ -285,7 +415,7 @@ describe('buildModelStepInputContextFromSources', () => {
     ]);
     expect(context.trace.selectedSources.map((source) => source.sourceId)).toEqual(expect.arrayContaining([
       'session-message:message:history-user',
-      'runtime-constraint:run-context:1:project-boundary',
+      'run-context:1:project-boundary',
       'permission-mode:permission-snapshot:1',
       'tool-call:tool-call:1',
       'tool-result:tool-result:1',
@@ -696,10 +826,11 @@ describe('buildModelStepInputContextFromSources', () => {
       '',
       '# Project Rules\nUse tests.',
     ].join('\n'));
-    expect(context.trace.selectedSources).toContainEqual({
+    expect(context.trace.selectedSources).toContainEqual(expect.objectContaining({
       sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
       reason: 'instruction',
-    });
+    }));
   });
 
   it('materializes normalized input preprocessing after project instructions and before runtime constraints', () => {
@@ -902,24 +1033,25 @@ describe('buildModelStepInputContextFromSources', () => {
       currentMessage: message({ messageId: 'message:current' }),
     });
 
-    expect(context.parts[0]).toMatchObject({
-      kind: 'instruction',
-      budgetStatus: 'included_truncated',
-      truncation: {
-        reason: 'project_instruction_hard_cap_exceeded',
-      },
+    expect(context.parts.some((part) => part.kind === 'instruction')).toBe(false);
+    expect(context.trace.excludedSources).toContainEqual({
+      sourceRef: expect.objectContaining({
+        sourceId: 'project-instruction:AGENTS.md',
+        sourceKind: 'project_instruction',
+        metadata: expect.objectContaining({
+          status: 'included_truncated',
+          sizeBytes: 70000,
+          includedBytes: 65536,
+          hardCapBytes: 65536,
+          truncated: true,
+        }),
+      }),
+      reason: 'context_budget_exceeded',
+      partId: 'part:instruction:project:project-instruction:AGENTS.md',
     });
-    expect(context.parts[0]?.sourceRefs[0]?.metadata).toMatchObject({
-      status: 'included_truncated',
-      sizeBytes: 70000,
-      includedBytes: 65536,
-      hardCapBytes: 65536,
-      truncated: true,
-    });
-    expect(context.trace.selectedSources).toContainEqual({
+    expect(context.trace.selectedSources).not.toContainEqual(expect.objectContaining({
       sourceId: 'project-instruction:AGENTS.md',
-      reason: 'project_instruction_hard_cap_exceeded',
-    });
+    }));
   });
 
   it('keeps included empty project instructions model-visible and traceable', () => {
@@ -969,10 +1101,11 @@ describe('buildModelStepInputContextFromSources', () => {
         },
       }],
     });
-    expect(context.trace.selectedSources).toContainEqual({
+    expect(context.trace.selectedSources).toContainEqual(expect.objectContaining({
       sourceId: 'project-instruction:AGENTS.md',
+      sourceKind: 'project_instruction',
       reason: 'instruction',
-    });
+    }));
   });
 
   it('records missing, unavailable, and read-failed instruction sources as excluded trace only', () => {

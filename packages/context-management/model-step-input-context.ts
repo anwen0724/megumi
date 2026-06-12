@@ -5,10 +5,12 @@ import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,
+  ModelInputContextBuildRequest,
   ModelInputContextExcludedSource,
   ModelInputContextPart,
   ModelInputContextSourceRef,
   ModelInputContextTruncation,
+  ModelInputRuntimeConstraintKind,
 } from '@megumi/shared/model';
 import type { ModelStepProviderState } from '@megumi/shared/model';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission';
@@ -31,10 +33,23 @@ export interface CreateModelStepInputContextIdInput {
 export interface ModelStepRuntimeConstraintInput {
   constraintId: string;
   projectRoot?: string;
+  effectiveCwd?: string;
   workspaceAccess?: string;
   sandboxSummary?: string;
   approvalSummary?: string;
+  availableCapabilitySummary?: string;
+  runtimeFactKind?: string;
+  runtimeFactText?: string;
+  required?: boolean;
   loadedAt?: string;
+}
+
+export interface ModelInputMemoryRecallSource {
+  sourceId: string;
+  text: string;
+  memoryIds?: string[];
+  loadedAt?: string;
+  metadata?: JsonObject;
 }
 
 export function createModelStepInputContextId(input: CreateModelStepInputContextIdInput): string {
@@ -67,13 +82,73 @@ export interface BuildModelStepInputContextFromSourcesInput {
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
+  memoryRecallSources?: ModelInputMemoryRecallSource[];
+  traceMetadata?: JsonObject;
   budgetPolicy?: ContextBudgetPolicy;
+}
+
+export interface BuildModelStepInputContextFromBuildRequestInput {
+  request: ModelInputContextBuildRequest;
+  baseInputContext?: ModelInputContext;
+  instructionSources?: AgentInstructionSourceSnapshot[];
+  sessionContext?: SessionContextInput;
+  memoryRecallSources?: ModelInputMemoryRecallSource[];
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
+  providerStates?: ModelStepProviderState[];
+  budgetPolicy?: ContextBudgetPolicy;
+}
+
+export function buildModelStepInputContextFromBuildRequest(
+  input: BuildModelStepInputContextFromBuildRequestInput,
+): ModelInputContext {
+  const { request } = input;
+  const currentMessage = request.currentTurn?.effectiveUserText
+    ? ({
+        messageId: request.currentTurn.messageId ?? `${request.runId}:current-turn`,
+        sessionId: request.sessionId,
+        runId: request.runId,
+        role: 'user',
+        content: request.currentTurn.effectiveUserText,
+        status: 'completed',
+        createdAt: request.builtAt,
+        completedAt: request.builtAt,
+      } satisfies SessionMessage)
+    : undefined;
+
+  return buildModelStepInputContextFromSources({
+    baseInputContext: input.baseInputContext,
+    instructionSources: input.instructionSources,
+    contextId: request.contextId,
+    sessionId: request.sessionId,
+    runId: request.runId,
+    stepId: request.modelStepId,
+    buildReason: 'model_step_input_build',
+    builtAt: request.builtAt,
+    ...(currentMessage ? { currentMessage } : {}),
+    sessionContext: input.sessionContext,
+    runtimeConstraints: runtimeConstraintsFromBuildRequest(request),
+    toolCalls: input.toolCalls,
+    toolResults: input.toolResults,
+    providerStates: input.providerStates,
+    memoryRecallSources: input.memoryRecallSources,
+    budgetPolicy: input.budgetPolicy,
+    traceMetadata: {
+      traceId: request.traceId,
+      ...(request.effectiveCwd ? { effectiveCwd: request.effectiveCwd } : {}),
+      modelTarget: {
+        providerId: request.modelTarget.providerId,
+        modelId: request.modelTarget.modelId,
+      },
+    },
+  });
 }
 
 export function buildModelStepInputContextFromSources(
   input: BuildModelStepInputContextFromSourcesInput,
 ): ModelInputContext {
   const toolParts = toolContinuationParts(input);
+  const memoryParts = memoryRecallParts(input.memoryRecallSources ?? [], input.builtAt);
   const instructionSources = input.instructionSources ?? [];
   const nextInstructionParts = instructionParts(instructionSources);
   const inputPreprocessingParts = inputPreprocessingInstructionParts(input.inputPreprocessing, input.builtAt);
@@ -92,9 +167,11 @@ export function buildModelStepInputContextFromSources(
         ...inputPreprocessingParts,
         ...input.baseInputContext.parts.filter((part) => (
           part.kind !== 'tool_continuation'
+          && part.kind !== 'memory'
           && !(input.instructionSources && part.kind === 'instruction' && part.instructionKind === 'project')
           && !(input.inputPreprocessing && isInputDerivedInstructionPart(part))
         )).map(draftFromFinalPart),
+        ...memoryParts,
         ...toolParts,
       ]
     : [
@@ -102,6 +179,7 @@ export function buildModelStepInputContextFromSources(
         ...inputPreprocessingParts,
         ...runtimeConstraintParts(input),
         ...sessionContextResult.parts,
+        ...memoryParts,
         ...toolParts,
         ...(input.currentMessage ? [currentTurnPart(input.currentMessage, input.builtAt, input.inputPreprocessing)] : []),
       ];
@@ -116,6 +194,7 @@ export function buildModelStepInputContextFromSources(
     budgetPolicy: resolveModelStepContextBudgetPolicy(input),
     parts,
     excludedSources,
+    traceMetadata: input.traceMetadata,
   });
 }
 
@@ -238,6 +317,65 @@ function isInputDerivedInstructionPart(part: ModelInputContextPart): boolean {
       || part.instructionKind === 'skill'
       || part.instructionKind === 'input_hook'
     );
+}
+
+function runtimeConstraintsFromBuildRequest(
+  request: ModelInputContextBuildRequest,
+): ModelStepRuntimeConstraintInput[] {
+  const loadedAt = request.builtAt;
+  const constraints: ModelStepRuntimeConstraintInput[] = [];
+
+  if (request.projectRoot || request.effectiveCwd) {
+    constraints.push({
+      constraintId: `${request.requestId}:runtime-location`,
+      projectRoot: request.projectRoot,
+      effectiveCwd: request.effectiveCwd,
+      loadedAt,
+    });
+  }
+
+  if (request.availableCapabilitySummary) {
+    constraints.push({
+      constraintId: `${request.requestId}:available-capabilities`,
+      availableCapabilitySummary: request.availableCapabilitySummary,
+      loadedAt,
+    });
+  }
+
+  for (const fact of request.runtimeFacts) {
+    constraints.push({
+      constraintId: fact.factId,
+      runtimeFactKind: fact.factKind,
+      runtimeFactText: fact.text,
+      required: fact.required,
+      loadedAt,
+    });
+  }
+
+  return constraints;
+}
+
+function memoryRecallParts(
+  sources: ModelInputMemoryRecallSource[],
+  builtAt: string,
+): ModelInputContextPartDraft[] {
+  return sources.map((source): ModelInputContextPartDraft => ({
+    partId: `part:memory:${source.sourceId}`,
+    kind: 'memory',
+    memoryKind: 'memory_recall',
+    text: source.text,
+    memoryIds: source.memoryIds,
+    sourceRefs: [{
+      sourceId: source.sourceId,
+      sourceKind: 'memory_recall',
+      sourceUri: `memory-recall://${source.sourceId}`,
+      loadedAt: source.loadedAt ?? builtAt,
+      ...(source.metadata ? { metadata: source.metadata } : {}),
+    }],
+    priority: 55,
+    budgetClass: 'contextual',
+    required: false,
+  }));
 }
 
 // Maps input preprocessing entries to instructionKind: 'intent',
@@ -382,6 +520,8 @@ function currentTurnPart(
     text: inputPreprocessing?.effectiveUserText ?? message.content,
     sourceRefs: [sessionMessageSourceRef(message, builtAt, 'current_user_message', inputPreprocessing)],
     priority: 95,
+    budgetClass: 'required',
+    required: true,
     metadata: {
       role: message.role,
       status: message.status,
@@ -392,26 +532,70 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
   const parts: ModelInputContextPartDraft[] = [];
 
   for (const constraint of input.runtimeConstraints ?? []) {
+    const loadedAt = constraint.loadedAt ?? input.builtAt;
     const lines = [
       constraint.projectRoot ? `Project root: ${constraint.projectRoot}` : undefined,
+      constraint.effectiveCwd ? `Current working directory: ${constraint.effectiveCwd}` : undefined,
       constraint.workspaceAccess ? `Workspace access: ${constraint.workspaceAccess}` : undefined,
       constraint.sandboxSummary ? `Sandbox: ${constraint.sandboxSummary}` : undefined,
       constraint.approvalSummary ? `Approval: ${constraint.approvalSummary}` : undefined,
     ].filter((line): line is string => Boolean(line));
 
     if (lines.length > 0) {
+      const sourceKind = constraint.effectiveCwd ? 'runtime_fact' : 'project_boundary';
       parts.push({
-        partId: `part:runtime:project-boundary:${constraint.constraintId}`,
+        partId: `part:runtime-constraint:${constraint.constraintId}:boundary`,
         kind: 'runtime_constraint',
-        constraintKind: 'project_boundary',
+        constraintKind: constraint.effectiveCwd ? 'effective_cwd' : 'project_boundary',
         text: lines.join('\n'),
         sourceRefs: [{
-          sourceId: `runtime-constraint:${constraint.constraintId}`,
-          sourceKind: 'project_boundary',
+          sourceId: constraint.constraintId,
+          sourceKind,
           sourceUri: `runtime-constraint://${constraint.constraintId}`,
-          loadedAt: constraint.loadedAt ?? input.builtAt,
+          loadedAt,
         }],
-        priority: 85,
+        priority: 98,
+        budgetClass: 'required',
+        required: true,
+      });
+    }
+
+    if (constraint.availableCapabilitySummary) {
+      parts.push({
+        partId: `part:runtime-constraint:${constraint.constraintId}:capabilities`,
+        kind: 'runtime_constraint',
+        constraintKind: 'available_capability_summary',
+        text: constraint.availableCapabilitySummary,
+        sourceRefs: [{
+          sourceId: constraint.constraintId,
+          sourceKind: 'runtime_fact',
+          sourceUri: `runtime-constraint://${constraint.constraintId}`,
+          loadedAt,
+        }],
+        priority: 96,
+        budgetClass: 'required',
+        required: true,
+      });
+    }
+
+    if (constraint.runtimeFactText) {
+      parts.push({
+        partId: `part:runtime-fact:${constraint.constraintId}`,
+        kind: 'runtime_constraint',
+        constraintKind: runtimeFactConstraintKind(constraint.runtimeFactKind),
+        text: constraint.runtimeFactText,
+        sourceRefs: [{
+          sourceId: constraint.constraintId,
+          sourceKind: 'runtime_fact',
+          sourceUri: `runtime-fact://${constraint.constraintId}`,
+          loadedAt,
+        }],
+        priority: constraint.required ? 95 : 60,
+        budgetClass: constraint.required ? 'required' : 'contextual',
+        required: constraint.required === true,
+        metadata: {
+          runtimeFactKind: constraint.runtimeFactKind ?? 'other',
+        },
       });
     }
   }
@@ -429,6 +613,8 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
         loadedAt: input.permissionSnapshot.createdAt,
       }],
       priority: 90,
+      budgetClass: 'required',
+      required: true,
       metadata: {
         source: input.permissionSnapshot.source,
       },
@@ -436,6 +622,19 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
   }
 
   return parts;
+}
+
+function runtimeFactConstraintKind(factKind: string | undefined): ModelInputRuntimeConstraintKind {
+  if (factKind === 'effective_cwd') {
+    return 'effective_cwd';
+  }
+  if (factKind === 'available_capability_summary') {
+    return 'available_capability_summary';
+  }
+  if (factKind === 'permission_posture') {
+    return 'permission_posture';
+  }
+  return 'other';
 }
 
 function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPartDraft[] {

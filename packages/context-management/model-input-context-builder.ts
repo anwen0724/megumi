@@ -1,4 +1,5 @@
 ﻿import type { ContextBudgetPolicy } from '@megumi/shared/context';
+import type { JsonObject } from '@megumi/shared/primitives';
 import {
   ModelInputContextSchema,
   type ModelInputContext,
@@ -19,6 +20,7 @@ export interface BuildModelInputContextInput {
   budgetPolicy?: ContextBudgetPolicy;
   parts: ModelInputContextPartDraft[];
   excludedSources?: ModelInputContextExcludedSource[];
+  traceMetadata?: JsonObject;
 }
 
 export const DEFAULT_MODEL_CONTEXT_WINDOW = 8192;
@@ -44,7 +46,10 @@ export function buildModelInputContext(input: BuildModelInputContextInput): Mode
     stepId: input.stepId,
     parts: budgetedContext.parts,
     budget: budgetedContext.budget,
-    trace: budgetedContext.trace,
+    trace: {
+      ...budgetedContext.trace,
+      ...(input.traceMetadata ? { metadata: input.traceMetadata } : {}),
+    },
     builtAt: input.builtAt,
   });
 }
