@@ -17,6 +17,7 @@ export * from './capture-trigger-classifier';
 export * from './extraction';
 export * from './candidate-validation';
 export * from './memory-resolution';
+export * from './markdown-memory-format';
 
 const MAX_SUMMARY_LENGTH = 500;
 const MAX_CONTENT_PREVIEW_LENGTH = 1000;
