@@ -702,9 +702,9 @@ describe('buildModelStepInputContextFromSources', () => {
     });
   });
 
-  it('adds intent instruction metadata after project instructions and before runtime constraints', () => {
+  it('materializes normalized input preprocessing after project instructions and before runtime constraints', () => {
     const context = buildModelStepInputContextFromSources({
-      contextId: 'model-input-context:workflow-instruction',
+      contextId: 'model-input-context:input-preprocessing',
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:1',
@@ -723,17 +723,47 @@ describe('buildModelStepInputContextFromSources', () => {
         hardCapBytes: 65536,
         truncated: false,
       }],
-      inputIntent: {
-        intentName: 'code_review',
-        source: 'core_command',
-        commandName: 'review',
-        argsText: '当前改动',
+      inputPreprocessing: {
+        originalText: '/summary',
+        effectiveUserText: '总结当前会话',
+        entries: [
+          {
+            kind: 'prompt_template',
+            sourceId: 'input:prompt-template:summary',
+            sourceName: '/summary',
+            visibility: 'model_visible',
+            instructionText: '请总结当前会话。',
+            templateId: 'summary',
+            commandName: 'summary',
+            templateSource: 'builtin',
+          },
+          {
+            kind: 'skill',
+            sourceId: 'input:skill:write-doc',
+            sourceName: '/write-doc',
+            visibility: 'model_visible',
+            instructionText: '你正在执行文档写作任务。',
+            skillId: 'write-doc',
+            commandName: 'write-doc',
+            skillSource: 'builtin',
+          },
+          {
+            kind: 'input_hook',
+            sourceId: 'input:hook:default',
+            sourceName: 'default input hook',
+            visibility: 'host_only',
+            hookId: 'default',
+            action: 'continue',
+          },
+        ],
+        diagnostics: [],
       },
       runtimeConstraints: [projectBoundaryConstraint()],
-      currentMessage: message({ messageId: 'message:current', content: '/review 当前改动' }),
+      currentMessage: message({ messageId: 'message:current', content: '/summary' }),
     });
 
     expect(context.parts.map((part) => part.kind)).toEqual([
+      'instruction',
       'instruction',
       'instruction',
       'runtime_constraint',
@@ -741,35 +771,112 @@ describe('buildModelStepInputContextFromSources', () => {
     ]);
     expect(context.parts[1]).toMatchObject({
       kind: 'instruction',
-      instructionKind: 'intent',
-      text: expect.stringContaining('Input intent: code_review'),
+      instructionKind: 'prompt_template',
+      text: '请总结当前会话。',
       sourceRefs: [{
-        sourceId: 'input-intent:review',
-        sourceKind: 'input_intent',
-        sourceUri: 'input-intent://review',
+        sourceId: 'input:prompt-template:summary',
+        sourceKind: 'input_prompt_template',
+        sourceUri: 'input://prompt_template/summary',
         loadedAt: builtAt,
         metadata: {
-          intentName: 'code_review',
-          source: 'core_command',
-          commandName: 'review',
-          argsText: '当前改动',
+          sourceName: '/summary',
+          commandName: 'summary',
+          templateId: 'summary',
+          templateSource: 'builtin',
         },
       }],
-      metadata: {
-        intent: {
-          intentName: 'code_review',
-          source: 'core_command',
-          commandName: 'review',
-          argsText: '当前改动',
+    });
+    expect(context.parts[2]).toMatchObject({
+      kind: 'instruction',
+      instructionKind: 'skill',
+      text: '你正在执行文档写作任务。',
+      sourceRefs: [{
+        sourceId: 'input:skill:write-doc',
+        sourceKind: 'input_skill',
+        sourceUri: 'input://skill/write-doc',
+        loadedAt: builtAt,
+        metadata: {
+          sourceName: '/write-doc',
+          commandName: 'write-doc',
+          skillId: 'write-doc',
+          skillSource: 'builtin',
         },
-      },
+      }],
     });
-    expect(context.trace.selectedSources).toContainEqual({
-      sourceId: 'input-intent:review',
-      reason: 'instruction',
+    expect(context.parts[4]).toMatchObject({
+      kind: 'current_turn',
+      text: '总结当前会话',
+      sourceRefs: [
+        expect.objectContaining({
+          sourceKind: 'current_user_message',
+          metadata: expect.objectContaining({
+            originalText: '/summary',
+          }),
+        }),
+      ],
     });
+    expect(context.parts.some((part) => part.kind === 'instruction' && part.instructionKind === 'input_hook')).toBe(false);
   });
 
+  it('replaces stale input-derived instructions when rebuilding from a base context', () => {
+    const base = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:base-input-preprocessing',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      inputPreprocessing: {
+        originalText: '/summary',
+        effectiveUserText: '总结当前会话',
+        entries: [
+          {
+            kind: 'prompt_template',
+            sourceId: 'input:prompt-template:summary',
+            sourceName: '/summary',
+            visibility: 'model_visible',
+            instructionText: '旧 summary instruction',
+            templateId: 'summary',
+            commandName: 'summary',
+            templateSource: 'builtin',
+          },
+        ],
+        diagnostics: [],
+      },
+      currentMessage: message({ messageId: 'message:current', content: '/summary' }),
+    });
+
+    const rebuilt = buildModelStepInputContextFromSources({
+      baseInputContext: base,
+      contextId: 'model-input-context:rebuilt-input-preprocessing',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:2',
+      buildReason: 'tool_result_continuation',
+      builtAt,
+      inputPreprocessing: {
+        originalText: '/write-doc README.md',
+        effectiveUserText: 'README.md',
+        entries: [
+          {
+            kind: 'skill',
+            sourceId: 'input:skill:write-doc',
+            sourceName: '/write-doc',
+            visibility: 'model_visible',
+            instructionText: '新 write-doc instruction',
+            skillId: 'write-doc',
+            commandName: 'write-doc',
+            skillSource: 'builtin',
+          },
+        ],
+        diagnostics: [],
+      },
+    });
+
+    expect(rebuilt.parts.filter((part) => part.kind === 'instruction').map((part) => part.text)).toEqual([
+      '新 write-doc instruction',
+    ]);
+  });
   it('marks truncated project instruction parts with truncation metadata', () => {
     const context = buildModelStepInputContextFromSources({
       contextId: 'model-input-context:project-instruction-truncated',
@@ -1006,4 +1113,5 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(JSON.stringify(context.parts)).not.toContain('# Old rules');
   });
 });
+
 
