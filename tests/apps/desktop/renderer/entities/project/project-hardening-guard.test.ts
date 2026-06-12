@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 describe('project hardening guards', () => {
@@ -25,25 +25,29 @@ describe('project hardening guards', () => {
     expect(storeSource).not.toContain('localStorage');
   });
 
-  it('has no WorkspaceStore reference in source or test directories', () => {
-    const dirs = ['apps/', 'packages/', 'tests/'];
+  it('has no WorkspaceStore reference outside source guard tests', () => {
+    // Use ripgrep instead of PowerShell recursion so this guard remains stable
+    // when it runs concurrently with the full Vitest suite.
+    const result = spawnSync('rg', [
+      '--fixed-strings',
+      '--line-number',
+      '--glob',
+      '*.ts',
+      '--glob',
+      '*.tsx',
+      '--glob',
+      '!*guard.test.ts',
+      'WorkspaceStore',
+      'apps',
+      'packages',
+      'tests',
+    ], {
+      encoding: 'utf8',
+    });
 
-    for (const dir of dirs) {
-      try {
-        const result = execSync(
-          `powershell -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse -Include *.ts,*.tsx | Select-String -Pattern 'WorkspaceStore' -SimpleMatch | Select-Object -First 1"`,
-          { encoding: 'utf8' },
-        );
-        expect(result.trim()).toBe('');
-      } catch (error) {
-        // Non-zero exit is expected when no matches are found.
-        // Only the source-guard tests may contain the literal as a negated assertion.
-        const stderr = (error as { stderr?: Buffer }).stderr?.toString() ?? '';
-        if (stderr) {
-          throw new Error(`Unexpected error scanning ${dir}: ${stderr}`);
-        }
-      }
-    }
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(1);
+    expect(result.stdout.trim()).toBe('');
   });
 
   it('uses no local-workspace sentinel in session timeline', () => {
