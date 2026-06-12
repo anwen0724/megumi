@@ -105,6 +105,16 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
           toolResultContent: 'read_file returned the current provider mapper.',
         } as Partial<ModelInputContextPart>),
         basePart({
+          partId: 'part:memory:preference',
+          kind: 'memory',
+          memoryKind: 'memory_recall',
+          text: 'User prefers concise Chinese answers.',
+          sourceRefs: [sourceRef('memory-recall:preference', 'memory_recall')],
+          priority: 55,
+          budgetClass: 'contextual',
+          memoryIds: ['memory:preference:1'],
+        } as Partial<ModelInputContextPart>),
+        basePart({
           partId: 'part:runtime:1',
           kind: 'runtime_constraint',
           constraintKind: 'permission_mode',
@@ -134,6 +144,10 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
       },
       {
         role: 'system',
+        content: 'User prefers concise Chinese answers.',
+      },
+      {
+        role: 'system',
         content: 'Permission mode is plan.',
       },
       {
@@ -156,6 +170,34 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
         content: 'read_file returned the current provider mapper.',
       },
     ]);
+  });
+
+  it('materializes memory recall parts as provider system messages', () => {
+    const context = buildModelInputContext({
+      contextId: 'model-input-context:memory-provider',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        basePart({
+          partId: 'part:memory:preference',
+          kind: 'memory',
+          memoryKind: 'memory_recall',
+          text: 'User prefers concise Chinese answers.',
+          sourceRefs: [sourceRef('memory-recall:preference', 'memory_recall')],
+          priority: 55,
+          budgetClass: 'contextual',
+          memoryIds: ['memory:preference:1'],
+        } as Partial<ModelInputContextPart>),
+      ],
+    });
+
+    expect(mapModelInputContextToOpenAICompatibleMessages(context)).toEqual([{
+      role: 'system',
+      content: 'User prefers concise Chinese answers.',
+    }]);
   });
 
   it('materializes intent instruction text without exposing trace-only metadata as provider text', () => {

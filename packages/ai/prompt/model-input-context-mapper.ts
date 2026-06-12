@@ -166,6 +166,11 @@ function mapModelInputContextPartToOpenAICompatibleMessage(
         role: 'system',
         content: part.text,
       };
+    case 'memory':
+      return {
+        role: 'system',
+        content: part.text,
+      };
   }
 }
 
