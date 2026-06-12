@@ -36,7 +36,17 @@ function offenders(files: string[], pattern: RegExp): string[] {
 describe('memory foundation boundaries', () => {
   it('keeps packages/memory platform independent', () => {
     const files = productionFilesUnder('packages', 'memory');
-    expect(offenders(files, /from ['"]electron['"]|from ['"]node:fs['"]|from ['"]fs['"]|@megumi\/db|apps\//)).toEqual([]);
+    expect(offenders(files, /from ['"](electron|node:fs|fs|node:path|path)['"]|@megumi\/(db|ai)(\/|['"]|$)|packages\/(db|ai)|apps\/desktop|session-run|provider adapter|providers\//i)).toEqual([]);
+  });
+
+  it('keeps packages/memory on deterministic recall without vector search', () => {
+    const files = productionFilesUnder('packages', 'memory');
+    expect(offenders(files, /\bembedding\b|\bvector\b|cosineSimilarity|\bann\b|faiss/i)).toEqual([]);
+  });
+
+  it('keeps packages/memory free from runtime file IO operations', () => {
+    const files = productionFilesUnder('packages', 'memory');
+    expect(offenders(files, /\b(readFile|writeFile|appendFile|rename|watch)\b/)).toEqual([]);
   });
 
   it('keeps core memory helpers free from Host and persistence dependencies', () => {

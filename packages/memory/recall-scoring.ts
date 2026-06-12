@@ -1,5 +1,5 @@
 // Selects long-term memories for recall using deterministic lexical scoring
-// and builds run-scoped snapshots. It does not use embeddings or persistence.
+// and builds run-scoped snapshots. It does not inspect persistence.
 import type {
   MemoryKind,
   MemoryRecallDiagnostic,
@@ -18,7 +18,7 @@ export interface RecallScore {
 
 export interface RecallScoreInput {
   projectId?: string | null;
-  query: string;
+  query?: string;
   scopes?: MemoryScope[];
   kinds?: MemoryKind[];
 }
@@ -27,7 +27,7 @@ export interface SelectMemoryRecallResultsInput {
   recallRequestId: string;
   records: MemoryRecord[];
   projectId?: string | null;
-  query: string;
+  query?: string;
   limit: number;
   budget?: number;
   now: string;
@@ -45,12 +45,12 @@ export function scoreMemoryRecordForRecall(record: MemoryRecord, input: RecallSc
   if (input.kinds && !input.kinds.includes(record.kind)) {
     return { eligible: false, score: 0, reason: 'kind_mismatch' };
   }
-  if (record.scope === 'project' && (!input.projectId || record.projectId !== input.projectId)) {
+  if (record.scope === 'project' && input.projectId && record.projectId !== input.projectId) {
     return { eligible: false, score: 0, reason: 'scope_mismatch' };
   }
 
   const searchable = normalizeMemoryText(`${record.summary ?? ''} ${record.content} ${record.normalizedText}`);
-  const queryTokens = tokenize(input.query);
+  const queryTokens = tokenize(input.query ?? '');
   const queryMatches = queryTokens.filter((token) => searchable.includes(token)).length;
   if (queryTokens.length > 0 && queryMatches === 0) {
     return { eligible: false, score: 0, reason: 'query_mismatch' };
@@ -163,6 +163,9 @@ export function buildMemoryRecallSnapshot(input: {
     .filter((result) => result.selectedForContext)
     .map((result) => {
       const record = recordById.get(result.memoryId);
+      const tokenEstimate = typeof result.metadata.tokenEstimate === 'number'
+        ? result.metadata.tokenEstimate
+        : 0;
       return {
         memoryId: result.memoryId,
         scope: record?.scope ?? 'project',
@@ -170,7 +173,7 @@ export function buildMemoryRecallSnapshot(input: {
         content: record?.content ?? '',
         reason: result.reason,
         score: result.score,
-        tokenEstimate: result.metadata.tokenEstimate,
+        tokenEstimate,
       };
     });
 
