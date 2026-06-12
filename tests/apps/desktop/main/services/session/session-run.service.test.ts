@@ -3285,6 +3285,26 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]?.inputContext.contextId.length).toBeLessThanOrEqual(128);
     expect(requests[0]?.toolDefinitions).toEqual(toolDefinitions);
+    expect(requests[0]?.inputContext.trace.metadata).toMatchObject({
+      traceId: 'trace:model-input:run-1:step-1:initial',
+      effectiveCwd: 'C:\\all\\work\\study\\megumi',
+      modelTarget: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+      },
+    });
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'available_capability_summary',
+        text: 'Available tools: list_directory (project_read).',
+      }),
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        constraintKind: 'effective_cwd',
+        text: expect.stringContaining('Current working directory: .'),
+      }),
+    ]));
   });
 
   it('builds session message model input from persisted SessionContextInput', async () => {
@@ -4798,12 +4818,14 @@ describe('SessionRunService', () => {
     ], {
       onRequest: (request) => requests.push(request),
       agentInstructionSourceService: {
-        async loadInstructionSources({ projectRoot, loadedAt }) {
+        async loadInstructionSources({ projectRoot, effectiveCwd, loadedAt }) {
+          expect(projectRoot).toBe('C:/project');
+          expect(effectiveCwd).toBe('C:\\project');
           return [{
             sourceId: 'project-instruction:AGENTS.md',
             sourceKind: 'project_instruction',
             status: 'included',
-            sourceUri: 'project://AGENTS.md',
+            sourceUri: 'project-instruction://AGENTS.md',
             relativePath: 'AGENTS.md',
             text: `# rules for ${projectRoot}`,
             loadedAt,
@@ -5332,8 +5354,8 @@ describe('SessionRunService', () => {
     expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'runtime_constraint',
-        constraintKind: 'permission_mode',
-        text: expect.stringContaining('Permission mode is'),
+        constraintKind: 'permission_posture',
+        text: expect.stringContaining('Permission mode:'),
       }),
     ]));
   });

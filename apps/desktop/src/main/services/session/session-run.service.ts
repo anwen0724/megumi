@@ -106,6 +106,11 @@ import {
   type BuildSessionContextInputFromRepositoryInput,
 } from './session-context-input.service';
 import {
+  ModelStepInputBuildService,
+  type BuildModelStepInputInput,
+  type BuildModelStepInputResult,
+} from './model-step-input-build.service';
+import {
   SessionCompactionOrchestrator,
   type CompactIfNeededInput,
   type SessionCompactionOrchestrationResult,
@@ -187,6 +192,10 @@ export interface SessionRunSessionContextInputService {
   buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
 }
 
+export interface SessionRunModelStepInputBuildService {
+  buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
+}
+
 export interface SessionRunAutomaticRetryOptions {
   maxAttempts: number;
   baseDelayMs: number;
@@ -229,6 +238,7 @@ export interface SessionRunServiceOptions {
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
+  modelStepInputBuildService?: SessionRunModelStepInputBuildService;
   sessionContextInputService?: SessionRunSessionContextInputService;
   sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
@@ -320,6 +330,7 @@ export class SessionRunService {
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
+  private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly sessionContextInputService: SessionRunSessionContextInputService;
   private readonly sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
@@ -354,7 +365,12 @@ export class SessionRunService {
       ?? new SessionContextInputService({
         repository: this.repository,
         activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
-    });
+      });
+    this.modelStepInputBuildService = options.modelStepInputBuildService
+      ?? new ModelStepInputBuildService({
+        instructionSourceService: options.agentInstructionSourceService,
+        defaultBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
+      });
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.timelineMessageRepository = options.timelineMessageRepository;
     this.workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(options.workspaceChanges)
@@ -1222,36 +1238,32 @@ export class SessionRunService {
       currentMessageId: String(input.userMessage.messageId),
       builtAt: input.payload.createdAt,
     });
-    const instructionSources = await this.loadInstructionSourcesForModelStep({
-      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      loadedAt: input.payload.createdAt,
-    });
-    const preflightInputContext = buildModelStepInputContextFromSources({
-      contextId: createModelStepInputContextId({
-        stepId: String(input.step.stepId),
-        contextKind: 'preflight',
-      }),
+    const compactionProbeModelInput = await this.modelStepInputBuildService.buildModelStepInput({
+      requestId: input.requestId,
       sessionId: String(input.session.sessionId),
       runId: String(input.run.runId),
       stepId: String(input.step.stepId),
-      buildReason: 'initial_model_step_preflight',
-      builtAt: input.payload.createdAt,
-      currentMessage: input.userMessage,
-      sessionContext,
-      instructionSources,
-      ...(context ? {
-        runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
+      contextKind: 'compaction-probe',
+      providerId: input.payload.providerId,
+      modelId: input.payload.modelId,
+      modelContextWindow: budgetPolicy.modelContextWindow,
+      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      permissionMode: input.permissionMode,
+      ...(input.permissionSnapshot ? {
+        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
       } : {}),
+      currentMessage: input.userMessage,
       inputPreprocessing: input.inputPreprocessing,
+      sessionContext,
+      ...(toolDefinitions ? { toolDefinitions } : {}),
       budgetPolicy: {
         modelContextWindow: Number.MAX_SAFE_INTEGER,
         reservedOutputTokens: 0,
         keepRecentTokens: Number.MAX_SAFE_INTEGER,
       },
-      ...(input.permissionSnapshot ? {
-        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
-      } : {}),
+      builtAt: input.payload.createdAt,
     });
     const compactionPromise = this.sessionCompactionOrchestrator
       ? this.sessionCompactionOrchestrator.compactIfNeeded({
@@ -1264,7 +1276,7 @@ export class SessionRunService {
           runtimeContext: input.runtimeContext,
           createdAt: input.payload.createdAt,
           sessionContext,
-          preflightInputContext,
+          preflightInputContext: compactionProbeModelInput.inputContext,
           budgetPolicy,
           startSequence: lastSequence,
         })
@@ -1311,28 +1323,28 @@ export class SessionRunService {
       currentMessageId: String(input.userMessage.messageId),
       builtAt: input.payload.createdAt,
     });
-    const inputContext = buildModelStepInputContextFromSources({
-      contextId: createModelStepInputContextId({
-        stepId: String(input.step.stepId),
-        contextKind: 'initial',
-      }),
+    const initialModelInput = await this.modelStepInputBuildService.buildModelStepInput({
+      requestId: input.requestId,
       sessionId: String(input.session.sessionId),
       runId: String(input.run.runId),
       stepId: String(input.step.stepId),
-      buildReason: 'initial_model_step',
-      builtAt: input.payload.createdAt,
-      currentMessage: input.userMessage,
-      sessionContext: finalSessionContext,
-      instructionSources,
-      ...(context ? {
-        runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
-      } : {}),
-      inputPreprocessing: input.inputPreprocessing,
-      budgetPolicy,
+      contextKind: 'initial',
+      providerId: input.payload.providerId,
+      modelId: input.payload.modelId,
+      modelContextWindow: budgetPolicy.modelContextWindow,
+      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      permissionMode: input.permissionMode,
       ...(input.permissionSnapshot ? {
         permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
         permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
       } : {}),
+      currentMessage: input.userMessage,
+      inputPreprocessing: input.inputPreprocessing,
+      sessionContext: finalSessionContext,
+      ...(toolDefinitions ? { toolDefinitions } : {}),
+      budgetPolicy,
+      builtAt: input.payload.createdAt,
     });
     const request: ModelStepRuntimeRequest = {
       requestId: input.requestId,
@@ -1341,8 +1353,8 @@ export class SessionRunService {
       stepId: input.step.stepId,
       providerId: input.payload.providerId,
       modelId: input.payload.modelId,
-      inputContext,
-      ...(toolDefinitions && toolDefinitions.length > 0 ? { toolDefinitions } : {}),
+      inputContext: initialModelInput.inputContext,
+      ...(initialModelInput.toolDefinitions.length > 0 ? { toolDefinitions: initialModelInput.toolDefinitions } : {}),
       runtimeContext: input.runtimeContext,
       createdAt: input.payload.createdAt,
     };
@@ -1363,6 +1375,7 @@ export class SessionRunService {
       ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
       startSequence: lastSequence,
       emitRunStarted: false,
+      permissionMode: input.permissionMode,
     });
   }
 
@@ -1446,6 +1459,7 @@ export class SessionRunService {
     toolRuntime?: ToolCallHandlerPort & ToolApprovalResumePort;
     chatStreamAdapter?: ChatStreamEventAdapter;
     projectRoot?: string;
+    permissionMode?: PermissionMode;
     startSequence?: number;
     emitRunStarted?: boolean;
   }): AsyncIterable<RuntimeEvent> {
