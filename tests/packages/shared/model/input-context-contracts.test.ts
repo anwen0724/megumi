@@ -903,7 +903,7 @@ describe('AgentInstructionSourceSnapshot contracts', () => {
     }
   });
 
-  it('rejects empty instruction source identity values', () => {
+  it('rejects unsafe instruction source identity values', () => {
     expect(() => AgentInstructionSourceSnapshotSchema.parse({
       sourceId: 'project-instruction:empty-uri',
       sourceKind: 'project_instruction',
@@ -919,11 +919,39 @@ describe('AgentInstructionSourceSnapshot contracts', () => {
     })).toThrow();
 
     expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:file-uri',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'file:///C:/project/AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 8,
+      includedBytes: 8,
+      hardCapBytes: 65536,
+      truncated: false,
+    })).toThrow();
+
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
       sourceId: 'project-instruction:empty-relative-path',
       sourceKind: 'project_instruction',
       status: 'included',
       sourceUri: 'project-instruction://AGENTS.md',
       relativePath: '',
+      text: '# AGENTS',
+      loadedAt,
+      sizeBytes: 8,
+      includedBytes: 8,
+      hardCapBytes: 65536,
+      truncated: false,
+    })).toThrow();
+
+    expect(() => AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:path-escape',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'project-instruction://../AGENTS.md',
+      relativePath: '../AGENTS.md',
       text: '# AGENTS',
       loadedAt,
       sizeBytes: 8,

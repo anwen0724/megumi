@@ -138,12 +138,22 @@ export interface ModelInputContextSourceRef {
   metadata?: JsonObject;
 }
 
+const InstructionSourceRelativePathSchema = z
+  .string()
+  .min(1)
+  .refine(isSafeInstructionRelativePath, 'Instruction source relative path must stay project-relative.');
+
+const InstructionSourceUriSchema = z
+  .string()
+  .min(1)
+  .refine(isSafeInstructionSourceUri, 'Instruction source URI must use an instruction source scheme.');
+
 const AgentInstructionSourceSnapshotBaseSchema = z
   .object({
     sourceId: IdSchema,
     sourceKind: z.enum(['global_instruction', 'project_instruction']),
-    sourceUri: z.string().min(1).optional(),
-    relativePath: z.string().min(1).optional(),
+    sourceUri: InstructionSourceUriSchema.optional(),
+    relativePath: InstructionSourceRelativePathSchema.optional(),
     loadedAt: IsoDateTimeSchema,
   })
   .strict();
@@ -202,6 +212,33 @@ interface AgentInstructionSourceSnapshotBase {
   sourceUri?: string;
   relativePath?: string;
   loadedAt: IsoDateTime;
+}
+
+function isSafeInstructionSourceUri(value: string): boolean {
+  if (value === 'project://AGENTS.md') {
+    return true;
+  }
+
+  for (const prefix of ['project-instruction://', 'global-instruction://']) {
+    if (value.startsWith(prefix)) {
+      return isSafeInstructionRelativePath(value.slice(prefix.length));
+    }
+  }
+
+  return false;
+}
+
+function isSafeInstructionRelativePath(value: string): boolean {
+  const normalized = value.replace(/\\/g, '/');
+  return normalized === value
+    && normalized.trim() === normalized
+    && !normalized.includes('//')
+    && !normalized.startsWith('/')
+    && !/^[A-Za-z]:/.test(normalized)
+    && normalized !== '..'
+    && !normalized.startsWith('../')
+    && !normalized.includes('/../')
+    && !normalized.endsWith('/..');
 }
 
 export type AgentInstructionSourceSnapshot =
