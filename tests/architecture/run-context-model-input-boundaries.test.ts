@@ -54,12 +54,15 @@ describe('run context and model input boundaries', () => {
     expect(sessionRun).toMatch(/context\??\.contextBudgetPolicy/);
   });
 
-  it('keeps input intent materialization in context-management and out of provider adapters', () => {
+  it('keeps input preprocessing materialization in context-management and out of provider adapters', () => {
     const contextSource = read('packages/context-management/model-step-input-context.ts');
     const providerSource = read('packages/ai/prompt/model-input-context-mapper.ts');
 
-    expect(contextSource).toContain('inputIntent');
+    expect(contextSource).toContain('inputPreprocessing');
+    expect(contextSource).toContain("instructionKind: 'prompt_template'");
+    expect(contextSource).toContain("instructionKind: 'skill'");
     expect(contextSource).toContain("instructionKind: 'intent'");
+    expect(providerSource).not.toContain('InputPreprocessingResult');
     expect(providerSource).not.toContain('InputIntentCommandMetadata');
     expect(providerSource).not.toContain('input-command-contracts');
   });

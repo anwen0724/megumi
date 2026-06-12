@@ -108,6 +108,34 @@ describe('Command system source guards', () => {
     ])).toEqual([]);
   });
 
+  it('keeps production code off legacy input command contracts and legacy context intent handoff', () => {
+    const productionText = productionSourceFiles()
+      .map((relativePath) => source(relativePath))
+      .join('\n');
+
+    expect(productionText).not.toContain('@megumi/shared/input-command');
+    expect(productionText).not.toContain('packages/shared/input-command');
+    expect(productionText).not.toContain('context?.intent');
+    expect(productionText).not.toContain('context.intent');
+    expect(productionText).not.toContain('payload.intent');
+    expect(productionText).not.toContain('inputIntent');
+  });
+
+  it('keeps required input preprocessing boundary comments in production code', () => {
+    expect(source('apps/desktop/src/main/services/runtime/runtime-input.service.ts'))
+      .toContain('before session runs trust it');
+    expect(source('packages/context-management/model-step-input-context.ts'))
+      .toContain('never parses raw slash commands');
+    expect(source('apps/desktop/src/main/services/session/session-run.service.ts'))
+      .toContain('runtime normalization is the trust boundary');
+    expect(source('packages/shared/ipc/schemas.ts'))
+      .toContain('runtime services own trusted normalization');
+    expect(source('apps/desktop/src/renderer/features/input/preprocessing/input-preprocessing-submit.ts'))
+      .toContain('instead of expanding provider-visible text in the renderer');
+    expect(source('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts'))
+      .toContain('Desktop Main is responsible for validating it');
+  });
+
   it('keeps provider adapters free of slash command parsing and input command business semantics', () => {
     expect(offenders(filesUnder('packages/ai'), [
       /parseSlashCommand/,

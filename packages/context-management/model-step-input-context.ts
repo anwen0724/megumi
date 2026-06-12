@@ -1,4 +1,4 @@
-﻿// Materializes normalized runtime input sources into provider-neutral model context parts.
+// Materializes normalized runtime input sources into provider-neutral model context parts.
 // This module consumes typed sources and never parses raw slash commands.
 import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
@@ -240,6 +240,8 @@ function isInputDerivedInstructionPart(part: ModelInputContextPart): boolean {
     );
 }
 
+// Maps input preprocessing entries to instructionKind: 'intent',
+// instructionKind: 'prompt_template', instructionKind: 'skill', or input_hook.
 function inputPreprocessingInstructionKind(
   entry: InputPreprocessingEntry,
 ): Extract<ModelInputContextPartDraft, { kind: 'instruction' }>['instructionKind'] {
@@ -607,7 +609,3 @@ function stringifyJsonValue(value: JsonValue): string {
     return '[unserializable structured content]';
   }
 }
-
-
-
-

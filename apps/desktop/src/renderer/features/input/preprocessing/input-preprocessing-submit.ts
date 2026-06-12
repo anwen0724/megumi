@@ -115,8 +115,7 @@ function createWriteDocPayload(rawText: string, argsText: string): InputPreproce
   };
 }
 
-// This switch maps command kinds to structured preprocessing entries instead
-// of expanding provider-visible text in the renderer.
+// This switch maps command kinds to structured preprocessing entries instead of expanding provider-visible text in the renderer.
 export function createInputPreprocessingSubmitPayload(message: string): InputPreprocessingSubmitPayload | null {
   const dispatch = dispatchCommandText(message, BUILT_IN_INPUT_COMMAND_REGISTRY);
   if (dispatch.kind === 'send_intent' && dispatch.command.name === 'review') {

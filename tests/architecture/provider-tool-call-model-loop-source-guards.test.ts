@@ -106,6 +106,13 @@ describe('provider tool call model loop source guards', () => {
 
     expect(source).not.toContain('input-command-contracts');
     expect(source).not.toContain('InputIntentCommandMetadata');
+    expect(source).not.toContain('InputPreprocessingResult');
+    expect(source).not.toContain('@megumi/shared/input');
+    expect(source).not.toContain('@megumi/shared/hook');
+    expect(source).not.toContain('@megumi/shared/skill');
+    expect(source).not.toContain('@megumi/shared/prompt-template');
+    expect(source).not.toContain('/summary');
+    expect(source).not.toContain('/write-doc');
     expect(source).not.toContain('dispatchCommandText');
     expect(source).not.toContain('BUILT_IN_INPUT_COMMAND');
     expect(source).not.toContain('workflow-command-contracts');

@@ -112,12 +112,8 @@ describe('package and file structure source guards', () => {
     ])).toEqual([]);
   });
 
-  it('keeps input command compatibility isolated to the temporary shared shim', () => {
-    const compatibilityShim = read('packages/shared/input-command/contracts.ts');
-
-    expect(compatibilityShim).toContain("export * from '../input/command-contracts'");
-    expect(compatibilityShim).not.toContain("from 'zod'");
-    expect(compatibilityShim).not.toContain('InputPreprocessingResultSchema');
+  it('removes the temporary input command compatibility shim after input foundation migration', () => {
+    expect(existsSync(join(repoRoot, 'packages/shared/input-command'))).toBe(false);
   });
 
   it('keeps core runtime under agent-runtime and off old runtime helper paths', () => {
