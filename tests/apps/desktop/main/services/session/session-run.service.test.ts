@@ -23,7 +23,7 @@ import type {
 import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session/session-compaction-orchestrator.service';
 import { PermissionSnapshotService } from '@megumi/desktop/main/services/security/permission-snapshot.service';
 import type { ChatStreamEvent } from '@megumi/shared';
-import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { ModelInputContext, ModelStepRuntimeRequest, SessionInstructionSourceSnapshot } from '@megumi/shared/model';
 import type { ModelInputContextSourceKind } from '@megumi/shared/model';
 import type { RunContext } from '@megumi/shared/run';
 import type { RunAction } from '@megumi/shared/session';
@@ -254,6 +254,9 @@ function createServiceWithModelStepStream(
   sessionContextInputService?: SessionRunServiceOptions['sessionContextInputService'];
   sessionCompactionOrchestrator?: SessionRunServiceOptions['sessionCompactionOrchestrator'];
   modelStepInputBuildService?: SessionRunServiceOptions['modelStepInputBuildService'];
+  globalInstructionDirectoryProvider?: SessionRunServiceOptions['globalInstructionDirectoryProvider'];
+  sessionInstructionSourceProvider?: SessionRunServiceOptions['sessionInstructionSourceProvider'];
+  runEffectiveCwdProvider?: SessionRunServiceOptions['runEffectiveCwdProvider'];
   activePathRepository?: SessionActivePathRepository;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
@@ -274,6 +277,13 @@ function createServiceWithModelStepStream(
       sessionCompactionOrchestrator: options.sessionCompactionOrchestrator,
     } : {}),
     ...(options?.modelStepInputBuildService ? { modelStepInputBuildService: options.modelStepInputBuildService } : {}),
+    ...(options?.globalInstructionDirectoryProvider ? {
+      globalInstructionDirectoryProvider: options.globalInstructionDirectoryProvider,
+    } : {}),
+    ...(options?.sessionInstructionSourceProvider ? {
+      sessionInstructionSourceProvider: options.sessionInstructionSourceProvider,
+    } : {}),
+    ...(options?.runEffectiveCwdProvider ? { runEffectiveCwdProvider: options.runEffectiveCwdProvider } : {}),
     ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
@@ -5058,8 +5068,119 @@ describe('SessionRunService', () => {
     });
   });
 
+  it('passes host runtime sources into compaction probe and initial model input builds', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const loadInstructionCalls: unknown[] = [];
+    const sessionInstructionSources: SessionInstructionSourceSnapshot[] = [{
+      sourceId: 'session-instruction:active',
+      sourceKind: 'session_instruction',
+      text: 'Prefer terse output for this session.',
+      loadedAt: '2026-05-17T00:00:00.000Z',
+    }, {
+      sourceId: 'mode-instruction:debug',
+      sourceKind: 'mode_instruction',
+      text: 'Inspect evidence before changing files.',
+      loadedAt: '2026-05-17T00:00:00.000Z',
+    }];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      globalInstructionDirectoryProvider: {
+        listGlobalInstructionDirs: () => ['C:/megumi/global-instructions'],
+      },
+      sessionInstructionSourceProvider: {
+        listSessionInstructionSources: () => sessionInstructionSources,
+      },
+      runEffectiveCwdProvider: {
+        getRunEffectiveCwd: () => 'src/app',
+      },
+      agentInstructionSourceService: {
+        async loadInstructionSources(input) {
+          loadInstructionCalls.push(input);
+          return [{
+            sourceId: 'global-instruction:CLAUDE.md',
+            sourceKind: 'global_instruction',
+            status: 'included',
+            sourceUri: 'global-instruction://CLAUDE.md',
+            relativePath: 'CLAUDE.md',
+            text: '# global rules',
+            loadedAt: input.loadedAt,
+            sizeBytes: 14,
+            includedBytes: 14,
+            hardCapBytes: 65536,
+            truncated: false,
+          }];
+        },
+      },
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          expect(input.budgetProbeInputContext.parts).toEqual(expect.arrayContaining([
+            expect.objectContaining({ kind: 'instruction', instructionKind: 'session' }),
+            expect.objectContaining({ kind: 'instruction', instructionKind: 'mode' }),
+            expect.objectContaining({ kind: 'runtime_constraint', constraintKind: 'effective_cwd' }),
+          ]));
+          return { status: 'skipped', events: [] };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Continue',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain the stream so the model request is built.
+    }
+
+    expect(loadInstructionCalls).toEqual([
+      expect.objectContaining({
+        projectRoot: 'C:/project',
+        effectiveCwd: 'C:\\project\\src\\app',
+        globalInstructionDirs: ['C:/megumi/global-instructions'],
+      }),
+      expect.objectContaining({
+        projectRoot: 'C:/project',
+        effectiveCwd: 'C:\\project\\src\\app',
+        globalInstructionDirs: ['C:/megumi/global-instructions'],
+      }),
+    ]);
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'instruction', instructionKind: 'global' }),
+      expect.objectContaining({ kind: 'instruction', instructionKind: 'session' }),
+      expect.objectContaining({ kind: 'instruction', instructionKind: 'mode' }),
+      expect.objectContaining({ kind: 'runtime_constraint', constraintKind: 'effective_cwd' }),
+    ]));
+  });
+
   it('refreshes project instructions for tool continuation model steps', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
+    const sessionInstructionSources: SessionInstructionSourceSnapshot[] = [{
+      sourceId: 'session-instruction:continuation',
+      sourceKind: 'session_instruction',
+      text: 'Keep continuation scoped to the current run.',
+      loadedAt: '2026-05-17T00:00:00.000Z',
+    }];
     const service = createServiceWithModelStepStream((request, callIndex) => {
       if (callIndex === 1) {
         return [
@@ -5111,10 +5232,19 @@ describe('SessionRunService', () => {
           availability: { status: 'available' },
         }],
       },
+      globalInstructionDirectoryProvider: {
+        listGlobalInstructionDirs: () => ['C:/megumi/global-instructions'],
+      },
+      sessionInstructionSourceProvider: {
+        listSessionInstructionSources: () => sessionInstructionSources,
+      },
+      runEffectiveCwdProvider: {
+        getRunEffectiveCwd: () => 'packages/core',
+      },
       agentInstructionSourceService: {
         async loadInstructionSources({ projectRoot, effectiveCwd, loadedAt }) {
           expect(projectRoot).toBe('C:/project');
-          expect(effectiveCwd).toBe('C:\\project');
+          expect(effectiveCwd).toBe('C:\\project\\packages\\core');
           return [{
             sourceId: 'project-instruction:AGENTS.md',
             sourceKind: 'project_instruction',
@@ -5178,12 +5308,20 @@ describe('SessionRunService', () => {
       text: expect.stringContaining('# rules loaded at'),
     });
     expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'instruction', instructionKind: 'session' }),
+      expect.objectContaining({ kind: 'runtime_constraint', constraintKind: 'effective_cwd' }),
       expect.objectContaining({ kind: 'tool_continuation' }),
     ]));
   });
 
   it('registers pending approvals before yielding approval runtime events', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
+    const sessionInstructionSources: SessionInstructionSourceSnapshot[] = [{
+      sourceId: 'session-instruction:approval',
+      sourceKind: 'session_instruction',
+      text: 'Use the approved tool result before answering.',
+      loadedAt: '2026-05-17T00:00:00.000Z',
+    }];
     const service = createServiceWithModelStepStream((request, callIndex) => {
       requests.push(request);
       if (callIndex === 1) {
@@ -5287,8 +5425,15 @@ describe('SessionRunService', () => {
           availability: { status: 'available' },
         }],
       },
+      sessionInstructionSourceProvider: {
+        listSessionInstructionSources: () => sessionInstructionSources,
+      },
+      runEffectiveCwdProvider: {
+        getRunEffectiveCwd: () => 'packages/approval',
+      },
       agentInstructionSourceService: {
-        async loadInstructionSources({ loadedAt }) {
+        async loadInstructionSources({ effectiveCwd, loadedAt }) {
+          expect(effectiveCwd).toBe('C:\\project\\packages\\approval');
           return [{
             sourceId: 'project-instruction:AGENTS.md',
             sourceKind: 'project_instruction',
@@ -5376,6 +5521,10 @@ describe('SessionRunService', () => {
       instructionKind: 'project',
       text: expect.stringContaining('# approval rules loaded at 2026-05-17T00:00:05.000Z'),
     });
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'instruction', instructionKind: 'session' }),
+      expect.objectContaining({ kind: 'runtime_constraint', constraintKind: 'effective_cwd' }),
+    ]));
   });
 
   it('passes workspace baseline context to model step requests for session messages', async () => {

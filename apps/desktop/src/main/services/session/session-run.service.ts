@@ -33,6 +33,7 @@ import type {
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContextSourceRef,
+  SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
@@ -192,6 +193,23 @@ export interface SessionRunModelStepInputBuildService {
   buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
 }
 
+export interface SessionRunGlobalInstructionDirectoryProvider {
+  listGlobalInstructionDirs(input: { sessionId: string; runId: string; stepId: string }): string[];
+}
+
+export interface SessionRunSessionInstructionSourceProvider {
+  listSessionInstructionSources(input: {
+    sessionId: string;
+    runId: string;
+    stepId: string;
+    builtAt: string;
+  }): SessionInstructionSourceSnapshot[];
+}
+
+export interface SessionRunEffectiveCwdProvider {
+  getRunEffectiveCwd(input: { sessionId: string; runId: string; stepId: string }): string | undefined;
+}
+
 export interface SessionRunAutomaticRetryOptions {
   maxAttempts: number;
   baseDelayMs: number;
@@ -236,6 +254,9 @@ export interface SessionRunServiceOptions {
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
+  globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
+  sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
+  runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
   sessionContextInputService?: SessionRunSessionContextInputService;
   sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
@@ -327,6 +348,9 @@ export class SessionRunService {
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
+  private readonly globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
+  private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
+  private readonly runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
   private readonly sessionContextInputService: SessionRunSessionContextInputService;
   private readonly sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
@@ -356,6 +380,9 @@ export class SessionRunService {
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
+    this.globalInstructionDirectoryProvider = options.globalInstructionDirectoryProvider;
+    this.sessionInstructionSourceProvider = options.sessionInstructionSourceProvider;
+    this.runEffectiveCwdProvider = options.runEffectiveCwdProvider;
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
         repository: this.repository,
@@ -393,6 +420,25 @@ export class SessionRunService {
           })
         : undefined);
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
+  }
+
+  private modelInputRuntimeSourceOverrides(input: {
+    sessionId: string;
+    runId: string;
+    stepId: string;
+    builtAt: string;
+  }): Partial<Pick<
+    BuildModelStepInputInput,
+    'globalInstructionDirs' | 'sessionInstructionSources' | 'requestedCwd'
+  >> {
+    const globalInstructionDirs = this.globalInstructionDirectoryProvider?.listGlobalInstructionDirs(input) ?? [];
+    const sessionInstructionSources = this.sessionInstructionSourceProvider?.listSessionInstructionSources(input) ?? [];
+    const requestedCwd = this.runEffectiveCwdProvider?.getRunEffectiveCwd(input);
+    return {
+      ...(globalInstructionDirs.length > 0 ? { globalInstructionDirs } : {}),
+      ...(sessionInstructionSources.length > 0 ? { sessionInstructionSources } : {}),
+      ...(requestedCwd ? { requestedCwd } : {}),
+    };
   }
 
   createSession(payload: SessionCreatePayload): Session {
@@ -1244,6 +1290,12 @@ export class SessionRunService {
       modelContextWindow: budgetPolicy.modelContextWindow,
       ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      ...this.modelInputRuntimeSourceOverrides({
+        sessionId: String(input.session.sessionId),
+        runId: String(input.run.runId),
+        stepId: String(input.step.stepId),
+        builtAt: input.payload.createdAt,
+      }),
       permissionMode: input.permissionMode,
       ...(input.permissionSnapshot ? {
         permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
@@ -1335,6 +1387,12 @@ export class SessionRunService {
       modelContextWindow: budgetPolicy.modelContextWindow,
       ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      ...this.modelInputRuntimeSourceOverrides({
+        sessionId: String(input.session.sessionId),
+        runId: String(input.run.runId),
+        stepId: String(input.step.stepId),
+        builtAt: input.payload.createdAt,
+      }),
       permissionMode: input.permissionMode,
       ...(input.permissionSnapshot ? {
         permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
@@ -1585,6 +1643,12 @@ export class SessionRunService {
               providerId: input.request.providerId,
               modelId: String(input.request.modelId),
               ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+              ...this.modelInputRuntimeSourceOverrides({
+                sessionId: contextInput.sessionId,
+                runId: contextInput.runId,
+                stepId: contextInput.stepId,
+                builtAt: contextInput.builtAt,
+              }),
               permissionMode: input.permissionMode ?? 'default',
               toolDefinitions: input.request.toolDefinitions ?? [],
               toolCalls: contextInput.toolCalls,
@@ -2526,6 +2590,12 @@ export class SessionRunService {
       providerId: pending.request.providerId,
       modelId: String(pending.request.modelId),
       ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
+      ...this.modelInputRuntimeSourceOverrides({
+        sessionId: pending.request.sessionId,
+        runId: String(pending.request.runId),
+        stepId: String(resumedStep.stepId),
+        builtAt: input.decidedAt,
+      }),
       permissionMode: continuation.permissionMode ?? 'default',
       toolDefinitions: pending.request.toolDefinitions ?? [],
       toolCalls: pending.accumulatedToolCalls,
