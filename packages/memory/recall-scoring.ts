@@ -45,8 +45,10 @@ export function scoreMemoryRecordForRecall(record: MemoryRecord, input: RecallSc
   if (input.kinds && !input.kinds.includes(record.kind)) {
     return { eligible: false, score: 0, reason: 'kind_mismatch' };
   }
-  if (record.scope === 'project' && input.projectId && record.projectId !== input.projectId) {
-    return { eligible: false, score: 0, reason: 'scope_mismatch' };
+  if (record.scope === 'project') {
+    if (!input.projectId || record.projectId !== input.projectId) {
+      return { eligible: false, score: 0, reason: 'scope_mismatch' };
+    }
   }
 
   const searchable = normalizeMemoryText(`${record.summary ?? ''} ${record.content} ${record.normalizedText}`);

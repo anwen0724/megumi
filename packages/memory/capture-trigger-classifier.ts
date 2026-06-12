@@ -52,6 +52,12 @@ const STRONG_SIGNALS = new Set<MemoryCaptureSignal>([
   'source_of_truth_doc_changed',
 ]);
 
+const SCOPED_CAPTURE_SIGNALS = new Set<MemoryCaptureSignal>([
+  'project_rule',
+  'stable_project_fact',
+  'source_of_truth_doc_changed',
+]);
+
 export function evaluateMemoryCaptureTrigger(input: MemoryCaptureTriggerInput): MemoryCaptureTriggerDecision {
   if (!input.memoryEnabled) {
     return skip('memory_disabled');
@@ -64,7 +70,7 @@ export function evaluateMemoryCaptureTrigger(input: MemoryCaptureTriggerInput): 
   }
 
   const text = normalizeMemoryPatternText(`${input.userText} ${input.assistantFinalText ?? ''}`);
-  const signals = collectSignals(text, input);
+  const signals = collectSignals(text, input).filter((signal) => input.hasProject || !SCOPED_CAPTURE_SIGNALS.has(signal));
   if (signals.length === 0) {
     return skip('no_long_term_signal');
   }

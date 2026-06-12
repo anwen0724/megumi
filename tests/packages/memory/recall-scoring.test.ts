@@ -57,6 +57,40 @@ describe('memory recall scoring', () => {
     expect(results.map((result) => result.memoryId)).toEqual(['current', 'user-pref']);
   });
 
+  it('excludes project memories when there is no current project id', () => {
+    const results = selectMemoryRecallResults({
+      recallRequestId: 'memory-recall:1',
+      records: [
+        memory({ memoryId: 'project-memory', projectId: 'project:1', content: 'Use Vitest for unit tests.' }),
+        memory({ memoryId: 'user-memory', scope: 'user', projectId: null, kind: 'preference', content: 'Prefer concise answers.' }),
+      ],
+      projectId: undefined,
+      query: 'vitest concise',
+      limit: 8,
+      budget: 100,
+      now,
+    });
+
+    expect(results.map((result) => result.memoryId)).toEqual(['user-memory']);
+  });
+
+  it('excludes other-project records when current project id does not match', () => {
+    const results = selectMemoryRecallResults({
+      recallRequestId: 'memory-recall:1',
+      records: [
+        memory({ memoryId: 'current-project', projectId: 'project:1', content: 'Use Vitest for unit tests.' }),
+        memory({ memoryId: 'other-project', projectId: 'project:2', content: 'Use Vitest for unit tests.' }),
+      ],
+      projectId: 'project:1',
+      query: 'vitest',
+      limit: 8,
+      budget: 100,
+      now,
+    });
+
+    expect(results.map((result) => result.memoryId)).toEqual(['current-project']);
+  });
+
   it('weights kind priority, lexical match, recency, confidence, and usage deterministically', () => {
     const results = selectMemoryRecallResults({
       recallRequestId: 'memory-recall:1',
@@ -98,6 +132,29 @@ describe('memory recall scoring', () => {
     expect(snapshot.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ memoryId: 'inactive', reason: 'inactive_status' }),
       expect.objectContaining({ reason: 'budget_exceeded' }),
+    ]));
+  });
+
+  it('records diagnostics for project memories excluded without current project id', () => {
+    const snapshot = buildMemoryRecallSnapshot({
+      snapshotId: 'memory-recall-snapshot:1',
+      recallRequestId: 'memory-recall:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      projectId: null,
+      query: 'vitest',
+      records: [
+        memory({ memoryId: 'project-memory', projectId: 'project:1', content: 'Use Vitest for unit tests.' }),
+        memory({ memoryId: 'user-memory', scope: 'user', projectId: null, kind: 'preference', content: 'Prefer concise answers.' }),
+      ],
+      maxResults: 8,
+      maxTokens: 100,
+      now,
+    });
+
+    expect(snapshot.selected.map((item) => item.memoryId)).toEqual(['user-memory']);
+    expect(snapshot.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ memoryId: 'project-memory', reason: 'scope_mismatch' }),
     ]));
   });
 });

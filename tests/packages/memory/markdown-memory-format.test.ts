@@ -60,6 +60,25 @@ describe('memory markdown format', () => {
     ]);
   });
 
+  it('infers import kind from heading and reports metadata kind mismatches', () => {
+    const parsed = parseMemoryMarkdown({
+      scope: 'user',
+      markdown: [
+        '# User Memory',
+        '## Preference',
+        '<!-- memory:id=memory:1 kind=decision updated=2026-06-12T00:00:00.000Z -->',
+        '- 用户希望回答简洁。',
+      ].join('\n'),
+    });
+
+    expect(parsed.entries).toEqual([
+      expect.objectContaining({ memoryId: 'memory:1', kind: 'preference', text: '用户希望回答简洁。' }),
+    ]);
+    expect(parsed.diagnostics).toEqual([
+      expect.objectContaining({ reason: 'metadata_kind_mismatch', heading: 'Preference' }),
+    ]);
+  });
+
   it('renders active records only with fixed kind order and updatedAt desc', () => {
     const rendered = renderMemoryMarkdown({
       title: 'User Memory',

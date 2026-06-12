@@ -10,7 +10,7 @@ export interface ParsedMemoryMarkdownEntry {
 }
 
 export interface MemoryMarkdownDiagnostic {
-  reason: 'unknown_heading' | 'entry_without_kind' | 'invalid_metadata';
+  reason: 'unknown_heading' | 'entry_without_kind' | 'invalid_metadata' | 'metadata_kind_mismatch';
   heading?: string;
   line?: number;
 }
@@ -32,8 +32,9 @@ export function parseMemoryMarkdown(input: {
   const entries: ParsedMemoryMarkdownEntry[] = [];
   const diagnostics: MemoryMarkdownDiagnostic[] = [];
   let currentKind: MemoryKind | null = null;
+  let currentHeading: string | null = null;
   let insideUnknownHeading = false;
-  let pendingMetadata: { memoryId: string; kind: MemoryKind; updatedAt: string } | null = null;
+  let pendingMetadata: { memoryId: string; kind: MemoryKind; updatedAt: string; line: number } | null = null;
 
   const lines = input.markdown.split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
@@ -42,6 +43,7 @@ export function parseMemoryMarkdown(input: {
     const heading = /^##\s+(.+?)\s*$/.exec(line);
     if (heading) {
       const headingText = heading[1] ?? '';
+      currentHeading = headingText;
       currentKind = KIND_BY_HEADING.get(headingText.toLowerCase()) ?? null;
       insideUnknownHeading = !currentKind;
       pendingMetadata = null;
@@ -62,6 +64,7 @@ export function parseMemoryMarkdown(input: {
         memoryId: metadata[1] ?? '',
         kind: metadata[2] as MemoryKind,
         updatedAt: metadata[3] ?? '',
+        line: lineNumber,
       };
       continue;
     }
@@ -80,9 +83,16 @@ export function parseMemoryMarkdown(input: {
 
     const metadata = pendingMetadata;
     pendingMetadata = null;
+    if (metadata && metadata.kind !== currentKind) {
+      diagnostics.push({
+        reason: 'metadata_kind_mismatch',
+        heading: currentHeading ?? currentKind,
+        line: metadata.line,
+      });
+    }
     entries.push({
       memoryId: metadata?.memoryId ?? null,
-      kind: metadata?.kind ?? currentKind,
+      kind: currentKind,
       text: item[1] ?? '',
       ...(metadata?.updatedAt ? { updatedAt: metadata.updatedAt } : {}),
     });

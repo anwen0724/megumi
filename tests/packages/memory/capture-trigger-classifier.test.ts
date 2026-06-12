@@ -76,6 +76,37 @@ describe('memory capture trigger classifier', () => {
     });
   });
 
+  it('does not extract project-only signals when there is no current project', () => {
+    expect(evaluateMemoryCaptureTrigger({
+      ...baseInput,
+      hasProject: false,
+      userText: '项目文档默认使用中文。',
+    })).toMatchObject({
+      shouldExtract: false,
+      reason: 'no_long_term_signal',
+    });
+    expect(evaluateMemoryCaptureTrigger({
+      ...baseInput,
+      hasProject: false,
+      userText: '检查一下文档。',
+      toolActivity: { hasStableProjectFact: true },
+    })).toMatchObject({
+      shouldExtract: false,
+      reason: 'no_long_term_signal',
+    });
+  });
+
+  it('still extracts user-scope strong signals without a current project', () => {
+    expect(evaluateMemoryCaptureTrigger({
+      ...baseInput,
+      hasProject: false,
+      userText: 'Please remember that I prefer concise answers in future reviews.',
+    })).toMatchObject({
+      shouldExtract: true,
+      signals: expect.arrayContaining(['explicit_remember', 'future_preference']),
+    });
+  });
+
   it('applies cooldown to weak stable facts but not strong signals', () => {
     const lastCaptureAt = '2026-06-11T23:59:30.000Z';
     expect(evaluateMemoryCaptureTrigger({

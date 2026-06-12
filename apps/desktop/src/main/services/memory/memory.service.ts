@@ -343,6 +343,7 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
         records,
         scopes: input.scopes,
         kinds: input.kinds,
+        projectId: input.projectId,
         query: input.query,
         limit: input.limit,
         budget: input.budget,
