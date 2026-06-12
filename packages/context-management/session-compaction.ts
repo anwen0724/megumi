@@ -84,14 +84,14 @@ export interface BuildSessionCompactionSummaryInputContextInput {
 }
 
 export function shouldRunSessionCompaction(input: {
-  preflightInputContext: ModelInputContext;
+  budgetProbeInputContext: ModelInputContext;
   budgetPolicy: ContextBudgetPolicy;
 }): SessionCompactionBudgetPressureResult {
   const availableInputTokens = Math.max(
     0,
     input.budgetPolicy.modelContextWindow - input.budgetPolicy.reservedOutputTokens,
   );
-  const tokensBefore = input.preflightInputContext.budget.inputTokenEstimate;
+  const tokensBefore = input.budgetProbeInputContext.budget.inputTokenEstimate;
 
   return {
     shouldCompact: tokensBefore > availableInputTokens,

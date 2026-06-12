@@ -1270,7 +1270,7 @@ export class SessionRunService {
           runtimeContext: input.runtimeContext,
           createdAt: input.payload.createdAt,
           sessionContext,
-          preflightInputContext: compactionProbeModelInput.inputContext,
+          budgetProbeInputContext: compactionProbeModelInput.inputContext,
           budgetPolicy,
           startSequence: lastSequence,
         })

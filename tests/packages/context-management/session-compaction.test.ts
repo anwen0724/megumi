@@ -192,18 +192,18 @@ describe('prepareSessionCompactionInput', () => {
 });
 
 describe('shouldRunSessionCompaction', () => {
-  it('triggers when preflight input tokens exceed the available model input budget', () => {
+  it('triggers when budget probe input tokens exceed the available model input budget', () => {
     const budgetPolicy: ContextBudgetPolicy = {
       modelContextWindow: 40,
       reservedOutputTokens: 10,
       keepRecentTokens: 12,
     };
-    const preflight = buildModelStepInputContextFromSources({
-      contextId: 'model-input-context:step-1:preflight',
+    const budgetProbe = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:step-1:compaction-probe',
       sessionId: 'session-1',
       runId: 'run-1',
       stepId: 'step-1',
-      buildReason: 'initial_model_step_preflight',
+      buildReason: 'model_step_compaction_probe',
       builtAt,
       sessionContext: sessionContext({
         historyEntries: [
@@ -220,28 +220,28 @@ describe('shouldRunSessionCompaction', () => {
     });
 
     expect(shouldRunSessionCompaction({
-      preflightInputContext: preflight,
+      budgetProbeInputContext: budgetProbe,
       budgetPolicy,
     })).toEqual({
       shouldCompact: true,
       triggerReason: 'context_budget_pressure',
-      tokensBefore: preflight.budget.inputTokenEstimate,
+      tokensBefore: budgetProbe.budget.inputTokenEstimate,
       availableInputTokens: 30,
     });
   });
 
-  it('does not trigger when preflight input fits the budget', () => {
+  it('does not trigger when budget probe input fits the budget', () => {
     const budgetPolicy: ContextBudgetPolicy = {
       modelContextWindow: 8192,
       reservedOutputTokens: 1024,
       keepRecentTokens: 4096,
     };
-    const preflight = buildModelStepInputContextFromSources({
-      contextId: 'model-input-context:step-1:preflight',
+    const budgetProbe = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:step-1:compaction-probe',
       sessionId: 'session-1',
       runId: 'run-1',
       stepId: 'step-1',
-      buildReason: 'initial_model_step_preflight',
+      buildReason: 'model_step_compaction_probe',
       builtAt,
       sessionContext: sessionContext(),
       budgetPolicy: {
@@ -252,12 +252,12 @@ describe('shouldRunSessionCompaction', () => {
     });
 
     expect(shouldRunSessionCompaction({
-      preflightInputContext: preflight,
+      budgetProbeInputContext: budgetProbe,
       budgetPolicy,
     })).toEqual({
       shouldCompact: false,
       triggerReason: 'context_budget_pressure',
-      tokensBefore: preflight.budget.inputTokenEstimate,
+      tokensBefore: budgetProbe.budget.inputTokenEstimate,
       availableInputTokens: 7168,
     });
   });

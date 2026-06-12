@@ -187,13 +187,13 @@ function sessionContext(): SessionContextInput {
   };
 }
 
-function preflightInputContext(input: SessionContextInput = sessionContext()) {
+function budgetProbeInputContext(input: SessionContextInput = sessionContext()) {
   return buildModelStepInputContextFromSources({
-    contextId: 'model-input-context:preflight',
+    contextId: 'model-input-context:compaction-probe',
     sessionId: 'session-1',
     runId: 'run-1',
     stepId: 'step-1',
-    buildReason: 'initial_model_step_preflight',
+    buildReason: 'model_step_compaction_probe',
     builtAt,
     sessionContext: input,
     budgetPolicy: {
@@ -268,7 +268,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: sessionContext(),
-      preflightInputContext: preflightInputContext(),
+      budgetProbeInputContext: budgetProbeInputContext(),
       budgetPolicy,
       startSequence: 1,
     });
@@ -340,7 +340,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: sessionContext(),
-      preflightInputContext: preflightInputContext(),
+      budgetProbeInputContext: budgetProbeInputContext(),
       budgetPolicy,
       startSequence: 1,
     });
@@ -409,7 +409,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: sessionContext(),
-      preflightInputContext: preflightInputContext(),
+      budgetProbeInputContext: budgetProbeInputContext(),
       budgetPolicy,
       startSequence: 1,
     });
@@ -471,7 +471,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: sessionContext(),
-      preflightInputContext: preflightInputContext(),
+      budgetProbeInputContext: budgetProbeInputContext(),
       budgetPolicy,
       startSequence: 1,
     });
@@ -484,7 +484,7 @@ describe('SessionCompactionOrchestrator', () => {
     expect(activePathRepo.getActiveLeaf('session-1')?.leafSourceEntryId).toBe('source-entry-new-branch');
   });
 
-  it('returns skipped when preflight tokens fit the budget', async () => {
+  it('returns skipped when budget probe tokens fit the budget', async () => {
     const repo = repository();
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
@@ -510,7 +510,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: { historyEntries: [sessionContext().historyEntries![2]!] },
-      preflightInputContext: preflightInputContext({
+      budgetProbeInputContext: budgetProbeInputContext({
         historyEntries: [sessionContext().historyEntries![2]!],
       }),
       budgetPolicy: {
@@ -579,7 +579,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: sessionContext(),
-      preflightInputContext: preflightInputContext(),
+      budgetProbeInputContext: budgetProbeInputContext(),
       budgetPolicy,
       startSequence: 1,
     });
@@ -625,7 +625,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: sessionContext(),
-      preflightInputContext: preflightInputContext(),
+      budgetProbeInputContext: budgetProbeInputContext(),
       budgetPolicy,
       startSequence: 1,
     });
@@ -672,7 +672,7 @@ describe('SessionCompactionOrchestrator', () => {
       modelId: 'deepseek-v4-flash',
       createdAt: builtAt,
       sessionContext: sessionContext(),
-      preflightInputContext: preflightInputContext(),
+      budgetProbeInputContext: budgetProbeInputContext(),
       budgetPolicy,
       startSequence: 1,
     });

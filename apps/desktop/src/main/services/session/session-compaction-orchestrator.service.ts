@@ -83,7 +83,7 @@ export interface CompactIfNeededInput {
   runtimeContext?: RuntimeContext;
   createdAt: string;
   sessionContext: SessionContextInput;
-  preflightInputContext: ModelInputContext;
+  budgetProbeInputContext: ModelInputContext;
   budgetPolicy: ContextBudgetPolicy;
   startSequence: number;
 }
@@ -98,7 +98,7 @@ export class SessionCompactionOrchestrator {
 
   async compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult> {
     const pressure = shouldRunSessionCompaction({
-      preflightInputContext: input.preflightInputContext,
+      budgetProbeInputContext: input.budgetProbeInputContext,
       budgetPolicy: input.budgetPolicy,
     });
 
