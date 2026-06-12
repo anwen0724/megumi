@@ -1,6 +1,7 @@
 ﻿import { describe, expect, it } from 'vitest';
 import {
   AgentInstructionSourceSnapshotSchema,
+  MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS,
   MODEL_INPUT_CONTEXT_BUDGET_CLASSES,
   MODEL_INPUT_CONTEXT_BUDGET_STATUSES,
   MODEL_INPUT_CONTEXT_PART_KINDS,
@@ -8,6 +9,7 @@ import {
   MODEL_INPUT_INSTRUCTION_KINDS,
   MODEL_INPUT_SESSION_PART_KINDS,
   ModelInputContextBuildRequestSchema,
+  ModelInputContextSourceSchema,
   ModelInputInstructionKindSchema,
   ModelInputContextSchema,
   SessionInstructionSourceSnapshotSchema,
@@ -31,6 +33,67 @@ function sourceRef(sourceId: string, sourceKind: ModelInputContext['parts'][numb
 }
 
 describe('ModelInputContext contracts', () => {
+  it('parses canonical 18.01 context sources with diagnostics and failure behavior', () => {
+    const source = ModelInputContextSourceSchema.parse({
+      id: 'source:permission:mode:1',
+      kind: 'permission_constraint',
+      origin: 'desktop_main',
+      scope: {
+        kind: 'run',
+        sessionId: 'session:1',
+        runId: 'run:1',
+        stepId: 'step:1',
+      },
+      visibility: 'model_visible',
+      priority: 990,
+      budgetClass: 'required',
+      content: {
+        text: 'Permission mode is default.',
+      },
+      trace: {
+        discoveryStatus: 'included',
+        redactionStatus: 'not_required',
+        materializationStatus: 'included_full',
+        loadedBytes: 27,
+        loadedChars: 27,
+      },
+      diagnostics: [],
+      failureBehavior: 'block_model_step',
+    });
+
+    expect(source.kind).toBe('permission_constraint');
+    expect(source.failureBehavior).toBe('block_model_step');
+    expect(source.trace.materializationStatus).toBe('included_full');
+  });
+
+  it('keeps the 18.01 canonical source kind set explicit', () => {
+    expect(MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS).toEqual([
+      'system_instruction',
+      'global_instruction',
+      'project_instruction',
+      'session_instruction',
+      'input_instruction',
+      'permission_constraint',
+      'session_context',
+      'tool_continuation',
+      'memory_recall',
+      'runtime_fact',
+    ]);
+  });
+
+  it('rejects canonical context sources without required provenance fields', () => {
+    expect(() => ModelInputContextSourceSchema.parse({
+      id: 'source:runtime:missing-origin',
+      kind: 'runtime_fact',
+      scope: { kind: 'run', runId: 'run:1' },
+      visibility: 'model_visible',
+      priority: 500,
+      budgetClass: 'contextual',
+      diagnostics: [],
+      failureBehavior: 'degrade',
+    })).toThrow();
+  });
+
   it('parses strict provider-neutral model input context parts with source refs and budget status', () => {
     const parsed = ModelInputContextSchema.parse({
       contextId: 'model-input-context:1',

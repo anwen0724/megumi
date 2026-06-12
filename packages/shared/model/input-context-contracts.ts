@@ -55,6 +55,21 @@ export const MODEL_INPUT_CONTEXT_SOURCE_KINDS = [
 ] as const;
 export type ModelInputContextSourceKind = (typeof MODEL_INPUT_CONTEXT_SOURCE_KINDS)[number];
 
+export const MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS = [
+  'system_instruction',
+  'global_instruction',
+  'project_instruction',
+  'session_instruction',
+  'input_instruction',
+  'permission_constraint',
+  'session_context',
+  'tool_continuation',
+  'memory_recall',
+  'runtime_fact',
+] as const;
+export const ModelInputContextCanonicalSourceKindSchema = z.enum(MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS);
+export type ModelInputContextCanonicalSourceKind = (typeof MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS)[number];
+
 export const MODEL_INPUT_CONTEXT_BUDGET_STATUSES = [
   'included_full',
   'included_truncated',
@@ -71,6 +86,86 @@ export const MODEL_INPUT_CONTEXT_BUDGET_CLASSES = [
 ] as const;
 export const ModelInputContextBudgetClassSchema = z.enum(MODEL_INPUT_CONTEXT_BUDGET_CLASSES);
 export type ModelInputContextBudgetClass = (typeof MODEL_INPUT_CONTEXT_BUDGET_CLASSES)[number];
+
+export const MODEL_INPUT_CONTEXT_SOURCE_ORIGINS = [
+  'system',
+  'desktop_main',
+  'project_file',
+  'session_state',
+  'input_preprocessing',
+  'tool_runtime',
+  'memory_runtime',
+  'context_management',
+] as const;
+export const ModelInputContextSourceOriginSchema = z.enum(MODEL_INPUT_CONTEXT_SOURCE_ORIGINS);
+export type ModelInputContextSourceOrigin = (typeof MODEL_INPUT_CONTEXT_SOURCE_ORIGINS)[number];
+
+export const MODEL_INPUT_CONTEXT_SOURCE_VISIBILITIES = [
+  'model_visible',
+  'trace_only',
+  'host_only',
+] as const;
+export const ModelInputContextSourceVisibilitySchema = z.enum(MODEL_INPUT_CONTEXT_SOURCE_VISIBILITIES);
+export type ModelInputContextSourceVisibility = (typeof MODEL_INPUT_CONTEXT_SOURCE_VISIBILITIES)[number];
+
+export const MODEL_INPUT_CONTEXT_SOURCE_FAILURE_BEHAVIORS = [
+  'block_model_step',
+  'degrade',
+  'drop',
+  'trace_only',
+] as const;
+export const ModelInputContextSourceFailureBehaviorSchema = z.enum(MODEL_INPUT_CONTEXT_SOURCE_FAILURE_BEHAVIORS);
+export type ModelInputContextSourceFailureBehavior = (typeof MODEL_INPUT_CONTEXT_SOURCE_FAILURE_BEHAVIORS)[number];
+
+export const ModelInputContextSourceScopeSchema = z
+  .object({
+    kind: z.enum(['global', 'project', 'directory', 'session', 'run', 'step', 'tool', 'memory']),
+    sessionId: IdSchema.optional(),
+    runId: IdSchema.optional(),
+    stepId: IdSchema.optional(),
+    projectId: IdSchema.optional(),
+    projectRoot: z.string().min(1).optional(),
+    effectiveCwd: z.string().min(1).optional(),
+    relativePath: z.string().min(1).optional(),
+    depth: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type ModelInputContextSourceScope = z.infer<typeof ModelInputContextSourceScopeSchema>;
+
+export const ModelInputContextSourceTraceSchema = z
+  .object({
+    discoveryStatus: z.enum(['included', 'included_truncated', 'missing', 'unavailable', 'read_failed', 'blocked', 'dropped']),
+    redactionStatus: z.enum(['not_required', 'passed', 'redacted', 'blocked']).default('not_required'),
+    materializationStatus: z.enum(['included_full', 'included_truncated', 'included_reduced', 'dropped', 'trace_only']),
+    loadedBytes: z.number().int().nonnegative().optional(),
+    loadedChars: z.number().int().nonnegative().optional(),
+    materializedPartId: IdSchema.optional(),
+    reason: z.string().min(1).optional(),
+  })
+  .strict();
+export type ModelInputContextSourceTrace = z.infer<typeof ModelInputContextSourceTraceSchema>;
+
+export const ModelInputContextSourceDiagnosticSchema = z
+  .object({
+    severity: z.enum(['info', 'warning', 'error']),
+    reason: z.string().min(1),
+    message: z.string().min(1).optional(),
+    conflictingSourceIds: z.array(IdSchema).optional(),
+    metadata: OptionalJsonObjectSchema,
+  })
+  .strict();
+export type ModelInputContextSourceDiagnostic = z.infer<typeof ModelInputContextSourceDiagnosticSchema>;
+
+export const ModelInputContextSourceContentSchema = z
+  .object({
+    text: z.string().min(1).optional(),
+    structuredPayload: JsonValueSchema.optional(),
+  })
+  .strict()
+  .refine((value) => value.text !== undefined || value.structuredPayload !== undefined, {
+    message: 'Context source content requires text or structuredPayload.',
+  });
+export type ModelInputContextSourceContent = z.infer<typeof ModelInputContextSourceContentSchema>;
 
 export const AGENT_INSTRUCTION_SOURCE_STATUSES = [
   'included',
@@ -137,6 +232,24 @@ export interface ModelInputContextSourceRef {
   loadedAt?: IsoDateTime;
   metadata?: JsonObject;
 }
+
+export const ModelInputContextSourceSchema = z
+  .object({
+    id: IdSchema,
+    kind: ModelInputContextCanonicalSourceKindSchema,
+    origin: ModelInputContextSourceOriginSchema,
+    scope: ModelInputContextSourceScopeSchema,
+    visibility: ModelInputContextSourceVisibilitySchema,
+    priority: z.number().int().nonnegative(),
+    budgetClass: ModelInputContextBudgetClassSchema,
+    content: ModelInputContextSourceContentSchema.optional(),
+    trace: ModelInputContextSourceTraceSchema,
+    diagnostics: z.array(ModelInputContextSourceDiagnosticSchema),
+    failureBehavior: ModelInputContextSourceFailureBehaviorSchema,
+    sourceRef: ModelInputContextSourceRefSchema.optional(),
+  })
+  .strict();
+export type ModelInputContextSource = z.infer<typeof ModelInputContextSourceSchema>;
 
 const InstructionSourceRelativePathSchema = z
   .string()
