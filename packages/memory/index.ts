@@ -13,6 +13,7 @@
 
 export * from './text-normalization';
 export * from './memory-security-policy';
+export * from './capture-trigger-classifier';
 
 const MAX_SUMMARY_LENGTH = 500;
 const MAX_CONTENT_PREVIEW_LENGTH = 1000;
