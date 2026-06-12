@@ -115,16 +115,15 @@ describe('memory engine', () => {
       normalizedText: 'provider adapter setting',
     });
 
-    expect(scoreMemoryRecordForRecall(first, { scopes: ['project'], query: 'spec plans', kinds: ['decision'] }).score)
-      .toBeGreaterThan(scoreMemoryRecordForRecall(unrelated, { scopes: ['project'], query: 'spec plans' }).score);
-    expect(scoreMemoryRecordForRecall(superseded, { scopes: ['project'], query: 'spec plans' }).eligible).toBe(false);
-    expect(scoreMemoryRecordForRecall(deleted, { scopes: ['project'], query: 'spec plans' }).eligible).toBe(false);
+    expect(scoreMemoryRecordForRecall(first, { projectId: 'project:1', query: 'spec plans', kinds: ['decision'] }).score)
+      .toBeGreaterThan(scoreMemoryRecordForRecall(unrelated, { projectId: 'project:1', query: 'spec plans' }).score);
+    expect(scoreMemoryRecordForRecall(superseded, { projectId: 'project:1', query: 'spec plans' }).eligible).toBe(false);
+    expect(scoreMemoryRecordForRecall(deleted, { projectId: 'project:1', query: 'spec plans' }).eligible).toBe(false);
 
     const results = selectMemoryRecallResults({
       recallRequestId: 'memory-recall:1',
       records: [deleted, unrelated, superseded, first],
-      scopes: ['project'],
-      kinds: ['decision'],
+      projectId: 'project:1',
       query: 'spec plans',
       limit: 5,
       budget: 20,
@@ -139,7 +138,7 @@ describe('memory engine', () => {
         score: expect.any(Number),
         rank: 1,
         selectedForContext: true,
-        reason: 'scope_match query_match',
+        reason: 'project_scope kind_priority lexical_match',
         createdAt: now,
         metadata: {
           tokenEstimate: 6,

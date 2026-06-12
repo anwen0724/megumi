@@ -3,8 +3,6 @@
   MemoryKind,
   MemoryPolicy,
   MemoryProposedBy,
-  MemoryRecallResult,
-  MemoryRecord,
   MemoryRiskLevel,
   MemoryScope,
   MemorySourceKind,
@@ -18,9 +16,9 @@ export * from './extraction';
 export * from './candidate-validation';
 export * from './memory-resolution';
 export * from './markdown-memory-format';
+export * from './recall-scoring';
 
 const MAX_SUMMARY_LENGTH = 500;
-const MAX_CONTENT_PREVIEW_LENGTH = 1000;
 
 const BLOCKED_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/i,
@@ -117,103 +115,7 @@ export function createMemoryCandidateDraft(input: CreateMemoryCandidateDraftInpu
   };
 }
 
-export interface RecallScoringInput {
-  scopes: MemoryScope[];
-  kinds?: MemoryKind[];
-  query?: string;
-}
-
-export interface RecallScore {
-  eligible: boolean;
-  score: number;
-  reason: string;
-}
-
-export function scoreMemoryRecordForRecall(record: MemoryRecord, input: RecallScoringInput): RecallScore {
-  if (record.status !== 'active') {
-    return { eligible: false, score: 0, reason: 'inactive_status' };
-  }
-  if (!input.scopes.includes(record.scope)) {
-    return { eligible: false, score: 0, reason: 'scope_mismatch' };
-  }
-  if (input.kinds && !input.kinds.includes(record.kind)) {
-    return { eligible: false, score: 0, reason: 'kind_mismatch' };
-  }
-
-  const normalizedQuery = normalizeForSearch(input.query ?? '');
-  const searchable = normalizeForSearch(`${record.summary ?? ''} ${record.content} ${record.normalizedText}`);
-  const queryTokens = normalizedQuery ? normalizedQuery.split(/\s+/) : [];
-  const queryMatches = queryTokens.filter((token) => searchable.includes(token)).length;
-  if (queryTokens.length > 0 && queryMatches < queryTokens.length) {
-    return { eligible: false, score: 0, reason: 'query_mismatch' };
-  }
-  const queryScore = normalizedQuery.length === 0
-    ? 0.2
-    : queryMatches / queryTokens.length;
-  const useScore = Math.min(record.useCount ?? 0, 10) / 100;
-  const recencyScore = record.lastUsedAt ? 0.05 : 0;
-  const score = clamp01(0.4 + queryScore * 0.45 + useScore + recencyScore);
-  return { eligible: true, score, reason: normalizedQuery ? 'scope_match query_match' : 'scope_match' };
-}
-
-export interface SelectMemoryRecallResultsInput {
-  recallRequestId: string;
-  records: MemoryRecord[];
-  scopes: MemoryScope[];
-  kinds?: MemoryKind[];
-  query?: string;
-  limit: number;
-  budget?: number;
-  now: string;
-}
-
-export function selectMemoryRecallResults(input: SelectMemoryRecallResultsInput): MemoryRecallResult[] {
-  let spent = 0;
-  return input.records
-    .map((record) => ({ record, score: scoreMemoryRecordForRecall(record, input) }))
-    .filter((entry) => entry.score.eligible)
-    .sort((left, right) => right.score.score - left.score.score)
-    .slice(0, input.limit)
-    .map((entry, index) => {
-      const contentPreview = normalizeSafeText(entry.record.content, MAX_CONTENT_PREVIEW_LENGTH);
-      const tokenEstimate = estimateTokens(contentPreview);
-      const selectedForContext = input.budget === undefined || spent + tokenEstimate <= input.budget;
-      if (selectedForContext) {
-        spent += tokenEstimate;
-      }
-      return {
-        recallResultId: `${input.recallRequestId}:result:${index + 1}`,
-        recallRequestId: input.recallRequestId,
-        memoryId: entry.record.memoryId,
-        score: entry.score.score,
-        rank: index + 1,
-        selectedForContext,
-        reason: entry.score.reason,
-        createdAt: input.now,
-        metadata: {
-          tokenEstimate,
-          scope: entry.record.scope,
-          kind: entry.record.kind,
-          contentPreview,
-        },
-      };
-    });
-}
-
 export function normalizeSafeText(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized;
 }
-
-export function estimateTokens(value: string): number {
-  return Math.ceil(value.length / 4);
-}
-
-function normalizeForSearch(value: string): string {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, ' ').trim();
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
