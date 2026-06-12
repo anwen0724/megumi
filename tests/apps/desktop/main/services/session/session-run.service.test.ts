@@ -4931,12 +4931,14 @@ describe('SessionRunService', () => {
         }],
       },
       agentInstructionSourceService: {
-        async loadInstructionSources({ loadedAt }) {
+        async loadInstructionSources({ projectRoot, effectiveCwd, loadedAt }) {
+          expect(projectRoot).toBe('C:/project');
+          expect(effectiveCwd).toBe('C:\\project');
           return [{
             sourceId: 'project-instruction:AGENTS.md',
             sourceKind: 'project_instruction',
             status: 'included',
-            sourceUri: 'project://AGENTS.md',
+            sourceUri: 'project-instruction://AGENTS.md',
             relativePath: 'AGENTS.md',
             text: `# rules loaded at ${loadedAt}`,
             loadedAt,
@@ -4982,6 +4984,13 @@ describe('SessionRunService', () => {
 
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(requests).toHaveLength(2);
+    expect(requests[1]?.inputContext.trace.metadata).toMatchObject({
+      traceId: 'trace:model-input:run-1:step-1:tool-continuation',
+      modelTarget: {
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+      },
+    });
     expect(requests[1]?.inputContext.parts[0]).toMatchObject({
       kind: 'instruction',
       instructionKind: 'project',
@@ -5174,6 +5183,13 @@ describe('SessionRunService', () => {
     }
 
     expect(streamedResumeEvents.map((event) => event.eventType)).toContain('assistant.output.completed');
+    expect(requests[1]?.inputContext.trace.metadata).toMatchObject({
+      traceId: 'trace:model-input:run-1:step-1:approval-resume',
+      modelTarget: {
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+      },
+    });
     expect(requests[1]?.inputContext.parts[0]).toMatchObject({
       kind: 'instruction',
       instructionKind: 'project',
@@ -5278,7 +5294,7 @@ describe('SessionRunService', () => {
     expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'runtime_constraint',
-        constraintKind: 'project_boundary',
+        constraintKind: 'effective_cwd',
         text: expect.stringContaining('Project root: C:/all/work/study/megumi'),
       }),
     ]));

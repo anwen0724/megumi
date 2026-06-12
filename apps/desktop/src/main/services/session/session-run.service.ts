@@ -1,10 +1,6 @@
 // Orchestrates Desktop Main session runs by bridging IPC payloads, persistence,
 // permission snapshots, context construction, and model-step execution.
 import path from 'node:path';
-import {
-  buildModelStepInputContextFromSources,
-  createModelStepInputContextId,
-} from '@megumi/context-management/model-step-input-context';
 import { runTurn } from '@megumi/core/agent-runtime';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/agent-runtime';
 import {
@@ -30,7 +26,6 @@ import { SessionActivePathRepository } from '@megumi/db/repos/session-active-pat
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
-import type { ModelStepRuntimeConstraintInput } from '@megumi/context-management/model-step-input-context';
 import type {
   RunContext,
   ModelCapabilitySummary,
@@ -216,6 +211,7 @@ interface ApprovalContinuationGroup {
   run: Run;
   step: RunStep;
   projectRoot?: string;
+  permissionMode?: PermissionMode;
   userMessageId: string;
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
@@ -329,7 +325,6 @@ export class SessionRunService {
   private readonly modelStepProvider?: SessionRunModelStepProvider;
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
-  private readonly agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly sessionContextInputService: SessionRunSessionContextInputService;
   private readonly sessionCompactionOrchestrator?: {
@@ -360,7 +355,6 @@ export class SessionRunService {
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
-    this.agentInstructionSourceService = options.agentInstructionSourceService;
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
         repository: this.repository,
@@ -1494,6 +1488,7 @@ export class SessionRunService {
         run: waitingRun,
         step: waitingStep,
         ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+        ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
         userMessageId: input.userMessageId,
         pendingByApprovalId: new Map(pendingContinuations.map((pending) => [
           pending.pendingApproval.approvalRequest.approvalRequestId,
@@ -1558,13 +1553,26 @@ export class SessionRunService {
           onPendingApproval: (pending) => {
             pendingContinuations.push(pending);
           },
-          buildContinuationInputContext: async (contextInput) => buildModelStepInputContextFromSources({
-            ...contextInput,
-            instructionSources: await this.loadInstructionSourcesForModelStep({
+          buildContinuationInputContext: async (contextInput) => {
+            const continuationInput = await this.modelStepInputBuildService.buildModelStepInput({
+              baseInputContext: contextInput.baseInputContext,
+              requestId: input.request.requestId,
+              sessionId: contextInput.sessionId,
+              runId: contextInput.runId,
+              stepId: contextInput.stepId,
+              contextKind: 'tool-continuation',
+              providerId: input.request.providerId,
+              modelId: String(input.request.modelId),
               ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
-              loadedAt: contextInput.builtAt,
-            }),
-          }),
+              permissionMode: input.permissionMode ?? 'default',
+              toolDefinitions: input.request.toolDefinitions ?? [],
+              toolCalls: contextInput.toolCalls,
+              toolResults: contextInput.toolResults,
+              providerStates: contextInput.providerStates,
+              builtAt: contextInput.builtAt,
+            });
+            return continuationInput.inputContext;
+          },
         })
       : streamProviderModelStep(input.request);
 
@@ -2347,17 +2355,6 @@ export class SessionRunService {
     return this.activePathRepository;
   }
 
-  private async loadInstructionSourcesForModelStep(input: {
-    projectRoot?: string;
-    loadedAt: string;
-  }): Promise<AgentInstructionSourceSnapshot[]> {
-    if (!this.agentInstructionSourceService) {
-      return [];
-    }
-
-    return this.agentInstructionSourceService.loadInstructionSources(input);
-  }
-
   private requirePermissionSnapshotService(): NonNullable<SessionRunServiceOptions['permissionSnapshotService']> {
     if (!this.permissionSnapshotService) {
       throw new Error('Permission snapshot service is not configured.');
@@ -2495,30 +2492,28 @@ export class SessionRunService {
       ...pending.accumulatedToolResults,
       ...continuation.resolvedResults,
     ];
-    const resumedInstructionSources = await this.loadInstructionSourcesForModelStep({
+    const resumedModelInput = await this.modelStepInputBuildService.buildModelStepInput({
+      baseInputContext: pending.request.inputContext,
+      requestId: pending.request.requestId,
+      sessionId: pending.request.sessionId,
+      runId: String(pending.request.runId),
+      stepId: String(resumedStep.stepId),
+      contextKind: 'approval-resume',
+      providerId: pending.request.providerId,
+      modelId: String(pending.request.modelId),
       ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
-      loadedAt: input.decidedAt,
+      permissionMode: continuation.permissionMode ?? 'default',
+      toolDefinitions: pending.request.toolDefinitions ?? [],
+      toolCalls: pending.accumulatedToolCalls,
+      toolResults: resumedToolResults,
+      providerStates: pending.accumulatedProviderStates,
+      builtAt: input.decidedAt,
     });
     const resumedRequest: ModelStepRuntimeRequest = {
       ...pending.request,
       stepId: resumedStep.stepId,
       modelStepId: `model-step:${crypto.randomUUID()}`,
-      inputContext: buildModelStepInputContextFromSources({
-        baseInputContext: pending.request.inputContext,
-        contextId: createModelStepInputContextId({
-          stepId: String(resumedStep.stepId),
-          contextKind: 'approval-resume',
-        }),
-        sessionId: pending.request.sessionId,
-        runId: String(pending.request.runId),
-        stepId: String(resumedStep.stepId),
-        buildReason: 'approval_resume_continuation',
-        builtAt: input.decidedAt,
-        toolCalls: pending.accumulatedToolCalls,
-        toolResults: resumedToolResults,
-        providerStates: pending.accumulatedProviderStates,
-        instructionSources: resumedInstructionSources,
-      }),
+      inputContext: resumedModelInput.inputContext,
       createdAt: input.decidedAt,
     };
 
@@ -2532,6 +2527,7 @@ export class SessionRunService {
       ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
       ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       emitRunStarted: false,
+      ...(continuation.permissionMode ? { permissionMode: continuation.permissionMode } : {}),
     });
   }
 
@@ -2674,20 +2670,6 @@ function defaultHostBoundary(
       summary: 'Session run run completed without tool execution.',
     }),
   };
-}
-
-function runtimeConstraintsFromRunContext(
-  context: RunContext,
-  loadedAt: string,
-): ModelStepRuntimeConstraintInput[] {
-  return [{
-    constraintId: `${context.contextId}:project-boundary`,
-    projectRoot: context.workspaceBoundary.rootPath,
-    workspaceAccess: context.policySummary.workspaceAccess,
-    sandboxSummary: context.policySummary.sandboxSummary,
-    approvalSummary: context.policySummary.approvalSummary,
-    loadedAt,
-  }];
 }
 
 function sessionMessageSourceRef(messageId: string, builtAt: string): ModelInputContextSourceRef {

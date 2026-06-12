@@ -101,6 +101,7 @@ export class ModelStepInputBuildService {
       baseInputContext: input.baseInputContext,
       instructionSources,
       sessionContext: input.sessionContext,
+      inputPreprocessing: input.inputPreprocessing,
       memoryRecallSources: input.memoryRecallSources,
       toolCalls: input.toolCalls,
       toolResults: input.toolResults,

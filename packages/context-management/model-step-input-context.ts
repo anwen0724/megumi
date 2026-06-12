@@ -92,6 +92,7 @@ export interface BuildModelStepInputContextFromBuildRequestInput {
   baseInputContext?: ModelInputContext;
   instructionSources?: AgentInstructionSourceSnapshot[];
   sessionContext?: SessionContextInput;
+  inputPreprocessing?: InputPreprocessingResult;
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
@@ -127,6 +128,7 @@ export function buildModelStepInputContextFromBuildRequest(
     builtAt: request.builtAt,
     ...(currentMessage ? { currentMessage } : {}),
     sessionContext: input.sessionContext,
+    inputPreprocessing: input.inputPreprocessing,
     runtimeConstraints: runtimeConstraintsFromBuildRequest(request),
     toolCalls: input.toolCalls,
     toolResults: input.toolResults,
