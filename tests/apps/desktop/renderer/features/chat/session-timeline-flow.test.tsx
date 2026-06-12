@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
@@ -485,7 +485,7 @@ describe('useSessionTimeline', () => {
     expect(useChatUiStore.getState().agentStatus).toBe('idle');
   });
 
-  it('sends intent metadata and permission source for /review commands', async () => {
+  it('sends input preprocessing and permission source for /review commands', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
 
@@ -495,12 +495,6 @@ describe('useSessionTimeline', () => {
         permissionMode: 'plan',
         permissionSource: 'intent_default',
         model: 'deepseek-v4-flash',
-        intent: {
-          intentName: 'code_review',
-          source: 'core_command',
-          commandName: 'review',
-          argsText: '当前改动',
-        },
         preprocessing: {
           originalText: '/review 当前改动',
           effectiveUserText: '当前改动',
@@ -526,12 +520,6 @@ describe('useSessionTimeline', () => {
       payload: expect.objectContaining({
         message: expect.objectContaining({ content: '/review 当前改动' }),
         context: expect.objectContaining({
-          intent: {
-            intentName: 'code_review',
-            source: 'core_command',
-            commandName: 'review',
-            argsText: '当前改动',
-          },
           preprocessing: expect.objectContaining({
             originalText: '/review 当前改动',
             effectiveUserText: '当前改动',
@@ -545,6 +533,7 @@ describe('useSessionTimeline', () => {
         }),
       }),
     }));
+    expect(session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('intent');
     expect(session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('workflow');
   });
 
@@ -1887,4 +1876,3 @@ describe('useSessionTimeline', () => {
     expect(JSON.stringify(messages)).not.toContain('Committed stale text');
   });
 });
-

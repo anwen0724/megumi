@@ -1,4 +1,6 @@
-﻿import { z } from 'zod';
+// Defines strict IPC schemas for renderer-to-main messages and runtime payloads.
+// Shared IPC schemas validate transport shape only; runtime services own trusted normalization.
+import { z } from 'zod';
 import { JsonObjectSchema } from '../primitives/json';
 import {
   createRuntimeIpcRequestSchema,
@@ -30,7 +32,6 @@ import {
   PermissionModeSchema,
   PermissionModeSelectionSourceSchema,
 } from '../permission/mode-contracts';
-import { InputIntentCommandMetadataSchema } from '../input/command-contracts';
 import { InputPreprocessingResultSchema } from '../input/preprocessing-contracts';
 import {
   CancelRequestSchema,
@@ -227,19 +228,9 @@ export const SessionMessageRuntimeContextSchema = z
     sessionTitle: z.string().min(1).optional(),
     permissionMode: PermissionModeSchema.optional(),
     permissionSource: PermissionModeSelectionSourceSchema.optional(),
-    intent: InputIntentCommandMetadataSchema.optional(),
     preprocessing: InputPreprocessingResultSchema.optional(),
   })
-  .strict()
-  .superRefine((context, refinement) => {
-    if (context.intent?.intentName === 'code_review' && context.intent.commandName !== 'review') {
-      refinement.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Code review intent metadata must use the review command.',
-        path: ['intent', 'commandName'],
-      });
-    }
-  });
+  .strict();
 
 export const SessionMessageSendPayloadSchema = z
   .object({
@@ -1424,4 +1415,3 @@ export type WorkspaceFilesListPayload = z.infer<typeof WorkspaceFilesListPayload
 export type WorkspaceFilesListData = z.infer<typeof WorkspaceFilesListDataSchema>;
 export type WorkspaceFileOpenPayload = z.infer<typeof WorkspaceFileOpenPayloadSchema>;
 export type WorkspaceFileOpenData = z.infer<typeof WorkspaceFileOpenDataSchema>;
-

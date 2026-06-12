@@ -218,12 +218,6 @@ describe('Composer', () => {
       message: '/review 当前改动',
       permissionMode: 'plan',
       permissionSource: 'intent_default',
-      intent: {
-        intentName: 'code_review',
-        source: 'core_command',
-        commandName: 'review',
-        argsText: '当前改动',
-      },
       preprocessing: expect.objectContaining({
         originalText: '/review 当前改动',
         effectiveUserText: '当前改动',
@@ -238,6 +232,7 @@ describe('Composer', () => {
         ],
       }),
     }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
   });
 
@@ -271,12 +266,6 @@ describe('Composer', () => {
       message: '/review 当前改动',
       permissionMode: 'plan',
       permissionSource: 'intent_default',
-      intent: {
-        intentName: 'code_review',
-        source: 'core_command',
-        commandName: 'review',
-        argsText: '当前改动',
-      },
       preprocessing: expect.objectContaining({
         originalText: '/review 当前改动',
         effectiveUserText: '当前改动',
@@ -291,6 +280,7 @@ describe('Composer', () => {
         ],
       }),
     }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
   });
 

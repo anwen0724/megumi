@@ -1,10 +1,6 @@
 // Builds preliminary renderer input preprocessing payloads before Desktop Main performs trusted validation.
 import type { PermissionModeSelectionSource } from '@megumi/shared/permission';
-import {
-  type InputIntentCommandMetadata,
-  type InputPreprocessingResult,
-  createCodeReviewInputIntentMetadata,
-} from '@megumi/shared/input';
+import type { InputPreprocessingResult } from '@megumi/shared/input';
 import {
   dispatchCommandText,
   listCommandSuggestions,
@@ -37,9 +33,6 @@ export interface InputPreprocessingSubmitPayload {
   message: string;
   permissionMode?: 'plan';
   permissionSource?: PermissionModeSelectionSource;
-  // Kept only as a compatibility bridge until Desktop Main fully consumes
-  // structured preprocessing. Runtime must still re-validate this metadata.
-  intent?: InputIntentCommandMetadata;
   preprocessing: InputPreprocessingResult;
 }
 
@@ -48,16 +41,10 @@ export function listInputCommandSuggestions(inputText: string): CommandDefinitio
 }
 
 function createReviewPayload(rawText: string, argsText: string): InputPreprocessingSubmitPayload {
-  const intent = createCodeReviewInputIntentMetadata(argsText);
-
-  // Renderer can provide structured hints for immediate IPC compatibility, but
-  // it is not the trust boundary. Desktop Main owns final intent and permission
-  // normalization before the run is created.
   return {
     message: rawText,
     permissionMode: 'plan',
     permissionSource: 'intent_default',
-    intent,
     preprocessing: {
       originalText: rawText,
       effectiveUserText: argsText,
@@ -73,8 +60,8 @@ function createReviewPayload(rawText: string, argsText: string): InputPreprocess
           defaultPermissionMode: 'plan',
           defaultPermissionSource: 'intent_default',
           metadata: {
-            intentName: intent.intentName,
-            argsText: intent.argsText,
+            intentName: 'code_review',
+            argsText,
           },
         },
       ],
@@ -82,7 +69,6 @@ function createReviewPayload(rawText: string, argsText: string): InputPreprocess
     },
   };
 }
-
 function createSummaryPayload(rawText: string, argsText: string): InputPreprocessingSubmitPayload {
   return {
     message: rawText,
@@ -129,11 +115,10 @@ function createWriteDocPayload(rawText: string, argsText: string): InputPreproce
   };
 }
 
+// This switch maps command kinds to structured preprocessing entries instead
+// of expanding provider-visible text in the renderer.
 export function createInputPreprocessingSubmitPayload(message: string): InputPreprocessingSubmitPayload | null {
   const dispatch = dispatchCommandText(message, BUILT_IN_INPUT_COMMAND_REGISTRY);
-
-  // This switch maps command kinds to structured preprocessing entries instead
-  // of expanding provider-visible text in the renderer.
   if (dispatch.kind === 'send_intent' && dispatch.command.name === 'review') {
     return createReviewPayload(dispatch.rawText, dispatch.argsText);
   }

@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -5348,7 +5348,8 @@ describe('SessionRunService', () => {
           return {
             permissionSnapshotId: 'permission-snapshot:input-review',
             runId: input.runId,
-            permissionModeState: input.permissionModeState,
+            permissionLabel: input.permissionMode,
+            permissionModeState: input.permissionModeState ?? { permissionMode: 'default', source: 'system' },
             createdAt: input.createdAt,
           };
         },
@@ -5448,7 +5449,8 @@ describe('SessionRunService', () => {
           return {
             permissionSnapshotId: 'permission-snapshot:summary',
             runId: input.runId,
-            permissionModeState: input.permissionModeState,
+            permissionLabel: input.permissionMode,
+            permissionModeState: input.permissionModeState ?? { permissionMode: 'default', source: 'system' },
             createdAt: input.createdAt,
           };
         },
@@ -5603,7 +5605,7 @@ describe('SessionRunService', () => {
     });
   });
 
-  it('persists intent metadata on session message permission snapshots with the real repository', async () => {
+  it('persists input preprocessing metadata on session message permission snapshots with the real repository', async () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const sessionRepository = new SessionRunRepository(db);
@@ -5656,11 +5658,27 @@ describe('SessionRunService', () => {
           createdAt: '2026-05-17T00:00:00.000Z',
         }],
         context: {
-          intent: {
-            intentName: 'code_review',
-            source: 'core_command',
-            commandName: 'review',
-            argsText: '当前改动',
+          preprocessing: {
+            originalText: '/review 当前改动',
+            effectiveUserText: '当前改动',
+            entries: [
+              {
+                kind: 'intent',
+                sourceId: 'input:intent:review',
+                sourceName: '/review',
+                visibility: 'model_visible',
+                instructionText: 'Current input comes from the review intent.',
+                intentId: 'review',
+                commandName: 'review',
+                defaultPermissionMode: 'plan',
+                defaultPermissionSource: 'intent_default',
+                metadata: {
+                  intentName: 'code_review',
+                  argsText: '当前改动',
+                },
+              },
+            ],
+            diagnostics: [],
           },
         },
         createdAt: '2026-05-17T00:00:00.000Z',
@@ -5681,12 +5699,21 @@ describe('SessionRunService', () => {
         source: 'intent_default',
       },
       metadata: {
-        intent: {
-          intentName: 'code_review',
-          source: 'core_command',
-          commandName: 'review',
-          argsText: '当前改动',
-        },
+        inputPreprocessing: expect.objectContaining({
+          originalText: '/review 当前改动',
+          effectiveUserText: '当前改动',
+          entries: expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'intent',
+              intentId: 'review',
+              commandName: 'review',
+            }),
+            expect.objectContaining({
+              kind: 'input_hook',
+              hookId: 'default',
+            }),
+          ]),
+        }),
       },
     });
   });
@@ -5834,8 +5861,3 @@ describe('SessionRunService', () => {
     ]);
   });
 });
-
-
-
-
-

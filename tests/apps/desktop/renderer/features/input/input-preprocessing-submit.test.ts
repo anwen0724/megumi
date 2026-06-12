@@ -21,17 +21,11 @@ describe('renderer input preprocessing submit payload', () => {
     expect(listInputCommandSuggestions('/write').map((command) => command.name)).toEqual(['write-doc']);
   });
 
-  it('creates review intent preprocessing while preserving the legacy intent bridge', () => {
+  it('creates review intent preprocessing without the legacy intent bridge', () => {
     expect(createInputPreprocessingSubmitPayload('/review 当前改动')).toEqual({
       message: '/review 当前改动',
       permissionMode: 'plan',
       permissionSource: 'intent_default',
-      intent: {
-        intentName: 'code_review',
-        source: 'core_command',
-        commandName: 'review',
-        argsText: '当前改动',
-      },
       preprocessing: {
         originalText: '/review 当前改动',
         effectiveUserText: '当前改动',
@@ -55,6 +49,7 @@ describe('renderer input preprocessing submit payload', () => {
         diagnostics: [],
       },
     });
+    expect(createInputPreprocessingSubmitPayload('/review 当前改动')).not.toHaveProperty('intent');
   });
 
   it('creates summary prompt-template preprocessing without overriding permission posture', () => {

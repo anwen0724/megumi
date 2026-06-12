@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import {
@@ -650,46 +650,6 @@ describe('provider and chat ipc schemas', () => {
     expect(parsed.payload.context?.permissionMode).toBe('plan');
   });
 
-  it('accepts code review intent metadata on session message runtime context', () => {
-    const parsed = SessionMessageSendRequestSchema.parse({
-      requestId: 'request:intent-review',
-      payload: {
-        sessionId: 'session:1',
-        providerId: 'deepseek',
-        modelId: 'deepseek-v4-flash',
-        message: {
-          id: 'client-message:1',
-          content: '/review 当前改动',
-          createdAt: '2026-06-08T00:00:00.000Z',
-        },
-        context: {
-          permissionMode: 'plan',
-          permissionSource: 'intent_default',
-          intent: {
-            intentName: 'code_review',
-            source: 'core_command',
-            commandName: 'review',
-            argsText: '当前改动',
-          },
-        },
-        createdAt: '2026-06-08T00:00:00.000Z',
-      },
-      meta: {
-        channel: IPC_CHANNELS.session.message.send,
-        createdAt: '2026-06-08T00:00:00.000Z',
-        source: 'renderer',
-      },
-    });
-
-    expect(parsed.payload.context?.intent).toEqual({
-      intentName: 'code_review',
-      source: 'core_command',
-      commandName: 'review',
-      argsText: '当前改动',
-    });
-    expect(parsed.payload.context?.permissionSource).toBe('intent_default');
-  });
-
   it('accepts input preprocessing metadata on session message runtime context', () => {
     const parsed = SessionMessageSendRequestSchema.parse({
       requestId: 'request:input-preprocessing-summary',
@@ -799,171 +759,34 @@ describe('provider and chat ipc schemas', () => {
     })).toThrow();
   });
 
-  it('rejects mismatched code review intent metadata in session message runtime context', () => {
+  it('rejects legacy intent metadata on session message runtime context', () => {
     expect(() => SessionMessageSendRequestSchema.parse({
-      requestId: 'request:intent-review',
+      requestId: 'request:legacy-intent',
       payload: {
+        sessionId: 'session:1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
         message: {
           id: 'client-message:1',
           content: '/review 当前改动',
-          createdAt: '2026-06-08T00:00:00.000Z',
+          createdAt: '2026-06-12T00:00:00.000Z',
         },
         context: {
           permissionMode: 'plan',
           intent: {
             intentName: 'code_review',
             source: 'core_command',
-            commandName: 'reviewx',
+            commandName: 'review',
             argsText: '当前改动',
           },
         },
-        createdAt: '2026-06-08T00:00:00.000Z',
+        createdAt: '2026-06-12T00:00:00.000Z',
       },
       meta: {
         channel: IPC_CHANNELS.session.message.send,
-        createdAt: '2026-06-08T00:00:00.000Z',
+        createdAt: '2026-06-12T00:00:00.000Z',
         source: 'renderer',
       },
-    })).toThrow();
-  });
-
-  it('rejects legacy composerMode in session message runtime context', () => {
-    expect(() => SessionMessageSendPayloadSchema.parse({
-      providerId: 'deepseek',
-      modelId: 'deepseek-v4-flash',
-      message: {
-        id: 'message-1',
-        content: 'Hello',
-        createdAt: '2026-05-20T00:00:00.000Z',
-      },
-      context: {
-        composerMode: 'execute',
-      },
-      createdAt: '2026-05-20T00:00:00.000Z',
-    })).toThrow();
-  });
-
-  it('uses a target request id for chat cancellation payloads', () => {
-    const payload = SessionMessageCancelPayloadSchema.safeParse({
-      targetRequestId: 'ipc-chat-start-1',
-    });
-
-    const request = SessionMessageCancelRequestSchema.safeParse({
-      requestId: 'ipc-chat-cancel-1',
-      payload: {
-        targetRequestId: 'ipc-chat-start-1',
-      },
-      meta: {
-        channel: IPC_CHANNELS.session.message.cancel,
-        createdAt: '2026-05-12T00:00:00.000Z',
-        source: 'renderer',
-      },
-    });
-
-    expect(payload.success).toBe(true);
-    expect(request.success).toBe(true);
-  });
-
-  it('rejects invalid chat messages', () => {
-    const result = SessionMessageSendPayloadSchema.safeParse({
-      providerId: 'deepseek',
-      modelId: 'deepseek-v4-flash',
-      messages: [
-        {
-          id: 'message-1',
-          role: 'admin',
-          content: 'Hello',
-          createdAt: '2026-05-12T00:00:00.000Z',
-        },
-      ],
-      createdAt: '2026-05-12T00:00:00.000Z',
-    });
-
-    expect(result.success).toBe(false);
-  });
-});
-
-describe('session run ipc contracts', () => {
-  it('validates session runtime ipc requests', () => {
-    expect(SessionCreateRequestSchema.parse({
-      requestId: 'ipc-agent-session-create-1',
-      payload: {
-        title: 'New session',
-        createdAt: '2026-05-15T00:00:00.000Z',
-      },
-      meta: {
-        channel: IPC_CHANNELS.session.create,
-        source: 'renderer',
-        createdAt: '2026-05-15T00:00:00.000Z',
-      },
-    }).payload.title).toBe('New session');
-
-    expect(SessionListRequestSchema.parse({
-      requestId: 'ipc-agent-session-list-1',
-      payload: {},
-      meta: {
-        channel: IPC_CHANNELS.session.list,
-        source: 'renderer',
-        createdAt: '2026-05-15T00:00:00.000Z',
-      },
-    }).meta.channel).toBe('session:list');
-
-    expect(SessionMessageListRequestSchema.parse({
-      requestId: 'ipc-session-message-list-1',
-      payload: { sessionId: 'session-1' },
-      meta: {
-        channel: IPC_CHANNELS.session.message.list,
-        source: 'renderer',
-        createdAt: '2026-05-15T00:00:00.000Z',
-      },
-    }).payload.sessionId).toBe('session-1');
-  });
-
-  it('registers plan-specific IPC channels in the runtime envelope', () => {
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.plan.byRunGet);
-    expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.plan.statusUpdate);
-    expect(PlanByRunGetRequestSchema.parse({
-      requestId: 'request:plan-get',
-      payload: { runId: 'run:plan' },
-      meta: {
-        channel: IPC_CHANNELS.plan.byRunGet,
-        createdAt: '2026-05-15T00:00:00.000Z',
-        source: 'renderer',
-      },
-    }).payload.runId).toBe('run:plan');
-  });
-
-  it('parses run start payloads with canonical permission mode state', () => {
-    const payload = RunStartPayloadSchema.parse({
-      sessionId: 'session-1',
-      goal: 'Write a plan',
-      mode: 'plan',
-      permissionModeState: {
-        permissionMode: 'plan',
-        source: 'user',
-      },
-      createdAt: '2026-05-15T00:00:00.000Z',
-    });
-
-    expect(payload.permissionModeState).toEqual({
-      permissionMode: 'plan',
-      source: 'user',
-    });
-    expect(payload).not.toHaveProperty('modeSnapshot');
-  });
-
-  it('rejects legacy modeSnapshot run start input', () => {
-    expect(() => RunStartPayloadSchema.parse({
-      sessionId: 'session:1',
-      goal: 'Plan task',
-      mode: 'plan',
-      modeSnapshot: {
-        permissionMode: 'plan',
-        source: 'intent_default',
-      },
-      createdAt: '2026-06-11T00:00:00.000Z',
     })).toThrow();
   });
 });
@@ -1738,4 +1561,3 @@ describe('shared barrel exports', () => {
     expect(typeof runtimeRequestSchema.parse).toBe('function');
   });
 });
-

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -110,7 +110,6 @@ function createSessionMessageSendPayload(
       sessionTitle: activeSession?.title ?? undefined,
       permissionMode: payload.permissionMode,
       ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
-      ...(payload.intent ? { intent: payload.intent } : {}),
       // Preprocessing is renderer-provided context metadata; Desktop Main is
       // responsible for validating it before constructing model input.
       ...(payload.preprocessing ? { preprocessing: payload.preprocessing } : {}),
@@ -490,4 +489,3 @@ export function useSessionTimeline() {
     cancelBranchDraft,
   };
 }
-

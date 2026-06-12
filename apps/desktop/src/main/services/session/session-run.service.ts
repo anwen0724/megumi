@@ -1,4 +1,6 @@
-﻿import path from 'node:path';
+// Orchestrates Desktop Main session runs by bridging IPC payloads, persistence,
+// permission snapshots, context construction, and model-step execution.
+import path from 'node:path';
 import {
   buildModelStepInputContextFromSources,
   createModelStepInputContextId,
@@ -46,6 +48,7 @@ import {
   type PermissionModeSnapshot,
   type PermissionModeSelectionSource,
 } from '@megumi/shared/permission';
+import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   RunStartPayload,
@@ -69,10 +72,6 @@ import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
-  InputIntentCommandMetadataSchema,
-  type InputIntentCommandMetadata,
-} from '@megumi/shared/input-command';
-import {
   createRuntimeEvent,
   createSessionActiveLeafChangedEvent,
   createSessionBranchDraftCancelledEvent,
@@ -87,6 +86,10 @@ import type {
   WorkspaceChangeSet,
   WorkspaceChangeSummary,
 } from '@megumi/shared/workspace';
+import {
+  normalizeSessionMessageInputPreprocessing,
+  type NormalizedSessionMessageInputPreprocessing,
+} from '../runtime/runtime-input.service';
 import { PermissionSnapshotService } from '../security/permission-snapshot.service';
 import type { MegumiHomePaths } from '../project/megumi-home.service';
 import {
@@ -519,19 +522,19 @@ export class SessionRunService {
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
     const currentUserMessage = currentUserChatMessage(input.payload);
-    const inputIntent = normalizeInputIntentMetadata(input.payload.context?.intent);
-    const intentDefaultPermission = defaultPermissionForInputIntent(inputIntent);
-    const permissionMode = intentDefaultPermission?.permissionMode
-      ?? input.payload.context?.permissionMode
-      ?? 'default';
-    const permissionSource = intentDefaultPermission?.source
-      ?? input.payload.context?.permissionSource
-      ?? 'user';
-    const mode = permissionMode;
-    const inputMetadata = sessionMessageInputMetadata({
-      intent: inputIntent,
+    // Renderer preprocessing is treated as transport metadata here; this
+    // runtime normalization is the trust boundary before persistence and model input.
+    const normalizedInput: NormalizedSessionMessageInputPreprocessing = normalizeSessionMessageInputPreprocessing({
+      rawText: currentUserMessage?.content ?? '',
+      requestedPermissionMode: input.payload.context?.permissionMode,
+      requestedPermissionSource: input.payload.context?.permissionSource,
+      preprocessing: input.payload.context?.preprocessing,
+      createdAt,
     });
-
+    const permissionMode = normalizedInput.permissionMode;
+    const permissionSource = normalizedInput.permissionSource;
+    const mode = permissionMode;
+    const inputMetadata = normalizedInput.metadata;
     if (!currentUserMessage) {
       throw new Error('Session message send requires a user message.');
     }
@@ -645,7 +648,7 @@ export class SessionRunService {
         userMessage,
         currentUserMessage,
         permissionMode,
-        ...(inputIntent ? { inputIntent } : {}),
+        inputPreprocessing: normalizedInput.inputPreprocessing,
         ...(permissionSnapshot ? { permissionSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       })),
@@ -1183,7 +1186,7 @@ export class SessionRunService {
     userMessage: SessionMessage;
     currentUserMessage: SessionMessageSendCurrentMessage;
     permissionMode: PermissionMode;
-    inputIntent?: InputIntentCommandMetadata;
+    inputPreprocessing: InputPreprocessingResult;
     permissionSnapshot?: PermissionSnapshotRecord;
     chatStreamAdapter?: ChatStreamEventAdapter;
   }): AsyncIterable<RuntimeEvent> {
@@ -1239,7 +1242,7 @@ export class SessionRunService {
       ...(context ? {
         runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
       } : {}),
-      ...(input.inputIntent ? { inputIntent: input.inputIntent } : {}),
+      inputPreprocessing: input.inputPreprocessing,
       budgetPolicy: {
         modelContextWindow: Number.MAX_SAFE_INTEGER,
         reservedOutputTokens: 0,
@@ -1324,7 +1327,7 @@ export class SessionRunService {
       ...(context ? {
         runtimeConstraints: runtimeConstraintsFromRunContext(context, input.payload.createdAt),
       } : {}),
-      ...(input.inputIntent ? { inputIntent: input.inputIntent } : {}),
+      inputPreprocessing: input.inputPreprocessing,
       budgetPolicy,
       ...(input.permissionSnapshot ? {
         permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
@@ -2930,39 +2933,6 @@ function getRunStartPermissionModeState(payload: RunStartPayload): PermissionMod
   return payload.permissionModeState;
 }
 
-function normalizeInputIntentMetadata(input: unknown): InputIntentCommandMetadata | undefined {
-  if (!input) {
-    return undefined;
-  }
-
-  return InputIntentCommandMetadataSchema.parse(input);
-}
-
-function defaultPermissionForInputIntent(
-  intent: InputIntentCommandMetadata | undefined,
-): { permissionMode: PermissionMode; source: Extract<PermissionModeSelectionSource, 'intent_default'> } | undefined {
-  if (intent?.intentName === 'code_review') {
-    return {
-      permissionMode: 'plan',
-      source: 'intent_default',
-    };
-  }
-
-  return undefined;
-}
-
-function sessionMessageInputMetadata(input: {
-  intent?: InputIntentCommandMetadata;
-}): JsonObject | undefined {
-  const metadata: JsonObject = {};
-
-  if (input.intent) {
-    metadata.intent = input.intent as unknown as JsonObject;
-  }
-
-  return Object.keys(metadata).length > 0 ? metadata : undefined;
-}
-
 function createPermissionModeState(
   permissionMode: PermissionMode,
   source: PermissionModeSelectionSource,
@@ -3176,7 +3146,3 @@ export function createDefaultSessionRunService(
     agentInstructionSourceService: options.agentInstructionSourceService ?? new AgentInstructionSourceService(),
   });
 }
-
-
-
-
