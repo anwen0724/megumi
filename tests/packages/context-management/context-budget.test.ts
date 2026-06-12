@@ -85,6 +85,20 @@ function toolContinuationPart(tokens: number, sourceId: string, toolCallId: stri
   };
 }
 
+function memoryPart(tokens: number, sourceId: string, loadedAt = builtAt): ModelInputContextPartDraft {
+  return {
+    partId: `part:${sourceId}`,
+    kind: 'memory',
+    memoryKind: 'memory_recall',
+    text: textForTokens(tokens),
+    memoryIds: [`memory:${sourceId}`],
+    sourceRefs: [sourceRef(sourceId, 'memory_recall', loadedAt)],
+    priority: 55,
+    budgetClass: 'contextual',
+    required: false,
+  };
+}
+
 describe('Context budget executor', () => {
   it('estimates model input tokens with the V1 character heuristic', () => {
     expect(estimateModelInputContextTokens('')).toBe(0);
@@ -166,7 +180,12 @@ describe('Context budget executor', () => {
     expect(result.trace.firstKeptSourceId).toBeUndefined();
   });
 
-  it('counts instruction in budget statistics but never prunes it as session context', () => {
+  it('counts system instruction in budget statistics but never prunes it as session context', () => {
+    const systemInstruction = {
+      ...instructionPart(35),
+      instructionKind: 'system' as const,
+      sourceRefs: [sourceRef('instruction:1', 'system_instruction')],
+    };
     const result = applyContextBudget({
       buildReason: 'required_over_budget',
       policy: {
@@ -175,7 +194,7 @@ describe('Context budget executor', () => {
         keepRecentTokens: 20,
       },
       parts: [
-        instructionPart(35),
+        systemInstruction,
         currentTurnPart(10),
         sessionHistoryPart(5, 'history:old', '2026-05-30T00:00:01.000Z'),
       ],
@@ -197,31 +216,33 @@ describe('Context budget executor', () => {
       {
         sourceRef: sourceRef('history:old', 'session_message', '2026-05-30T00:00:01.000Z'),
         reason: 'outside_keep_recent_tokens',
+        partId: 'part:history:old',
       },
     ]);
   });
 
-  it('does not let required false demote kind-mandated required context', () => {
-    const requiredFalseInstruction = {
-      ...instructionPart(12, 'instruction:required-false'),
-      required: false,
+  it('keeps system instruction required by default under 18.01 budget rules', () => {
+    const requiredSystemInstruction = {
+      ...instructionPart(12, 'instruction:system-required'),
+      instructionKind: 'system' as const,
+      sourceRefs: [sourceRef('instruction:system-required', 'system_instruction')],
     };
 
     const result = applyContextBudget({
-      buildReason: 'required_false_instruction',
+      buildReason: 'default_system_instruction_required',
       policy: {
         modelContextWindow: 15,
         reservedOutputTokens: 5,
         keepRecentTokens: 10,
       },
       parts: [
-        requiredFalseInstruction,
+        requiredSystemInstruction,
         sessionHistoryPart(5, 'history:old', '2026-05-30T00:00:01.000Z'),
       ],
     });
 
     expect(result.parts.map((part) => part.partId)).toEqual([
-      'part:instruction:required-false',
+      'part:instruction:system-required',
     ]);
     expect(result.trace.budgetWarnings).toEqual([
       {
@@ -234,6 +255,67 @@ describe('Context budget executor', () => {
       {
         sourceRef: sourceRef('history:old', 'session_message', '2026-05-30T00:00:01.000Z'),
         reason: 'outside_keep_recent_tokens',
+        partId: 'part:history:old',
+      },
+    ]);
+  });
+
+  it('allows explicit required false to keep project instructions prunable under 18.01 budget rules', () => {
+    const optionalProjectInstruction = {
+      ...instructionPart(30, 'project-instruction:optional'),
+      budgetClass: 'high_priority' as const,
+      required: false,
+    };
+
+    const result = applyContextBudget({
+      buildReason: '18_01_optional_project_instruction',
+      policy: {
+        modelContextWindow: 20,
+        reservedOutputTokens: 5,
+        keepRecentTokens: 5,
+      },
+      parts: [
+        currentTurnPart(5),
+        optionalProjectInstruction,
+        sessionHistoryPart(5, 'history:recent', '2026-05-30T00:00:03.000Z'),
+      ],
+    });
+
+    expect(result.parts.map((part) => part.partId)).toEqual([
+      'part:current:1',
+      'part:history:recent',
+    ]);
+    expect(result.trace.excludedSources).toEqual([
+      {
+        sourceRef: sourceRef('project-instruction:optional', 'project_instruction'),
+        reason: 'context_budget_exceeded',
+        budgetClass: 'high_priority',
+        partId: 'part:project-instruction:optional',
+      },
+    ]);
+  });
+
+  it('treats memory recall as contextual and prunes it before required current turn', () => {
+    const result = applyContextBudget({
+      buildReason: '18_01_memory_contextual',
+      policy: {
+        modelContextWindow: 18,
+        reservedOutputTokens: 4,
+        keepRecentTokens: 4,
+      },
+      parts: [
+        currentTurnPart(8),
+        memoryPart(10, 'memory-recall:old'),
+      ],
+    });
+
+    expect(result.parts.map((part) => part.partId)).toEqual(['part:current:1']);
+    expect(result.trace.excludedSources).toEqual([
+      {
+        sourceRef: sourceRef('memory-recall:old', 'memory_recall', builtAt),
+        reason: 'context_budget_exceeded',
+        budgetClass: 'contextual',
+        partId: 'part:memory-recall:old',
       },
     ]);
   });
@@ -263,6 +345,7 @@ describe('Context budget executor', () => {
       {
         sourceRef: sourceRef('history:old', 'session_message', '2026-05-30T00:00:01.000Z'),
         reason: 'outside_keep_recent_tokens',
+        partId: 'part:history:old',
       },
     ]);
     expect(result.trace.firstKeptPartId).toBe('part:history:middle');
@@ -293,10 +376,12 @@ describe('Context budget executor', () => {
       {
         sourceRef: sourceRef('history:old', 'session_message', '2026-05-30T00:00:01.000Z'),
         reason: 'outside_keep_recent_tokens',
+        partId: 'part:history:old',
       },
       {
         sourceRef: sourceRef('history:middle', 'session_message', '2026-05-30T00:00:02.000Z'),
         reason: 'outside_keep_recent_tokens',
+        partId: 'part:history:middle',
       },
     ]);
     expect(result.trace.firstKeptPartId).toBe('part:history:new');
@@ -328,6 +413,7 @@ describe('Context budget executor', () => {
       {
         sourceRef: sourceRef('fact:old-info', 'session_runtime_fact', '2026-05-30T00:00:01.000Z'),
         reason: 'context_budget_exceeded',
+        partId: 'part:fact:old-info',
       },
     ]);
   });
@@ -365,6 +451,8 @@ describe('Context budget executor', () => {
       {
         sourceId: 'instruction:truncated',
         reason: 'project_instruction_hard_cap_exceeded',
+        sourceKind: 'project_instruction',
+        partId: 'part:instruction:truncated',
       },
     ]);
   });

@@ -10,6 +10,7 @@ import type {
   ModelInputContextSelectedSource,
   ModelInputContextTrace,
   ModelInputContextTruncation,
+  MemoryPart,
   RuntimeConstraintPart,
   SessionPart,
   ToolContinuationPart,
@@ -28,7 +29,8 @@ export type ModelInputContextPartDraft =
   | (BudgetlessPart<CurrentTurnPart> & DraftFields)
   | (BudgetlessPart<SessionPart> & DraftFields)
   | (BudgetlessPart<ToolContinuationPart> & DraftFields)
-  | (BudgetlessPart<RuntimeConstraintPart> & DraftFields);
+  | (BudgetlessPart<RuntimeConstraintPart> & DraftFields)
+  | (BudgetlessPart<MemoryPart> & DraftFields);
 
 export interface ApplyContextBudgetInput {
   parts: ModelInputContextPartDraft[];
@@ -111,6 +113,17 @@ export function applyContextBudget(input: ApplyContextBudgetInput): ApplyContext
     for (const part of runtimeSelection.excluded) {
       pushExcludedSources(part.draft, CONTEXT_BUDGET_EXCEEDED_REASON, excludedSources);
     }
+
+    const usedByRuntimeFacts = sumTokens(runtimeSelection.kept);
+    const remainingAfterRuntimeFacts = Math.max(0, remainingAfterHistory - usedByRuntimeFacts);
+    const contextualSelection = selectContextualParts(estimatedParts, remainingAfterRuntimeFacts);
+
+    for (const part of contextualSelection.kept) {
+      keepIndexes.add(part.index);
+    }
+    for (const part of contextualSelection.excluded) {
+      pushExcludedSources(part.draft, CONTEXT_BUDGET_EXCEEDED_REASON, excludedSources);
+    }
   }
 
   const finalParts = estimatedParts
@@ -146,16 +159,16 @@ export function estimateModelInputContextTokens(value: string): number {
 }
 
 function isRequiredDraft(draft: ModelInputContextPartDraft): boolean {
-  if (draft.required === true) {
-    return true;
+  if (draft.required !== undefined) {
+    return draft.required;
   }
   if (draft.kind === 'session') {
     return draft.sessionKind === 'session_summary';
   }
-  return draft.kind === 'instruction'
-    || draft.kind === 'current_turn'
+  return draft.kind === 'current_turn'
     || draft.kind === 'runtime_constraint'
-    || draft.kind === 'tool_continuation';
+    || draft.kind === 'tool_continuation'
+    || (draft.kind === 'instruction' && draft.instructionKind === 'system');
 }
 
 function isSessionHistoryDraft(draft: ModelInputContextPartDraft): boolean {
@@ -210,6 +223,40 @@ function selectRuntimeFacts(
   };
 }
 
+function selectContextualParts(
+  parts: EstimatedDraft[],
+  tokenBudget: number,
+): { kept: EstimatedDraft[]; excluded: EstimatedDraft[] } {
+  const contextualParts = parts.filter((part) => (
+    !part.required
+    && !isSessionHistoryDraft(part.draft)
+    && !isRuntimeFactDraft(part.draft)
+  ));
+  const kept = new Set<number>();
+  let usedTokens = 0;
+
+  for (const part of [...contextualParts].sort(compareContextualPartsForRetention)) {
+    if (usedTokens + part.tokenEstimate <= tokenBudget) {
+      kept.add(part.index);
+      usedTokens += part.tokenEstimate;
+    }
+  }
+
+  return {
+    kept: contextualParts.filter((part) => kept.has(part.index)),
+    excluded: contextualParts.filter((part) => !kept.has(part.index)),
+  };
+}
+
+function compareContextualPartsForRetention(left: EstimatedDraft, right: EstimatedDraft): number {
+  const priorityDelta = right.draft.priority - left.draft.priority;
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  return left.index - right.index;
+}
+
 function compareRuntimeFactsForRetention(left: EstimatedDraft, right: EstimatedDraft): number {
   const severityDelta = severityRank(right.draft) - severityRank(left.draft);
   if (severityDelta !== 0) {
@@ -252,6 +299,8 @@ function excludePrunableParts(
       pushExcludedSources(part.draft, SESSION_HISTORY_EXCLUDED_REASON, excludedSources);
     } else if (isRuntimeFactDraft(part.draft)) {
       pushExcludedSources(part.draft, CONTEXT_BUDGET_EXCEEDED_REASON, excludedSources);
+    } else {
+      pushExcludedSources(part.draft, CONTEXT_BUDGET_EXCEEDED_REASON, excludedSources);
     }
   }
 }
@@ -265,6 +314,8 @@ function pushExcludedSources(
     excludedSources.push({
       sourceRef,
       reason,
+      ...(draft.budgetClass ? { budgetClass: draft.budgetClass } : {}),
+      partId: draft.partId,
     });
   }
 }
@@ -310,6 +361,9 @@ function selectedSourcesForParts(parts: ModelInputContextPart[]): ModelInputCont
         selectedSources.set(sourceRef.sourceId, {
           sourceId: sourceRef.sourceId,
           reason: selectedReasonForPart(part),
+          sourceKind: sourceRef.sourceKind,
+          ...(part.budgetClass ? { budgetClass: part.budgetClass } : {}),
+          partId: part.partId,
         });
       }
     }
