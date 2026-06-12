@@ -1448,10 +1448,10 @@ describe('agent memory ipc payload and data schemas', () => {
     });
     const recallPayload = MemoryRecallPreviewPayloadSchema.parse({
       sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      query: 'workflow',
-      scopes: ['workspace'],
-      kinds: ['workflow'],
+      projectId: 'project:1',
+      query: 'decision',
+      scopes: ['project'],
+      kinds: ['decision'],
       limit: 3,
       budget: 500,
       createdAt: '2026-05-16T00:00:00.000Z',
@@ -1459,14 +1459,15 @@ describe('agent memory ipc payload and data schemas', () => {
     const recallData = MemoryRecallPreviewDataSchema.parse({
       request: {
         recallRequestId: 'memory-recall:1',
+        runId: 'run:1',
         sessionId: recallPayload.sessionId,
-        workspaceId: recallPayload.workspaceId,
-        query: recallPayload.query,
-        scopes: recallPayload.scopes,
-        kinds: recallPayload.kinds,
-        limit: recallPayload.limit,
-        budget: recallPayload.budget,
+        projectId: recallPayload.projectId,
+        queryText: recallPayload.query,
+        requestedScopes: recallPayload.scopes,
+        requestedKinds: recallPayload.kinds,
+        maxResults: recallPayload.limit,
         createdAt: recallPayload.createdAt,
+        metadata: {},
       },
       results: [],
     });

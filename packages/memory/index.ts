@@ -29,8 +29,8 @@ export interface DefaultMemoryPolicyInput {
 
 export function createDefaultMemoryPolicy(input: DefaultMemoryPolicyInput): MemoryPolicy {
   return {
-    allowedScopes: ['user', 'workspace', 'project', 'session'],
-    allowedKinds: ['preference', 'project_fact', 'workflow', 'constraint', 'decision'],
+    allowedScopes: ['user', 'project'],
+    allowedKinds: ['preference', 'constraint', 'fact', 'decision'],
     blockedSourceKinds: [],
     requiresReviewRiskLevels: ['medium', 'high'],
     blockedPatterns: BLOCKED_PATTERNS.map((pattern) => pattern.source),
@@ -133,7 +133,7 @@ export function scoreMemoryRecordForRecall(record: MemoryRecord, input: RecallSc
   }
 
   const normalizedQuery = normalizeForSearch(input.query ?? '');
-  const searchable = normalizeForSearch(`${record.summary} ${record.content}`);
+  const searchable = normalizeForSearch(`${record.summary ?? ''} ${record.content} ${record.normalizedText}`);
   const queryTokens = normalizedQuery ? normalizedQuery.split(/\s+/) : [];
   const queryMatches = queryTokens.filter((token) => searchable.includes(token)).length;
   if (queryTokens.length > 0 && queryMatches < queryTokens.length) {
@@ -142,8 +142,9 @@ export function scoreMemoryRecordForRecall(record: MemoryRecord, input: RecallSc
   const queryScore = normalizedQuery.length === 0
     ? 0.2
     : queryMatches / queryTokens.length;
-  const accessScore = Math.min(record.accessCount ?? 0, 10) / 100;
-  const score = clamp01(0.4 + queryScore * 0.4 + record.confidence * 0.15 + accessScore);
+  const useScore = Math.min(record.useCount ?? 0, 10) / 100;
+  const recencyScore = record.lastUsedAt ? 0.05 : 0;
+  const score = clamp01(0.4 + queryScore * 0.45 + useScore + recencyScore);
   return { eligible: true, score, reason: normalizedQuery ? 'scope_match query_match' : 'scope_match' };
 }
 
@@ -176,17 +177,17 @@ export function selectMemoryRecallResults(input: SelectMemoryRecallResultsInput)
         recallResultId: `${input.recallRequestId}:result:${index + 1}`,
         recallRequestId: input.recallRequestId,
         memoryId: entry.record.memoryId,
-        scope: entry.record.scope,
-        kind: entry.record.kind,
-        summary: entry.record.summary,
-        contentPreview,
-        relevanceScore: entry.score.score,
-        confidence: entry.record.confidence,
-        sourceRefs: entry.record.sourceRefs,
-        recallReason: entry.score.reason,
-        tokenEstimate,
+        score: entry.score.score,
+        rank: index + 1,
         selectedForContext,
+        reason: entry.score.reason,
         createdAt: input.now,
+        metadata: {
+          tokenEstimate,
+          scope: entry.record.scope,
+          kind: entry.record.kind,
+          contentPreview,
+        },
       };
     });
 }

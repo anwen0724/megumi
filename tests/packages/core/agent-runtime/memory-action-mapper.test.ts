@@ -14,17 +14,17 @@ function result(id: string, selectedForContext: boolean): MemoryRecallResult {
     recallResultId: id,
     recallRequestId: 'memory-recall:1',
     memoryId: `memory:${id}`,
-    scope: 'workspace',
-    kind: 'workflow',
-    summary: 'spec first workflow',
-    contentPreview: '大功能先写 spec 再写 plan。',
-    relevanceScore: 0.9,
-    confidence: 0.8,
-    sourceRefs: [],
-    recallReason: 'scope_match query_match',
-    tokenEstimate: 8,
+    score: 0.9,
+    rank: 1,
     selectedForContext,
+    reason: 'scope_match query_match',
     createdAt: now,
+    metadata: {
+      scope: 'project',
+      kind: 'decision',
+      contentPreview: '大功能先写 spec 再写 plan。',
+      tokenEstimate: 8,
+    },
   };
 }
 

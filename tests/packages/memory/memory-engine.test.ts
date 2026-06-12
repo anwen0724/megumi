@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   createDefaultMemoryPolicy,
   createMemoryCandidateDraft,
@@ -8,7 +8,7 @@ import {
 } from '@megumi/memory';
 import type { MemoryRecord, MemorySourceRef } from '@megumi/shared/memory';
 
-const now = '2026-05-16T00:00:00.000Z';
+const now = '2026-06-12T00:00:00.000Z';
 
 function sourceRef(ownerId: string): MemorySourceRef {
   return {
@@ -25,30 +25,42 @@ function sourceRef(ownerId: string): MemorySourceRef {
 function memory(input: Partial<MemoryRecord> = {}): MemoryRecord {
   return {
     memoryId: input.memoryId ?? 'memory:1',
-    workspaceId: 'workspace:1',
-    scope: input.scope ?? 'workspace',
-    kind: input.kind ?? 'workflow',
-    content: input.content ?? '大功能先写 spec 再写 plan。',
-    summary: input.summary ?? 'spec first workflow',
-    sourceRefs: [sourceRef(input.memoryId ?? 'memory:1')],
-    confidence: input.confidence ?? 0.9,
+    scope: input.scope ?? 'project',
+    projectId: input.scope === 'user' ? null : 'project:1',
+    kind: input.kind ?? 'decision',
     status: input.status ?? 'active',
+    content: input.content ?? 'Use Vitest for unit tests.',
+    summary: input.summary ?? 'Testing framework decision',
+    normalizedText: input.normalizedText ?? 'use vitest for unit tests',
+    dedupeKey: input.dedupeKey ?? 'project:project:1:decision:use-vitest',
+    source: input.source ?? 'capture',
+    sourceRunId: 'run:1',
+    sourceSessionId: 'session:1',
+    sourceMessageId: 'message:1',
+    sourceToolCallId: null,
+    evidence: [],
+    supersededById: null,
     createdAt: now,
     updatedAt: input.updatedAt ?? now,
-    accessCount: input.accessCount ?? 0,
+    lastUsedAt: input.lastUsedAt ?? now,
+    useCount: input.useCount ?? 0,
+    deletedAt: null,
+    metadata: {},
+    ...input,
   };
 }
 
 describe('memory engine', () => {
   it('creates a conservative default policy and blocks high risk raw content', () => {
     const policy = createDefaultMemoryPolicy({ now });
-    expect(policy.allowedScopes).toEqual(['user', 'workspace', 'project', 'session']);
+    expect(policy.allowedScopes).toEqual(['user', 'project']);
+    expect(policy.allowedKinds).toEqual(['preference', 'constraint', 'fact', 'decision']);
     expect(policy.requiresReviewRiskLevels).toEqual(['medium', 'high']);
 
     expect(
       evaluateMemoryCandidatePolicy({
         policy,
-        scope: 'workspace',
+        scope: 'project',
         kind: 'constraint',
         sourceKinds: ['message'],
         content: '-----BEGIN PRIVATE KEY-----',
@@ -59,46 +71,83 @@ describe('memory engine', () => {
     });
   });
 
-  it('creates safe candidate drafts without raw source content', () => {
+  it('creates compatible candidate drafts with 18.02 scope and kind vocabulary', () => {
     const candidate = createMemoryCandidateDraft({
       candidateId: 'memory-candidate:1',
-      workspaceId: 'workspace:1',
-      scope: 'workspace',
-      kind: 'workflow',
+      projectId: 'project:1',
+      sessionId: 'session:1',
+      scope: 'project',
+      kind: 'decision',
       content: '  大功能先写 spec，再写 00 brief，再写 implementation plans。  ',
       sourceRefs: [sourceRef('memory-candidate:1')],
       proposedBy: 'agent',
       now,
     });
 
+    expect(candidate.scope).toBe('project');
+    expect(candidate.kind).toBe('decision');
     expect(candidate.summary).toBe('大功能先写 spec，再写 00 brief，再写 implementation plans。');
     expect(candidate.status).toBe('proposed');
     expect(JSON.stringify(candidate)).not.toContain('raw full prompt');
   });
 
-  it('scores and selects recall results with scope query status confidence and budget', () => {
-    const first = memory({ memoryId: 'memory:workflow', content: 'spec brief plans workflow', confidence: 0.95 });
-    const disabled = memory({ memoryId: 'memory:disabled', status: 'disabled', content: 'spec brief plans workflow' });
-    const unrelated = memory({ memoryId: 'memory:other', content: 'provider adapter setting' });
+  it('scores and selects recall results with 18.02 lifecycle and usage metadata', () => {
+    const first = memory({
+      memoryId: 'memory:decision',
+      content: 'spec brief plans vitest',
+      normalizedText: 'spec brief plans vitest',
+      useCount: 3,
+    });
+    const superseded = memory({
+      memoryId: 'memory:superseded',
+      status: 'superseded',
+      content: 'spec brief plans vitest',
+    });
+    const deleted = memory({
+      memoryId: 'memory:deleted',
+      status: 'deleted',
+      content: 'spec brief plans vitest',
+    });
+    const unrelated = memory({
+      memoryId: 'memory:other',
+      kind: 'fact',
+      content: 'provider adapter setting',
+      normalizedText: 'provider adapter setting',
+    });
 
-    expect(scoreMemoryRecordForRecall(first, { scopes: ['workspace'], query: 'spec plans', kinds: ['workflow'] }).score)
-      .toBeGreaterThan(scoreMemoryRecordForRecall(unrelated, { scopes: ['workspace'], query: 'spec plans' }).score);
-    expect(scoreMemoryRecordForRecall(disabled, { scopes: ['workspace'], query: 'spec plans' }).eligible).toBe(false);
+    expect(scoreMemoryRecordForRecall(first, { scopes: ['project'], query: 'spec plans', kinds: ['decision'] }).score)
+      .toBeGreaterThan(scoreMemoryRecordForRecall(unrelated, { scopes: ['project'], query: 'spec plans' }).score);
+    expect(scoreMemoryRecordForRecall(superseded, { scopes: ['project'], query: 'spec plans' }).eligible).toBe(false);
+    expect(scoreMemoryRecordForRecall(deleted, { scopes: ['project'], query: 'spec plans' }).eligible).toBe(false);
 
     const results = selectMemoryRecallResults({
       recallRequestId: 'memory-recall:1',
-      records: [disabled, unrelated, first],
-      scopes: ['workspace'],
-      kinds: ['workflow'],
+      records: [deleted, unrelated, superseded, first],
+      scopes: ['project'],
+      kinds: ['decision'],
       query: 'spec plans',
       limit: 5,
       budget: 20,
       now,
     });
 
-    expect(results.map((result) => result.memoryId)).toEqual(['memory:workflow']);
-    expect(results[0].selectedForContext).toBe(true);
-    expect(results[0].contentPreview).toBe('spec brief plans workflow');
+    expect(results).toEqual([
+      {
+        recallResultId: 'memory-recall:1:result:1',
+        recallRequestId: 'memory-recall:1',
+        memoryId: 'memory:decision',
+        score: expect.any(Number),
+        rank: 1,
+        selectedForContext: true,
+        reason: 'scope_match query_match',
+        createdAt: now,
+        metadata: {
+          tokenEstimate: 6,
+          scope: 'project',
+          kind: 'decision',
+          contentPreview: 'spec brief plans vitest',
+        },
+      },
+    ]);
   });
 });
-

@@ -1412,6 +1412,35 @@ export function migrateDatabase(database: MegumiDatabase): void {
     );
   `);
 
+  addColumnIfMissing(database, 'memory_records', 'normalized_text', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'dedupe_key', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'source', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'source_run_id', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'source_session_id', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'source_message_id', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'source_tool_call_id', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'evidence_json', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'superseded_by_id', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'last_used_at', 'TEXT');
+  addColumnIfMissing(database, 'memory_records', 'use_count', 'INTEGER NOT NULL DEFAULT 0');
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS memory_markdown_mirrors (
+      mirror_id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      project_id TEXT,
+      file_path TEXT NOT NULL,
+      status TEXT NOT NULL,
+      last_imported_at TEXT,
+      last_exported_at TEXT,
+      content_hash TEXT,
+      last_error TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
   addColumnIfMissing(database, 'timeline_messages', 'turn_order', 'INTEGER');
 
   database.exec(`
@@ -1568,16 +1597,41 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_memory_records_workspace_status
     ON memory_records(workspace_id, status);
 
+    CREATE INDEX IF NOT EXISTS idx_memory_records_active_lookup
+    ON memory_records(scope, project_id, kind, status, updated_at);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_records_dedupe_key
+    ON memory_records(scope, ifnull(project_id, ''), kind, dedupe_key)
+    WHERE dedupe_key IS NOT NULL AND status = 'active';
+
+    CREATE INDEX IF NOT EXISTS idx_memory_records_updated_at
+    ON memory_records(updated_at);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_records_last_used_at
+    ON memory_records(last_used_at);
+
     CREATE INDEX IF NOT EXISTS idx_memory_source_refs_owner
     ON memory_source_refs(owner_id, owner_kind);
 
     CREATE INDEX IF NOT EXISTS idx_memory_recall_results_request_id
     ON memory_recall_results(recall_request_id);
 
+    CREATE INDEX IF NOT EXISTS idx_memory_recall_results_memory
+    ON memory_recall_results(memory_id);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_recall_requests_run_session
+    ON memory_recall_requests(run_id, session_id);
+
     CREATE INDEX IF NOT EXISTS idx_memory_access_logs_memory_id
     ON memory_access_logs(memory_id);
 
     CREATE INDEX IF NOT EXISTS idx_memory_audit_logs_target
     ON memory_audit_logs(target_kind, target_id);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_markdown_mirrors_scope_project
+    ON memory_markdown_mirrors(scope, project_id);
+
+    CREATE INDEX IF NOT EXISTS idx_memory_markdown_mirrors_status
+    ON memory_markdown_mirrors(status);
   `);
 }

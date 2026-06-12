@@ -33,10 +33,11 @@ describe('MemoryService', () => {
 
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
+        projectId: 'project:1',
         sessionId: 'session:1',
         runId: 'run:1',
-        scope: 'workspace',
-        kind: 'workflow',
+        scope: 'project',
+        kind: 'decision',
         content: '大功能先写 spec，再写 plan。',
         sourceRefs: [
           {
@@ -53,6 +54,7 @@ describe('MemoryService', () => {
       });
 
       expect(candidate.status).toBe('proposed');
+      expect(candidate.scope).toBe('project');
       expect(candidate.sourceRefs[0]).toMatchObject({
         ownerId: candidate.candidateId,
         ownerKind: 'candidate',
@@ -67,7 +69,7 @@ describe('MemoryService', () => {
 
       expect(accepted.candidate.status).toBe('accepted');
       expect(accepted.memory.status).toBe('active');
-      expect(service.listMemories({ workspaceId: 'workspace:1', status: 'active' })).toHaveLength(1);
+      expect(service.listMemories({ scope: 'project', projectId: 'project:1', status: 'active' })).toHaveLength(1);
       expect(events.map((event) => event.eventType)).toEqual(expect.arrayContaining([
         'memory.candidate.proposed',
         'memory.candidate.accepted',
@@ -84,8 +86,9 @@ describe('MemoryService', () => {
     try {
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
+        projectId: 'project:1',
         sessionId: 'session:1',
-        scope: 'workspace',
+        scope: 'project',
         kind: 'constraint',
         content: 'IPC channel stays in request.meta.channel.',
         sourceRefs: [],
@@ -93,13 +96,16 @@ describe('MemoryService', () => {
       });
       const { memory } = service.acceptCandidate({ candidateId: candidate.candidateId, reviewedAt: now });
 
-      expect(service.disableMemory({ memoryId: memory.memoryId, updatedAt: now }).status).toBe('disabled');
+      const disabled = service.disableMemory({ memoryId: memory.memoryId, updatedAt: now });
+      expect(disabled).toMatchObject({ status: 'deleted', deletedAt: now });
+      expect(service.enableMemory({ memoryId: memory.memoryId, updatedAt: now }).status).toBe('active');
+      expect(service.archiveMemory({ memoryId: memory.memoryId, updatedAt: now }).status).toBe('superseded');
       expect(service.enableMemory({ memoryId: memory.memoryId, updatedAt: now }).status).toBe('active');
       const preview = service.recallPreview({
         sessionId: 'session:1',
-        workspaceId: 'workspace:1',
+        projectId: 'project:1',
         query: 'ipc channel',
-        scopes: ['workspace'],
+        scopes: ['project'],
         kinds: ['constraint'],
         limit: 5,
         createdAt: now,
@@ -108,15 +114,15 @@ describe('MemoryService', () => {
       expect(preview.results).toHaveLength(1);
       expect(service.listAccessLogs({ memoryId: memory.memoryId })).toHaveLength(1);
       expect(service.getMemory(memory.memoryId).memory).toMatchObject({
-        lastAccessedAt: now,
-        accessCount: 1,
+        lastUsedAt: now,
+        useCount: 1,
       });
       expect(service.deleteMemory({ memoryId: memory.memoryId, updatedAt: now }).status).toBe('deleted');
       expect(service.recallPreview({
         sessionId: 'session:1',
-        workspaceId: 'workspace:1',
+        projectId: 'project:1',
         query: 'ipc channel',
-        scopes: ['workspace'],
+        scopes: ['project'],
         limit: 5,
         createdAt: now,
       }).results).toHaveLength(0);
@@ -130,9 +136,10 @@ describe('MemoryService', () => {
     try {
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
+        projectId: 'project:1',
         sessionId: 'session:1',
-        scope: 'workspace',
-        kind: 'workflow',
+        scope: 'project',
+        kind: 'decision',
         content: 'old candidate content',
         sourceRefs: [],
         proposedBy: 'agent',

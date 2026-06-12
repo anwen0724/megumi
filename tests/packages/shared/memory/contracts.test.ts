@@ -1,195 +1,226 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import {
-  MEMORY_ACCESS_KINDS,
   MEMORY_AUDIT_OPERATIONS,
-  MEMORY_CANDIDATE_STATUSES,
   MEMORY_KINDS,
+  MEMORY_MARKDOWN_MIRROR_STATUSES,
+  MEMORY_RECORD_SOURCES,
   MEMORY_RECORD_STATUSES,
   MEMORY_SCOPES,
-  MEMORY_SOURCE_KINDS,
-  MemoryAccessLogSchema,
   MemoryAuditLogSchema,
-  MemoryCandidateSchema,
-  MemoryPolicySchema,
+  MemoryMarkdownMirrorSchema,
   MemoryRecallRequestSchema,
   MemoryRecallResultSchema,
+  MemoryRecallSnapshotSchema,
   MemoryRecordSchema,
-  MemorySettingsSchema,
-  MemorySourceRefSchema,
+  MemoryScopeSchema,
 } from '@megumi/shared/memory';
 
-const now = '2026-05-16T00:00:00.000Z';
+describe('memory shared contracts', () => {
+  it('exposes only long-term memory scopes from the 18.02 spec', () => {
+    expect(MEMORY_SCOPES).toEqual(['user', 'project']);
+    expect(MemoryScopeSchema.safeParse('user').success).toBe(true);
+    expect(MemoryScopeSchema.safeParse('project').success).toBe(true);
+    expect(MemoryScopeSchema.safeParse('session').success).toBe(false);
+    expect(MemoryScopeSchema.safeParse('workspace').success).toBe(false);
+  });
 
-describe('memory contracts', () => {
-  it('defines stable scope kind status and governance vocabularies', () => {
-    expect(MEMORY_SCOPES).toEqual(['user', 'workspace', 'project', 'session']);
-    expect(MEMORY_KINDS).toEqual(['preference', 'project_fact', 'workflow', 'constraint', 'decision']);
-    expect(MEMORY_CANDIDATE_STATUSES).toEqual(['proposed', 'accepted', 'rejected', 'archived']);
-    expect(MEMORY_RECORD_STATUSES).toEqual(['active', 'archived', 'disabled', 'deleted']);
-    expect(MEMORY_SOURCE_KINDS).toEqual([
-      'message',
-      'session',
-      'run',
-      'step',
-      'runtime_event',
-      'observation',
-      'artifact',
-      'tool_call',
-      'manual',
-      'host_context',
+  it('exposes only long-term memory kinds from the 18.02 spec', () => {
+    expect(MEMORY_KINDS).toEqual(['preference', 'constraint', 'fact', 'decision']);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ kind: 'fact' })).success).toBe(true);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ kind: 'project_fact' })).success).toBe(false);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ kind: 'workflow' })).success).toBe(false);
+  });
+
+  it('exposes only 18.02 record lifecycle statuses', () => {
+    expect(MEMORY_RECORD_STATUSES).toEqual(['active', 'superseded', 'deleted']);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'active' })).success).toBe(true);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'superseded' })).success).toBe(true);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'deleted' })).success).toBe(true);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'archived' })).success).toBe(false);
+    expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'disabled' })).success).toBe(false);
+  });
+
+  it('parses a runtime memory record with source, evidence, dedupe, and use metadata', () => {
+    const result = MemoryRecordSchema.safeParse(validMemoryRecord());
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      return;
+    }
+
+    expect(result.data.scope).toBe('project');
+    expect(result.data.kind).toBe('decision');
+    expect(result.data.normalizedText).toBe('use vitest for unit tests');
+    expect(result.data.source).toBe('capture');
+    expect(result.data.evidence).toEqual([
+      {
+        kind: 'message',
+        runId: 'run-1',
+        sessionId: 'session-1',
+        messageId: 'message-1',
+        metadata: {},
+      },
     ]);
-    expect(MEMORY_ACCESS_KINDS).toEqual(['recalled', 'selected_for_context', 'viewed', 'exported']);
-    expect(MEMORY_AUDIT_OPERATIONS).toContain('candidate_accepted');
-    expect(MEMORY_AUDIT_OPERATIONS).toContain('memory_deleted');
+    expect(result.data.useCount).toBe(2);
   });
 
-  it('parses a proposed candidate with safe source refs', () => {
-    const candidate = MemoryCandidateSchema.parse({
-      candidateId: 'memory-candidate:1',
-      workspaceId: 'workspace:1',
-      scope: 'workspace',
-      kind: 'workflow',
-      content: '项目大功能先写 spec，再写 00 brief，再写 implementation plans。',
-      summary: '项目大功能采用 spec -> brief -> plans 流程。',
-      sourceRefs: [
-        {
-          sourceRefId: 'memory-source:1',
-          ownerId: 'memory-candidate:1',
-          ownerKind: 'candidate',
-          kind: 'message',
-          refId: 'message:1',
-          label: '用户确认的流程',
-          excerptPreview: '先写 spec，再写 00 brief。',
-          createdAt: now,
-        },
-      ],
-      confidence: 0.9,
-      riskLevel: 'low',
-      status: 'proposed',
-      proposedBy: 'agent',
-      createdAt: now,
-      metadata: { source: 'test' },
-    });
+  it('rejects session-scoped long-term memory records', () => {
+    const result = MemoryRecordSchema.safeParse(
+      validMemoryRecord({
+        scope: 'session',
+        projectId: null,
+        sourceSessionId: 'session-1',
+      }),
+    );
 
-    expect(candidate.status).toBe('proposed');
-    expect(JSON.stringify(candidate)).not.toContain('raw full prompt');
+    expect(result.success).toBe(false);
   });
 
-  it('parses records recall results access logs audit logs policy and settings', () => {
-    const sourceRef = MemorySourceRefSchema.parse({
-      sourceRefId: 'memory-source:2',
-      ownerId: 'memory:1',
-      ownerKind: 'memory',
-      kind: 'artifact',
-      refId: 'artifact:1',
-      label: 'Review report',
-      excerptPreview: '安全摘要',
-      createdAt: now,
-    });
-
-    const record = MemoryRecordSchema.parse({
-      memoryId: 'memory:1',
-      workspaceId: 'workspace:1',
-      scope: 'workspace',
-      kind: 'constraint',
-      content: 'Runtime IPC channel 必须位于 request.meta.channel。',
-      summary: 'IPC channel 位置约束。',
-      sourceRefs: [sourceRef],
-      confidence: 1,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-      accessCount: 0,
-    });
-
+  it('parses recall request, result, and model snapshot contracts', () => {
     const request = MemoryRecallRequestSchema.parse({
-      recallRequestId: 'memory-recall:1',
-      sessionId: 'session:1',
-      runId: 'run:1',
-      workspaceId: 'workspace:1',
-      query: 'ipc channel',
-      scopes: ['workspace'],
-      kinds: ['constraint'],
-      limit: 5,
-      budget: 500,
-      createdAt: now,
+      recallRequestId: 'recall-1',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      queryText: 'How should tests be written?',
+      requestedScopes: ['user', 'project'],
+      requestedKinds: ['preference', 'decision'],
+      maxResults: 8,
+      createdAt: '2026-06-12T00:00:00.000Z',
+      metadata: {},
     });
 
     const result = MemoryRecallResultSchema.parse({
-      recallResultId: 'memory-recall-result:1',
+      recallResultId: 'result-1',
       recallRequestId: request.recallRequestId,
-      memoryId: record.memoryId,
-      scope: record.scope,
-      kind: record.kind,
-      summary: record.summary,
-      contentPreview: 'Runtime IPC channel 必须位于 request.meta.channel。',
-      relevanceScore: 0.95,
-      confidence: 1,
-      sourceRefs: [sourceRef],
-      recallReason: 'scope_match query_match',
-      tokenEstimate: 12,
+      memoryId: 'memory-1',
+      score: 0.82,
+      rank: 1,
       selectedForContext: true,
-      createdAt: now,
+      reason: 'Matches project testing preference.',
+      createdAt: '2026-06-12T00:00:00.000Z',
+      metadata: {},
     });
 
-    const access = MemoryAccessLogSchema.parse({
-      accessLogId: 'memory-access:1',
-      memoryId: record.memoryId,
-      sessionId: 'session:1',
-      runId: 'run:1',
+    const snapshot = MemoryRecallSnapshotSchema.parse({
       recallRequestId: request.recallRequestId,
-      accessKind: 'selected_for_context',
-      accessedAt: now,
-      selectedForContext: true,
+      recalledAt: '2026-06-12T00:00:00.000Z',
+      memories: [
+        {
+          memoryId: result.memoryId,
+          scope: 'project',
+          kind: 'decision',
+          content: 'Use Vitest for unit tests.',
+          reason: result.reason,
+          score: result.score,
+        },
+      ],
     });
 
-    const audit = MemoryAuditLogSchema.parse({
-      auditLogId: 'memory-audit:1',
-      targetKind: 'memory',
-      targetId: record.memoryId,
-      operation: 'memory_created',
-      actor: 'user',
-      createdAt: now,
-      summary: '用户接受候选记忆。',
-    });
-
-    const settings = MemorySettingsSchema.parse({
-      workspaceId: 'workspace:1',
-      autoCaptureEnabled: true,
-      defaultCandidateReviewMode: 'manual',
-      updatedAt: now,
-    });
-
-    const policy = MemoryPolicySchema.parse({
-      allowedScopes: ['user', 'workspace', 'project', 'session'],
-      allowedKinds: ['preference', 'project_fact', 'workflow', 'constraint', 'decision'],
-      blockedSourceKinds: [],
-      requiresReviewRiskLevels: ['medium', 'high'],
-      blockedPatterns: ['plaintext secret'],
-      autoCaptureEnabled: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    expect(result.selectedForContext).toBe(true);
-    expect(access.accessKind).toBe('selected_for_context');
-    expect(audit.operation).toBe('memory_created');
-    expect(settings.defaultCandidateReviewMode).toBe('manual');
-    expect(policy.requiresReviewRiskLevels).toEqual(['medium', 'high']);
+    expect(snapshot.memories).toHaveLength(1);
   });
 
-  it('rejects raw source content and unknown fields', () => {
-    expect(() =>
-      MemorySourceRefSchema.parse({
-        sourceRefId: 'memory-source:raw',
-        ownerId: 'memory:raw',
-        ownerKind: 'memory',
-        kind: 'message',
-        refId: 'message:raw',
-        rawContent: 'raw full prompt',
-        createdAt: now,
-      }),
-    ).toThrow();
+  it('parses markdown mirror state without making markdown authoritative', () => {
+    expect(MEMORY_MARKDOWN_MIRROR_STATUSES).toEqual(['synced', 'dirty', 'conflict', 'missing']);
+
+    const mirror = MemoryMarkdownMirrorSchema.parse({
+      mirrorId: 'mirror-1',
+      scope: 'project',
+      projectId: 'project-1',
+      filePath: 'C:/repo/.megumi/memory/project.md',
+      status: 'synced',
+      lastImportedAt: '2026-06-12T00:00:00.000Z',
+      lastExportedAt: '2026-06-12T00:00:00.000Z',
+      contentHash: 'hash-1',
+      metadata: {},
+    });
+
+    expect(mirror.status).toBe('synced');
+  });
+
+  it('exposes audit operations for capture, import, recall, and conflict diagnostics', () => {
+    expect(MEMORY_RECORD_SOURCES).toEqual(['capture', 'markdown_import', 'manual_system']);
+    expect(MEMORY_AUDIT_OPERATIONS).toEqual(
+      expect.arrayContaining([
+        'capture_evaluated',
+        'extraction_skipped',
+        'extraction_failed',
+        'markdown_import_parsed',
+        'markdown_import_failed',
+        'memory_created',
+        'memory_updated',
+        'memory_superseded',
+        'memory_deleted',
+        'recall_requested',
+        'recall_selected',
+        'recall_failed',
+        'conflict_detected',
+      ]),
+    );
+
+    const audit = MemoryAuditLogSchema.parse({
+      auditId: 'audit-1',
+      operation: 'memory_created',
+      targetKind: 'memory',
+      targetId: 'memory-1',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      actorKind: 'system',
+      reason: 'Captured durable project testing decision.',
+      beforeState: null,
+      afterState: {
+        scope: 'project',
+        kind: 'decision',
+        status: 'active',
+      },
+      createdAt: '2026-06-12T00:00:00.000Z',
+      metadata: {},
+    });
+
+    expect(audit.afterState).not.toHaveProperty('content');
+    expect(MemoryAuditLogSchema.safeParse({
+      ...audit,
+      auditId: 'audit-raw-content',
+      afterState: {
+        content: 'raw memory content must not be stored in audit state',
+      },
+    }).success).toBe(false);
   });
 });
 
+function validMemoryRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    memoryId: 'memory-1',
+    scope: 'project',
+    projectId: 'project-1',
+    kind: 'decision',
+    status: 'active',
+    content: 'Use Vitest for unit tests.',
+    summary: 'Testing framework decision',
+    normalizedText: 'use vitest for unit tests',
+    dedupeKey: 'project:project-1:decision:use-vitest',
+    source: 'capture',
+    sourceRunId: 'run-1',
+    sourceSessionId: 'session-1',
+    sourceMessageId: 'message-1',
+    sourceToolCallId: null,
+    evidence: [
+      {
+        kind: 'message',
+        runId: 'run-1',
+        sessionId: 'session-1',
+        messageId: 'message-1',
+      },
+    ],
+    supersededById: null,
+    createdAt: '2026-06-12T00:00:00.000Z',
+    updatedAt: '2026-06-12T00:00:00.000Z',
+    lastUsedAt: '2026-06-12T00:00:00.000Z',
+    useCount: 2,
+    deletedAt: null,
+    metadata: {},
+    ...overrides,
+  };
+}

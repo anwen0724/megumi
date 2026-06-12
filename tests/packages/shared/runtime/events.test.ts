@@ -1194,8 +1194,8 @@ describe('memory runtime events', () => {
       },
       {
         candidateId: 'memory-candidate:1',
-        scope: 'workspace',
-        kind: 'workflow',
+        scope: 'project',
+        kind: 'decision',
         status: 'proposed',
         riskLevel: 'low',
         summary: '使用 spec -> brief -> plans 流程。',
@@ -1222,8 +1222,8 @@ describe('memory runtime events', () => {
           {
             memoryId: 'memory:1',
             from: 'active',
-            to: 'disabled',
-            reason: 'User disabled memory.',
+            to: 'superseded',
+            reason: 'User archived memory.',
           },
         ),
       ).eventType,

@@ -1,4 +1,7 @@
-﻿import { z } from 'zod';
+// Defines serializable memory contracts shared across package,
+// Desktop Main, preload, and renderer boundaries. This file owns shape only;
+// persistence mapping and runtime memory decisions live outside packages/shared.
+import { z } from 'zod';
 import type { IsoDateTime } from '../primitives/ids';
 import { JsonObjectSchema, type JsonObject } from '../primitives/json';
 import { IsoDateTimeSchema } from '../runtime/validation';
@@ -6,17 +9,29 @@ import { IsoDateTimeSchema } from '../runtime/validation';
 const IdSchema = z.string().min(1).max(128);
 const OptionalJsonObjectSchema = JsonObjectSchema.optional();
 
-export const MEMORY_SCOPES = ['user', 'workspace', 'project', 'session'] as const;
-export type MemoryScope = (typeof MEMORY_SCOPES)[number];
+export const MEMORY_SCOPES = ['user', 'project'] as const;
+export const MemoryScopeSchema = z.enum(MEMORY_SCOPES);
+export type MemoryScope = z.infer<typeof MemoryScopeSchema>;
 
-export const MEMORY_KINDS = ['preference', 'project_fact', 'workflow', 'constraint', 'decision'] as const;
-export type MemoryKind = (typeof MEMORY_KINDS)[number];
+export const MEMORY_KINDS = ['preference', 'constraint', 'fact', 'decision'] as const;
+export const MemoryKindSchema = z.enum(MEMORY_KINDS);
+export type MemoryKind = z.infer<typeof MemoryKindSchema>;
 
 export const MEMORY_CANDIDATE_STATUSES = ['proposed', 'accepted', 'rejected', 'archived'] as const;
-export type MemoryCandidateStatus = (typeof MEMORY_CANDIDATE_STATUSES)[number];
+export const MemoryCandidateStatusSchema = z.enum(MEMORY_CANDIDATE_STATUSES);
+export type MemoryCandidateStatus = z.infer<typeof MemoryCandidateStatusSchema>;
 
-export const MEMORY_RECORD_STATUSES = ['active', 'archived', 'disabled', 'deleted'] as const;
-export type MemoryRecordStatus = (typeof MEMORY_RECORD_STATUSES)[number];
+export const MEMORY_RECORD_STATUSES = ['active', 'superseded', 'deleted'] as const;
+export const MemoryRecordStatusSchema = z.enum(MEMORY_RECORD_STATUSES);
+export type MemoryRecordStatus = z.infer<typeof MemoryRecordStatusSchema>;
+
+export const MEMORY_RECORD_SOURCES = ['capture', 'markdown_import', 'manual_system'] as const;
+export const MemoryRecordSourceSchema = z.enum(MEMORY_RECORD_SOURCES);
+export type MemoryRecordSource = z.infer<typeof MemoryRecordSourceSchema>;
+
+export const MEMORY_EVIDENCE_KINDS = ['message', 'tool_result', 'user_edit', 'markdown_import'] as const;
+export const MemoryEvidenceKindSchema = z.enum(MEMORY_EVIDENCE_KINDS);
+export type MemoryEvidenceKind = z.infer<typeof MemoryEvidenceKindSchema>;
 
 export const MEMORY_SOURCE_KINDS = [
   'message',
@@ -30,57 +45,58 @@ export const MEMORY_SOURCE_KINDS = [
   'manual',
   'host_context',
 ] as const;
-export type MemorySourceKind = (typeof MEMORY_SOURCE_KINDS)[number];
+export const MemorySourceKindSchema = z.enum(MEMORY_SOURCE_KINDS);
+export type MemorySourceKind = z.infer<typeof MemorySourceKindSchema>;
 
 export const MEMORY_OWNER_KINDS = ['candidate', 'memory'] as const;
-export type MemoryOwnerKind = (typeof MEMORY_OWNER_KINDS)[number];
+export const MemoryOwnerKindSchema = z.enum(MEMORY_OWNER_KINDS);
+export type MemoryOwnerKind = z.infer<typeof MemoryOwnerKindSchema>;
 
 export const MEMORY_PROPOSED_BY = ['agent', 'host', 'user', 'system'] as const;
-export type MemoryProposedBy = (typeof MEMORY_PROPOSED_BY)[number];
+export const MemoryProposedBySchema = z.enum(MEMORY_PROPOSED_BY);
+export type MemoryProposedBy = z.infer<typeof MemoryProposedBySchema>;
 
 export const MEMORY_RISK_LEVELS = ['low', 'medium', 'high', 'blocked'] as const;
-export type MemoryRiskLevel = (typeof MEMORY_RISK_LEVELS)[number];
+export const MemoryRiskLevelSchema = z.enum(MEMORY_RISK_LEVELS);
+export type MemoryRiskLevel = z.infer<typeof MemoryRiskLevelSchema>;
 
 export const MEMORY_REVIEW_MODES = ['manual'] as const;
-export type MemoryReviewMode = (typeof MEMORY_REVIEW_MODES)[number];
+export const MemoryReviewModeSchema = z.enum(MEMORY_REVIEW_MODES);
+export type MemoryReviewMode = z.infer<typeof MemoryReviewModeSchema>;
 
 export const MEMORY_ACCESS_KINDS = ['recalled', 'selected_for_context', 'viewed', 'exported'] as const;
-export type MemoryAccessKind = (typeof MEMORY_ACCESS_KINDS)[number];
+export const MemoryAccessKindSchema = z.enum(MEMORY_ACCESS_KINDS);
+export type MemoryAccessKind = z.infer<typeof MemoryAccessKindSchema>;
 
-export const MEMORY_AUDIT_TARGET_KINDS = ['candidate', 'memory', 'settings', 'recall'] as const;
-export type MemoryAuditTargetKind = (typeof MEMORY_AUDIT_TARGET_KINDS)[number];
+export const MEMORY_AUDIT_TARGET_KINDS = ['candidate', 'memory', 'settings', 'recall', 'markdown_mirror'] as const;
+export const MemoryAuditTargetKindSchema = z.enum(MEMORY_AUDIT_TARGET_KINDS);
+export type MemoryAuditTargetKind = z.infer<typeof MemoryAuditTargetKindSchema>;
 
 export const MEMORY_AUDIT_ACTORS = ['agent', 'host', 'user', 'system'] as const;
-export type MemoryAuditActor = (typeof MEMORY_AUDIT_ACTORS)[number];
+export const MemoryAuditActorSchema = z.enum(MEMORY_AUDIT_ACTORS);
+export type MemoryAuditActor = z.infer<typeof MemoryAuditActorSchema>;
 
 export const MEMORY_AUDIT_OPERATIONS = [
+  'capture_evaluated',
+  'extraction_skipped',
+  'extraction_failed',
   'candidate_proposed',
   'candidate_accepted',
   'candidate_rejected',
-  'candidate_archived',
+  'candidate_imported',
+  'markdown_import_parsed',
+  'markdown_import_failed',
   'memory_created',
   'memory_updated',
-  'memory_archived',
-  'memory_disabled',
-  'memory_enabled',
+  'memory_superseded',
   'memory_deleted',
-  'memory_recalled',
+  'recall_requested',
+  'recall_selected',
+  'recall_failed',
+  'conflict_detected',
 ] as const;
-export type MemoryAuditOperation = (typeof MEMORY_AUDIT_OPERATIONS)[number];
-
-export const MemoryScopeSchema = z.enum(MEMORY_SCOPES);
-export const MemoryKindSchema = z.enum(MEMORY_KINDS);
-export const MemoryCandidateStatusSchema = z.enum(MEMORY_CANDIDATE_STATUSES);
-export const MemoryRecordStatusSchema = z.enum(MEMORY_RECORD_STATUSES);
-export const MemorySourceKindSchema = z.enum(MEMORY_SOURCE_KINDS);
-export const MemoryOwnerKindSchema = z.enum(MEMORY_OWNER_KINDS);
-export const MemoryProposedBySchema = z.enum(MEMORY_PROPOSED_BY);
-export const MemoryRiskLevelSchema = z.enum(MEMORY_RISK_LEVELS);
-export const MemoryReviewModeSchema = z.enum(MEMORY_REVIEW_MODES);
-export const MemoryAccessKindSchema = z.enum(MEMORY_ACCESS_KINDS);
-export const MemoryAuditTargetKindSchema = z.enum(MEMORY_AUDIT_TARGET_KINDS);
-export const MemoryAuditActorSchema = z.enum(MEMORY_AUDIT_ACTORS);
 export const MemoryAuditOperationSchema = z.enum(MEMORY_AUDIT_OPERATIONS);
+export type MemoryAuditOperation = z.infer<typeof MemoryAuditOperationSchema>;
 
 export const MemorySourceRefSchema = z
   .object({
@@ -126,72 +142,143 @@ export const MemoryCandidateSchema = z
 
 export type MemoryCandidate = z.infer<typeof MemoryCandidateSchema>;
 
+export const MemoryEvidenceSchema = z.object({
+  kind: MemoryEvidenceKindSchema,
+  runId: z.string().min(1).optional(),
+  sessionId: z.string().min(1).optional(),
+  messageId: z.string().min(1).optional(),
+  toolCallId: z.string().min(1).optional(),
+  filePath: z.string().min(1).optional(),
+  lineStart: z.number().int().positive().optional(),
+  lineEnd: z.number().int().positive().optional(),
+  metadata: JsonObjectSchema.default({}),
+});
+export type MemoryEvidence = z.infer<typeof MemoryEvidenceSchema>;
+
 export const MemoryRecordSchema = z
   .object({
-    memoryId: IdSchema,
-    workspaceId: IdSchema.optional(),
-    projectId: IdSchema.optional(),
-    sessionId: IdSchema.optional(),
+    memoryId: z.string().min(1),
     scope: MemoryScopeSchema,
+    projectId: z.string().min(1).nullable().optional(),
     kind: MemoryKindSchema,
-    content: z.string().min(1).max(4000),
-    summary: z.string().min(1).max(500),
-    sourceRefs: MemorySourceRefsSchema,
-    confidence: z.number().min(0).max(1),
     status: MemoryRecordStatusSchema,
-    createdFromCandidateId: IdSchema.optional(),
+    content: z.string().min(1),
+    summary: z.string().min(1).nullable().optional(),
+    normalizedText: z.string().min(1),
+    dedupeKey: z.string().min(1),
+    source: MemoryRecordSourceSchema,
+    sourceRunId: z.string().min(1).nullable().optional(),
+    sourceSessionId: z.string().min(1).nullable().optional(),
+    sourceMessageId: z.string().min(1).nullable().optional(),
+    sourceToolCallId: z.string().min(1).nullable().optional(),
+    evidence: z.array(MemoryEvidenceSchema).default([]),
+    supersededById: z.string().min(1).nullable().optional(),
     createdAt: IsoDateTimeSchema,
     updatedAt: IsoDateTimeSchema,
-    lastAccessedAt: IsoDateTimeSchema.optional(),
-    accessCount: z.number().int().nonnegative().optional(),
-    deletedAt: IsoDateTimeSchema.optional(),
-    disabledAt: IsoDateTimeSchema.optional(),
-    metadata: OptionalJsonObjectSchema,
+    lastUsedAt: IsoDateTimeSchema.nullable().optional(),
+    useCount: z.number().int().min(0).default(0),
+    deletedAt: IsoDateTimeSchema.nullable().optional(),
+    metadata: JsonObjectSchema.default({}),
+    sourceRefs: MemorySourceRefsSchema.optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    createdFromCandidateId: z.string().min(1).optional(),
   })
-  .strict();
-
+  .superRefine((record, ctx) => {
+    if (record.scope === 'project' && !record.projectId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['projectId'],
+        message: 'project scoped memory requires projectId',
+      });
+    }
+    if (record.scope === 'user' && record.projectId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['projectId'],
+        message: 'user scoped memory must not set projectId',
+      });
+    }
+  });
 export type MemoryRecord = z.infer<typeof MemoryRecordSchema>;
 
-export const MemoryRecallRequestSchema = z
-  .object({
-    recallRequestId: IdSchema,
-    sessionId: IdSchema,
-    runId: IdSchema.optional(),
-    workspaceId: IdSchema.optional(),
-    projectId: IdSchema.optional(),
-    query: z.string().min(1).optional(),
-    scopes: z.array(MemoryScopeSchema).min(1),
-    kinds: z.array(MemoryKindSchema).optional(),
-    limit: z.number().int().positive().max(50),
-    budget: z.number().int().positive().optional(),
-    createdAt: IsoDateTimeSchema,
-    metadata: OptionalJsonObjectSchema,
-  })
-  .strict();
+export const MEMORY_MARKDOWN_MIRROR_STATUSES = ['synced', 'dirty', 'conflict', 'missing'] as const;
+export const MemoryMarkdownMirrorStatusSchema = z.enum(MEMORY_MARKDOWN_MIRROR_STATUSES);
+export type MemoryMarkdownMirrorStatus = z.infer<typeof MemoryMarkdownMirrorStatusSchema>;
 
+export const MemoryMarkdownMirrorSchema = z
+  .object({
+    mirrorId: z.string().min(1),
+    scope: MemoryScopeSchema,
+    projectId: z.string().min(1).nullable().optional(),
+    filePath: z.string().min(1),
+    status: MemoryMarkdownMirrorStatusSchema,
+    lastImportedAt: IsoDateTimeSchema.nullable().optional(),
+    lastExportedAt: IsoDateTimeSchema.nullable().optional(),
+    contentHash: z.string().min(1).nullable().optional(),
+    lastError: z.string().min(1).nullable().optional(),
+    metadata: JsonObjectSchema.default({}),
+  })
+  .superRefine((mirror, ctx) => {
+    if (mirror.scope === 'project' && !mirror.projectId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['projectId'],
+        message: 'project scoped markdown mirror requires projectId',
+      });
+    }
+    if (mirror.scope === 'user' && mirror.projectId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['projectId'],
+        message: 'user scoped markdown mirror must not set projectId',
+      });
+    }
+  });
+export type MemoryMarkdownMirror = z.infer<typeof MemoryMarkdownMirrorSchema>;
+
+export const MemoryRecallRequestSchema = z.object({
+  recallRequestId: z.string().min(1),
+  runId: z.string().min(1),
+  sessionId: z.string().min(1),
+  projectId: z.string().min(1).nullable().optional(),
+  queryText: z.string().min(1),
+  requestedScopes: z.array(MemoryScopeSchema).min(1),
+  requestedKinds: z.array(MemoryKindSchema).optional(),
+  maxResults: z.number().int().positive(),
+  createdAt: IsoDateTimeSchema,
+  metadata: JsonObjectSchema.default({}),
+});
 export type MemoryRecallRequest = z.infer<typeof MemoryRecallRequestSchema>;
 
-export const MemoryRecallResultSchema = z
-  .object({
-    recallResultId: IdSchema,
-    recallRequestId: IdSchema,
-    memoryId: IdSchema,
-    scope: MemoryScopeSchema,
-    kind: MemoryKindSchema,
-    summary: z.string().min(1).max(500),
-    contentPreview: z.string().min(1).max(1000),
-    relevanceScore: z.number().min(0).max(1),
-    confidence: z.number().min(0).max(1),
-    sourceRefs: MemorySourceRefsSchema,
-    recallReason: z.string().min(1).max(500),
-    tokenEstimate: z.number().int().nonnegative(),
-    selectedForContext: z.boolean(),
-    createdAt: IsoDateTimeSchema,
-    metadata: OptionalJsonObjectSchema,
-  })
-  .strict();
-
+export const MemoryRecallResultSchema = z.object({
+  recallResultId: z.string().min(1),
+  recallRequestId: z.string().min(1),
+  memoryId: z.string().min(1),
+  score: z.number().min(0).max(1),
+  rank: z.number().int().positive(),
+  selectedForContext: z.boolean(),
+  reason: z.string().min(1).nullable().optional(),
+  createdAt: IsoDateTimeSchema,
+  metadata: JsonObjectSchema.default({}),
+});
 export type MemoryRecallResult = z.infer<typeof MemoryRecallResultSchema>;
+
+export const MemoryRecallSnapshotItemSchema = z.object({
+  memoryId: z.string().min(1),
+  scope: MemoryScopeSchema,
+  kind: MemoryKindSchema,
+  content: z.string().min(1),
+  reason: z.string().min(1).nullable().optional(),
+  score: z.number().min(0).max(1),
+});
+export type MemoryRecallSnapshotItem = z.infer<typeof MemoryRecallSnapshotItemSchema>;
+
+export const MemoryRecallSnapshotSchema = z.object({
+  recallRequestId: z.string().min(1),
+  recalledAt: IsoDateTimeSchema,
+  memories: z.array(MemoryRecallSnapshotItemSchema),
+});
+export type MemoryRecallSnapshot = z.infer<typeof MemoryRecallSnapshotSchema>;
 
 export const MemorySettingsSchema = z
   .object({
@@ -238,19 +325,26 @@ export const MemoryAccessLogSchema = z
 
 export type MemoryAccessLog = z.infer<typeof MemoryAccessLogSchema>;
 
-export const MemoryAuditLogSchema = z
-  .object({
-    auditLogId: IdSchema,
-    targetKind: MemoryAuditTargetKindSchema,
-    targetId: IdSchema,
-    operation: MemoryAuditOperationSchema,
-    actor: MemoryAuditActorSchema,
-    createdAt: IsoDateTimeSchema,
-    summary: z.string().min(1).max(500),
-    metadata: OptionalJsonObjectSchema,
-  })
-  .strict();
+export const MemoryAuditStateSchema = JsonObjectSchema.refine(
+  (state) => !containsForbiddenAuditStateKey(state),
+  { message: 'memory audit state must not include raw content fields' },
+);
 
+export const MemoryAuditLogSchema = z.object({
+  auditId: z.string().min(1),
+  operation: MemoryAuditOperationSchema,
+  targetKind: MemoryAuditTargetKindSchema,
+  targetId: z.string().min(1).nullable().optional(),
+  runId: z.string().min(1).nullable().optional(),
+  sessionId: z.string().min(1).nullable().optional(),
+  projectId: z.string().min(1).nullable().optional(),
+  actorKind: MemoryAuditActorSchema,
+  reason: z.string().min(1).nullable().optional(),
+  beforeState: MemoryAuditStateSchema.nullable().optional(),
+  afterState: MemoryAuditStateSchema.nullable().optional(),
+  createdAt: IsoDateTimeSchema,
+  metadata: JsonObjectSchema.default({}),
+});
 export type MemoryAuditLog = z.infer<typeof MemoryAuditLogSchema>;
 
 export interface MemoryStatusChange {
@@ -263,9 +357,26 @@ export interface MemorySafePreview {
   memoryId: string;
   scope: MemoryScope;
   kind: MemoryKind;
-  summary: string;
+  summary?: string | null;
   contentPreview: string;
-  sourceRefs: MemorySourceRef[];
+  sourceRefs?: MemorySourceRef[];
   metadata?: JsonObject;
 }
 
+function containsForbiddenAuditStateKey(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => containsForbiddenAuditStateKey(item));
+  }
+  return Object.entries(value).some(([key, child]) => {
+    const normalizedKey = key.toLowerCase();
+    return normalizedKey === 'content'
+      || normalizedKey === 'rawcontent'
+      || normalizedKey === 'rawprompt'
+      || normalizedKey === 'rawtooloutput'
+      || normalizedKey === 'transcript'
+      || containsForbiddenAuditStateKey(child);
+  });
+}

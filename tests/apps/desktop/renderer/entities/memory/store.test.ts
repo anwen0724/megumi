@@ -57,15 +57,25 @@ beforeEach(() => {
         recallPreview: vi.fn(async (request) => {
           expect(expectRuntimeRequest(request, IPC_CHANNELS.memory.recallPreview)).toMatchObject({
             sessionId: 'session:1',
-            workspaceId: 'workspace:1',
-            scopes: ['workspace'],
+            projectId: 'project:1',
+            scopes: ['project'],
             limit: 3,
             createdAt: now,
           });
           return {
             ok: true,
             data: {
-              request: { recallRequestId: 'memory-recall:1', sessionId: 'session:1', scopes: ['workspace'], limit: 3, createdAt: now },
+              request: {
+                recallRequestId: 'memory-recall:1',
+                runId: 'run:1',
+                sessionId: 'session:1',
+                projectId: 'project:1',
+                queryText: 'memory preview',
+                requestedScopes: ['project'],
+                maxResults: 3,
+                createdAt: now,
+                metadata: {},
+              },
               results: [],
             },
             meta: { requestId: 'request:4', channel: IPC_CHANNELS.memory.recallPreview, handledAt: now },
@@ -83,8 +93,8 @@ describe('useMemoryStore', () => {
     await useMemoryStore.getState().loadMemories({ workspaceId: 'workspace:1', status: 'active' });
     await useMemoryStore.getState().previewRecall({
       sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      scopes: ['workspace'],
+      projectId: 'project:1',
+      scopes: ['project'],
       limit: 3,
       createdAt: now,
     });

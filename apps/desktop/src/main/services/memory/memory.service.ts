@@ -89,7 +89,7 @@ export interface MemoryService {
   acceptCandidate(input: CandidateReviewInput): { candidate: MemoryCandidate; memory: MemoryRecord };
   rejectCandidate(input: CandidateRejectInput): MemoryCandidate;
   archiveCandidate(input: CandidateReviewInput): MemoryCandidate;
-  listMemories(filter: { workspaceId?: string; projectId?: string; sessionId?: string; status?: MemoryRecordStatus; query?: string }): MemoryRecord[];
+  listMemories(filter: { scope?: MemoryScope; projectId?: string | null; status?: MemoryRecordStatus; kind?: MemoryKind; query?: string; limit?: number }): MemoryRecord[];
   getMemory(memoryId: string): { memory?: MemoryRecord; sourceRefs: MemorySourceRef[] };
   updateMemory(input: { memoryId: string; content?: string; summary?: string; scope?: MemoryScope; kind?: MemoryKind; updatedAt: string }): MemoryRecord;
   archiveMemory(input: MemoryStatusInput): MemoryRecord;
@@ -132,12 +132,11 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
       ...current,
       status: to,
       updatedAt,
-      ...(to === 'deleted' ? { deletedAt: updatedAt, content: '', summary: 'Deleted memory tombstone.' } : {}),
-      ...(to === 'disabled' ? { disabledAt: updatedAt } : {}),
-      ...(to === 'active' ? { disabledAt: undefined } : {}),
+      ...(to === 'deleted' ? { deletedAt: updatedAt } : {}),
+      ...(to === 'active' ? { deletedAt: null, supersededById: null } : {}),
     };
     deps.repository.saveMemory(updated);
-    emit(createRuntimeMemoryRecordStatusChangedEvent(eventBase(undefined, updated.sessionId, 1), {
+    emit(createRuntimeMemoryRecordStatusChangedEvent(eventBase(undefined, updated.sourceSessionId ?? undefined, 1), {
       memoryId,
       from: current.status,
       to,
@@ -225,20 +224,30 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
       const sourceRefs = candidate.sourceRefs.map((ref) => ({ ...ref, sourceRefId: deps.createId('memory-source'), ownerId: memoryId, ownerKind: 'memory' as const }));
       const memory: MemoryRecord = {
         memoryId,
-        workspaceId: candidate.workspaceId,
-        projectId: candidate.projectId,
-        sessionId: candidate.sessionId,
         scope: candidate.scope,
+        projectId: candidate.scope === 'project' ? candidate.projectId ?? candidate.workspaceId ?? null : null,
         kind: candidate.kind,
+        status: 'active',
         content: candidate.content,
         summary: candidate.summary,
-        sourceRefs,
-        confidence: candidate.confidence,
-        status: 'active',
+        normalizedText: normalizeMemoryText(candidate.content),
+        dedupeKey: buildDedupeKey(candidate.scope, candidate.scope === 'project' ? candidate.projectId ?? candidate.workspaceId ?? null : null, candidate.kind, candidate.content),
+        source: 'manual_system',
+        sourceRunId: null,
+        sourceSessionId: candidate.sessionId ?? null,
+        sourceMessageId: null,
+        sourceToolCallId: null,
+        evidence: [],
+        supersededById: null,
         createdFromCandidateId: candidate.candidateId,
         createdAt: input.reviewedAt,
         updatedAt: input.reviewedAt,
-        accessCount: 0,
+        lastUsedAt: null,
+        useCount: 0,
+        deletedAt: null,
+        metadata: {},
+        sourceRefs,
+        confidence: candidate.confidence,
       };
       deps.repository.saveCandidate(candidate);
       deps.repository.saveMemory(memory);
@@ -247,12 +256,12 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
         memoryId: memory.memoryId,
         reviewedAt: input.reviewedAt,
       }));
-      emit(createRuntimeMemoryRecordCreatedEvent(eventBase(undefined, memory.sessionId, 2), {
+      emit(createRuntimeMemoryRecordCreatedEvent(eventBase(undefined, memory.sourceSessionId ?? undefined, 2), {
         memoryId: memory.memoryId,
         scope: memory.scope,
         kind: memory.kind,
         status: memory.status,
-        summary: memory.summary,
+        summary: memory.summary ?? memory.content,
       }));
       return { candidate, memory };
     },
@@ -283,18 +292,24 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
     },
     updateMemory(input) {
       const current = requireMemory(input.memoryId);
+      const scope = input.scope ?? current.scope;
+      const kind = input.kind ?? current.kind;
+      const content = input.content ?? current.content;
+      const projectId = scope === 'project' ? current.projectId ?? null : null;
       return deps.repository.saveMemory({
         ...current,
-        ...(input.content ? { content: input.content } : {}),
+        ...(input.content ? { content: input.content, normalizedText: normalizeMemoryText(input.content) } : {}),
         ...(input.summary ? { summary: input.summary } : {}),
-        ...(input.scope ? { scope: input.scope } : {}),
-        ...(input.kind ? { kind: input.kind } : {}),
+        scope,
+        projectId,
+        kind,
+        dedupeKey: buildDedupeKey(scope, projectId, kind, content),
         updatedAt: input.updatedAt,
       });
     },
-    archiveMemory: (input) => statusChange(input.memoryId, 'archived', input.updatedAt),
+    archiveMemory: (input) => statusChange(input.memoryId, 'superseded', input.updatedAt),
     deleteMemory: (input) => statusChange(input.memoryId, 'deleted', input.updatedAt),
-    disableMemory: (input) => statusChange(input.memoryId, 'disabled', input.updatedAt),
+    disableMemory: (input) => statusChange(input.memoryId, 'deleted', input.updatedAt),
     enableMemory: (input) => statusChange(input.memoryId, 'active', input.updatedAt),
     listSourceRefs: (memoryId) => deps.repository.listSourceRefsByOwner(memoryId, 'memory'),
     listAccessLogs: (filter) => deps.repository.listAccessLogs(filter),
@@ -302,28 +317,27 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
       const request: MemoryRecallRequest = {
         recallRequestId: deps.createId('memory-recall'),
         sessionId: input.sessionId,
-        runId: input.runId,
-        workspaceId: input.workspaceId,
+        runId: input.runId ?? 'run:memory-preview',
         projectId: input.projectId,
-        query: input.query,
-        scopes: input.scopes,
-        kinds: input.kinds,
-        limit: input.limit,
-        budget: input.budget,
+        queryText: input.query ?? 'memory preview',
+        requestedScopes: input.scopes,
+        requestedKinds: input.kinds,
+        maxResults: input.limit,
         createdAt: input.createdAt,
+        metadata: {},
       };
       emit(createRuntimeMemoryRecallRequestedEvent(eventBase(input.runId, input.sessionId, 1), {
         recallRequestId: request.recallRequestId,
-        scopes: request.scopes,
-        kinds: request.kinds,
-        limit: request.limit,
+        scopes: request.requestedScopes,
+        kinds: request.requestedKinds,
+        limit: request.maxResults,
       }));
-      const records = deps.repository.listMemories({
-        workspaceId: input.workspaceId,
-        projectId: input.projectId,
+      const records = input.scopes.flatMap((scope) => deps.repository.listMemories({
+        scope,
+        projectId: scope === 'project' ? input.projectId ?? null : null,
         status: 'active',
         query: input.query,
-      });
+      }));
       const results = selectMemoryRecallResults({
         recallRequestId: request.recallRequestId,
         records,
@@ -351,8 +365,8 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
         if (recalled) {
           deps.repository.saveMemory({
             ...recalled,
-            lastAccessedAt: input.createdAt,
-            accessCount: (recalled.accessCount ?? 0) + 1,
+            lastUsedAt: input.createdAt,
+            useCount: (recalled.useCount ?? 0) + 1,
             updatedAt: recalled.updatedAt,
           });
         }
@@ -371,5 +385,13 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
       return { request, results };
     },
   };
+}
+
+function normalizeMemoryText(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, ' ').trim() || 'memory';
+}
+
+function buildDedupeKey(scope: MemoryScope, projectId: string | null | undefined, kind: MemoryKind, content: string): string {
+  return `${scope}:${projectId ?? ''}:${kind}:${normalizeMemoryText(content)}`;
 }
 

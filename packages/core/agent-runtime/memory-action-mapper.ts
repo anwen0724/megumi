@@ -72,10 +72,11 @@ export function createMemoryRecallContextSource(result: MemoryRecallResult, load
       recallResultId: result.recallResultId,
       recallRequestId: result.recallRequestId,
       memoryId: result.memoryId,
-      scope: result.scope,
-      kind: result.kind,
-      recallReason: result.recallReason,
-      tokenEstimate: result.tokenEstimate,
+      score: result.score,
+      rank: result.rank,
+      reason: result.reason ?? null,
+      selectedForContext: result.selectedForContext,
+      ...result.metadata,
     },
   };
 }
