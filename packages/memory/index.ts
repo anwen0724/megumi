@@ -15,6 +15,7 @@ export * from './text-normalization';
 export * from './memory-security-policy';
 export * from './capture-trigger-classifier';
 export * from './extraction';
+export * from './candidate-validation';
 
 const MAX_SUMMARY_LENGTH = 500;
 const MAX_CONTENT_PREVIEW_LENGTH = 1000;
