@@ -53,10 +53,11 @@ export function materializeModelStepOpenAICompatibleRequest(
   request: ModelStepRuntimeRequest,
 ): OpenAICompatibleMaterializedProviderRequest {
   assertMaterializableModelStepRequest(request);
+  const modelId = String(request.modelId);
 
   const tools = request.toolDefinitions?.map(mapToolDefinition);
   const body: OpenAICompatibleChatCompletionRequestBody = {
-    model: String(request.modelId),
+    model: modelId,
     messages: mapModelStepToOpenAICompatibleMessages(request),
     stream: true,
     stream_options: {
@@ -84,7 +85,7 @@ export function mapModelStepToOpenAICompatibleMessages(
 }
 
 function assertMaterializableModelStepRequest(request: ModelStepRuntimeRequest): void {
-  if (!String(request.modelId).trim()) {
+  if (!isPresentModelId(request.modelId)) {
     throw new OpenAICompatibleRequestMaterializationError(
       'model_target_missing',
       'Model target is required before provider request materialization.',
@@ -99,6 +100,14 @@ function assertMaterializableModelStepRequest(request: ModelStepRuntimeRequest):
       baseErrorDetails(request),
     );
   }
+}
+
+function isPresentModelId(modelId: unknown): boolean {
+  return modelId !== undefined && modelId !== null && String(modelId).trim().length > 0;
+}
+
+function modelIdForDiagnostics(modelId: unknown): string {
+  return isPresentModelId(modelId) ? String(modelId) : '';
 }
 
 function hasRequiredInputSubject(parts: ModelInputContextPart[]): boolean {
@@ -132,7 +141,7 @@ function baseErrorDetails(request: ModelStepRuntimeRequest): JsonObject {
     runId: String(request.runId),
     stepId: request.stepId,
     providerId: request.providerId,
-    modelId: String(request.modelId),
+    modelId: modelIdForDiagnostics(request.modelId),
     contextId: request.inputContext.contextId,
     buildReason: request.inputContext.trace.buildReason,
   };

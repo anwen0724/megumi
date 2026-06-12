@@ -572,6 +572,49 @@ describe('OpenAI-compatible message mapper', () => {
     expect(materialized.trace.messageRoles).toEqual(['system', 'assistant', 'tool']);
   });
 
+  it('throws a typed materialization error when the model target is missing at runtime', () => {
+    const inputContext = buildModelInputContext({
+      contextId: 'model-input-context:missing-model-target',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        currentTurnPart({
+          partId: 'part:current-turn:missing-model-target',
+          text: 'Read package.json.',
+        }),
+      ],
+    });
+
+    try {
+      messageMapper.materializeModelStepOpenAICompatibleRequest({
+        requestId: 'request-missing-model-target',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        stepId: 'step-1',
+        providerId: 'openai',
+        modelId: undefined as never,
+        inputContext,
+        toolDefinitions: [],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      });
+      throw new Error('Expected materialization to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(messageMapper.OpenAICompatibleRequestMaterializationError);
+      expect(error).toMatchObject({
+        code: 'model_target_missing',
+        details: {
+          requestId: 'request-missing-model-target',
+          modelId: '',
+          contextId: 'model-input-context:missing-model-target',
+          buildReason: 'initial_model_step',
+        },
+      });
+    }
+  });
+
   it('throws a typed materialization error when the required input subject is missing', () => {
     const inputContext = buildModelInputContext({
       contextId: 'model-input-context:missing-subject',
