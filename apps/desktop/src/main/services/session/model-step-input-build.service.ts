@@ -12,6 +12,7 @@ import type {
   ModelInputContext,
   ModelInputContextBuildRequest,
   ModelStepProviderState,
+  SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
@@ -54,6 +55,7 @@ export interface BuildModelStepInputInput {
   currentMessage?: SessionMessage;
   inputPreprocessing?: InputPreprocessingResult;
   sessionContext?: SessionContextInput;
+  sessionInstructionSources?: SessionInstructionSourceSnapshot[];
   toolDefinitions?: ToolDefinition[];
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
@@ -101,6 +103,7 @@ export class ModelStepInputBuildService {
       baseInputContext: input.baseInputContext,
       instructionSources,
       sessionContext: input.sessionContext,
+      sessionInstructionSources: input.sessionInstructionSources,
       inputPreprocessing: input.inputPreprocessing,
       memoryRecallSources: input.memoryRecallSources,
       toolCalls: input.toolCalls,

@@ -10,8 +10,10 @@ import {
   ModelInputContextBuildRequestSchema,
   ModelInputInstructionKindSchema,
   ModelInputContextSchema,
+  SessionInstructionSourceSnapshotSchema,
   type AgentInstructionSourceSnapshot,
   type ModelInputContext,
+  type SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
 import type { ContextBudgetWarning } from '@megumi/shared/context';
 import { SessionContextInputSchema, type SessionContextInput } from '@megumi/shared/session';
@@ -815,6 +817,34 @@ describe('AgentInstructionSourceSnapshot contracts', () => {
 
     expect(globalSource.sourceKind).toBe('global_instruction');
     expect(directorySource.relativePath).toBe('packages/core/CLAUDE.md');
+  });
+
+  it('parses session and mode instruction source snapshots', () => {
+    const sessionSource = SessionInstructionSourceSnapshotSchema.parse({
+      sourceId: 'session-instruction:1',
+      sourceKind: 'session_instruction',
+      text: 'Keep the current session in planning mode.',
+      sourceUri: 'session-instruction://session:1/planning',
+      loadedAt,
+      metadata: { source: 'session_state' },
+    });
+    const modeSource = SessionInstructionSourceSnapshotSchema.parse({
+      sourceId: 'mode-instruction:plan',
+      sourceKind: 'mode_instruction',
+      text: 'Discuss before editing files.',
+      loadedAt,
+      metadata: { mode: 'plan' },
+    });
+
+    expect(sessionSource).toEqual({
+      sourceId: 'session-instruction:1',
+      sourceKind: 'session_instruction',
+      text: 'Keep the current session in planning mode.',
+      sourceUri: 'session-instruction://session:1/planning',
+      loadedAt,
+      metadata: { source: 'session_state' },
+    } satisfies SessionInstructionSourceSnapshot);
+    expect(modeSource.sourceKind).toBe('mode_instruction');
   });
 
   it('accepts unavailable, missing, read_failed, and truncated statuses', () => {

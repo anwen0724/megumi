@@ -8,7 +8,11 @@ import {
 } from '@megumi/context-management';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionMessage } from '@megumi/shared/session';
-import type { ModelInputContextBuildRequest, ModelStepProviderState } from '@megumi/shared/model';
+import type {
+  AgentInstructionSourceSnapshot,
+  ModelInputContextBuildRequest,
+  ModelStepProviderState,
+} from '@megumi/shared/model';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
@@ -804,7 +808,8 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(context.parts[0]).toMatchObject({
       kind: 'instruction',
       instructionKind: 'project',
-      priority: 100,
+      priority: 97,
+      budgetClass: 'high_priority',
       budgetStatus: 'included_full',
       sourceRefs: [{
         sourceId: 'project-instruction:AGENTS.md',
@@ -818,6 +823,8 @@ describe('buildModelStepInputContextFromSources', () => {
           includedBytes: 26,
           hardCapBytes: 65536,
           truncated: false,
+          instructionScope: 'project',
+          instructionDepth: 0,
         },
       }],
     });
@@ -831,6 +838,174 @@ describe('buildModelStepInputContextFromSources', () => {
       sourceKind: 'project_instruction',
       reason: 'instruction',
     }));
+  });
+
+  it('preserves multi-level file instruction semantics in parts and trace', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:multi-level-instructions',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [
+        instructionSource({
+          sourceId: 'global-instruction:CLAUDE.md',
+          sourceKind: 'global_instruction',
+          sourceUri: 'global-instruction://CLAUDE.md',
+          relativePath: 'CLAUDE.md',
+          text: '# Global\nPrefer concise answers.',
+        }),
+        instructionSource({
+          sourceId: 'project-instruction:AGENTS.md',
+          sourceKind: 'project_instruction',
+          sourceUri: 'project-instruction://AGENTS.md',
+          relativePath: 'AGENTS.md',
+          text: '# Root\nUse tests.',
+        }),
+        instructionSource({
+          sourceId: 'project-instruction:packages/CLAUDE.md',
+          sourceKind: 'project_instruction',
+          sourceUri: 'project-instruction://packages/CLAUDE.md',
+          relativePath: 'packages/CLAUDE.md',
+          text: '# Packages\nKeep package boundaries.',
+        }),
+        instructionSource({
+          sourceId: 'project-instruction:packages/core/AGENTS.md',
+          sourceKind: 'project_instruction',
+          sourceUri: 'project-instruction://packages/core/AGENTS.md',
+          relativePath: 'packages/core/AGENTS.md',
+          text: '# Core\nKeep runtime boundaries.',
+        }),
+      ],
+      currentMessage: message({ messageId: 'message:current' }),
+    });
+
+    const instructionParts = context.parts.filter((part) => part.kind === 'instruction');
+
+    expect(instructionParts).toEqual([
+      expect.objectContaining({
+        partId: 'part:instruction:global:global-instruction:CLAUDE.md',
+        instructionKind: 'global',
+        priority: 100,
+        budgetClass: 'high_priority',
+        sourceRefs: [expect.objectContaining({
+          sourceId: 'global-instruction:CLAUDE.md',
+          sourceKind: 'global_instruction',
+          sourceUri: 'global-instruction://CLAUDE.md',
+          metadata: expect.objectContaining({
+            relativePath: 'CLAUDE.md',
+            instructionScope: 'global',
+            instructionDepth: 0,
+          }),
+        })],
+      }),
+      expect.objectContaining({
+        partId: 'part:instruction:project:project-instruction:AGENTS.md',
+        instructionKind: 'project',
+        priority: 97,
+        budgetClass: 'high_priority',
+        sourceRefs: [expect.objectContaining({
+          sourceKind: 'project_instruction',
+          metadata: expect.objectContaining({
+            relativePath: 'AGENTS.md',
+            instructionScope: 'project',
+            instructionDepth: 0,
+          }),
+        })],
+      }),
+      expect.objectContaining({
+        partId: 'part:instruction:project:project-instruction:packages/CLAUDE.md',
+        instructionKind: 'project',
+        priority: 98,
+        budgetClass: 'high_priority',
+        sourceRefs: [expect.objectContaining({
+          sourceKind: 'project_instruction',
+          metadata: expect.objectContaining({
+            relativePath: 'packages/CLAUDE.md',
+            instructionScope: 'project_directory',
+            instructionDepth: 1,
+          }),
+        })],
+      }),
+      expect.objectContaining({
+        partId: 'part:instruction:project:project-instruction:packages/core/AGENTS.md',
+        instructionKind: 'project',
+        priority: 99,
+        budgetClass: 'high_priority',
+        sourceRefs: [expect.objectContaining({
+          sourceKind: 'project_instruction',
+          metadata: expect.objectContaining({
+            relativePath: 'packages/core/AGENTS.md',
+            instructionScope: 'project_directory',
+            instructionDepth: 2,
+          }),
+        })],
+      }),
+    ]);
+    expect(context.trace.selectedSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceId: 'global-instruction:CLAUDE.md',
+        sourceKind: 'global_instruction',
+        budgetClass: 'high_priority',
+      }),
+      expect.objectContaining({
+        sourceId: 'project-instruction:packages/core/AGENTS.md',
+        sourceKind: 'project_instruction',
+        budgetClass: 'high_priority',
+      }),
+    ]));
+  });
+
+  it('materializes session and mode instruction sources with lifecycle-specific kinds', () => {
+    const context = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:session-mode-instructions',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      sessionInstructionSources: [
+        {
+          sourceId: 'session-instruction:memory-off',
+          sourceKind: 'session_instruction',
+          text: 'For this session, avoid changing generated docs without asking.',
+          loadedAt: builtAt,
+          metadata: { source: 'session_state' },
+        },
+        {
+          sourceId: 'mode-instruction:plan',
+          sourceKind: 'mode_instruction',
+          text: 'Plan mode: discuss before editing files.',
+          loadedAt: builtAt,
+          metadata: { mode: 'plan' },
+        },
+      ],
+      currentMessage: message({ messageId: 'message:current' }),
+    });
+
+    expect(context.parts.filter((part) => part.kind === 'instruction')).toEqual([
+      expect.objectContaining({
+        partId: 'part:instruction:session:session-instruction:memory-off',
+        instructionKind: 'session',
+        priority: 96,
+        budgetClass: 'high_priority',
+        sourceRefs: [expect.objectContaining({
+          sourceId: 'session-instruction:memory-off',
+          sourceKind: 'session_instruction',
+        })],
+      }),
+      expect.objectContaining({
+        partId: 'part:instruction:mode:mode-instruction:plan',
+        instructionKind: 'mode',
+        priority: 96,
+        budgetClass: 'high_priority',
+        sourceRefs: [expect.objectContaining({
+          sourceId: 'mode-instruction:plan',
+          sourceKind: 'mode_instruction',
+        })],
+      }),
+    ]);
   });
 
   it('materializes normalized input preprocessing after project instructions and before runtime constraints', () => {
@@ -1047,6 +1222,7 @@ describe('buildModelStepInputContextFromSources', () => {
         }),
       }),
       reason: 'context_budget_exceeded',
+      budgetClass: 'high_priority',
       partId: 'part:instruction:project:project-instruction:AGENTS.md',
     });
     expect(context.trace.selectedSources).not.toContainEqual(expect.objectContaining({
@@ -1153,9 +1329,11 @@ describe('buildModelStepInputContextFromSources', () => {
           sourceId: 'project-instruction:no-project-root',
           sourceKind: 'project_instruction',
           loadedAt: builtAt,
-          metadata: {
-            status: 'unavailable',
-          },
+        metadata: {
+          instructionScope: 'project',
+          instructionDepth: 0,
+          status: 'unavailable',
+        },
         },
         reason: 'agent_instruction_no_project_root',
       },
@@ -1165,10 +1343,12 @@ describe('buildModelStepInputContextFromSources', () => {
           sourceKind: 'project_instruction',
           sourceUri: 'project://AGENTS.md',
           loadedAt: builtAt,
-          metadata: {
-            relativePath: 'AGENTS.md',
-            status: 'missing',
-          },
+        metadata: {
+          relativePath: 'AGENTS.md',
+          instructionScope: 'project',
+          instructionDepth: 0,
+          status: 'missing',
+        },
         },
         reason: 'agent_instruction_missing',
       },
@@ -1178,10 +1358,12 @@ describe('buildModelStepInputContextFromSources', () => {
           sourceKind: 'project_instruction',
           sourceUri: 'project://AGENTS.md',
           loadedAt: builtAt,
-          metadata: {
-            relativePath: 'AGENTS.md',
-            status: 'read_failed',
-          },
+        metadata: {
+          relativePath: 'AGENTS.md',
+          instructionScope: 'project',
+          instructionDepth: 0,
+          status: 'read_failed',
+        },
         },
         reason: 'agent_instruction_read_failed',
       },
@@ -1245,6 +1427,128 @@ describe('buildModelStepInputContextFromSources', () => {
     expect(JSON.stringify(context.parts)).toContain('# New rules');
     expect(JSON.stringify(context.parts)).not.toContain('# Old rules');
   });
+
+  it('refreshes all managed instruction layers when rebuilding from a base input context', () => {
+    const baseInputContext = buildModelStepInputContextFromSources({
+      contextId: 'model-input-context:instruction-layers-base',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      instructionSources: [
+        instructionSource({
+          sourceId: 'global-instruction:CLAUDE.md',
+          sourceKind: 'global_instruction',
+          sourceUri: 'global-instruction://CLAUDE.md',
+          relativePath: 'CLAUDE.md',
+          text: '# Old global',
+        }),
+        instructionSource({
+          sourceId: 'project-instruction:AGENTS.md',
+          sourceKind: 'project_instruction',
+          sourceUri: 'project-instruction://AGENTS.md',
+          relativePath: 'AGENTS.md',
+          text: '# Old project',
+        }),
+      ],
+      sessionInstructionSources: [{
+        sourceId: 'session-instruction:old',
+        sourceKind: 'session_instruction',
+        text: 'Old session instruction.',
+        loadedAt: builtAt,
+      }],
+      inputPreprocessing: {
+        originalText: '/summary',
+        effectiveUserText: 'Summarize.',
+        entries: [{
+          kind: 'prompt_template',
+          sourceId: 'input:prompt-template:summary',
+          sourceName: '/summary',
+          visibility: 'model_visible',
+          instructionText: 'Old prompt instruction.',
+          templateId: 'summary',
+          commandName: 'summary',
+          templateSource: 'builtin',
+        }],
+        diagnostics: [],
+      },
+      currentMessage: message({ messageId: 'message:current' }),
+    });
+
+    const context = buildModelStepInputContextFromSources({
+      baseInputContext,
+      contextId: 'model-input-context:instruction-layers-refresh',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:2',
+      buildReason: 'tool_continuation',
+      builtAt,
+      instructionSources: [
+        instructionSource({
+          sourceId: 'global-instruction:CLAUDE.md',
+          sourceKind: 'global_instruction',
+          sourceUri: 'global-instruction://CLAUDE.md',
+          relativePath: 'CLAUDE.md',
+          text: '# New global',
+        }),
+        instructionSource({
+          sourceId: 'project-instruction:AGENTS.md',
+          sourceKind: 'project_instruction',
+          sourceUri: 'project-instruction://AGENTS.md',
+          relativePath: 'AGENTS.md',
+          text: '# New project',
+        }),
+      ],
+      sessionInstructionSources: [{
+        sourceId: 'session-instruction:new',
+        sourceKind: 'session_instruction',
+        text: 'New session instruction.',
+        loadedAt: builtAt,
+      }],
+      inputPreprocessing: {
+        originalText: '/write-doc',
+        effectiveUserText: 'Write docs.',
+        entries: [{
+          kind: 'skill',
+          sourceId: 'input:skill:write-doc',
+          sourceName: '/write-doc',
+          visibility: 'model_visible',
+          instructionText: 'New skill instruction.',
+          skillId: 'write-doc',
+          commandName: 'write-doc',
+          skillSource: 'builtin',
+        }],
+        diagnostics: [],
+      },
+      toolCalls: [toolCall()],
+    });
+
+    const contextJson = JSON.stringify(context.parts);
+    expect(contextJson).toContain('# New global');
+    expect(contextJson).toContain('# New project');
+    expect(contextJson).toContain('New session instruction.');
+    expect(contextJson).toContain('New skill instruction.');
+    expect(contextJson).not.toContain('# Old global');
+    expect(contextJson).not.toContain('# Old project');
+    expect(contextJson).not.toContain('Old session instruction.');
+    expect(contextJson).not.toContain('Old prompt instruction.');
+  });
 });
+
+function instructionSource(
+  input: Pick<AgentInstructionSourceSnapshot, 'sourceId' | 'sourceKind' | 'sourceUri' | 'relativePath'>
+    & { text: string },
+): AgentInstructionSourceSnapshot {
+  return {
+    ...input,
+    status: 'included',
+    loadedAt: builtAt,
+    sizeBytes: Buffer.byteLength(input.text, 'utf8'),
+    includedBytes: Buffer.byteLength(input.text, 'utf8'),
+    hardCapBytes: 65536,
+    truncated: false,
+  };
+}
 
 

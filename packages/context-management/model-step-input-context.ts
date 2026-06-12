@@ -10,7 +10,9 @@ import type {
   ModelInputContextPart,
   ModelInputContextSourceRef,
   ModelInputContextTruncation,
+  ModelInputInstructionKind,
   ModelInputRuntimeConstraintKind,
+  SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
 import type { ModelStepProviderState } from '@megumi/shared/model';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission';
@@ -76,6 +78,7 @@ export interface BuildModelStepInputContextFromSourcesInput {
   currentMessage?: SessionMessage;
   sessionContext?: SessionContextInput;
   runtimeConstraints?: ModelStepRuntimeConstraintInput[];
+  sessionInstructionSources?: SessionInstructionSourceSnapshot[];
   permissionSnapshot?: PermissionModeSnapshot;
   permissionSnapshotRef?: string;
   inputPreprocessing?: InputPreprocessingResult;
@@ -92,6 +95,7 @@ export interface BuildModelStepInputContextFromBuildRequestInput {
   baseInputContext?: ModelInputContext;
   instructionSources?: AgentInstructionSourceSnapshot[];
   sessionContext?: SessionContextInput;
+  sessionInstructionSources?: SessionInstructionSourceSnapshot[];
   inputPreprocessing?: InputPreprocessingResult;
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   toolCalls?: ToolCall[];
@@ -128,6 +132,7 @@ export function buildModelStepInputContextFromBuildRequest(
     builtAt: request.builtAt,
     ...(currentMessage ? { currentMessage } : {}),
     sessionContext: input.sessionContext,
+    sessionInstructionSources: input.sessionInstructionSources,
     inputPreprocessing: input.inputPreprocessing,
     runtimeConstraints: runtimeConstraintsFromBuildRequest(request),
     toolCalls: input.toolCalls,
@@ -153,6 +158,7 @@ export function buildModelStepInputContextFromSources(
   const memoryParts = memoryRecallParts(input.memoryRecallSources ?? [], input.builtAt);
   const instructionSources = input.instructionSources ?? [];
   const nextInstructionParts = instructionParts(instructionSources);
+  const nextSessionInstructionParts = sessionInstructionParts(input.sessionInstructionSources ?? []);
   const inputPreprocessingParts = inputPreprocessingInstructionParts(input.inputPreprocessing, input.builtAt);
   const instructionExcludedSources = instructionExcludedSourcesFor(input.instructionSources ?? []);
   const sessionContextResult = buildSessionContextParts({
@@ -166,11 +172,13 @@ export function buildModelStepInputContextFromSources(
   const parts: ModelInputContextPartDraft[] = input.baseInputContext
     ? [
         ...nextInstructionParts,
+        ...nextSessionInstructionParts,
         ...inputPreprocessingParts,
         ...input.baseInputContext.parts.filter((part) => (
           part.kind !== 'tool_continuation'
           && part.kind !== 'memory'
-          && !(input.instructionSources && part.kind === 'instruction' && part.instructionKind === 'project')
+          && !(input.instructionSources && isFileInstructionPart(part))
+          && !(input.sessionInstructionSources && isSessionScopedInstructionPart(part))
           && !(input.inputPreprocessing && isInputDerivedInstructionPart(part))
         )).map(draftFromFinalPart),
         ...memoryParts,
@@ -178,6 +186,7 @@ export function buildModelStepInputContextFromSources(
       ]
     : [
         ...nextInstructionParts,
+        ...nextSessionInstructionParts,
         ...inputPreprocessingParts,
         ...runtimeConstraintParts(input),
         ...sessionContextResult.parts,
@@ -241,12 +250,13 @@ function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInput
   return sources
     .filter((source) => source.status === 'included' || source.status === 'included_truncated')
     .map((source): ModelInputContextPartDraft => ({
-      partId: `part:instruction:project:${source.sourceId}`,
+      partId: `part:instruction:${instructionKindForAgentSource(source)}:${source.sourceId}`,
       kind: 'instruction',
-      instructionKind: 'project',
+      instructionKind: instructionKindForAgentSource(source),
       text: `${AGENT_INSTRUCTION_WRAPPER}\n\n${source.text}`,
       sourceRefs: [instructionSourceRef(source)],
-      priority: 100,
+      priority: instructionPriorityForAgentSource(source),
+      budgetClass: 'high_priority',
       ...(source.status === 'included_truncated'
         ? {
             truncationHint: {
@@ -256,8 +266,27 @@ function instructionParts(sources: AgentInstructionSourceSnapshot[]): ModelInput
         : {}),
       metadata: {
         instructionSourceStatus: source.status,
+        instructionScope: instructionScopeForAgentSource(source),
+        instructionDepth: instructionDepthForAgentSource(source),
       },
     }));
+}
+
+function sessionInstructionParts(sources: SessionInstructionSourceSnapshot[]): ModelInputContextPartDraft[] {
+  return sources.map((source): ModelInputContextPartDraft => ({
+    partId: `part:instruction:${instructionKindForSessionSource(source)}:${source.sourceId}`,
+    kind: 'instruction',
+    instructionKind: instructionKindForSessionSource(source),
+    text: source.text,
+    sourceRefs: [sessionInstructionSourceRef(source)],
+    priority: 96,
+    budgetClass: 'high_priority',
+    metadata: {
+      instructionSourceStatus: 'included',
+      instructionScope: source.sourceKind === 'session_instruction' ? 'session' : 'mode',
+      ...source.metadata,
+    },
+  }));
 }
 
 function instructionExcludedSourcesFor(sources: AgentInstructionSourceSnapshot[]): ModelInputContextExcludedSource[] {
@@ -272,11 +301,13 @@ function instructionExcludedSourcesFor(sources: AgentInstructionSourceSnapshot[]
 function instructionSourceRef(source: AgentInstructionSourceSnapshot): ModelInputContextSourceRef {
   return {
     sourceId: source.sourceId,
-    sourceKind: 'project_instruction',
+    sourceKind: source.sourceKind,
     ...(source.sourceUri ? { sourceUri: source.sourceUri } : {}),
     loadedAt: source.loadedAt,
     metadata: cleanMetadata({
       relativePath: source.relativePath,
+      instructionScope: instructionScopeForAgentSource(source),
+      instructionDepth: instructionDepthForAgentSource(source),
       status: source.status,
       sizeBytes: source.sizeBytes,
       includedBytes: source.includedBytes,
@@ -284,6 +315,53 @@ function instructionSourceRef(source: AgentInstructionSourceSnapshot): ModelInpu
       truncated: source.truncated,
     }),
   };
+}
+
+function sessionInstructionSourceRef(source: SessionInstructionSourceSnapshot): ModelInputContextSourceRef {
+  return {
+    sourceId: source.sourceId,
+    sourceKind: source.sourceKind,
+    ...(source.sourceUri ? { sourceUri: source.sourceUri } : {}),
+    loadedAt: source.loadedAt,
+    metadata: {
+      instructionScope: source.sourceKind === 'session_instruction' ? 'session' : 'mode',
+      ...source.metadata,
+    },
+  };
+}
+
+function instructionKindForAgentSource(source: AgentInstructionSourceSnapshot): ModelInputInstructionKind {
+  return source.sourceKind === 'global_instruction' ? 'global' : 'project';
+}
+
+function instructionKindForSessionSource(source: SessionInstructionSourceSnapshot): ModelInputInstructionKind {
+  return source.sourceKind === 'mode_instruction' ? 'mode' : 'session';
+}
+
+function instructionPriorityForAgentSource(source: AgentInstructionSourceSnapshot): number {
+  if (source.sourceKind === 'global_instruction') {
+    return 100;
+  }
+
+  return Math.min(99, 97 + instructionDepthForAgentSource(source));
+}
+
+function instructionScopeForAgentSource(source: AgentInstructionSourceSnapshot): string {
+  if (source.sourceKind === 'global_instruction') {
+    return 'global';
+  }
+
+  return instructionDepthForAgentSource(source) === 0 ? 'project' : 'project_directory';
+}
+
+function instructionDepthForAgentSource(source: AgentInstructionSourceSnapshot): number {
+  if (source.sourceKind === 'global_instruction') {
+    return 0;
+  }
+
+  const relativePath = source.relativePath ?? '';
+  const directory = relativePath.split('/').slice(0, -1).filter(Boolean);
+  return directory.length;
 }
 
 // Converts runtime-normalized input entries into model-visible instructions.
@@ -319,6 +397,22 @@ function isInputDerivedInstructionPart(part: ModelInputContextPart): boolean {
       || part.instructionKind === 'skill'
       || part.instructionKind === 'input_hook'
     );
+}
+
+function isFileInstructionPart(part: ModelInputContextPart): boolean {
+  return part.kind === 'instruction'
+    && part.sourceRefs.some((sourceRef) => (
+      sourceRef.sourceKind === 'global_instruction'
+      || sourceRef.sourceKind === 'project_instruction'
+    ));
+}
+
+function isSessionScopedInstructionPart(part: ModelInputContextPart): boolean {
+  return part.kind === 'instruction'
+    && part.sourceRefs.some((sourceRef) => (
+      sourceRef.sourceKind === 'session_instruction'
+      || sourceRef.sourceKind === 'mode_instruction'
+    ));
 }
 
 function runtimeConstraintsFromBuildRequest(

@@ -270,6 +270,32 @@ export type AgentInstructionSourceSnapshot =
       reason?: string;
     });
 
+export const SESSION_INSTRUCTION_SOURCE_KINDS = [
+  'session_instruction',
+  'mode_instruction',
+] as const;
+export type SessionInstructionSourceKind = (typeof SESSION_INSTRUCTION_SOURCE_KINDS)[number];
+
+export const SessionInstructionSourceSnapshotSchema = z
+  .object({
+    sourceId: IdSchema,
+    sourceKind: z.enum(SESSION_INSTRUCTION_SOURCE_KINDS),
+    text: NonEmptyTextSchema,
+    sourceUri: z.string().min(1).optional(),
+    loadedAt: IsoDateTimeSchema,
+    metadata: OptionalJsonObjectSchema,
+  })
+  .strict();
+
+export interface SessionInstructionSourceSnapshot {
+  sourceId: string;
+  sourceKind: SessionInstructionSourceKind;
+  text: string;
+  sourceUri?: string;
+  loadedAt: IsoDateTime;
+  metadata?: JsonObject;
+}
+
 export const ModelInputContextTruncationSchema = z
   .object({
     originalTokenEstimate: z.number().int().nonnegative().optional(),

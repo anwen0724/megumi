@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { ModelStepInputBuildService } from '@megumi/desktop/main/services/session/model-step-input-build.service';
-import type { AgentInstructionSourceSnapshot, ModelInputContext } from '@megumi/shared/model';
+import type {
+  AgentInstructionSourceSnapshot,
+  ModelInputContext,
+  SessionInstructionSourceSnapshot,
+} from '@megumi/shared/model';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolDefinition } from '@megumi/shared/tool';
@@ -93,6 +97,85 @@ describe('ModelStepInputBuildService', () => {
       }),
     ]));
     expect(result.toolDefinitions).toEqual(toolDefinitions);
+  });
+
+  it('preserves multi-level instruction source kinds through the build service', async () => {
+    const instructionSources: AgentInstructionSourceSnapshot[] = [
+      agentInstructionSource({
+        sourceId: 'global-instruction:CLAUDE.md',
+        sourceKind: 'global_instruction',
+        sourceUri: 'global-instruction://CLAUDE.md',
+        relativePath: 'CLAUDE.md',
+        text: '# Global\nUse concise answers.',
+      }),
+      agentInstructionSource({
+        sourceId: 'project-instruction:packages/core/AGENTS.md',
+        sourceKind: 'project_instruction',
+        sourceUri: 'project-instruction://packages/core/AGENTS.md',
+        relativePath: 'packages/core/AGENTS.md',
+        text: '# Core\nKeep runtime boundaries.',
+      }),
+    ];
+    const sessionInstructionSources: SessionInstructionSourceSnapshot[] = [{
+      sourceId: 'session-instruction:active-mode',
+      sourceKind: 'session_instruction',
+      text: 'Session instruction text.',
+      loadedAt: builtAt,
+      metadata: { source: 'session_state' },
+    }, {
+      sourceId: 'mode-instruction:plan',
+      sourceKind: 'mode_instruction',
+      text: 'Mode instruction text.',
+      loadedAt: builtAt,
+      metadata: { mode: 'plan' },
+    }];
+    const service = new ModelStepInputBuildService({
+      instructionSourceService: { loadInstructionSources: vi.fn(async () => instructionSources) },
+    });
+
+    const result = await service.buildModelStepInput({
+      requestId: 'request:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      contextKind: 'initial',
+      providerId: 'openai-compatible',
+      modelId: 'deepseek-chat',
+      projectRoot: 'C:/all/work/study/megumi',
+      requestedCwd: 'packages/core',
+      permissionMode: 'default',
+      currentMessage: userMessage(),
+      sessionContext: sessionContext(),
+      sessionInstructionSources,
+      toolDefinitions: [],
+      builtAt,
+    });
+
+    expect(result.inputContext.parts.filter((part) => part.kind === 'instruction')).toEqual([
+      expect.objectContaining({
+        instructionKind: 'global',
+        sourceRefs: [expect.objectContaining({ sourceKind: 'global_instruction' })],
+      }),
+      expect.objectContaining({
+        instructionKind: 'project',
+        priority: 99,
+        sourceRefs: [expect.objectContaining({
+          sourceKind: 'project_instruction',
+          metadata: expect.objectContaining({
+            instructionScope: 'project_directory',
+            instructionDepth: 2,
+          }),
+        })],
+      }),
+      expect.objectContaining({
+        instructionKind: 'session',
+        sourceRefs: [expect.objectContaining({ sourceKind: 'session_instruction' })],
+      }),
+      expect.objectContaining({
+        instructionKind: 'mode',
+        sourceRefs: [expect.objectContaining({ sourceKind: 'mode_instruction' })],
+      }),
+    ]);
   });
 
   it('rebuilds continuation input from a base input context without using tool-local cwd as run cwd', async () => {
@@ -322,5 +405,20 @@ function toolDefinition(name: string, capabilities: ToolDefinition['capabilities
     riskLevel: 'low',
     sideEffect: 'none',
     availability: { status: 'available' },
+  };
+}
+
+function agentInstructionSource(
+  input: Pick<AgentInstructionSourceSnapshot, 'sourceId' | 'sourceKind' | 'sourceUri' | 'relativePath'>
+    & { text: string },
+): AgentInstructionSourceSnapshot {
+  return {
+    ...input,
+    status: 'included',
+    loadedAt: builtAt,
+    sizeBytes: Buffer.byteLength(input.text, 'utf8'),
+    includedBytes: Buffer.byteLength(input.text, 'utf8'),
+    hardCapBytes: 65536,
+    truncated: false,
   };
 }

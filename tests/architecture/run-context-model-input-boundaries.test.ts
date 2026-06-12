@@ -67,4 +67,14 @@ describe('run context and model input boundaries', () => {
     expect(providerSource).not.toContain('InputIntentCommandMetadata');
     expect(providerSource).not.toContain('input-command-contracts');
   });
+
+  it('preserves multi-level instruction source semantics in context materialization', () => {
+    const contextSource = read('packages/context-management/model-step-input-context.ts');
+
+    expect(contextSource).toContain('instructionKindForAgentSource');
+    expect(contextSource).toContain('sessionInstructionParts');
+    expect(contextSource).toContain('sourceKind: source.sourceKind');
+    expect(contextSource).not.toContain("sourceKind: 'project_instruction',");
+    expect(contextSource).not.toContain('part:instruction:project:${source.sourceId}');
+  });
 });
