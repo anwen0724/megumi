@@ -357,11 +357,6 @@ describe('buildModelStepInputContextFromSources', () => {
           required: true,
         }],
       }),
-      permissionSnapshot: {
-        permissionMode: 'default',
-        source: 'session',
-        createdAt: builtAt,
-      },
       budgetPolicy: budgetPolicy(),
     });
 

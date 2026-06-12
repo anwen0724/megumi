@@ -16,10 +16,14 @@ import {
   type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/desktop/main/services/session/session-run.service';
 import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/services/session/timeline-history-commit-projector.service';
+import type {
+  BuildModelStepInputInput,
+  BuildModelStepInputResult,
+} from '@megumi/desktop/main/services/session/model-step-input-build.service';
 import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session/session-compaction-orchestrator.service';
 import { PermissionSnapshotService } from '@megumi/desktop/main/services/security/permission-snapshot.service';
 import type { ChatStreamEvent } from '@megumi/shared';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ModelInputContextSourceKind } from '@megumi/shared/model';
 import type { RunContext } from '@megumi/shared/run';
 import type { RunAction } from '@megumi/shared/session';
@@ -249,6 +253,7 @@ function createServiceWithModelStepStream(
   agentInstructionSourceService?: SessionRunServiceOptions['agentInstructionSourceService'];
   sessionContextInputService?: SessionRunServiceOptions['sessionContextInputService'];
   sessionCompactionOrchestrator?: SessionRunServiceOptions['sessionCompactionOrchestrator'];
+  modelStepInputBuildService?: SessionRunServiceOptions['modelStepInputBuildService'];
   activePathRepository?: SessionActivePathRepository;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
@@ -268,6 +273,7 @@ function createServiceWithModelStepStream(
     ...(options?.sessionCompactionOrchestrator ? {
       sessionCompactionOrchestrator: options.sessionCompactionOrchestrator,
     } : {}),
+    ...(options?.modelStepInputBuildService ? { modelStepInputBuildService: options.modelStepInputBuildService } : {}),
     ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
@@ -355,6 +361,102 @@ function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   });
 
   return { service, repository, activePathRepo };
+}
+
+function modelInputContextFromBuildInput(input: BuildModelStepInputInput): ModelInputContext {
+  const sourceId = input.currentMessage
+    ? `session-message:${input.currentMessage.messageId}`
+    : `run:${input.runId}`;
+  const sourceKind: ModelInputContextSourceKind = input.currentMessage ? 'current_user_message' : 'session_run';
+  const partId = `part:current-turn:${input.stepId}`;
+  const part = input.currentMessage
+    ? {
+        partId,
+        kind: 'current_turn' as const,
+        role: 'user' as const,
+        text: input.currentMessage.content,
+        sourceRefs: [{
+          sourceId,
+          sourceKind,
+          loadedAt: input.builtAt,
+        }],
+        priority: 100,
+        tokenEstimate: 2,
+        budgetStatus: 'included_full' as const,
+        budgetClass: 'required' as const,
+      }
+    : {
+        partId,
+        kind: 'runtime_constraint' as const,
+        constraintKind: 'other' as const,
+        text: 'Continue.',
+        sourceRefs: [{
+          sourceId,
+          sourceKind,
+          loadedAt: input.builtAt,
+        }],
+        priority: 100,
+        tokenEstimate: 2,
+        budgetStatus: 'included_full' as const,
+        budgetClass: 'required' as const,
+      };
+  return {
+    contextId: `model-input-context:${input.stepId}:${input.contextKind}`,
+    sessionId: input.sessionId,
+    runId: input.runId,
+    stepId: input.stepId,
+    builtAt: input.builtAt,
+    parts: [part],
+    budget: {
+      modelContextWindow: 8192,
+      reservedOutputTokens: 1024,
+      availableInputTokens: 7168,
+      keepRecentTokens: 4096,
+      inputTokenEstimate: 2,
+      partBudgets: [{
+        partId,
+        tokenEstimate: 2,
+        budgetStatus: 'included_full',
+      }],
+    },
+    trace: {
+      buildReason: input.contextKind,
+      selectedSources: [{
+        sourceId,
+        sourceKind,
+        reason: input.currentMessage ? 'current_turn' : 'runtime_fact',
+        budgetClass: 'required',
+        partId,
+      }],
+      excludedSources: [],
+    },
+  };
+}
+
+function successfulModelStepInputBuild(input: BuildModelStepInputInput): BuildModelStepInputResult {
+  const inputContext = modelInputContextFromBuildInput(input);
+  return {
+    buildRequest: {
+      requestId: `model-input-build:${input.runId}:${input.stepId}:${input.contextKind}`,
+      contextId: inputContext.contextId,
+      sessionId: input.sessionId,
+      runId: input.runId,
+      modelStepId: input.stepId,
+      permissionMode: input.permissionMode,
+      modelTarget: {
+        providerId: input.providerId,
+        modelId: input.modelId,
+      },
+      availableCapabilitySummary: 'Available tools: none.',
+      runtimeFacts: [],
+      traceId: `trace:${input.runId}:${input.stepId}:${input.contextKind}`,
+      builtAt: input.builtAt,
+    },
+    inputContext,
+    toolDefinitions: input.toolDefinitions ?? [],
+    instructionSources: [],
+    availableCapabilitySummary: 'Available tools: none.',
+  };
 }
 
 function createServiceWithAutomaticRetryStream(
@@ -2498,7 +2600,7 @@ describe('SessionRunService', () => {
           },
           modelCapabilitySummary: input.modelCapabilitySummary,
           contextBudgetPolicy: {
-            modelContextWindow: 40,
+            modelContextWindow: 400,
             reservedOutputTokens: 10,
             keepRecentTokens: 3,
           },
@@ -2626,6 +2728,85 @@ describe('SessionRunService', () => {
     ]));
     expect(streamed.find((event) => event.eventType === 'run.started')?.sequence).toBe(1);
     expect(streamed.find((event) => event.eventType === 'context.compaction.started')?.sequence).toBe(2);
+  });
+
+  it('blocks provider streaming when the initial model step input build fails', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const buildInputs: BuildModelStepInputInput[] = [];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(): Promise<SessionCompactionOrchestrationResult> {
+          return { status: 'skipped', events: [] };
+        },
+      },
+      modelStepInputBuildService: {
+        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+          buildInputs.push(input);
+          const result = successfulModelStepInputBuild(input);
+          if (input.contextKind === 'initial') {
+            return {
+              ...result,
+              failure: {
+                code: 'context_required_over_budget',
+                message: 'Required model input exceeds the available context budget.',
+                retryable: false,
+              },
+            };
+          }
+          return result;
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'x'.repeat(1000),
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
+    expect(requests).toEqual([]);
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+    expect(streamed.find((event) => event.eventType === 'run.failed')?.payload).toMatchObject({
+      error: {
+        code: 'context_budget_exceeded',
+        retryable: false,
+        source: 'main',
+      },
+    });
   });
 
   it('uses the latest completed compaction when building the normal model step after maintenance compaction', async () => {

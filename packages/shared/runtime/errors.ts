@@ -17,6 +17,7 @@ export const RUNTIME_ERROR_CODES = [
   'filesystem_error',
   'security_denied',
   'runtime_cancelled',
+  'context_budget_exceeded',
   'runtime_protocol_violation',
   'runtime_unknown',
   'tool_input_invalid',

@@ -102,6 +102,7 @@ import {
 } from './session-context-input.service';
 import {
   ModelStepInputBuildService,
+  type BuildModelStepInputFailure,
   type BuildModelStepInputInput,
   type BuildModelStepInputResult,
 } from './model-step-input-build.service';
@@ -1259,7 +1260,13 @@ export class SessionRunService {
       },
       builtAt: input.payload.createdAt,
     });
-    const compactionPromise = this.sessionCompactionOrchestrator
+    const compactionPromise = compactionProbeModelInput.failure
+      ? Promise.resolve({
+          status: 'failed' as const,
+          events: [],
+          failure: modelStepInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
+        })
+      : this.sessionCompactionOrchestrator
       ? this.sessionCompactionOrchestrator.compactIfNeeded({
           requestId: input.requestId,
           sessionId: String(input.session.sessionId),
@@ -1340,6 +1347,20 @@ export class SessionRunService {
       budgetPolicy,
       builtAt: input.payload.createdAt,
     });
+    if (initialModelInput.failure) {
+      yield* this.failRunBeforeModelStep({
+        requestId: input.requestId,
+        runtimeContext: input.runtimeContext,
+        sessionId: String(input.session.sessionId),
+        run: input.run,
+        step: input.step,
+        error: modelStepInputBuildFailureToRuntimeError(initialModelInput.failure),
+        startSequence: lastSequence,
+        createdAt: this.clock.now(),
+        chatStreamAdapter: input.chatStreamAdapter,
+      });
+      return;
+    }
     const request: ModelStepRuntimeRequest = {
       requestId: input.requestId,
       sessionId: input.session.sessionId,
@@ -1571,6 +1592,9 @@ export class SessionRunService {
               providerStates: contextInput.providerStates,
               builtAt: contextInput.builtAt,
             });
+            if (continuationInput.failure) {
+              throw modelStepInputBuildFailureToRuntimeError(continuationInput.failure);
+            }
             return continuationInput.inputContext;
           },
         })
@@ -2509,6 +2533,19 @@ export class SessionRunService {
       providerStates: pending.accumulatedProviderStates,
       builtAt: input.decidedAt,
     });
+    if (resumedModelInput.failure) {
+      yield* this.failRunBeforeModelStep({
+        requestId: pending.request.requestId,
+        sessionId: pending.request.sessionId,
+        run: runningRun,
+        step: resumedStep,
+        error: modelStepInputBuildFailureToRuntimeError(resumedModelInput.failure),
+        startSequence: lastSequence,
+        createdAt: input.decidedAt,
+        chatStreamAdapter,
+      });
+      return;
+    }
     const resumedRequest: ModelStepRuntimeRequest = {
       ...pending.request,
       stepId: resumedStep.stepId,
@@ -2817,6 +2854,16 @@ function createFallbackRuntimeError(message: string): RuntimeError {
     severity: 'error',
     retryable: false,
     source: 'core',
+  };
+}
+
+function modelStepInputBuildFailureToRuntimeError(failure: BuildModelStepInputFailure): RuntimeError {
+  return {
+    code: 'context_budget_exceeded',
+    message: failure.message,
+    severity: 'error',
+    retryable: failure.retryable,
+    source: 'main',
   };
 }
 

@@ -72,6 +72,13 @@ export interface BuildModelStepInputResult {
   instructionSources: AgentInstructionSourceSnapshot[];
   availableCapabilitySummary: string;
   effectiveCwd?: ModelStepEffectiveCwd;
+  failure?: BuildModelStepInputFailure;
+}
+
+export interface BuildModelStepInputFailure {
+  code: 'context_required_over_budget';
+  message: string;
+  retryable: false;
 }
 
 const DEFAULT_IDS: ModelStepInputBuildIds = {
@@ -111,6 +118,7 @@ export class ModelStepInputBuildService {
       providerStates: input.providerStates,
       budgetPolicy: input.budgetPolicy ?? this.options.defaultBudgetPolicy,
     });
+    const failure = buildFailureForInputContext(inputContext);
 
     return {
       buildRequest,
@@ -119,6 +127,7 @@ export class ModelStepInputBuildService {
       instructionSources,
       availableCapabilitySummary,
       ...(effectiveCwd ? { effectiveCwd } : {}),
+      ...(failure ? { failure } : {}),
     };
   }
 
@@ -186,6 +195,21 @@ export class ModelStepInputBuildService {
       },
     };
   }
+}
+
+function buildFailureForInputContext(inputContext: ModelInputContext): BuildModelStepInputFailure | undefined {
+  const hasRequiredOverflow = inputContext.trace.budgetWarnings?.some(
+    (warning) => warning.reason === 'required_context_over_budget',
+  ) === true;
+  if (!hasRequiredOverflow) {
+    return undefined;
+  }
+
+  return {
+    code: 'context_required_over_budget',
+    message: 'Required model input exceeds the available context budget.',
+    retryable: false,
+  };
 }
 
 function availableCapabilitySummaryFor(toolDefinitions: ToolDefinition[]): string {

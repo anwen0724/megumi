@@ -178,6 +178,39 @@ describe('ModelStepInputBuildService', () => {
     ]);
   });
 
+  it('returns a build failure when required model input exceeds budget', async () => {
+    const service = new ModelStepInputBuildService();
+    const result = await service.buildModelStepInput({
+      requestId: 'request:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      contextKind: 'initial',
+      providerId: 'openai-compatible',
+      modelId: 'deepseek-chat',
+      permissionMode: 'default',
+      permissionSnapshot: permissionSnapshot(),
+      permissionSnapshotRef: 'permission-snapshot:1',
+      currentMessage: {
+        ...userMessage(),
+        content: 'x'.repeat(1000),
+      },
+      sessionContext: sessionContext(),
+      toolDefinitions: [],
+      budgetPolicy: {
+        modelContextWindow: 32,
+        reservedOutputTokens: 16,
+        keepRecentTokens: 0,
+      },
+      builtAt,
+    });
+
+    expect(result.failure).toEqual(expect.objectContaining({
+      code: 'context_required_over_budget',
+      retryable: false,
+    }));
+  });
+
   it('rebuilds continuation input from a base input context without using tool-local cwd as run cwd', async () => {
     const baseInputContext: ModelInputContext = {
       contextId: 'model-input-context:step:1:initial',
