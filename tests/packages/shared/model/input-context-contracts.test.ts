@@ -1,11 +1,13 @@
 ﻿import { describe, expect, it } from 'vitest';
 import {
   AgentInstructionSourceSnapshotSchema,
+  MODEL_INPUT_CONTEXT_BUDGET_CLASSES,
   MODEL_INPUT_CONTEXT_BUDGET_STATUSES,
   MODEL_INPUT_CONTEXT_PART_KINDS,
   MODEL_INPUT_CONTEXT_SOURCE_KINDS,
   MODEL_INPUT_INSTRUCTION_KINDS,
   MODEL_INPUT_SESSION_PART_KINDS,
+  ModelInputContextBuildRequestSchema,
   ModelInputInstructionKindSchema,
   ModelInputContextSchema,
   type AgentInstructionSourceSnapshot,
@@ -539,6 +541,103 @@ describe('ModelInputContext contracts', () => {
     ]);
   });
 
+  it('parses 18.01 memory part and build request contracts', () => {
+    const memoryContext = ModelInputContextSchema.parse({
+      contextId: 'model-input-context:memory-slot',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      parts: [
+        {
+          partId: 'part:memory:recall:1',
+          kind: 'memory',
+          memoryKind: 'memory_recall',
+          text: 'User prefers concise Chinese technical answers.',
+          sourceRefs: [sourceRef('memory-recall:1', 'memory_recall')],
+          priority: 55,
+          tokenEstimate: 10,
+          budgetStatus: 'included_full',
+          budgetClass: 'contextual',
+          memoryIds: ['memory:preference:1'],
+        },
+      ],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        keepRecentTokens: 4096,
+        inputTokenEstimate: 10,
+        partBudgets: [
+          { partId: 'part:memory:recall:1', tokenEstimate: 10, budgetStatus: 'included_full' },
+        ],
+      },
+      trace: {
+        buildReason: 'initial_model_step',
+        selectedSources: [
+          {
+            sourceId: 'memory-recall:1',
+            reason: 'memory_recall',
+            sourceKind: 'memory_recall',
+            budgetClass: 'contextual',
+            partId: 'part:memory:recall:1',
+          },
+        ],
+        excludedSources: [],
+      },
+      builtAt,
+    });
+
+    expect(memoryContext.parts[0]).toMatchObject({
+      kind: 'memory',
+      memoryKind: 'memory_recall',
+      memoryIds: ['memory:preference:1'],
+    });
+
+    const buildRequest = ModelInputContextBuildRequestSchema.parse({
+      requestId: 'model-input-build:1',
+      contextId: 'model-input-context:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      modelStepId: 'step:1',
+      projectId: 'project:1',
+      projectRoot: 'C:/all/work/study/megumi',
+      effectiveCwd: 'C:/all/work/study/megumi/packages/core',
+      permissionMode: 'default',
+      permissionSnapshotRef: 'permission-snapshot:1',
+      currentTurn: {
+        messageId: 'message:1',
+        effectiveUserText: 'Review this package.',
+        inputPreprocessingRef: 'input-preprocessing:1',
+      },
+      activePath: {
+        activeLeafId: 'message:1',
+      },
+      modelTarget: {
+        providerId: 'openai-compatible',
+        modelId: 'deepseek-chat',
+        contextWindow: 131072,
+      },
+      availableToolsRef: 'tool-definitions:run:1',
+      availableCapabilitySummary: 'Available tools: read_file, search_text, run_command.',
+      runtimeFacts: [
+        {
+          factId: 'runtime-fact:cwd',
+          factKind: 'effective_cwd',
+          text: 'Current working directory: packages/core.',
+          required: true,
+        },
+      ],
+      memoryRecallSeed: {
+        queryText: 'Review this package.',
+      },
+      traceId: 'trace:model-input:1',
+      builtAt,
+    });
+
+    expect(buildRequest.effectiveCwd).toBe('C:/all/work/study/megumi/packages/core');
+    expect(buildRequest.runtimeFacts[0]?.required).toBe(true);
+  });
+
   it('exports stable model input context constants', () => {
     expect(MODEL_INPUT_CONTEXT_PART_KINDS).toEqual([
       'instruction',
@@ -546,6 +645,14 @@ describe('ModelInputContext contracts', () => {
       'session',
       'tool_continuation',
       'runtime_constraint',
+      'memory',
+    ]);
+    expect(MODEL_INPUT_CONTEXT_BUDGET_CLASSES).toEqual([
+      'required',
+      'high_priority',
+      'contextual',
+      'continuation',
+      'diagnostic_only',
     ]);
     expect(MODEL_INPUT_CONTEXT_BUDGET_STATUSES).toEqual([
       'included_full',
@@ -559,7 +666,9 @@ describe('ModelInputContext contracts', () => {
     ]);
     expect(MODEL_INPUT_INSTRUCTION_KINDS).toEqual([
       'system',
+      'global',
       'project',
+      'session',
       'mode',
       'developer',
       'user',
@@ -571,11 +680,14 @@ describe('ModelInputContext contracts', () => {
     expect(() => ModelInputInstructionKindSchema.parse('workflow')).toThrow();
     expect(MODEL_INPUT_CONTEXT_SOURCE_KINDS).toEqual([
       'system_instruction',
+      'global_instruction',
       'project_instruction',
+      'session_instruction',
       'mode_instruction',
       'current_user_message',
       'run_goal',
       'timeline_message',
+      'session_context',
       'session_message',
       'session_run',
       'session_step',
@@ -588,13 +700,16 @@ describe('ModelInputContext contracts', () => {
       'tool_result',
       'approval',
       'provider_state',
+      'permission_constraint',
       'permission_mode',
       'project_boundary',
       'runtime_constraint',
+      'runtime_fact',
       'input_intent',
       'input_prompt_template',
       'input_skill',
       'input_hook',
+      'memory_recall',
       'external_resource',
       'other',
     ]);

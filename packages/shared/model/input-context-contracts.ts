@@ -14,16 +14,20 @@ export const MODEL_INPUT_CONTEXT_PART_KINDS = [
   'session',
   'tool_continuation',
   'runtime_constraint',
+  'memory',
 ] as const;
 export type ModelInputContextPartKind = (typeof MODEL_INPUT_CONTEXT_PART_KINDS)[number];
 
 export const MODEL_INPUT_CONTEXT_SOURCE_KINDS = [
   'system_instruction',
+  'global_instruction',
   'project_instruction',
+  'session_instruction',
   'mode_instruction',
   'current_user_message',
   'run_goal',
   'timeline_message',
+  'session_context',
   'session_message',
   'session_run',
   'session_step',
@@ -36,13 +40,16 @@ export const MODEL_INPUT_CONTEXT_SOURCE_KINDS = [
   'tool_result',
   'approval',
   'provider_state',
+  'permission_constraint',
   'permission_mode',
   'project_boundary',
   'runtime_constraint',
+  'runtime_fact',
   'input_intent',
   'input_prompt_template',
   'input_skill',
   'input_hook',
+  'memory_recall',
   'external_resource',
   'other',
 ] as const;
@@ -55,6 +62,16 @@ export const MODEL_INPUT_CONTEXT_BUDGET_STATUSES = [
 ] as const;
 export type ModelInputContextBudgetStatus = (typeof MODEL_INPUT_CONTEXT_BUDGET_STATUSES)[number];
 
+export const MODEL_INPUT_CONTEXT_BUDGET_CLASSES = [
+  'required',
+  'high_priority',
+  'contextual',
+  'continuation',
+  'diagnostic_only',
+] as const;
+export const ModelInputContextBudgetClassSchema = z.enum(MODEL_INPUT_CONTEXT_BUDGET_CLASSES);
+export type ModelInputContextBudgetClass = (typeof MODEL_INPUT_CONTEXT_BUDGET_CLASSES)[number];
+
 export const AGENT_INSTRUCTION_SOURCE_STATUSES = [
   'included',
   'included_truncated',
@@ -66,7 +83,9 @@ export type AgentInstructionSourceStatus = (typeof AGENT_INSTRUCTION_SOURCE_STAT
 
 export const MODEL_INPUT_INSTRUCTION_KINDS = [
   'system',
+  'global',
   'project',
+  'session',
   'mode',
   'developer',
   'user',
@@ -94,6 +113,9 @@ export const MODEL_INPUT_RUNTIME_CONSTRAINT_KINDS = [
   'sandbox',
   'approval',
   'sensitive_content',
+  'effective_cwd',
+  'available_capability_summary',
+  'permission_posture',
   'other',
 ] as const;
 export type ModelInputRuntimeConstraintKind = (typeof MODEL_INPUT_RUNTIME_CONSTRAINT_KINDS)[number];
@@ -232,6 +254,7 @@ const ModelInputContextPartBaseSchema = z
     priority: z.number().int().min(0).max(100),
     tokenEstimate: z.number().int().nonnegative().optional(),
     budgetStatus: z.enum(MODEL_INPUT_CONTEXT_BUDGET_STATUSES),
+    budgetClass: ModelInputContextBudgetClassSchema.optional(),
     truncation: ModelInputContextTruncationSchema.optional(),
     metadata: OptionalJsonObjectSchema,
   })
@@ -244,6 +267,7 @@ export interface ModelInputContextPartBase {
   priority: number;
   tokenEstimate?: number;
   budgetStatus: ModelInputContextBudgetStatus;
+  budgetClass?: ModelInputContextBudgetClass;
   truncation?: ModelInputContextTruncation;
   metadata?: JsonObject;
 }
@@ -326,12 +350,31 @@ export interface RuntimeConstraintPart extends ModelInputContextPartBase {
   text: string;
 }
 
+export const MODEL_INPUT_MEMORY_PART_KINDS = ['memory_recall'] as const;
+export const ModelInputMemoryPartKindSchema = z.enum(MODEL_INPUT_MEMORY_PART_KINDS);
+export type ModelInputMemoryPartKind = (typeof MODEL_INPUT_MEMORY_PART_KINDS)[number];
+
+export const MemoryPartSchema = ModelInputContextPartBaseSchema.extend({
+  kind: z.literal('memory'),
+  memoryKind: ModelInputMemoryPartKindSchema,
+  text: NonEmptyTextSchema,
+  memoryIds: z.array(IdSchema).optional(),
+}).strict();
+
+export interface MemoryPart extends ModelInputContextPartBase {
+  kind: 'memory';
+  memoryKind: ModelInputMemoryPartKind;
+  text: string;
+  memoryIds?: string[];
+}
+
 export const ModelInputContextPartSchema = z.discriminatedUnion('kind', [
   InstructionPartSchema,
   CurrentTurnPartSchema,
   SessionPartSchema,
   ToolContinuationPartSchema,
   RuntimeConstraintPartSchema,
+  MemoryPartSchema,
 ]);
 
 export type ModelInputContextPart =
@@ -339,7 +382,8 @@ export type ModelInputContextPart =
   | CurrentTurnPart
   | SessionPart
   | ToolContinuationPart
-  | RuntimeConstraintPart;
+  | RuntimeConstraintPart
+  | MemoryPart;
 
 export const ModelInputContextPartBudgetSchema = z
   .object({
@@ -379,24 +423,34 @@ export const ModelInputContextSelectedSourceSchema = z
   .object({
     sourceId: IdSchema,
     reason: z.string().min(1),
+    sourceKind: z.enum(MODEL_INPUT_CONTEXT_SOURCE_KINDS).optional(),
+    budgetClass: ModelInputContextBudgetClassSchema.optional(),
+    partId: IdSchema.optional(),
   })
   .strict();
 
 export interface ModelInputContextSelectedSource {
   sourceId: string;
   reason: string;
+  sourceKind?: ModelInputContextSourceKind;
+  budgetClass?: ModelInputContextBudgetClass;
+  partId?: string;
 }
 
 export const ModelInputContextExcludedSourceSchema = z
   .object({
     sourceRef: ModelInputContextSourceRefSchema,
     reason: z.string().min(1),
+    budgetClass: ModelInputContextBudgetClassSchema.optional(),
+    partId: IdSchema.optional(),
   })
   .strict();
 
 export interface ModelInputContextExcludedSource {
   sourceRef: ModelInputContextSourceRef;
   reason: string;
+  budgetClass?: ModelInputContextBudgetClass;
+  partId?: string;
 }
 
 export const ModelInputContextTraceSchema = z
@@ -420,6 +474,74 @@ export interface ModelInputContextTrace {
   budgetWarnings?: ContextBudgetWarning[];
   metadata?: JsonObject;
 }
+
+const ModelInputContextBuildCurrentTurnSchema = z
+  .object({
+    messageId: IdSchema.optional(),
+    effectiveUserText: NonEmptyTextSchema.optional(),
+    inputPreprocessingRef: IdSchema.optional(),
+  })
+  .strict();
+
+const ModelInputContextBuildActivePathSchema = z
+  .object({
+    activeLeafId: IdSchema.optional(),
+    branchId: IdSchema.optional(),
+  })
+  .strict();
+
+const ModelInputContextBuildModelTargetSchema = z
+  .object({
+    providerId: IdSchema,
+    modelId: IdSchema,
+    contextWindow: z.number().int().positive().optional(),
+    metadata: OptionalJsonObjectSchema,
+  })
+  .strict();
+
+const ModelInputContextBuildRuntimeFactSchema = z
+  .object({
+    factId: IdSchema,
+    factKind: IdSchema,
+    text: NonEmptyTextSchema,
+    required: z.boolean().optional(),
+    metadata: OptionalJsonObjectSchema,
+  })
+  .strict();
+
+const ModelInputContextBuildMemoryRecallSeedSchema = z
+  .object({
+    queryText: NonEmptyTextSchema.optional(),
+    metadata: OptionalJsonObjectSchema,
+  })
+  .strict();
+
+export const ModelInputContextBuildRequestSchema = z
+  .object({
+    requestId: IdSchema,
+    contextId: IdSchema,
+    sessionId: IdSchema,
+    runId: IdSchema,
+    modelStepId: IdSchema,
+    projectId: IdSchema.optional(),
+    projectRoot: NonEmptyTextSchema.optional(),
+    effectiveCwd: NonEmptyTextSchema.optional(),
+    permissionMode: IdSchema.optional(),
+    permissionSnapshotRef: IdSchema.optional(),
+    currentTurn: ModelInputContextBuildCurrentTurnSchema.optional(),
+    activePath: ModelInputContextBuildActivePathSchema.optional(),
+    modelTarget: ModelInputContextBuildModelTargetSchema,
+    availableToolsRef: IdSchema.optional(),
+    availableCapabilitySummary: NonEmptyTextSchema.optional(),
+    runtimeFacts: z.array(ModelInputContextBuildRuntimeFactSchema).default([]),
+    memoryRecallSeed: ModelInputContextBuildMemoryRecallSeedSchema.optional(),
+    traceId: IdSchema,
+    builtAt: IsoDateTimeSchema,
+    metadata: OptionalJsonObjectSchema,
+  })
+  .strict();
+
+export type ModelInputContextBuildRequest = z.infer<typeof ModelInputContextBuildRequestSchema>;
 
 export const ModelInputContextSchema = z
   .object({
