@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { ModelStepInputBuildService } from '@megumi/desktop/main/services/session/model-step-input-build.service';
-import type { AgentInstructionSourceSnapshot } from '@megumi/shared/model';
+import type { AgentInstructionSourceSnapshot, ModelInputContext } from '@megumi/shared/model';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolDefinition } from '@megumi/shared/tool';
@@ -93,6 +93,120 @@ describe('ModelStepInputBuildService', () => {
       }),
     ]));
     expect(result.toolDefinitions).toEqual(toolDefinitions);
+  });
+
+  it('rebuilds continuation input from a base input context without using tool-local cwd as run cwd', async () => {
+    const baseInputContext: ModelInputContext = {
+      contextId: 'model-input-context:step:1:initial',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      builtAt,
+      parts: [{
+        partId: 'part:current-turn:message:1',
+        kind: 'current_turn',
+        role: 'user',
+        text: 'Read package.json.',
+        sourceRefs: [{
+          sourceId: 'message:1',
+          sourceKind: 'current_user_message',
+          loadedAt: builtAt,
+        }],
+        priority: 90,
+        budgetStatus: 'included_full',
+        budgetClass: 'required',
+      }],
+      budget: {
+        modelContextWindow: 8192,
+        reservedOutputTokens: 1024,
+        availableInputTokens: 7168,
+        keepRecentTokens: 4096,
+        inputTokenEstimate: 4,
+        partBudgets: [{
+          partId: 'part:current-turn:message:1',
+          tokenEstimate: 4,
+          budgetStatus: 'included_full',
+        }],
+      },
+      trace: {
+        buildReason: 'initial_model_step',
+        selectedSources: [{
+          sourceId: 'message:1',
+          reason: 'current_turn',
+          sourceKind: 'current_user_message',
+          budgetClass: 'required',
+          partId: 'part:current-turn:message:1',
+        }],
+        excludedSources: [],
+      },
+    };
+    const service = new ModelStepInputBuildService({
+      instructionSourceService: { loadInstructionSources: vi.fn(async () => []) },
+      idFactory: {
+        buildRequestId: () => 'model-input-build:continuation',
+        traceId: () => 'trace:model-input:continuation',
+      },
+    });
+
+    const result = await service.buildModelStepInput({
+      baseInputContext,
+      requestId: 'request:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:2',
+      contextKind: 'tool-continuation',
+      providerId: 'openai-compatible',
+      modelId: 'deepseek-chat',
+      projectRoot: 'C:/all/work/study/megumi',
+      requestedCwd: 'packages/core',
+      permissionMode: 'default',
+      sessionContext: {},
+      toolDefinitions: [],
+      toolCalls: [{
+        toolCallId: 'tool-call:1',
+        runId: 'run:1',
+        modelStepId: 'step:1',
+        providerToolCallId: 'call_1',
+        toolName: 'run_command',
+        input: { command: 'pwd', cwd: 'packages/ai' },
+        inputPreview: {
+          summary: 'run_command pwd',
+          targets: [],
+          redactionState: 'none',
+        },
+        status: 'completed',
+        createdAt: builtAt,
+      }],
+      toolResults: [{
+        toolResultId: 'tool-result:1',
+        toolCallId: 'tool-call:1',
+        runId: 'run:1',
+        kind: 'success',
+        textContent: 'C:/all/work/study/megumi/packages/ai',
+        redactionState: 'none',
+        createdAt: builtAt,
+      }],
+      builtAt,
+    });
+
+    expect(result.inputContext.contextId).toBe('model-input-context:step:2:tool-continuation');
+    expect(result.effectiveCwd?.projectRelativePath).toBe('packages/core');
+    expect(result.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'current_turn',
+        text: 'Read package.json.',
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolCallId: 'tool-call:1',
+      }),
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolResultId: 'tool-result:1',
+      }),
+    ]));
+    expect(JSON.stringify(result.inputContext.trace.metadata)).toContain('trace:model-input:continuation');
+    expect(JSON.stringify(result.inputContext.trace.metadata)).not.toContain('packages/ai');
   });
 
   it('does not let tool-local cwd change run-level effective cwd', async () => {

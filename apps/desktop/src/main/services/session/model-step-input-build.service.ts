@@ -35,6 +35,7 @@ export interface ModelStepInputBuildServiceOptions {
 }
 
 export interface BuildModelStepInputInput {
+  baseInputContext?: ModelInputContext;
   requestId: string;
   sessionId: string;
   runId: string;
@@ -97,6 +98,7 @@ export class ModelStepInputBuildService {
     const buildRequest = this.buildRequest(input, effectiveCwd, availableCapabilitySummary);
     const inputContext = buildModelStepInputContextFromBuildRequest({
       request: buildRequest,
+      baseInputContext: input.baseInputContext,
       instructionSources,
       sessionContext: input.sessionContext,
       memoryRecallSources: input.memoryRecallSources,
