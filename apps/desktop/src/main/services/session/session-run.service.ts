@@ -3258,7 +3258,7 @@ export function createDefaultSessionRunService(
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     agentInstructionSourceService: options.agentInstructionSourceService ?? new AgentInstructionSourceService(),
     globalInstructionDirectoryProvider: {
-      listGlobalInstructionDirs: () => [path.join(homePaths.homePath, 'instructions')],
+      listGlobalInstructionDirs: () => [homePaths.homePath],
     },
   });
 }
