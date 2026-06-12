@@ -133,6 +133,7 @@ describe('09 session run integration final source guards', () => {
 
     expect(sessionRun).toContain('ModelStepInputBuildService');
     expect(sessionRun).toContain('modelStepInputBuildService');
+    expect(sessionRun).toContain('modelInputRuntimeSourceOverrides');
     expect(sessionRun).not.toContain('buildModelStepInputContextFromSources');
     expect(sessionRun).not.toContain('createModelStepInputContextId');
     expect(sessionRun).not.toContain('loadInstructionSourcesForModelStep');

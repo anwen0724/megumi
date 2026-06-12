@@ -418,6 +418,13 @@ describe('OpenAI-compatible message mapper', () => {
         reason: 'outside_recent_window',
         budgetClass: 'contextual',
       }],
+      traceMetadata: {
+        sourceDiagnostics: [{
+          sourceId: 'source:conflict',
+          code: 'instruction_conflicts_with_permission_constraint',
+          message: 'TRACE_ONLY_DIAGNOSTIC_SHOULD_NOT_APPEAR',
+        }],
+      },
       budgetPolicy: {
         modelContextWindow: 1,
         reservedOutputTokens: 0,
@@ -495,7 +502,9 @@ describe('OpenAI-compatible message mapper', () => {
       toolDefinitionCount: 1,
     });
     expect(JSON.stringify(materialized.body)).not.toContain('TRACE_ONLY_METADATA_SHOULD_NOT_APPEAR');
+    expect(JSON.stringify(materialized.body)).not.toContain('TRACE_ONLY_DIAGNOSTIC_SHOULD_NOT_APPEAR');
     expect(JSON.stringify(materialized.body)).not.toContain('source:old-session');
+    expect(JSON.stringify(materialized.trace)).not.toContain('TRACE_ONLY_DIAGNOSTIC_SHOULD_NOT_APPEAR');
   });
 
   it('allows complete tool continuation as the required input subject', () => {

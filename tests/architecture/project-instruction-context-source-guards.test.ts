@@ -78,4 +78,16 @@ describe('Project Instruction Context source guards', () => {
       /workspacePath/,
     ])).toEqual([]);
   });
+
+  it('keeps global instruction directory discovery out of packages and renderer', () => {
+    expect(offenders([
+      'packages/context-management',
+      'packages/ai',
+      'apps/desktop/src/renderer',
+    ], [
+      /globalInstructionDirs/,
+      /listGlobalInstructionDirs/,
+      /global-instruction:\/\//,
+    ])).toEqual([]);
+  });
 });

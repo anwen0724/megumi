@@ -118,6 +118,18 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('writeFileSync');
   });
 
+  it('keeps provider package free of context source collection dependencies', () => {
+    const source = sourceUnder('packages/ai');
+
+    expect(source).not.toContain('@megumi/context-management');
+    expect(source).not.toContain('AgentInstructionSourceService');
+    expect(source).not.toContain('ModelStepInputBuildService');
+    expect(source).not.toContain('globalInstructionDirs');
+    expect(source).not.toContain('sessionInstructionSources');
+    expect(source).not.toContain('memoryRecallSources');
+    expect(source).not.toContain('ModelInputContextSourceSchema');
+  });
+
   it('keeps provider adapters free of input command contracts and intent dispatch semantics', () => {
     const source = sourceUnder('packages/ai');
 

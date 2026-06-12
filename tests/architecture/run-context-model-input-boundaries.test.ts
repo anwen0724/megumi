@@ -77,4 +77,15 @@ describe('run context and model input boundaries', () => {
     expect(contextSource).not.toContain("sourceKind: 'project_instruction',");
     expect(contextSource).not.toContain('part:instruction:project:${source.sourceId}');
   });
+
+  it('keeps canonical model input source contracts in shared model contracts', () => {
+    const sharedModel = read('packages/shared/model/input-context-contracts.ts');
+    const contextSource = read('packages/context-management/model-step-input-context.ts');
+
+    expect(sharedModel).toContain('MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS');
+    expect(sharedModel).toContain('ModelInputContextSourceSchema');
+    expect(sharedModel).toContain('failureBehavior');
+    expect(contextSource).not.toContain('ModelInputContextSourceSchema');
+    expect(contextSource).not.toContain('MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS');
+  });
 });
