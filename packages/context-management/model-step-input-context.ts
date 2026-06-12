@@ -1,4 +1,6 @@
-﻿import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+﻿// Materializes normalized runtime input sources into provider-neutral model context parts.
+// This module consumes typed sources and never parses raw slash commands.
+import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   AgentInstructionSourceSnapshot,
@@ -13,7 +15,7 @@ import type { PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
-import type { InputIntentCommandMetadata } from '@megumi/shared/input-command';
+import type { InputPreprocessingEntry, InputPreprocessingResult } from '@megumi/shared/input';
 import type { ModelInputContextPartDraft } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
 import { buildSessionContextParts } from './session-context';
@@ -61,7 +63,7 @@ export interface BuildModelStepInputContextFromSourcesInput {
   runtimeConstraints?: ModelStepRuntimeConstraintInput[];
   permissionSnapshot?: PermissionModeSnapshot;
   permissionSnapshotRef?: string;
-  inputIntent?: InputIntentCommandMetadata;
+  inputPreprocessing?: InputPreprocessingResult;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
@@ -74,7 +76,7 @@ export function buildModelStepInputContextFromSources(
   const toolParts = toolContinuationParts(input);
   const instructionSources = input.instructionSources ?? [];
   const nextInstructionParts = instructionParts(instructionSources);
-  const intentParts = intentInstructionParts(input.inputIntent, input.builtAt);
+  const inputPreprocessingParts = inputPreprocessingInstructionParts(input.inputPreprocessing, input.builtAt);
   const instructionExcludedSources = instructionExcludedSourcesFor(input.instructionSources ?? []);
   const sessionContextResult = buildSessionContextParts({
     input: input.sessionContext,
@@ -87,21 +89,21 @@ export function buildModelStepInputContextFromSources(
   const parts: ModelInputContextPartDraft[] = input.baseInputContext
     ? [
         ...nextInstructionParts,
-        ...intentParts,
+        ...inputPreprocessingParts,
         ...input.baseInputContext.parts.filter((part) => (
           part.kind !== 'tool_continuation'
           && !(input.instructionSources && part.kind === 'instruction' && part.instructionKind === 'project')
-          && !(input.inputIntent && part.kind === 'instruction' && part.instructionKind === 'intent')
+          && !(input.inputPreprocessing && isInputDerivedInstructionPart(part))
         )).map(draftFromFinalPart),
         ...toolParts,
       ]
     : [
         ...nextInstructionParts,
-        ...intentParts,
+        ...inputPreprocessingParts,
         ...runtimeConstraintParts(input),
         ...sessionContextResult.parts,
         ...toolParts,
-        ...(input.currentMessage ? [currentTurnPart(input.currentMessage, input.builtAt)] : []),
+        ...(input.currentMessage ? [currentTurnPart(input.currentMessage, input.builtAt, input.inputPreprocessing)] : []),
       ];
 
   return buildModelInputContext({
@@ -203,38 +205,148 @@ function instructionSourceRef(source: AgentInstructionSourceSnapshot): ModelInpu
   };
 }
 
-function intentInstructionParts(
-  intent: InputIntentCommandMetadata | undefined,
+// Converts runtime-normalized input entries into model-visible instructions.
+// Host-only entries remain trace metadata and are not emitted as model text.
+function inputPreprocessingInstructionParts(
+  inputPreprocessing: InputPreprocessingResult | undefined,
   builtAt: string,
 ): ModelInputContextPartDraft[] {
-  if (!intent) {
+  if (!inputPreprocessing) {
     return [];
   }
 
-  const intentMetadata = intent as unknown as JsonObject;
-  return [{
-    partId: `part:instruction:intent:${intent.commandName}`,
-    kind: 'instruction',
-    instructionKind: 'intent',
-    text: [
-      `Input intent: ${intent.intentName}.`,
-      `Command: /${intent.commandName}.`,
-      intent.argsText ? `Arguments: ${intent.argsText}.` : undefined,
-    ].filter((line): line is string => Boolean(line)).join('\n'),
-    sourceRefs: [{
-      sourceId: `input-intent:${intent.commandName}`,
-      sourceKind: 'input_intent',
-      sourceUri: `input-intent://${intent.commandName}`,
-      loadedAt: builtAt,
-      metadata: intentMetadata,
-    }],
-    priority: 95,
-    metadata: {
-      intent: intentMetadata,
-    },
-  }];
+  return inputPreprocessing.entries
+    .filter((entry) => entry.visibility === 'model_visible' && entry.instructionText)
+    .map((entry): ModelInputContextPartDraft => ({
+      partId: `part:instruction:${inputPreprocessingInstructionKind(entry)}:${inputPreprocessingEntryStableId(entry)}`,
+      kind: 'instruction',
+      instructionKind: inputPreprocessingInstructionKind(entry),
+      text: entry.instructionText ?? '',
+      sourceRefs: [inputPreprocessingSourceRef(entry, builtAt)],
+      priority: inputPreprocessingPriority(entry),
+      metadata: {
+        inputPreprocessing: inputPreprocessingMetadata(entry),
+      },
+    }));
 }
 
+function isInputDerivedInstructionPart(part: ModelInputContextPart): boolean {
+  return part.kind === 'instruction'
+    && (
+      part.instructionKind === 'intent'
+      || part.instructionKind === 'prompt_template'
+      || part.instructionKind === 'skill'
+      || part.instructionKind === 'input_hook'
+    );
+}
+
+function inputPreprocessingInstructionKind(
+  entry: InputPreprocessingEntry,
+): Extract<ModelInputContextPartDraft, { kind: 'instruction' }>['instructionKind'] {
+  switch (entry.kind) {
+    case 'intent':
+      return 'intent';
+    case 'prompt_template':
+      return 'prompt_template';
+    case 'skill':
+      return 'skill';
+    case 'input_hook':
+      return 'input_hook';
+  }
+}
+
+function inputPreprocessingSourceKind(entry: InputPreprocessingEntry): ModelInputContextSourceRef['sourceKind'] {
+  switch (entry.kind) {
+    case 'intent':
+      return 'input_intent';
+    case 'prompt_template':
+      return 'input_prompt_template';
+    case 'skill':
+      return 'input_skill';
+    case 'input_hook':
+      return 'input_hook';
+  }
+}
+
+function inputPreprocessingEntryStableId(entry: InputPreprocessingEntry): string {
+  switch (entry.kind) {
+    case 'intent':
+      return entry.intentId;
+    case 'prompt_template':
+      return entry.templateId;
+    case 'skill':
+      return entry.skillId;
+    case 'input_hook':
+      return entry.hookId;
+  }
+}
+
+function inputPreprocessingSourceUri(entry: InputPreprocessingEntry): string {
+  return `input://${entry.kind}/${inputPreprocessingEntryStableId(entry)}`;
+}
+
+function inputPreprocessingPriority(entry: InputPreprocessingEntry): number {
+  switch (entry.kind) {
+    case 'intent':
+      return 95;
+    case 'prompt_template':
+    case 'skill':
+      return 92;
+    case 'input_hook':
+      return 88;
+  }
+}
+
+function inputPreprocessingMetadata(entry: InputPreprocessingEntry): JsonObject {
+  const base = {
+    sourceName: entry.sourceName,
+    ...entry.metadata,
+  };
+
+  switch (entry.kind) {
+    case 'intent':
+      return {
+        ...base,
+        intentId: entry.intentId,
+        commandName: entry.commandName,
+        ...(entry.defaultPermissionMode ? { defaultPermissionMode: entry.defaultPermissionMode } : {}),
+        ...(entry.defaultPermissionSource ? { defaultPermissionSource: entry.defaultPermissionSource } : {}),
+      } as JsonObject;
+    case 'prompt_template':
+      return {
+        ...base,
+        templateId: entry.templateId,
+        commandName: entry.commandName,
+        templateSource: entry.templateSource,
+      } as JsonObject;
+    case 'skill':
+      return {
+        ...base,
+        skillId: entry.skillId,
+        commandName: entry.commandName,
+        skillSource: entry.skillSource,
+      } as JsonObject;
+    case 'input_hook':
+      return {
+        ...base,
+        hookId: entry.hookId,
+        action: entry.action,
+      } as JsonObject;
+  }
+}
+
+function inputPreprocessingSourceRef(
+  entry: InputPreprocessingEntry,
+  builtAt: string,
+): ModelInputContextSourceRef {
+  return {
+    sourceId: entry.sourceId,
+    sourceKind: inputPreprocessingSourceKind(entry),
+    sourceUri: inputPreprocessingSourceUri(entry),
+    loadedAt: builtAt,
+    metadata: inputPreprocessingMetadata(entry),
+  };
+}
 function reasonForInstructionSourceStatus(status: AgentInstructionSourceSnapshot['status']): string {
   switch (status) {
     case 'missing':
@@ -256,13 +368,17 @@ function cleanMetadata(input: Record<string, string | number | boolean | undefin
   ) as JsonObject;
 }
 
-function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputContextPartDraft {
+function currentTurnPart(
+  message: SessionMessage,
+  builtAt: string,
+  inputPreprocessing?: InputPreprocessingResult,
+): ModelInputContextPartDraft {
   return {
     partId: `part:current-turn:${message.messageId}`,
     kind: 'current_turn',
     role: message.role === 'user' ? 'user' : 'host',
-    text: message.content,
-    sourceRefs: [sessionMessageSourceRef(message, builtAt, 'current_user_message')],
+    text: inputPreprocessing?.effectiveUserText ?? message.content,
+    sourceRefs: [sessionMessageSourceRef(message, builtAt, 'current_user_message', inputPreprocessing)],
     priority: 95,
     metadata: {
       role: message.role,
@@ -270,7 +386,6 @@ function currentTurnPart(message: SessionMessage, builtAt: string): ModelInputCo
     },
   };
 }
-
 function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInput): ModelInputContextPartDraft[] {
   const parts: ModelInputContextPartDraft[] = [];
 
@@ -389,6 +504,7 @@ function sessionMessageSourceRef(
   message: SessionMessage,
   builtAt: string,
   sourceKind: ModelInputContextSourceRef['sourceKind'] = 'session_message',
+  inputPreprocessing?: InputPreprocessingResult,
 ): ModelInputContextSourceRef {
   return {
     sourceId: `session-message:${message.messageId}`,
@@ -398,10 +514,13 @@ function sessionMessageSourceRef(
     metadata: {
       role: message.role,
       status: message.status,
+      ...(inputPreprocessing ? {
+        originalText: inputPreprocessing.originalText,
+        inputPreprocessingEntryKinds: inputPreprocessing.entries.map((entry) => entry.kind).join(','),
+      } : {}),
     },
   };
 }
-
 function toolCallSourceRef(toolCall: ToolCall, loadedAt: string): ModelInputContextSourceRef {
   return {
     sourceId: `tool-call:${toolCall.toolCallId}`,
@@ -488,4 +607,7 @@ function stringifyJsonValue(value: JsonValue): string {
     return '[unserializable structured content]';
   }
 }
+
+
+
 
