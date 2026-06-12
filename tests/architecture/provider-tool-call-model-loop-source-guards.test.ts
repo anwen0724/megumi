@@ -101,6 +101,23 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toMatch(/\bModelStepPromptRequest\b/);
   });
 
+  it('keeps provider request materialization out of Host source selection', () => {
+    const source = read('packages/ai/prompt/message-mapper.ts');
+
+    expect(source).toContain('materializeModelStepOpenAICompatibleRequest');
+    expect(source).not.toContain('@megumi/context-management');
+    expect(source).not.toContain('@megumi/db');
+    expect(source).not.toContain('@megumi/memory');
+    expect(source).not.toContain('@megumi/security');
+    expect(source).not.toContain('apps/desktop');
+    expect(source).not.toContain('AgentInstructionSourceService');
+    expect(source).not.toContain('ModelStepInputBuildService');
+    expect(source).not.toContain('SessionRepository');
+    expect(source).not.toContain('MemoryRepository');
+    expect(source).not.toContain('readFileSync');
+    expect(source).not.toContain('writeFileSync');
+  });
+
   it('keeps provider adapters free of input command contracts and intent dispatch semantics', () => {
     const source = sourceUnder('packages/ai');
 
