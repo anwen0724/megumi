@@ -1,5 +1,5 @@
 ﻿// @vitest-environment node
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -44,7 +44,7 @@ describe('AgentInstructionSourceService', () => {
       sourceId: 'project-instruction:AGENTS.md',
       sourceKind: 'project_instruction',
       status: 'missing',
-      sourceUri: 'project://AGENTS.md',
+      sourceUri: 'project-instruction://AGENTS.md',
       relativePath: 'AGENTS.md',
       loadedAt,
       reason: 'agent_instruction_missing',
@@ -62,7 +62,7 @@ describe('AgentInstructionSourceService', () => {
       sourceId: 'project-instruction:AGENTS.md',
       sourceKind: 'project_instruction',
       status: 'included',
-      sourceUri: 'project://AGENTS.md',
+      sourceUri: 'project-instruction://AGENTS.md',
       relativePath: 'AGENTS.md',
       text: '# Rules\nUse tests.\n',
       loadedAt,
@@ -71,6 +71,96 @@ describe('AgentInstructionSourceService', () => {
     });
     expect(snapshot?.sizeBytes).toBe(Buffer.byteLength('# Rules\nUse tests.\n', 'utf8'));
     expect(snapshot?.includedBytes).toBe(Buffer.byteLength('# Rules\nUse tests.\n', 'utf8'));
+  });
+
+  it('loads project root to effective cwd ancestor instructions with fixed candidate ordering', async () => {
+    const projectRoot = await tempProject();
+    await mkdir(path.join(projectRoot, 'packages', 'core'), { recursive: true });
+    await writeFile(path.join(projectRoot, 'AGENTS.md'), '# Root\nUse tests.\n', 'utf8');
+    await writeFile(path.join(projectRoot, 'packages', 'CLAUDE.md'), '# Packages\nKeep package boundaries.\n', 'utf8');
+    await writeFile(path.join(projectRoot, 'packages', 'core', 'AGENTS.MD'), '# Core AGENTS\nPrefer runtime boundaries.\n', 'utf8');
+    await writeFile(path.join(projectRoot, 'packages', 'core', 'CLAUDE.md'), '# Core CLAUDE\nShould not be selected.\n', 'utf8');
+    const service = new AgentInstructionSourceService();
+
+    const sources = await service.loadInstructionSources({
+      projectRoot,
+      effectiveCwd: path.join(projectRoot, 'packages', 'core'),
+      loadedAt,
+    });
+
+    expect(sources.filter((source) => source.status === 'included').map((source) => ({
+      sourceId: source.sourceId,
+      relativePath: source.relativePath,
+      text: source.text,
+    }))).toEqual([
+      {
+        sourceId: 'project-instruction:AGENTS.md',
+        relativePath: 'AGENTS.md',
+        text: '# Root\nUse tests.\n',
+      },
+      {
+        sourceId: 'project-instruction:packages/CLAUDE.md',
+        relativePath: 'packages/CLAUDE.md',
+        text: '# Packages\nKeep package boundaries.\n',
+      },
+      {
+        sourceId: 'project-instruction:packages/core/AGENTS.MD',
+        relativePath: 'packages/core/AGENTS.MD',
+        text: '# Core AGENTS\nPrefer runtime boundaries.\n',
+      },
+    ]);
+  });
+
+  it('loads global instruction directories before project instructions', async () => {
+    const globalDir = await tempProject();
+    const projectRoot = await tempProject();
+    await writeFile(path.join(globalDir, 'CLAUDE.md'), '# Global\nUse concise answers.\n', 'utf8');
+    await writeFile(path.join(projectRoot, 'AGENTS.md'), '# Project\nUse project rules.\n', 'utf8');
+    const service = new AgentInstructionSourceService();
+
+    const sources = await service.loadInstructionSources({
+      globalInstructionDirs: [globalDir],
+      projectRoot,
+      loadedAt,
+    });
+
+    expect(sources.map((source) => ({
+      sourceKind: source.sourceKind,
+      sourceId: source.sourceId,
+      relativePath: source.relativePath,
+      status: source.status,
+    }))).toEqual([
+      {
+        sourceKind: 'global_instruction',
+        sourceId: 'global-instruction:CLAUDE.md',
+        relativePath: 'CLAUDE.md',
+        status: 'included',
+      },
+      {
+        sourceKind: 'project_instruction',
+        sourceId: 'project-instruction:AGENTS.md',
+        relativePath: 'AGENTS.md',
+        status: 'included',
+      },
+    ]);
+  });
+
+  it('deduplicates resolved instruction paths in the project chain', async () => {
+    const projectRoot = await tempProject();
+    await writeFile(path.join(projectRoot, 'AGENTS.md'), '# Root\n', 'utf8');
+    const service = new AgentInstructionSourceService();
+
+    const sources = await service.loadInstructionSources({
+      projectRoot,
+      effectiveCwd: projectRoot,
+      loadedAt,
+    });
+
+    expect(sources.filter((source) => source.status === 'included')).toHaveLength(1);
+    expect(sources[0]).toMatchObject({
+      sourceId: 'project-instruction:AGENTS.md',
+      relativePath: 'AGENTS.md',
+    });
   });
 
   it('truncates over hard cap without returning invalid UTF-8 text', async () => {
@@ -102,7 +192,7 @@ describe('AgentInstructionSourceService', () => {
       sourceId: 'project-instruction:AGENTS.md',
       sourceKind: 'project_instruction',
       status: 'included_truncated',
-      sourceUri: 'project://AGENTS.md',
+      sourceUri: 'project-instruction://AGENTS.md',
       relativePath: 'AGENTS.md',
       text: 'abc',
       loadedAt,
@@ -128,7 +218,7 @@ describe('AgentInstructionSourceService', () => {
       sourceId: 'project-instruction:AGENTS.md',
       sourceKind: 'project_instruction',
       status: 'read_failed',
-      sourceUri: 'project://AGENTS.md',
+      sourceUri: 'project-instruction://AGENTS.md',
       relativePath: 'AGENTS.md',
       loadedAt,
       reason: 'agent_instruction_read_failed',
