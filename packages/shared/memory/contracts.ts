@@ -29,7 +29,15 @@ export const MEMORY_RECORD_SOURCES = ['capture', 'markdown_import', 'manual_syst
 export const MemoryRecordSourceSchema = z.enum(MEMORY_RECORD_SOURCES);
 export type MemoryRecordSource = z.infer<typeof MemoryRecordSourceSchema>;
 
-export const MEMORY_EVIDENCE_KINDS = ['message', 'tool_result', 'user_edit', 'markdown_import'] as const;
+export const MEMORY_EVIDENCE_KINDS = [
+  'message',
+  'user_message',
+  'assistant_message',
+  'tool_result',
+  'source_file',
+  'user_edit',
+  'markdown_import',
+] as const;
 export const MemoryEvidenceKindSchema = z.enum(MEMORY_EVIDENCE_KINDS);
 export type MemoryEvidenceKind = z.infer<typeof MemoryEvidenceKindSchema>;
 
@@ -270,13 +278,40 @@ export const MemoryRecallSnapshotItemSchema = z.object({
   content: z.string().min(1),
   reason: z.string().min(1).nullable().optional(),
   score: z.number().min(0).max(1),
+  tokenEstimate: z.number().int().nonnegative().optional(),
 });
 export type MemoryRecallSnapshotItem = z.infer<typeof MemoryRecallSnapshotItemSchema>;
 
+export const MemoryRecallDiagnosticSeveritySchema = z.enum(['info', 'warning', 'error']);
+export type MemoryRecallDiagnosticSeverity = z.infer<typeof MemoryRecallDiagnosticSeveritySchema>;
+
+export const MemoryRecallDiagnosticSchema = z.object({
+  code: z.string().min(1),
+  severity: MemoryRecallDiagnosticSeveritySchema,
+  reason: z.string().min(1),
+  memoryId: z.string().min(1).nullable().optional(),
+  metadata: JsonObjectSchema.default({}),
+});
+export type MemoryRecallDiagnostic = z.infer<typeof MemoryRecallDiagnosticSchema>;
+
+export const MemoryRecallSnapshotBudgetSchema = z.object({
+  maxTokens: z.number().int().positive(),
+  estimatedTokens: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+});
+export type MemoryRecallSnapshotBudget = z.infer<typeof MemoryRecallSnapshotBudgetSchema>;
+
 export const MemoryRecallSnapshotSchema = z.object({
+  snapshotId: z.string().min(1),
   recallRequestId: z.string().min(1),
-  recalledAt: IsoDateTimeSchema,
-  memories: z.array(MemoryRecallSnapshotItemSchema),
+  sessionId: z.string().min(1),
+  runId: z.string().min(1),
+  projectId: z.string().min(1).nullable().optional(),
+  query: z.string(),
+  selected: z.array(MemoryRecallSnapshotItemSchema),
+  diagnostics: z.array(MemoryRecallDiagnosticSchema).default([]),
+  budget: MemoryRecallSnapshotBudgetSchema,
+  createdAt: IsoDateTimeSchema,
 });
 export type MemoryRecallSnapshot = z.infer<typeof MemoryRecallSnapshotSchema>;
 

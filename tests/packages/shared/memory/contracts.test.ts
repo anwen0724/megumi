@@ -65,6 +65,25 @@ describe('memory shared contracts', () => {
     expect(result.data.useCount).toBe(2);
   });
 
+  it('parses source-file evidence for source-of-truth document memory', () => {
+    const result = MemoryRecordSchema.safeParse(validMemoryRecord({
+      evidence: [
+        {
+          kind: 'source_file',
+          filePath: '.local-docs/specs/18-context-instruction-and-long-term-memory-foundation/02-long-term-memory-runtime-loop.md',
+          lineStart: 12,
+          lineEnd: 18,
+          metadata: {},
+        },
+      ],
+    }));
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.evidence[0]?.kind).toBe('source_file');
+    }
+  });
+
   it('rejects session-scoped long-term memory records', () => {
     const result = MemoryRecordSchema.safeParse(
       validMemoryRecord({
@@ -104,9 +123,13 @@ describe('memory shared contracts', () => {
     });
 
     const snapshot = MemoryRecallSnapshotSchema.parse({
+      snapshotId: 'memory-recall-snapshot:1',
       recallRequestId: request.recallRequestId,
-      recalledAt: '2026-06-12T00:00:00.000Z',
-      memories: [
+      sessionId: request.sessionId,
+      runId: request.runId,
+      projectId: request.projectId,
+      query: request.queryText,
+      selected: [
         {
           memoryId: result.memoryId,
           scope: 'project',
@@ -114,11 +137,61 @@ describe('memory shared contracts', () => {
           content: 'Use Vitest for unit tests.',
           reason: result.reason,
           score: result.score,
+          tokenEstimate: 8,
         },
       ],
+      diagnostics: [],
+      budget: {
+        maxTokens: 200,
+        estimatedTokens: 8,
+        truncated: false,
+      },
+      createdAt: '2026-06-12T00:00:00.000Z',
     });
 
-    expect(snapshot.memories).toHaveLength(1);
+    expect(snapshot.selected).toHaveLength(1);
+    expect(snapshot.snapshotId).toBe('memory-recall-snapshot:1');
+    expect(snapshot.budget.maxTokens).toBe(200);
+  });
+
+  it('parses a run-scoped memory recall snapshot with diagnostics and budget', () => {
+    const snapshot = MemoryRecallSnapshotSchema.parse({
+      snapshotId: 'memory-recall-snapshot:1',
+      recallRequestId: 'memory-recall:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      projectId: 'project:1',
+      query: 'How should implementation plans be written?',
+      selected: [
+        {
+          memoryId: 'memory:1',
+          scope: 'project',
+          kind: 'decision',
+          content: 'Write a reviewed spec before implementation plans.',
+          reason: 'project_scope kind_priority lexical_match',
+          score: 0.91,
+          tokenEstimate: 12,
+        },
+      ],
+      diagnostics: [
+        {
+          code: 'candidate_excluded',
+          severity: 'info',
+          reason: 'inactive_status',
+          memoryId: 'memory:2',
+          metadata: {},
+        },
+      ],
+      budget: {
+        maxTokens: 200,
+        estimatedTokens: 12,
+        truncated: false,
+      },
+      createdAt: '2026-06-12T00:00:00.000Z',
+    });
+
+    expect(snapshot.selected).toHaveLength(1);
+    expect(snapshot.diagnostics[0]?.reason).toBe('inactive_status');
   });
 
   it('parses markdown mirror state without making markdown authoritative', () => {
