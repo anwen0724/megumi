@@ -11,6 +11,9 @@
   MemorySourceRef,
 } from '@megumi/shared/memory';
 
+export * from './text-normalization';
+export * from './memory-security-policy';
+
 const MAX_SUMMARY_LENGTH = 500;
 const MAX_CONTENT_PREVIEW_LENGTH = 1000;
 
