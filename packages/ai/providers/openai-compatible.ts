@@ -14,7 +14,11 @@ import {
   createRunFailedEvent,
   createToolCallCreatedEvent,
 } from '@megumi/shared/runtime';
-import { mapModelStepToOpenAICompatibleRequest } from '../prompt/message-mapper';
+import {
+  materializeModelStepOpenAICompatibleRequest,
+  OpenAICompatibleRequestMaterializationError,
+  type OpenAICompatibleProviderRequestTrace,
+} from '../prompt/message-mapper';
 import { parseOpenAICompatibleSseStream } from '../stream';
 import {
   type AiModelStepAdapterRequest,
@@ -29,14 +33,16 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
   return {
     providerId: options.providerId,
     async *streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent> {
-      const requestBody = mapModelStepToOpenAICompatibleRequest(input.request);
-      const diagnostics = createProviderRequestDiagnostics(
-        requestBody,
-        hasToolResultContinuation(input.request) ? 'tool_continuation' : 'initial',
-      );
-      let failureStage: ProviderFailureStage = 'fetch_throw';
+      const requestShape = hasToolResultContinuation(input.request) ? 'tool_continuation' : 'initial';
+      let diagnostics: JsonObject = createProviderRequestDiagnosticsBase(requestShape);
+      let failureStage: ProviderFailureStage = 'materialization';
 
       try {
+        const materializedRequest = materializeModelStepOpenAICompatibleRequest(input.request);
+        const requestBody = materializedRequest.body;
+        diagnostics = createProviderRequestDiagnostics(requestBody, requestShape, materializedRequest.trace);
+        failureStage = 'fetch_throw';
+
         const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
           method: 'POST',
           headers: {
@@ -113,6 +119,19 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
           usage,
         }, clock.now());
       } catch (error) {
+        if (error instanceof OpenAICompatibleRequestMaterializationError) {
+          yield failedModelStepEvent(input, 'runtime_protocol_violation', clock.now(), {
+            ...diagnostics,
+            failureStage: 'materialization',
+            materializationCode: error.code,
+            ...error.details,
+          }, {
+            message: 'Provider request materialization failed.',
+            retryable: false,
+          });
+          return;
+        }
+
         if (isAbortError(error) || input.signal?.aborted) {
           yield createRunCancelledEvent({
             eventId: input.eventIdFactory(),
@@ -155,7 +174,7 @@ function mapHttpStatus(status: number): RuntimeErrorCode {
   return 'provider_network_error';
 }
 
-type ProviderFailureStage = 'http_error' | 'fetch_throw' | 'stream_parse_error';
+type ProviderFailureStage = 'materialization' | 'http_error' | 'fetch_throw' | 'stream_parse_error';
 type ProviderRequestShape = 'initial' | 'tool_continuation';
 
 interface OpenAICompatibleRequestDiagnosticsBody {
@@ -163,14 +182,27 @@ interface OpenAICompatibleRequestDiagnosticsBody {
   tools?: unknown[];
 }
 
-function createProviderRequestDiagnostics(
-  body: OpenAICompatibleRequestDiagnosticsBody,
-  requestShape: ProviderRequestShape,
-): JsonObject {
+function createProviderRequestDiagnosticsBase(requestShape: ProviderRequestShape): JsonObject {
   return {
     boundary: 'provider',
     operation: 'chat_completions_stream',
     requestShape,
+  };
+}
+
+function createProviderRequestDiagnostics(
+  body: OpenAICompatibleRequestDiagnosticsBody,
+  requestShape: ProviderRequestShape,
+  trace: OpenAICompatibleProviderRequestTrace,
+): JsonObject {
+  return {
+    ...createProviderRequestDiagnosticsBase(requestShape),
+    contextId: trace.contextId,
+    buildReason: trace.buildReason,
+    selectedSourceCount: trace.selectedSourceIds.length,
+    excludedSourceCount: trace.excludedSourceIds.length,
+    truncatedPartCount: trace.truncatedPartIds.length,
+    budgetWarningCount: trace.budgetWarningReasons.length,
     messageRoles: body.messages.map((message) => message.role),
     toolDefinitionCount: body.tools?.length ?? 0,
     toolCallCount: body.messages.reduce((count, message) => count + (message.tool_calls?.length ?? 0), 0),
@@ -535,6 +567,7 @@ function failedModelStepEvent(
   code: RuntimeErrorCode,
   createdAt: string,
   diagnostics: JsonObject = {},
+  options: { message?: string; retryable?: boolean } = {},
 ): RuntimeEvent {
   return createRunFailedEvent({
     eventId: input.eventIdFactory(),
@@ -544,9 +577,9 @@ function failedModelStepEvent(
     createdAt,
     error: {
       code,
-      message: errorMessageForCode(code),
+      message: options.message ?? errorMessageForCode(code),
       severity: 'error',
-      retryable: code === 'provider_rate_limited' || code === 'provider_network_error',
+      retryable: options.retryable ?? (code === 'provider_rate_limited' || code === 'provider_network_error'),
       source: 'provider',
       details: {
         providerId: input.config.providerId,

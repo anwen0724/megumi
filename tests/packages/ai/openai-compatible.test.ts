@@ -656,6 +656,65 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
+  it('blocks provider fetch when request materialization has no required input subject', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"should not run"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+    const inputContext = buildModelInputContext({
+      contextId: 'model-input-context:adapter-missing-subject',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        instructionPart({
+          partId: 'part:instruction:adapter-missing-subject',
+          text: 'System instruction without a model step subject.',
+        }),
+      ],
+    });
+
+    const [event] = await collect(adapter.streamModelStep(modelStepInput({
+      inputContext,
+    })));
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(event).toMatchObject({
+      eventType: 'run.failed',
+      requestId: 'request-1',
+      runId: 'run-1',
+      sequence: 1,
+      payload: {
+        error: {
+          code: 'runtime_protocol_violation',
+          message: 'Provider request materialization failed.',
+          retryable: false,
+          source: 'provider',
+          details: {
+            providerId: 'openai',
+            modelId: 'gpt-4.1',
+            boundary: 'provider',
+            operation: 'chat_completions_stream',
+            failureStage: 'materialization',
+            materializationCode: 'model_input_subject_missing',
+            contextId: 'model-input-context:adapter-missing-subject',
+            buildReason: 'initial_model_step',
+          },
+        },
+      },
+    });
+    expect(RuntimeEventSchema.parse(event)).toEqual(event);
+    expect(JSON.stringify(event)).not.toContain('System instruction without a model step subject.');
+  });
+
   it('maps model step auth failures to typed failed events', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response('bad key', { status: 401 }));
     const adapter = createOpenAICompatibleAdapter({
