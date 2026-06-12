@@ -26,6 +26,7 @@ import { buildSessionContextParts } from './session-context';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
 const AGENT_INSTRUCTION_WRAPPER = 'Follow these agent instructions:';
+const PERMISSION_BYPASS_PATTERN = /\b(bypass|ignore|skip|disable)\b[\s\S]{0,80}\b(permission|sandbox|approval)\b/i;
 
 export interface CreateModelStepInputContextIdInput {
   stepId: string;
@@ -156,11 +157,15 @@ export function buildModelStepInputContextFromSources(
 ): ModelInputContext {
   const toolParts = toolContinuationParts(input);
   const memoryParts = memoryRecallParts(input.memoryRecallSources ?? [], input.builtAt);
-  const instructionSources = input.instructionSources ?? [];
+  const instructionSelection = selectInstructionSources(input);
+  const instructionSources = instructionSelection.sources;
   const nextInstructionParts = instructionParts(instructionSources);
   const nextSessionInstructionParts = sessionInstructionParts(input.sessionInstructionSources ?? []);
   const inputPreprocessingParts = inputPreprocessingInstructionParts(input.inputPreprocessing, input.builtAt);
-  const instructionExcludedSources = instructionExcludedSourcesFor(input.instructionSources ?? []);
+  const instructionExcludedSources = [
+    ...instructionSelection.excludedSources,
+    ...instructionExcludedSourcesFor(input.instructionSources ?? []),
+  ];
   const sessionContextResult = buildSessionContextParts({
     input: input.sessionContext,
     builtAt: input.builtAt,
@@ -222,6 +227,62 @@ function draftFromFinalPart(part: ModelInputContextPart): ModelInputContextPartD
     ...draft,
     ...(truncation ? { truncationHint: truncation } : {}),
   } as ModelInputContextPartDraft;
+}
+
+function selectInstructionSources(input: BuildModelStepInputContextFromSourcesInput): {
+  sources: AgentInstructionSourceSnapshot[];
+  excludedSources: ModelInputContextExcludedSource[];
+} {
+  const sources = input.instructionSources ?? [];
+  if (!hasPermissionConstraintSource(input)) {
+    return { sources, excludedSources: [] };
+  }
+
+  const selected: AgentInstructionSourceSnapshot[] = [];
+  const excludedSources: ModelInputContextExcludedSource[] = [];
+
+  for (const source of sources) {
+    if (instructionConflictsWithPermission(source)) {
+      excludedSources.push(conflictingInstructionExcludedSource(source));
+      continue;
+    }
+    selected.push(source);
+  }
+
+  return { sources: selected, excludedSources };
+}
+
+function hasPermissionConstraintSource(input: BuildModelStepInputContextFromSourcesInput): boolean {
+  return Boolean(
+    input.permissionSnapshot
+      || input.runtimeConstraints?.some((constraint) => (
+        constraint.runtimeFactKind === 'permission_posture'
+        || Boolean(constraint.sandboxSummary)
+        || Boolean(constraint.approvalSummary)
+      )),
+  );
+}
+
+function instructionConflictsWithPermission(source: AgentInstructionSourceSnapshot): boolean {
+  return (source.status === 'included' || source.status === 'included_truncated')
+    && PERMISSION_BYPASS_PATTERN.test(source.text);
+}
+
+function conflictingInstructionExcludedSource(
+  source: AgentInstructionSourceSnapshot,
+): ModelInputContextExcludedSource {
+  const sourceRef = instructionSourceRef(source);
+  return {
+    sourceRef: {
+      ...sourceRef,
+      metadata: cleanMetadata({
+        ...sourceRef.metadata,
+        diagnosticSeverity: 'warning',
+      }),
+    },
+    reason: 'instruction_conflicts_with_permission_constraint',
+    budgetClass: 'diagnostic_only',
+  };
 }
 
 function resolveModelStepContextBudgetPolicy(
@@ -675,6 +736,7 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
     }
 
     if (constraint.runtimeFactText) {
+      const sourceKind = runtimeFactSourceKind(constraint.runtimeFactKind);
       parts.push({
         partId: `part:runtime-fact:${constraint.constraintId}`,
         kind: 'runtime_constraint',
@@ -682,7 +744,7 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
         text: constraint.runtimeFactText,
         sourceRefs: [{
           sourceId: constraint.constraintId,
-          sourceKind: 'runtime_fact',
+          sourceKind,
           sourceUri: `runtime-fact://${constraint.constraintId}`,
           loadedAt,
         }],
@@ -704,7 +766,7 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
       text: `Permission mode is ${input.permissionSnapshot.permissionMode}.`,
       sourceRefs: [{
         sourceId: `permission-mode:${input.permissionSnapshotRef ?? input.runId}`,
-        sourceKind: 'permission_mode',
+        sourceKind: 'permission_constraint',
         sourceUri: `permission-mode://${input.permissionSnapshotRef ?? input.runId}`,
         loadedAt: input.permissionSnapshot.createdAt,
       }],
@@ -718,6 +780,13 @@ function runtimeConstraintParts(input: BuildModelStepInputContextFromSourcesInpu
   }
 
   return parts;
+}
+
+function runtimeFactSourceKind(factKind: string | undefined): ModelInputContextSourceRef['sourceKind'] {
+  if (factKind === 'permission_posture') {
+    return 'permission_constraint';
+  }
+  return 'runtime_fact';
 }
 
 function runtimeFactConstraintKind(factKind: string | undefined): ModelInputRuntimeConstraintKind {
