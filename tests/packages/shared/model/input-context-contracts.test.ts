@@ -784,6 +784,39 @@ describe('AgentInstructionSourceSnapshot contracts', () => {
     } satisfies AgentInstructionSourceSnapshot);
   });
 
+  it('parses global and directory-scoped instruction source snapshots', () => {
+    const globalSource = AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'global-instruction:user:AGENTS.md',
+      sourceKind: 'global_instruction',
+      status: 'included',
+      sourceUri: 'global-instruction://user/AGENTS.md',
+      relativePath: 'AGENTS.md',
+      text: '# Global\nPrefer concise answers.',
+      loadedAt,
+      sizeBytes: 32,
+      includedBytes: 32,
+      hardCapBytes: 65536,
+      truncated: false,
+    });
+
+    const directorySource = AgentInstructionSourceSnapshotSchema.parse({
+      sourceId: 'project-instruction:packages/core/CLAUDE.md',
+      sourceKind: 'project_instruction',
+      status: 'included',
+      sourceUri: 'project-instruction://packages/core/CLAUDE.md',
+      relativePath: 'packages/core/CLAUDE.md',
+      text: '# Core Rules\nKeep runtime code host-free.',
+      loadedAt,
+      sizeBytes: 42,
+      includedBytes: 42,
+      hardCapBytes: 65536,
+      truncated: false,
+    });
+
+    expect(globalSource.sourceKind).toBe('global_instruction');
+    expect(directorySource.relativePath).toBe('packages/core/CLAUDE.md');
+  });
+
   it('accepts unavailable, missing, read_failed, and truncated statuses', () => {
     const statuses = [
       'unavailable',
@@ -870,12 +903,12 @@ describe('AgentInstructionSourceSnapshot contracts', () => {
     }
   });
 
-  it('rejects unsafe project instruction source identity values', () => {
+  it('rejects empty instruction source identity values', () => {
     expect(() => AgentInstructionSourceSnapshotSchema.parse({
-      sourceId: 'project-instruction:AGENTS.md',
+      sourceId: 'project-instruction:empty-uri',
       sourceKind: 'project_instruction',
       status: 'included',
-      sourceUri: 'file:///C:/project/AGENTS.md',
+      sourceUri: '',
       relativePath: 'AGENTS.md',
       text: '# AGENTS',
       loadedAt,
@@ -886,11 +919,11 @@ describe('AgentInstructionSourceSnapshot contracts', () => {
     })).toThrow();
 
     expect(() => AgentInstructionSourceSnapshotSchema.parse({
-      sourceId: 'project-instruction:AGENTS.md',
+      sourceId: 'project-instruction:empty-relative-path',
       sourceKind: 'project_instruction',
       status: 'included',
-      sourceUri: 'project://AGENTS.md',
-      relativePath: '../AGENTS.md',
+      sourceUri: 'project-instruction://AGENTS.md',
+      relativePath: '',
       text: '# AGENTS',
       loadedAt,
       sizeBytes: 8,

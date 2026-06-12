@@ -141,9 +141,9 @@ export interface ModelInputContextSourceRef {
 const AgentInstructionSourceSnapshotBaseSchema = z
   .object({
     sourceId: IdSchema,
-    sourceKind: z.literal('project_instruction'),
-    sourceUri: z.literal('project://AGENTS.md').optional(),
-    relativePath: z.literal('AGENTS.md').optional(),
+    sourceKind: z.enum(['global_instruction', 'project_instruction']),
+    sourceUri: z.string().min(1).optional(),
+    relativePath: z.string().min(1).optional(),
     loadedAt: IsoDateTimeSchema,
   })
   .strict();
@@ -198,9 +198,9 @@ export const AgentInstructionSourceSnapshotSchema = z.discriminatedUnion('status
 
 interface AgentInstructionSourceSnapshotBase {
   sourceId: string;
-  sourceKind: 'project_instruction';
-  sourceUri?: 'project://AGENTS.md';
-  relativePath?: 'AGENTS.md';
+  sourceKind: 'global_instruction' | 'project_instruction';
+  sourceUri?: string;
+  relativePath?: string;
   loadedAt: IsoDateTime;
 }
 
