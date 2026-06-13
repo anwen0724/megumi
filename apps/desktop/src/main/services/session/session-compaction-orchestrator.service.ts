@@ -4,6 +4,7 @@
   prepareSessionCompactionInput,
   shouldRunSessionCompaction,
 } from '@megumi/context-management/session-compaction';
+import type { AiModelStepCompletionResult } from '@megumi/ai/types';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelId } from '@megumi/shared/model';
 import type {
@@ -52,7 +53,7 @@ export interface SessionCompactionActivePathRepository {
 }
 
 export interface SessionCompactionOrchestratorModelStepProvider {
-  streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
+  completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult>;
 }
 
 export interface SessionCompactionOrchestratorClock {
@@ -299,23 +300,27 @@ export class SessionCompactionOrchestrator {
     | { ok: true; value: string }
     | { ok: false; error: RuntimeError }
   > {
-    let completed = '';
-
     try {
-      for await (const event of this.options.modelStepProvider.streamModelStep(request)) {
-        if (event.eventType === 'assistant.output.completed') {
-          const content = (event.payload as { content?: unknown }).content;
-          if (typeof content === 'string') {
-            completed = content.trim();
-          }
-        }
-        if (event.eventType === 'run.failed') {
-          return {
-            ok: false,
-            error: runtimeErrorFromPayload(event.payload),
-          };
-        }
+      const completion = await this.options.modelStepProvider.completeModelStep(request);
+      if (!completion.ok) {
+        return {
+          ok: false,
+          error: completion.error,
+        };
       }
+      const completed = completion.text.trim();
+      if (completed.length === 0) {
+        return {
+          ok: false,
+          error: runtimeError({
+            code: 'runtime_protocol_violation',
+            message: 'Context compaction summary model call did not produce summary text.',
+            source: 'provider',
+            retryable: true,
+          }),
+        };
+      }
+      return { ok: true, value: completed };
     } catch {
       return {
         ok: false,
@@ -327,20 +332,6 @@ export class SessionCompactionOrchestrator {
         }),
       };
     }
-
-    if (completed.length === 0) {
-      return {
-        ok: false,
-        error: runtimeError({
-          code: 'runtime_protocol_violation',
-          message: 'Context compaction summary model call did not produce summary text.',
-          source: 'provider',
-          retryable: true,
-        }),
-      };
-    }
-
-    return { ok: true, value: completed };
   }
 
   private failedResult(
@@ -399,19 +390,6 @@ function latestPreviousSummaryId(input: SessionContextInput): string | undefined
     ?.summaryId;
 }
 
-function runtimeErrorFromPayload(payload: object): RuntimeError {
-  const error = (payload as { error?: unknown }).error;
-  if (isRuntimeError(error)) {
-    return error;
-  }
-  return runtimeError({
-    code: 'runtime_unknown',
-    message: 'Context compaction summary model call failed.',
-    source: 'provider',
-    retryable: true,
-  });
-}
-
 function runtimeError(input: {
   code: RuntimeError['code'];
   message: string;
@@ -425,15 +403,5 @@ function runtimeError(input: {
     retryable: input.retryable,
     source: input.source,
   };
-}
-
-function isRuntimeError(value: unknown): value is RuntimeError {
-  return typeof value === 'object'
-    && value !== null
-    && typeof (value as RuntimeError).code === 'string'
-    && typeof (value as RuntimeError).message === 'string'
-    && typeof (value as RuntimeError).severity === 'string'
-    && typeof (value as RuntimeError).retryable === 'boolean'
-    && typeof (value as RuntimeError).source === 'string';
 }
 

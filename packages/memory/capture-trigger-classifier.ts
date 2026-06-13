@@ -61,8 +61,8 @@ export function evaluateMemoryCaptureTrigger(input: MemoryCaptureTriggerInput): 
     return skip('missing_assistant_final_text');
   }
 
-  const text = normalizeMemoryPatternText(`${input.userText} ${input.assistantFinalText ?? ''}`);
-  const signals = collectSignals(text, input).filter((signal) => input.hasProject || !SCOPED_CAPTURE_SIGNALS.has(signal));
+  const userText = normalizeMemoryPatternText(input.userText);
+  const signals = collectSignals(userText, input).filter((signal) => input.hasProject || !SCOPED_CAPTURE_SIGNALS.has(signal));
   if (signals.length === 0) {
     return skip('no_long_term_signal');
   }

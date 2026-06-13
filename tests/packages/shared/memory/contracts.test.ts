@@ -248,6 +248,23 @@ describe('memory shared contracts', () => {
       ]),
     );
 
+    const runAudit = MemoryAuditLogSchema.parse({
+      auditId: 'audit-run-1',
+      operation: 'capture_evaluated',
+      targetKind: 'run',
+      targetId: 'run-1',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      actorKind: 'system',
+      reason: 'completed',
+      beforeState: null,
+      afterState: null,
+      createdAt: '2026-06-12T00:00:00.000Z',
+      metadata: {},
+    });
+    expect(runAudit.targetKind).toBe('run');
+
     const audit = MemoryAuditLogSchema.parse({
       auditId: 'audit-1',
       operation: 'memory_created',

@@ -21,8 +21,11 @@ import {
 } from '../prompt/message-mapper';
 import { parseOpenAICompatibleSseStream } from '../stream';
 import {
+  type AiModelStepCompletionResult,
+  type AiModelStepCompletionToolCall,
   type AiModelStepAdapterRequest,
   type AiProviderAdapter,
+  type OpenAICompatibleToolCall,
   type OpenAICompatibleAdapterOptions,
   systemClock,
 } from '../types';
@@ -32,15 +35,114 @@ export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOp
 
   return {
     providerId: options.providerId,
+    async completeModelStep(input: AiModelStepAdapterRequest): Promise<AiModelStepCompletionResult> {
+      const requestShape = hasToolResultContinuation(input.request) ? 'tool_continuation' : 'initial';
+      let diagnostics: JsonObject = createProviderRequestDiagnosticsBase(requestShape, 'chat_completions_complete');
+      let failureStage: ProviderFailureStage = 'materialization';
+
+      try {
+        const materializedRequest = materializeModelStepOpenAICompatibleRequest(input.request);
+        const { stream: _stream, stream_options: _streamOptions, ...streamingBody } = materializedRequest.body;
+        const requestBody = {
+          ...streamingBody,
+          stream: false,
+        };
+        diagnostics = createProviderRequestDiagnostics(requestBody, requestShape, materializedRequest.trace, 'chat_completions_complete');
+        failureStage = 'fetch_throw';
+
+        const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${input.config.apiKey}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: input.signal,
+        });
+
+        if (!response.ok) {
+          return {
+            ok: false,
+            error: providerRuntimeError(input, mapHttpStatus(response.status), {
+              ...diagnostics,
+              failureStage: 'http_error',
+              httpStatus: response.status,
+              httpStatusText: response.statusText,
+              ...(await providerErrorBodyPreview(response)),
+            }),
+          };
+        }
+
+        failureStage = 'response_parse_error';
+        const completion = await parseOpenAICompatibleCompletionResponse(response);
+        const providerStates = completion.reasoningContent
+          ? [{
+              modelStepId: modelStepIdFor(input),
+              providerId: input.config.providerId,
+              modelId: String(input.request.modelId || input.config.defaultModelId),
+              blocks: [{
+                type: 'reasoning_content' as const,
+                text: completion.reasoningContent,
+              }],
+            }]
+          : undefined;
+
+        return {
+          ok: true,
+          text: completion.content,
+          ...(completion.toolCalls.length > 0 ? { toolCalls: completion.toolCalls.map(mapCompletionToolCall) } : {}),
+          ...(providerStates ? { providerStates } : {}),
+          ...(completion.finishReason ? { finishReason: completion.finishReason } : {}),
+          ...(completion.usage ? { usage: completion.usage } : {}),
+        };
+      } catch (error) {
+        if (error instanceof OpenAICompatibleRequestMaterializationError) {
+          return {
+            ok: false,
+            error: providerRuntimeError(input, 'runtime_protocol_violation', {
+              ...diagnostics,
+              failureStage: 'materialization',
+              materializationCode: error.code,
+              ...error.details,
+            }, {
+              message: 'Provider request materialization failed.',
+              retryable: false,
+            }),
+          };
+        }
+
+        if (isAbortError(error) || input.signal?.aborted) {
+          return {
+            ok: false,
+            error: providerRuntimeError(input, 'runtime_cancelled', {
+              ...diagnostics,
+              failureStage,
+            }, {
+              message: 'Provider request was cancelled.',
+              retryable: false,
+            }),
+          };
+        }
+
+        return {
+          ok: false,
+          error: providerRuntimeError(input, 'provider_network_error', {
+            ...diagnostics,
+            failureStage,
+            ...errorDiagnostics(error),
+          }),
+        };
+      }
+    },
     async *streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent> {
       const requestShape = hasToolResultContinuation(input.request) ? 'tool_continuation' : 'initial';
-      let diagnostics: JsonObject = createProviderRequestDiagnosticsBase(requestShape);
+      let diagnostics: JsonObject = createProviderRequestDiagnosticsBase(requestShape, 'chat_completions_stream');
       let failureStage: ProviderFailureStage = 'materialization';
 
       try {
         const materializedRequest = materializeModelStepOpenAICompatibleRequest(input.request);
         const requestBody = materializedRequest.body;
-        diagnostics = createProviderRequestDiagnostics(requestBody, requestShape, materializedRequest.trace);
+        diagnostics = createProviderRequestDiagnostics(requestBody, requestShape, materializedRequest.trace, 'chat_completions_stream');
         failureStage = 'fetch_throw';
 
         const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
@@ -174,7 +276,7 @@ function mapHttpStatus(status: number): RuntimeErrorCode {
   return 'provider_network_error';
 }
 
-type ProviderFailureStage = 'materialization' | 'http_error' | 'fetch_throw' | 'stream_parse_error';
+type ProviderFailureStage = 'materialization' | 'http_error' | 'fetch_throw' | 'stream_parse_error' | 'response_parse_error';
 type ProviderRequestShape = 'initial' | 'tool_continuation';
 
 interface OpenAICompatibleRequestDiagnosticsBody {
@@ -182,10 +284,10 @@ interface OpenAICompatibleRequestDiagnosticsBody {
   tools?: unknown[];
 }
 
-function createProviderRequestDiagnosticsBase(requestShape: ProviderRequestShape): JsonObject {
+function createProviderRequestDiagnosticsBase(requestShape: ProviderRequestShape, operation: string): JsonObject {
   return {
     boundary: 'provider',
-    operation: 'chat_completions_stream',
+    operation,
     requestShape,
   };
 }
@@ -194,9 +296,10 @@ function createProviderRequestDiagnostics(
   body: OpenAICompatibleRequestDiagnosticsBody,
   requestShape: ProviderRequestShape,
   trace: OpenAICompatibleProviderRequestTrace,
+  operation: string,
 ): JsonObject {
   return {
-    ...createProviderRequestDiagnosticsBase(requestShape),
+    ...createProviderRequestDiagnosticsBase(requestShape, operation),
     contextId: trace.contextId,
     buildReason: trace.buildReason,
     selectedSourceCount: trace.selectedSourceIds.length,
@@ -207,6 +310,57 @@ function createProviderRequestDiagnostics(
     toolDefinitionCount: body.tools?.length ?? 0,
     toolCallCount: body.messages.reduce((count, message) => count + (message.tool_calls?.length ?? 0), 0),
     toolResultCount: body.messages.filter((message) => message.role === 'tool').length,
+  };
+}
+
+interface OpenAICompatibleCompletionResponse {
+  choices?: Array<{
+    message?: {
+      content?: string | null;
+      reasoning_content?: string | null;
+      tool_calls?: OpenAICompatibleToolCall[];
+    };
+    finish_reason?: string | null;
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+}
+
+async function parseOpenAICompatibleCompletionResponse(response: Response): Promise<{
+  content: string;
+  reasoningContent?: string;
+  toolCalls: OpenAICompatibleToolCall[];
+  finishReason?: string;
+  usage?: ChatTokenUsagePayload;
+}> {
+  const body = await response.json() as OpenAICompatibleCompletionResponse;
+  const choice = body.choices?.[0];
+  const message = choice?.message;
+  return {
+    content: typeof message?.content === 'string' ? message.content : '',
+    ...(typeof message?.reasoning_content === 'string' && message.reasoning_content.length > 0
+      ? { reasoningContent: message.reasoning_content }
+      : {}),
+    toolCalls: message?.tool_calls ?? [],
+    ...(choice?.finish_reason ? { finishReason: choice.finish_reason } : {}),
+    ...(body.usage ? {
+      usage: {
+        inputTokens: body.usage.prompt_tokens,
+        outputTokens: body.usage.completion_tokens,
+        totalTokens: body.usage.total_tokens,
+      },
+    } : {}),
+  };
+}
+
+function mapCompletionToolCall(toolCall: OpenAICompatibleToolCall): AiModelStepCompletionToolCall {
+  return {
+    providerToolCallId: toolCall.id,
+    toolName: toolCall.function.name,
+    argumentsText: toolCall.function.arguments,
   };
 }
 
@@ -575,19 +729,28 @@ function failedModelStepEvent(
     runId: input.runId,
     sequence: input.nextSequence(),
     createdAt,
-    error: {
-      code,
-      message: options.message ?? errorMessageForCode(code),
-      severity: 'error',
-      retryable: options.retryable ?? (code === 'provider_rate_limited' || code === 'provider_network_error'),
-      source: 'provider',
-      details: {
-        providerId: input.config.providerId,
-        modelId: String(input.request.modelId || input.config.defaultModelId),
-        ...diagnostics,
-      },
-    },
+    error: providerRuntimeError(input, code, diagnostics, options),
   });
+}
+
+function providerRuntimeError(
+  input: AiModelStepAdapterRequest,
+  code: RuntimeErrorCode,
+  diagnostics: JsonObject = {},
+  options: { message?: string; retryable?: boolean } = {},
+) {
+  return {
+    code,
+    message: options.message ?? errorMessageForCode(code),
+    severity: 'error' as const,
+    retryable: options.retryable ?? (code === 'provider_rate_limited' || code === 'provider_network_error'),
+    source: 'provider' as const,
+    details: {
+      providerId: input.config.providerId,
+      modelId: String(input.request.modelId || input.config.defaultModelId),
+      ...diagnostics,
+    },
+  };
 }
 
 function errorMessageForCode(code: RuntimeErrorCode): string {

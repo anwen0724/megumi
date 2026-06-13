@@ -41,6 +41,21 @@ export function createAnthropicAdapter(options: AnthropicAdapterOptions = {}): A
         },
       });
     },
+    async completeModelStep(input: AiModelStepAdapterRequest) {
+      return {
+        ok: false,
+        error: {
+          code: 'provider_unsupported',
+          message: 'Anthropic provider is not implemented yet.',
+          severity: 'warning',
+          retryable: false,
+          source: 'provider',
+          details: {
+            providerId: input.config.providerId,
+          },
+        },
+      };
+    },
   };
 }
 

@@ -1,67 +1,36 @@
 import { describe, expect, it } from 'vitest';
 import { materializeModelStepOpenAICompatibleRequest } from '@megumi/ai/prompt/message-mapper';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { AiModelStepCompletionResult } from '@megumi/ai/types';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { MemoryExtractionModelClientService } from '@megumi/desktop/main/services/memory/memory-extraction-model-client.service';
 
 class FakeModelStepProvider {
   requests: ModelStepRuntimeRequest[] = [];
 
-  constructor(private readonly events: RuntimeEvent[]) {}
+  constructor(private readonly result: AiModelStepCompletionResult) {}
 
-  async *streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent> {
+  async completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult> {
     this.requests.push(request);
-    for (const event of this.events) {
-      yield event;
-    }
+    return this.result;
   }
 }
 
-function assistantCompleted(content: string): RuntimeEvent {
+function providerFailure(): AiModelStepCompletionResult {
   return {
-    eventId: 'event-assistant-output-completed',
-    schemaVersion: 1,
-    eventType: 'assistant.output.completed',
-    sessionId: 'session-1',
-    runId: 'run-1',
-    stepId: 'step-1',
-    sequence: 1,
-    createdAt: '2026-06-13T00:00:00.000Z',
-    source: 'provider',
-    visibility: 'user',
-    persist: 'required',
-    payload: { content },
-  };
-}
-
-function runFailed(): RuntimeEvent {
-  return {
-    eventId: 'event-run-failed',
-    schemaVersion: 1,
-    eventType: 'run.failed',
-    sessionId: 'session-1',
-    runId: 'run-1',
-    stepId: 'step-1',
-    sequence: 1,
-    createdAt: '2026-06-13T00:00:00.000Z',
-    source: 'provider',
-    visibility: 'user',
-    persist: 'required',
-    payload: {
-      error: {
-        code: 'provider_auth_failed',
-        message: 'Provider failed.',
-        severity: 'error',
-        retryable: false,
-        source: 'provider',
-      },
+    ok: false,
+    error: {
+      code: 'provider_auth_failed',
+      message: 'Provider failed.',
+      severity: 'error',
+      retryable: false,
+      source: 'provider',
     },
   };
 }
 
 describe('MemoryExtractionModelClientService', () => {
-  it('streams a hidden extraction model step and returns assistant JSON text', async () => {
-    const provider = new FakeModelStepProvider([assistantCompleted('{ "candidates": [] }')]);
+  it('completes a hidden extraction model step and returns JSON text', async () => {
+    const provider = new FakeModelStepProvider({ ok: true, text: '{ "candidates": [] }' });
     const client = new MemoryExtractionModelClientService({
       modelStepProvider: provider,
       ids: {
@@ -129,7 +98,7 @@ describe('MemoryExtractionModelClientService', () => {
   });
 
   it('returns degraded reason when provider target is missing', async () => {
-    const provider = new FakeModelStepProvider([assistantCompleted('{ "candidates": [] }')]);
+    const provider = new FakeModelStepProvider({ ok: true, text: '{ "candidates": [] }' });
     const client = new MemoryExtractionModelClientService({
       modelStepProvider: provider,
       ids: {
@@ -154,7 +123,7 @@ describe('MemoryExtractionModelClientService', () => {
   });
 
   it('returns provider failure reason without throwing', async () => {
-    const provider = new FakeModelStepProvider([runFailed()]);
+    const provider = new FakeModelStepProvider(providerFailure());
     const client = new MemoryExtractionModelClientService({
       modelStepProvider: provider,
       ids: {
@@ -180,7 +149,7 @@ describe('MemoryExtractionModelClientService', () => {
   });
 
   it('returns empty output reason when no assistant final text is produced', async () => {
-    const provider = new FakeModelStepProvider([]);
+    const provider = new FakeModelStepProvider({ ok: true, text: '   ' });
     const client = new MemoryExtractionModelClientService({
       modelStepProvider: provider,
       ids: {

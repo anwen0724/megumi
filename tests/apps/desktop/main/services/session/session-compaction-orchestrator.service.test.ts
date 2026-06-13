@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { SessionCompactionEntry } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session';
@@ -204,33 +203,17 @@ function budgetProbeInputContext(input: SessionContextInput = sessionContext()) 
   });
 }
 
-function completedSummaryEvent(request: ModelStepRuntimeRequest): RuntimeEvent {
-  return {
-    eventId: 'event-summary-completed',
-    schemaVersion: 1,
-    eventType: 'assistant.output.completed',
-    sessionId: request.sessionId,
-    runId: request.runId,
-    stepId: request.stepId,
-    requestId: request.requestId,
-    sequence: 1,
-    createdAt: builtAt,
-    source: 'provider',
-    visibility: 'user',
-    persist: 'required',
-    payload: {
-      content: [
-        '## Goal',
-        'Continue the 09 work.',
-        '<read-files>',
-        'packages/context-management/session-compaction.ts',
-        '</read-files>',
-        '<modified-files>',
-        'apps/desktop/src/main/services/session/session-run.service.ts',
-        '</modified-files>',
-      ].join('\n'),
-    },
-  };
+function completedSummaryText(): string {
+  return [
+    '## Goal',
+    'Continue the 09 work.',
+    '<read-files>',
+    'packages/context-management/session-compaction.ts',
+    '</read-files>',
+    '<modified-files>',
+    'apps/desktop/src/main/services/session/session-run.service.ts',
+    '</modified-files>',
+  ].join('\n');
 }
 
 describe('SessionCompactionOrchestrator', () => {
@@ -240,9 +223,9 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        async completeModelStep(request) {
           requests.push(request);
-          yield completedSummaryEvent(request);
+          return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
       clock: { now: () => builtAt },
@@ -313,8 +296,8 @@ describe('SessionCompactionOrchestrator', () => {
       repository: repo,
       activePathRepository: activePathRepo,
       modelStepProvider: {
-        streamModelStep: async function* (request: ModelStepRuntimeRequest) {
-          yield completedSummaryEvent(request);
+        async completeModelStep(_request: ModelStepRuntimeRequest) {
+          return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
       clock: { now: () => builtAt },
@@ -382,8 +365,8 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        streamModelStep: async function* (request: ModelStepRuntimeRequest) {
-          yield completedSummaryEvent(request);
+        async completeModelStep(_request: ModelStepRuntimeRequest) {
+          return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
       clock: { now: () => builtAt },
@@ -426,7 +409,7 @@ describe('SessionCompactionOrchestrator', () => {
       repository: repo,
       activePathRepository: activePathRepo,
       modelStepProvider: {
-        streamModelStep: async function* (request: ModelStepRuntimeRequest) {
+        async completeModelStep(_request: ModelStepRuntimeRequest) {
           activePathRepo.appendSourceEntry({
             sourceEntryId: 'source-entry-new-branch',
             sessionId: 'session-1',
@@ -445,7 +428,7 @@ describe('SessionCompactionOrchestrator', () => {
             updatedAt: builtAt,
             reason: 'source_appended',
           });
-          yield completedSummaryEvent(request);
+          return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
       clock: { now: () => builtAt },
@@ -489,7 +472,7 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        streamModelStep: async function* () {
+        async completeModelStep() {
           throw new Error('summary provider should not be called');
         },
       },
@@ -530,28 +513,15 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
-          yield {
-            eventId: 'event-summary-failed',
-            schemaVersion: 1,
-            eventType: 'run.failed',
-            sessionId: request.sessionId,
-            runId: request.runId,
-            stepId: request.stepId,
-            requestId: request.requestId,
-            sequence: 1,
-            createdAt: builtAt,
-            source: 'provider',
-            visibility: 'user',
-            persist: 'required',
-            payload: {
-              error: {
-                code: 'provider_network_error',
-                message: 'Provider failed.',
-                severity: 'error',
-                retryable: true,
-                source: 'provider',
-              },
+        async completeModelStep() {
+          return {
+            ok: false,
+            error: {
+              code: 'provider_network_error',
+              message: 'Provider failed.',
+              severity: 'error',
+              retryable: true,
+              source: 'provider',
             },
           };
         },
@@ -598,8 +568,8 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
-          yield completedSummaryEvent(request);
+        async completeModelStep(_request: ModelStepRuntimeRequest) {
+          return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
       clock: { now: () => builtAt },
@@ -645,8 +615,8 @@ describe('SessionCompactionOrchestrator', () => {
       repository: repo,
       activePathRepository: activePathRepo,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
-          yield completedSummaryEvent(request);
+        async completeModelStep(_request: ModelStepRuntimeRequest) {
+          return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
       clock: { now: () => builtAt },

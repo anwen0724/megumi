@@ -6,6 +6,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createRunFailedEvent } from '@megumi/shared/runtime';
 import { normalizeRuntimeError } from '@megumi/core/agent-runtime';
 import type {
+  AiModelStepCompletionResult,
   AiProviderAdapter,
   ProviderRuntimeConfig,
 } from '@megumi/ai/types';
@@ -77,6 +78,42 @@ export class ModelStepProviderService {
         createdAt: new Date().toISOString(),
         error: toRuntimeError(error, request),
       });
+    } finally {
+      this.activeRequests.delete(request.requestId);
+    }
+  }
+
+  async completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult> {
+    const controller = new AbortController();
+    let sequence = 0;
+    const nextSequence = () => {
+      sequence += 1;
+      return sequence;
+    };
+    this.activeRequests.set(request.requestId, controller);
+
+    try {
+      const config = await this.options.resolver.resolveProviderRuntimeConfig({
+        providerId: request.providerId,
+        modelId: String(request.modelId),
+        runtimeContext: request.runtimeContext,
+      });
+      const adapter = this.options.registry.getAdapter(config.providerId);
+
+      return await adapter.completeModelStep({
+        request,
+        runId: request.runId,
+        stepId: request.stepId,
+        config,
+        signal: controller.signal,
+        nextSequence,
+        eventIdFactory: () => `event:${crypto.randomUUID()}`,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: toRuntimeError(error, request),
+      };
     } finally {
       this.activeRequests.delete(request.requestId);
     }

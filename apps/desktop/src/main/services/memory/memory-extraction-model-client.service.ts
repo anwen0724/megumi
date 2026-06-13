@@ -1,13 +1,13 @@
 // Adapts memory extraction prompts to hidden model-step requests.
 // The provider sees a normal ModelStepRuntimeRequest; memory persistence stays in host services.
 import type { MemoryExtractionPrompt } from '@megumi/memory';
+import type { AiModelStepCompletionResult } from '@megumi/ai/types';
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId } from '@megumi/shared/provider';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface MemoryExtractionModelStepProvider {
-  streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
+  completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult>;
 }
 
 export interface ExtractMemoryCandidatesInput {
@@ -42,39 +42,23 @@ export class MemoryExtractionModelClientService {
     }
 
     const request = this.buildRequest(input);
-    let completed = '';
 
     try {
-      for await (const event of this.options.modelStepProvider.streamModelStep(request)) {
-        if (input.signal?.aborted) {
-          return { ok: false, reason: 'request_cancelled' };
-        }
-        if (event.eventType === 'assistant.output.completed') {
-          const content = (event.payload as { content?: unknown }).content;
-          if (typeof content === 'string') {
-            completed = content.trim();
-          }
-        }
-        if (event.eventType === 'run.failed') {
-          const error = (event.payload as { error?: { code?: unknown; message?: unknown } }).error;
-          return {
-            ok: false,
-            reason: typeof error?.code === 'string'
-              ? error.code
-              : typeof error?.message === 'string'
-                ? error.message
-                : 'provider_failed',
-          };
-        }
+      const completion = await this.options.modelStepProvider.completeModelStep(request);
+      if (input.signal?.aborted) {
+        return { ok: false, reason: 'request_cancelled' };
       }
+      if (!completion.ok) {
+        return { ok: false, reason: completion.error.code || completion.error.message || 'provider_failed' };
+      }
+      const completed = completion.text.trim();
+      if (!completed) {
+        return { ok: false, reason: 'empty_extraction_output' };
+      }
+      return { ok: true, text: completed };
     } catch (error) {
       return { ok: false, reason: error instanceof Error ? error.message : String(error) };
     }
-
-    if (!completed) {
-      return { ok: false, reason: 'empty_extraction_output' };
-    }
-    return { ok: true, text: completed };
   }
 
   private buildRequest(input: ExtractMemoryCandidatesInput): ModelStepRuntimeRequest {

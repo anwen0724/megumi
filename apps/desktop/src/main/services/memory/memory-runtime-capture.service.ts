@@ -100,7 +100,8 @@ export class MemoryRuntimeCaptureService {
     let degradedReason: string | null = null;
     const captureAudit = this.saveAudit({
       operation: 'capture_evaluated',
-      targetKind: 'memory',
+      targetKind: 'run',
+      targetId: input.runId,
       runId: input.runId,
       sessionId: input.sessionId,
       projectId: input.projectId,
@@ -198,7 +199,10 @@ export class MemoryRuntimeCaptureService {
 
     const parsed = parseMemoryExtractionOutput(extraction.text);
     if (!parsed.ok) {
-      await this.saveExtractionFailed(input, parsed.reason, { diagnostic: parsed.diagnostic });
+      await this.saveExtractionFailed(input, parsed.reason, {
+        diagnostic: parsed.diagnostic,
+        rawOutput: extraction.text,
+      });
       return { status: 'degraded', reason: parsed.reason };
     }
     if (parsed.candidates.length === 0) {
@@ -398,7 +402,8 @@ export class MemoryRuntimeCaptureService {
   ): { ok: true } | { ok: false; message: string } {
     return this.saveAudit({
       operation: 'extraction_skipped',
-      targetKind: 'memory',
+      targetKind: 'run',
+      targetId: input.runId,
       runId: input.runId,
       sessionId: input.sessionId,
       projectId: input.projectId,
@@ -414,7 +419,8 @@ export class MemoryRuntimeCaptureService {
   ): Promise<void> {
     this.saveAudit({
       operation: 'extraction_failed',
-      targetKind: 'memory',
+      targetKind: 'run',
+      targetId: input.runId,
       runId: input.runId,
       sessionId: input.sessionId,
       projectId: input.projectId,

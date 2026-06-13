@@ -209,6 +209,35 @@ describe('MemoryRuntimeCaptureService', () => {
     ]);
   });
 
+  it('writes run-level audit targets for capture evaluation and extraction outcomes', async () => {
+    const disabled = createService(new FakeExtractionClient());
+    await disabled.service.evaluateRunCompletedCapture(baseInput({ memoryEnabled: false }));
+    expect(disabled.repository.audits).toEqual([
+      expect.objectContaining({
+        operation: 'capture_evaluated',
+        targetKind: 'run',
+        targetId: 'run:1',
+      }),
+      expect.objectContaining({
+        operation: 'extraction_skipped',
+        targetKind: 'run',
+        targetId: 'run:1',
+      }),
+    ]);
+
+    const extraction = new FakeExtractionClient();
+    extraction.result = { ok: false, reason: 'provider unavailable' };
+    const failed = createService(extraction);
+    await failed.service.evaluateRunCompletedCapture(baseInput());
+    expect(failed.repository.audits).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        operation: 'extraction_failed',
+        targetKind: 'run',
+        targetId: 'run:1',
+      }),
+    ]));
+  });
+
   it('builds extraction prompts and degrades on missing client or extraction failure', async () => {
     const missing = createService();
     await expect(missing.service.evaluateRunCompletedCapture(baseInput())).resolves.toMatchObject({
@@ -266,6 +295,34 @@ describe('MemoryRuntimeCaptureService', () => {
     });
     expect(repository.audits.map((audit) => audit.operation)).toContain('extraction_failed');
     expect(JSON.stringify(fileSystem.diagnostics)).toContain('invalid_json');
+    expect(JSON.stringify(repository.audits)).toContain('{not-json');
+    expect(JSON.stringify(fileSystem.diagnostics)).toContain('{not-json');
+  });
+
+  it('records raw extraction output when schema validation fails', async () => {
+    const extraction = new FakeExtractionClient();
+    extraction.result = {
+      ok: true,
+      text: JSON.stringify({
+        candidates: [{
+          scope: 'user',
+          kind: 'preference',
+          text: 'User wants every reply to end with a fixed phrase.',
+          confidence: '0.9',
+          evidence: [{ source: 'user_message', quote: 'please remember' }],
+        }],
+      }),
+    };
+    const { service, repository, fileSystem } = createService(extraction);
+
+    await expect(service.evaluateRunCompletedCapture(baseInput())).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'invalid_schema',
+    });
+    const failureAudit = repository.audits.find((audit) => audit.operation === 'extraction_failed');
+    expect(failureAudit?.metadata?.rawOutput).toContain('"confidence":"0.9"');
+    expect(JSON.stringify(fileSystem.diagnostics)).toContain('\\"confidence\\":\\"0.9\\"');
+    expect(JSON.stringify(fileSystem.diagnostics)).toContain('Expected number');
   });
 
   it('persists valid candidates and exports affected markdown mirrors', async () => {

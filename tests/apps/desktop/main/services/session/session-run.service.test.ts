@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -304,6 +304,7 @@ function createServiceWithModelStepStream(
         options?.onRequest?.(request);
         yield* (typeof events === 'function' ? events(request, callIndex) : events);
       },
+      completeModelStep: async () => ({ ok: true, text: '' }),
       cancelModelStep: () => true,
     },
     clock: { now: () => '2026-05-17T00:00:00.000Z' },
@@ -354,6 +355,7 @@ function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
       streamModelStep: async function* () {
         yield* events;
       },
+      completeModelStep: async () => ({ ok: true, text: '' }),
       cancelModelStep: () => true,
     },
     clock: { now: () => '2026-06-01T08:00:00.000Z' },
@@ -539,6 +541,7 @@ function createServiceWithAutomaticRetryStream(
         callIndex += 1;
         yield* events(request, callIndex);
       },
+      completeModelStep: async () => ({ ok: true, text: '' }),
       cancelModelStep: () => true,
     },
     workspaceChanges: options?.workspaceChanges,
@@ -888,6 +891,7 @@ function createServiceWithChatStreamSink(
         callIndex += 1;
         yield* (typeof events === 'function' ? events(request, callIndex) : events);
       },
+      completeModelStep: async () => ({ ok: true, text: '' }),
       cancelModelStep: () => true,
     },
     chatStreamEventSink: {
@@ -3828,7 +3832,8 @@ describe('SessionRunService', () => {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       clock: { now: () => '2026-05-31T11:05:00.000Z' },
       ids: {
@@ -4001,7 +4006,8 @@ describe('SessionRunService', () => {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       clock: { now: () => '2026-05-31T11:05:00.000Z' },
       ids: {
@@ -4467,7 +4473,8 @@ describe('SessionRunService', () => {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       clock: { now: () => '2026-05-28T00:01:00.000Z' },
       ids: {
@@ -4614,7 +4621,8 @@ describe('SessionRunService', () => {
             stepId: request.stepId,
           };
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       toolRuntimeFactory: {
         async create(input) {
@@ -4766,7 +4774,8 @@ describe('SessionRunService', () => {
             stepId: request.stepId,
           };
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       toolRuntimeFactory: {
         async create() {
@@ -4943,7 +4952,8 @@ describe('SessionRunService', () => {
             stepId: request.stepId,
           };
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       toolRuntimeFactory: {
         async create() {
@@ -5524,7 +5534,8 @@ describe('SessionRunService', () => {
             stepId: request.stepId,
           };
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       toolRuntimeFactory: {
         async create(input) {
@@ -5775,7 +5786,8 @@ describe('SessionRunService', () => {
             stepId: request.stepId,
           };
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       toolRuntimeFactory: {
         async create() {
@@ -6904,7 +6916,8 @@ describe('SessionRunService', () => {
         streamModelStep: async function* (request) {
           requests.push(request);
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       clock: { now: () => '2026-05-17T00:00:00.000Z' },
       ids: {
@@ -6980,7 +6993,8 @@ describe('SessionRunService', () => {
         streamModelStep: async function* () {
           // No provider events are needed for snapshot persistence.
         },
-        cancelModelStep: () => true,
+        completeModelStep: async () => ({ ok: true, text: '' }),
+      cancelModelStep: () => true,
       },
       clock: { now: () => '2026-05-17T00:00:00.000Z' },
       ids: {

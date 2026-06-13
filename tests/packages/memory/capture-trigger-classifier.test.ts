@@ -107,6 +107,17 @@ describe('memory capture trigger classifier', () => {
     });
   });
 
+  it('does not extract when only assistant text contains memory-like wording', () => {
+    expect(evaluateMemoryCaptureTrigger({
+      ...baseInput,
+      userText: '你好，今天有什么建议？',
+      assistantFinalText: '我会记住你的偏好，以后回复前先说喵。',
+    })).toMatchObject({
+      shouldExtract: false,
+      reason: 'no_long_term_signal',
+    });
+  });
+
   it('applies cooldown to weak stable facts but not strong signals', () => {
     const lastCaptureAt = '2026-06-11T23:59:30.000Z';
     expect(evaluateMemoryCaptureTrigger({

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModelInputContext } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ProviderRuntimeConfig } from '@megumi/ai/types';
+import type { AiModelStepCompletionResult, ProviderRuntimeConfig } from '@megumi/ai/types';
 import {
   ModelStepProviderService,
   type ModelStepProviderRegistryPort,
@@ -108,6 +108,9 @@ describe('ModelStepProviderService', () => {
     const registry: ModelStepProviderRegistryPort = {
       getAdapter: () => ({
         providerId: 'deepseek',
+        async completeModelStep() {
+          throw new Error('complete should not be called');
+        },
         async *streamModelStep(input) {
           expect(input.config).toBe(config);
           expect(input.request).toBe(request);
@@ -159,6 +162,42 @@ describe('ModelStepProviderService', () => {
       'assistant.output.completed',
     ]);
     expect(events.map((event) => event.sequence)).toEqual([1, 2]);
+  });
+
+  it('resolves runtime config and completes model steps through the selected adapter', async () => {
+    const completion: AiModelStepCompletionResult = {
+      ok: true,
+      text: '{ "candidates": [] }',
+      finishReason: 'stop',
+    };
+    const resolver: ModelStepRuntimeResolverPort = {
+      resolveProviderRuntimeConfig: async (input) => {
+        expect(input).toEqual({
+          providerId: 'deepseek',
+          modelId: 'deepseek-v4-flash',
+          runtimeContext,
+        });
+        return config;
+      },
+    };
+    const registry: ModelStepProviderRegistryPort = {
+      getAdapter: () => ({
+        providerId: 'deepseek',
+        async *streamModelStep() {
+          throw new Error('stream should not be called');
+        },
+        async completeModelStep(input) {
+          expect(input.config).toBe(config);
+          expect(input.request).toBe(request);
+          expect(input.runId).toBe('run-1');
+          expect(input.stepId).toBe('step-1');
+          return completion;
+        },
+      }),
+    };
+    const service = new ModelStepProviderService({ resolver, registry });
+
+    await expect(service.completeModelStep(request)).resolves.toBe(completion);
   });
 
   it('maps runtime resolution errors to failed stream events', async () => {
@@ -253,6 +292,9 @@ describe('ModelStepProviderService', () => {
     const registry: ModelStepProviderRegistryPort = {
       getAdapter: () => ({
         providerId: 'deepseek',
+        async completeModelStep() {
+          throw new Error('complete should not be called');
+        },
         async *streamModelStep(input) {
           yield {
             eventId: input.eventIdFactory(),
@@ -294,6 +336,9 @@ describe('ModelStepProviderService', () => {
     const registry: ModelStepProviderRegistryPort = {
       getAdapter: () => ({
         providerId: 'deepseek',
+        async completeModelStep() {
+          throw new Error('complete should not be called');
+        },
         async *streamModelStep(input): AsyncIterable<RuntimeEvent> {
           capturedSignal = input.signal;
           yield {

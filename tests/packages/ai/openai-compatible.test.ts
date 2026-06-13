@@ -276,6 +276,72 @@ describe('OpenAI-compatible adapter', () => {
     });
   });
 
+  it('completes model step requests through non-streaming OpenAI-compatible responses', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{
+        message: {
+          content: '{ "candidates": [] }',
+          reasoning_content: 'checked durable memory rules',
+          tool_calls: [{
+            id: 'call-1',
+            type: 'function',
+            function: {
+              name: 'lookup',
+              arguments: '{"q":"memory"}',
+            },
+          }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 4,
+        total_tokens: 14,
+      },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    const adapter = createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      fetch,
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    const result = await adapter.completeModelStep(modelStepInput());
+
+    const [, init] = fetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      model: 'gpt-4.1',
+      stream: false,
+    });
+    expect(result).toEqual({
+      ok: true,
+      text: '{ "candidates": [] }',
+      finishReason: 'tool_calls',
+      usage: {
+        inputTokens: 10,
+        outputTokens: 4,
+        totalTokens: 14,
+      },
+      providerStates: [{
+        modelStepId: 'step-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        blocks: [{
+          type: 'reasoning_content',
+          text: 'checked durable memory rules',
+        }],
+      }],
+      toolCalls: [{
+        providerToolCallId: 'call-1',
+        toolName: 'lookup',
+        argumentsText: '{"q":"memory"}',
+      }],
+    });
+  });
+
   it('streams model step tool calls as tool call created events', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-read","type":"function","function":{"name":"read_file","arguments":"{\\"path\\":"}}]}}]}\n\n',

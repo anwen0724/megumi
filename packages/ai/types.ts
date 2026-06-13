@@ -1,9 +1,7 @@
-﻿import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ModelId } from '@megumi/shared/model';
+import type { ModelId, ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId, ProviderKind } from '@megumi/shared/provider';
-import type { RunId } from '@megumi/shared/primitives';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { JsonObject } from '@megumi/shared/primitives';
+import type { JsonObject, RunId } from '@megumi/shared/primitives';
+import type { ChatTokenUsagePayload, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface ProviderRuntimeConfig {
   providerId: ProviderId;
@@ -23,9 +21,30 @@ export interface AiModelStepAdapterRequest {
   eventIdFactory: () => string;
 }
 
+export type AiModelStepCompletionResult =
+  | {
+      ok: true;
+      text: string;
+      toolCalls?: AiModelStepCompletionToolCall[];
+      providerStates?: ModelStepProviderState[];
+      finishReason?: string;
+      usage?: ChatTokenUsagePayload;
+    }
+  | {
+      ok: false;
+      error: RuntimeError;
+    };
+
+export interface AiModelStepCompletionToolCall {
+  providerToolCallId: string;
+  toolName: string;
+  argumentsText: string;
+}
+
 export interface AiProviderAdapter {
   readonly providerId: ProviderId;
   streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent>;
+  completeModelStep(input: AiModelStepAdapterRequest): Promise<AiModelStepCompletionResult>;
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -82,4 +101,3 @@ export interface OpenAICompatibleAdapterOptions {
 export const systemClock: Clock = {
   now: () => new Date().toISOString(),
 };
-

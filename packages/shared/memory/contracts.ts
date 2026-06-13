@@ -88,7 +88,7 @@ export const MEMORY_ACCESS_KINDS = ['recalled', 'selected_for_context', 'viewed'
 export const MemoryAccessKindSchema = z.enum(MEMORY_ACCESS_KINDS);
 export type MemoryAccessKind = z.infer<typeof MemoryAccessKindSchema>;
 
-export const MEMORY_AUDIT_TARGET_KINDS = ['candidate', 'memory', 'settings', 'recall', 'markdown_mirror'] as const;
+export const MEMORY_AUDIT_TARGET_KINDS = ['candidate', 'memory', 'settings', 'recall', 'markdown_mirror', 'run'] as const;
 export const MemoryAuditTargetKindSchema = z.enum(MEMORY_AUDIT_TARGET_KINDS);
 export type MemoryAuditTargetKind = z.infer<typeof MemoryAuditTargetKindSchema>;
 

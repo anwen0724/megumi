@@ -15,6 +15,8 @@ describe('memory extraction prompt and parser', () => {
     });
 
     expect(prompt.system).toContain('Return strict JSON only');
+    expect(prompt.system).toContain('Only create memory candidates from user-authored durable information');
+    expect(prompt.system).toContain('Assistant text is confirmation evidence only');
     expect(prompt.system).toContain('Do not include id, status, or projectId');
     expect(prompt.system).toContain('Do not save task progress');
     expect(prompt.user).toContain('explicit_remember');
