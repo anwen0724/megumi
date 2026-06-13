@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
@@ -63,9 +63,26 @@ describe('ProviderSettingsPanel', () => {
 
     expect(updateProvider).toHaveBeenCalledWith({
       providerId: 'deepseek',
-      enabled: true,
       baseUrl: 'https://proxy.local/deepseek',
       defaultModelId: 'deepseek-v4-pro',
+    });
+  });
+
+  it('saves provider enabled changes immediately', async () => {
+    const user = userEvent.setup();
+    const updateProvider = vi.fn();
+    useProviderStore.setState({ updateProvider });
+
+    render(<ProviderSettingsPanel />);
+
+    const openAiSection = screen.getByText('OpenAI').closest('section');
+    expect(openAiSection).not.toBeNull();
+
+    await user.click(within(openAiSection as HTMLElement).getByRole('checkbox', { name: 'Enabled' }));
+
+    expect(updateProvider).toHaveBeenCalledWith({
+      providerId: 'openai',
+      enabled: false,
     });
   });
 

@@ -82,9 +82,17 @@ export function ProviderSettingsPanel() {
 
     await updateProvider({
       providerId: provider.providerId,
-      enabled: form.enabled,
       baseUrl: form.baseUrl.trim() || undefined,
       defaultModelId: form.defaultModelId,
+    });
+  }
+
+  async function handleEnabledChange(provider: ProviderPublicStatus, enabled: boolean) {
+    updateForm(provider.providerId, { enabled });
+
+    await updateProvider({
+      providerId: provider.providerId,
+      enabled,
     });
   }
 
@@ -146,7 +154,8 @@ export function ProviderSettingsPanel() {
                   <input
                     type="checkbox"
                     checked={form.enabled}
-                    onChange={(event) => updateForm(provider.providerId, { enabled: event.target.checked })}
+                    onChange={(event) => void handleEnabledChange(provider, event.target.checked)}
+                    disabled={status === 'saving'}
                   />
                   Enabled
                 </label>
