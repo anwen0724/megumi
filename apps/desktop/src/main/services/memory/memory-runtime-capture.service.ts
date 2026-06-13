@@ -92,7 +92,8 @@ export class MemoryRuntimeCaptureService {
 
   async evaluateRunCompletedCapture(input: EvaluateRunCompletedMemoryCaptureInput): Promise<MemoryRuntimeCaptureResult> {
     const now = this.options.clock.now();
-    this.saveAudit({
+    let degradedReason: string | null = null;
+    const captureAudit = this.saveAudit({
       operation: 'capture_evaluated',
       targetKind: 'memory',
       runId: input.runId,
@@ -107,9 +108,20 @@ export class MemoryRuntimeCaptureService {
         assistantHash: input.assistantText ? hashText(input.assistantText).slice(0, 16) : null,
       },
     });
+    if (!captureAudit.ok) {
+      degradedReason = 'audit_write_failed';
+      await this.writeDiagnostic(input, 'audit_write_failed', 'warning', 'audit_write_failed', {
+        message: captureAudit.message,
+      });
+    }
 
     if (input.memoryEnabled === false) {
-      this.saveExtractionSkipped(input, 'memory_disabled');
+      if (!this.saveExtractionSkipped(input, 'memory_disabled').ok) {
+        degradedReason ??= 'audit_write_failed';
+      }
+      if (degradedReason) {
+        return { status: 'degraded', reason: degradedReason };
+      }
       return { status: 'skipped', reason: 'memory_disabled' };
     }
 
@@ -131,7 +143,12 @@ export class MemoryRuntimeCaptureService {
       cooldownMs: input.cooldownMs,
     });
     if (!trigger.shouldExtract) {
-      this.saveExtractionSkipped(input, trigger.reason, trigger.signals);
+      if (!this.saveExtractionSkipped(input, trigger.reason, trigger.signals).ok) {
+        degradedReason ??= 'audit_write_failed';
+      }
+      if (degradedReason) {
+        return { status: 'degraded', reason: degradedReason };
+      }
       return { status: 'skipped', reason: trigger.reason };
     }
 
@@ -148,13 +165,21 @@ export class MemoryRuntimeCaptureService {
       toolActivitySummary: input.toolActivitySummary ?? null,
     });
 
-    const extraction = await this.options.extractionClient.extractMemoryCandidates({
-      runId: input.runId,
-      sessionId: input.sessionId,
-      projectId: input.projectId ?? null,
-      prompt,
-      signal: input.signal,
-    });
+    let extraction: Awaited<ReturnType<MemoryExtractionModelClient['extractMemoryCandidates']>>;
+    try {
+      extraction = await this.options.extractionClient.extractMemoryCandidates({
+        runId: input.runId,
+        sessionId: input.sessionId,
+        projectId: input.projectId ?? null,
+        prompt,
+        signal: input.signal,
+      });
+    } catch (error) {
+      await this.saveExtractionFailed(input, 'extraction_threw', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return { status: 'degraded', reason: 'extraction_threw' };
+    }
     if (!extraction.ok) {
       await this.saveExtractionFailed(input, extraction.reason);
       return { status: 'degraded', reason: extraction.reason };
@@ -170,13 +195,17 @@ export class MemoryRuntimeCaptureService {
       return { status: 'degraded', reason: parsed.reason };
     }
     if (parsed.candidates.length === 0) {
-      this.saveExtractionSkipped(input, 'no_candidates', trigger.signals);
+      if (!this.saveExtractionSkipped(input, 'no_candidates', trigger.signals).ok) {
+        degradedReason ??= 'audit_write_failed';
+      }
+      if (degradedReason) {
+        return { status: 'degraded', reason: degradedReason };
+      }
       return { status: 'skipped', reason: 'no_candidates' };
     }
 
     const savedMemoryIds = new Set<string>();
     const affectedScopes = new Map<string, AffectedScope>();
-    let degradedReason: string | null = null;
 
     for (const candidate of parsed.candidates) {
       const validation = validateMemoryCandidate({
@@ -252,11 +281,20 @@ export class MemoryRuntimeCaptureService {
     }
 
     for (const affected of affectedScopes.values()) {
-      const exportResult: MemoryMarkdownSyncResult = await this.options.markdownSync.exportAfterMemoryWrite({
-        homePath: input.homePath,
-        scope: affected.scope,
-        projectId: affected.projectId ?? null,
-      });
+      let exportResult: MemoryMarkdownSyncResult;
+      try {
+        exportResult = await this.options.markdownSync.exportAfterMemoryWrite({
+          homePath: input.homePath,
+          scope: affected.scope,
+          projectId: affected.projectId ?? null,
+        });
+      } catch (error) {
+        await this.writeDiagnostic(input, 'markdown_export_failed', 'error', 'markdown_export_failed', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        degradedReason ??= 'markdown_export_failed';
+        continue;
+      }
       if (exportResult.status === 'degraded') {
         degradedReason ??= exportResult.reason;
       }
@@ -350,8 +388,8 @@ export class MemoryRuntimeCaptureService {
     input: EvaluateRunCompletedMemoryCaptureInput,
     reason: string,
     signals: MemoryCaptureSignal[] = input.signals ?? [],
-  ): void {
-    this.saveAudit({
+  ): { ok: true } | { ok: false; message: string } {
+    return this.saveAudit({
       operation: 'extraction_skipped',
       targetKind: 'memory',
       runId: input.runId,
@@ -388,22 +426,27 @@ export class MemoryRuntimeCaptureService {
     projectId?: string | null;
     reason?: string | null;
     metadata?: Record<string, unknown>;
-  }): void {
-    this.options.repository.saveAuditLog({
-      auditId: this.options.ids.auditId(),
-      operation: input.operation,
-      targetKind: input.targetKind,
-      targetId: input.targetId ?? null,
-      runId: input.runId ?? null,
-      sessionId: input.sessionId ?? null,
-      projectId: input.projectId ?? null,
-      actorKind: 'host',
-      reason: input.reason ?? null,
-      beforeState: null,
-      afterState: null,
-      createdAt: this.options.clock.now(),
-      metadata: sanitizeAuditMetadata(input.metadata ?? {}),
-    });
+  }): { ok: true } | { ok: false; message: string } {
+    try {
+      this.options.repository.saveAuditLog({
+        auditId: this.options.ids.auditId(),
+        operation: input.operation,
+        targetKind: input.targetKind,
+        targetId: input.targetId ?? null,
+        runId: input.runId ?? null,
+        sessionId: input.sessionId ?? null,
+        projectId: input.projectId ?? null,
+        actorKind: 'host',
+        reason: input.reason ?? null,
+        beforeState: null,
+        afterState: null,
+        createdAt: this.options.clock.now(),
+        metadata: sanitizeAuditMetadata(input.metadata ?? {}),
+      });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   private async writeDiagnostic(
@@ -465,10 +508,15 @@ function scopeKey(scope: MemoryScope, projectId?: string | null): string {
 }
 
 function sanitizeAuditMetadata(value: Record<string, unknown>): JsonObject {
+  return sanitizeAuditObject(value);
+}
+
+const FORBIDDEN_AUDIT_KEYS = new Set(['content', 'rawcontent', 'rawprompt', 'rawtooloutput', 'transcript']);
+
+function sanitizeAuditObject(value: Record<string, unknown>): JsonObject {
   const output: JsonObject = {};
   for (const [key, child] of Object.entries(value)) {
-    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (normalized === 'content' || normalized === 'rawcontent' || normalized === 'rawprompt' || normalized === 'rawtooloutput' || normalized === 'transcript') {
+    if (FORBIDDEN_AUDIT_KEYS.has(normalizeMetadataKey(key))) {
       continue;
     }
     const jsonValue = toJsonValue(child);
@@ -487,14 +535,11 @@ function toJsonValue(value: unknown): JsonValue | undefined {
     return value.map(toJsonValue).filter((item): item is JsonValue => item !== undefined);
   }
   if (value && typeof value === 'object') {
-    const object: JsonObject = {};
-    for (const [key, child] of Object.entries(value)) {
-      const jsonValue = toJsonValue(child);
-      if (jsonValue !== undefined) {
-        object[key] = jsonValue;
-      }
-    }
-    return object;
+    return sanitizeAuditObject(value as Record<string, unknown>);
   }
   return undefined;
+}
+
+function normalizeMetadataKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, '');
 }

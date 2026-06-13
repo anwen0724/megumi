@@ -98,17 +98,57 @@ export class MemoryMarkdownSyncService {
   async importMirror(input: MirrorInput): Promise<MemoryMarkdownSyncResult> {
     const target = resolveTarget(input);
     const now = this.options.clock.now();
-    const read = await this.options.fileSystem.readText(target.filePath);
+    let read: Awaited<ReturnType<MemoryRuntimeFileSystem['readText']>>;
+    try {
+      read = await this.options.fileSystem.readText(target.filePath);
+    } catch (error) {
+      this.saveAudit({
+        operation: 'markdown_import_failed',
+        targetKind: 'markdown_mirror',
+        targetId: target.mirrorId,
+        projectId: input.projectId,
+        reason: 'read_failed',
+        metadata: { message: error instanceof Error ? error.message : String(error) },
+      });
+      await this.writeDiagnostic({
+        input,
+        operation: 'markdown_import_failed',
+        severity: 'error',
+        targetId: target.mirrorId,
+        reason: 'read_failed',
+        metadata: { message: error instanceof Error ? error.message : String(error) },
+      });
+      return { status: 'degraded', reason: 'read_failed' };
+    }
     if (!read.ok) {
       if (read.reason === 'not_found') {
-        this.saveMirror({
+        const mirrorSaved = this.saveMirror({
           target,
           status: 'missing',
           now,
           metadata: {},
         });
+        if (!mirrorSaved.ok) {
+          await this.writeDiagnostic({
+            input,
+            operation: 'markdown_import_failed',
+            severity: 'error',
+            targetId: target.mirrorId,
+            reason: 'mirror_state_write_failed',
+            metadata: { message: mirrorSaved.message },
+          });
+          return { status: 'degraded', reason: 'mirror_state_write_failed' };
+        }
         return { status: 'skipped', reason: 'mirror_missing' };
       }
+      this.saveAudit({
+        operation: 'markdown_import_failed',
+        targetKind: 'markdown_mirror',
+        targetId: target.mirrorId,
+        projectId: input.projectId,
+        reason: read.reason,
+        metadata: { message: read.message },
+      });
       await this.writeDiagnostic({
         input,
         operation: 'markdown_import_failed',
@@ -181,6 +221,36 @@ export class MemoryMarkdownSyncService {
         if (entry.memoryId) {
           const current = this.options.repository.getMemory(entry.memoryId);
           if (current && current.scope === input.scope && (current.projectId ?? null) === (target.projectId ?? null)) {
+            const candidateRecord = toCandidateRecord({
+              candidate: validation.candidate,
+              memoryId: current.memoryId,
+            });
+            const resolution = resolveMemoryCandidate({
+              candidate: candidateRecord,
+              existingActiveRecords: activeRecords.filter((record) => record.memoryId !== current.memoryId),
+              now,
+              createMemoryId: () => current.memoryId,
+            });
+            if (resolution.action === 'conflict') {
+              hasConflict = true;
+              this.saveAudit({
+                operation: 'conflict_detected',
+                targetKind: 'memory',
+                targetId: resolution.conflictingMemoryId,
+                projectId: input.projectId,
+                reason: resolution.reason,
+                metadata: { candidateHash: hashText(candidateRecord.normalizedText) },
+              });
+              await this.writeDiagnostic({
+                input,
+                operation: 'conflict_detected',
+                severity: 'warning',
+                targetId: resolution.conflictingMemoryId,
+                reason: resolution.reason,
+                metadata: { normalizedText: candidateRecord.normalizedText },
+              });
+              continue;
+            }
             const updated = this.options.repository.saveMemory({
               ...current,
               content: validation.candidate.content,
@@ -266,13 +336,24 @@ export class MemoryMarkdownSyncService {
       }
 
       if (hasConflict) {
-        this.saveMirror({
+        const mirrorSaved = this.saveMirror({
           target,
           status: 'conflict',
           now,
           lastImportedAt: now,
           metadata: { conflictDetectedAt: now },
         });
+        if (!mirrorSaved.ok) {
+          await this.writeDiagnostic({
+            input,
+            operation: 'markdown_import_failed',
+            severity: 'error',
+            targetId: target.mirrorId,
+            reason: 'mirror_state_write_failed',
+            metadata: { message: mirrorSaved.message },
+          });
+          return { status: 'degraded', reason: 'mirror_state_write_failed' };
+        }
         return { status: 'degraded', reason: 'conflict_detected' };
       }
 
@@ -282,6 +363,14 @@ export class MemoryMarkdownSyncService {
       }
       return exportResult;
     } catch (error) {
+      this.saveAudit({
+        operation: 'markdown_import_failed',
+        targetKind: 'markdown_mirror',
+        targetId: target.mirrorId,
+        projectId: input.projectId,
+        reason: 'import_failed',
+        metadata: { message: error instanceof Error ? error.message : String(error) },
+      });
       await this.writeDiagnostic({
         input,
         operation: 'markdown_import_failed',
@@ -297,14 +386,57 @@ export class MemoryMarkdownSyncService {
   async exportMirror(input: MirrorInput): Promise<MemoryMarkdownSyncResult> {
     const target = resolveTarget(input);
     const now = this.options.clock.now();
-    const records = this.listActive(input);
+    let records: MemoryRecord[];
+    try {
+      records = this.listActive(input);
+    } catch (error) {
+      await this.writeDiagnostic({
+        input,
+        operation: 'markdown_export_failed',
+        severity: 'error',
+        targetId: target.mirrorId,
+        reason: 'read_active_memories_failed',
+        metadata: { message: error instanceof Error ? error.message : String(error) },
+      });
+      return { status: 'degraded', reason: 'read_active_memories_failed' };
+    }
     const markdown = renderMemoryMarkdown({ title: target.title, records });
     const exportedMemoryIds = orderedExportedIds(records);
-    const result = await this.options.fileSystem.writeTextAtomic(target.filePath, markdown);
+    let result: Awaited<ReturnType<MemoryRuntimeFileSystem['writeTextAtomic']>>;
+    try {
+      result = await this.options.fileSystem.writeTextAtomic(target.filePath, markdown);
+    } catch (error) {
+      await this.writeDiagnostic({
+        input,
+        operation: 'markdown_export_failed',
+        severity: 'error',
+        targetId: target.mirrorId,
+        reason: 'write_failed',
+        metadata: { message: error instanceof Error ? error.message : String(error) },
+      });
+      const mirrorSaved = this.saveMirror({
+        target,
+        status: 'dirty',
+        now,
+        lastError: error instanceof Error ? error.message : String(error),
+        metadata: { exportedMemoryIds },
+      });
+      if (!mirrorSaved.ok) {
+        await this.writeDiagnostic({
+          input,
+          operation: 'markdown_export_failed',
+          severity: 'error',
+          targetId: target.mirrorId,
+          reason: 'mirror_state_write_failed',
+          metadata: { message: mirrorSaved.message },
+        });
+      }
+      return { status: 'degraded', reason: 'write_failed' };
+    }
     if (!result.ok) {
       await this.writeDiagnostic({
         input,
-        operation: 'markdown_import_failed',
+        operation: 'markdown_export_failed',
         severity: 'error',
         targetId: target.mirrorId,
         reason: result.reason,
@@ -320,7 +452,7 @@ export class MemoryMarkdownSyncService {
       return { status: 'degraded', reason: result.reason };
     }
 
-    this.saveMirror({
+    const mirrorSaved = this.saveMirror({
       target,
       status: 'synced',
       now,
@@ -328,6 +460,17 @@ export class MemoryMarkdownSyncService {
       contentHash: hashText(markdown).slice(0, 32),
       metadata: { exportedMemoryIds },
     });
+    if (!mirrorSaved.ok) {
+      await this.writeDiagnostic({
+        input,
+        operation: 'markdown_export_failed',
+        severity: 'error',
+        targetId: target.mirrorId,
+        reason: 'mirror_state_write_failed',
+        metadata: { message: mirrorSaved.message },
+      });
+      return { status: 'degraded', reason: 'mirror_state_write_failed' };
+    }
     return { status: 'synced', exportedMemoryIds };
   }
 
@@ -402,20 +545,25 @@ export class MemoryMarkdownSyncService {
     projectId?: string | null;
     reason?: string | null;
     metadata?: Record<string, unknown>;
-  }): void {
-    this.options.repository.saveAuditLog({
-      auditId: this.options.ids.auditId(),
-      operation: input.operation,
-      targetKind: input.targetKind,
-      targetId: input.targetId ?? null,
-      projectId: input.projectId ?? null,
-      actorKind: 'host',
-      reason: input.reason ?? null,
-      beforeState: null,
-      afterState: null,
-      createdAt: this.options.clock.now(),
-      metadata: sanitizeAuditMetadata(input.metadata ?? {}),
-    });
+  }): { ok: true } | { ok: false; message: string } {
+    try {
+      this.options.repository.saveAuditLog({
+        auditId: this.options.ids.auditId(),
+        operation: input.operation,
+        targetKind: input.targetKind,
+        targetId: input.targetId ?? null,
+        projectId: input.projectId ?? null,
+        actorKind: 'host',
+        reason: input.reason ?? null,
+        beforeState: null,
+        afterState: null,
+        createdAt: this.options.clock.now(),
+        metadata: sanitizeAuditMetadata(input.metadata ?? {}),
+      });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   private saveMirror(input: {
@@ -427,19 +575,24 @@ export class MemoryMarkdownSyncService {
     contentHash?: string | null;
     lastError?: string | null;
     metadata: JsonObject;
-  }): void {
-    this.options.repository.saveMarkdownMirror({
-      mirrorId: input.target.mirrorId,
-      scope: input.target.scope,
-      projectId: input.target.projectId ?? null,
-      filePath: input.target.filePath,
-      status: input.status,
-      lastImportedAt: input.lastImportedAt ?? null,
-      lastExportedAt: input.lastExportedAt ?? null,
-      contentHash: input.contentHash ?? null,
-      lastError: input.lastError ?? null,
-      metadata: input.metadata,
-    });
+  }): { ok: true } | { ok: false; message: string } {
+    try {
+      this.options.repository.saveMarkdownMirror({
+        mirrorId: input.target.mirrorId,
+        scope: input.target.scope,
+        projectId: input.target.projectId ?? null,
+        filePath: input.target.filePath,
+        status: input.status,
+        lastImportedAt: input.lastImportedAt ?? null,
+        lastExportedAt: input.lastExportedAt ?? null,
+        contentHash: input.contentHash ?? null,
+        lastError: input.lastError ?? null,
+        metadata: input.metadata,
+      });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   private async writeDiagnostic(input: {
@@ -538,10 +691,15 @@ function hashText(value: string): string {
 }
 
 function sanitizeAuditMetadata(value: Record<string, unknown>): JsonObject {
+  return sanitizeAuditObject(value);
+}
+
+const FORBIDDEN_AUDIT_KEYS = new Set(['content', 'rawcontent', 'rawprompt', 'rawtooloutput', 'transcript']);
+
+function sanitizeAuditObject(value: Record<string, unknown>): JsonObject {
   const output: JsonObject = {};
   for (const [key, child] of Object.entries(value)) {
-    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (normalized === 'content' || normalized === 'rawcontent' || normalized === 'rawprompt' || normalized === 'rawtooloutput' || normalized === 'transcript') {
+    if (FORBIDDEN_AUDIT_KEYS.has(normalizeMetadataKey(key))) {
       continue;
     }
     const jsonValue = toJsonValue(child);
@@ -560,14 +718,11 @@ function toJsonValue(value: unknown): JsonValue | undefined {
     return value.map(toJsonValue).filter((item): item is JsonValue => item !== undefined);
   }
   if (value && typeof value === 'object') {
-    const object: JsonObject = {};
-    for (const [key, child] of Object.entries(value)) {
-      const jsonValue = toJsonValue(child);
-      if (jsonValue !== undefined) {
-        object[key] = jsonValue;
-      }
-    }
-    return object;
+    return sanitizeAuditObject(value as Record<string, unknown>);
   }
   return undefined;
+}
+
+function normalizeMetadataKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, '');
 }

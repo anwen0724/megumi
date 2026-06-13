@@ -37,6 +37,7 @@ class FakeMemoryRuntimeCaptureRepository {
   readonly memories = new Map<string, MemoryRecord>();
   readonly audits: MemoryAuditLog[] = [];
   failSaveMemory = false;
+  failSaveAudit = false;
 
   listMemories(filter: {
     scope?: MemoryScope;
@@ -64,6 +65,9 @@ class FakeMemoryRuntimeCaptureRepository {
   }
 
   saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog {
+    if (this.failSaveAudit) {
+      throw new Error('audit database locked');
+    }
     this.audits.push(auditLog);
     return auditLog;
   }
@@ -71,6 +75,7 @@ class FakeMemoryRuntimeCaptureRepository {
 
 class FakeExtractionClient implements MemoryExtractionModelClient {
   calls: Parameters<MemoryExtractionModelClient['extractMemoryCandidates']>[0][] = [];
+  throwOnExtract = false;
   result: Awaited<ReturnType<MemoryExtractionModelClient['extractMemoryCandidates']>> = {
     ok: true,
     text: JSON.stringify({ candidates: [] }),
@@ -78,11 +83,17 @@ class FakeExtractionClient implements MemoryExtractionModelClient {
 
   async extractMemoryCandidates(input: Parameters<MemoryExtractionModelClient['extractMemoryCandidates']>[0]) {
     this.calls.push(input);
+    if (this.throwOnExtract) {
+      throw new Error('provider threw');
+    }
     return this.result;
   }
 }
 
-function createService(extractionClient?: MemoryExtractionModelClient) {
+function createService(
+  extractionClient?: MemoryExtractionModelClient,
+  options: { throwOnExport?: boolean } = {},
+) {
   const repository = new FakeMemoryRuntimeCaptureRepository();
   const fileSystem = new FakeMemoryRuntimeFileSystem();
   const diagnostics = new MemoryDiagnosticWriter({ fileSystem });
@@ -93,6 +104,9 @@ function createService(extractionClient?: MemoryExtractionModelClient) {
     repository,
     markdownSync: {
       exportAfterMemoryWrite: async (input) => {
+        if (options.throwOnExport) {
+          throw new Error('export failed hard');
+        }
         exports.push(input);
         return { status: 'synced', exportedMemoryIds: [] };
       },
@@ -375,5 +389,50 @@ describe('MemoryRuntimeCaptureService', () => {
       reason: 'memory_write_failed',
     });
     expect(JSON.stringify(fileSystem.diagnostics)).toContain('database locked');
+  });
+
+  it('degrades audit, extraction throw, and export throw failures without rejecting the run', async () => {
+    const auditExtraction = new FakeExtractionClient();
+    auditExtraction.result = {
+      ok: true,
+      text: JSON.stringify({
+        candidates: [{ scope: 'user', kind: 'preference', text: 'User prefers concise answers.', confidence: 0.9 }],
+      }),
+    };
+    const audit = createService(auditExtraction);
+    audit.repository.failSaveAudit = true;
+
+    await expect(audit.service.evaluateRunCompletedCapture(baseInput())).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'audit_write_failed',
+    });
+    expect(audit.repository.memories.size).toBe(1);
+    expect(JSON.stringify(audit.fileSystem.diagnostics)).toContain('audit database locked');
+
+    const thrownExtraction = new FakeExtractionClient();
+    thrownExtraction.throwOnExtract = true;
+    const extraction = createService(thrownExtraction);
+
+    await expect(extraction.service.evaluateRunCompletedCapture(baseInput())).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'extraction_threw',
+    });
+    expect(JSON.stringify(extraction.fileSystem.diagnostics)).toContain('provider threw');
+
+    const exportExtraction = new FakeExtractionClient();
+    exportExtraction.result = {
+      ok: true,
+      text: JSON.stringify({
+        candidates: [{ scope: 'user', kind: 'preference', text: 'User prefers brief answers.', confidence: 0.9 }],
+      }),
+    };
+    const exportFailure = createService(exportExtraction, { throwOnExport: true });
+
+    await expect(exportFailure.service.evaluateRunCompletedCapture(baseInput())).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'markdown_export_failed',
+    });
+    expect(exportFailure.repository.memories.size).toBe(1);
+    expect(JSON.stringify(exportFailure.fileSystem.diagnostics)).toContain('export failed hard');
   });
 });

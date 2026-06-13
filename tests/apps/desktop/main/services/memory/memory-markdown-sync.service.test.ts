@@ -19,8 +19,13 @@ class FakeMemoryRuntimeFileSystem implements MemoryRuntimeFileSystem {
   readonly writes: Array<{ filePath: string; content: string }> = [];
   readonly diagnostics: Array<{ filePath: string; entry: unknown }> = [];
   writeResult: { ok: true } | { ok: false; reason: 'write_failed'; message: string } = { ok: true };
+  throwOnRead = false;
+  throwOnWrite = false;
 
   async readText(filePath: string): ReturnType<MemoryRuntimeFileSystem['readText']> {
+    if (this.throwOnRead) {
+      throw new Error('read exploded');
+    }
     if (!this.files.has(filePath)) {
       return { ok: false, reason: 'not_found', message: 'missing' };
     }
@@ -29,6 +34,9 @@ class FakeMemoryRuntimeFileSystem implements MemoryRuntimeFileSystem {
 
   async writeTextAtomic(filePath: string, content: string): ReturnType<MemoryRuntimeFileSystem['writeTextAtomic']> {
     this.writes.push({ filePath, content });
+    if (this.throwOnWrite) {
+      throw new Error('write exploded');
+    }
     if (!this.writeResult.ok) {
       return this.writeResult;
     }
@@ -46,6 +54,12 @@ class FakeMemoryMarkdownSyncRepository {
   readonly memories = new Map<string, MemoryRecord>();
   readonly mirrors = new Map<string, MemoryMarkdownMirror>();
   readonly audits: MemoryAuditLog[] = [];
+  failListMemories = false;
+  failGetMemory = false;
+  failSaveMemory = false;
+  failSaveMirror = false;
+  failGetMirror = false;
+  failSaveAudit = false;
 
   listMemories(filter: {
     scope?: MemoryScope;
@@ -55,6 +69,9 @@ class FakeMemoryMarkdownSyncRepository {
     query?: string;
     limit?: number;
   } = {}): MemoryRecord[] {
+    if (this.failListMemories) {
+      throw new Error('list memories failed');
+    }
     return [...this.memories.values()]
       .filter((memory) => !filter.scope || memory.scope === filter.scope)
       .filter((memory) => !Object.hasOwn(filter, 'projectId') || (memory.projectId ?? null) === (filter.projectId ?? null))
@@ -64,23 +81,38 @@ class FakeMemoryMarkdownSyncRepository {
   }
 
   getMemory(memoryId: string): MemoryRecord | undefined {
+    if (this.failGetMemory) {
+      throw new Error('get memory failed');
+    }
     return this.memories.get(memoryId);
   }
 
   saveMemory(memory: MemoryRecord): MemoryRecord {
+    if (this.failSaveMemory) {
+      throw new Error('save memory failed');
+    }
     this.memories.set(memory.memoryId, memory);
     return memory;
   }
 
   saveMarkdownMirror(mirror: MemoryMarkdownMirror): void {
+    if (this.failSaveMirror) {
+      throw new Error('save mirror failed');
+    }
     this.mirrors.set(mirror.mirrorId, mirror);
   }
 
   getMarkdownMirror(mirrorId: string): MemoryMarkdownMirror | null {
+    if (this.failGetMirror) {
+      throw new Error('get mirror failed');
+    }
     return this.mirrors.get(mirrorId) ?? null;
   }
 
   saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog {
+    if (this.failSaveAudit) {
+      throw new Error('save audit failed');
+    }
     this.audits.push(auditLog);
     return auditLog;
   }
@@ -321,6 +353,113 @@ describe('MemoryMarkdownSyncService', () => {
     expect(fileSystem.diagnostics.map((diagnostic) => JSON.stringify(diagnostic.entry))).toEqual(
       expect.arrayContaining([expect.stringContaining('conflict_detected')]),
     );
+  });
+
+  it('detects conflict for id-based updates without changing the record or exporting', async () => {
+    const { service, repository, fileSystem } = createService();
+    repository.saveMemory(memory({
+      memoryId: 'memory:target',
+      scope: 'user',
+      kind: 'preference',
+      content: 'User prefers short summaries.',
+      normalizedText: 'user prefers short summaries',
+    }));
+    repository.saveMemory(memory({
+      memoryId: 'memory:other',
+      scope: 'user',
+      kind: 'preference',
+      content: 'User prefers concise answers.',
+      normalizedText: 'user prefers concise answers',
+    }));
+    fileSystem.files.set(path.join(homePath, 'memory', 'user.md'), [
+      '# User Memory',
+      '',
+      '## Preference',
+      '',
+      '<!-- memory:id=memory:target kind=preference updated=2026-06-12T00:00:00.000Z -->',
+      '- User prefers detailed answers.',
+      '',
+    ].join('\n'));
+
+    const result = await service.importMirror({ homePath, scope: 'user' });
+
+    expect(result).toMatchObject({ status: 'degraded', reason: 'conflict_detected' });
+    expect(repository.getMemory('memory:target')).toMatchObject({
+      content: 'User prefers short summaries.',
+    });
+    expect(fileSystem.writes).toHaveLength(0);
+    expect(repository.mirrors.get('memory:user')).toMatchObject({ status: 'conflict' });
+    expect(repository.audits.map((audit) => audit.operation)).toContain('conflict_detected');
+    expect(JSON.stringify(fileSystem.diagnostics)).toContain('conflict_detected');
+  });
+
+  it('degrades dependency throws and records safe diagnostics/audits', async () => {
+    const readFailure = createService();
+    readFailure.fileSystem.throwOnRead = true;
+    await expect(readFailure.service.importMirror({ homePath, scope: 'user' })).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'read_failed',
+    });
+    expect(readFailure.repository.audits.map((audit) => audit.operation)).toContain('markdown_import_failed');
+    expect(JSON.stringify(readFailure.fileSystem.diagnostics)).toContain('read exploded');
+
+    const writeFailure = createService();
+    writeFailure.repository.saveMemory(memory({
+      memoryId: 'memory:1',
+      scope: 'user',
+      kind: 'preference',
+      content: 'User prefers focused reports.',
+    }));
+    writeFailure.fileSystem.throwOnWrite = true;
+    await expect(writeFailure.service.exportMirror({ homePath, scope: 'user' })).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'write_failed',
+    });
+    expect(JSON.stringify(writeFailure.fileSystem.diagnostics)).toContain('markdown_export_failed');
+
+    const repoFailure = createService();
+    repoFailure.fileSystem.files.set(path.join(homePath, 'memory', 'user.md'), [
+      '# User Memory',
+      '',
+      '## Preference',
+      '',
+      '- User prefers concise reports.',
+      '',
+    ].join('\n'));
+    repoFailure.repository.failSaveMemory = true;
+    await expect(repoFailure.service.importMirror({ homePath, scope: 'user' })).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'import_failed',
+    });
+    expect(repoFailure.repository.audits.map((audit) => audit.operation)).toContain('markdown_import_failed');
+    expect(JSON.stringify(repoFailure.fileSystem.diagnostics)).toContain('save memory failed');
+
+    const mirrorFailure = createService();
+    mirrorFailure.repository.failSaveMirror = true;
+    await expect(mirrorFailure.service.importMirror({ homePath, scope: 'user' })).resolves.toMatchObject({
+      status: 'degraded',
+      reason: 'mirror_state_write_failed',
+    });
+    expect(JSON.stringify(mirrorFailure.fileSystem.diagnostics)).toContain('save mirror failed');
+  });
+
+  it('recursively filters raw audit metadata keys', async () => {
+    const { service, repository, fileSystem } = createService();
+    fileSystem.files.set(path.join(homePath, 'memory', 'user.md'), [
+      '# User Memory',
+      '',
+      '## Preference',
+      '',
+      '- api_key=sk-12345678901234567890 should never be saved',
+      '',
+    ].join('\n'));
+
+    await service.importMirror({ homePath, scope: 'user' });
+
+    expect(repository.audits.map((audit) => JSON.stringify(audit))).toEqual(
+      expect.arrayContaining([expect.not.stringContaining('sk-12345678901234567890')]),
+    );
+    expect(JSON.stringify(repository.audits)).not.toContain('rawcontent');
   });
 
   it('syncs user before project before recall without requiring session-run wiring', async () => {
