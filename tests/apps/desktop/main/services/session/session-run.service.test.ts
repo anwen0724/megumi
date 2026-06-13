@@ -2859,6 +2859,137 @@ describe('SessionRunService', () => {
     });
   });
 
+  it('fails the run when the compaction probe model input build throws before provider streaming', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      modelStepInputBuildService: {
+        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+          if (input.contextKind === 'compaction-probe') {
+            throw new Error('compaction probe build exploded');
+          }
+          return successfulModelStepInputBuild(input);
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'x'.repeat(1000),
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    const repository = new SessionRunRepository(db!);
+    expect(requests).toEqual([]);
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+    expect(streamed.find((event) => event.eventType === 'run.failed')?.payload).toMatchObject({
+      error: {
+        code: 'runtime_unknown',
+        message: 'compaction probe build exploded',
+        retryable: false,
+        source: 'core',
+      },
+    });
+    expect(repository.getRun('run-1')?.status).toBe('failed');
+    expect(repository.listStepsByRun('run-1').map((step) => step.status)).toEqual(['failed']);
+  });
+
+  it('fails the run when tool runtime creation throws before provider streaming', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      toolRuntimeFactory: {
+        async create() {
+          throw new Error('tool runtime create exploded');
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Run a project task.',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    const repository = new SessionRunRepository(db!);
+    expect(requests).toEqual([]);
+    expect(streamed.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+    expect(streamed.find((event) => event.eventType === 'run.failed')?.payload).toMatchObject({
+      error: {
+        code: 'runtime_unknown',
+        message: 'tool runtime create exploded',
+        retryable: false,
+        source: 'core',
+      },
+    });
+    expect(repository.getRun('run-1')?.status).toBe('failed');
+    expect(repository.listStepsByRun('run-1').map((step) => step.status)).toEqual(['failed']);
+  });
+
   it('recalls memory before the compaction probe and reuses that source for the initial build', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const buildInputs: BuildModelStepInputInput[] = [];

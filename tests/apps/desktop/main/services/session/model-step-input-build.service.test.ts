@@ -211,6 +211,46 @@ describe('ModelStepInputBuildService', () => {
     }));
   });
 
+  it('keeps runtime constraint source ids within schema limits for real uuid run and step ids', async () => {
+    const service = new ModelStepInputBuildService();
+    const result = await service.buildModelStepInput({
+      requestId: 'request:real-ids',
+      sessionId: '4449c3f1-b160-41cd-bc5e-34cd1a3248bc',
+      runId: 'c25f17d0-5578-4fc8-ae3c-a73296fbcbf2',
+      stepId: 'b49cc6e2-d6fb-4c4b-a9ec-315ed3ead1f2',
+      contextKind: 'compaction-probe',
+      providerId: 'openai-compatible',
+      modelId: 'deepseek-chat',
+      projectId: 'workspace-1',
+      projectRoot: 'C:/Users/anwen/Desktop/test',
+      requestedCwd: 'C:/Users/anwen/Desktop/test',
+      permissionMode: 'default',
+      currentMessage: userMessage(),
+      sessionContext: sessionContext(),
+      toolDefinitions: [],
+      builtAt,
+    });
+
+    const ids = [
+      ...result.inputContext.parts.map((part) => part.partId),
+      ...result.inputContext.parts.flatMap((part) => part.sourceRefs.map((sourceRef) => sourceRef.sourceId)),
+      ...result.inputContext.budget.partBudgets.map((partBudget) => partBudget.partId),
+      ...result.inputContext.trace.selectedSources.map((source) => source.sourceId),
+      ...result.inputContext.trace.selectedSources.map((source) => source.partId).filter((id): id is string => Boolean(id)),
+    ];
+    expect(ids.every((id) => id.length <= 128)).toBe(true);
+    expect(result.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        sourceRefs: [expect.objectContaining({ sourceId: 'runtime-location:b49cc6e2-d6fb-4c4b-a9ec-315ed3ead1f2' })],
+      }),
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        sourceRefs: [expect.objectContaining({ sourceId: 'runtime-capabilities:b49cc6e2-d6fb-4c4b-a9ec-315ed3ead1f2' })],
+      }),
+    ]));
+  });
+
   it('passes memory recall seed into the build request trace without creating memory text by itself', async () => {
     const service = new ModelStepInputBuildService({
       idFactory: {

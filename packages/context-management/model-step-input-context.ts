@@ -25,6 +25,10 @@ import { buildModelInputContext } from './model-input-context-builder';
 import { buildSessionContextParts } from './session-context';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
+const MODEL_INPUT_CONTEXT_ID_MAX_LENGTH = 128;
+const RUNTIME_CONSTRAINT_PART_PREFIX = 'part:runtime-constraint:';
+const RUNTIME_CONSTRAINT_BOUNDARY_SUFFIX = ':boundary';
+const RUNTIME_CONSTRAINT_CAPABILITIES_SUFFIX = ':capabilities';
 const AGENT_INSTRUCTION_WRAPPER = 'Follow these agent instructions:';
 const PERMISSION_BYPASS_PATTERN = /\b(bypass|ignore|skip|disable)\b[\s\S]{0,80}\b(permission|sandbox|approval)\b/i;
 
@@ -59,11 +63,11 @@ export function createModelStepInputContextId(input: CreateModelStepInputContext
   const suffix = `:${input.contextKind}`;
   const contextId = `${MODEL_INPUT_CONTEXT_ID_PREFIX}${input.stepId}${suffix}`;
 
-  if (contextId.length <= 128) {
+  if (contextId.length <= MODEL_INPUT_CONTEXT_ID_MAX_LENGTH) {
     return contextId;
   }
 
-  const availableStepIdLength = 128 - MODEL_INPUT_CONTEXT_ID_PREFIX.length - suffix.length;
+  const availableStepIdLength = MODEL_INPUT_CONTEXT_ID_MAX_LENGTH - MODEL_INPUT_CONTEXT_ID_PREFIX.length - suffix.length;
   return `${MODEL_INPUT_CONTEXT_ID_PREFIX}${input.stepId.slice(0, Math.max(1, availableStepIdLength))}${suffix}`;
 }
 
@@ -486,7 +490,7 @@ function runtimeConstraintsFromBuildRequest(
 
   if (request.projectRoot || request.effectiveCwd) {
     constraints.push({
-      constraintId: `${request.requestId}:runtime-location`,
+      constraintId: runtimeConstraintIdForModelStep('location', request.modelStepId),
       projectRoot: request.projectRoot,
       effectiveCwd: request.effectiveCwd,
       loadedAt,
@@ -495,7 +499,7 @@ function runtimeConstraintsFromBuildRequest(
 
   if (request.availableCapabilitySummary) {
     constraints.push({
-      constraintId: `${request.requestId}:available-capabilities`,
+      constraintId: runtimeConstraintIdForModelStep('capabilities', request.modelStepId),
       availableCapabilitySummary: request.availableCapabilitySummary,
       loadedAt,
     });
@@ -512,6 +516,24 @@ function runtimeConstraintsFromBuildRequest(
   }
 
   return constraints;
+}
+
+function runtimeConstraintIdForModelStep(kind: 'location' | 'capabilities', modelStepId: string): string {
+  const prefix = kind === 'location' ? 'runtime-location:' : 'runtime-capabilities:';
+  const partSuffix = kind === 'location'
+    ? RUNTIME_CONSTRAINT_BOUNDARY_SUFFIX
+    : RUNTIME_CONSTRAINT_CAPABILITIES_SUFFIX;
+  const maxConstraintIdLength = MODEL_INPUT_CONTEXT_ID_MAX_LENGTH
+    - RUNTIME_CONSTRAINT_PART_PREFIX.length
+    - partSuffix.length;
+  const constraintId = `${prefix}${modelStepId}`;
+
+  if (constraintId.length <= maxConstraintIdLength) {
+    return constraintId;
+  }
+
+  const availableModelStepIdLength = Math.max(1, maxConstraintIdLength - prefix.length);
+  return `${prefix}${modelStepId.slice(0, availableModelStepIdLength)}`;
 }
 
 function memoryRecallParts(

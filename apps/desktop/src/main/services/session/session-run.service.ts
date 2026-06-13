@@ -1408,215 +1408,234 @@ export class SessionRunService {
       runtimeContext: input.runtimeContext,
     });
     this.appendRuntimeEvent(runStarted, input.chatStreamAdapter);
+    let runStartedYielded = false;
 
-    const context = this.createInitialContextForSessionMessage({
-      runId: String(input.run.runId),
-      goal: input.userMessage.content,
-      session: input.session,
-    });
-    const budgetPolicy = context?.contextBudgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
-    const toolDefinitions = input.session.workspacePath && this.toolDefinitionProvider
-      ? this.toolDefinitionProvider.listDefinitions({
-          runId: String(input.run.runId),
-          permissionMode: input.permissionMode,
-          providerCapabilitySummary: { supportsToolCall: true },
+    try {
+      const context = this.createInitialContextForSessionMessage({
+        runId: String(input.run.runId),
+        goal: input.userMessage.content,
+        session: input.session,
+      });
+      const budgetPolicy = context?.contextBudgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
+      const toolDefinitions = input.session.workspacePath && this.toolDefinitionProvider
+        ? this.toolDefinitionProvider.listDefinitions({
+            runId: String(input.run.runId),
+            permissionMode: input.permissionMode,
+            providerCapabilitySummary: { supportsToolCall: true },
+          })
+        : undefined;
+      const sessionContext = this.sessionContextInputService.buildSessionContextInput({
+        sessionId: String(input.session.sessionId),
+        currentRunId: String(input.run.runId),
+        currentMessageId: String(input.userMessage.messageId),
+        builtAt: input.payload.createdAt,
+      });
+      const modelInputSourceOverrides = this.modelInputRuntimeSourceOverrides({
+        sessionId: String(input.session.sessionId),
+        runId: String(input.run.runId),
+        stepId: String(input.step.stepId),
+        builtAt: input.payload.createdAt,
+      });
+      const memoryRecallEffectiveCwd = resolveRecallEffectiveCwd(
+        input.session.workspacePath,
+        modelInputSourceOverrides.requestedCwd,
+      );
+      const memoryEnabled = this.resolveMemoryEnabled();
+      const memoryRecall = await this.recallMemoryForNewUserInput({
+        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        ...(memoryRecallEffectiveCwd ? { effectiveCwd: memoryRecallEffectiveCwd } : {}),
+        sessionId: String(input.session.sessionId),
+        runId: String(input.run.runId),
+        modelStepId: String(input.step.stepId),
+        queryText: input.inputPreprocessing.effectiveUserText,
+        providerId: input.payload.providerId,
+        modelId: input.payload.modelId,
+        enabled: memoryEnabled,
+        createdAt: input.payload.createdAt,
+      });
+      const compactionProbeModelInput = await this.modelStepInputBuildService.buildModelStepInput({
+        requestId: input.requestId,
+        sessionId: String(input.session.sessionId),
+        runId: String(input.run.runId),
+        stepId: String(input.step.stepId),
+        contextKind: 'compaction-probe',
+        providerId: input.payload.providerId,
+        modelId: input.payload.modelId,
+        modelContextWindow: budgetPolicy.modelContextWindow,
+        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        ...modelInputSourceOverrides,
+        permissionMode: input.permissionMode,
+        ...(input.permissionSnapshot ? {
+          permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+          permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
+        } : {}),
+        currentMessage: input.userMessage,
+        inputPreprocessing: input.inputPreprocessing,
+        sessionContext,
+        ...memoryRecall,
+        ...(toolDefinitions ? { toolDefinitions } : {}),
+        budgetPolicy: {
+          modelContextWindow: Number.MAX_SAFE_INTEGER,
+          reservedOutputTokens: 0,
+          keepRecentTokens: Number.MAX_SAFE_INTEGER,
+        },
+        builtAt: input.payload.createdAt,
+      });
+      const compactionPromise = compactionProbeModelInput.failure
+        ? Promise.resolve({
+            status: 'failed' as const,
+            events: [],
+            failure: modelStepInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
+          })
+        : this.sessionCompactionOrchestrator
+        ? this.sessionCompactionOrchestrator.compactIfNeeded({
+            requestId: input.requestId,
+            sessionId: String(input.session.sessionId),
+            runId: String(input.run.runId),
+            stepId: String(input.step.stepId),
+            providerId: input.payload.providerId,
+            modelId: input.payload.modelId,
+            runtimeContext: input.runtimeContext,
+            createdAt: input.payload.createdAt,
+            sessionContext,
+            budgetProbeInputContext: compactionProbeModelInput.inputContext,
+            budgetPolicy,
+            startSequence: lastSequence,
         })
-      : undefined;
-    const sessionContext = this.sessionContextInputService.buildSessionContextInput({
-      sessionId: String(input.session.sessionId),
-      currentRunId: String(input.run.runId),
-      currentMessageId: String(input.userMessage.messageId),
-      builtAt: input.payload.createdAt,
-    });
-    const modelInputSourceOverrides = this.modelInputRuntimeSourceOverrides({
-      sessionId: String(input.session.sessionId),
-      runId: String(input.run.runId),
-      stepId: String(input.step.stepId),
-      builtAt: input.payload.createdAt,
-    });
-    const memoryRecallEffectiveCwd = resolveRecallEffectiveCwd(
-      input.session.workspacePath,
-      modelInputSourceOverrides.requestedCwd,
-    );
-    const memoryEnabled = this.resolveMemoryEnabled();
-    const memoryRecall = await this.recallMemoryForNewUserInput({
-      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      ...(memoryRecallEffectiveCwd ? { effectiveCwd: memoryRecallEffectiveCwd } : {}),
-      sessionId: String(input.session.sessionId),
-      runId: String(input.run.runId),
-      modelStepId: String(input.step.stepId),
-      queryText: input.inputPreprocessing.effectiveUserText,
-      providerId: input.payload.providerId,
-      modelId: input.payload.modelId,
-      enabled: memoryEnabled,
-      createdAt: input.payload.createdAt,
-    });
-    const compactionProbeModelInput = await this.modelStepInputBuildService.buildModelStepInput({
-      requestId: input.requestId,
-      sessionId: String(input.session.sessionId),
-      runId: String(input.run.runId),
-      stepId: String(input.step.stepId),
-      contextKind: 'compaction-probe',
-      providerId: input.payload.providerId,
-      modelId: input.payload.modelId,
-      modelContextWindow: budgetPolicy.modelContextWindow,
-      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      ...modelInputSourceOverrides,
-      permissionMode: input.permissionMode,
-      ...(input.permissionSnapshot ? {
-        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
-      } : {}),
-      currentMessage: input.userMessage,
-      inputPreprocessing: input.inputPreprocessing,
-      sessionContext,
-      ...memoryRecall,
-      ...(toolDefinitions ? { toolDefinitions } : {}),
-      budgetPolicy: {
-        modelContextWindow: Number.MAX_SAFE_INTEGER,
-        reservedOutputTokens: 0,
-        keepRecentTokens: Number.MAX_SAFE_INTEGER,
-      },
-      builtAt: input.payload.createdAt,
-    });
-    const compactionPromise = compactionProbeModelInput.failure
-      ? Promise.resolve({
-          status: 'failed' as const,
-          events: [],
-          failure: modelStepInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
-        })
-      : this.sessionCompactionOrchestrator
-      ? this.sessionCompactionOrchestrator.compactIfNeeded({
+        : Promise.resolve({ status: 'skipped' as const, events: [] });
+
+      yield runStarted;
+      runStartedYielded = true;
+      const compaction = await compactionPromise;
+
+      for (const event of compaction.events) {
+        lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(input.run.runId))));
+        const eventWithRequest = withSessionMessageRequestMetadata(event, {
           requestId: input.requestId,
-          sessionId: String(input.session.sessionId),
-          runId: String(input.run.runId),
-          stepId: String(input.step.stepId),
-          providerId: input.payload.providerId,
-          modelId: input.payload.modelId,
           runtimeContext: input.runtimeContext,
-          createdAt: input.payload.createdAt,
-          sessionContext,
-          budgetProbeInputContext: compactionProbeModelInput.inputContext,
-          budgetPolicy,
+        });
+        const sequencedEvent = withSequenceAfter(eventWithRequest, lastSequence);
+        lastSequence = sequencedEvent.sequence;
+        this.appendRuntimeEvent(sequencedEvent, input.chatStreamAdapter);
+        yield sequencedEvent;
+      }
+
+      const persistedRun = this.repository.getRun(String(input.run.runId));
+      if (persistedRun?.status === 'cancelled') {
+        return;
+      }
+
+      if (compaction.status === 'failed') {
+        yield* this.failRunBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: compaction.failure,
           startSequence: lastSequence,
-        })
-      : Promise.resolve({ status: 'skipped' as const, events: [] });
+          createdAt: this.clock.now(),
+          chatStreamAdapter: input.chatStreamAdapter,
+        });
+        return;
+      }
 
-    yield runStarted;
-    const compaction = await compactionPromise;
-
-    for (const event of compaction.events) {
-      lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(input.run.runId))));
-      const eventWithRequest = withSessionMessageRequestMetadata(event, {
-        requestId: input.requestId,
-        runtimeContext: input.runtimeContext,
+      const finalSessionContext = this.sessionContextInputService.buildSessionContextInput({
+        sessionId: String(input.session.sessionId),
+        currentRunId: String(input.run.runId),
+        currentMessageId: String(input.userMessage.messageId),
+        builtAt: input.payload.createdAt,
       });
-      const sequencedEvent = withSequenceAfter(eventWithRequest, lastSequence);
-      lastSequence = sequencedEvent.sequence;
-      this.appendRuntimeEvent(sequencedEvent, input.chatStreamAdapter);
-      yield sequencedEvent;
-    }
+      const initialModelInput = await this.modelStepInputBuildService.buildModelStepInput({
+        requestId: input.requestId,
+        sessionId: String(input.session.sessionId),
+        runId: String(input.run.runId),
+        stepId: String(input.step.stepId),
+        contextKind: 'initial',
+        providerId: input.payload.providerId,
+        modelId: input.payload.modelId,
+        modelContextWindow: budgetPolicy.modelContextWindow,
+        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        ...modelInputSourceOverrides,
+        permissionMode: input.permissionMode,
+        ...(input.permissionSnapshot ? {
+          permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+          permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
+        } : {}),
+        currentMessage: input.userMessage,
+        inputPreprocessing: input.inputPreprocessing,
+        sessionContext: finalSessionContext,
+        ...memoryRecall,
+        ...(toolDefinitions ? { toolDefinitions } : {}),
+        budgetPolicy,
+        builtAt: input.payload.createdAt,
+      });
+      if (initialModelInput.failure) {
+        yield* this.failRunBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: modelStepInputBuildFailureToRuntimeError(initialModelInput.failure),
+          startSequence: lastSequence,
+          createdAt: this.clock.now(),
+          chatStreamAdapter: input.chatStreamAdapter,
+        });
+        return;
+      }
+      const request: ModelStepRuntimeRequest = {
+        requestId: input.requestId,
+        sessionId: input.session.sessionId,
+        runId: input.run.runId,
+        stepId: input.step.stepId,
+        providerId: input.payload.providerId,
+        modelId: input.payload.modelId,
+        inputContext: initialModelInput.inputContext,
+        ...(initialModelInput.toolDefinitions.length > 0 ? { toolDefinitions: initialModelInput.toolDefinitions } : {}),
+        runtimeContext: input.runtimeContext,
+        createdAt: input.payload.createdAt,
+      };
+      const toolRuntime = input.session.workspacePath
+        ? await this.toolRuntimeFactory?.create({
+            projectRoot: input.session.workspacePath,
+            permissionMode: input.permissionMode,
+          })
+        : undefined;
 
-    const persistedRun = this.repository.getRun(String(input.run.runId));
-    if (persistedRun?.status === 'cancelled') {
-      return;
-    }
-
-    if (compaction.status === 'failed') {
+      yield* this.streamAndPersistModelStep({
+        request,
+        run: input.run,
+        step: input.step,
+        userMessageId: input.userMessage.messageId,
+        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        ...(toolRuntime ? { toolRuntime } : {}),
+        ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
+        startSequence: lastSequence,
+        emitRunStarted: false,
+        permissionMode: input.permissionMode,
+        ...memoryRecall,
+      });
+    } catch (error) {
+      if (!runStartedYielded) {
+        yield runStarted;
+      }
       yield* this.failRunBeforeModelStep({
         requestId: input.requestId,
         runtimeContext: input.runtimeContext,
         sessionId: String(input.session.sessionId),
         run: input.run,
         step: input.step,
-        error: compaction.failure,
+        error: createRuntimeErrorFromUnknown(error),
         startSequence: lastSequence,
         createdAt: this.clock.now(),
         chatStreamAdapter: input.chatStreamAdapter,
       });
-      return;
     }
-
-    const finalSessionContext = this.sessionContextInputService.buildSessionContextInput({
-      sessionId: String(input.session.sessionId),
-      currentRunId: String(input.run.runId),
-      currentMessageId: String(input.userMessage.messageId),
-      builtAt: input.payload.createdAt,
-    });
-    const initialModelInput = await this.modelStepInputBuildService.buildModelStepInput({
-      requestId: input.requestId,
-      sessionId: String(input.session.sessionId),
-      runId: String(input.run.runId),
-      stepId: String(input.step.stepId),
-      contextKind: 'initial',
-      providerId: input.payload.providerId,
-      modelId: input.payload.modelId,
-      modelContextWindow: budgetPolicy.modelContextWindow,
-      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      ...modelInputSourceOverrides,
-      permissionMode: input.permissionMode,
-      ...(input.permissionSnapshot ? {
-        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
-      } : {}),
-      currentMessage: input.userMessage,
-      inputPreprocessing: input.inputPreprocessing,
-      sessionContext: finalSessionContext,
-      ...memoryRecall,
-      ...(toolDefinitions ? { toolDefinitions } : {}),
-      budgetPolicy,
-      builtAt: input.payload.createdAt,
-    });
-    if (initialModelInput.failure) {
-      yield* this.failRunBeforeModelStep({
-        requestId: input.requestId,
-        runtimeContext: input.runtimeContext,
-        sessionId: String(input.session.sessionId),
-        run: input.run,
-        step: input.step,
-        error: modelStepInputBuildFailureToRuntimeError(initialModelInput.failure),
-        startSequence: lastSequence,
-        createdAt: this.clock.now(),
-        chatStreamAdapter: input.chatStreamAdapter,
-      });
-      return;
-    }
-    const request: ModelStepRuntimeRequest = {
-      requestId: input.requestId,
-      sessionId: input.session.sessionId,
-      runId: input.run.runId,
-      stepId: input.step.stepId,
-      providerId: input.payload.providerId,
-      modelId: input.payload.modelId,
-      inputContext: initialModelInput.inputContext,
-      ...(initialModelInput.toolDefinitions.length > 0 ? { toolDefinitions: initialModelInput.toolDefinitions } : {}),
-      runtimeContext: input.runtimeContext,
-      createdAt: input.payload.createdAt,
-    };
-    const toolRuntime = input.session.workspacePath
-      ? await this.toolRuntimeFactory?.create({
-          projectRoot: input.session.workspacePath,
-          permissionMode: input.permissionMode,
-        })
-      : undefined;
-
-    yield* this.streamAndPersistModelStep({
-      request,
-      run: input.run,
-      step: input.step,
-      userMessageId: input.userMessage.messageId,
-      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      ...(toolRuntime ? { toolRuntime } : {}),
-      ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
-      startSequence: lastSequence,
-      emitRunStarted: false,
-      permissionMode: input.permissionMode,
-      ...memoryRecall,
-    });
   }
 
   private scheduleRunCompletedMemoryCapture(input: {
