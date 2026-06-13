@@ -357,18 +357,22 @@ export class MemoryRecallRuntimeService {
     reason?: string | null;
     metadata?: Record<string, unknown>;
   }): Promise<void> {
-    await this.options.diagnostics.write({
-      homePath: input.input.homePath,
-      operation: input.operation,
-      severity: input.severity,
-      createdAt: input.createdAt,
-      runId: input.input.runId,
-      sessionId: input.input.sessionId,
-      projectId: input.input.projectId ?? null,
-      targetId: input.targetId ?? null,
-      reason: input.reason ?? null,
-      metadata: cleanJsonObject(input.metadata ?? {}),
-    });
+    try {
+      await this.options.diagnostics.write({
+        homePath: input.input.homePath,
+        operation: input.operation,
+        severity: input.severity,
+        createdAt: input.createdAt,
+        runId: input.input.runId,
+        sessionId: input.input.sessionId,
+        projectId: input.input.projectId ?? null,
+        targetId: input.targetId ?? null,
+        reason: input.reason ?? null,
+        metadata: cleanJsonObject(input.metadata ?? {}),
+      });
+    } catch {
+      // Diagnostic persistence is best-effort and must never affect recall.
+    }
   }
 }
 

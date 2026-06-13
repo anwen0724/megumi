@@ -260,6 +260,7 @@ function createServiceWithModelStepStream(
   sessionInstructionSourceProvider?: SessionRunServiceOptions['sessionInstructionSourceProvider'];
   runEffectiveCwdProvider?: SessionRunServiceOptions['runEffectiveCwdProvider'];
   activePathRepository?: SessionActivePathRepository;
+  runId?: () => string;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -300,7 +301,7 @@ function createServiceWithModelStepStream(
     clock: { now: () => '2026-05-17T00:00:00.000Z' },
     ids: {
       sessionId: () => 'session-1',
-      runId: () => 'run-1',
+      runId: options?.runId ?? (() => 'run-1'),
       stepId: () => 'step-1',
       actionId: () => 'action-1',
       observationId: () => 'observation-1',
@@ -3085,6 +3086,196 @@ describe('SessionRunService', () => {
     expect(requests[1]?.inputContext.trace.metadata).toMatchObject({
       memoryRecallSeed,
     });
+  });
+
+  it('recalls for each independent new user input while tool continuation reuses the same run snapshot', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const recallForNewUserInput = vi.fn(async (input) => ({
+      memoryRecallSources: [{
+        sourceId: `memory-recall:snapshot-${input.runId}`,
+        text: `Relevant long-term memory:\n\n1. [user/fact] Recall for ${input.runId}.`,
+        memoryIds: [`memory-${input.runId}`],
+        loadedAt: '2026-05-17T00:00:00.000Z',
+        metadata: {
+          snapshotId: `memory-recall-snapshot-${input.runId}`,
+          recallRequestId: `memory-recall-request-${input.runId}`,
+          selectedCount: 1,
+        },
+      }],
+      memoryRecallSeed: {
+        queryText: input.queryText,
+        metadata: {
+          snapshotId: `memory-recall-snapshot-${input.runId}`,
+          recallRequestId: `memory-recall-request-${input.runId}`,
+          selectedCount: 1,
+        },
+      },
+    }));
+    let nextRun = 0;
+    const service = createServiceWithModelStepStream((request, callIndex) => {
+      requests.push(request);
+      if (callIndex === 1) {
+        return [
+          toolUseCreatedEvent(1),
+          modelStepCompletedEvent(2),
+        ];
+      }
+      return [{ ...assistantOutputCompletedEvent(1), stepId: request.stepId }];
+    }, {
+      runId: () => {
+        nextRun += 1;
+        return `run-${nextRun}`;
+      },
+      megumiHomePath: 'C:/megumi-home',
+      memoryRecallService: { recallForNewUserInput },
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolCalls() {
+              return {
+                toolResults: [createToolResult({
+                  createdAt: '2026-05-17T00:00:02.500Z',
+                  toolCallId: 'tool-call-1',
+                })],
+                runtimeEvents: [],
+              };
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
+          };
+        },
+      },
+      toolDefinitionProvider: {
+        listDefinitions: () => [{
+          name: 'read_file',
+          title: 'Read file',
+          description: 'Read a file.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          availability: { status: 'available' },
+        }],
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const first = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user-1',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of first.events) {
+      // drain first run including tool continuation
+    }
+
+    const second = await service.sendSessionMessage({
+      requestId: 'request-2',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user-2',
+          role: 'user',
+          content: 'Summarize the result',
+          createdAt: '2026-05-17T00:00:05.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:05.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of second.events) {
+      // drain second run
+    }
+
+    expect(recallForNewUserInput).toHaveBeenCalledTimes(2);
+    expect(recallForNewUserInput.mock.calls.map(([input]) => [input.runId, input.queryText])).toEqual([
+      ['run-1', 'Read package.json'],
+      ['run-2', 'Summarize the result'],
+    ]);
+    expect(requests.map((request) => request.runId)).toEqual(['run-1', 'run-1', 'run-2']);
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'memory',
+        text: expect.stringContaining('Recall for run-1.'),
+      }),
+    ]));
+    expect(requests[2]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'memory',
+        text: expect.stringContaining('Recall for run-2.'),
+      }),
+    ]));
+  });
+
+  it('keeps memory recall optional when only megumiHomePath is configured', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      megumiHomePath: 'C:/megumi-home',
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'No recall service configured',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.inputContext.parts.some((part) => part.kind === 'memory')).toBe(false);
   });
 
   it('uses the latest completed compaction when building the normal model step after maintenance compaction', async () => {

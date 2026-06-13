@@ -135,6 +135,42 @@ describe('MemoryRecallRuntimeService', () => {
     }));
   });
 
+  it('continues DB recall when sync is degraded and diagnostic writing fails', async () => {
+    const repo = createRepo([
+      memoryRecord({
+        memoryId: 'memory:user:1',
+        scope: 'user',
+        projectId: null,
+        content: 'User prefers pnpm.',
+      }),
+    ]);
+    const sync = {
+      syncBeforeRecall: vi.fn(async (): Promise<MemoryMarkdownSyncResult> => ({
+        status: 'degraded',
+        reason: 'markdown_import_failed',
+      })),
+    };
+    const diagnostics = createFailingDiagnostics();
+    const service = createService({ repo, sync, diagnostics });
+
+    const result = await service.recallForNewUserInput({
+      homePath: 'C:/megumi-home',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      queryText: 'pnpm',
+    });
+
+    expect(result.status).toBe('recalled');
+    expect(repo.listCalls).toEqual([
+      { scope: 'user', projectId: null, status: 'active' },
+    ]);
+    expect(result.memoryRecallSources[0]?.text).toContain('User prefers pnpm.');
+    expect(diagnostics.write).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'memory_recall_sync_degraded',
+      reason: 'markdown_import_failed',
+    }));
+  });
+
   it('does not query project memories when projectId is absent', async () => {
     const repo = createRepo([
       memoryRecord({
@@ -205,6 +241,47 @@ describe('MemoryRecallRuntimeService', () => {
       }),
     ]));
     expect(JSON.stringify(diagnostics.write.mock.calls)).not.toContain('pnpm');
+  });
+
+  it('returns degraded instead of throwing when repository reads and diagnostic writing both fail', async () => {
+    const repo = createRepo([]);
+    repo.listMemories = vi.fn(() => {
+      throw new Error('database is locked');
+    });
+    const diagnostics = createFailingDiagnostics();
+    const service = createService({ repo, diagnostics });
+
+    const result = await service.recallForNewUserInput({
+      homePath: 'C:/megumi-home',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      projectId: 'project:1',
+      queryText: 'pnpm',
+    });
+
+    expect(result).toEqual({
+      status: 'degraded',
+      reason: 'database is locked',
+      memoryRecallSources: [],
+      memoryRecallSeed: {
+        queryText: 'pnpm',
+        metadata: {
+          status: 'degraded',
+          reason: 'database is locked',
+        },
+      },
+    });
+    expect(diagnostics.write).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'memory_recall_failed',
+      severity: 'error',
+      reason: 'database is locked',
+    }));
+    expect(repo.auditLogs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        operation: 'recall_failed',
+        reason: 'database is locked',
+      }),
+    ]));
   });
 
   it('skips disabled or empty recalls without syncing or reading the repository', async () => {
@@ -314,6 +391,14 @@ function createService(input: {
 function createDiagnostics() {
   return {
     write: vi.fn(async () => undefined),
+  } satisfies Pick<MemoryDiagnosticWriter, 'write'>;
+}
+
+function createFailingDiagnostics() {
+  return {
+    write: vi.fn(async () => {
+      throw new Error('diagnostic writer unavailable');
+    }),
   } satisfies Pick<MemoryDiagnosticWriter, 'write'>;
 }
 
