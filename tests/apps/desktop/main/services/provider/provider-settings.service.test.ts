@@ -46,6 +46,8 @@ describe('ProviderSettingsService', () => {
         hasApiKey: false,
         credentialSource: 'missing',
         envOverrideActive: false,
+        apiKeyEnv: 'DEEPSEEK_API_KEY',
+        apiKeyEnvCustomized: false,
       },
       {
         providerId: 'openai',
@@ -56,6 +58,8 @@ describe('ProviderSettingsService', () => {
         hasApiKey: false,
         credentialSource: 'missing',
         envOverrideActive: false,
+        apiKeyEnv: 'OPENAI_API_KEY',
+        apiKeyEnvCustomized: false,
       },
       {
         providerId: 'anthropic',
@@ -65,6 +69,8 @@ describe('ProviderSettingsService', () => {
         hasApiKey: false,
         credentialSource: 'missing',
         envOverrideActive: false,
+        apiKeyEnv: 'ANTHROPIC_API_KEY',
+        apiKeyEnvCustomized: false,
       },
     ]);
   });
@@ -132,6 +138,8 @@ describe('ProviderSettingsService', () => {
       providerId: 'deepseek',
       hasApiKey: true,
       credentialSource: 'environment',
+      apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY',
+      apiKeyEnvCustomized: true,
       envOverrideActive: true,
     });
     expect(JSON.stringify(deepseek)).not.toContain('sk-custom-env');
@@ -162,6 +170,45 @@ describe('ProviderSettingsService', () => {
           baseUrl: 'https://proxy.local/deepseek',
           defaultModel: 'deepseek-v4-pro',
         },
+      },
+    });
+  });
+
+  it('updates and clears configured API key environment variable names', async () => {
+    const service = new ProviderSettingsService({
+      settings,
+      env: {
+        CUSTOM_OPENAI_KEY: 'sk-custom-openai',
+      },
+    });
+
+    const updated = await service.updateProviderSettings('openai', {
+      apiKeyEnv: 'CUSTOM_OPENAI_KEY',
+    });
+
+    expect(updated.apiKeyEnv).toBe('CUSTOM_OPENAI_KEY');
+    expect(settings.raw).toEqual({
+      providers: {
+        openai: {
+          apiKeyEnv: 'CUSTOM_OPENAI_KEY',
+        },
+      },
+    });
+    expect((await service.listProviderStatuses()).find((status) => status.providerId === 'openai')).toMatchObject({
+      hasApiKey: true,
+      credentialSource: 'environment',
+      apiKeyEnv: 'CUSTOM_OPENAI_KEY',
+      apiKeyEnvCustomized: true,
+    });
+
+    const cleared = await service.updateProviderSettings('openai', {
+      apiKeyEnv: null,
+    });
+
+    expect(cleared.apiKeyEnv).toBe('OPENAI_API_KEY');
+    expect(settings.raw).toEqual({
+      providers: {
+        openai: {},
       },
     });
   });

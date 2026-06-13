@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AppSettingsRawSchema,
   DEFAULT_APP_SETTINGS,
+  mergeRawAppSettings,
   resolveAppSettings,
 } from '@megumi/shared/settings';
 
@@ -89,6 +90,30 @@ describe('app settings contracts', () => {
         deepseek: {
           apiKey: 'sk-deepseek',
         },
+      },
+    });
+  });
+
+  it('uses null patches to remove direct and environment API key overrides', () => {
+    const merged = mergeRawAppSettings({
+      providers: {
+        deepseek: {
+          apiKey: 'sk-deepseek',
+          apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY',
+        },
+      },
+    }, {
+      providers: {
+        deepseek: {
+          apiKey: null,
+          apiKeyEnv: null,
+        },
+      },
+    });
+
+    expect(merged).toEqual({
+      providers: {
+        deepseek: {},
       },
     });
   });

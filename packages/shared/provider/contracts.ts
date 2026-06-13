@@ -37,6 +37,8 @@ export interface ProviderPublicStatus {
   hasApiKey: boolean;
   credentialSource: ProviderCredentialSource;
   envOverrideActive: boolean;
+  apiKeyEnv?: string;
+  apiKeyEnvCustomized?: boolean;
 }
 
 const DEFAULT_TIMESTAMP = '1970-01-01T00:00:00.000Z';

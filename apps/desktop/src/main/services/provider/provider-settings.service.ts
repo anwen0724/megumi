@@ -24,6 +24,7 @@ export interface ProviderSettingsUpdateInput {
   displayName?: string;
   baseUrl?: string;
   defaultModelId?: string;
+  apiKeyEnv?: string | null;
 }
 
 export class ProviderSettingsService {
@@ -52,6 +53,7 @@ export class ProviderSettingsService {
           displayName: input.displayName,
           baseUrl: input.baseUrl,
           defaultModel: input.defaultModelId,
+          apiKeyEnv: input.apiKeyEnv,
         },
       },
     });
@@ -99,7 +101,8 @@ export class ProviderSettingsService {
   }
 
   private toPublicStatus(settings: ProviderSettings): ProviderPublicStatus {
-    const envKey = settings.apiKeyEnv ?? DEFAULT_PROVIDER_SETTINGS[settings.providerId].apiKeyEnv;
+    const defaultEnvKey = DEFAULT_PROVIDER_SETTINGS[settings.providerId].apiKeyEnv;
+    const envKey = settings.apiKeyEnv ?? defaultEnvKey;
     const envOverrideActive = Boolean(envKey && this.env[envKey]?.trim());
     const settingsApiKeyActive = Boolean(settings.apiKey?.trim());
 
@@ -116,6 +119,8 @@ export class ProviderSettingsService {
           ? 'environment'
           : 'missing',
       envOverrideActive,
+      ...(envKey ? { apiKeyEnv: envKey } : {}),
+      apiKeyEnvCustomized: Boolean(envKey && envKey !== defaultEnvKey),
     };
   }
 }

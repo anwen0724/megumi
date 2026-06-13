@@ -10,11 +10,12 @@ interface ProviderFormState {
   baseUrl: string;
   defaultModelId: string;
   apiKey: string;
+  apiKeyEnv: string;
 }
 
 function credentialLabel(provider: ProviderPublicStatus): string {
-  if (provider.envOverrideActive) return 'Environment key';
-  if (provider.hasApiKey) return 'Settings key';
+  if (provider.credentialSource === 'settings') return 'Settings key active';
+  if (provider.credentialSource === 'environment') return 'Environment key active';
   return 'Missing key';
 }
 
@@ -30,6 +31,7 @@ function createInitialFormState(provider: ProviderPublicStatus): ProviderFormSta
     baseUrl: provider.baseUrl ?? '',
     defaultModelId: String(provider.defaultModelId),
     apiKey: '',
+    apiKeyEnv: provider.apiKeyEnv ?? '',
   };
 }
 
@@ -70,6 +72,7 @@ export function ProviderSettingsPanel() {
           baseUrl: '',
           defaultModelId: '',
           apiKey: '',
+          apiKeyEnv: '',
         }),
         ...update,
       },
@@ -107,13 +110,35 @@ export function ProviderSettingsPanel() {
     updateForm(provider.providerId, { apiKey: '' });
   }
 
+  async function handleApiKeyEnvSubmit(event: FormEvent<HTMLFormElement>, provider: ProviderPublicStatus) {
+    event.preventDefault();
+    const form = forms[provider.providerId] ?? createInitialFormState(provider);
+    const apiKeyEnv = form.apiKeyEnv.trim();
+
+    if (!apiKeyEnv) return;
+
+    await updateProvider({
+      providerId: provider.providerId,
+      apiKeyEnv,
+    });
+  }
+
+  async function handleApiKeyEnvClear(provider: ProviderPublicStatus) {
+    updateForm(provider.providerId, { apiKeyEnv: '' });
+
+    await updateProvider({
+      providerId: provider.providerId,
+      apiKeyEnv: null,
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-sm font-semibold text-[var(--color-text)]">Provider settings</h3>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Configure model providers for the real chat runtime. API keys are sent only to the main process secret store.
+            Configure model providers for the real chat runtime. API keys are stored in settings or read from configured environment variables.
           </p>
         </div>
         <IconButton label="Refresh providers" variant="ghost" size="sm" onClick={() => void loadProviders()}>
@@ -135,6 +160,9 @@ export function ProviderSettingsPanel() {
         {providers.map((provider) => {
           const form = forms[provider.providerId] ?? createInitialFormState(provider);
           const modelOptions = COMPOSER_MODEL_OPTIONS.filter((option) => option.providerId === provider.providerId);
+          const selectedKnownModel = modelOptions.some((option) => option.value === form.defaultModelId)
+            ? form.defaultModelId
+            : '';
 
           return (
             <section
@@ -167,14 +195,26 @@ export function ProviderSettingsPanel() {
                   placeholder="https://api.example.com/v1"
                 />
 
+                <TextField
+                  label={`${provider.displayName} default model ID`}
+                  value={form.defaultModelId}
+                  onChange={(event) => updateForm(provider.providerId, { defaultModelId: event.target.value })}
+                  placeholder="model-id"
+                />
+
                 <label className="block text-xs font-medium text-[var(--color-text-muted)]">
-                  {provider.displayName} default model
+                  {provider.displayName} known model
                   <select
-                    aria-label={`${provider.displayName} default model`}
-                    value={form.defaultModelId}
-                    onChange={(event) => updateForm(provider.providerId, { defaultModelId: event.target.value })}
+                    aria-label={`${provider.displayName} known model`}
+                    value={selectedKnownModel}
+                    onChange={(event) => {
+                      if (event.target.value) {
+                        updateForm(provider.providerId, { defaultModelId: event.target.value });
+                      }
+                    }}
                     className="mt-1 h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 text-sm text-[var(--color-text)]"
                   >
+                    <option value="">Custom model ID</option>
                     {modelOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -207,7 +247,30 @@ export function ProviderSettingsPanel() {
                   size="sm"
                   variant="secondary"
                   onClick={() => void deleteApiKey({ providerId: provider.providerId })}
-                  disabled={status === 'saving' || provider.envOverrideActive}
+                  disabled={status === 'saving' || provider.credentialSource !== 'settings'}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </IconButton>
+              </form>
+
+              <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => void handleApiKeyEnvSubmit(event, provider)}>
+                <div className="min-w-56 flex-1">
+                  <TextField
+                    label={`${provider.displayName} API key environment variable`}
+                    value={form.apiKeyEnv}
+                    onChange={(event) => updateForm(provider.providerId, { apiKeyEnv: event.target.value })}
+                    placeholder="PROVIDER_API_KEY"
+                  />
+                </div>
+                <Button type="submit" size="sm" variant="secondary" disabled={status === 'saving' || !form.apiKeyEnv.trim()}>
+                  Save {provider.displayName} environment variable
+                </Button>
+                <IconButton
+                  label={`Clear ${provider.displayName} environment variable`}
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void handleApiKeyEnvClear(provider)}
+                  disabled={status === 'saving' || !provider.apiKeyEnvCustomized}
                 >
                   <Trash2 size={14} aria-hidden="true" />
                 </IconButton>

@@ -621,6 +621,7 @@ describe('provider and chat ipc schemas', () => {
         displayName: 'DeepSeek',
         baseUrl: 'https://api.deepseek.com',
         defaultModelId: 'deepseek-v4-flash',
+        apiKeyEnv: 'DEEPSEEK_API_KEY',
       },
       meta: {
         channel: IPC_CHANNELS.provider.update,
@@ -645,6 +646,7 @@ describe('provider and chat ipc schemas', () => {
           hasApiKey: true,
           credentialSource: 'settings',
           envOverrideActive: false,
+          apiKeyEnv: 'DEEPSEEK_API_KEY',
         },
       ],
     });

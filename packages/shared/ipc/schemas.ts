@@ -110,6 +110,8 @@ export const ProviderPublicStatusSchema = z
     hasApiKey: z.boolean(),
     credentialSource: ProviderCredentialSourceSchema,
     envOverrideActive: z.boolean(),
+    apiKeyEnv: z.string().min(1).optional(),
+    apiKeyEnvCustomized: z.boolean().optional(),
   })
   .strict();
 
@@ -128,6 +130,7 @@ export const ProviderUpdatePayloadSchema = z
     displayName: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
     defaultModelId: z.string().min(1).optional(),
+    apiKeyEnv: z.string().min(1).nullable().optional(),
   })
   .strict();
 

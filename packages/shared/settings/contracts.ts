@@ -46,7 +46,7 @@ export const AppProviderSettingsRawSchema = z
     baseUrl: z.string().url().optional(),
     defaultModel: z.string().min(1).optional(),
     apiKey: z.string().min(1).nullable().optional(),
-    apiKeyEnv: z.string().min(1).optional(),
+    apiKeyEnv: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -261,6 +261,9 @@ function mergeRawProvider(
   if (patch.apiKey === null) {
     delete merged.apiKey;
   }
+  if (patch.apiKeyEnv === null) {
+    delete merged.apiKeyEnv;
+  }
   return merged;
 }
 
@@ -268,6 +271,9 @@ function definedProviderOverride(value: z.infer<typeof AppProviderSettingsRawSch
   const defined = definedObject(value);
   if (defined.apiKey === null) {
     delete defined.apiKey;
+  }
+  if (defined.apiKeyEnv === null) {
+    delete defined.apiKeyEnv;
   }
   return defined;
 }

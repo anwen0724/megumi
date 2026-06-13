@@ -21,6 +21,7 @@ export interface ProviderUpdateInput {
   displayName?: string;
   baseUrl?: string;
   defaultModelId?: string;
+  apiKeyEnv?: string | null;
 }
 
 export interface ProviderApiKeyInput {
