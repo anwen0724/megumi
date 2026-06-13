@@ -276,13 +276,13 @@ export class MemoryRepository {
   saveSettings(settings: MemorySettings): MemorySettings {
     this.database.prepare(`
       INSERT INTO memory_settings (
-        workspace_id, auto_capture_enabled, default_candidate_review_mode,
+        settings_id, auto_capture_enabled, default_candidate_review_mode,
         updated_at, metadata_json, settings_json
       ) VALUES (
-        @workspace_id, @auto_capture_enabled, @default_candidate_review_mode,
+        @settings_id, @auto_capture_enabled, @default_candidate_review_mode,
         @updated_at, @metadata_json, @settings_json
       )
-      ON CONFLICT(workspace_id) DO UPDATE SET
+      ON CONFLICT(settings_id) DO UPDATE SET
         auto_capture_enabled = excluded.auto_capture_enabled,
         default_candidate_review_mode = excluded.default_candidate_review_mode,
         updated_at = excluded.updated_at,
@@ -292,10 +292,10 @@ export class MemoryRepository {
     return settings;
   }
 
-  getSettings(workspaceId: string): MemorySettings | undefined {
+  getSettings(): MemorySettings | undefined {
     return parseJsonRow<MemorySettings>(this.database.prepare(
-      'SELECT settings_json FROM memory_settings WHERE workspace_id = ?',
-    ).get(workspaceId), 'settings_json');
+      "SELECT settings_json FROM memory_settings WHERE settings_id = 'global'",
+    ).get(), 'settings_json');
   }
 
   saveRecallRequest(request: MemoryRecallRequest): MemoryRecallRequest {
@@ -581,7 +581,7 @@ function toSourceRefRow(sourceRef: MemorySourceRef) {
 
 function toSettingsRow(settings: MemorySettings) {
   return {
-    workspace_id: settings.workspaceId,
+    settings_id: 'global',
     auto_capture_enabled: settings.autoCaptureEnabled ? 1 : 0,
     default_candidate_review_mode: settings.defaultCandidateReviewMode,
     updated_at: settings.updatedAt,

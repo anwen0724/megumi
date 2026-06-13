@@ -25,8 +25,7 @@ describe('MemoryService', () => {
   it('creates settings and candidate-first records through user review', () => {
     const { service, database, events } = createService();
     try {
-      expect(service.getSettings('workspace:1')).toMatchObject({
-        workspaceId: 'workspace:1',
+      expect(service.getSettings()).toMatchObject({
         autoCaptureEnabled: true,
         defaultCandidateReviewMode: 'manual',
       });

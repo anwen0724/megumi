@@ -102,13 +102,15 @@ const providerRuntimeService = new ProviderRuntimeService({
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
-void memoryRuntime.markdownSyncService.syncUserMirrorOnAppStart({
-  homePath: megumiHomePaths.homePath,
-}).catch((error) => {
-  runtimeLogger.warn('memory_user_markdown_startup_sync_failed', {
-    message: error instanceof Error ? error.message : String(error),
+if (memoryRepository.getSettings()?.autoCaptureEnabled ?? true) {
+  void memoryRuntime.markdownSyncService.syncUserMirrorOnAppStart({
+    homePath: megumiHomePaths.homePath,
+  }).catch((error) => {
+    runtimeLogger.warn('memory_user_markdown_startup_sync_failed', {
+      message: error instanceof Error ? error.message : String(error),
+    });
   });
-});
+}
 const agentInstructionSourceService = new AgentInstructionSourceService();
 const timelineMessageRepository = new TimelineMessageRepository(database);
 const sessionRunRepository = new SessionRunRepository(database);
@@ -184,8 +186,8 @@ const sessionRunService = new SessionRunService({
   memoryRecallService: memoryRuntime.recallService,
   memoryCaptureService: memoryRuntime.captureService,
   memorySettingsProvider: {
-    getMemorySettings({ workspaceId }) {
-      return memoryRepository.getSettings(workspaceId) ?? undefined;
+    getMemorySettings() {
+      return memoryRepository.getSettings() ?? undefined;
     },
   },
   memoryMarkdownSyncService: memoryRuntime.markdownSyncService,

@@ -15,6 +15,7 @@ import {
   MemoryRecallResultSchema,
   MemoryRecallSnapshotSchema,
   MemoryRecordSchema,
+  MemorySettingsSchema,
   MemoryScopeSchema,
 } from '@megumi/shared/memory';
 
@@ -55,6 +56,22 @@ describe('memory shared contracts', () => {
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'deleted' })).success).toBe(true);
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'archived' })).success).toBe(false);
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'disabled' })).success).toBe(false);
+  });
+
+  it('keeps memory settings global instead of workspace-scoped', () => {
+    expect(MemorySettingsSchema.parse({
+      autoCaptureEnabled: true,
+      defaultCandidateReviewMode: 'manual',
+      updatedAt: '2026-06-13T00:00:00.000Z',
+    })).toMatchObject({
+      autoCaptureEnabled: true,
+    });
+    expect(MemorySettingsSchema.safeParse({
+      workspaceId: 'workspace-1',
+      autoCaptureEnabled: true,
+      defaultCandidateReviewMode: 'manual',
+      updatedAt: '2026-06-13T00:00:00.000Z',
+    }).success).toBe(false);
   });
 
   it('parses a runtime memory record with source, evidence, dedupe, and use metadata', () => {

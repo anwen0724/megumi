@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bot, CheckCircle2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Bot, BrainCircuit, CheckCircle2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { ThemeSelector } from '../shared/theme';
 import { Button, cx } from '../shared/ui';
 
-type SettingsCategory = 'appearance' | 'models' | 'security' | 'about';
+type SettingsCategory = 'appearance' | 'models' | 'memory' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -20,6 +21,7 @@ interface SettingsCategoryItem {
 const categories: SettingsCategoryItem[] = [
   { id: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme and local display preferences' },
   { id: 'models', label: 'Models', icon: Bot, description: 'Provider and model runtime settings' },
+  { id: 'memory', label: 'Memory', icon: BrainCircuit, description: 'Global long-term memory runtime settings' },
   { id: 'security', label: 'Security', icon: ShieldCheck, description: 'Local secret and approval posture' },
   { id: 'about', label: 'About', icon: Info, description: 'Megumi desktop runtime information' },
 ];
@@ -115,6 +117,8 @@ export function SettingsPage({ onDone }: SettingsPageProps) {
               ) : null}
 
               {category === 'models' ? <ProviderSettingsPanel /> : null}
+
+              {category === 'memory' ? <MemorySettingsPanel /> : null}
 
               {category === 'security' ? (
                 <div className="space-y-3">

@@ -68,6 +68,21 @@ describe('memory schema migrations', () => {
     ]));
   });
 
+  it('stores memory settings as a single global row model', () => {
+    database = createDatabase(':memory:');
+    migrateDatabase(database);
+
+    expect(columnNames('memory_settings')).toEqual(expect.arrayContaining([
+      'settings_id',
+      'auto_capture_enabled',
+      'default_candidate_review_mode',
+      'updated_at',
+      'metadata_json',
+      'settings_json',
+    ]));
+    expect(columnNames('memory_settings')).not.toContain('workspace_id');
+  });
+
   it('creates lookup, dedupe, recall relation, and mirror indexes', () => {
     database = createDatabase(':memory:');
     migrateDatabase(database);

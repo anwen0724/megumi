@@ -212,10 +212,11 @@ const mocks = vi.hoisted(() => {
       this.database = database;
     }),
     MemoryRepository: vi.fn(function MemoryRepository(
-      this: { database?: unknown },
+      this: { database?: unknown; getSettings?: ReturnType<typeof vi.fn> },
       database: unknown,
     ) {
       this.database = database;
+      this.getSettings = vi.fn(() => undefined);
     }),
     ProjectRepository: vi.fn(function ProjectRepository(
       this: { database?: unknown },

@@ -3291,6 +3291,11 @@ describe('SessionRunService', () => {
       memoryRecallSources: [],
       diagnostics: [],
     }));
+    const getMemorySettings = vi.fn(() => ({
+      autoCaptureEnabled: false,
+      defaultCandidateReviewMode: 'manual' as const,
+      updatedAt: '2026-05-17T00:00:00.000Z',
+    }));
     const memoryCaptureService = {
       calls: [] as unknown[],
       async evaluateRunCompletedCapture(input: unknown) {
@@ -3303,12 +3308,7 @@ describe('SessionRunService', () => {
       memoryRecallService: { recallForNewUserInput },
       memoryCaptureService,
       memorySettingsProvider: {
-        getMemorySettings: vi.fn(() => ({
-          workspaceId: 'workspace-1',
-          autoCaptureEnabled: false,
-          defaultCandidateReviewMode: 'manual' as const,
-          updatedAt: '2026-05-17T00:00:00.000Z',
-        })),
+        getMemorySettings,
       },
     });
     service.createSession({
@@ -3345,6 +3345,7 @@ describe('SessionRunService', () => {
     expect(recallForNewUserInput).toHaveBeenCalledWith(expect.objectContaining({
       enabled: false,
     }));
+    expect(getMemorySettings).toHaveBeenCalledWith();
     expect(memoryCaptureService.calls).toEqual([
       expect.objectContaining({
         memoryEnabled: false,

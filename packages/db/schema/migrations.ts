@@ -44,6 +44,27 @@ function addColumnIfMissing(
   database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition};`);
 }
 
+function ensureGlobalMemorySettingsTable(database: MegumiDatabase): void {
+  if (tableExists(database, 'memory_settings')) {
+    const hasWorkspaceId = tableColumns(database, 'memory_settings').some((column) => column.name === 'workspace_id');
+    if (hasWorkspaceId) {
+      // Stage 18 memory settings are global; old workspace-scoped rows are intentionally not migrated.
+      database.exec('DROP TABLE memory_settings;');
+    }
+  }
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS memory_settings (
+      settings_id TEXT PRIMARY KEY,
+      auto_capture_enabled INTEGER NOT NULL,
+      default_candidate_review_mode TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT,
+      settings_json TEXT NOT NULL
+    );
+  `);
+}
+
 function archiveLegacyToolPersistenceTables(database: MegumiDatabase): void {
   database.exec(`
     DROP INDEX IF EXISTS idx_tool_uses_run_id;
@@ -1402,15 +1423,9 @@ export function migrateDatabase(database: MegumiDatabase): void {
       audit_log_json TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS memory_settings (
-      workspace_id TEXT PRIMARY KEY,
-      auto_capture_enabled INTEGER NOT NULL,
-      default_candidate_review_mode TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      metadata_json TEXT,
-      settings_json TEXT NOT NULL
-    );
   `);
+
+  ensureGlobalMemorySettingsTable(database);
 
   addColumnIfMissing(database, 'memory_records', 'normalized_text', 'TEXT');
   addColumnIfMissing(database, 'memory_records', 'dedupe_key', 'TEXT');

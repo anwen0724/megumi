@@ -329,7 +329,6 @@ export type MemoryRecallSnapshot = z.infer<typeof MemoryRecallSnapshotSchema>;
 
 export const MemorySettingsSchema = z
   .object({
-    workspaceId: IdSchema,
     autoCaptureEnabled: z.boolean(),
     defaultCandidateReviewMode: MemoryReviewModeSchema,
     updatedAt: IsoDateTimeSchema,

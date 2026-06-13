@@ -241,7 +241,7 @@ export interface SessionRunMemoryCaptureService {
 }
 
 export interface SessionRunMemorySettingsProvider {
-  getMemorySettings(input: { workspaceId: string; sessionId?: string | null }): MemorySettings | undefined;
+  getMemorySettings(): MemorySettings | undefined;
 }
 
 export interface SessionRunMemoryMarkdownSyncService {
@@ -561,15 +561,12 @@ export class SessionRunService {
     }
   }
 
-  private resolveMemoryEnabled(input: { workspaceId?: string | null; sessionId?: string | null }): boolean {
-    if (!input.workspaceId || !this.memorySettingsProvider) {
+  private resolveMemoryEnabled(): boolean {
+    if (!this.memorySettingsProvider) {
       return true;
     }
     try {
-      return this.memorySettingsProvider.getMemorySettings({
-        workspaceId: String(input.workspaceId),
-        ...(input.sessionId ? { sessionId: String(input.sessionId) } : {}),
-      })?.autoCaptureEnabled ?? true;
+      return this.memorySettingsProvider.getMemorySettings()?.autoCaptureEnabled ?? true;
     } catch {
       return true;
     }
@@ -579,10 +576,7 @@ export class SessionRunService {
     if (!this.megumiHomePath || !this.memoryMarkdownSyncService || !session.workspaceId) {
       return;
     }
-    if (!this.resolveMemoryEnabled({
-      workspaceId: String(session.workspaceId),
-      sessionId: String(session.sessionId),
-    })) {
+    if (!this.resolveMemoryEnabled()) {
       return;
     }
 
@@ -1444,10 +1438,7 @@ export class SessionRunService {
       input.session.workspacePath,
       modelInputSourceOverrides.requestedCwd,
     );
-    const memoryEnabled = this.resolveMemoryEnabled({
-      ...(input.session.workspaceId ? { workspaceId: String(input.session.workspaceId) } : {}),
-      sessionId: String(input.session.sessionId),
-    });
+    const memoryEnabled = this.resolveMemoryEnabled();
     const memoryRecall = await this.recallMemoryForNewUserInput({
       ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
@@ -2180,10 +2171,7 @@ export class SessionRunService {
             .trim(),
           assistantText: assistantContent,
           hasProject: Boolean(input.projectRoot),
-          memoryEnabled: this.resolveMemoryEnabled({
-            ...(input.projectId ? { workspaceId: input.projectId } : {}),
-            sessionId: String(input.request.sessionId),
-          }),
+          memoryEnabled: this.resolveMemoryEnabled(),
         });
       }
       yield eventWithRequest;

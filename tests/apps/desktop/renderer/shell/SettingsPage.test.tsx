@@ -1,5 +1,5 @@
 ﻿// @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
@@ -36,6 +36,30 @@ describe('SettingsPage', () => {
           update: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
           setApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
           deleteApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
+        },
+        memory: {
+          settingsGet: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              settings: {
+                autoCaptureEnabled: true,
+                defaultCandidateReviewMode: 'manual',
+                updatedAt: '2026-06-13T00:00:00.000Z',
+              },
+            },
+            meta: {},
+          }),
+          settingsUpdate: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              settings: {
+                autoCaptureEnabled: false,
+                defaultCandidateReviewMode: 'manual',
+                updatedAt: '2026-06-13T00:01:00.000Z',
+              },
+            },
+            meta: {},
+          }),
         },
       },
     });
@@ -80,10 +104,10 @@ describe('SettingsPage', () => {
     expect(within(categories).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Appearance',
       'Models',
+      'Memory',
       'Security',
       'About',
     ]);
-    expect(screen.queryByRole('tab', { name: 'Memory' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Context' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Run dashboard' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Checkpoint' })).not.toBeInTheDocument();
@@ -91,6 +115,9 @@ describe('SettingsPage', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Models' }));
     expect(screen.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Provider settings')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Memory' }));
+    expect(screen.getByText('Long-term memory')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Security' }));
     expect(screen.getByText('Secret storage')).toBeInTheDocument();
@@ -116,6 +143,32 @@ describe('SettingsPage', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: 'Appearance' }));
     expect(content).toHaveClass('grid-cols-[13rem_minmax(0,1fr)]');
+  });
+
+  it('updates the global memory runtime setting without a workspace payload', async () => {
+    renderSettingsPage();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Memory' }));
+
+    await waitFor(() => {
+      expect(window.megumi.memory.settingsGet).toHaveBeenCalledWith(expect.objectContaining({
+        payload: {},
+      }));
+    });
+
+    const toggle = await screen.findByRole('switch', { name: 'Long-term memory' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+    await userEvent.click(toggle);
+
+    expect(window.megumi.memory.settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        autoCaptureEnabled: false,
+        defaultCandidateReviewMode: 'manual',
+        updatedAt: expect.any(String),
+      },
+    }));
+    expect(JSON.stringify(vi.mocked(window.megumi.memory.settingsUpdate).mock.calls)).not.toContain('workspaceId');
   });
 
   it('calls onDone from Escape without rendering a visible Done button', () => {
