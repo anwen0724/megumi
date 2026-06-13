@@ -10,7 +10,6 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
-import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 import App from '@megumi/desktop/renderer/app/App';
@@ -407,17 +406,6 @@ function resetStores() {
   useChatStreamStore.getState().reset();
   useWorkspaceFilesStore.getState().reset();
   useArtifactStore.getState().clearArtifacts();
-  useMemoryStore.setState({
-    settings: undefined,
-    candidates: [],
-    memories: [],
-    selectedMemory: undefined,
-    selectedSourceRefs: [],
-    accessLogs: [],
-    recallPreview: undefined,
-    loading: false,
-    error: undefined,
-  });
 }
 
 function renderApp() {
