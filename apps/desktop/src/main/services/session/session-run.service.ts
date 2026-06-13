@@ -11,6 +11,7 @@ import {
   type ToolApprovalResumePort,
   type ToolCallHandlerPort,
 } from '@megumi/core/agent-runtime';
+import type { ModelInputMemoryRecallSource } from '@megumi/context-management/model-step-input-context';
 import {
   createRunCompletedEvent,
   createRunFailedEvent,
@@ -32,6 +33,7 @@ import type {
 } from '@megumi/shared/run';
 import type {
   AgentInstructionSourceSnapshot,
+  ModelInputContextBuildRequest,
   ModelInputContextSourceRef,
   SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
@@ -107,6 +109,7 @@ import {
   type BuildModelStepInputInput,
   type BuildModelStepInputResult,
 } from './model-step-input-build.service';
+import type { RecallForNewUserInput } from '../memory/memory-recall-runtime.service';
 import {
   SessionCompactionOrchestrator,
   type CompactIfNeededInput,
@@ -193,6 +196,13 @@ export interface SessionRunModelStepInputBuildService {
   buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
 }
 
+export interface SessionRunMemoryRecallService {
+  recallForNewUserInput(input: RecallForNewUserInput): Promise<{
+    memoryRecallSources: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+  }>;
+}
+
 export interface SessionRunGlobalInstructionDirectoryProvider {
   listGlobalInstructionDirs(input: { sessionId: string; runId: string; stepId: string }): string[];
 }
@@ -235,7 +245,14 @@ interface ApprovalContinuationGroup {
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
   toolRuntime: ToolCallHandlerPort & ToolApprovalResumePort;
+  memoryRecallSources?: ModelInputMemoryRecallSource[];
+  memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
   chatStreamAdapter?: ChatStreamEventAdapter;
+}
+
+interface SessionRunMemoryRecallSnapshot {
+  memoryRecallSources?: ModelInputMemoryRecallSource[];
+  memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
 }
 
 export interface SessionRunServiceOptions {
@@ -254,6 +271,8 @@ export interface SessionRunServiceOptions {
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
+  memoryRecallService?: SessionRunMemoryRecallService;
+  megumiHomePath?: string;
   globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
   runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
@@ -348,6 +367,8 @@ export class SessionRunService {
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
+  private readonly memoryRecallService?: SessionRunMemoryRecallService;
+  private readonly megumiHomePath?: string;
   private readonly globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
   private readonly runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
@@ -380,6 +401,8 @@ export class SessionRunService {
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
+    this.memoryRecallService = options.memoryRecallService;
+    this.megumiHomePath = options.megumiHomePath;
     this.globalInstructionDirectoryProvider = options.globalInstructionDirectoryProvider;
     this.sessionInstructionSourceProvider = options.sessionInstructionSourceProvider;
     this.runEffectiveCwdProvider = options.runEffectiveCwdProvider;
@@ -439,6 +462,46 @@ export class SessionRunService {
       ...(sessionInstructionSources.length > 0 ? { sessionInstructionSources } : {}),
       ...(requestedCwd ? { requestedCwd } : {}),
     };
+  }
+
+  private async recallMemoryForNewUserInput(input: {
+    projectId?: string;
+    projectRoot?: string;
+    effectiveCwd?: string;
+    sessionId: string;
+    runId: string;
+    modelStepId: string;
+    queryText: string;
+    providerId?: string;
+    modelId?: string;
+    createdAt: string;
+  }): Promise<SessionRunMemoryRecallSnapshot> {
+    if (!this.memoryRecallService || !this.megumiHomePath) {
+      return {};
+    }
+
+    try {
+      const result = await this.memoryRecallService.recallForNewUserInput({
+        homePath: this.megumiHomePath,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+        ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+        ...(input.effectiveCwd ? { effectiveCwd: input.effectiveCwd } : {}),
+        sessionId: input.sessionId,
+        runId: input.runId,
+        modelStepId: input.modelStepId,
+        queryText: input.queryText,
+        ...(input.providerId ? { providerId: input.providerId } : {}),
+        ...(input.modelId ? { modelId: input.modelId } : {}),
+        createdAt: input.createdAt,
+      });
+
+      return {
+        ...(result.memoryRecallSources.length > 0 ? { memoryRecallSources: result.memoryRecallSources } : {}),
+        ...(result.memoryRecallSeed ? { memoryRecallSeed: result.memoryRecallSeed } : {}),
+      };
+    } catch {
+      return {};
+    }
   }
 
   createSession(payload: SessionCreatePayload): Session {
@@ -1279,6 +1342,28 @@ export class SessionRunService {
       currentMessageId: String(input.userMessage.messageId),
       builtAt: input.payload.createdAt,
     });
+    const modelInputSourceOverrides = this.modelInputRuntimeSourceOverrides({
+      sessionId: String(input.session.sessionId),
+      runId: String(input.run.runId),
+      stepId: String(input.step.stepId),
+      builtAt: input.payload.createdAt,
+    });
+    const memoryRecallEffectiveCwd = resolveRecallEffectiveCwd(
+      input.session.workspacePath,
+      modelInputSourceOverrides.requestedCwd,
+    );
+    const memoryRecall = await this.recallMemoryForNewUserInput({
+      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      ...(memoryRecallEffectiveCwd ? { effectiveCwd: memoryRecallEffectiveCwd } : {}),
+      sessionId: String(input.session.sessionId),
+      runId: String(input.run.runId),
+      modelStepId: String(input.step.stepId),
+      queryText: input.inputPreprocessing.effectiveUserText,
+      providerId: input.payload.providerId,
+      modelId: input.payload.modelId,
+      createdAt: input.payload.createdAt,
+    });
     const compactionProbeModelInput = await this.modelStepInputBuildService.buildModelStepInput({
       requestId: input.requestId,
       sessionId: String(input.session.sessionId),
@@ -1290,12 +1375,7 @@ export class SessionRunService {
       modelContextWindow: budgetPolicy.modelContextWindow,
       ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      ...this.modelInputRuntimeSourceOverrides({
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        builtAt: input.payload.createdAt,
-      }),
+      ...modelInputSourceOverrides,
       permissionMode: input.permissionMode,
       ...(input.permissionSnapshot ? {
         permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
@@ -1304,6 +1384,7 @@ export class SessionRunService {
       currentMessage: input.userMessage,
       inputPreprocessing: input.inputPreprocessing,
       sessionContext,
+      ...memoryRecall,
       ...(toolDefinitions ? { toolDefinitions } : {}),
       budgetPolicy: {
         modelContextWindow: Number.MAX_SAFE_INTEGER,
@@ -1387,12 +1468,7 @@ export class SessionRunService {
       modelContextWindow: budgetPolicy.modelContextWindow,
       ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      ...this.modelInputRuntimeSourceOverrides({
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        builtAt: input.payload.createdAt,
-      }),
+      ...modelInputSourceOverrides,
       permissionMode: input.permissionMode,
       ...(input.permissionSnapshot ? {
         permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
@@ -1401,6 +1477,7 @@ export class SessionRunService {
       currentMessage: input.userMessage,
       inputPreprocessing: input.inputPreprocessing,
       sessionContext: finalSessionContext,
+      ...memoryRecall,
       ...(toolDefinitions ? { toolDefinitions } : {}),
       budgetPolicy,
       builtAt: input.payload.createdAt,
@@ -1449,6 +1526,7 @@ export class SessionRunService {
       startSequence: lastSequence,
       emitRunStarted: false,
       permissionMode: input.permissionMode,
+      ...memoryRecall,
     });
   }
 
@@ -1533,6 +1611,8 @@ export class SessionRunService {
     chatStreamAdapter?: ChatStreamEventAdapter;
     projectRoot?: string;
     permissionMode?: PermissionMode;
+    memoryRecallSources?: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
     startSequence?: number;
     emitRunStarted?: boolean;
   }): AsyncIterable<RuntimeEvent> {
@@ -1575,6 +1655,8 @@ export class SessionRunService {
         ])),
         resolvedResults: [],
         toolRuntime,
+        ...(input.memoryRecallSources ? { memoryRecallSources: input.memoryRecallSources } : {}),
+        ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
         ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
       };
       this.pendingApprovalGroups.set(groupId, group);
@@ -1654,6 +1736,8 @@ export class SessionRunService {
               toolCalls: contextInput.toolCalls,
               toolResults: contextInput.toolResults,
               providerStates: contextInput.providerStates,
+              ...(input.memoryRecallSources ? { memoryRecallSources: input.memoryRecallSources } : {}),
+              ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
               builtAt: contextInput.builtAt,
             });
             if (continuationInput.failure) {
@@ -2601,6 +2685,8 @@ export class SessionRunService {
       toolCalls: pending.accumulatedToolCalls,
       toolResults: resumedToolResults,
       providerStates: pending.accumulatedProviderStates,
+      ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
+      ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
       builtAt: input.decidedAt,
     });
     if (resumedModelInput.failure) {
@@ -2635,6 +2721,8 @@ export class SessionRunService {
       ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       emitRunStarted: false,
       ...(continuation.permissionMode ? { permissionMode: continuation.permissionMode } : {}),
+      ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
+      ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
     });
   }
 
@@ -3213,6 +3301,16 @@ function withTextDelta(event: RuntimeEvent, delta: string): RuntimeEvent {
       delta,
     },
   };
+}
+
+function resolveRecallEffectiveCwd(projectRoot: string | undefined, requestedCwd: string | undefined): string | undefined {
+  if (!requestedCwd) {
+    return projectRoot;
+  }
+  if (path.isAbsolute(requestedCwd)) {
+    return requestedCwd;
+  }
+  return projectRoot ? path.join(projectRoot, requestedCwd) : requestedCwd;
 }
 
 function createToolResultSummary(toolResult: ToolResult): string {

@@ -254,6 +254,8 @@ function createServiceWithModelStepStream(
   sessionContextInputService?: SessionRunServiceOptions['sessionContextInputService'];
   sessionCompactionOrchestrator?: SessionRunServiceOptions['sessionCompactionOrchestrator'];
   modelStepInputBuildService?: SessionRunServiceOptions['modelStepInputBuildService'];
+  memoryRecallService?: SessionRunServiceOptions['memoryRecallService'];
+  megumiHomePath?: string;
   globalInstructionDirectoryProvider?: SessionRunServiceOptions['globalInstructionDirectoryProvider'];
   sessionInstructionSourceProvider?: SessionRunServiceOptions['sessionInstructionSourceProvider'];
   runEffectiveCwdProvider?: SessionRunServiceOptions['runEffectiveCwdProvider'];
@@ -277,6 +279,8 @@ function createServiceWithModelStepStream(
       sessionCompactionOrchestrator: options.sessionCompactionOrchestrator,
     } : {}),
     ...(options?.modelStepInputBuildService ? { modelStepInputBuildService: options.modelStepInputBuildService } : {}),
+    ...(options?.memoryRecallService ? { memoryRecallService: options.memoryRecallService } : {}),
+    ...(options?.megumiHomePath ? { megumiHomePath: options.megumiHomePath } : {}),
     ...(options?.globalInstructionDirectoryProvider ? {
       globalInstructionDirectoryProvider: options.globalInstructionDirectoryProvider,
     } : {}),
@@ -379,6 +383,25 @@ function modelInputContextFromBuildInput(input: BuildModelStepInputInput): Model
     : `run:${input.runId}`;
   const sourceKind: ModelInputContextSourceKind = input.currentMessage ? 'current_user_message' : 'session_run';
   const partId = `part:current-turn:${input.stepId}`;
+  const memoryParts = (input.memoryRecallSources ?? []).map((source, index) => ({
+    partId: `part:memory:${index + 1}:${source.sourceId}`,
+    kind: 'memory' as const,
+    memoryKind: 'memory_recall' as const,
+    text: source.text,
+    memoryIds: source.memoryIds,
+    sourceRefs: [{
+      sourceId: source.sourceId,
+      sourceKind: 'memory_recall' as const,
+      sourceUri: `memory-recall://${source.sourceId}`,
+      loadedAt: source.loadedAt ?? input.builtAt,
+      ...(source.metadata ? { metadata: source.metadata } : {}),
+    }],
+    priority: 55,
+    tokenEstimate: 3,
+    budgetStatus: 'included_full' as const,
+    budgetClass: 'contextual' as const,
+    required: false as const,
+  }));
   const part = input.currentMessage
     ? {
         partId,
@@ -410,24 +433,25 @@ function modelInputContextFromBuildInput(input: BuildModelStepInputInput): Model
         budgetStatus: 'included_full' as const,
         budgetClass: 'required' as const,
       };
+  const parts = [part, ...memoryParts];
   return {
     contextId: `model-input-context:${input.stepId}:${input.contextKind}`,
     sessionId: input.sessionId,
     runId: input.runId,
     stepId: input.stepId,
     builtAt: input.builtAt,
-    parts: [part],
+    parts,
     budget: {
       modelContextWindow: 8192,
       reservedOutputTokens: 1024,
       availableInputTokens: 7168,
       keepRecentTokens: 4096,
-      inputTokenEstimate: 2,
-      partBudgets: [{
-        partId,
-        tokenEstimate: 2,
-        budgetStatus: 'included_full',
-      }],
+      inputTokenEstimate: parts.reduce((sum, nextPart) => sum + (nextPart.tokenEstimate ?? 0), 0),
+      partBudgets: parts.map((nextPart) => ({
+        partId: nextPart.partId,
+        tokenEstimate: nextPart.tokenEstimate ?? 0,
+        budgetStatus: nextPart.budgetStatus,
+      })),
     },
     trace: {
       buildReason: input.contextKind,
@@ -437,8 +461,15 @@ function modelInputContextFromBuildInput(input: BuildModelStepInputInput): Model
         reason: input.currentMessage ? 'current_turn' : 'runtime_fact',
         budgetClass: 'required',
         partId,
-      }],
+      }, ...memoryParts.map((memoryPart) => ({
+        sourceId: memoryPart.sourceRefs[0].sourceId,
+        sourceKind: 'memory_recall' as const,
+        reason: 'memory',
+        budgetClass: 'contextual' as const,
+        partId: memoryPart.partId,
+      }))],
       excludedSources: [],
+      ...(input.memoryRecallSeed ? { metadata: { memoryRecallSeed: input.memoryRecallSeed } } : {}),
     },
   };
 }
@@ -2816,6 +2847,243 @@ describe('SessionRunService', () => {
         retryable: false,
         source: 'main',
       },
+    });
+  });
+
+  it('recalls memory before the compaction probe and reuses that source for the initial build', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const buildInputs: BuildModelStepInputInput[] = [];
+    const order: string[] = [];
+    const memoryRecallSources = [{
+      sourceId: 'memory-recall:snapshot-1',
+      text: 'Relevant long-term memory:\n\n1. [user/preference] Prefer pnpm commands.',
+      memoryIds: ['memory-user-1'],
+      loadedAt: '2026-05-17T00:00:00.000Z',
+      metadata: {
+        snapshotId: 'memory-recall-snapshot-1',
+        recallRequestId: 'memory-recall-request-1',
+        selectedCount: 1,
+      },
+    }];
+    const memoryRecallSeed = {
+      queryText: 'Review package scripts',
+      metadata: {
+        snapshotId: 'memory-recall-snapshot-1',
+        recallRequestId: 'memory-recall-request-1',
+        selectedCount: 1,
+      },
+    };
+    const recallForNewUserInput = vi.fn(async (input) => {
+      order.push('recall');
+      expect(input).toMatchObject({
+        homePath: 'C:/megumi-home',
+        projectId: 'workspace-1',
+        projectRoot: 'C:/project',
+        effectiveCwd: 'C:/project',
+        sessionId: 'session-1',
+        runId: 'run-1',
+        modelStepId: 'step-1',
+        queryText: 'Review package scripts',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      });
+      return {
+        status: 'ok' as const,
+        memoryRecallSources,
+        memoryRecallSeed,
+        diagnostics: [],
+      };
+    });
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      onRequest: (request) => requests.push(request),
+      megumiHomePath: 'C:/megumi-home',
+      memoryRecallService: { recallForNewUserInput },
+      sessionCompactionOrchestrator: {
+        async compactIfNeeded(input): Promise<SessionCompactionOrchestrationResult> {
+          order.push('compact');
+          expect(input.budgetProbeInputContext.parts).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'memory',
+              memoryKind: 'memory_recall',
+              text: expect.stringContaining('Prefer pnpm commands.'),
+            }),
+          ]));
+          return { status: 'skipped', events: [] };
+        },
+      },
+      modelStepInputBuildService: {
+        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+          order.push(`build:${input.contextKind}`);
+          buildInputs.push(input);
+          return successfulModelStepInputBuild(input);
+        },
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Review package scripts',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(order).toEqual(['recall', 'build:compaction-probe', 'compact', 'build:initial']);
+    expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
+    expect(buildInputs[0]?.memoryRecallSources).toBe(memoryRecallSources);
+    expect(buildInputs[1]?.memoryRecallSources).toBe(memoryRecallSources);
+    expect(buildInputs[0]?.memoryRecallSeed).toBe(memoryRecallSeed);
+    expect(buildInputs[1]?.memoryRecallSeed).toBe(memoryRecallSeed);
+    expect(requests[0]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'memory',
+        memoryKind: 'memory_recall',
+        required: false,
+        text: expect.stringContaining('Prefer pnpm commands.'),
+      }),
+    ]));
+    expect(service.listMessagesBySession('session-1').some((message) => (
+      message.content.includes('Prefer pnpm commands.')
+    ))).toBe(false);
+    expect(recallForNewUserInput).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the run-scoped recalled memory snapshot for tool continuation without recalling again', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const memoryRecallSources = [{
+      sourceId: 'memory-recall:snapshot-tool',
+      text: 'Relevant long-term memory:\n\n1. [project/fact] Use the existing session service tests.',
+      memoryIds: ['memory-project-1'],
+      loadedAt: '2026-05-17T00:00:00.000Z',
+      metadata: {
+        snapshotId: 'memory-recall-snapshot-tool',
+        recallRequestId: 'memory-recall-request-tool',
+        selectedCount: 1,
+      },
+    }];
+    const memoryRecallSeed = {
+      queryText: 'Read package.json',
+      metadata: {
+        snapshotId: 'memory-recall-snapshot-tool',
+        recallRequestId: 'memory-recall-request-tool',
+        selectedCount: 1,
+      },
+    };
+    const recallForNewUserInput = vi.fn(async () => ({
+      status: 'ok' as const,
+      memoryRecallSources,
+      memoryRecallSeed,
+      diagnostics: [],
+    }));
+    const service = createServiceWithModelStepStream((request, callIndex) => {
+      requests.push(request);
+      if (callIndex === 1) {
+        return [
+          toolUseCreatedEvent(1),
+          modelStepCompletedEvent(2),
+        ];
+      }
+      return [{ ...assistantOutputCompletedEvent(1), stepId: request.stepId }];
+    }, {
+      megumiHomePath: 'C:/megumi-home',
+      memoryRecallService: { recallForNewUserInput },
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolCalls() {
+              return {
+                toolResults: [createToolResult({
+                  createdAt: '2026-05-17T00:00:02.500Z',
+                  toolCallId: 'tool-call-1',
+                })],
+                runtimeEvents: [],
+              };
+            },
+            async resumeToolApproval() {
+              return undefined;
+            },
+          };
+        },
+      },
+      toolDefinitionProvider: {
+        listDefinitions: () => [{
+          name: 'read_file',
+          title: 'Read file',
+          description: 'Read a file.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          availability: { status: 'available' },
+        }],
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(recallForNewUserInput).toHaveBeenCalledTimes(1);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'memory',
+        memoryKind: 'memory_recall',
+        text: expect.stringContaining('existing session service tests'),
+      }),
+    ]));
+    expect(requests[1]?.inputContext.trace.metadata).toMatchObject({
+      memoryRecallSeed,
     });
   });
 
@@ -5322,6 +5590,31 @@ describe('SessionRunService', () => {
       text: 'Use the approved tool result before answering.',
       loadedAt: '2026-05-17T00:00:00.000Z',
     }];
+    const memoryRecallSources = [{
+      sourceId: 'memory-recall:snapshot-approval',
+      text: 'Relevant long-term memory:\n\n1. [project/fact] Approval resumes should keep recalled memory.',
+      memoryIds: ['memory-project-approval'],
+      loadedAt: '2026-05-17T00:00:00.000Z',
+      metadata: {
+        snapshotId: 'memory-recall-snapshot-approval',
+        recallRequestId: 'memory-recall-request-approval',
+        selectedCount: 1,
+      },
+    }];
+    const memoryRecallSeed = {
+      queryText: 'Read package.json',
+      metadata: {
+        snapshotId: 'memory-recall-snapshot-approval',
+        recallRequestId: 'memory-recall-request-approval',
+        selectedCount: 1,
+      },
+    };
+    const recallForNewUserInput = vi.fn(async () => ({
+      status: 'ok' as const,
+      memoryRecallSources,
+      memoryRecallSeed,
+      diagnostics: [],
+    }));
     const service = createServiceWithModelStepStream((request, callIndex) => {
       requests.push(request);
       if (callIndex === 1) {
@@ -5428,6 +5721,8 @@ describe('SessionRunService', () => {
       sessionInstructionSourceProvider: {
         listSessionInstructionSources: () => sessionInstructionSources,
       },
+      megumiHomePath: 'C:/megumi-home',
+      memoryRecallService: { recallForNewUserInput },
       runEffectiveCwdProvider: {
         getRunEffectiveCwd: () => 'packages/approval',
       },
@@ -5511,6 +5806,7 @@ describe('SessionRunService', () => {
     expect(streamedResumeEvents.map((event) => event.eventType)).toContain('assistant.output.completed');
     expect(requests[1]?.inputContext.trace.metadata).toMatchObject({
       traceId: 'trace:model-input:run-1:step-1:approval-resume',
+      memoryRecallSeed,
       modelTarget: {
         providerId: 'openai',
         modelId: 'gpt-4.1',
@@ -5524,7 +5820,13 @@ describe('SessionRunService', () => {
     expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'instruction', instructionKind: 'session' }),
       expect.objectContaining({ kind: 'runtime_constraint', constraintKind: 'effective_cwd' }),
+      expect.objectContaining({
+        kind: 'memory',
+        memoryKind: 'memory_recall',
+        text: expect.stringContaining('Approval resumes should keep recalled memory.'),
+      }),
     ]));
+    expect(recallForNewUserInput).toHaveBeenCalledTimes(1);
   });
 
   it('passes workspace baseline context to model step requests for session messages', async () => {

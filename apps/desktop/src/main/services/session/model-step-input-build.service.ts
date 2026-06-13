@@ -61,6 +61,7 @@ export interface BuildModelStepInputInput {
   toolResults?: ToolResult[];
   providerStates?: ModelStepProviderState[];
   memoryRecallSources?: ModelInputMemoryRecallSource[];
+  memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
   budgetPolicy?: ContextBudgetPolicy;
   builtAt: string;
 }
@@ -186,6 +187,7 @@ export class ModelStepInputBuildService {
       availableToolsRef: `tool-definitions:${input.runId}`,
       availableCapabilitySummary,
       runtimeFacts: runtimeFactsForInput(input, effectiveCwd),
+      ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
       traceId: this.idFactory.traceId(identity),
       builtAt: input.builtAt,
       metadata: {

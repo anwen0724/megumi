@@ -392,6 +392,7 @@ function finalizePart(
     ...basePart,
     tokenEstimate,
     budgetStatus,
+    ...(draft.required === false ? { required: false } : {}),
     ...(draft.truncationHint ? { truncation: draft.truncationHint } : {}),
   } as ModelInputContextPart;
 }

@@ -39,6 +39,10 @@ import { createRecoveryService } from './services/runtime/recovery.service';
 import { ArtifactContentStore } from './services/artifact/artifact-content-store.service';
 import { ArtifactService } from './services/artifact/artifact.service';
 import { createMemoryService } from './services/memory/memory.service';
+import { MemoryDiagnosticWriter } from './services/memory/memory-diagnostic-writer.service';
+import { MemoryMarkdownSyncService } from './services/memory/memory-markdown-sync.service';
+import { MemoryRecallRuntimeService } from './services/memory/memory-recall-runtime.service';
+import { createNodeMemoryRuntimeFileSystem } from './services/memory/memory-runtime-file-system';
 import { PlanArtifactCompatibilityService } from './services/artifact/plan-artifact-compatibility.service';
 import { TimelineHistoryCommitProjectorService } from './services/session/timeline-history-commit-projector.service';
 import { AgentInstructionSourceService } from './services/session/agent-instruction-source.service';
@@ -72,6 +76,7 @@ const projectService = createProjectService({
 });
 const artifactRepository = new ArtifactRepository(database);
 const memoryRepository = new MemoryRepository(database);
+const memoryRecallRuntime = createMemoryRecallRuntime(memoryRepository);
 const planArtifactCompatibility = new PlanArtifactCompatibilityService({
   repository: artifactRepository,
 });
@@ -167,6 +172,8 @@ const sessionRunService = new SessionRunService({
   workspaceChanges: workspaceChangeRepository,
   chatStreamEventSink: chatStreamSink,
   timelineMessageRepository,
+  memoryRecallService: memoryRecallRuntime.recallService,
+  megumiHomePath: megumiHomePaths.homePath,
 });
 const toolService = new ToolService({
   repository: toolRepository,
@@ -225,6 +232,42 @@ function createWorkspaceRestoreForChangeSet(changeSetId: string): WorkspaceResto
     },
   });
 }
+
+function createMemoryRecallRuntime(repository: MemoryRepository): {
+  recallService: MemoryRecallRuntimeService;
+} {
+  const fileSystem = createNodeMemoryRuntimeFileSystem();
+  const diagnostics = new MemoryDiagnosticWriter({
+    fileSystem,
+    logger: runtimeLogger,
+  });
+  const markdownSync = new MemoryMarkdownSyncService({
+    repository,
+    fileSystem,
+    diagnostics,
+    clock: { now: () => new Date().toISOString() },
+    ids: {
+      memoryId: () => `memory:${crypto.randomUUID()}`,
+      auditId: () => `memory-audit:${crypto.randomUUID()}`,
+    },
+  });
+
+  return {
+    recallService: new MemoryRecallRuntimeService({
+      repository,
+      markdownSync,
+      diagnostics,
+      clock: { now: () => new Date().toISOString() },
+      ids: {
+        recallRequestId: () => `memory-recall-request:${crypto.randomUUID()}`,
+        snapshotId: () => `memory-recall-snapshot:${crypto.randomUUID()}`,
+        accessLogId: () => `memory-access:${crypto.randomUUID()}`,
+        auditId: () => `memory-audit:${crypto.randomUUID()}`,
+      },
+    }),
+  };
+}
+
 const recoveryService = createRecoveryService({
   repository: new RecoveryRepository(database),
   clock: () => new Date(),

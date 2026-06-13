@@ -431,6 +431,7 @@ const ModelInputContextPartBaseSchema = z
     tokenEstimate: z.number().int().nonnegative().optional(),
     budgetStatus: z.enum(MODEL_INPUT_CONTEXT_BUDGET_STATUSES),
     budgetClass: ModelInputContextBudgetClassSchema.optional(),
+    required: z.boolean().optional(),
     truncation: ModelInputContextTruncationSchema.optional(),
     metadata: OptionalJsonObjectSchema,
   })
@@ -444,6 +445,7 @@ export interface ModelInputContextPartBase {
   tokenEstimate?: number;
   budgetStatus: ModelInputContextBudgetStatus;
   budgetClass?: ModelInputContextBudgetClass;
+  required?: boolean;
   truncation?: ModelInputContextTruncation;
   metadata?: JsonObject;
 }

@@ -49,6 +49,23 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /packages\/ai\/providers|@megumi\/ai\/providers|openai-compatible|provider adapter implementation/i)).toEqual([]);
   });
 
+  it('keeps provider adapters and prompt mappers away from memory persistence and recall scoring', () => {
+    const files = productionFilesUnder('packages', 'ai');
+    expect(offenders(files, /MemoryRepository|@megumi\/db|better-sqlite3|memory-markdown-sync|memory-recall-runtime|recall-scoring|@megumi\/memory/)).toEqual([]);
+  });
+
+  it('keeps SessionRunService orchestration behind the recall port instead of recall scoring', () => {
+    const files = [
+      join(root, 'apps', 'desktop', 'src', 'main', 'services', 'session', 'session-run.service.ts'),
+    ];
+    expect(offenders(files, /@megumi\/memory|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
+  });
+
+  it('keeps renderer out of hidden model-input memory injection plumbing', () => {
+    const files = productionFilesUnder('apps', 'desktop', 'src', 'renderer');
+    expect(offenders(files, /ModelInputContext|memoryRecallSources|memoryRecallSeed|memory-recall-runtime\.service|memory-markdown-sync\.service/)).toEqual([]);
+  });
+
   it('does not implement memory markdown sync with realtime file watchers', () => {
     const files = [
       ...productionFilesUnder('packages', 'memory'),

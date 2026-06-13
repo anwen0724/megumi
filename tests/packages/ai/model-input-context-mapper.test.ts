@@ -1,4 +1,6 @@
 ﻿// @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
 import { mapModelInputContextToOpenAICompatibleMessages } from '@megumi/ai/prompt/model-input-context-mapper';
@@ -39,6 +41,12 @@ function basePart(overrides: Partial<ModelInputContextPart>): ModelInputContextP
 }
 
 describe('ModelInputContext OpenAI-compatible mapper', () => {
+  it('does not import memory persistence, Markdown sync, or recall scoring', () => {
+    const source = readFileSync(join(process.cwd(), 'packages/ai/prompt/model-input-context-mapper.ts'), 'utf8');
+
+    expect(source).not.toMatch(/MemoryRepository|@megumi\/db|better-sqlite3|memory-markdown-sync|memory-recall-runtime|recall-scoring|@megumi\/memory/);
+  });
+
   it('materializes model input context parts into provider messages in order', () => {
     const context = buildModelInputContext({
       contextId: 'model-input-context:1',

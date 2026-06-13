@@ -144,6 +144,7 @@ export function buildModelStepInputContextFromBuildRequest(
     traceMetadata: {
       traceId: request.traceId,
       ...(request.effectiveCwd ? { effectiveCwd: request.effectiveCwd } : {}),
+      ...(request.memoryRecallSeed ? { memoryRecallSeed: request.memoryRecallSeed } : {}),
       modelTarget: {
         providerId: request.modelTarget.providerId,
         modelId: request.modelTarget.modelId,

@@ -211,6 +211,58 @@ describe('ModelStepInputBuildService', () => {
     }));
   });
 
+  it('passes memory recall seed into the build request trace without creating memory text by itself', async () => {
+    const service = new ModelStepInputBuildService({
+      idFactory: {
+        buildRequestId: () => 'model-input-build:memory-seed',
+        traceId: () => 'trace:model-input:memory-seed',
+      },
+    });
+
+    const result = await service.buildModelStepInput({
+      requestId: 'request:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      contextKind: 'initial',
+      providerId: 'openai',
+      modelId: 'gpt-4.1',
+      permissionMode: 'default',
+      currentMessage: userMessage(),
+      sessionContext: sessionContext(),
+      toolDefinitions: [],
+      memoryRecallSeed: {
+        queryText: 'Review package scripts.',
+        metadata: {
+          snapshotId: 'memory-recall-snapshot:1',
+          recallRequestId: 'memory-recall-request:1',
+          selectedCount: 1,
+        },
+      },
+      builtAt,
+    });
+
+    expect(result.buildRequest.memoryRecallSeed).toEqual({
+      queryText: 'Review package scripts.',
+      metadata: {
+        snapshotId: 'memory-recall-snapshot:1',
+        recallRequestId: 'memory-recall-request:1',
+        selectedCount: 1,
+      },
+    });
+    expect(result.inputContext.trace.metadata).toMatchObject({
+      memoryRecallSeed: {
+        queryText: 'Review package scripts.',
+        metadata: {
+          snapshotId: 'memory-recall-snapshot:1',
+          recallRequestId: 'memory-recall-request:1',
+          selectedCount: 1,
+        },
+      },
+    });
+    expect(result.inputContext.parts.some((part) => part.kind === 'memory')).toBe(false);
+  });
+
   it('rebuilds continuation input from a base input context without using tool-local cwd as run cwd', async () => {
     const baseInputContext: ModelInputContext = {
       contextId: 'model-input-context:step:1:initial',

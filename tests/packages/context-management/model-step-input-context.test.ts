@@ -336,6 +336,11 @@ describe('buildModelStepInputContextFromSources', () => {
         text: 'User prefers concise Chinese answers.',
         memoryIds: ['memory:preference:1'],
         budgetClass: 'contextual',
+        required: false,
+        sourceRefs: [expect.objectContaining({
+          sourceKind: 'memory_recall',
+          sourceUri: 'memory-recall://memory-recall:preference',
+        })],
       }),
     ]));
     expect(context.trace.selectedSources).toEqual(expect.arrayContaining([
@@ -345,6 +350,40 @@ describe('buildModelStepInputContextFromSources', () => {
         budgetClass: 'contextual',
       }),
     ]));
+    expect(context.trace.metadata).toMatchObject({
+      memoryRecallSeed: {
+        queryText: 'Summarize current context.',
+      },
+    });
+  });
+
+  it('keeps memory recall seed as trace metadata without materializing memory text', () => {
+    const context = buildModelStepInputContextFromBuildRequest({
+      request: buildRequestFixture({
+        memoryRecallSeed: {
+          queryText: 'Review package scripts.',
+          metadata: {
+            snapshotId: 'memory-recall-snapshot:1',
+            recallRequestId: 'memory-recall-request:1',
+            selectedCount: 0,
+          },
+        },
+      }),
+      budgetPolicy: budgetPolicy(),
+    });
+
+    expect(context.trace.metadata).toMatchObject({
+      memoryRecallSeed: {
+        queryText: 'Review package scripts.',
+        metadata: {
+          snapshotId: 'memory-recall-snapshot:1',
+          recallRequestId: 'memory-recall-request:1',
+          selectedCount: 0,
+        },
+      },
+    });
+    expect(context.parts.some((part) => part.kind === 'memory')).toBe(false);
+    expect(JSON.stringify(context.parts)).not.toContain('memory-recall-snapshot:1');
   });
 
   it('materializes permission posture as permission_constraint provenance', () => {
