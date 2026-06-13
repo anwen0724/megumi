@@ -1,9 +1,10 @@
 // Owns Composer interaction state and builds renderer-side submit payloads.
 // Runtime validation remains in Desktop Main; this hook only prepares UI input.
-import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_COMPOSER_MODEL,
   DEFAULT_COMPOSER_PERMISSION_MODE,
+  getComposerModelOptionsForProviders,
   type ComposerModel,
   type ComposerPermissionMode,
 } from '../components/composer-options';
@@ -45,6 +46,7 @@ function createComposerSubmitPayload(input: {
 export function useComposerController({
   status = 'idle',
   initialValue = '',
+  enabledProviderIds,
   seedTextKey = null,
   seedText = null,
   onSubmit,
@@ -58,12 +60,16 @@ export function useComposerController({
   const [value, setValue] = useState(initialValue);
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
+  const modelOptions = useMemo(
+    () => getComposerModelOptionsForProviders(enabledProviderIds),
+    [enabledProviderIds],
+  );
   const [commandSelectionIndex, setCommandSelectionIndex] = useState(0);
   const [commandAutocompleteDismissedFor, setCommandAutocompleteDismissedFor] = useState<string | null>(null);
   const trimmedValue = value.trim();
   const inputLocked = status === 'waiting-approval';
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
-  const canSend = trimmedValue.length > 0 && !sendLocked;
+  const canSend = trimmedValue.length > 0 && !sendLocked && modelOptions.length > 0;
   const showStop = status === 'sending' || status === 'running';
   const canStop = showStop && Boolean(onStop);
   const commandSuggestions = listInputCommandSuggestions(value);
@@ -80,6 +86,16 @@ export function useComposerController({
       setValue(seedText);
     }
   }, [seedTextKey, seedText]);
+
+  useEffect(() => {
+    if (modelOptions.length === 0) {
+      return;
+    }
+
+    if (!modelOptions.some((option) => option.value === model)) {
+      setModel(modelOptions[0].value);
+    }
+  }, [model, modelOptions]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -185,6 +201,7 @@ export function useComposerController({
     value,
     permissionMode,
     model,
+    modelOptions,
     inputLocked,
     canSend,
     showStop,

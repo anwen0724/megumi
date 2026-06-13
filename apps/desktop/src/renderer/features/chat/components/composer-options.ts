@@ -22,7 +22,7 @@ interface ComposerOption<TValue extends string> {
   label: string;
 }
 
-interface ComposerModelOption extends ComposerOption<ComposerModel> {
+export interface ComposerModelOption extends ComposerOption<ComposerModel> {
   providerId: ProviderId;
 }
 
@@ -56,5 +56,14 @@ export function getComposerModelLabel(model: string): string {
 
 export function getProviderIdForModel(model: ComposerModel): ProviderId {
   return COMPOSER_MODEL_OPTIONS.find((option) => option.value === model)?.providerId ?? 'deepseek';
+}
+
+export function getComposerModelOptionsForProviders(enabledProviderIds?: ProviderId[]): ComposerModelOption[] {
+  if (!enabledProviderIds) {
+    return COMPOSER_MODEL_OPTIONS;
+  }
+
+  const enabledProviders = new Set(enabledProviderIds);
+  return COMPOSER_MODEL_OPTIONS.filter((option) => enabledProviders.has(option.providerId));
 }
 

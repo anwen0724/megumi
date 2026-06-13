@@ -1,5 +1,6 @@
 ﻿import { useLayoutEffect, useRef } from 'react';
 import type { ApprovalRequest } from '@megumi/shared/tool';
+import type { ProviderId } from '@megumi/shared/provider';
 import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
@@ -19,6 +20,7 @@ interface ComposerDockProps {
   pendingApprovals: ApprovalRequest[];
   recoverableRuns: RecoverableRunSummary[];
   pendingRecoverableRunIds: Set<string>;
+  enabledProviderIds?: ProviderId[];
   onApprovalResolve: (payload: ApprovalCardResolvePayload) => void;
   onRetry: (run: RecoverableRunSummary) => void;
   onRerun: (run: RecoverableRunSummary) => void;
@@ -34,6 +36,7 @@ export function ComposerDock({
   pendingApprovals,
   recoverableRuns,
   pendingRecoverableRunIds,
+  enabledProviderIds,
   onApprovalResolve,
   onRetry,
   onRerun,
@@ -48,6 +51,7 @@ export function ComposerDock({
     composerSurfaceProps,
   } = useComposerController({
     status,
+    enabledProviderIds,
     seedTextKey: branchDraft?.key ?? null,
     seedText: branchDraft?.seedText ?? null,
     onSubmit,

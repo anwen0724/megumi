@@ -1,4 +1,5 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 import { useChatPageController } from '../hooks/use-chat-page-controller';
@@ -11,9 +12,18 @@ const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 
 export function ChatPage() {
   const controller = useChatPageController();
+  const providers = useProviderStore((state) => state.providers);
+  const providerStatus = useProviderStore((state) => state.status);
+  const loadProviders = useProviderStore((state) => state.loadProviders);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
+  const enabledProviderIds = useMemo(
+    () => providers.length > 0
+      ? providers.filter((provider) => provider.enabled).map((provider) => provider.providerId)
+      : undefined,
+    [providers],
+  );
   const timelineScroll = useTimelineAutoScroll({
     sessionKey: controller.activeChatStreamSessionKey,
     updateKey: `${controller.timelineUpdateKey}:${bottomSpacerHeight}`,
@@ -35,6 +45,12 @@ export function ChatPage() {
       void controller.cancelBranchDraft();
     },
   } : null;
+
+  useEffect(() => {
+    if (providerStatus === 'idle') {
+      void loadProviders().catch(() => undefined);
+    }
+  }, [loadProviders, providerStatus]);
 
   return (
     <div
@@ -104,6 +120,7 @@ export function ChatPage() {
             pendingApprovals={controller.pendingApprovals}
             recoverableRuns={controller.unmatchedRecoverableRuns}
             pendingRecoverableRunIds={controller.pendingRecoverableRunIds}
+            enabledProviderIds={enabledProviderIds}
             onApprovalResolve={(payload) => {
               void controller.resolveApproval(payload);
             }}
@@ -160,6 +177,7 @@ export function ChatPage() {
             <div data-testid="welcome-composer-layout" className="mt-10 w-full">
               <Composer
                 status={controller.composerStatus}
+                enabledProviderIds={enabledProviderIds}
                 seedTextKey={branchDraft?.key ?? null}
                 seedText={branchDraft?.seedText ?? null}
                 onSubmit={controller.handleSubmit}

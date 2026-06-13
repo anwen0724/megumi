@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 import { Button, IconButton } from '../../../shared/ui';
 import {
-  COMPOSER_MODEL_OPTIONS,
   COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,
+  type ComposerModelOption,
   type ComposerPermissionMode,
 } from './composer-options';
 
@@ -19,6 +19,7 @@ export interface ComposerSurfaceProps {
   value: string;
   permissionMode: ComposerPermissionMode;
   model: ComposerModel;
+  modelOptions: ComposerModelOption[];
   inputLocked: boolean;
   canSend: boolean;
   showStop: boolean;
@@ -40,6 +41,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   value,
   permissionMode,
   model,
+  modelOptions,
   inputLocked,
   canSend,
   showStop,
@@ -139,7 +141,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
                 onChange={(event) => onModelChange(event.target.value as ComposerModel)}
                 className="max-w-36 truncate bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
               >
-                {COMPOSER_MODEL_OPTIONS.map((option) => (
+                {modelOptions.map((option) => (
                   <option
                     key={option.value}
                     value={option.value}

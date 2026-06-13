@@ -157,6 +157,33 @@ describe('Composer', () => {
     }
   });
 
+  it('hides models whose providers are disabled', () => {
+    render(<Composer enabledProviderIds={['deepseek']} onSubmit={() => undefined} />);
+
+    const modelOptions = Array.from(screen.getByLabelText('Model').querySelectorAll('option'));
+
+    expect(modelOptions.map((option) => option.getAttribute('value'))).toEqual([
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
+    ]);
+    expect(screen.queryByRole('option', { name: 'GPT-5.5' })).not.toBeInTheDocument();
+  });
+
+  it('falls back when the selected model provider becomes disabled', async () => {
+    const { rerender } = render(
+      <Composer enabledProviderIds={['deepseek', 'openai']} onSubmit={() => undefined} />,
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText('Model'), 'gpt-5.5');
+
+    expect(screen.getByLabelText('Model')).toHaveValue('gpt-5.5');
+
+    rerender(<Composer enabledProviderIds={['deepseek']} onSubmit={() => undefined} />);
+
+    expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
+    expect(screen.queryByRole('option', { name: 'GPT-5.5' })).not.toBeInTheDocument();
+  });
+
   it('shows command autocomplete with name and description for slash prefixes', async () => {
     render(<Composer onSubmit={() => undefined} />);
     const input = screen.getByLabelText('Message Megumi');
