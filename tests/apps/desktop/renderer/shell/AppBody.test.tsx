@@ -7,7 +7,6 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
-import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useChatStreamStore } from '@megumi/desktop/renderer/features/chat-stream';
 
@@ -184,17 +183,6 @@ describe('App shell layout contract', () => {
     useRunStore.getState().resetRuns();
     useChatStreamStore.getState().reset();
     useArtifactStore.getState().clearArtifacts();
-    useMemoryStore.setState({
-      settings: undefined,
-      candidates: [],
-      memories: [],
-      selectedMemory: undefined,
-      selectedSourceRefs: [],
-      accessLogs: [],
-      recallPreview: undefined,
-      loading: false,
-      error: undefined,
-    });
   });
 
   afterEach(() => {

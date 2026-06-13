@@ -7,7 +7,6 @@ import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
-import { useMemoryStore } from '@megumi/desktop/renderer/entities/memory/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
@@ -224,17 +223,6 @@ function resetStores() {
   useRunStore.getState().resetRuns();
   useWorkspaceFilesStore.getState().reset();
   useArtifactStore.getState().clearArtifacts();
-  useMemoryStore.setState({
-    settings: undefined,
-    candidates: [],
-    memories: [],
-    selectedMemory: undefined,
-    selectedSourceRefs: [],
-    accessLogs: [],
-    recallPreview: undefined,
-    loading: false,
-    error: undefined,
-  });
 }
 
 function renderChatWithRightPanel() {

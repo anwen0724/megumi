@@ -31,6 +31,7 @@ import type {
   RunContext,
   ModelCapabilitySummary,
 } from '@megumi/shared/run';
+import { isProviderId, type ProviderId } from '@megumi/shared/provider';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContextBuildRequest,
@@ -109,7 +110,6 @@ import {
   type BuildModelStepInputInput,
   type BuildModelStepInputResult,
 } from './model-step-input-build.service';
-import type { RecallForNewUserInput } from '../memory/memory-recall-runtime.service';
 import {
   SessionCompactionOrchestrator,
   type CompactIfNeededInput,
@@ -196,11 +196,46 @@ export interface SessionRunModelStepInputBuildService {
   buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
 }
 
+export interface SessionRunMemoryRecallInput {
+  enabled?: boolean;
+  homePath: string;
+  sessionId: string;
+  runId: string;
+  modelStepId?: string | null;
+  projectId?: string | null;
+  projectRoot?: string | null;
+  effectiveCwd?: string | null;
+  queryText: string;
+  providerId?: string | null;
+  modelId?: string | null;
+  maxResults?: number;
+  maxTokens?: number;
+  createdAt?: string;
+  toolSummaryMetadata?: JsonObject;
+}
+
 export interface SessionRunMemoryRecallService {
-  recallForNewUserInput(input: RecallForNewUserInput): Promise<{
+  recallForNewUserInput(input: SessionRunMemoryRecallInput): Promise<{
     memoryRecallSources: ModelInputMemoryRecallSource[];
     memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
   }>;
+}
+
+export interface SessionRunMemoryCaptureService {
+  evaluateRunCompletedCapture(input: {
+    homePath: string;
+    runId: string;
+    sessionId: string;
+    projectId?: string | null;
+    providerId?: ProviderId | null;
+    modelId?: string | null;
+    runStatus: 'completed';
+    userText: string;
+    assistantText?: string;
+    toolActivitySummary?: string;
+    memoryEnabled?: boolean;
+    hasProject?: boolean;
+  }): Promise<{ status: string; reason?: string; savedMemoryIds?: string[] }>;
 }
 
 export interface SessionRunGlobalInstructionDirectoryProvider {
@@ -239,6 +274,7 @@ interface ApprovalContinuationGroup {
   request: ModelStepRuntimeRequest;
   run: Run;
   step: RunStep;
+  projectId?: string;
   projectRoot?: string;
   permissionMode?: PermissionMode;
   userMessageId: string;
@@ -272,6 +308,7 @@ export interface SessionRunServiceOptions {
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
   memoryRecallService?: SessionRunMemoryRecallService;
+  memoryCaptureService?: SessionRunMemoryCaptureService;
   megumiHomePath?: string;
   globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
@@ -368,6 +405,7 @@ export class SessionRunService {
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
+  private readonly memoryCaptureService?: SessionRunMemoryCaptureService;
   private readonly megumiHomePath?: string;
   private readonly globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
@@ -402,6 +440,7 @@ export class SessionRunService {
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.memoryRecallService = options.memoryRecallService;
+    this.memoryCaptureService = options.memoryCaptureService;
     this.megumiHomePath = options.megumiHomePath;
     this.globalInstructionDirectoryProvider = options.globalInstructionDirectoryProvider;
     this.sessionInstructionSourceProvider = options.sessionInstructionSourceProvider;
@@ -1520,6 +1559,7 @@ export class SessionRunService {
       run: input.run,
       step: input.step,
       userMessageId: input.userMessage.messageId,
+      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
       ...(toolRuntime ? { toolRuntime } : {}),
       ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
@@ -1527,6 +1567,39 @@ export class SessionRunService {
       emitRunStarted: false,
       permissionMode: input.permissionMode,
       ...memoryRecall,
+    });
+  }
+
+  private scheduleRunCompletedMemoryCapture(input: {
+    runId: string;
+    sessionId: string;
+    projectId?: string | null;
+    providerId?: string | null;
+    modelId?: string | null;
+    userText: string;
+    assistantText: string;
+    hasProject: boolean;
+  }): void {
+    if (!this.memoryCaptureService || !this.megumiHomePath) {
+      return;
+    }
+
+    // Capture is a hidden post-completion hook. It must never write transcript
+    // messages or alter the already completed user-visible run stream.
+    void this.memoryCaptureService.evaluateRunCompletedCapture({
+      homePath: this.megumiHomePath,
+      runId: input.runId,
+      sessionId: input.sessionId,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.providerId && isProviderId(input.providerId) ? { providerId: input.providerId } : {}),
+      ...(input.modelId ? { modelId: input.modelId } : {}),
+      runStatus: 'completed',
+      userText: input.userText,
+      assistantText: input.assistantText,
+      hasProject: input.hasProject,
+    }).catch(() => {
+      // Memory capture is best-effort. Runtime diagnostics are handled inside
+      // the memory service when available; session-run must not fail here.
     });
   }
 
@@ -1609,6 +1682,7 @@ export class SessionRunService {
     userMessageId: string;
     toolRuntime?: ToolCallHandlerPort & ToolApprovalResumePort;
     chatStreamAdapter?: ChatStreamEventAdapter;
+    projectId?: string;
     projectRoot?: string;
     permissionMode?: PermissionMode;
     memoryRecallSources?: ModelInputMemoryRecallSource[];
@@ -1646,6 +1720,7 @@ export class SessionRunService {
         request: input.request,
         run: waitingRun,
         step: waitingStep,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
         ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
         ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
         userMessageId: input.userMessageId,
@@ -1986,6 +2061,22 @@ export class SessionRunService {
     ]) {
       const eventWithRequest = withRequestMetadata(event, input.request);
       this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
+      if (eventWithRequest.eventType === 'run.completed') {
+        this.scheduleRunCompletedMemoryCapture({
+          runId: String(input.request.runId),
+          sessionId: String(input.request.sessionId),
+          ...(input.projectId ? { projectId: input.projectId } : {}),
+          providerId: isProviderId(input.request.providerId) ? input.request.providerId : null,
+          modelId: String(input.request.modelId),
+          userText: input.request.inputContext.parts
+            .filter((part) => part.kind === 'current_turn' && part.role === 'user')
+            .map((part) => part.text)
+            .join('\n')
+            .trim(),
+          assistantText: assistantContent,
+          hasProject: Boolean(input.projectRoot),
+        });
+      }
       yield eventWithRequest;
     }
   }
@@ -2717,6 +2808,7 @@ export class SessionRunService {
       userMessageId: continuation.userMessageId,
       startSequence: lastSequence,
       toolRuntime: continuation.toolRuntime,
+      ...(continuation.projectId ? { projectId: continuation.projectId } : {}),
       ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
       ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
       emitRunStarted: false,

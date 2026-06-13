@@ -65,8 +65,6 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'memory.settings.get';
     case IPC_CHANNELS.memory.settingsUpdate:
       return 'memory.settings.update';
-    case IPC_CHANNELS.memory.candidateList:
-      return 'memory.candidate.list';
     case IPC_CHANNELS.memory.candidateAccept:
       return 'memory.candidate.accept';
     case IPC_CHANNELS.memory.candidateReject:
@@ -93,8 +91,6 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'memory.source-refs.list';
     case IPC_CHANNELS.memory.accessLogsList:
       return 'memory.access-logs.list';
-    case IPC_CHANNELS.memory.recallPreview:
-      return 'memory.recall-preview';
     case IPC_CHANNELS.workspace.files.list:
       return 'workspace.files.list';
     default:

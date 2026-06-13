@@ -255,6 +255,7 @@ function createServiceWithModelStepStream(
   sessionCompactionOrchestrator?: SessionRunServiceOptions['sessionCompactionOrchestrator'];
   modelStepInputBuildService?: SessionRunServiceOptions['modelStepInputBuildService'];
   memoryRecallService?: SessionRunServiceOptions['memoryRecallService'];
+  memoryCaptureService?: SessionRunServiceOptions['memoryCaptureService'];
   megumiHomePath?: string;
   globalInstructionDirectoryProvider?: SessionRunServiceOptions['globalInstructionDirectoryProvider'];
   sessionInstructionSourceProvider?: SessionRunServiceOptions['sessionInstructionSourceProvider'];
@@ -281,6 +282,7 @@ function createServiceWithModelStepStream(
     } : {}),
     ...(options?.modelStepInputBuildService ? { modelStepInputBuildService: options.modelStepInputBuildService } : {}),
     ...(options?.memoryRecallService ? { memoryRecallService: options.memoryRecallService } : {}),
+    ...(options?.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
     ...(options?.megumiHomePath ? { megumiHomePath: options.megumiHomePath } : {}),
     ...(options?.globalInstructionDirectoryProvider ? {
       globalInstructionDirectoryProvider: options.globalInstructionDirectoryProvider,
@@ -3276,6 +3278,151 @@ describe('SessionRunService', () => {
 
     expect(requests).toHaveLength(1);
     expect(requests[0]?.inputContext.parts.some((part) => part.kind === 'memory')).toBe(false);
+  });
+
+  it('schedules memory capture after a completed run without writing memory to transcript', async () => {
+    const memoryCaptureService = {
+      calls: [] as unknown[],
+      async evaluateRunCompletedCapture(input: unknown) {
+        this.calls.push(input);
+        return { status: 'skipped' as const, reason: 'no_long_term_signal' };
+      },
+    };
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      memoryCaptureService,
+      megumiHomePath: 'C:/megumi-home',
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      workspacePath: 'C:/workspace/project',
+      createdAt: '2026-06-13T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Please remember that I prefer concise answers.',
+          createdAt: '2026-06-13T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-13T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) streamed.push(event);
+
+    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
+    expect(memoryCaptureService.calls).toEqual([
+      expect.objectContaining({
+        homePath: 'C:/megumi-home',
+        runId: 'run-1',
+        sessionId: 'session-1',
+        projectId: 'project-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        runStatus: 'completed',
+        userText: 'Please remember that I prefer concise answers.',
+        assistantText: 'Final answer after tool result.',
+        hasProject: true,
+      }),
+    ]);
+    const transcriptRoles = service.listMessagesBySession('session-1').map((message) => message.role);
+    expect(transcriptRoles).toHaveLength(2);
+    expect(transcriptRoles).toEqual(expect.arrayContaining(['user', 'assistant']));
+  });
+
+  it('does not schedule memory capture for provider failed runs', async () => {
+    const memoryCaptureService = {
+      calls: [] as unknown[],
+      async evaluateRunCompletedCapture(input: unknown) {
+        this.calls.push(input);
+        return { status: 'skipped' as const, reason: 'not_expected' };
+      },
+    };
+    const service = createServiceWithModelStepStream([
+      providerRunFailedEvent({
+        eventId: 'event-provider-failed',
+        stepId: 'step-1',
+        error: {
+          code: 'provider_auth_failed',
+          message: 'Provider failed.',
+          severity: 'error',
+          retryable: false,
+          source: 'provider',
+        },
+      }),
+    ], {
+      memoryCaptureService,
+      megumiHomePath: 'C:/megumi-home',
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-06-13T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Remember this.',
+          createdAt: '2026-06-13T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-13T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // drain
+    }
+
+    expect(memoryCaptureService.calls).toEqual([]);
+  });
+
+  it('does not let memory capture failures change completed run output', async () => {
+    const memoryCaptureService = {
+      async evaluateRunCompletedCapture() {
+        throw new Error('capture failed');
+      },
+    };
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      memoryCaptureService,
+      megumiHomePath: 'C:/megumi-home',
+    });
+    service.createSession({
+      title: 'Session',
+      createdAt: '2026-06-13T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Remember this.',
+          createdAt: '2026-06-13T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-13T00:00:00.000Z',
+      },
+    });
+    const streamed = [];
+    for await (const event of result.events) streamed.push(event);
+
+    expect(streamed.at(-1)?.eventType).toBe('run.completed');
+    expect(service.listRuntimeEventsByRun('run-1').at(-1)?.eventType).toBe('run.completed');
   });
 
   it('uses the latest completed compaction when building the normal model step after maintenance compaction', async () => {
