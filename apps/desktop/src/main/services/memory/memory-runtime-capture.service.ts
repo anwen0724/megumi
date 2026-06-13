@@ -20,6 +20,7 @@ import type {
   MemoryRecordStatus,
   MemoryScope,
 } from '@megumi/shared/memory';
+import type { ProviderId } from '@megumi/shared/provider';
 import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
 import type { MemoryDiagnosticWriter } from './memory-diagnostic-writer.service';
 import type { MemoryMarkdownSyncResult, MemoryMarkdownSyncService } from './memory-markdown-sync.service';
@@ -29,6 +30,8 @@ export interface MemoryExtractionModelClient {
     runId: string;
     sessionId: string;
     projectId?: string | null;
+    providerId?: ProviderId | null;
+    modelId?: string | null;
     prompt: ReturnType<typeof buildMemoryExtractionPrompt>;
     signal?: AbortSignal;
   }): Promise<
@@ -42,6 +45,8 @@ export interface EvaluateRunCompletedMemoryCaptureInput {
   runId: string;
   sessionId: string;
   projectId?: string | null;
+  providerId?: ProviderId | null;
+  modelId?: string | null;
   runStatus: MemoryCaptureRunStatus;
   userText: string;
   assistantText?: string;
@@ -171,6 +176,8 @@ export class MemoryRuntimeCaptureService {
         runId: input.runId,
         sessionId: input.sessionId,
         projectId: input.projectId ?? null,
+        providerId: input.providerId ?? null,
+        modelId: input.modelId ?? null,
         prompt,
         signal: input.signal,
       });

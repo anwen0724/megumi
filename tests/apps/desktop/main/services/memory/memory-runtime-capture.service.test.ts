@@ -231,6 +231,30 @@ describe('MemoryRuntimeCaptureService', () => {
     expect(failed.repository.audits.map((audit) => audit.operation)).toContain('extraction_failed');
   });
 
+  it('passes provider target into extraction client for completed triggered runs', async () => {
+    const extraction = new FakeExtractionClient();
+    extraction.result = { ok: true, text: '{ "candidates": [] }' };
+    const { service } = createService(extraction);
+
+    const result = await service.evaluateRunCompletedCapture(baseInput({
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      userText: 'Please remember this preference.',
+      assistantText: 'I will remember this preference.',
+    }));
+
+    expect(result).toMatchObject({ status: 'skipped', reason: 'no_candidates' });
+    expect(extraction.calls).toEqual([
+      expect.objectContaining({
+        runId: 'run:1',
+        sessionId: 'session:1',
+        projectId: 'project:1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+      }),
+    ]);
+  });
+
   it('records invalid extraction output without throwing', async () => {
     const extraction = new FakeExtractionClient();
     extraction.result = { ok: true, text: '{not-json' };
