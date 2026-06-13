@@ -6,7 +6,7 @@ import { useThemeStore } from './theme-store';
 
 export function ThemeSelector() {
   const currentTheme = useThemeStore((state) => state.theme);
-  const setTheme = useThemeStore((state) => state.setTheme);
+  const persistTheme = useThemeStore((state) => state.persistTheme);
 
   return (
     <div role="radiogroup" aria-label="Theme" className="grid gap-2 sm:grid-cols-2">
@@ -24,7 +24,7 @@ export function ThemeSelector() {
             type="button"
             role="radio"
             aria-checked={selected}
-            onClick={() => setTheme(themeName)}
+            onClick={() => void persistTheme(themeName)}
             className={cx(
               'flex min-h-16 items-center gap-3 rounded-md border px-3 py-2 text-left transition',
               'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',

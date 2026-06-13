@@ -99,6 +99,7 @@ describe('Megumi Home foundation', () => {
     });
 
     expect(paths.homePath).toBe(path.resolve('C:/Users/anwen', '.megumi'));
+    expect(paths.settingsPath).toBe(path.join(paths.homePath, 'settings.json'));
     expect(fileSystem.directories).toEqual(
       new Set([
         paths.homePath,

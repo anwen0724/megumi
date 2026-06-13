@@ -79,6 +79,43 @@ describe('preload api', () => {
     expect(invoke).toHaveBeenNthCalledWith(4, IPC_CHANNELS.provider.deleteApiKey, deleteRequest);
   });
 
+  it('exposes app settings methods on shared IPC channels with runtime requests', async () => {
+    const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
+    const { api } = await import('@megumi/desktop/preload/api');
+
+    invoke.mockResolvedValue({
+      ok: true,
+      data: {
+        settings: {
+          theme: 'midnight-blue',
+          memory: {
+            enabled: false,
+          },
+          compaction: {
+            enabled: true,
+            reserveTokens: 16384,
+            keepRecentTokens: 20000,
+          },
+        },
+      },
+      meta: { requestId: 'ipc-preload-request-1', channel: IPC_CHANNELS.settings.get, handledAt: 'now' },
+    });
+
+    const getRequest = createRequest(IPC_CHANNELS.settings.get, {});
+    const updateRequest = createRequest(IPC_CHANNELS.settings.update, {
+      theme: 'graphite-dark',
+      memory: {
+        enabled: true,
+      },
+    });
+
+    await api.settings.get(getRequest);
+    await api.settings.update(updateRequest);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.settings.get, getRequest);
+    expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.settings.update, updateRequest);
+  });
+
   it('converts rejected provider invokes to ipc_invoke_failed results', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { api } = await import('@megumi/desktop/preload/api');

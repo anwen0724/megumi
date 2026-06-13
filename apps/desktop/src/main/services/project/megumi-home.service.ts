@@ -61,6 +61,7 @@ export interface MegumiHomeVersion {
 export interface MegumiHomePaths {
   homePath: string;
   configPath: string;
+  settingsPath: string;
   configSchemaPath: string;
   readmePath: string;
   versionPath: string;
@@ -104,6 +105,7 @@ export function buildMegumiHomePaths(homePath: string): MegumiHomePaths {
   return {
     homePath: resolvedHomePath,
     configPath: path.join(resolvedHomePath, 'config.json'),
+    settingsPath: path.join(resolvedHomePath, 'settings.json'),
     configSchemaPath: path.join(resolvedHomePath, 'config.schema.json'),
     readmePath: path.join(resolvedHomePath, 'README.md'),
     versionPath: path.join(resolvedHomePath, 'version.json'),

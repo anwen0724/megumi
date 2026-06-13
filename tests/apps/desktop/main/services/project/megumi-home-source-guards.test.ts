@@ -72,11 +72,10 @@ describe('Megumi Home source guards', () => {
     expect(mainSources).not.toMatch(/secret.*send\(/i);
   });
 
-  it('does not register legacy AI or settings IPC handlers', () => {
+  it('does not register legacy AI IPC handlers', () => {
     const source = readProjectFile('apps/desktop/src/main/ipc/register-handlers.ts');
     const legacyRegistrations = [
       'register' + 'AIHandlers',
-      'register' + 'SettingsHandlers',
     ];
 
     for (const registration of legacyRegistrations) {
@@ -84,13 +83,13 @@ describe('Megumi Home source guards', () => {
     }
 
     expect(source).not.toContain('./handlers/ai.handler');
-    expect(source).not.toContain('./handlers/settings.handler');
+    expect(source).toContain('./handlers/settings.handler');
+    expect(source).toContain('settingsService?: SettingsHandlersService');
   });
 
   it('removes the old Electron userData credential runtime files', () => {
     const oldRuntimeFiles = [
       'apps/desktop/src/main/ipc/handlers/ai.handler.ts',
-      'apps/desktop/src/main/ipc/handlers/settings.handler.ts',
       'apps/desktop/src/main/services/key-' + 'store.service.ts',
     ];
 

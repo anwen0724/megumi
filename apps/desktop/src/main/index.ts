@@ -13,7 +13,7 @@ import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createChatStreamEvent } from '@megumi/shared/chat-stream';
-import { DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED } from '@megumi/shared/memory';
+import { createDefaultMemorySettings, type MemorySettings } from '@megumi/shared/memory';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/project/megumi-home.service';
@@ -37,6 +37,7 @@ import { WorkspaceChangeTrackerService } from './services/workspace/workspace-ch
 import { WorkspaceRestoreService } from './services/workspace/workspace-restore.service';
 import { createPermissionSettingsService } from './services/security/permission-settings.service';
 import { createRecoveryService } from './services/runtime/recovery.service';
+import { createAppSettingsService } from './services/settings/app-settings.service';
 import { ArtifactContentStore } from './services/artifact/artifact-content-store.service';
 import { ArtifactService } from './services/artifact/artifact.service';
 import { createMemoryService } from './services/memory/memory.service';
@@ -60,6 +61,9 @@ import { createWorkspaceChangeFooterProjectorService } from './services/workspac
 
 loadEnvFile();
 const megumiHomePaths = initializeElectronMegumiHomeSync();
+const appSettingsService = createAppSettingsService({
+  settingsPath: megumiHomePaths.settingsPath,
+});
 const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
 const runContextService = createDefaultRunContextService(megumiHomePaths);
 const database = createDatabase(path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3'));
@@ -103,7 +107,7 @@ const providerRuntimeService = new ProviderRuntimeService({
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
-if (memoryRepository.getSettings()?.autoCaptureEnabled ?? DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED) {
+if (appSettingsService.getResolvedSettings().memory.enabled) {
   void memoryRuntime.markdownSyncService.syncUserMirrorOnAppStart({
     homePath: megumiHomePaths.homePath,
   }).catch((error) => {
@@ -188,7 +192,7 @@ const sessionRunService = new SessionRunService({
   memoryCaptureService: memoryRuntime.captureService,
   memorySettingsProvider: {
     getMemorySettings() {
-      return memoryRepository.getSettings() ?? undefined;
+      return getResolvedMemorySettings();
     },
   },
   memoryMarkdownSyncService: memoryRuntime.markdownSyncService,
@@ -217,6 +221,15 @@ const memoryService = createMemoryService({
   repository: memoryRepository,
   now: () => new Date().toISOString(),
   createId: (prefix) => `${prefix}:${crypto.randomUUID()}`,
+  settings: {
+    getSettings: () => getResolvedMemorySettings(),
+    updateSettings(settings) {
+      const resolved = appSettingsService.updateSettings({
+        memory: { enabled: settings.autoCaptureEnabled },
+      });
+      return toMemorySettings(resolved.memory.enabled, settings.updatedAt);
+    },
+  },
   emitRuntimeEvent: (event) => runtimeLogger.info('runtime.memory.event', {
     eventId: event.eventId,
     eventType: event.eventType,
@@ -250,6 +263,20 @@ function createWorkspaceRestoreForChangeSet(changeSetId: string): WorkspaceResto
       restoreFileResultId: () => `workspace-restore-file-result:${crypto.randomUUID()}`,
     },
   });
+}
+
+function getResolvedMemorySettings(): MemorySettings {
+  return toMemorySettings(
+    appSettingsService.getResolvedSettings().memory.enabled,
+    new Date().toISOString(),
+  );
+}
+
+function toMemorySettings(autoCaptureEnabled: boolean, updatedAt: string): MemorySettings {
+  return {
+    ...createDefaultMemorySettings(updatedAt),
+    autoCaptureEnabled,
+  };
 }
 
 function createMemoryRuntime(
@@ -373,6 +400,7 @@ registerAppLifecycle({
     recoveryService,
     artifactService,
     memoryService,
+    settingsService: appSettingsService,
     projectService,
     workspaceFilesService,
   }),

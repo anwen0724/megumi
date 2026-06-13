@@ -8,6 +8,8 @@ describe('ipc channel contracts', () => {
     expect(IPC_CHANNELS.provider.update).toBe('provider:update');
     expect(IPC_CHANNELS.provider.setApiKey).toBe('provider:set-api-key');
     expect(IPC_CHANNELS.provider.deleteApiKey).toBe('provider:delete-api-key');
+    expect(IPC_CHANNELS.settings.get).toBe('settings:get');
+    expect(IPC_CHANNELS.settings.update).toBe('settings:update');
     expect(IPC_CHANNELS.session.create).toBe('session:create');
     expect(IPC_CHANNELS.session.list).toBe('session:list');
     expect(IPC_CHANNELS.session.message.list).toBe('session:message:list');
@@ -34,6 +36,8 @@ describe('ipc channel contracts', () => {
 
   it('checks known IPC channel strings', () => {
     expect(isIpcChannel('provider:list')).toBe(true);
+    expect(isIpcChannel('settings:get')).toBe(true);
+    expect(isIpcChannel('settings:update')).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.session.message.list)).toBe(true);
     expect(isIpcChannel('session:message:send')).toBe(true);
     expect(isIpcChannel(IPC_CHANNELS.run.listBySession)).toBe(true);

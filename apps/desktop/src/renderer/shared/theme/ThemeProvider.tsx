@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, type CSSProperties, type ReactNode } from 'react';
 import { getThemeDefinition } from './theme-tokens';
 import { useThemeStore } from './theme-store';
 
@@ -8,7 +8,12 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const theme = useThemeStore((state) => state.theme);
+  const hydrateFromSettings = useThemeStore((state) => state.hydrateFromSettings);
   const definition = getThemeDefinition(theme);
+
+  useEffect(() => {
+    void hydrateFromSettings();
+  }, [hydrateFromSettings]);
 
   return (
     <div

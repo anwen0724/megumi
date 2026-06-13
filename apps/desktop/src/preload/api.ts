@@ -68,6 +68,9 @@ import type {
   ProviderListData,
   ProviderListPayload,
   ProviderUpdatePayload,
+  SettingsData,
+  SettingsGetPayload,
+  SettingsUpdatePayload,
   RecoverableRunListData,
   RecoverableRunListPayload,
   RunCancelData,
@@ -181,6 +184,16 @@ export const api = {
       request: BusinessRequest<ProviderDeleteApiKeyPayload, typeof IPC_CHANNELS.provider.deleteApiKey>,
     ): Promise<RuntimeIpcResult<EmptyData, typeof IPC_CHANNELS.provider.deleteApiKey>> =>
       invokeRuntimeIpc(IPC_CHANNELS.provider.deleteApiKey, request),
+  },
+  settings: {
+    get: (
+      request: BusinessRequest<SettingsGetPayload, typeof IPC_CHANNELS.settings.get>,
+    ): Promise<RuntimeIpcResult<SettingsData, typeof IPC_CHANNELS.settings.get>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.get, request),
+    update: (
+      request: BusinessRequest<SettingsUpdatePayload, typeof IPC_CHANNELS.settings.update>,
+    ): Promise<RuntimeIpcResult<SettingsData, typeof IPC_CHANNELS.settings.update>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.update, request),
   },
   session: {
     create: (

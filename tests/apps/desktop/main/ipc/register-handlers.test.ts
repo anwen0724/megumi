@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const registerWindowHandlers = vi.fn();
 const registerProviderHandlers = vi.fn();
+const registerSettingsHandlers = vi.fn();
 const registerSessionHandlers = vi.fn();
 const registerRunHandlers = vi.fn();
 const registerRunContextHandlers = vi.fn();
@@ -16,6 +17,7 @@ const registerWorkspaceFilesHandlers = vi.fn();
 
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/settings.handler', () => ({ registerSettingsHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/session.handler', () => ({ registerSessionHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/run.handler', () => ({ registerRunHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/run-context.handler', () => ({ registerRunContextHandlers }));
@@ -34,6 +36,7 @@ describe('registerAllHandlers', () => {
   beforeEach(() => {
     registerWindowHandlers.mockReset();
     registerProviderHandlers.mockReset();
+    registerSettingsHandlers.mockReset();
     registerSessionHandlers.mockReset();
     registerRunHandlers.mockReset();
     registerRunContextHandlers.mockReset();
@@ -53,6 +56,7 @@ describe('registerAllHandlers', () => {
 
     expect(registerWindowHandlers).toHaveBeenCalledTimes(1);
     expect(registerProviderHandlers).toHaveBeenCalledTimes(1);
+    expect(registerSettingsHandlers).not.toHaveBeenCalled();
     expect(registerSessionHandlers).not.toHaveBeenCalled();
     expect(registerRunHandlers).not.toHaveBeenCalled();
     expect(registerRunContextHandlers).not.toHaveBeenCalled();
@@ -102,6 +106,22 @@ describe('registerAllHandlers', () => {
     registerAllHandlers({ runContextService });
 
     expect(registerRunContextHandlers).toHaveBeenCalledWith(runContextService, { logger: undefined });
+  });
+
+  it('registers settings handlers when a settings service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const settingsService = {
+      getResolvedSettings: vi.fn(),
+      updateSettings: vi.fn(),
+    };
+
+    registerAllHandlers({ settingsService });
+
+    expect(registerSettingsHandlers).toHaveBeenCalledWith({
+      ipcMain: expect.any(Object),
+      settingsService,
+      logger: undefined,
+    });
   });
 
   it('registers plan handlers when a plan service is provided', async () => {

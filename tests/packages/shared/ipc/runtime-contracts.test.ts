@@ -45,6 +45,10 @@ import {
   MemorySettingsGetRequestSchema,
   MemorySettingsGetResultSchema,
   MemorySettingsUpdatePayloadSchema,
+  SettingsGetRequestSchema,
+  SettingsGetResultSchema,
+  SettingsUpdateRequestSchema,
+  SettingsUpdateResultSchema,
   PlanByRunGetRequestSchema,
   ProviderApiKeyRequestSchema,
   ProviderListDataSchema,
@@ -514,6 +518,87 @@ describe('runtime ipc context adapter', () => {
     expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.window.toggleMaximize).success).toBe(false);
     expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.window.close).success).toBe(false);
     expect(BusinessIpcChannelSchema.safeParse(IPC_CHANNELS.runtime.event).success).toBe(false);
+  });
+});
+
+describe('application settings ipc schemas', () => {
+  it('validates resolved settings reads and sparse settings updates', () => {
+    const getRequest = SettingsGetRequestSchema.parse({
+      requestId: 'request:settings:get',
+      payload: {},
+      meta: {
+        channel: IPC_CHANNELS.settings.get,
+        createdAt: '2026-06-13T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+    expect(getRequest.payload).toEqual({});
+
+    const updateRequest = SettingsUpdateRequestSchema.parse({
+      requestId: 'request:settings:update',
+      payload: {
+        theme: 'graphite-dark',
+        memory: {
+          enabled: true,
+        },
+      },
+      meta: {
+        channel: IPC_CHANNELS.settings.update,
+        createdAt: '2026-06-13T00:00:00.000Z',
+        source: 'renderer',
+      },
+    });
+    expect(updateRequest.payload).toEqual({
+      theme: 'graphite-dark',
+      memory: {
+        enabled: true,
+      },
+    });
+
+    const resolvedSettings = {
+      theme: 'graphite-dark',
+      memory: {
+        enabled: true,
+      },
+      compaction: {
+        enabled: true,
+        reserveTokens: 16384,
+        keepRecentTokens: 20000,
+      },
+    };
+    const getResult = SettingsGetResultSchema.parse({
+      ok: true,
+      data: {
+        settings: resolvedSettings,
+      },
+      meta: {
+        requestId: 'request:settings:get',
+        channel: IPC_CHANNELS.settings.get,
+        operationName: 'settings.get',
+        handledAt: '2026-06-13T00:00:00.000Z',
+      },
+    });
+    expect(getResult.ok).toBe(true);
+    if (getResult.ok) {
+      expect(getResult.data.settings).toEqual(resolvedSettings);
+    }
+
+    const updateResult = SettingsUpdateResultSchema.parse({
+      ok: true,
+      data: {
+        settings: resolvedSettings,
+      },
+      meta: {
+        requestId: 'request:settings:update',
+        channel: IPC_CHANNELS.settings.update,
+        operationName: 'settings.update',
+        handledAt: '2026-06-13T00:00:00.000Z',
+      },
+    });
+    expect(updateResult.ok).toBe(true);
+    if (updateResult.ok) {
+      expect(updateResult.data.settings).toEqual(resolvedSettings);
+    }
   });
 });
 

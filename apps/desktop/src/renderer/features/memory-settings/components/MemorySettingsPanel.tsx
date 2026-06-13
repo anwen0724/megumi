@@ -21,8 +21,8 @@ export function MemorySettingsPanel() {
     let cancelled = false;
     setStatus('loading');
     setError(null);
-    void window.megumi.memory.settingsGet(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.settingsGet, {}),
+    void window.megumi.settings.get(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
     ).then((result) => {
       if (cancelled) return;
       if (!result.ok) {
@@ -30,7 +30,10 @@ export function MemorySettingsPanel() {
         setError(getRuntimeIpcErrorMessage(result));
         return;
       }
-      setSettings(result.data.settings);
+      setSettings({
+        ...defaultMemorySettings(),
+        autoCaptureEnabled: result.data.settings.memory.enabled,
+      });
       setStatus('ready');
     }).catch((reason: unknown) => {
       if (cancelled) return;
@@ -54,10 +57,14 @@ export function MemorySettingsPanel() {
     };
     setSettings(next);
 
-    let result: Awaited<ReturnType<typeof window.megumi.memory.settingsUpdate>>;
+    let result: Awaited<ReturnType<typeof window.megumi.settings.update>>;
     try {
-      result = await window.megumi.memory.settingsUpdate(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.memory.settingsUpdate, next),
+      result = await window.megumi.settings.update(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
+          memory: {
+            enabled: next.autoCaptureEnabled,
+          },
+        }),
       );
     } catch (reason) {
       setSettings(previous);
@@ -71,7 +78,10 @@ export function MemorySettingsPanel() {
       setError(getRuntimeIpcErrorMessage(result));
       return;
     }
-    setSettings(result.data.settings);
+    setSettings({
+      ...next,
+      autoCaptureEnabled: result.data.settings.memory.enabled,
+    });
     setStatus('ready');
   }
 

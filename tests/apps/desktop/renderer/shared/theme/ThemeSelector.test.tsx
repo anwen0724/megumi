@@ -1,12 +1,42 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider, ThemeSelector, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 
 describe('ThemeSelector', () => {
   beforeEach(() => {
     useThemeStore.setState({ theme: 'megumi-warm' });
+    Object.defineProperty(window, 'megumi', {
+      configurable: true,
+      value: {
+        settings: {
+          get: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              settings: {
+                theme: 'megumi-warm',
+                memory: { enabled: false },
+                compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+              },
+            },
+            meta: {},
+          }),
+          update: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              settings: {
+                theme: 'graphite-dark',
+                memory: { enabled: false },
+                compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+              },
+            },
+            meta: {},
+          }),
+        },
+      },
+    });
   });
 
   it('renders every built-in theme as a selectable option', () => {
@@ -35,5 +65,11 @@ describe('ThemeSelector', () => {
     expect(useThemeStore.getState().theme).toBe('graphite-dark');
     expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'graphite-dark');
     expect(screen.getByRole('radio', { name: /Graphite Dark/ })).toHaveAttribute('aria-checked', 'true');
+    expect(window.megumi.settings.update).toHaveBeenCalledWith(expect.objectContaining({
+      meta: expect.objectContaining({ channel: IPC_CHANNELS.settings.update }),
+      payload: {
+        theme: 'graphite-dark',
+      },
+    }));
   });
 });

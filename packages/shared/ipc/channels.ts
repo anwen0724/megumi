@@ -10,6 +10,10 @@ export const IPC_CHANNELS = {
     setApiKey: 'provider:set-api-key',
     deleteApiKey: 'provider:delete-api-key',
   },
+  settings: {
+    get: 'settings:get',
+    update: 'settings:update',
+  },
   session: {
     create: 'session:create',
     list: 'session:list',
@@ -117,6 +121,8 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.provider.update,
   IPC_CHANNELS.provider.setApiKey,
   IPC_CHANNELS.provider.deleteApiKey,
+  IPC_CHANNELS.settings.get,
+  IPC_CHANNELS.settings.update,
   IPC_CHANNELS.session.create,
   IPC_CHANNELS.session.list,
   IPC_CHANNELS.session.message.list,

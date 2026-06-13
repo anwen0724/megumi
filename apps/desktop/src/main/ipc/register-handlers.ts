@@ -1,6 +1,10 @@
 ﻿import { ipcMain } from 'electron';
 import { registerWindowHandlers } from './handlers/window.handler';
 import { registerProviderHandlers } from './handlers/provider.handler';
+import {
+  registerSettingsHandlers,
+  type SettingsHandlersService,
+} from './handlers/settings.handler';
 import { registerSessionHandlers, type SessionHandlersService } from './handlers/session.handler';
 import { registerRunHandlers, type RunHandlersService } from './handlers/run.handler';
 import {
@@ -37,6 +41,7 @@ import type { RuntimeLogger } from '../services/runtime/runtime-logger.service';
 
 export interface RegisterAllHandlersOptions {
   logger?: RuntimeLogger;
+  settingsService?: SettingsHandlersService;
   sessionRunService?: SessionHandlersService & RunHandlersService;
   runContextService?: RunContextHandlersService;
   planService?: PlanHandlersService;
@@ -51,6 +56,14 @@ export interface RegisterAllHandlersOptions {
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
   registerWindowHandlers();
   registerProviderHandlers(undefined, { logger: options.logger });
+
+  if (options.settingsService) {
+    registerSettingsHandlers({
+      ipcMain,
+      settingsService: options.settingsService,
+      logger: options.logger,
+    });
+  }
 
   if (options.sessionRunService) {
     registerSessionHandlers(options.sessionRunService, { logger: options.logger });

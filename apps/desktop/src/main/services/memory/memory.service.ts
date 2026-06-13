@@ -35,6 +35,10 @@ export interface MemoryServiceDependencies {
   repository: MemoryRepository;
   now: () => string;
   createId: (prefix: string) => string;
+  settings?: {
+    getSettings(): MemorySettings;
+    updateSettings(settings: MemorySettings): MemorySettings;
+  };
   emitRuntimeEvent?: (event: RuntimeEvent) => void;
 }
 
@@ -119,6 +123,9 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
   }
 
   function getSettings(): MemorySettings {
+    if (deps.settings) {
+      return deps.settings.getSettings();
+    }
     return deps.repository.getSettings() ?? createDefaultMemorySettings(deps.now());
   }
 
@@ -159,7 +166,7 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
 
   return {
     getSettings,
-    updateSettings: (settings) => deps.repository.saveSettings(settings),
+    updateSettings: (settings) => deps.settings?.updateSettings(settings) ?? deps.repository.saveSettings(settings),
     proposeCandidate(input) {
       const settings = getSettings();
       const policy = createDefaultMemoryPolicy({

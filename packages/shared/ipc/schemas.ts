@@ -61,6 +61,10 @@ import {
   MemorySourceRefSchema,
 } from '../memory/contracts';
 import {
+  AppSettingsRawSchema,
+  AppSettingsResolvedSchema,
+} from '../settings';
+import {
   ProjectListDataSchema,
   ProjectListPayloadSchema,
   ProjectOpenDataSchema,
@@ -147,6 +151,14 @@ export const ProviderDeleteApiKeyPayloadSchema = z
   .strict();
 
 export const ProviderEmptyDataSchema = z.object({}).strict();
+
+export const SettingsGetPayloadSchema = z.object({}).strict();
+
+export const SettingsUpdatePayloadSchema = AppSettingsRawSchema;
+
+export const SettingsDataSchema = z.object({
+  settings: AppSettingsResolvedSchema,
+}).strict();
 
 export const SessionMessageIpcRoleSchema = z.enum(['system', 'user', 'assistant', 'tool']);
 
@@ -770,6 +782,16 @@ export const ProviderDeleteApiKeyRequestSchema = createRuntimeIpcRequestSchema(
   ProviderDeleteApiKeyPayloadSchema,
 );
 
+export const SettingsGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.settings.get,
+  SettingsGetPayloadSchema,
+);
+
+export const SettingsUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.settings.update,
+  SettingsUpdatePayloadSchema,
+);
+
 export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.message.send,
   SessionMessageSendPayloadSchema,
@@ -1018,6 +1040,16 @@ export const ProviderApiKeyResultSchema = createRuntimeIpcResultSchema(
 export const ProviderDeleteApiKeyResultSchema = createRuntimeIpcResultSchema(
   ProviderEmptyDataSchema,
   IPC_CHANNELS.provider.deleteApiKey,
+);
+
+export const SettingsGetResultSchema = createRuntimeIpcResultSchema(
+  SettingsDataSchema,
+  IPC_CHANNELS.settings.get,
+);
+
+export const SettingsUpdateResultSchema = createRuntimeIpcResultSchema(
+  SettingsDataSchema,
+  IPC_CHANNELS.settings.update,
 );
 
 export const SessionMessageSendResultSchema = createRuntimeIpcResultSchema(
@@ -1320,6 +1352,9 @@ export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
 export type ProviderApiKeyPayload = z.infer<typeof ProviderApiKeyPayloadSchema>;
 export type ProviderDeleteApiKeyPayload = z.infer<typeof ProviderDeleteApiKeyPayloadSchema>;
 export type ProviderEmptyData = z.infer<typeof ProviderEmptyDataSchema>;
+export type SettingsGetPayload = z.infer<typeof SettingsGetPayloadSchema>;
+export type SettingsUpdatePayload = z.infer<typeof SettingsUpdatePayloadSchema>;
+export type SettingsData = z.infer<typeof SettingsDataSchema>;
 export type SessionMessageSendPayload = z.infer<typeof SessionMessageSendPayloadSchema>;
 export type SessionMessageSendData = z.infer<typeof SessionMessageSendDataSchema>;
 export type SessionMessageCancelPayload = z.infer<typeof SessionMessageCancelPayloadSchema>;

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     initializeElectronMegumiHomeSync: vi.fn(() => ({
       homePath,
       configPath: `${homePath}/config.json`,
+      settingsPath: `${homePath}/settings.json`,
       configSchemaPath: `${homePath}/config.schema.json`,
       readmePath: `${homePath}/README.md`,
       versionPath: `${homePath}/version.json`,
@@ -119,6 +120,14 @@ const mocks = vi.hoisted(() => {
     createDefaultRunContextService: vi.fn(() => ({
       getBaselineContext: vi.fn(),
       listWorkspaceSourcesByRun: vi.fn(),
+    })),
+    createAppSettingsService: vi.fn(() => ({
+      getResolvedSettings: vi.fn(() => ({
+        theme: 'midnight-blue',
+        memory: { enabled: false },
+        compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+      })),
+      updateSettings: vi.fn(),
     })),
     ToolService: vi.fn(function ToolService(
       this: { options?: unknown },
@@ -342,6 +351,10 @@ vi.mock('@megumi/desktop/main/services/runtime/run-context.service', () => ({
   createDefaultRunContextService: mocks.createDefaultRunContextService,
 }));
 
+vi.mock('@megumi/desktop/main/services/settings/app-settings.service', () => ({
+  createAppSettingsService: mocks.createAppSettingsService,
+}));
+
 vi.mock('@megumi/desktop/main/services/tool/tool.service', () => ({
   ToolService: mocks.ToolService,
   createDefaultToolService: mocks.createDefaultToolService,
@@ -451,6 +464,7 @@ describe('main runtime logger composition', () => {
     mocks.MegumiHomeConfigService.mockClear();
     mocks.ProviderRuntimeService.mockClear();
     mocks.createDefaultRunContextService.mockClear();
+    mocks.createAppSettingsService.mockClear();
     mocks.ToolService.mockClear();
     mocks.createDefaultToolService.mockClear();
     mocks.createDatabase.mockClear();
@@ -499,6 +513,7 @@ describe('main runtime logger composition', () => {
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
     const sessionRunService = mocks.SessionRunService.mock.results[0]?.value;
     const runContextService = mocks.createDefaultRunContextService.mock.results[0]?.value;
+    const settingsService = mocks.createAppSettingsService.mock.results[0]?.value;
     const toolService = mocks.ToolService.mock.results[0]?.value;
     const recoveryService = mocks.createRecoveryService.mock.results[0]?.value;
     const artifactService = mocks.ArtifactService.mock.results[0]?.value;
@@ -517,6 +532,9 @@ describe('main runtime logger composition', () => {
     expect(mocks.createDefaultRunContextService).toHaveBeenCalledWith(
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
     );
+    expect(mocks.createAppSettingsService).toHaveBeenCalledWith({
+      settingsPath: `${mocks.homePath}/settings.json`,
+    });
     expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.SessionRunRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
     expect(mocks.SessionActivePathRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
@@ -562,7 +580,16 @@ describe('main runtime logger composition', () => {
       chatStreamEventSink: expect.objectContaining({
         publish: expect.any(Function),
       }),
+      memorySettingsProvider: expect.objectContaining({
+        getMemorySettings: expect.any(Function),
+      }),
     }));
+    const sessionRunOptions = mocks.SessionRunService.mock.calls[0]?.[0] as {
+      memorySettingsProvider: { getMemorySettings(): unknown };
+    };
+    expect(sessionRunOptions.memorySettingsProvider.getMemorySettings()).toMatchObject({
+      autoCaptureEnabled: false,
+    });
     expect(mocks.ToolService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       registry: expect.any(Object),
@@ -576,6 +603,10 @@ describe('main runtime logger composition', () => {
       repository: expect.any(Object),
       now: expect.any(Function),
       createId: expect.any(Function),
+      settings: expect.objectContaining({
+        getSettings: expect.any(Function),
+        updateSettings: expect.any(Function),
+      }),
       emitRuntimeEvent: expect.any(Function),
     }));
     expect(mocks.createRecoveryService).toHaveBeenCalledWith(expect.objectContaining({
@@ -643,6 +674,7 @@ describe('main runtime logger composition', () => {
     expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
+      settingsService,
       sessionRunService,
       runContextService,
       planService: sessionRunService,

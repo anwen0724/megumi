@@ -37,6 +37,30 @@ describe('SettingsPage', () => {
           setApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
           deleteApiKey: vi.fn().mockResolvedValue({ ok: true, data: {}, meta: {} }),
         },
+        settings: {
+          get: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              settings: {
+                theme: 'megumi-warm',
+                memory: { enabled: false },
+                compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+              },
+            },
+            meta: {},
+          }),
+          update: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              settings: {
+                theme: 'midnight-blue',
+                memory: { enabled: true },
+                compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+              },
+            },
+            meta: {},
+          }),
+        },
         memory: {
           settingsGet: vi.fn().mockResolvedValue({
             ok: true,
@@ -151,7 +175,7 @@ describe('SettingsPage', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Memory' }));
 
     await waitFor(() => {
-      expect(window.megumi.memory.settingsGet).toHaveBeenCalledWith(expect.objectContaining({
+      expect(window.megumi.settings.get).toHaveBeenCalledWith(expect.objectContaining({
         payload: {},
       }));
     });
@@ -161,14 +185,14 @@ describe('SettingsPage', () => {
 
     await userEvent.click(toggle);
 
-    expect(window.megumi.memory.settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(window.megumi.settings.update).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
-        autoCaptureEnabled: true,
-        defaultCandidateReviewMode: 'manual',
-        updatedAt: expect.any(String),
+        memory: {
+          enabled: true,
+        },
       },
     }));
-    expect(JSON.stringify(vi.mocked(window.megumi.memory.settingsUpdate).mock.calls)).not.toContain('workspaceId');
+    expect(JSON.stringify(vi.mocked(window.megumi.settings.update).mock.calls)).not.toContain('workspaceId');
   });
 
   it('calls onDone from Escape without rendering a visible Done button', () => {
