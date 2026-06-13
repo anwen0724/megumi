@@ -69,7 +69,7 @@ describe('memory foundation boundaries', () => {
     const sessionRun = read(join(root, 'apps', 'desktop', 'src', 'main', 'services', 'session', 'session-run.service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
-    expect(index).toContain('memoryRepository.getSettings()?.autoCaptureEnabled ?? false');
+    expect(index).toContain('memoryRepository.getSettings()?.autoCaptureEnabled ?? DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED');
     expect(index).toContain('memoryMarkdownSyncService: memoryRuntime.markdownSyncService');
     expect(sessionRun).toContain('syncProjectMirrorOnProjectOpened');
   });

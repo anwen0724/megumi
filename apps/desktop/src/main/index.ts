@@ -13,6 +13,7 @@ import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createChatStreamEvent } from '@megumi/shared/chat-stream';
+import { DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED } from '@megumi/shared/memory';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/project/megumi-home.service';
@@ -102,7 +103,7 @@ const providerRuntimeService = new ProviderRuntimeService({
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
-if (memoryRepository.getSettings()?.autoCaptureEnabled ?? false) {
+if (memoryRepository.getSettings()?.autoCaptureEnabled ?? DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED) {
   void memoryRuntime.markdownSyncService.syncUserMirrorOnAppStart({
     homePath: megumiHomePaths.homePath,
   }).catch((error) => {

@@ -2,18 +2,14 @@
 // This component does not display, edit, or preview individual memory records.
 import { useEffect, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { MemorySettings } from '@megumi/shared/memory';
+import { createDefaultMemorySettings, type MemorySettings } from '@megumi/shared/memory';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';
 
 type MemorySettingsStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
 function defaultMemorySettings(): MemorySettings {
-  return {
-    autoCaptureEnabled: false,
-    defaultCandidateReviewMode: 'manual',
-    updatedAt: new Date().toISOString(),
-  };
+  return createDefaultMemorySettings(new Date().toISOString());
 }
 
 export function MemorySettingsPanel() {

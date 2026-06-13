@@ -80,7 +80,7 @@ import {
 } from '@megumi/shared/runtime';
 import type { SessionRetryAttempt } from '@megumi/shared/session';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
-import type { MemoryCaptureSignal, MemorySettings } from '@megumi/shared/memory';
+import { DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED, type MemoryCaptureSignal, type MemorySettings } from '@megumi/shared/memory';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
@@ -563,12 +563,12 @@ export class SessionRunService {
 
   private resolveMemoryEnabled(): boolean {
     if (!this.memorySettingsProvider) {
-      return false;
+      return DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED;
     }
     try {
-      return this.memorySettingsProvider.getMemorySettings()?.autoCaptureEnabled ?? false;
+      return this.memorySettingsProvider.getMemorySettings()?.autoCaptureEnabled ?? DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED;
     } catch {
-      return false;
+      return DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED;
     }
   }
 

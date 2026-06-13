@@ -18,6 +18,7 @@ import type {
   MemorySettings,
   MemorySourceRef,
 } from '@megumi/shared/memory';
+import { createDefaultMemorySettings } from '@megumi/shared/memory';
 import {
   createRuntimeMemoryAccessRecordedEvent,
   createRuntimeMemoryCandidateAcceptedEvent,
@@ -118,11 +119,7 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
   }
 
   function getSettings(): MemorySettings {
-    return deps.repository.getSettings() ?? {
-      autoCaptureEnabled: false,
-      defaultCandidateReviewMode: 'manual',
-      updatedAt: deps.now(),
-    };
+    return deps.repository.getSettings() ?? createDefaultMemorySettings(deps.now());
   }
 
   function statusChange(memoryId: string, to: MemoryRecordStatus, updatedAt: string): MemoryRecord {

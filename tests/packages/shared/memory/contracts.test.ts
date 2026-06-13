@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED,
   MEMORY_AUDIT_OPERATIONS,
   MEMORY_CAPTURE_SIGNALS,
   MEMORY_KINDS,
@@ -17,6 +18,7 @@ import {
   MemoryRecordSchema,
   MemorySettingsSchema,
   MemoryScopeSchema,
+  createDefaultMemorySettings,
 } from '@megumi/shared/memory';
 
 describe('memory shared contracts', () => {
@@ -72,6 +74,18 @@ describe('memory shared contracts', () => {
       defaultCandidateReviewMode: 'manual',
       updatedAt: '2026-06-13T00:00:00.000Z',
     }).success).toBe(false);
+  });
+
+  it('uses one shared default for global memory settings', () => {
+    const settings = createDefaultMemorySettings('2026-06-13T00:00:00.000Z');
+
+    expect(DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED).toBe(false);
+    expect(settings).toEqual({
+      autoCaptureEnabled: DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED,
+      defaultCandidateReviewMode: 'manual',
+      updatedAt: '2026-06-13T00:00:00.000Z',
+    });
+    expect(MemorySettingsSchema.parse(settings)).toEqual(settings);
   });
 
   it('parses a runtime memory record with source, evidence, dedupe, and use metadata', () => {
