@@ -126,6 +126,12 @@ describe('ProviderSettingsPanel', () => {
 
     render(<ProviderSettingsPanel />);
 
+    expect(screen.getByLabelText('OpenAI API key environment variable')).toHaveValue('');
+    expect(screen.getByLabelText('OpenAI API key environment variable')).toHaveAttribute(
+      'placeholder',
+      'Default: OPENAI_API_KEY',
+    );
+
     await user.clear(screen.getByLabelText('OpenAI API key environment variable'));
     await user.type(screen.getByLabelText('OpenAI API key environment variable'), 'CUSTOM_OPENAI_KEY');
     await user.click(screen.getByRole('button', { name: 'Save OpenAI environment variable' }));
@@ -152,6 +158,8 @@ describe('ProviderSettingsPanel', () => {
     }));
 
     render(<ProviderSettingsPanel />);
+
+    expect(screen.getByLabelText('OpenAI API key environment variable')).toHaveValue('CUSTOM_OPENAI_KEY');
 
     const clearButton = screen.getByRole('button', { name: 'Clear OpenAI environment variable' });
 

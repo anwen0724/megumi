@@ -31,7 +31,7 @@ function createInitialFormState(provider: ProviderPublicStatus): ProviderFormSta
     baseUrl: provider.baseUrl ?? '',
     defaultModelId: String(provider.defaultModelId),
     apiKey: '',
-    apiKeyEnv: provider.apiKeyEnv ?? '',
+    apiKeyEnv: provider.apiKeyEnvCustomized ? provider.apiKeyEnv ?? '' : '',
   };
 }
 
@@ -259,7 +259,7 @@ export function ProviderSettingsPanel() {
                     label={`${provider.displayName} API key environment variable`}
                     value={form.apiKeyEnv}
                     onChange={(event) => updateForm(provider.providerId, { apiKeyEnv: event.target.value })}
-                    placeholder="PROVIDER_API_KEY"
+                    placeholder={provider.apiKeyEnv ? `Default: ${provider.apiKeyEnv}` : 'PROVIDER_API_KEY'}
                   />
                 </div>
                 <Button type="submit" size="sm" variant="secondary" disabled={status === 'saving' || !form.apiKeyEnv.trim()}>
