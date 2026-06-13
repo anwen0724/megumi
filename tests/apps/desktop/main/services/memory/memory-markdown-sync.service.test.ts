@@ -3,6 +3,7 @@ import path from 'node:path';
 import { MemoryDiagnosticWriter } from '@megumi/desktop/main/services/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from '@megumi/desktop/main/services/memory/memory-markdown-sync.service';
 import type { MemoryRuntimeFileSystem } from '@megumi/desktop/main/services/memory/memory-runtime-file-system';
+import { resolveProjectMemoryMirrorTarget } from '@megumi/desktop/main/services/memory/memory-runtime-paths';
 import type {
   MemoryAuditLog,
   MemoryMarkdownMirror,
@@ -135,6 +136,10 @@ function createService() {
     },
   });
   return { service, repository, fileSystem };
+}
+
+function fileSystemPathForProjectMemory(projectId = 'project:1'): string {
+  return resolveProjectMemoryMirrorTarget({ homePath, projectId }).filePath;
 }
 
 function memory(overrides: Partial<MemoryRecord> & Pick<MemoryRecord, 'memoryId' | 'scope' | 'kind' | 'content'>): MemoryRecord {
@@ -391,6 +396,108 @@ describe('MemoryMarkdownSyncService', () => {
     expect(repository.mirrors.get('memory:user')).toMatchObject({ status: 'conflict' });
     expect(repository.audits.map((audit) => audit.operation)).toContain('conflict_detected');
     expect(JSON.stringify(fileSystem.diagnostics)).toContain('conflict_detected');
+  });
+
+  it('dedupes id-based updates into another active record and supersedes the current anchor record', async () => {
+    const { service, repository, fileSystem } = createService();
+    repository.saveMemory(memory({
+      memoryId: 'memory:target',
+      scope: 'user',
+      kind: 'preference',
+      content: 'User prefers short implementation reports.',
+      normalizedText: 'user prefers short implementation reports',
+      confidence: 0.6,
+    }));
+    repository.saveMemory(memory({
+      memoryId: 'memory:other',
+      scope: 'user',
+      kind: 'preference',
+      content: 'User prefers concise answers.',
+      normalizedText: 'user prefers concise answers',
+      confidence: 0.7,
+    }));
+    fileSystem.files.set(path.join(homePath, 'memory', 'user.md'), [
+      '# User Memory',
+      '',
+      '## Preference',
+      '',
+      '<!-- memory:id=memory:target kind=preference updated=2026-06-12T00:00:00.000Z -->',
+      '- User prefers concise answers.',
+      '',
+    ].join('\n'));
+
+    const result = await service.importMirror({ homePath, scope: 'user' });
+
+    expect(result).toMatchObject({
+      status: 'synced',
+      importedMemoryIds: expect.arrayContaining(['memory:other', 'memory:target']),
+    });
+    expect(repository.getMemory('memory:other')).toMatchObject({
+      status: 'active',
+      confidence: 1,
+    });
+    expect(repository.getMemory('memory:target')).toMatchObject({
+      status: 'superseded',
+      supersededById: 'memory:other',
+    });
+    expect(repository.listMemories({ scope: 'user', status: 'active' })).toHaveLength(1);
+    expect(repository.audits.map((audit) => audit.operation)).toEqual(expect.arrayContaining([
+      'memory_updated',
+      'memory_superseded',
+    ]));
+    expect(fileSystem.writes[0]?.content).toContain('memory:id=memory:other');
+    expect(fileSystem.writes[0]?.content).not.toContain('memory:id=memory:target');
+  });
+
+  it('lets an id-based update supersede another active record while preserving the current Markdown anchor id', async () => {
+    const { service, repository, fileSystem } = createService();
+    repository.saveMemory(memory({
+      memoryId: 'memory:target',
+      scope: 'project',
+      kind: 'constraint',
+      content: 'Project documentation uses Chinese.',
+      normalizedText: 'project documentation uses chinese',
+      projectId: 'project:1',
+    }));
+    repository.saveMemory(memory({
+      memoryId: 'memory:other',
+      scope: 'project',
+      kind: 'constraint',
+      content: 'Project docs use Chinese.',
+      normalizedText: 'project docs use chinese',
+      projectId: 'project:1',
+    }));
+    fileSystem.files.set(fileSystemPathForProjectMemory(), [
+      '# Project Memory',
+      '',
+      '## Constraint',
+      '',
+      '<!-- memory:id=memory:target kind=constraint updated=2026-06-12T00:00:00.000Z -->',
+      '- Project docs use Chinese by default and filenames use English kebab-case.',
+      '',
+    ].join('\n'));
+
+    const result = await service.importMirror({ homePath, scope: 'project', projectId: 'project:1' });
+
+    expect(result).toMatchObject({
+      status: 'synced',
+      importedMemoryIds: expect.arrayContaining(['memory:target', 'memory:other']),
+    });
+    expect(repository.getMemory('memory:other')).toMatchObject({
+      status: 'superseded',
+      supersededById: 'memory:target',
+    });
+    expect(repository.getMemory('memory:target')).toMatchObject({
+      status: 'active',
+      content: 'Project docs use Chinese by default and filenames use English kebab-case.',
+      supersededById: null,
+    });
+    expect(fileSystem.writes[0]?.content).toContain('memory:id=memory:target');
+    expect(fileSystem.writes[0]?.content).not.toContain('memory:id=memory:other');
+    expect(repository.audits.map((audit) => audit.operation)).toEqual(expect.arrayContaining([
+      'memory_superseded',
+      'memory_updated',
+    ]));
   });
 
   it('degrades dependency throws and records safe diagnostics/audits', async () => {

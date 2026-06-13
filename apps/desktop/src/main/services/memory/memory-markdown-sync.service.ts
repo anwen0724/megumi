@@ -251,27 +251,17 @@ export class MemoryMarkdownSyncService {
               });
               continue;
             }
-            const updated = this.options.repository.saveMemory({
-              ...current,
-              content: validation.candidate.content,
-              summary: validation.candidate.summary,
-              normalizedText: validation.candidate.normalizedText,
-              dedupeKey: validation.candidate.dedupeKey,
-              source: 'markdown_import',
-              evidence: validation.candidate.evidence,
-              updatedAt: now,
-              confidence: validation.candidate.confidence,
+            const applied = this.applyIdUpdateResolution({
+              resolution,
+              current,
+              candidate: validation.candidate,
+              projectId: input.projectId ?? null,
+              now,
             });
-            importedMemoryIds.add(updated.memoryId);
-            this.saveAudit({
-              operation: 'candidate_imported',
-              targetKind: 'memory',
-              targetId: updated.memoryId,
-              projectId: input.projectId,
-              reason: 'markdown_id_update',
-              metadata: { kind: updated.kind, scope: updated.scope },
-            });
-            activeRecords = replaceRecord(activeRecords, updated);
+            for (const memoryId of applied) {
+              importedMemoryIds.add(memoryId);
+            }
+            activeRecords = this.listActive(input);
           }
           continue;
         }
@@ -538,6 +528,97 @@ export class MemoryMarkdownSyncService {
     return [saved.memoryId];
   }
 
+  private applyIdUpdateResolution(input: {
+    resolution: Exclude<ReturnType<typeof resolveMemoryCandidate>, { action: 'conflict' }>;
+    current: MemoryRecord;
+    candidate: ValidatedMemoryCandidate;
+    projectId: string | null;
+    now: string;
+  }): string[] {
+    if (input.resolution.action === 'create') {
+      const updated = this.options.repository.saveMemory(toUpdatedCurrentRecord(input.current, input.candidate, input.now));
+      this.saveAudit({
+        operation: 'memory_updated',
+        targetKind: 'memory',
+        targetId: updated.memoryId,
+        projectId: input.projectId,
+        reason: 'markdown_id_update',
+        metadata: { kind: updated.kind, scope: updated.scope },
+      });
+      return [updated.memoryId];
+    }
+
+    if (input.resolution.action === 'update_existing') {
+      const target = this.options.repository.getMemory(input.resolution.targetMemoryId);
+      const affected: string[] = [];
+      if (target) {
+        const updatedTarget = this.options.repository.saveMemory({
+          ...target,
+          ...input.resolution.recordPatch,
+        });
+        affected.push(updatedTarget.memoryId);
+        this.saveAudit({
+          operation: 'memory_updated',
+          targetKind: 'memory',
+          targetId: updatedTarget.memoryId,
+          projectId: input.projectId,
+          reason: input.resolution.reason,
+          metadata: { scope: updatedTarget.scope, kind: updatedTarget.kind },
+        });
+      }
+
+      // An id-based edit that dedupes into another active record is a merge, not a user deletion:
+      // keep history by superseding the edited anchor record instead of leaving duplicate active memory.
+      const supersededCurrent = this.options.repository.saveMemory({
+        ...input.current,
+        status: 'superseded',
+        supersededById: input.resolution.targetMemoryId,
+        updatedAt: input.now,
+      });
+      affected.push(supersededCurrent.memoryId);
+      this.saveAudit({
+        operation: 'memory_superseded',
+        targetKind: 'memory',
+        targetId: supersededCurrent.memoryId,
+        projectId: input.projectId,
+        reason: 'markdown_id_deduped_into_existing',
+        metadata: { supersededById: input.resolution.targetMemoryId },
+      });
+      return affected;
+    }
+
+    const affected: string[] = [];
+    const oldRecord = this.options.repository.getMemory(input.resolution.supersededMemoryId);
+    if (oldRecord) {
+      const supersededOld = this.options.repository.saveMemory({
+        ...oldRecord,
+        ...input.resolution.oldRecordPatch,
+        supersededById: input.current.memoryId,
+      });
+      affected.push(supersededOld.memoryId);
+      this.saveAudit({
+        operation: 'memory_superseded',
+        targetKind: 'memory',
+        targetId: supersededOld.memoryId,
+        projectId: input.projectId,
+        reason: input.resolution.reason,
+        metadata: { supersededById: input.current.memoryId },
+      });
+    }
+
+    const updatedCurrent = this.options.repository.saveMemory(toUpdatedCurrentRecord(input.current, input.candidate, input.now));
+    affected.push(updatedCurrent.memoryId);
+    this.saveAudit({
+      operation: 'memory_updated',
+      targetKind: 'memory',
+      targetId: updatedCurrent.memoryId,
+      projectId: input.projectId,
+      reason: 'markdown_id_supersedes_existing',
+      metadata: { scope: updatedCurrent.scope, kind: updatedCurrent.kind },
+    });
+    return affected;
+  }
+
   private saveAudit(input: {
     operation: MemoryAuditLog['operation'];
     targetKind: MemoryAuditLog['targetKind'];
@@ -670,8 +751,25 @@ function exportedIdsFromMirror(mirror: MemoryMarkdownMirror | null): string[] {
   return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
 }
 
-function replaceRecord(records: MemoryRecord[], updated: MemoryRecord): MemoryRecord[] {
-  return records.map((record) => (record.memoryId === updated.memoryId ? updated : record));
+function toUpdatedCurrentRecord(
+  current: MemoryRecord,
+  candidate: ValidatedMemoryCandidate,
+  now: string,
+): MemoryRecord {
+  return {
+    ...current,
+    status: 'active',
+    content: candidate.content,
+    summary: candidate.summary,
+    normalizedText: candidate.normalizedText,
+    dedupeKey: candidate.dedupeKey,
+    source: 'markdown_import',
+    evidence: candidate.evidence,
+    supersededById: null,
+    updatedAt: now,
+    deletedAt: null,
+    confidence: candidate.confidence,
+  };
 }
 
 function combineResults(results: MemoryMarkdownSyncResult[]): MemoryMarkdownSyncResult {
