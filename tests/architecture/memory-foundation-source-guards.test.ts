@@ -39,6 +39,30 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /from ['"](electron|node:fs|fs|node:path|path)['"]|@megumi\/(db|ai)(\/|['"]|$)|packages\/(db|ai)|apps\/desktop|session-run|provider adapter|providers\//i)).toEqual([]);
   });
 
+  it('keeps packages/db memory repository free from memory business logic and Desktop Main runtime', () => {
+    const files = productionFilesUnder('packages', 'db');
+    expect(offenders(files, /@megumi\/memory|apps\/desktop|memory-markdown-sync\.service|memory-runtime-capture\.service|memory-diagnostic-writer\.service/)).toEqual([]);
+  });
+
+  it('keeps Desktop Main memory runtime away from provider adapter implementations', () => {
+    const files = productionFilesUnder('apps', 'desktop', 'src', 'main', 'services', 'memory');
+    expect(offenders(files, /packages\/ai\/providers|@megumi\/ai\/providers|openai-compatible|provider adapter implementation/i)).toEqual([]);
+  });
+
+  it('does not implement memory markdown sync with realtime file watchers', () => {
+    const files = [
+      ...productionFilesUnder('packages', 'memory'),
+      ...productionFilesUnder('packages', 'db'),
+      ...productionFilesUnder('apps', 'desktop', 'src', 'main'),
+    ];
+    expect(offenders(files, /\bfs\.watch\b|\bwatchFile\b|from ['"]chokidar['"]|require\(['"]chokidar['"]\)/)).toEqual([]);
+  });
+
+  it('keeps renderer from importing Desktop Main memory runtime services', () => {
+    const files = productionFilesUnder('apps', 'desktop', 'src', 'renderer');
+    expect(offenders(files, /memory-runtime-capture\.service|memory-markdown-sync\.service|memory-diagnostic-writer\.service|memory-runtime-file-system|memory-runtime-paths/)).toEqual([]);
+  });
+
   it('keeps packages/memory on deterministic recall without vector search', () => {
     const files = productionFilesUnder('packages', 'memory');
     expect(offenders(files, /\bembedding\b|\bvector\b|cosineSimilarity|\bann\b|faiss/i)).toEqual([]);
