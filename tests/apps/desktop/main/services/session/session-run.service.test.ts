@@ -3293,7 +3293,6 @@ describe('SessionRunService', () => {
       megumiHomePath: 'C:/megumi-home',
     });
     service.createSession({
-      sessionId: 'session-1',
       title: 'Session',
       workspaceId: 'project-1',
       workspacePath: 'C:/workspace/project',
@@ -3363,7 +3362,6 @@ describe('SessionRunService', () => {
       megumiHomePath: 'C:/megumi-home',
     });
     service.createSession({
-      sessionId: 'session-1',
       title: 'Session',
       createdAt: '2026-06-13T00:00:00.000Z',
     });
@@ -3401,7 +3399,6 @@ describe('SessionRunService', () => {
       megumiHomePath: 'C:/megumi-home',
     });
     service.createSession({
-      sessionId: 'session-1',
       title: 'Session',
       createdAt: '2026-06-13T00:00:00.000Z',
     });

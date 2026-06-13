@@ -42,6 +42,8 @@ import { createMemoryService } from './services/memory/memory.service';
 import { MemoryDiagnosticWriter } from './services/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from './services/memory/memory-markdown-sync.service';
 import { MemoryRecallRuntimeService } from './services/memory/memory-recall-runtime.service';
+import { MemoryRuntimeCaptureService } from './services/memory/memory-runtime-capture.service';
+import { MemoryExtractionModelClientService } from './services/memory/memory-extraction-model-client.service';
 import { createNodeMemoryRuntimeFileSystem } from './services/memory/memory-runtime-file-system';
 import { PlanArtifactCompatibilityService } from './services/artifact/plan-artifact-compatibility.service';
 import { TimelineHistoryCommitProjectorService } from './services/session/timeline-history-commit-projector.service';
@@ -76,7 +78,6 @@ const projectService = createProjectService({
 });
 const artifactRepository = new ArtifactRepository(database);
 const memoryRepository = new MemoryRepository(database);
-const memoryRecallRuntime = createMemoryRecallRuntime(memoryRepository);
 const planArtifactCompatibility = new PlanArtifactCompatibilityService({
   repository: artifactRepository,
 });
@@ -100,6 +101,7 @@ const providerRuntimeService = new ProviderRuntimeService({
   configCredentials,
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
+const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
 const agentInstructionSourceService = new AgentInstructionSourceService();
 const timelineMessageRepository = new TimelineMessageRepository(database);
 const sessionRunRepository = new SessionRunRepository(database);
@@ -172,7 +174,8 @@ const sessionRunService = new SessionRunService({
   workspaceChanges: workspaceChangeRepository,
   chatStreamEventSink: chatStreamSink,
   timelineMessageRepository,
-  memoryRecallService: memoryRecallRuntime.recallService,
+  memoryRecallService: memoryRuntime.recallService,
+  memoryCaptureService: memoryRuntime.captureService,
   megumiHomePath: megumiHomePaths.homePath,
 });
 const toolService = new ToolService({
@@ -233,8 +236,12 @@ function createWorkspaceRestoreForChangeSet(changeSetId: string): WorkspaceResto
   });
 }
 
-function createMemoryRecallRuntime(repository: MemoryRepository): {
+function createMemoryRuntime(
+  repository: MemoryRepository,
+  modelStepProvider: typeof modelStepProviderService,
+): {
   recallService: MemoryRecallRuntimeService;
+  captureService: MemoryRuntimeCaptureService;
 } {
   const fileSystem = createNodeMemoryRuntimeFileSystem();
   const diagnostics = new MemoryDiagnosticWriter({
@@ -251,6 +258,15 @@ function createMemoryRecallRuntime(repository: MemoryRepository): {
       auditId: () => `memory-audit:${crypto.randomUUID()}`,
     },
   });
+  const extractionClient = new MemoryExtractionModelClientService({
+    modelStepProvider,
+    clock: { now: () => new Date().toISOString() },
+    ids: {
+      requestId: () => `memory-extraction-request:${crypto.randomUUID()}`,
+      contextId: () => `memory-extraction-context:${crypto.randomUUID()}`,
+      traceId: () => `memory-extraction-trace:${crypto.randomUUID()}`,
+    },
+  });
 
   return {
     recallService: new MemoryRecallRuntimeService({
@@ -262,6 +278,17 @@ function createMemoryRecallRuntime(repository: MemoryRepository): {
         recallRequestId: () => `memory-recall-request:${crypto.randomUUID()}`,
         snapshotId: () => `memory-recall-snapshot:${crypto.randomUUID()}`,
         accessLogId: () => `memory-access:${crypto.randomUUID()}`,
+        auditId: () => `memory-audit:${crypto.randomUUID()}`,
+      },
+    }),
+    captureService: new MemoryRuntimeCaptureService({
+      repository,
+      markdownSync,
+      diagnostics,
+      extractionClient,
+      clock: { now: () => new Date().toISOString() },
+      ids: {
+        memoryId: () => `memory:${crypto.randomUUID()}`,
         auditId: () => `memory-audit:${crypto.randomUUID()}`,
       },
     }),

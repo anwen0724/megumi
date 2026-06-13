@@ -31,6 +31,7 @@ import type {
   RunContext,
   ModelCapabilitySummary,
 } from '@megumi/shared/run';
+import { isProviderId, type ProviderId } from '@megumi/shared/provider';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContextBuildRequest,
@@ -209,13 +210,12 @@ export interface SessionRunMemoryCaptureService {
     runId: string;
     sessionId: string;
     projectId?: string | null;
-    providerId?: string | null;
+    providerId?: ProviderId | null;
     modelId?: string | null;
     runStatus: 'completed';
     userText: string;
     assistantText?: string;
     toolActivitySummary?: string;
-    signals?: string[];
     memoryEnabled?: boolean;
     hasProject?: boolean;
   }): Promise<{ status: string; reason?: string; savedMemoryIds?: string[] }>;
@@ -1574,7 +1574,7 @@ export class SessionRunService {
       runId: input.runId,
       sessionId: input.sessionId,
       ...(input.projectId ? { projectId: input.projectId } : {}),
-      ...(input.providerId ? { providerId: input.providerId } : {}),
+      ...(input.providerId && isProviderId(input.providerId) ? { providerId: input.providerId } : {}),
       ...(input.modelId ? { modelId: input.modelId } : {}),
       runStatus: 'completed',
       userText: input.userText,
@@ -2049,7 +2049,7 @@ export class SessionRunService {
           runId: String(input.request.runId),
           sessionId: String(input.request.sessionId),
           ...(input.projectId ? { projectId: input.projectId } : {}),
-          providerId: input.request.providerId,
+          providerId: isProviderId(input.request.providerId) ? input.request.providerId : null,
           modelId: String(input.request.modelId),
           userText: input.request.inputContext.parts
             .filter((part) => part.kind === 'current_turn' && part.role === 'user')
