@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { materializeModelStepOpenAICompatibleRequest } from '@megumi/ai/prompt/message-mapper';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { MemoryExtractionModelClientService } from '@megumi/desktop/main/services/memory/memory-extraction-model-client.service';
@@ -85,7 +86,18 @@ describe('MemoryExtractionModelClientService', () => {
 
     expect(result).toEqual({ ok: true, text: '{ "candidates": [] }' });
     expect(provider.requests).toHaveLength(1);
-    expect(provider.requests[0]).toMatchObject({
+    const request = provider.requests[0];
+    expect(request).toBeDefined();
+
+    let materialized: ReturnType<typeof materializeModelStepOpenAICompatibleRequest> | undefined;
+    expect(() => {
+      materialized = materializeModelStepOpenAICompatibleRequest(request!);
+    }).not.toThrow();
+    expect(materialized?.body.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user' }),
+    ]));
+
+    expect(request).toMatchObject({
       requestId: 'memory-extraction-request-1',
       sessionId: 'session-1',
       runId: 'run-1',
@@ -99,7 +111,7 @@ describe('MemoryExtractionModelClientService', () => {
         stepId: 'memory-extraction:run-1',
       },
     });
-    expect(provider.requests[0]?.inputContext.parts).toEqual([
+    expect(request?.inputContext.parts).toEqual([
       expect.objectContaining({
         kind: 'instruction',
         instructionKind: 'system',
@@ -108,12 +120,12 @@ describe('MemoryExtractionModelClientService', () => {
       }),
       expect.objectContaining({
         kind: 'current_turn',
-        role: 'host',
+        role: 'user',
         text: '{"signals":["explicit_remember"]}',
         required: true,
       }),
     ]);
-    expect(JSON.stringify(provider.requests[0])).not.toContain('MemoryRepository');
+    expect(JSON.stringify(request)).not.toContain('MemoryRepository');
   });
 
   it('returns degraded reason when provider target is missing', async () => {

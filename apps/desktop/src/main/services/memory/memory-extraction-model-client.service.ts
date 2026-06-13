@@ -141,7 +141,7 @@ function buildExtractionInputContext(input: {
     {
       partId: `${input.contextId}:user-part`,
       kind: 'current_turn',
-      role: 'host',
+      role: 'user',
       text: input.prompt.user,
       sourceRefs: [userSourceRef],
       priority: 100,
