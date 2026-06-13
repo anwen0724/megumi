@@ -59,8 +59,8 @@ describe('registerProviderHandlers', () => {
         enabled: true,
         baseUrl: 'https://api.deepseek.com',
         defaultModelId: 'deepseek-v4-flash',
-        hasSecret: true,
-        credentialSource: 'secret-store',
+        hasApiKey: true,
+        credentialSource: 'settings',
         envOverrideActive: false,
       },
     ];
@@ -90,17 +90,17 @@ describe('registerProviderHandlers', () => {
     expect(JSON.stringify(result)).not.toContain('test-api-key-fixture');
   });
 
-  it('returns config_invalid for invalid Megumi Home config', async () => {
+  it('returns config_invalid for invalid Megumi Home settings', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
-    const { MegumiHomeConfigParseError } = await import('@megumi/desktop/main/services/project/megumi-home-config.service');
+    const { AppSettingsParseError } = await import('@megumi/desktop/main/services/settings/app-settings.service');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
-    const configPath = 'C:/Users/anwen/.megumi/config.json';
+    const settingsPath = 'C:/Users/anwen/.megumi/settings.json';
     const service = {
       getProviderSettings: vi.fn(),
       listProviderStatuses: vi.fn().mockRejectedValue(
-        new MegumiHomeConfigParseError(
-          "Megumi config could not be read: Expected ',' after object property",
-          configPath,
+        new AppSettingsParseError(
+          "Megumi settings could not be read: Expected ',' after object property",
+          settingsPath,
         ),
       ),
       updateProviderSettings: vi.fn(),
@@ -117,12 +117,12 @@ describe('registerProviderHandlers', () => {
       ok: false,
       error: {
         code: 'config_invalid',
-        message: `Megumi config is invalid. Fix ${configPath} and try again.`,
+        message: `Megumi settings are invalid. Fix ${settingsPath} and try again.`,
         severity: 'error',
         retryable: false,
         source: 'config',
         details: {
-          configPath,
+          settingsPath,
         },
       },
       meta: {
@@ -132,7 +132,7 @@ describe('registerProviderHandlers', () => {
     });
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain('Error invoking remote ' + 'method');
-    expect(serialized).not.toContain('MegumiHomeConfigParseError');
+    expect(serialized).not.toContain('AppSettingsParseError');
     expect(serialized).not.toContain("Expected ','");
   });
 

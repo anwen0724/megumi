@@ -131,8 +131,6 @@ function mapProviderResolutionErrorCode(code: string): RuntimeErrorCode {
       return 'provider_unsupported';
     case 'invalid_provider_config':
       return 'config_invalid';
-    case 'missing_provider_settings':
-      return 'provider_disabled';
     case 'request_cancelled':
       return 'runtime_cancelled';
     case 'provider_disabled':

@@ -15,8 +15,6 @@ import {
   MemoryGetRequestSchema,
   MemoryListRequestSchema,
   MemoryRecallPreviewRequestSchema,
-  MemorySettingsGetRequestSchema,
-  MemorySettingsUpdateRequestSchema,
   MemorySourceRefsListRequestSchema,
   MemoryUpdateRequestSchema,
 } from '@megumi/shared/ipc';
@@ -26,8 +24,6 @@ import type { RuntimeLogger } from '../../services/runtime/runtime-logger.servic
 
 export type MemoryHandlersService = Pick<
   MemoryService,
-  | 'getSettings'
-  | 'updateSettings'
   | 'listCandidates'
   | 'acceptCandidate'
   | 'rejectCandidate'
@@ -52,22 +48,6 @@ export interface RegisterMemoryHandlersOptions {
 
 export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): void {
   const { ipcMain, memoryService, logger } = options;
-
-  ipcMain.handle(IPC_CHANNELS.memory.settingsGet, createRuntimeIpcHandler({
-    channel: IPC_CHANNELS.memory.settingsGet,
-    requestSchema: MemorySettingsGetRequestSchema,
-    logger,
-    handle: () => ({ settings: memoryService.getSettings() }),
-    mapError: mapMemoryIpcError,
-  }));
-
-  ipcMain.handle(IPC_CHANNELS.memory.settingsUpdate, createRuntimeIpcHandler({
-    channel: IPC_CHANNELS.memory.settingsUpdate,
-    requestSchema: MemorySettingsUpdateRequestSchema,
-    logger,
-    handle: (request) => ({ settings: memoryService.updateSettings(request.payload) }),
-    mapError: mapMemoryIpcError,
-  }));
 
   ipcMain.handle(IPC_CHANNELS.memory.candidateList, createRuntimeIpcHandler({
     channel: IPC_CHANNELS.memory.candidateList,

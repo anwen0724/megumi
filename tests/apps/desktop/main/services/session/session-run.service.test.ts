@@ -3422,11 +3422,7 @@ describe('SessionRunService', () => {
       memoryRecallSources: [],
       diagnostics: [],
     }));
-    const getMemorySettings = vi.fn(() => ({
-      autoCaptureEnabled: false,
-      defaultCandidateReviewMode: 'manual' as const,
-      updatedAt: '2026-05-17T00:00:00.000Z',
-    }));
+    const isMemoryEnabled = vi.fn(() => false);
     const memoryCaptureService = {
       calls: [] as unknown[],
       async evaluateRunCompletedCapture(input: unknown) {
@@ -3439,7 +3435,7 @@ describe('SessionRunService', () => {
       memoryRecallService: { recallForNewUserInput },
       memoryCaptureService,
       memorySettingsProvider: {
-        getMemorySettings,
+        isMemoryEnabled,
       },
     });
     service.createSession({
@@ -3476,7 +3472,7 @@ describe('SessionRunService', () => {
     expect(recallForNewUserInput).toHaveBeenCalledWith(expect.objectContaining({
       enabled: false,
     }));
-    expect(getMemorySettings).toHaveBeenCalledWith();
+    expect(isMemoryEnabled).toHaveBeenCalledWith();
     expect(memoryCaptureService.calls).toEqual([
       expect.objectContaining({
         memoryEnabled: false,
@@ -3489,7 +3485,7 @@ describe('SessionRunService', () => {
       memoryRecallSources: [],
       diagnostics: [],
     }));
-    const getMemorySettings = vi.fn(() => undefined);
+    const isMemoryEnabled = vi.fn(() => false);
     const memoryCaptureService = {
       calls: [] as unknown[],
       async evaluateRunCompletedCapture(input: unknown) {
@@ -3502,7 +3498,7 @@ describe('SessionRunService', () => {
       memoryRecallService: { recallForNewUserInput },
       memoryCaptureService,
       memorySettingsProvider: {
-        getMemorySettings,
+        isMemoryEnabled,
       },
     });
     service.createSession({
@@ -3539,7 +3535,7 @@ describe('SessionRunService', () => {
     expect(recallForNewUserInput).toHaveBeenCalledWith(expect.objectContaining({
       enabled: false,
     }));
-    expect(getMemorySettings).toHaveBeenCalledWith();
+    expect(isMemoryEnabled).toHaveBeenCalledWith();
     expect(memoryCaptureService.calls).toEqual([
       expect.objectContaining({
         memoryEnabled: false,
@@ -3559,11 +3555,7 @@ describe('SessionRunService', () => {
       megumiHomePath: 'C:/megumi-home',
       memoryMarkdownSyncService,
       memorySettingsProvider: {
-        getMemorySettings: () => ({
-          autoCaptureEnabled: true,
-          defaultCandidateReviewMode: 'manual',
-          updatedAt: '2026-05-17T00:00:00.000Z',
-        }),
+        isMemoryEnabled: () => true,
       },
     });
 

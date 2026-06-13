@@ -139,6 +139,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/runtime/model-step-provider.service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/tool/tool-executors/read-file.executor.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);
   });
 });

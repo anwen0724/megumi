@@ -26,6 +26,15 @@ export interface AppSettingsService {
   updateSettings(patch: AppSettingsRaw): AppSettingsResolved;
 }
 
+export class AppSettingsParseError extends Error {
+  readonly code = 'app_settings_parse_error';
+
+  constructor(message: string, readonly settingsPath: string) {
+    super(message);
+    this.name = 'AppSettingsParseError';
+  }
+}
+
 export function createAppSettingsService(options: AppSettingsServiceOptions): AppSettingsService {
   const settingsPath = path.resolve(options.settingsPath);
   const fileSystem = options.fileSystem ?? createNodeAppSettingsFileSystem();
@@ -38,7 +47,14 @@ export function createAppSettingsService(options: AppSettingsServiceOptions): Ap
     if (!text) {
       return {};
     }
-    return AppSettingsRawSchema.parse(JSON.parse(text));
+    try {
+      return AppSettingsRawSchema.parse(JSON.parse(text));
+    } catch (error) {
+      throw new AppSettingsParseError(
+        `Megumi settings could not be parsed: ${error instanceof Error ? error.message : 'Unknown error.'}`,
+        settingsPath,
+      );
+    }
   }
 
   function writeRawSettings(raw: AppSettingsRaw): void {

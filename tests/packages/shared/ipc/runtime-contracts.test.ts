@@ -9,6 +9,7 @@ import {
 } from '@megumi/shared';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { JsonObjectSchema, JsonValueSchema } from '@megumi/shared/primitives';
+import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
 import {
   RUNTIME_IPC_ERROR_CODES,
   RuntimeIpcErrorSchema,
@@ -42,9 +43,6 @@ import {
   MemoryRecallPreviewDataSchema,
   MemoryRecallPreviewPayloadSchema,
   MemoryRecallPreviewRequestSchema,
-  MemorySettingsGetRequestSchema,
-  MemorySettingsGetResultSchema,
-  MemorySettingsUpdatePayloadSchema,
   SettingsGetRequestSchema,
   SettingsGetResultSchema,
   SettingsUpdateRequestSchema,
@@ -147,12 +145,12 @@ describe('runtime ipc error schemas', () => {
   it('accepts display-safe runtime ipc errors', () => {
     const result = RuntimeIpcErrorSchema.safeParse({
       code: 'config_invalid',
-      message: 'Megumi config is invalid. Fix C:\\Users\\anwen\\.megumi\\config.json and try again.',
+      message: 'Megumi settings are invalid. Fix C:\\Users\\anwen\\.megumi\\settings.json and try again.',
       severity: 'error',
       retryable: false,
       source: 'config',
       details: {
-        configPath: 'C:\\Users\\anwen\\.megumi\\config.json',
+        settingsPath: 'C:\\Users\\anwen\\.megumi\\settings.json',
         issueCount: 1,
       },
       debugId: 'debug-1',
@@ -556,6 +554,7 @@ describe('application settings ipc schemas', () => {
     });
 
     const resolvedSettings = {
+      ...DEFAULT_APP_SETTINGS,
       theme: 'graphite-dark',
       memory: {
         enabled: true,
@@ -643,8 +642,8 @@ describe('provider and chat ipc schemas', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           defaultModelId: 'deepseek-v4-flash',
-          hasSecret: true,
-          credentialSource: 'secret-store',
+          hasApiKey: true,
+          credentialSource: 'settings',
           envOverrideActive: false,
         },
       ],
@@ -1073,11 +1072,11 @@ describe('agent context runtime IPC schemas', () => {
       },
     }).payload.artifactId).toBe('artifact-1');
 
-    expect(MemorySettingsGetRequestSchema.parse({
-      requestId: 'ipc-memory-settings-get-1',
+    expect(SettingsGetRequestSchema.parse({
+      requestId: 'ipc-settings-get-1',
       payload: {},
       meta: {
-        channel: IPC_CHANNELS.memory.settingsGet,
+        channel: IPC_CHANNELS.settings.get,
         createdAt: '2026-05-17T00:00:00.000Z',
         source: 'renderer',
       },
@@ -1503,14 +1502,6 @@ describe('agent artifact IPC contracts', () => {
 describe('agent memory ipc payload and data schemas', () => {
   it('parses strict memory payload schemas before channels are wired', () => {
     expect(
-      MemorySettingsUpdatePayloadSchema.parse({
-        autoCaptureEnabled: false,
-        defaultCandidateReviewMode: 'manual',
-        updatedAt: '2026-05-16T00:00:00.000Z',
-      }).defaultCandidateReviewMode,
-    ).toBe('manual');
-
-    expect(
       MemoryCandidateListPayloadSchema.parse({
         workspaceId: 'workspace:1',
         status: 'proposed',
@@ -1563,24 +1554,29 @@ describe('agent memory ipc payload and data schemas', () => {
 
 describe('agent memory runtime ipc channels', () => {
   it('registers memory channels as business IPC channels', () => {
-    expect(IPC_CHANNELS.memory.settingsGet).toBe('memory:settings:get');
     expect(IPC_CHANNELS.memory.recallPreview).toBe('memory:recall-preview');
     expect(BUSINESS_IPC_CHANNELS).toContain(IPC_CHANNELS.memory.memoryList);
     expect(isBusinessIpcChannel('memory:memory:list')).toBe(true);
   });
 
   it('keeps channel in request meta and rejects top-level channel', () => {
-    const request = MemorySettingsGetRequestSchema.parse({
-      requestId: 'request:memory:settings',
-      payload: {},
+    const request = MemoryRecallPreviewRequestSchema.parse({
+      requestId: 'request:memory:recall',
+      payload: {
+        sessionId: 'session:1',
+        query: 'decision',
+        scopes: ['project'],
+        limit: 3,
+        createdAt: '2026-05-16T00:00:00.000Z',
+      },
       meta: {
-        channel: IPC_CHANNELS.memory.settingsGet,
+        channel: IPC_CHANNELS.memory.recallPreview,
         createdAt: '2026-05-16T00:00:00.000Z',
         source: 'renderer',
       },
     });
 
-    expect(request.meta.channel).toBe(IPC_CHANNELS.memory.settingsGet);
+    expect(request.meta.channel).toBe(IPC_CHANNELS.memory.recallPreview);
     expect(() =>
       MemoryRecallPreviewRequestSchema.parse({
         requestId: 'request:memory:recall',
@@ -1600,26 +1596,6 @@ describe('agent memory runtime ipc channels', () => {
     ).toThrow();
   });
 
-  it('parses memory results with strict runtime ipc metadata', () => {
-    const result = MemorySettingsGetResultSchema.parse({
-      ok: true,
-      data: {
-        settings: {
-          autoCaptureEnabled: true,
-          defaultCandidateReviewMode: 'manual',
-          updatedAt: '2026-05-16T00:00:00.000Z',
-        },
-      },
-      meta: {
-        requestId: 'request:memory:settings',
-        channel: IPC_CHANNELS.memory.settingsGet,
-        handledAt: '2026-05-16T00:00:01.000Z',
-        operationName: 'memory.settings.get',
-      },
-    });
-
-    expect(result.ok).toBe(true);
-  });
 });
 
 describe('shared barrel exports', () => {

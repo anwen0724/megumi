@@ -1,4 +1,7 @@
-import type { RedactionOptions } from './types';
+export interface RedactionOptions {
+  visiblePrefix?: number;
+  visibleSuffix?: number;
+}
 
 const REDACTED = '[redacted]';
 const SECRET_KEY_PATTERN = /(api[-_]?key|authorization|bearer|token|secret|password|credential|cookie|private[-_]?key|raw.*(body|header|prompt|output))/i;

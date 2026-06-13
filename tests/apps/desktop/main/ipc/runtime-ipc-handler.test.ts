@@ -269,13 +269,13 @@ describe('createRuntimeIpcHandler', () => {
         throw new RuntimeException(
           {
             code: 'config_invalid',
-            message: 'Megumi config is invalid. Fix C:/Users/anwen/.megumi/config.json and try again.',
+            message: 'Megumi settings are invalid. Fix C:/Users/anwen/.megumi/settings.json and try again.',
             severity: 'error',
             retryable: false,
             source: 'config',
             debugId: 'debug-config-1',
             details: {
-              configPath: 'C:/Users/anwen/.megumi/config.json',
+              settingsPath: 'C:/Users/anwen/.megumi/settings.json',
             },
           },
           {
@@ -295,13 +295,13 @@ describe('createRuntimeIpcHandler', () => {
       ok: false,
       error: {
         code: 'config_invalid',
-        message: 'Megumi config is invalid. Fix C:/Users/anwen/.megumi/config.json and try again.',
+        message: 'Megumi settings are invalid. Fix C:/Users/anwen/.megumi/settings.json and try again.',
         severity: 'error',
         retryable: false,
         source: 'config',
         debugId: 'debug-config-1',
         details: {
-          configPath: 'C:/Users/anwen/.megumi/config.json',
+          settingsPath: 'C:/Users/anwen/.megumi/settings.json',
         },
       },
       meta: {

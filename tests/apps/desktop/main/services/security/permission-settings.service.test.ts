@@ -1,15 +1,13 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createDefaultMegumiConfig } from '@megumi/desktop/main/services/project/megumi-home.service';
 import { createPermissionSettingsService } from '@megumi/desktop/main/services/security/permission-settings.service';
 
 describe('PermissionSettingsService', () => {
   it('loads User, Project, and Local permission settings in stable scope order', async () => {
     const files = new Map<string, unknown>([
       [
-        'C:/home/.megumi/config.json',
+        'C:/home/.megumi/settings.json',
         {
-          ...createDefaultMegumiConfig(),
           permissions: { deny: ['run_command(curl *)'] },
         },
       ],
@@ -17,7 +15,7 @@ describe('PermissionSettingsService', () => {
       ['C:/project/.megumi/settings.local.json', { permissions: { ask: ['run_command(npm install *)'] } }],
     ]);
     const service = createPermissionSettingsService({
-      userConfigPath: 'C:/home/.megumi/config.json',
+      userSettingsPath: 'C:/home/.megumi/settings.json',
       fileSystem: {
         readJson: async (filePath) => files.get(normalizePath(filePath)),
         pathExists: async (filePath) => files.has(normalizePath(filePath)),
@@ -38,7 +36,7 @@ describe('PermissionSettingsService', () => {
       ['C:/project/.megumi/settings.local.json', { permissions: { allow: ['invalid pattern'] } }],
     ]);
     const service = createPermissionSettingsService({
-      userConfigPath: 'C:/home/.megumi/config.json',
+      userSettingsPath: 'C:/home/.megumi/settings.json',
       fileSystem: {
         readJson: async (filePath) => files.get(normalizePath(filePath)),
         pathExists: async (filePath) => files.has(normalizePath(filePath)),
@@ -48,18 +46,17 @@ describe('PermissionSettingsService', () => {
     await expect(service.loadForProject('C:/project')).rejects.toThrow(/Permission rule/);
   });
 
-  it('rejects malformed user permissions from the broader Megumi Home config', async () => {
+  it('rejects malformed user permissions from Megumi Home settings', async () => {
     const files = new Map<string, unknown>([
       [
-        'C:/home/.megumi/config.json',
+        'C:/home/.megumi/settings.json',
         {
-          ...createDefaultMegumiConfig(),
           permissions: { allow: ['invalid pattern'] },
         },
       ],
     ]);
     const service = createPermissionSettingsService({
-      userConfigPath: 'C:/home/.megumi/config.json',
+      userSettingsPath: 'C:/home/.megumi/settings.json',
       fileSystem: {
         readJson: async (filePath) => files.get(normalizePath(filePath)),
         pathExists: async (filePath) => files.has(normalizePath(filePath)),

@@ -1,5 +1,6 @@
-﻿import { ipcMain } from 'electron';
-import path from 'path';
+// Adapts renderer provider settings IPC to the Main-owned settings.json provider service.
+// The handler accepts API key writes but never returns plaintext API keys to Renderer.
+import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import {
@@ -9,16 +10,9 @@ import {
   ProviderUpdateRequestSchema,
 } from '@megumi/shared/ipc';
 import type { ProviderId, ProviderPublicStatus, ProviderSettings } from '@megumi/shared/provider';
-import { createDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { ProviderSettingsRepository } from '@megumi/db/repos/provider-settings.repo';
-import {
-  MegumiHomeConfigParseError,
-  MegumiHomeConfigService,
-} from '@megumi/desktop/main/services/project/megumi-home-config.service';
 import { initializeElectronMegumiHomeSync } from '@megumi/desktop/main/services/project/megumi-home.service';
 import { ProviderSettingsService, type ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/provider/provider-settings.service';
-import { createElectronSecretStoreService } from '@megumi/desktop/main/services/security/secret-store.service';
+import { createAppSettingsService, AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 
@@ -98,15 +92,15 @@ export function registerProviderHandlers(
 }
 
 function mapProviderIpcError(error: unknown): RuntimeIpcError {
-  if (error instanceof MegumiHomeConfigParseError) {
+  if (error instanceof AppSettingsParseError) {
     return {
       code: 'config_invalid',
-      message: `Megumi config is invalid. Fix ${error.configPath} and try again.`,
+      message: `Megumi settings are invalid. Fix ${error.settingsPath} and try again.`,
       severity: 'error',
       retryable: false,
       source: 'config',
       details: {
-        configPath: error.configPath,
+        settingsPath: error.settingsPath,
       },
     };
   }
@@ -123,27 +117,12 @@ function mapProviderIpcError(error: unknown): RuntimeIpcError {
 export function getDefaultProviderService(): ProviderHandlersService {
   if (!defaultProviderService) {
     const homePaths = initializeElectronMegumiHomeSync();
-    const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
-    migrateDatabase(database);
-
-    const configCredentials = {
-      async getProviderApiKeyEnv(providerId: ProviderId) {
-        return new MegumiHomeConfigService({ configPath: homePaths.configPath }).getProviderApiKeyEnv(providerId);
-      },
-      async getPlaintextProviderApiKey(providerId: ProviderId) {
-        return new MegumiHomeConfigService({ configPath: homePaths.configPath }).getPlaintextProviderApiKey(providerId);
-      },
-    };
-
     defaultProviderService = new ProviderSettingsService({
-      repository: new ProviderSettingsRepository(database),
-      secretStore: createElectronSecretStoreService(homePaths.homePath),
-      configCredentials,
+      settings: createAppSettingsService({
+        settingsPath: homePaths.settingsPath,
+      }),
     });
   }
 
   return defaultProviderService;
 }
-
-
-

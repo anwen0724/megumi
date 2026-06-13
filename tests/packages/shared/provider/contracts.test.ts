@@ -6,7 +6,6 @@ import {
   isProviderId,
   type ProviderId,
   type ProviderSettings,
-  type SecretRef,
 } from '@megumi/shared/provider';
 import {
   DEFAULT_MODEL_BY_PROVIDER,
@@ -24,32 +23,26 @@ describe('provider contracts', () => {
     expect(isProviderId('ollama')).toBe(false);
   });
 
-  it('defines default settings without plaintext secrets', () => {
+  it('defines default settings with environment key names and without plaintext API keys', () => {
     const deepseek = DEFAULT_PROVIDER_SETTINGS.deepseek;
 
     expect(deepseek.providerId).toBe('deepseek');
     expect(deepseek.enabled).toBe(true);
     expect(deepseek.baseUrl).toBe('https://api.deepseek.com');
     expect(deepseek.defaultModelId).toBe(DEFAULT_MODEL_BY_PROVIDER.deepseek);
-    expect(deepseek.secretRef).toBeUndefined();
-    expect(JSON.stringify(DEFAULT_PROVIDER_SETTINGS)).not.toContain('apiKey');
+    expect(deepseek.apiKeyEnv).toBe('DEEPSEEK_API_KEY');
+    expect(deepseek.apiKey).toBeUndefined();
+    expect(Object.values(DEFAULT_PROVIDER_SETTINGS).every((settings) => settings.apiKey === undefined)).toBe(true);
   });
 
-  it('supports secret references without exposing secret values', () => {
-    const secretRef: SecretRef = {
-      id: 'secret:provider-api-key:deepseek',
-      providerId: 'deepseek',
-      scope: 'provider-api-key',
-    };
-
+  it('supports explicit settings API keys for Main-owned runtime resolution', () => {
     const settings: ProviderSettings = {
       ...DEFAULT_PROVIDER_SETTINGS.deepseek,
-      secretRef,
+      apiKey: 'sk-deepseek',
       updatedAt: '2026-05-11T00:00:00.000Z',
     };
 
-    expect(settings.secretRef).toEqual(secretRef);
-    expect(JSON.stringify(settings)).not.toContain('sk-');
+    expect(settings.apiKey).toBe('sk-deepseek');
   });
 });
 

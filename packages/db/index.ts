@@ -1,6 +1,5 @@
 export * from './connection';
 export * from './schema';
-export * from './repos/provider-settings.repo';
 export * from './repos/session-run.repo';
 export * from './repos/session-active-path.repo';
 export * from './repos/run-context.repo';

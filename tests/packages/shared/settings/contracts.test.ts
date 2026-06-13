@@ -25,14 +25,70 @@ describe('app settings contracts', () => {
     });
   });
 
+  it('resolves provider, chat, and permission overrides from sparse settings', () => {
+    expect(resolveAppSettings({
+      chat: {
+        defaultProvider: 'openai',
+      },
+      providers: {
+        deepseek: {
+          apiKey: 'sk-deepseek',
+        },
+        openai: {
+          enabled: false,
+          apiKeyEnv: 'CUSTOM_OPENAI_KEY',
+        },
+      },
+      permissions: {
+        ask: ['run_command(*)'],
+      },
+    })).toMatchObject({
+      chat: {
+        defaultProvider: 'openai',
+      },
+      providers: {
+        deepseek: {
+          enabled: true,
+          kind: 'openai-compatible',
+          displayName: 'DeepSeek',
+          baseUrl: 'https://api.deepseek.com',
+          defaultModel: 'deepseek-v4-flash',
+          apiKey: 'sk-deepseek',
+          apiKeyEnv: 'DEEPSEEK_API_KEY',
+        },
+        openai: {
+          enabled: false,
+          kind: 'openai-compatible',
+          displayName: 'OpenAI',
+          baseUrl: 'https://api.openai.com/v1',
+          defaultModel: 'gpt-5.5',
+          apiKeyEnv: 'CUSTOM_OPENAI_KEY',
+        },
+      },
+      permissions: {
+        ask: ['run_command(*)'],
+      },
+    });
+  });
+
   it('keeps raw settings partial so disk files only express user overrides', () => {
     expect(AppSettingsRawSchema.parse({
       memory: {
         enabled: true,
       },
+      providers: {
+        deepseek: {
+          apiKey: 'sk-deepseek',
+        },
+      },
     })).toEqual({
       memory: {
         enabled: true,
+      },
+      providers: {
+        deepseek: {
+          apiKey: 'sk-deepseek',
+        },
       },
     });
   });

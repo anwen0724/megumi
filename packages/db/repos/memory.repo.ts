@@ -22,7 +22,6 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-  MemorySettings,
   MemorySourceRef,
 } from '@megumi/shared/memory';
 
@@ -271,31 +270,6 @@ export class MemoryRepository {
       ORDER BY created_at ASC
     `).all(ownerId, ownerKind) as Array<{ source_ref_json: string }>;
     return rows.map((row) => JSON.parse(row.source_ref_json) as MemorySourceRef);
-  }
-
-  saveSettings(settings: MemorySettings): MemorySettings {
-    this.database.prepare(`
-      INSERT INTO memory_settings (
-        settings_id, auto_capture_enabled, default_candidate_review_mode,
-        updated_at, metadata_json, settings_json
-      ) VALUES (
-        @settings_id, @auto_capture_enabled, @default_candidate_review_mode,
-        @updated_at, @metadata_json, @settings_json
-      )
-      ON CONFLICT(settings_id) DO UPDATE SET
-        auto_capture_enabled = excluded.auto_capture_enabled,
-        default_candidate_review_mode = excluded.default_candidate_review_mode,
-        updated_at = excluded.updated_at,
-        metadata_json = excluded.metadata_json,
-        settings_json = excluded.settings_json
-    `).run(toSettingsRow(settings));
-    return settings;
-  }
-
-  getSettings(): MemorySettings | undefined {
-    return parseJsonRow<MemorySettings>(this.database.prepare(
-      "SELECT settings_json FROM memory_settings WHERE settings_id = 'global'",
-    ).get(), 'settings_json');
   }
 
   saveRecallRequest(request: MemoryRecallRequest): MemoryRecallRequest {
@@ -576,17 +550,6 @@ function toSourceRefRow(sourceRef: MemorySourceRef) {
     created_at: sourceRef.createdAt,
     metadata_json: sourceRef.metadata ? stringifyJson(sourceRef.metadata) : null,
     source_ref_json: stringifyJson(sourceRef),
-  };
-}
-
-function toSettingsRow(settings: MemorySettings) {
-  return {
-    settings_id: 'global',
-    auto_capture_enabled: settings.autoCaptureEnabled ? 1 : 0,
-    default_candidate_review_mode: settings.defaultCandidateReviewMode,
-    updated_at: settings.updatedAt,
-    metadata_json: settings.metadata ? stringifyJson(settings.metadata) : null,
-    settings_json: stringifyJson(settings),
   };
 }
 

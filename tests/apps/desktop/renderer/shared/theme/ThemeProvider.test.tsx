@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
 import { ThemeProvider, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 
 describe('ThemeProvider', () => {
@@ -16,6 +17,7 @@ describe('ThemeProvider', () => {
             ok: true,
             data: {
               settings: {
+                ...DEFAULT_APP_SETTINGS,
                 theme: 'midnight-blue',
                 memory: { enabled: false },
                 compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
@@ -46,6 +48,7 @@ describe('ThemeProvider', () => {
       ok: true,
       data: {
         settings: {
+          ...DEFAULT_APP_SETTINGS,
           theme: 'graphite-dark',
           memory: { enabled: false },
           compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },

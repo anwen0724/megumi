@@ -14,12 +14,12 @@ interface ProviderFormState {
 
 function credentialLabel(provider: ProviderPublicStatus): string {
   if (provider.envOverrideActive) return 'Environment key';
-  if (provider.hasSecret) return 'Stored key';
+  if (provider.hasApiKey) return 'Settings key';
   return 'Missing key';
 }
 
 function credentialVariant(provider: ProviderPublicStatus): 'success' | 'warning' | 'neutral' {
-  if (provider.envOverrideActive || provider.hasSecret) return 'success';
+  if (provider.envOverrideActive || provider.hasApiKey) return 'success';
   if (provider.providerId === 'anthropic') return 'neutral';
   return 'warning';
 }
@@ -186,7 +186,7 @@ export function ProviderSettingsPanel() {
                     type="password"
                     value={form.apiKey}
                     onChange={(event) => updateForm(provider.providerId, { apiKey: event.target.value })}
-                    placeholder={provider.hasSecret || provider.envOverrideActive ? 'Replace API key' : 'Paste API key'}
+                    placeholder={provider.hasApiKey || provider.envOverrideActive ? 'Replace API key' : 'Paste API key'}
                   />
                 </div>
                 <Button type="submit" size="sm" variant="primary" disabled={status === 'saving' || !form.apiKey.trim()}>

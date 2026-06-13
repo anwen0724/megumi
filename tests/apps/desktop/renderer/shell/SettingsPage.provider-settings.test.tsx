@@ -15,7 +15,7 @@ describe('SettingsPage provider settings', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           defaultModelId: 'deepseek-v4-flash',
-          hasSecret: false,
+          hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,
         },

@@ -15,10 +15,8 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-  MemorySettings,
   MemorySourceRef,
 } from '@megumi/shared/memory';
-import { createDefaultMemorySettings } from '@megumi/shared/memory';
 import {
   createRuntimeMemoryAccessRecordedEvent,
   createRuntimeMemoryCandidateAcceptedEvent,
@@ -35,10 +33,6 @@ export interface MemoryServiceDependencies {
   repository: MemoryRepository;
   now: () => string;
   createId: (prefix: string) => string;
-  settings?: {
-    getSettings(): MemorySettings;
-    updateSettings(settings: MemorySettings): MemorySettings;
-  };
   emitRuntimeEvent?: (event: RuntimeEvent) => void;
 }
 
@@ -87,8 +81,6 @@ export interface MemoryRecallPreviewInput {
 }
 
 export interface MemoryService {
-  getSettings(): MemorySettings;
-  updateSettings(settings: MemorySettings): MemorySettings;
   proposeCandidate(input: ProposeMemoryCandidateInput): MemoryCandidate;
   listCandidates(filter: { workspaceId?: string; sessionId?: string; status?: MemoryCandidateStatus }): MemoryCandidate[];
   acceptCandidate(input: CandidateReviewInput): { candidate: MemoryCandidate; memory: MemoryRecord };
@@ -120,13 +112,6 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
       createdAt: deps.now(),
       source: 'memory' as const,
     };
-  }
-
-  function getSettings(): MemorySettings {
-    if (deps.settings) {
-      return deps.settings.getSettings();
-    }
-    return deps.repository.getSettings() ?? createDefaultMemorySettings(deps.now());
   }
 
   function statusChange(memoryId: string, to: MemoryRecordStatus, updatedAt: string): MemoryRecord {
@@ -165,13 +150,10 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
   }
 
   return {
-    getSettings,
-    updateSettings: (settings) => deps.settings?.updateSettings(settings) ?? deps.repository.saveSettings(settings),
     proposeCandidate(input) {
-      const settings = getSettings();
       const policy = createDefaultMemoryPolicy({
         now: deps.now(),
-        autoCaptureEnabled: settings.autoCaptureEnabled,
+        autoCaptureEnabled: true,
       });
       const decision = evaluateMemoryCandidatePolicy({
         policy,

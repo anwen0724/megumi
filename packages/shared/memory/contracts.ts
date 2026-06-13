@@ -327,27 +327,6 @@ export const MemoryRecallSnapshotSchema = z.object({
 });
 export type MemoryRecallSnapshot = z.infer<typeof MemoryRecallSnapshotSchema>;
 
-export const MemorySettingsSchema = z
-  .object({
-    autoCaptureEnabled: z.boolean(),
-    defaultCandidateReviewMode: MemoryReviewModeSchema,
-    updatedAt: IsoDateTimeSchema,
-    metadata: OptionalJsonObjectSchema,
-  })
-  .strict();
-
-export type MemorySettings = z.infer<typeof MemorySettingsSchema>;
-
-export const DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED = false;
-
-export function createDefaultMemorySettings(updatedAt: string): MemorySettings {
-  return MemorySettingsSchema.parse({
-    autoCaptureEnabled: DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED,
-    defaultCandidateReviewMode: 'manual',
-    updatedAt,
-  });
-}
-
 export const MemoryPolicySchema = z
   .object({
     allowedScopes: z.array(MemoryScopeSchema).min(1),

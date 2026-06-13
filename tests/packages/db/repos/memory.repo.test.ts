@@ -10,7 +10,6 @@ import type {
   MemoryRecallRequest,
   MemoryRecallResult,
   MemoryRecord,
-  MemorySettings,
   MemorySourceRef,
 } from '@megumi/shared/memory';
 
@@ -168,7 +167,7 @@ describe('MemoryRepository', () => {
     expect(repo.listRecallResultsByRequest(request.recallRequestId)).toEqual([result]);
   });
 
-  it('keeps candidate, settings, access, and audit compatibility without session scoped records', () => {
+  it('keeps candidate, access, and audit compatibility without session scoped records', () => {
     const repo = createRepository();
     const candidate: MemoryCandidate = {
       candidateId: 'memory-candidate:1',
@@ -184,11 +183,6 @@ describe('MemoryRepository', () => {
       status: 'proposed',
       proposedBy: 'agent',
       createdAt: now,
-    };
-    const settings: MemorySettings = {
-      autoCaptureEnabled: true,
-      defaultCandidateReviewMode: 'manual',
-      updatedAt: now,
     };
     const access: MemoryAccessLog = {
       accessLogId: 'memory-access:1',
@@ -214,8 +208,6 @@ describe('MemoryRepository', () => {
 
     expect(repo.saveCandidate(candidate).scope).toBe('project');
     expect(repo.listCandidates({ sessionId: 'session:1', status: 'proposed' })).toEqual([candidate]);
-    expect(repo.saveSettings(settings)).toEqual(settings);
-    expect(repo.getSettings()).toEqual(settings);
     expect(repo.saveAccessLog(access)).toEqual(access);
     expect(repo.listAccessLogs({ memoryId: 'memory:1' })).toEqual([access]);
     expect(repo.saveAuditLog(audit)).toEqual(audit);

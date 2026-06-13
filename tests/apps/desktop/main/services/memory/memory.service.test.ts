@@ -3,7 +3,6 @@ import { createMemoryService } from '@megumi/desktop/main/services/memory/memory
 import { createDatabase } from '@megumi/db/connection';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
-import { createDefaultMemorySettings } from '@megumi/shared/memory';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 const now = '2026-05-16T00:00:00.000Z';
@@ -23,50 +22,9 @@ function createService() {
 }
 
 describe('MemoryService', () => {
-  it('uses an injected settings port when Main runtime owns persisted settings', () => {
-    const database = createDatabase(':memory:');
-    migrateDatabase(database);
-    const repository = new MemoryRepository(database);
-    const writtenSettings = createDefaultMemorySettings(now);
-    writtenSettings.autoCaptureEnabled = true;
-    const service = createMemoryService({
-      repository,
-      now: () => now,
-      createId: (prefix) => `${prefix}:1`,
-      settings: {
-        getSettings: () => ({
-          ...createDefaultMemorySettings(now),
-          autoCaptureEnabled: true,
-        }),
-        updateSettings: (settings) => ({
-          ...settings,
-          autoCaptureEnabled: false,
-        }),
-      },
-    });
-
-    try {
-      expect(service.getSettings().autoCaptureEnabled).toBe(true);
-      expect(service.updateSettings(writtenSettings).autoCaptureEnabled).toBe(false);
-      expect(repository.getSettings()).toBeUndefined();
-    } finally {
-      database.close();
-    }
-  });
-
   it('creates settings and candidate-first records through user review', () => {
     const { service, database, events } = createService();
     try {
-      expect(service.getSettings()).toMatchObject({
-        autoCaptureEnabled: false,
-        defaultCandidateReviewMode: 'manual',
-      });
-      service.updateSettings({
-        autoCaptureEnabled: true,
-        defaultCandidateReviewMode: 'manual',
-        updatedAt: now,
-      });
-
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
         projectId: 'project:1',
@@ -120,11 +78,6 @@ describe('MemoryService', () => {
   it('updates lifecycle and recall preview with access logs', () => {
     const { service, database } = createService();
     try {
-      service.updateSettings({
-        autoCaptureEnabled: true,
-        defaultCandidateReviewMode: 'manual',
-        updatedAt: now,
-      });
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
         projectId: 'project:1',
@@ -175,11 +128,6 @@ describe('MemoryService', () => {
   it('applies candidate edits before accepting memory records', () => {
     const { service, database } = createService();
     try {
-      service.updateSettings({
-        autoCaptureEnabled: true,
-        defaultCandidateReviewMode: 'manual',
-        updatedAt: now,
-      });
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
         projectId: 'project:1',

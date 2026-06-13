@@ -11,8 +11,8 @@ const providers: ProviderPublicStatus[] = [
     enabled: true,
     baseUrl: 'https://api.deepseek.com',
     defaultModelId: 'deepseek-v4-flash',
-    hasSecret: true,
-    credentialSource: 'secret-store',
+    hasApiKey: true,
+    credentialSource: 'settings',
     envOverrideActive: false,
   },
 ];
@@ -166,7 +166,7 @@ describe('useProviderStore', () => {
             ok: false,
             error: {
               code: 'config_invalid',
-              message: 'Megumi config is invalid. Fix C:\\Users\\anwen\\.megumi\\config.json and try again.',
+              message: 'Megumi settings are invalid. Fix C:\\Users\\anwen\\.megumi\\settings.json and try again.',
               severity: 'error',
               retryable: false,
               source: 'config',
@@ -185,7 +185,7 @@ describe('useProviderStore', () => {
 
     expect(useProviderStore.getState()).toMatchObject({
       status: 'error',
-      error: 'Megumi config is invalid. Fix C:\\Users\\anwen\\.megumi\\config.json and try again.',
+      error: 'Megumi settings are invalid. Fix C:\\Users\\anwen\\.megumi\\settings.json and try again.',
     });
     expect(JSON.stringify(useProviderStore.getState())).not.toContain('stack trace');
     expect(JSON.stringify(useProviderStore.getState())).not.toContain('sk-test-secret');

@@ -13,7 +13,7 @@ export interface PermissionSettingsFileSystem {
 }
 
 export interface PermissionSettingsServiceOptions {
-  userConfigPath: string;
+  userSettingsPath: string;
   fileSystem: PermissionSettingsFileSystem;
 }
 
@@ -28,7 +28,7 @@ export function createPermissionSettingsService(
     async loadForProject(projectRoot) {
       const scoped: ScopedPermissionSettings[] = [];
 
-      const userSettings = await readUserSettingsIfPresent(options.fileSystem, options.userConfigPath);
+      const userSettings = await readUserSettingsIfPresent(options.fileSystem, options.userSettingsPath);
       if (userSettings) {
         scoped.push({ scope: 'user', settings: userSettings });
       }

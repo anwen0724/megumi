@@ -12,14 +12,11 @@ const mocks = vi.hoisted(() => {
     loadEnvFile: vi.fn(),
     initializeElectronMegumiHomeSync: vi.fn(() => ({
       homePath,
-      configPath: `${homePath}/config.json`,
       settingsPath: `${homePath}/settings.json`,
-      configSchemaPath: `${homePath}/config.schema.json`,
+      settingsSchemaPath: `${homePath}/settings.schema.json`,
       readmePath: `${homePath}/README.md`,
       versionPath: `${homePath}/version.json`,
       sqlitePath: `${homePath}/sqlite`,
-      secretsPath: `${homePath}/secrets`,
-      providerSecretsPath: `${homePath}/secrets/providers`,
       logsPath,
       cachePath: `${homePath}/cache`,
       tmpPath: `${homePath}/tmp`,
@@ -93,22 +90,17 @@ const mocks = vi.hoisted(() => {
       streamModelStep: vi.fn(),
       cancelModelStep: vi.fn(),
     })),
-    getDefaultProviderService: vi.fn(() => ({
-      listProviders: vi.fn(),
-    })),
-    createElectronSecretStoreService: vi.fn(() => ({
-      get: vi.fn(),
-      set: vi.fn(),
-      delete: vi.fn(),
-    })),
-    MegumiHomeConfigService: vi.fn(function MegumiHomeConfigService(
+    ProviderSettingsService: vi.fn(function ProviderSettingsService(
       this: { options?: unknown },
       options: unknown,
     ) {
       this.options = options;
       return {
-        getProviderApiKeyEnv: vi.fn(),
-        getPlaintextProviderApiKey: vi.fn(),
+        getProviderSettingsSync: vi.fn(),
+        listProviderStatuses: vi.fn(),
+        updateProviderSettings: vi.fn(),
+        setProviderApiKey: vi.fn(),
+        deleteProviderApiKey: vi.fn(),
       };
     }),
     ProviderRuntimeService: vi.fn(function ProviderRuntimeService(
@@ -126,6 +118,13 @@ const mocks = vi.hoisted(() => {
         theme: 'midnight-blue',
         memory: { enabled: false },
         compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+        chat: { defaultProvider: 'deepseek' },
+        permissions: {
+          defaultMode: 'ask',
+          trustedWorkspaceRoots: [],
+          toolOverrides: {},
+        },
+        providers: {},
       })),
       updateSettings: vi.fn(),
     })),
@@ -221,11 +220,10 @@ const mocks = vi.hoisted(() => {
       this.database = database;
     }),
     MemoryRepository: vi.fn(function MemoryRepository(
-      this: { database?: unknown; getSettings?: ReturnType<typeof vi.fn> },
+      this: { database?: unknown },
       database: unknown,
     ) {
       this.database = database;
-      this.getSettings = vi.fn(() => undefined);
     }),
     ProjectRepository: vi.fn(function ProjectRepository(
       this: { database?: unknown },
@@ -251,8 +249,6 @@ const mocks = vi.hoisted(() => {
       };
     }),
     createMemoryService: vi.fn(() => ({
-      getSettings: vi.fn(),
-      updateSettings: vi.fn(),
       proposeCandidate: vi.fn(),
       listCandidates: vi.fn(),
       acceptCandidate: vi.fn(),
@@ -331,16 +327,8 @@ vi.mock('@megumi/desktop/main/services/runtime/model-step-provider.service', () 
   createModelStepProviderService: mocks.createModelStepProviderService,
 }));
 
-vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({
-  getDefaultProviderService: mocks.getDefaultProviderService,
-}));
-
-vi.mock('@megumi/desktop/main/services/security/secret-store.service', () => ({
-  createElectronSecretStoreService: mocks.createElectronSecretStoreService,
-}));
-
-vi.mock('@megumi/desktop/main/services/project/megumi-home-config.service', () => ({
-  MegumiHomeConfigService: mocks.MegumiHomeConfigService,
+vi.mock('@megumi/desktop/main/services/provider/provider-settings.service', () => ({
+  ProviderSettingsService: mocks.ProviderSettingsService,
 }));
 
 vi.mock('@megumi/desktop/main/services/provider/provider-runtime.service', () => ({
@@ -459,9 +447,7 @@ describe('main runtime logger composition', () => {
     mocks.PermissionSnapshotService.mockClear();
     mocks.SessionRunService.mockClear();
     mocks.createModelStepProviderService.mockClear();
-    mocks.getDefaultProviderService.mockClear();
-    mocks.createElectronSecretStoreService.mockClear();
-    mocks.MegumiHomeConfigService.mockClear();
+    mocks.ProviderSettingsService.mockClear();
     mocks.ProviderRuntimeService.mockClear();
     mocks.createDefaultRunContextService.mockClear();
     mocks.createAppSettingsService.mockClear();
@@ -556,15 +542,11 @@ describe('main runtime logger composition', () => {
       repository: expect.any(Object),
       planArtifactCompatibility,
     }));
-    expect(mocks.getDefaultProviderService).toHaveBeenCalledTimes(1);
-    expect(mocks.createElectronSecretStoreService).toHaveBeenCalledWith(mocks.homePath);
+    expect(mocks.ProviderSettingsService).toHaveBeenCalledWith({
+      settings: settingsService,
+    });
     expect(mocks.ProviderRuntimeService).toHaveBeenCalledWith(expect.objectContaining({
-      settings: expect.any(Object),
-      secretStore: expect.any(Object),
-      configCredentials: expect.objectContaining({
-        getProviderApiKeyEnv: expect.any(Function),
-        getPlaintextProviderApiKey: expect.any(Function),
-      }),
+      settings: mocks.ProviderSettingsService.mock.results[0]?.value,
     }));
     const modelStepProviderService = mocks.createModelStepProviderService.mock.results[0]?.value;
     expect(mocks.createModelStepProviderService).toHaveBeenCalledWith(
@@ -581,15 +563,13 @@ describe('main runtime logger composition', () => {
         publish: expect.any(Function),
       }),
       memorySettingsProvider: expect.objectContaining({
-        getMemorySettings: expect.any(Function),
+        isMemoryEnabled: expect.any(Function),
       }),
     }));
     const sessionRunOptions = mocks.SessionRunService.mock.calls[0]?.[0] as {
-      memorySettingsProvider: { getMemorySettings(): unknown };
+      memorySettingsProvider: { isMemoryEnabled(): boolean };
     };
-    expect(sessionRunOptions.memorySettingsProvider.getMemorySettings()).toMatchObject({
-      autoCaptureEnabled: false,
-    });
+    expect(sessionRunOptions.memorySettingsProvider.isMemoryEnabled()).toBe(false);
     expect(mocks.ToolService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       registry: expect.any(Object),
@@ -603,10 +583,6 @@ describe('main runtime logger composition', () => {
       repository: expect.any(Object),
       now: expect.any(Function),
       createId: expect.any(Function),
-      settings: expect.objectContaining({
-        getSettings: expect.any(Function),
-        updateSettings: expect.any(Function),
-      }),
       emitRuntimeEvent: expect.any(Function),
     }));
     expect(mocks.createRecoveryService).toHaveBeenCalledWith(expect.objectContaining({

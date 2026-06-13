@@ -22,7 +22,6 @@ describe('memory schema migrations', () => {
       'memory_recall_results',
       'memory_access_logs',
       'memory_audit_logs',
-      'memory_settings',
     ]));
 
     expect(columnNames('memory_records')).toEqual(expect.arrayContaining([
@@ -66,21 +65,6 @@ describe('memory schema migrations', () => {
       'created_at',
       'updated_at',
     ]));
-  });
-
-  it('stores memory settings as a single global row model', () => {
-    database = createDatabase(':memory:');
-    migrateDatabase(database);
-
-    expect(columnNames('memory_settings')).toEqual(expect.arrayContaining([
-      'settings_id',
-      'auto_capture_enabled',
-      'default_candidate_review_mode',
-      'updated_at',
-      'metadata_json',
-      'settings_json',
-    ]));
-    expect(columnNames('memory_settings')).not.toContain('workspace_id');
   });
 
   it('creates lookup, dedupe, recall relation, and mirror indexes', () => {

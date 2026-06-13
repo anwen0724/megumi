@@ -25,7 +25,6 @@ describe('ipc channel contracts', () => {
     expect(IPC_CHANNELS.approval.resolve).toBe('approval:resolve');
     expect(IPC_CHANNELS.recovery.resume).toBe('recovery:resume');
     expect(IPC_CHANNELS.artifacts.get).toBe('artifacts:get');
-    expect(IPC_CHANNELS.memory.settingsGet).toBe('memory:settings:get');
     expect(IPC_CHANNELS.project.list).toBe('project:list');
     expect(IPC_CHANNELS.project.useExisting).toBe('project:use-existing');
     expect(IPC_CHANNELS.project.open).toBe('project:open');

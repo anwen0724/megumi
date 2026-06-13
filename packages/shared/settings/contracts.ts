@@ -1,6 +1,13 @@
 // Defines user-editable application settings contracts shared across Main, Preload, and Renderer.
-// Raw settings represent the sparse settings.json file; resolved settings are defaults plus raw overrides.
+// Raw settings represent sparse settings.json overrides; resolved settings are defaults plus those overrides.
 import { z } from 'zod';
+import {
+  DEFAULT_PROVIDER_SETTINGS,
+  PROVIDER_IDS,
+  ProviderIdSchema,
+  ProviderKindSchema,
+} from '../provider';
+import { PermissionRulesSchema } from '../permission';
 
 export const AppThemeNameSchema = z.enum([
   'megumi-warm',
@@ -25,11 +32,38 @@ export const AppCompactionSettingsRawSchema = z
   })
   .strict();
 
+export const AppChatSettingsRawSchema = z
+  .object({
+    defaultProvider: ProviderIdSchema.optional(),
+  })
+  .strict();
+
+export const AppProviderSettingsRawSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    kind: ProviderKindSchema.optional(),
+    displayName: z.string().min(1).optional(),
+    baseUrl: z.string().url().optional(),
+    defaultModel: z.string().min(1).optional(),
+    apiKey: z.string().min(1).nullable().optional(),
+    apiKeyEnv: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const AppProvidersSettingsRawSchema = z
+  .object(Object.fromEntries(
+    PROVIDER_IDS.map((providerId) => [providerId, AppProviderSettingsRawSchema.optional()]),
+  ) as Record<(typeof PROVIDER_IDS)[number], z.ZodOptional<typeof AppProviderSettingsRawSchema>>)
+  .strict();
+
 export const AppSettingsRawSchema = z
   .object({
     theme: AppThemeNameSchema.optional(),
     memory: AppMemorySettingsRawSchema.optional(),
     compaction: AppCompactionSettingsRawSchema.optional(),
+    chat: AppChatSettingsRawSchema.optional(),
+    providers: AppProvidersSettingsRawSchema.optional(),
+    permissions: PermissionRulesSchema.optional(),
   })
   .strict();
 export type AppSettingsRaw = z.infer<typeof AppSettingsRawSchema>;
@@ -48,11 +82,38 @@ export const AppCompactionSettingsResolvedSchema = z
   })
   .strict();
 
+export const AppChatSettingsResolvedSchema = z
+  .object({
+    defaultProvider: ProviderIdSchema,
+  })
+  .strict();
+
+export const AppProviderSettingsResolvedSchema = z
+  .object({
+    enabled: z.boolean(),
+    kind: ProviderKindSchema,
+    displayName: z.string().min(1),
+    baseUrl: z.string().url().optional(),
+    defaultModel: z.string().min(1),
+    apiKey: z.string().min(1).optional(),
+    apiKeyEnv: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const AppProvidersSettingsResolvedSchema = z
+  .object(Object.fromEntries(
+    PROVIDER_IDS.map((providerId) => [providerId, AppProviderSettingsResolvedSchema]),
+  ) as Record<(typeof PROVIDER_IDS)[number], typeof AppProviderSettingsResolvedSchema>)
+  .strict();
+
 export const AppSettingsResolvedSchema = z
   .object({
     theme: AppThemeNameSchema,
     memory: AppMemorySettingsResolvedSchema,
     compaction: AppCompactionSettingsResolvedSchema,
+    chat: AppChatSettingsResolvedSchema,
+    providers: AppProvidersSettingsResolvedSchema,
+    permissions: PermissionRulesSchema,
   })
   .strict();
 export type AppSettingsResolved = z.infer<typeof AppSettingsResolvedSchema>;
@@ -67,6 +128,15 @@ export const DEFAULT_APP_SETTINGS = AppSettingsResolvedSchema.parse({
     reserveTokens: 16384,
     keepRecentTokens: 20000,
   },
+  chat: {
+    defaultProvider: 'deepseek',
+  },
+  providers: {
+    deepseek: providerDefault('deepseek'),
+    openai: providerDefault('openai'),
+    anthropic: providerDefault('anthropic'),
+  },
+  permissions: {},
 } satisfies AppSettingsResolved);
 
 export function resolveAppSettings(raw: unknown): AppSettingsResolved {
@@ -86,6 +156,18 @@ export function resolveAppSettings(raw: unknown): AppSettingsResolved {
             ...DEFAULT_APP_SETTINGS.compaction,
             ...definedObject(parsed.compaction),
           }
+        : undefined,
+      chat: parsed.chat
+        ? {
+            ...DEFAULT_APP_SETTINGS.chat,
+            ...definedObject(parsed.chat),
+          }
+        : undefined,
+      providers: parsed.providers
+        ? resolveProviderSettings(parsed.providers)
+        : undefined,
+      permissions: parsed.permissions
+        ? definedObject(parsed.permissions)
         : undefined,
     }),
   });
@@ -110,8 +192,84 @@ export function mergeRawAppSettings(current: AppSettingsRaw, patch: AppSettingsR
             ...definedObject(patchParsed.compaction),
           }
         : undefined,
+      chat: patchParsed.chat
+        ? {
+            ...(currentParsed.chat ?? {}),
+            ...definedObject(patchParsed.chat),
+          }
+        : undefined,
+      providers: patchParsed.providers
+        ? mergeRawProviders(currentParsed.providers ?? {}, patchParsed.providers)
+        : undefined,
+      permissions: patchParsed.permissions
+        ? {
+            ...(currentParsed.permissions ?? {}),
+            ...definedObject(patchParsed.permissions),
+          }
+        : undefined,
     }),
   });
+}
+
+function providerDefault(providerId: (typeof PROVIDER_IDS)[number]) {
+  const defaults = DEFAULT_PROVIDER_SETTINGS[providerId];
+  return AppProviderSettingsResolvedSchema.parse({
+    enabled: defaults.enabled,
+    kind: defaults.kind,
+    displayName: defaults.displayName,
+    ...(defaults.baseUrl ? { baseUrl: defaults.baseUrl } : {}),
+    defaultModel: String(defaults.defaultModelId),
+    ...(defaults.apiKey ? { apiKey: defaults.apiKey } : {}),
+    ...(defaults.apiKeyEnv ? { apiKeyEnv: defaults.apiKeyEnv } : {}),
+  });
+}
+
+function resolveProviderSettings(providers: NonNullable<AppSettingsRaw['providers']>) {
+  return AppProvidersSettingsResolvedSchema.parse(Object.fromEntries(
+    PROVIDER_IDS.map((providerId) => [
+      providerId,
+      {
+        ...DEFAULT_APP_SETTINGS.providers[providerId],
+        ...definedProviderOverride(providers[providerId] ?? {}),
+      },
+    ]),
+  ));
+}
+
+function mergeRawProviders(
+  current: NonNullable<AppSettingsRaw['providers']>,
+  patch: NonNullable<AppSettingsRaw['providers']>,
+) {
+  return AppProvidersSettingsRawSchema.parse(Object.fromEntries(
+    PROVIDER_IDS.map((providerId) => [
+      providerId,
+      patch[providerId]
+        ? mergeRawProvider(current[providerId] ?? {}, patch[providerId])
+        : current[providerId],
+    ]),
+  ));
+}
+
+function mergeRawProvider(
+  current: z.infer<typeof AppProviderSettingsRawSchema>,
+  patch: z.infer<typeof AppProviderSettingsRawSchema>,
+) {
+  const merged = {
+    ...current,
+    ...definedObject(patch),
+  };
+  if (patch.apiKey === null) {
+    delete merged.apiKey;
+  }
+  return merged;
+}
+
+function definedProviderOverride(value: z.infer<typeof AppProviderSettingsRawSchema>) {
+  const defined = definedObject(value);
+  if (defined.apiKey === null) {
+    delete defined.apiKey;
+  }
+  return defined;
 }
 
 function definedObject<T extends Record<string, unknown>>(value: T): Partial<T> {

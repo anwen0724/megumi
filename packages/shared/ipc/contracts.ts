@@ -47,8 +47,6 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.artifacts.versionCreate,
   IPC_CHANNELS.artifacts.statusUpdate,
   IPC_CHANNELS.artifacts.reference,
-  IPC_CHANNELS.memory.settingsGet,
-  IPC_CHANNELS.memory.settingsUpdate,
   IPC_CHANNELS.memory.candidateList,
   IPC_CHANNELS.memory.candidateAccept,
   IPC_CHANNELS.memory.candidateReject,

@@ -73,10 +73,6 @@ export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): st
       return 'artifacts.status.update';
     case IPC_CHANNELS.artifacts.reference:
       return 'artifacts.reference';
-    case IPC_CHANNELS.memory.settingsGet:
-      return 'memory.settings.get';
-    case IPC_CHANNELS.memory.settingsUpdate:
-      return 'memory.settings.update';
     case IPC_CHANNELS.memory.candidateList:
       return 'memory.candidate.list';
     case IPC_CHANNELS.memory.candidateAccept:

@@ -1,25 +1,16 @@
-﻿import type { RuntimeError } from '@megumi/shared/runtime';
+// Resolves provider runtime configuration from Main-owned settings and process env only.
+// SQLite and other host persistence details are kept outside provider request execution.
+import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type {
   ProviderId,
   ProviderSettings,
-  SecretRef,
 } from '@megumi/shared/provider';
+import { DEFAULT_PROVIDER_SETTINGS } from '@megumi/shared/provider';
 import type { ProviderRuntimeConfig } from '@megumi/ai/types';
-import { buildProviderApiKeySecretRef } from '@megumi/security/secret-policy';
-import { MegumiHomeConfigParseError } from '../project/megumi-home-config.service';
 
 export interface ProviderRuntimeSettingsPort {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;
-}
-
-export interface ProviderRuntimeSecretStorePort {
-  readSecret(ref: SecretRef): Promise<string | null>;
-}
-
-export interface ProviderRuntimeConfigCredentialPort {
-  getProviderApiKeyEnv(providerId: ProviderId): Promise<string | undefined>;
-  getPlaintextProviderApiKey(providerId: ProviderId): Promise<string | null>;
 }
 
 export interface ResolveProviderRuntimeConfigInput {
@@ -30,16 +21,8 @@ export interface ResolveProviderRuntimeConfigInput {
 
 export interface ProviderRuntimeServiceOptions {
   settings: ProviderRuntimeSettingsPort;
-  secretStore: ProviderRuntimeSecretStorePort;
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
-  configCredentials?: ProviderRuntimeConfigCredentialPort;
 }
-
-const PROVIDER_API_KEY_ENV: Record<ProviderId, string> = {
-  deepseek: 'DEEPSEEK_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  anthropic: 'ANTHROPIC_API_KEY',
-};
 
 export class ProviderRuntimeResolutionError extends Error {
   constructor(readonly payload: RuntimeError) {
@@ -104,7 +87,7 @@ export class ProviderRuntimeService {
       }, input.runtimeContext);
     }
 
-    const apiKey = await this.resolveApiKey(settings, input.runtimeContext);
+    const apiKey = this.resolveApiKey(settings);
 
     if (!apiKey) {
       throw this.error({
@@ -129,72 +112,15 @@ export class ProviderRuntimeService {
     };
   }
 
-  private async resolveApiKey(
-    settings: ProviderSettings,
-    runtimeContext?: RuntimeContext,
-  ): Promise<string | null> {
-    const envKey = await this.resolveConfiguredEnvKey(settings, runtimeContext);
-    const envValue = this.env[envKey]?.trim();
-
-    if (envValue) {
-      return envValue;
+  private resolveApiKey(settings: ProviderSettings): string | null {
+    const settingsApiKey = settings.apiKey?.trim();
+    if (settingsApiKey) {
+      return settingsApiKey;
     }
 
-    const plaintextConfigApiKey = await this.resolvePlaintextConfigApiKey(settings, runtimeContext);
-
-    if (plaintextConfigApiKey?.trim()) {
-      return plaintextConfigApiKey.trim();
-    }
-
-    const secretRef = settings.secretRef ?? buildProviderApiKeySecretRef(settings.providerId);
-    return this.options.secretStore.readSecret(secretRef);
-  }
-
-  private async resolveConfiguredEnvKey(
-    settings: ProviderSettings,
-    runtimeContext?: RuntimeContext,
-  ): Promise<string> {
-    try {
-      return (
-        await this.options.configCredentials?.getProviderApiKeyEnv(settings.providerId)
-      ) ?? PROVIDER_API_KEY_ENV[settings.providerId];
-    } catch (error) {
-      this.throwConfigError(error, settings, runtimeContext);
-    }
-  }
-
-  private async resolvePlaintextConfigApiKey(
-    settings: ProviderSettings,
-    runtimeContext?: RuntimeContext,
-  ): Promise<string | null | undefined> {
-    try {
-      return await this.options.configCredentials?.getPlaintextProviderApiKey(settings.providerId);
-    } catch (error) {
-      this.throwConfigError(error, settings, runtimeContext);
-    }
-  }
-
-  private throwConfigError(
-    error: unknown,
-    settings: ProviderSettings,
-    runtimeContext?: RuntimeContext,
-  ): never {
-    if (error instanceof MegumiHomeConfigParseError) {
-      throw this.error({
-        code: 'config_invalid',
-        message: `Megumi config is invalid. Fix ${error.configPath} and try again.`,
-        severity: 'error',
-        retryable: false,
-        source: 'config',
-        details: {
-          providerId: settings.providerId,
-          modelId: String(settings.defaultModelId),
-          cause: error.message,
-        },
-      }, runtimeContext);
-    }
-
-    throw error;
+    const envKey = settings.apiKeyEnv ?? DEFAULT_PROVIDER_SETTINGS[settings.providerId].apiKeyEnv;
+    const envValue = envKey ? this.env[envKey]?.trim() : undefined;
+    return envValue || null;
   }
 
   private error(payload: RuntimeError, runtimeContext?: RuntimeContext): ProviderRuntimeResolutionError {
@@ -204,5 +130,3 @@ export class ProviderRuntimeService {
     });
   }
 }
-
-

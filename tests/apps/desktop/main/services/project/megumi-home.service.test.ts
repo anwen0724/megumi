@@ -1,9 +1,8 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import path from 'path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  createDefaultMegumiConfig,
-  createMegumiConfigSchema,
+  createMegumiSettingsSchema,
   initializeMegumiHome,
   initializeMegumiHomeSync,
   resolveMegumiHomePath,
@@ -88,7 +87,7 @@ describe('Megumi Home foundation', () => {
     ).toBe(path.resolve('C:/Users/anwen', '.megumi'));
   });
 
-  it('creates the minimal Megumi Home directory structure and default files', async () => {
+  it('creates minimal directories and managed metadata without creating default settings.json', async () => {
     const paths = await initializeMegumiHome({
       env: {},
       homeDirectory: 'C:/Users/anwen',
@@ -104,43 +103,33 @@ describe('Megumi Home foundation', () => {
       new Set([
         paths.homePath,
         paths.sqlitePath,
-        paths.secretsPath,
-        paths.providerSecretsPath,
         paths.logsPath,
         paths.cachePath,
         paths.tmpPath,
       ]),
     );
 
-    expect(fileSystem.jsonFiles.get(paths.configPath)).toEqual(createDefaultMegumiConfig());
+    expect(fileSystem.jsonFiles.has(paths.settingsPath)).toBe(false);
     expect(fileSystem.jsonFiles.get(paths.versionPath)).toEqual({
       version: 1,
       createdAt: '2026-05-11T12:00:00.000Z',
       lastMigration: 'megumi-home-v1',
     });
-    expect(fileSystem.jsonFiles.get(paths.configSchemaPath)).toMatchObject({
+    expect(fileSystem.jsonFiles.get(paths.settingsSchemaPath)).toMatchObject({
       $schema: 'https://json-schema.org/draft/2020-12/schema',
-      title: 'Megumi config',
+      title: 'Megumi settings',
       type: 'object',
     });
-    expect(fileSystem.textFiles.get(paths.readmePath)).toContain('Megumi Home');
-    expect(fileSystem.textFiles.get(paths.readmePath)).toContain('MEGUMI_HOME');
+    expect(fileSystem.textFiles.get(paths.readmePath)).toContain('settings.json');
   });
 
-  it('does not overwrite existing user-managed files', async () => {
+  it('does not overwrite existing user-managed settings or README files', async () => {
     const homePath = path.resolve('C:/Users/anwen', '.megumi');
-    const configPath = path.join(homePath, 'config.json');
+    const settingsPath = path.join(homePath, 'settings.json');
     const readmePath = path.join(homePath, 'README.md');
 
-    await fileSystem.writeJson(configPath, {
-      version: 1,
-      app: {
-        theme: 'custom-theme',
-      },
-      chat: {
-        defaultProvider: 'openai',
-      },
-      providers: {},
+    await fileSystem.writeJson(settingsPath, {
+      theme: 'graphite-dark',
     });
     await fileSystem.writeFile(readmePath, 'User edited README');
 
@@ -153,52 +142,27 @@ describe('Megumi Home foundation', () => {
       },
     });
 
-    expect(fileSystem.jsonFiles.get(paths.configPath)).toEqual({
-      version: 1,
-      app: {
-        theme: 'custom-theme',
-      },
-      chat: {
-        defaultProvider: 'openai',
-      },
-      providers: {},
+    expect(fileSystem.jsonFiles.get(paths.settingsPath)).toEqual({
+      theme: 'graphite-dark',
     });
     expect(fileSystem.textFiles.get(paths.readmePath)).toBe('User edited README');
   });
 
-  it('creates a single-file config with provider defaults and no duplicated chat model', () => {
-    const config = createDefaultMegumiConfig();
-
-    expect(config).not.toHaveProperty('permissions');
-    expect(config.chat).toEqual({
-      defaultProvider: 'deepseek',
-    });
-    expect(config.providers.deepseek).toMatchObject({
-      enabled: true,
-      kind: 'openai-compatible',
-      displayName: 'DeepSeek',
-      baseUrl: 'https://api.deepseek.com',
-      defaultModel: 'deepseek-v4-flash',
-      apiKeyEnv: 'DEEPSEEK_API_KEY',
-    });
-    expect(config.providers.openai).toMatchObject({
-      defaultModel: 'gpt-5.5',
-      apiKeyEnv: 'OPENAI_API_KEY',
-    });
-    expect(config.providers.anthropic).toMatchObject({
-      enabled: false,
-      kind: 'anthropic',
-      defaultModel: 'claude-sonnet-4-6',
-      apiKeyEnv: 'ANTHROPIC_API_KEY',
-    });
-  });
-
-  it('exposes optional permission rules in the generated config schema', () => {
-    const schema = createMegumiConfigSchema();
+  it('exposes optional provider, memory, compaction, and permission rules in the generated settings schema', () => {
+    const schema = createMegumiSettingsSchema();
 
     expect(schema).toMatchObject({
-      required: ['version', 'app', 'chat', 'providers'],
       properties: {
+        providers: {
+          properties: {
+            deepseek: {
+              properties: {
+                apiKey: { type: 'string' },
+                apiKeyEnv: { type: 'string' },
+              },
+            },
+          },
+        },
         permissions: {
           type: 'object',
           additionalProperties: false,
@@ -241,9 +205,10 @@ describe('Megumi Home foundation', () => {
 
     expect(paths.homePath).toBe(path.resolve('D:/megumi-home'));
     expect(syncDirectories.has(paths.sqlitePath)).toBe(true);
-    expect(syncDirectories.has(paths.providerSecretsPath)).toBe(true);
-    expect(syncJsonFiles.get(paths.configPath)).toEqual(createDefaultMegumiConfig());
+    expect(syncJsonFiles.has(paths.settingsPath)).toBe(false);
+    expect(syncJsonFiles.get(paths.settingsSchemaPath)).toMatchObject({
+      title: 'Megumi settings',
+    });
     expect(syncTextFiles.get(paths.readmePath)).toContain('Megumi Home');
   });
 });
-

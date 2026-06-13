@@ -4,79 +4,6 @@ import { registerMemoryHandlers } from '@megumi/desktop/main/ipc/handlers/memory
 import { runtimeOperationNameFromChannel } from '@megumi/desktop/main/ipc/runtime-operation-name';
 
 describe('registerMemoryHandlers', () => {
-  it('registers primary memory IPC channels and deprecated agent bridges', async () => {
-    const handle = vi.fn();
-    const ipcMain = { handle };
-    const service = {
-      getSettings: vi.fn(() => ({
-        autoCaptureEnabled: true,
-        defaultCandidateReviewMode: 'manual',
-        updatedAt: '2026-05-16T00:00:00.000Z',
-      })),
-    };
-
-    registerMemoryHandlers({ ipcMain, memoryService: service as any });
-
-    expect(handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.memory.settingsGet,
-      expect.any(Function),
-    );
-    expect(service.getSettings).not.toHaveBeenCalled();
-    expect(handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.memory.settingsUpdate,
-      expect.any(Function),
-    );
-  });
-
-  it('uses global memory settings IPC payloads without workspace settings fields', async () => {
-    const handlers = new Map<string, (...args: any[]) => Promise<unknown>>();
-    const ipcMain = {
-      handle: vi.fn((channel: string, handler: (...args: any[]) => Promise<unknown>) => {
-        handlers.set(channel, handler);
-      }),
-    };
-    const service = {
-      getSettings: vi.fn(() => ({
-        autoCaptureEnabled: true,
-        defaultCandidateReviewMode: 'manual',
-        updatedAt: '2026-05-16T00:00:00.000Z',
-      })),
-      updateSettings: vi.fn((settings) => settings),
-    };
-
-    registerMemoryHandlers({ ipcMain: ipcMain as any, memoryService: service as any });
-
-    const getResult = await handlers.get(IPC_CHANNELS.memory.settingsGet)?.({} as any, {
-      requestId: 'request:memory:settings:get',
-      payload: {},
-      meta: {
-        channel: IPC_CHANNELS.memory.settingsGet,
-        createdAt: '2026-05-16T00:00:00.000Z',
-        source: 'renderer',
-      },
-    });
-    expect(service.getSettings).toHaveBeenCalledWith();
-    expect(JSON.stringify(getResult)).not.toContain('workspaceId');
-
-    const updatePayload = {
-      autoCaptureEnabled: false,
-      defaultCandidateReviewMode: 'manual',
-      updatedAt: '2026-05-16T00:01:00.000Z',
-    } as const;
-    const updateResult = await handlers.get(IPC_CHANNELS.memory.settingsUpdate)?.({} as any, {
-      requestId: 'request:memory:settings:update',
-      payload: updatePayload,
-      meta: {
-        channel: IPC_CHANNELS.memory.settingsUpdate,
-        createdAt: '2026-05-16T00:00:00.000Z',
-        source: 'renderer',
-      },
-    });
-
-    expect(service.updateSettings).toHaveBeenCalledWith(updatePayload);
-    expect(JSON.stringify(updateResult)).not.toContain('workspaceId');
-  });
-
   it('passes candidate edit fields through edit-and-accept handler', async () => {
     const handlers = new Map<string, (...args: any[]) => Promise<unknown>>();
     const ipcMain = {
@@ -167,9 +94,6 @@ describe('registerMemoryHandlers', () => {
 
 describe('memory runtime operation names', () => {
   it('uses lowercase dotted/kebab operation names', () => {
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.memory.settingsGet)).toBe(
-      'memory.settings.get',
-    );
     expect(runtimeOperationNameFromChannel(IPC_CHANNELS.memory.recallPreview)).toBe(
       'memory.recall-preview',
     );

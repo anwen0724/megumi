@@ -8,7 +8,6 @@
   MemorySourceKind,
   MemorySourceRef,
 } from '@megumi/shared/memory';
-import { DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED } from '@megumi/shared/memory';
 
 export * from './text-normalization';
 export * from './memory-security-policy';
@@ -20,6 +19,7 @@ export * from './markdown-memory-format';
 export * from './recall-scoring';
 
 const MAX_SUMMARY_LENGTH = 500;
+const DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED = false;
 
 const BLOCKED_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/i,

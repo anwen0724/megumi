@@ -1,34 +1,22 @@
-﻿import {
+// Projects Main-owned settings.json provider configuration into renderer-safe provider status.
+// API keys may be written to settings.json, but this service never returns plaintext keys to Renderer.
+import {
+  DEFAULT_PROVIDER_SETTINGS,
+  PROVIDER_IDS,
   type ProviderId,
   type ProviderPublicStatus,
   type ProviderSettings,
-  type SecretRef,
 } from '@megumi/shared/provider';
-import { buildProviderApiKeySecretRef } from '@megumi/security/secret-policy';
+import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
 
-export interface ProviderSettingsRepositoryPort {
-  initializeDefaults(): void;
-  list(): ProviderSettings[];
-  get(providerId: ProviderId): ProviderSettings | undefined;
-  updateProvider(providerId: ProviderId, update: Partial<ProviderSettings>): ProviderSettings;
-}
-
-export interface ProviderSecretStorePort {
-  setSecret(ref: SecretRef, value: string): Promise<void>;
-  hasSecret(ref: SecretRef): Promise<boolean>;
-  deleteSecret(ref: SecretRef): Promise<void>;
-}
-
-export interface ProviderConfigCredentialPort {
-  getProviderApiKeyEnv(providerId: ProviderId): Promise<string | undefined>;
-  getPlaintextProviderApiKey(providerId: ProviderId): Promise<string | null>;
+export interface ProviderSettingsAppSettingsPort {
+  getResolvedSettings(): AppSettingsResolved;
+  updateSettings(patch: AppSettingsRaw): AppSettingsResolved;
 }
 
 export interface ProviderSettingsServiceOptions {
-  repository: ProviderSettingsRepositoryPort;
-  secretStore: ProviderSecretStorePort;
+  settings: ProviderSettingsAppSettingsPort;
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
-  configCredentials?: ProviderConfigCredentialPort;
 }
 
 export interface ProviderSettingsUpdateInput {
@@ -38,28 +26,6 @@ export interface ProviderSettingsUpdateInput {
   defaultModelId?: string;
 }
 
-const PROVIDER_API_KEY_ENV: Record<ProviderId, string> = {
-  deepseek: 'DEEPSEEK_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  anthropic: 'ANTHROPIC_API_KEY',
-};
-
-const LEGACY_DEFAULT_MODEL_MIGRATIONS: Partial<Record<ProviderId, Record<string, string>>> = {
-  deepseek: {
-    'deepseek-chat': 'deepseek-v4-flash',
-    'deepseek-reasoner': 'deepseek-v4-flash',
-  },
-  openai: {
-    'gpt-4.1': 'gpt-5.5',
-    'gpt-5.1': 'gpt-5.5',
-  },
-  anthropic: {
-    'claude-3-5-sonnet-latest': 'claude-sonnet-4-6',
-    'claude-sonnet-4-20250514': 'claude-sonnet-4-6',
-    'claude-opus-4-1-20250805': 'claude-opus-4-7',
-  },
-};
-
 export class ProviderSettingsService {
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>;
 
@@ -68,55 +34,74 @@ export class ProviderSettingsService {
   }
 
   async listProviderStatuses(): Promise<ProviderPublicStatus[]> {
-    this.options.repository.initializeDefaults();
-
-    const settingsList = this.options.repository.list().map((settings) => this.normalizeDefaultModel(settings));
-    return Promise.all(settingsList.map((settings) => this.toPublicStatus(settings)));
+    return PROVIDER_IDS.map((providerId) => this.toPublicStatus(this.getProviderSettingsSync(providerId)));
   }
 
   async getProviderSettings(providerId: ProviderId): Promise<ProviderSettings> {
-    this.options.repository.initializeDefaults();
-
-    const settings = this.options.repository.get(providerId);
-
-    if (!settings) {
-      throw new Error(`Provider settings not found: ${providerId}`);
-    }
-
-    return this.normalizeDefaultModel(settings);
+    return this.getProviderSettingsSync(providerId);
   }
 
   async updateProviderSettings(
     providerId: ProviderId,
     input: ProviderSettingsUpdateInput,
   ): Promise<ProviderSettings> {
-    this.options.repository.initializeDefaults();
-    return this.options.repository.updateProvider(providerId, input);
+    this.options.settings.updateSettings({
+      providers: {
+        [providerId]: {
+          enabled: input.enabled,
+          displayName: input.displayName,
+          baseUrl: input.baseUrl,
+          defaultModel: input.defaultModelId,
+        },
+      },
+    });
+    return this.getProviderSettingsSync(providerId);
   }
 
   async setProviderApiKey(providerId: ProviderId, apiKey: string): Promise<ProviderSettings> {
-    this.options.repository.initializeDefaults();
-
-    const secretRef = buildProviderApiKeySecretRef(providerId);
-    await this.options.secretStore.setSecret(secretRef, apiKey);
-
-    return this.options.repository.updateProvider(providerId, { secretRef });
+    this.options.settings.updateSettings({
+      providers: {
+        [providerId]: {
+          apiKey,
+        },
+      },
+    });
+    return this.getProviderSettingsSync(providerId);
   }
 
   async deleteProviderApiKey(providerId: ProviderId): Promise<ProviderSettings> {
-    this.options.repository.initializeDefaults();
-
-    const secretRef = buildProviderApiKeySecretRef(providerId);
-    await this.options.secretStore.deleteSecret(secretRef);
-
-    return this.options.repository.updateProvider(providerId, { secretRef: undefined });
+    this.options.settings.updateSettings({
+      providers: {
+        [providerId]: {
+          apiKey: null,
+        },
+      },
+    });
+    return this.getProviderSettingsSync(providerId);
   }
 
-  private async toPublicStatus(settings: ProviderSettings): Promise<ProviderPublicStatus> {
-    const secretRef = settings.secretRef ?? buildProviderApiKeySecretRef(settings.providerId);
-    const hasSecret = await this.options.secretStore.hasSecret(secretRef);
-    const envOverrideActive = await this.hasEnvironmentApiKey(settings.providerId);
-    const hasConfigApiKey = Boolean(await this.options.configCredentials?.getPlaintextProviderApiKey(settings.providerId));
+  private getProviderSettingsSync(providerId: ProviderId): ProviderSettings {
+    const provider = this.options.settings.getResolvedSettings().providers[providerId];
+    const defaults = DEFAULT_PROVIDER_SETTINGS[providerId];
+    return {
+      id: defaults.id,
+      providerId,
+      kind: provider.kind,
+      displayName: provider.displayName,
+      enabled: provider.enabled,
+      ...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}),
+      defaultModelId: provider.defaultModel,
+      ...(provider.apiKey ? { apiKey: provider.apiKey } : {}),
+      ...(provider.apiKeyEnv ? { apiKeyEnv: provider.apiKeyEnv } : {}),
+      createdAt: defaults.createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private toPublicStatus(settings: ProviderSettings): ProviderPublicStatus {
+    const envKey = settings.apiKeyEnv ?? DEFAULT_PROVIDER_SETTINGS[settings.providerId].apiKeyEnv;
+    const envOverrideActive = Boolean(envKey && this.env[envKey]?.trim());
+    const settingsApiKeyActive = Boolean(settings.apiKey?.trim());
 
     return {
       providerId: settings.providerId,
@@ -124,33 +109,13 @@ export class ProviderSettingsService {
       enabled: settings.enabled,
       ...(settings.baseUrl ? { baseUrl: settings.baseUrl } : {}),
       defaultModelId: settings.defaultModelId,
-      hasSecret,
-      credentialSource: envOverrideActive
-        ? 'environment'
-        : hasConfigApiKey
-          ? 'config'
-          : hasSecret
-            ? 'secret-store'
-            : 'missing',
+      hasApiKey: settingsApiKeyActive || envOverrideActive,
+      credentialSource: settingsApiKeyActive
+        ? 'settings'
+        : envOverrideActive
+          ? 'environment'
+          : 'missing',
       envOverrideActive,
     };
   }
-
-  private normalizeDefaultModel(settings: ProviderSettings): ProviderSettings {
-    const migration = LEGACY_DEFAULT_MODEL_MIGRATIONS[settings.providerId]?.[String(settings.defaultModelId)];
-
-    if (!migration) {
-      return settings;
-    }
-
-    return this.options.repository.updateProvider(settings.providerId, {
-      defaultModelId: migration,
-    });
-  }
-
-  private async hasEnvironmentApiKey(providerId: ProviderId): Promise<boolean> {
-    const envKey = (await this.options.configCredentials?.getProviderApiKeyEnv(providerId)) ?? PROVIDER_API_KEY_ENV[providerId];
-    return Boolean(this.env[envKey]?.trim());
-  }
 }
-

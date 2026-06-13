@@ -52,9 +52,6 @@ import type {
   MemoryListPayload,
   MemoryRecallPreviewData,
   MemoryRecallPreviewPayload,
-  MemorySettingsData,
-  MemorySettingsGetPayload,
-  MemorySettingsUpdatePayload,
   MemorySourceRefsListData,
   MemorySourceRefsListPayload,
   MemoryStatusPayload,
@@ -354,14 +351,6 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.artifacts.reference, request),
   },
   memory: {
-    settingsGet: (
-      request: BusinessRequest<MemorySettingsGetPayload, typeof IPC_CHANNELS.memory.settingsGet>,
-    ): Promise<RuntimeIpcResult<MemorySettingsData, typeof IPC_CHANNELS.memory.settingsGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.settingsGet, request),
-    settingsUpdate: (
-      request: BusinessRequest<MemorySettingsUpdatePayload, typeof IPC_CHANNELS.memory.settingsUpdate>,
-    ): Promise<RuntimeIpcResult<MemorySettingsData, typeof IPC_CHANNELS.memory.settingsUpdate>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.settingsUpdate, request),
     candidateList: (
       request: BusinessRequest<MemoryCandidateListPayload, typeof IPC_CHANNELS.memory.candidateList>,
     ): Promise<RuntimeIpcResult<MemoryCandidateListData, typeof IPC_CHANNELS.memory.candidateList>> =>

@@ -74,8 +74,6 @@ export const IPC_CHANNELS = {
     reference: 'artifacts:reference',
   },
   memory: {
-    settingsGet: 'memory:settings:get',
-    settingsUpdate: 'memory:settings:update',
     candidateList: 'memory:candidate:list',
     candidateAccept: 'memory:candidate:accept',
     candidateReject: 'memory:candidate:reject',
@@ -156,8 +154,6 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.artifacts.versionCreate,
   IPC_CHANNELS.artifacts.statusUpdate,
   IPC_CHANNELS.artifacts.reference,
-  IPC_CHANNELS.memory.settingsGet,
-  IPC_CHANNELS.memory.settingsUpdate,
   IPC_CHANNELS.memory.candidateList,
   IPC_CHANNELS.memory.candidateAccept,
   IPC_CHANNELS.memory.candidateReject,

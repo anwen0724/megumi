@@ -18,13 +18,13 @@ function term(...parts: string[]): string {
 }
 
 describe('Megumi Home source guards', () => {
-  it('keeps provider handler database creation on Megumi Home sqlite path', () => {
-    const source = readProjectFile('apps/desktop/src/main/ipc/handlers/provider.handler.ts');
+  it('keeps database creation on Megumi Home sqlite path in main composition', () => {
+    const source = readProjectFile('apps/desktop/src/main/index.ts');
     const singleQuotedUserData = term("app.getPath('", 'userData', "')");
     const doubleQuotedUserData = term('app.getPath("', 'userData', '")');
 
     expect(source).toContain('initializeElectronMegumiHomeSync');
-    expect(source).toContain("path.join(homePaths.sqlitePath, 'megumi.sqlite3')");
+    expect(source).toContain("path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3')");
     expect(source).not.toContain(`createDatabase(path.join(${singleQuotedUserData}, 'megumi.sqlite3'))`);
     expect(source).not.toContain(`createDatabase(path.join(${doubleQuotedUserData}, "megumi.sqlite3"))`);
   });
@@ -37,24 +37,26 @@ describe('Megumi Home source guards', () => {
     expect(source).not.toContain(term('legacy', 'UserDataPath'));
   });
 
-  it('creates provider encrypted secret files under secrets/providers', () => {
-    const source = readProjectFile('apps/desktop/src/main/services/security/secret-store.service.ts');
+  it('keeps provider credentials in Megumi Home settings.json instead of secret-store files', () => {
+    const homeSource = readProjectFile('apps/desktop/src/main/services/project/megumi-home.service.ts');
+    const providerSettingsSource = readProjectFile('apps/desktop/src/main/services/provider/provider-settings.service.ts');
 
-    expect(source).toContain("'providers'");
-    expect(source).toContain('`${ref.providerId}.enc`');
-    expect(source).not.toContain(term("app.getPath('", 'userData', "')"));
-    expect(source).not.toContain(term('app.getPath("', 'userData', '")'));
-    expect(source).not.toContain(
-      "path.join(this.options.userDataPath, 'secrets', `${this.sanitizeSecretId(ref.id)}.enc`)",
-    );
+    expect(projectFileExists('apps/desktop/src/main/services/security/secret-store.service.ts')).toBe(false);
+    expect(homeSource).toContain('settings.json');
+    expect(homeSource).toContain('settings.schema.json');
+    expect(providerSettingsSource).toContain('setProviderApiKey');
+    expect(providerSettingsSource).toContain('apiKey');
   });
 
-  it('uses Megumi Home root when constructing provider and model step secret stores', () => {
+  it('uses Megumi Home settings when constructing provider runtime services', () => {
     const providerHandler = readProjectFile('apps/desktop/src/main/ipc/handlers/provider.handler.ts');
     const mainComposition = readProjectFile('apps/desktop/src/main/index.ts');
 
-    expect(providerHandler).toContain('createElectronSecretStoreService(homePaths.homePath)');
-    expect(mainComposition).toContain('createElectronSecretStoreService(megumiHomePaths.homePath)');
+    expect(providerHandler).toContain('createAppSettingsService');
+    expect(providerHandler).toContain('settingsPath: homePaths.settingsPath');
+    expect(mainComposition).toContain('new ProviderSettingsService');
+    expect(mainComposition).toContain('new ProviderRuntimeService');
+    expect(mainComposition).not.toContain('createElectronSecretStoreService');
   });
 
   it('does not expose plaintext API keys through main-to-renderer send calls', () => {

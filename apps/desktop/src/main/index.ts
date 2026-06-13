@@ -10,10 +10,8 @@ import { MemoryRepository } from '@megumi/db/repos/memory.repo';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
-import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createChatStreamEvent } from '@megumi/shared/chat-stream';
-import { createDefaultMemorySettings, type MemorySettings } from '@megumi/shared/memory';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/project/megumi-home.service';
@@ -25,9 +23,8 @@ import { createRuntimeJsonlLoggerForMegumiHome } from './services/runtime/runtim
 import { SessionRunService, type SessionRunToolRuntimeFactory } from './services/session/session-run.service';
 import { forwardChatStreamEvent } from './ipc/chat-stream-event-forwarder';
 import { createModelStepProviderService } from './services/runtime/model-step-provider.service';
-import { MegumiHomeConfigService } from './services/project/megumi-home-config.service';
 import { ProviderRuntimeService } from './services/provider/provider-runtime.service';
-import { createElectronSecretStoreService } from './services/security/secret-store.service';
+import { ProviderSettingsService } from './services/provider/provider-settings.service';
 import { PermissionSnapshotService } from './services/security/permission-snapshot.service';
 import { createDefaultRunContextService } from './services/runtime/run-context.service';
 import { ToolService } from './services/tool/tool.service';
@@ -56,7 +53,6 @@ import { ProjectRepository } from '@megumi/db/repos/project.repo';
 import { createProjectService } from './services/project/project.service';
 import { createWorkspaceFilesService } from './services/workspace/workspace-files.service';
 import { createWorkspaceRootAuthorizer } from './services/security/workspace-root-authorization.service';
-import { getDefaultProviderService } from './ipc/handlers/provider.handler';
 import { createWorkspaceChangeFooterProjectorService } from './services/workspace/workspace-change-footer-projector.service';
 
 loadEnvFile();
@@ -71,7 +67,7 @@ migrateDatabase(database);
 const toolRepository = new ToolRepository(database);
 const toolRegistry = createBuiltInToolRegistry();
 const permissionSettingsService = createPermissionSettingsService({
-  userConfigPath: megumiHomePaths.configPath,
+  userSettingsPath: megumiHomePaths.settingsPath,
   fileSystem: fs,
 });
 const projectService = createProjectService({
@@ -90,20 +86,11 @@ const permissionSnapshotService = new PermissionSnapshotService({
   repository: new PermissionSnapshotRepository(database),
   planArtifactCompatibility,
 });
-const providerSettingsService = getDefaultProviderService();
-const secretStore = createElectronSecretStoreService(megumiHomePaths.homePath);
-const configCredentials = {
-  async getProviderApiKeyEnv(providerId: ProviderId) {
-    return new MegumiHomeConfigService({ configPath: megumiHomePaths.configPath }).getProviderApiKeyEnv(providerId);
-  },
-  async getPlaintextProviderApiKey(providerId: ProviderId) {
-    return new MegumiHomeConfigService({ configPath: megumiHomePaths.configPath }).getPlaintextProviderApiKey(providerId);
-  },
-};
+const providerSettingsService = new ProviderSettingsService({
+  settings: appSettingsService,
+});
 const providerRuntimeService = new ProviderRuntimeService({
   settings: providerSettingsService,
-  secretStore,
-  configCredentials,
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
@@ -191,8 +178,8 @@ const sessionRunService = new SessionRunService({
   memoryRecallService: memoryRuntime.recallService,
   memoryCaptureService: memoryRuntime.captureService,
   memorySettingsProvider: {
-    getMemorySettings() {
-      return getResolvedMemorySettings();
+    isMemoryEnabled() {
+      return appSettingsService.getResolvedSettings().memory.enabled;
     },
   },
   memoryMarkdownSyncService: memoryRuntime.markdownSyncService,
@@ -221,15 +208,6 @@ const memoryService = createMemoryService({
   repository: memoryRepository,
   now: () => new Date().toISOString(),
   createId: (prefix) => `${prefix}:${crypto.randomUUID()}`,
-  settings: {
-    getSettings: () => getResolvedMemorySettings(),
-    updateSettings(settings) {
-      const resolved = appSettingsService.updateSettings({
-        memory: { enabled: settings.autoCaptureEnabled },
-      });
-      return toMemorySettings(resolved.memory.enabled, settings.updatedAt);
-    },
-  },
   emitRuntimeEvent: (event) => runtimeLogger.info('runtime.memory.event', {
     eventId: event.eventId,
     eventType: event.eventType,
@@ -263,20 +241,6 @@ function createWorkspaceRestoreForChangeSet(changeSetId: string): WorkspaceResto
       restoreFileResultId: () => `workspace-restore-file-result:${crypto.randomUUID()}`,
     },
   });
-}
-
-function getResolvedMemorySettings(): MemorySettings {
-  return toMemorySettings(
-    appSettingsService.getResolvedSettings().memory.enabled,
-    new Date().toISOString(),
-  );
-}
-
-function toMemorySettings(autoCaptureEnabled: boolean, updatedAt: string): MemorySettings {
-  return {
-    ...createDefaultMemorySettings(updatedAt),
-    autoCaptureEnabled,
-  };
 }
 
 function createMemoryRuntime(

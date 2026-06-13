@@ -44,27 +44,6 @@ function addColumnIfMissing(
   database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition};`);
 }
 
-function ensureGlobalMemorySettingsTable(database: MegumiDatabase): void {
-  if (tableExists(database, 'memory_settings')) {
-    const hasWorkspaceId = tableColumns(database, 'memory_settings').some((column) => column.name === 'workspace_id');
-    if (hasWorkspaceId) {
-      // Stage 18 memory settings are global; old workspace-scoped rows are intentionally not migrated.
-      database.exec('DROP TABLE memory_settings;');
-    }
-  }
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS memory_settings (
-      settings_id TEXT PRIMARY KEY,
-      auto_capture_enabled INTEGER NOT NULL,
-      default_candidate_review_mode TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      metadata_json TEXT,
-      settings_json TEXT NOT NULL
-    );
-  `);
-}
-
 function archiveLegacyToolPersistenceTables(database: MegumiDatabase): void {
   database.exec(`
     DROP INDEX IF EXISTS idx_tool_uses_run_id;
@@ -100,28 +79,6 @@ function archiveLegacyToolPersistenceTables(database: MegumiDatabase): void {
 }
 
 export function migrateDatabase(database: MegumiDatabase): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS provider_settings (
-      id TEXT NOT NULL,
-      provider_id TEXT NOT NULL UNIQUE,
-      kind TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      enabled INTEGER NOT NULL,
-      base_url TEXT,
-      default_model_id TEXT NOT NULL,
-      secret_ref_id TEXT,
-      secret_ref_provider_id TEXT,
-      secret_ref_scope TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_provider_settings_provider_id
-    ON provider_settings(provider_id);
-  `);
-
   database.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       project_id TEXT PRIMARY KEY,
@@ -1424,8 +1381,6 @@ export function migrateDatabase(database: MegumiDatabase): void {
     );
 
   `);
-
-  ensureGlobalMemorySettingsTable(database);
 
   addColumnIfMissing(database, 'memory_records', 'normalized_text', 'TEXT');
   addColumnIfMissing(database, 'memory_records', 'dedupe_key', 'TEXT');

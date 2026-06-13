@@ -57,7 +57,6 @@ import {
   MemoryRecordSchema,
   MemoryRecordStatusSchema,
   MemoryScopeSchema,
-  MemorySettingsSchema,
   MemorySourceRefSchema,
 } from '../memory/contracts';
 import {
@@ -91,18 +90,13 @@ import {
 import { TimelineMessageSchema } from '../timeline/message-block-schemas';
 import { RuntimeEventSchema } from '../runtime/event-schemas';
 import { IPC_CHANNELS } from '../ipc/channels';
-import { PROVIDER_IDS, type ProviderId } from '../provider/contracts';
+import { ProviderIdSchema } from '../provider/contracts';
 
 export { ProjectRecordSchema } from '../project/contracts';
 
-const PROVIDER_ID_VALUES = [...PROVIDER_IDS] as [ProviderId, ...ProviderId[]];
-
-export const ProviderIdSchema = z.enum(PROVIDER_ID_VALUES);
-
 export const ProviderCredentialSourceSchema = z.enum([
-  'secret-store',
+  'settings',
   'environment',
-  'config',
   'missing',
 ]);
 
@@ -113,7 +107,7 @@ export const ProviderPublicStatusSchema = z
     enabled: z.boolean(),
     baseUrl: z.string().url().optional(),
     defaultModelId: z.string().min(1),
-    hasSecret: z.boolean(),
+    hasApiKey: z.boolean(),
     credentialSource: ProviderCredentialSourceSchema,
     envOverrideActive: z.boolean(),
   })
@@ -602,18 +596,6 @@ export const ArtifactReferenceDataSchema = z
   })
   .strict();
 
-export const MemorySettingsGetPayloadSchema = z.object({}).strict();
-
-export const MemorySettingsUpdatePayloadSchema = z
-  .object({
-    autoCaptureEnabled: z.boolean(),
-    defaultCandidateReviewMode: z.literal('manual'),
-    updatedAt: IsoDateTimeSchema,
-  })
-  .strict();
-
-export const MemorySettingsDataSchema = z.object({ settings: MemorySettingsSchema }).strict();
-
 export const MemoryCandidateListPayloadSchema = z
   .object({
     workspaceId: z.string().min(1).optional(),
@@ -937,16 +919,6 @@ export const ArtifactReferenceRequestSchema = createRuntimeIpcRequestSchema(
   ArtifactReferencePayloadSchema,
 );
 
-export const MemorySettingsGetRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.memory.settingsGet,
-  MemorySettingsGetPayloadSchema,
-);
-
-export const MemorySettingsUpdateRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.memory.settingsUpdate,
-  MemorySettingsUpdatePayloadSchema,
-);
-
 export const MemoryCandidateListRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.memory.candidateList,
   MemoryCandidateListPayloadSchema,
@@ -1197,16 +1169,6 @@ export const ArtifactReferenceResultSchema = createRuntimeIpcResultSchema(
   IPC_CHANNELS.artifacts.reference,
 );
 
-export const MemorySettingsGetResultSchema = createRuntimeIpcResultSchema(
-  MemorySettingsDataSchema,
-  IPC_CHANNELS.memory.settingsGet,
-);
-
-export const MemorySettingsUpdateResultSchema = createRuntimeIpcResultSchema(
-  MemorySettingsDataSchema,
-  IPC_CHANNELS.memory.settingsUpdate,
-);
-
 export const MemoryCandidateListResultSchema = createRuntimeIpcResultSchema(
   MemoryCandidateListDataSchema,
   IPC_CHANNELS.memory.candidateList,
@@ -1417,9 +1379,6 @@ export type ArtifactVersionGetData = z.infer<typeof ArtifactVersionGetDataSchema
 export type ArtifactVersionCreateData = z.infer<typeof ArtifactVersionCreateDataSchema>;
 export type ArtifactStatusUpdateData = z.infer<typeof ArtifactStatusUpdateDataSchema>;
 export type ArtifactReferenceData = z.infer<typeof ArtifactReferenceDataSchema>;
-export type MemorySettingsGetPayload = z.infer<typeof MemorySettingsGetPayloadSchema>;
-export type MemorySettingsUpdatePayload = z.infer<typeof MemorySettingsUpdatePayloadSchema>;
-export type MemorySettingsData = z.infer<typeof MemorySettingsDataSchema>;
 export type MemoryCandidateListPayload = z.infer<typeof MemoryCandidateListPayloadSchema>;
 export type MemoryCandidateAcceptPayload = z.infer<typeof MemoryCandidateAcceptPayloadSchema>;
 export type MemoryCandidateRejectPayload = z.infer<typeof MemoryCandidateRejectPayloadSchema>;

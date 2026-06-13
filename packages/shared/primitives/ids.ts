@@ -24,7 +24,6 @@ export type ContextSelectionRecordId = Brand<string, 'ContextSelectionRecordId'>
 export type ContextRedactionRecordId = Brand<string, 'ContextRedactionRecordId'>;
 export type ContextTruncationRecordId = Brand<string, 'ContextTruncationRecordId'>;
 export type ProviderSettingsId = Brand<string, 'ProviderSettingsId'>;
-export type SecretRefId = Brand<string, 'SecretRefId'>;
 
 export type AgentStepId = RunStepId;
 export type AgentActionId = RunActionId;

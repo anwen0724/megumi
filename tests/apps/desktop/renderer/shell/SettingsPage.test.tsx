@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
 import { SettingsPage } from '@megumi/desktop/renderer/shell/SettingsPage';
 import { ThemeProvider, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 
@@ -42,6 +43,7 @@ describe('SettingsPage', () => {
             ok: true,
             data: {
               settings: {
+                ...DEFAULT_APP_SETTINGS,
                 theme: 'megumi-warm',
                 memory: { enabled: false },
                 compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
@@ -53,33 +55,10 @@ describe('SettingsPage', () => {
             ok: true,
             data: {
               settings: {
+                ...DEFAULT_APP_SETTINGS,
                 theme: 'midnight-blue',
                 memory: { enabled: true },
                 compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
-              },
-            },
-            meta: {},
-          }),
-        },
-        memory: {
-          settingsGet: vi.fn().mockResolvedValue({
-            ok: true,
-            data: {
-              settings: {
-                autoCaptureEnabled: false,
-                defaultCandidateReviewMode: 'manual',
-                updatedAt: '2026-06-13T00:00:00.000Z',
-              },
-            },
-            meta: {},
-          }),
-          settingsUpdate: vi.fn().mockResolvedValue({
-            ok: true,
-            data: {
-              settings: {
-                autoCaptureEnabled: true,
-                defaultCandidateReviewMode: 'manual',
-                updatedAt: '2026-06-13T00:01:00.000Z',
               },
             },
             meta: {},

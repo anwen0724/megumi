@@ -1,19 +1,15 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_PROVIDER_SETTINGS,
   type ProviderId,
   type ProviderSettings,
-  type SecretRef,
 } from '@megumi/shared/provider';
-import { buildProviderApiKeySecretRef } from '@megumi/security/secret-policy';
 import {
   ProviderRuntimeResolutionError,
   ProviderRuntimeService,
-  type ProviderRuntimeSecretStorePort,
   type ProviderRuntimeSettingsPort,
 } from '@megumi/desktop/main/services/provider/provider-runtime.service';
-import { MegumiHomeConfigParseError } from '@megumi/desktop/main/services/project/megumi-home-config.service';
 
 class MemorySettingsPort implements ProviderRuntimeSettingsPort {
   readonly settings = new Map<ProviderId, ProviderSettings>();
@@ -35,35 +31,23 @@ class MemorySettingsPort implements ProviderRuntimeSettingsPort {
   }
 }
 
-class MemorySecretStore implements ProviderRuntimeSecretStorePort {
-  readonly values = new Map<string, string>();
-
-  async readSecret(ref: SecretRef): Promise<string | null> {
-    return this.values.get(ref.id) ?? null;
-  }
-}
-
 describe('ProviderRuntimeService', () => {
   let settings: MemorySettingsPort;
-  let secretStore: MemorySecretStore;
 
   beforeEach(() => {
     settings = new MemorySettingsPort();
-    secretStore = new MemorySecretStore();
   });
 
-  it('resolves DeepSeek runtime config from stored secret', async () => {
-    const ref = buildProviderApiKeySecretRef('deepseek');
+  it('prefers settings.json API keys over environment API keys', async () => {
     settings.settings.set('deepseek', {
       ...DEFAULT_PROVIDER_SETTINGS.deepseek,
-      secretRef: ref,
+      apiKey: 'sk-settings-deepseek',
     });
-    secretStore.values.set(ref.id, 'sk-deepseek');
-
     const service = new ProviderRuntimeService({
       settings,
-      secretStore,
-      env: {},
+      env: {
+        DEEPSEEK_API_KEY: 'sk-env-deepseek',
+      },
     });
 
     await expect(service.resolveProviderRuntimeConfig({
@@ -73,33 +57,32 @@ describe('ProviderRuntimeService', () => {
       providerId: 'deepseek',
       kind: 'openai-compatible',
       baseUrl: 'https://api.deepseek.com',
-      apiKey: 'sk-deepseek',
+      apiKey: 'sk-settings-deepseek',
       defaultModelId: 'deepseek-v4-pro',
     });
   });
 
-  it('prefers environment API keys without exposing them in public status', async () => {
+  it('uses configured environment API key names when settings apiKey is absent', async () => {
+    settings.settings.set('deepseek', {
+      ...DEFAULT_PROVIDER_SETTINGS.deepseek,
+      apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY',
+    });
     const service = new ProviderRuntimeService({
       settings,
-      secretStore,
       env: {
-        OPENAI_API_KEY: 'sk-env-openai',
+        CUSTOM_DEEPSEEK_KEY: 'sk-custom-env',
       },
     });
 
-    await expect(service.resolveProviderRuntimeConfig({
-      providerId: 'openai',
-    })).resolves.toMatchObject({
-      providerId: 'openai',
-      apiKey: 'sk-env-openai',
-      defaultModelId: 'gpt-5.5',
+    await expect(service.resolveProviderRuntimeConfig({ providerId: 'deepseek' })).resolves.toMatchObject({
+      providerId: 'deepseek',
+      apiKey: 'sk-custom-env',
     });
   });
 
   it('throws provider_disabled for disabled providers', async () => {
     const service = new ProviderRuntimeService({
       settings,
-      secretStore,
       env: {},
     });
 
@@ -117,10 +100,9 @@ describe('ProviderRuntimeService', () => {
     });
   });
 
-  it('throws provider_missing_api_key when neither env nor secret store has a key', async () => {
+  it('throws provider_missing_api_key when neither settings nor env has a key', async () => {
     const service = new ProviderRuntimeService({
       settings,
-      secretStore,
       env: {},
     });
 
@@ -146,13 +128,10 @@ describe('ProviderRuntimeService', () => {
     settings.settings.set('deepseek', {
       ...DEFAULT_PROVIDER_SETTINGS.deepseek,
       baseUrl: undefined,
-      secretRef: buildProviderApiKeySecretRef('deepseek'),
+      apiKey: 'sk-deepseek',
     });
-    secretStore.values.set('secret:provider-api-key:deepseek', 'sk-deepseek');
-
     const service = new ProviderRuntimeService({
       settings,
-      secretStore,
       env: {},
     });
 
@@ -167,103 +146,9 @@ describe('ProviderRuntimeService', () => {
     });
   });
 
-  it('uses plaintext config API key before encrypted secret store', async () => {
-    settings.settings.set('deepseek', {
-      ...DEFAULT_PROVIDER_SETTINGS.deepseek,
-      secretRef: buildProviderApiKeySecretRef('deepseek'),
-      createdAt: '2026-05-11T00:00:00.000Z',
-      updatedAt: '2026-05-11T00:00:00.000Z',
-    });
-    secretStore.values.set('secret:provider-api-key:deepseek', 'sk-secret-store');
-
-    const service = new ProviderRuntimeService({
-      settings,
-      secretStore,
-      env: {},
-      configCredentials: {
-        getProviderApiKeyEnv: async () => undefined,
-        getPlaintextProviderApiKey: async (providerId) => (providerId === 'deepseek' ? 'sk-config-deepseek' : null),
-      },
-    });
-
-    await expect(service.resolveProviderRuntimeConfig({ providerId: 'deepseek' })).resolves.toMatchObject({
-      providerId: 'deepseek',
-      apiKey: 'sk-config-deepseek',
-    });
-  });
-
-  it('uses config-defined apiKeyEnv before plaintext config and secret store', async () => {
-    settings.settings.set('deepseek', {
-      ...DEFAULT_PROVIDER_SETTINGS.deepseek,
-      secretRef: buildProviderApiKeySecretRef('deepseek'),
-      createdAt: '2026-05-11T00:00:00.000Z',
-      updatedAt: '2026-05-11T00:00:00.000Z',
-    });
-    secretStore.values.set('secret:provider-api-key:deepseek', 'sk-secret-store');
-
-    const service = new ProviderRuntimeService({
-      settings,
-      secretStore,
-      env: {
-        CUSTOM_DEEPSEEK_KEY: 'sk-custom-env',
-      },
-      configCredentials: {
-        getProviderApiKeyEnv: async (providerId) => (providerId === 'deepseek' ? 'CUSTOM_DEEPSEEK_KEY' : undefined),
-        getPlaintextProviderApiKey: async () => 'sk-config-deepseek',
-      },
-    });
-
-    await expect(service.resolveProviderRuntimeConfig({ providerId: 'deepseek' })).resolves.toMatchObject({
-      providerId: 'deepseek',
-      apiKey: 'sk-custom-env',
-    });
-  });
-
-  it('maps Megumi Home config parse errors to invalid_provider_config', async () => {
-    const configPath = 'C:/Users/anwen/.megumi/config.json';
-    settings.settings.set('deepseek', {
-      ...DEFAULT_PROVIDER_SETTINGS.deepseek,
-      secretRef: buildProviderApiKeySecretRef('deepseek'),
-      createdAt: '2026-05-11T00:00:00.000Z',
-      updatedAt: '2026-05-11T00:00:00.000Z',
-    });
-
-    const service = new ProviderRuntimeService({
-      settings,
-      secretStore,
-      env: {},
-      configCredentials: {
-        async getProviderApiKeyEnv() {
-          throw new MegumiHomeConfigParseError(
-            'Megumi config could not be read: Expected comma in JSON at position 41',
-            configPath,
-          );
-        },
-        async getPlaintextProviderApiKey() {
-          return null;
-        },
-      },
-    });
-
-    await expect(service.resolveProviderRuntimeConfig({ providerId: 'deepseek' })).rejects.toMatchObject({
-      payload: {
-        code: 'config_invalid',
-        message: `Megumi config is invalid. Fix ${configPath} and try again.`,
-        retryable: false,
-        source: 'config',
-        details: {
-          providerId: 'deepseek',
-          modelId: 'deepseek-v4-flash',
-          cause: 'Megumi config could not be read: Expected comma in JSON at position 41',
-        },
-      },
-    });
-  });
-
   it('attaches runtime debug id to provider resolution errors', async () => {
     const service = new ProviderRuntimeService({
       settings,
-      secretStore,
       env: {},
     });
 
@@ -287,29 +172,4 @@ describe('ProviderRuntimeService', () => {
       },
     });
   });
-
-  it('keeps provider resolution errors on severity and retryable fields', async () => {
-    const service = new ProviderRuntimeService({
-      settings,
-      secretStore,
-      env: {},
-    });
-
-    try {
-      await service.resolveProviderRuntimeConfig({ providerId: 'deepseek' });
-      throw new Error('Expected provider runtime resolution to fail.');
-    } catch (error) {
-      expect(error).toBeInstanceOf(ProviderRuntimeResolutionError);
-      const payload = (error as ProviderRuntimeResolutionError).payload;
-      const obsoleteRuntimeErrorField = ['recover', 'able'].join('');
-
-      expect(payload).toMatchObject({
-        severity: 'error',
-        retryable: false,
-      });
-      expect(payload).not.toHaveProperty(obsoleteRuntimeErrorField);
-    }
-  });
 });
-
-

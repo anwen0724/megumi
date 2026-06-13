@@ -2,18 +2,13 @@
 // This component does not display, edit, or preview individual memory records.
 import { useEffect, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import { createDefaultMemorySettings, type MemorySettings } from '@megumi/shared/memory';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';
 
 type MemorySettingsStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
-function defaultMemorySettings(): MemorySettings {
-  return createDefaultMemorySettings(new Date().toISOString());
-}
-
 export function MemorySettingsPanel() {
-  const [settings, setSettings] = useState<MemorySettings>(defaultMemorySettings);
+  const [enabled, setEnabled] = useState(false);
   const [status, setStatus] = useState<MemorySettingsStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -30,10 +25,7 @@ export function MemorySettingsPanel() {
         setError(getRuntimeIpcErrorMessage(result));
         return;
       }
-      setSettings({
-        ...defaultMemorySettings(),
-        autoCaptureEnabled: result.data.settings.memory.enabled,
-      });
+      setEnabled(result.data.settings.memory.enabled);
       setStatus('ready');
     }).catch((reason: unknown) => {
       if (cancelled) return;
@@ -49,43 +41,34 @@ export function MemorySettingsPanel() {
   async function updateAutoCaptureEnabled(autoCaptureEnabled: boolean): Promise<void> {
     setStatus('saving');
     setError(null);
-    const previous = settings;
-    const next: MemorySettings = {
-      ...settings,
-      autoCaptureEnabled,
-      updatedAt: new Date().toISOString(),
-    };
-    setSettings(next);
+    const previous = enabled;
+    setEnabled(autoCaptureEnabled);
 
     let result: Awaited<ReturnType<typeof window.megumi.settings.update>>;
     try {
       result = await window.megumi.settings.update(
         createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
           memory: {
-            enabled: next.autoCaptureEnabled,
+            enabled: autoCaptureEnabled,
           },
         }),
       );
     } catch (reason) {
-      setSettings(previous);
+      setEnabled(previous);
       setStatus('error');
       setError(reason instanceof Error ? reason.message : String(reason));
       return;
     }
     if (!result.ok) {
-      setSettings(previous);
+      setEnabled(previous);
       setStatus('error');
       setError(getRuntimeIpcErrorMessage(result));
       return;
     }
-    setSettings({
-      ...next,
-      autoCaptureEnabled: result.data.settings.memory.enabled,
-    });
+    setEnabled(result.data.settings.memory.enabled);
     setStatus('ready');
   }
 
-  const enabled = settings.autoCaptureEnabled;
   const busy = status === 'loading' || status === 'saving';
 
   return (
