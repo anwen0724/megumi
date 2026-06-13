@@ -186,7 +186,6 @@ describe('MemoryRepository', () => {
       createdAt: now,
     };
     const settings: MemorySettings = {
-      workspaceId: 'workspace:1',
       autoCaptureEnabled: true,
       defaultCandidateReviewMode: 'manual',
       updatedAt: now,
@@ -216,7 +215,7 @@ describe('MemoryRepository', () => {
     expect(repo.saveCandidate(candidate).scope).toBe('project');
     expect(repo.listCandidates({ sessionId: 'session:1', status: 'proposed' })).toEqual([candidate]);
     expect(repo.saveSettings(settings)).toEqual(settings);
-    expect(repo.getSettings(settings.workspaceId)).toEqual(settings);
+    expect(repo.getSettings()).toEqual(settings);
     expect(repo.saveAccessLog(access)).toEqual(access);
     expect(repo.listAccessLogs({ memoryId: 'memory:1' })).toEqual([access]);
     expect(repo.saveAuditLog(audit)).toEqual(audit);

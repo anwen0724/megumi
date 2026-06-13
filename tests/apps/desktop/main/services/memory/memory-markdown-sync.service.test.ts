@@ -300,7 +300,20 @@ describe('MemoryMarkdownSyncService', () => {
       status: 'deleted',
       deletedAt: now,
     });
-    expect(repository.audits.map((audit) => audit.operation)).toContain('memory_deleted');
+    expect(repository.audits.map((audit) => audit.operation)).toEqual(expect.arrayContaining([
+      'markdown_import_parsed',
+      'candidate_imported',
+      'memory_deleted',
+    ]));
+    expect(repository.audits.find((audit) => audit.operation === 'markdown_import_parsed')).toMatchObject({
+      targetKind: 'markdown_mirror',
+      targetId: 'memory:user',
+      metadata: expect.objectContaining({
+        entryCount: 2,
+        diagnosticCount: 1,
+      }),
+    });
+    expect(repository.audits.filter((audit) => audit.operation === 'candidate_imported')).toHaveLength(2);
     expect(fileSystem.diagnostics.map((diagnostic) => JSON.stringify(diagnostic.entry))).toEqual(
       expect.arrayContaining([expect.stringContaining('unknown_heading')]),
     );

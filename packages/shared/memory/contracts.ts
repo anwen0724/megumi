@@ -29,6 +29,18 @@ export const MEMORY_RECORD_SOURCES = ['capture', 'markdown_import', 'manual_syst
 export const MemoryRecordSourceSchema = z.enum(MEMORY_RECORD_SOURCES);
 export type MemoryRecordSource = z.infer<typeof MemoryRecordSourceSchema>;
 
+export const MEMORY_CAPTURE_SIGNALS = [
+  'explicit_remember',
+  'explicit_forget_or_correction',
+  'future_preference',
+  'project_rule',
+  'confirmed_decision',
+  'stable_project_fact',
+  'source_of_truth_doc_changed',
+] as const;
+export const MemoryCaptureSignalSchema = z.enum(MEMORY_CAPTURE_SIGNALS);
+export type MemoryCaptureSignal = z.infer<typeof MemoryCaptureSignalSchema>;
+
 export const MEMORY_EVIDENCE_KINDS = [
   'message',
   'user_message',
@@ -317,7 +329,6 @@ export type MemoryRecallSnapshot = z.infer<typeof MemoryRecallSnapshotSchema>;
 
 export const MemorySettingsSchema = z
   .object({
-    workspaceId: IdSchema,
     autoCaptureEnabled: z.boolean(),
     defaultCandidateReviewMode: MemoryReviewModeSchema,
     updatedAt: IsoDateTimeSchema,
@@ -326,6 +337,16 @@ export const MemorySettingsSchema = z
   .strict();
 
 export type MemorySettings = z.infer<typeof MemorySettingsSchema>;
+
+export const DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED = false;
+
+export function createDefaultMemorySettings(updatedAt: string): MemorySettings {
+  return MemorySettingsSchema.parse({
+    autoCaptureEnabled: DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED,
+    defaultCandidateReviewMode: 'manual',
+    updatedAt,
+  });
+}
 
 export const MemoryPolicySchema = z
   .object({

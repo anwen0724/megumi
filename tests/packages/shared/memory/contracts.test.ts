@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED,
   MEMORY_AUDIT_OPERATIONS,
+  MEMORY_CAPTURE_SIGNALS,
   MEMORY_KINDS,
   MEMORY_MARKDOWN_MIRROR_STATUSES,
   MEMORY_RECORD_SOURCES,
   MEMORY_RECORD_STATUSES,
   MEMORY_SCOPES,
   MemoryAuditLogSchema,
+  MemoryCaptureSignalSchema,
   MemoryMarkdownMirrorSchema,
   MemoryRecallRequestSchema,
   MemoryRecallResultSchema,
   MemoryRecallSnapshotSchema,
   MemoryRecordSchema,
+  MemorySettingsSchema,
   MemoryScopeSchema,
+  createDefaultMemorySettings,
 } from '@megumi/shared/memory';
 
 describe('memory shared contracts', () => {
@@ -32,6 +37,20 @@ describe('memory shared contracts', () => {
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ kind: 'workflow' })).success).toBe(false);
   });
 
+  it('exposes deterministic capture signals across runtime boundaries', () => {
+    expect(MEMORY_CAPTURE_SIGNALS).toEqual([
+      'explicit_remember',
+      'explicit_forget_or_correction',
+      'future_preference',
+      'project_rule',
+      'confirmed_decision',
+      'stable_project_fact',
+      'source_of_truth_doc_changed',
+    ]);
+    expect(MemoryCaptureSignalSchema.safeParse('source_of_truth_doc_changed').success).toBe(true);
+    expect(MemoryCaptureSignalSchema.safeParse('session_summary_changed').success).toBe(false);
+  });
+
   it('exposes only 18.02 record lifecycle statuses', () => {
     expect(MEMORY_RECORD_STATUSES).toEqual(['active', 'superseded', 'deleted']);
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'active' })).success).toBe(true);
@@ -39,6 +58,34 @@ describe('memory shared contracts', () => {
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'deleted' })).success).toBe(true);
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'archived' })).success).toBe(false);
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ status: 'disabled' })).success).toBe(false);
+  });
+
+  it('keeps memory settings global instead of workspace-scoped', () => {
+    expect(MemorySettingsSchema.parse({
+      autoCaptureEnabled: true,
+      defaultCandidateReviewMode: 'manual',
+      updatedAt: '2026-06-13T00:00:00.000Z',
+    })).toMatchObject({
+      autoCaptureEnabled: true,
+    });
+    expect(MemorySettingsSchema.safeParse({
+      workspaceId: 'workspace-1',
+      autoCaptureEnabled: true,
+      defaultCandidateReviewMode: 'manual',
+      updatedAt: '2026-06-13T00:00:00.000Z',
+    }).success).toBe(false);
+  });
+
+  it('uses one shared default for global memory settings', () => {
+    const settings = createDefaultMemorySettings('2026-06-13T00:00:00.000Z');
+
+    expect(DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED).toBe(false);
+    expect(settings).toEqual({
+      autoCaptureEnabled: DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED,
+      defaultCandidateReviewMode: 'manual',
+      updatedAt: '2026-06-13T00:00:00.000Z',
+    });
+    expect(MemorySettingsSchema.parse(settings)).toEqual(settings);
   });
 
   it('parses a runtime memory record with source, evidence, dedupe, and use metadata', () => {

@@ -54,7 +54,8 @@ describe('UI polish source guard', () => {
       'fixed inset-0',
       'Close settings ' + 'overlay',
     ].join('|')));
-    expect(settingsPage).not.toMatch(/Memory|Context debug|Run dashboard|Checkpoint/);
+    expect(settingsPage).toContain('Memory');
+    expect(settingsPage).not.toMatch(/Context debug|Run dashboard|Checkpoint/);
   });
 
   it('keeps the focus canvas free of timeline rails and assistant cards', () => {

@@ -10,11 +10,11 @@ import {
 } from '@megumi/memory';
 import type {
   MemoryCaptureRunStatus,
-  MemoryCaptureSignal,
   ValidatedMemoryCandidate,
 } from '@megumi/memory';
 import type {
   MemoryAuditLog,
+  MemoryCaptureSignal,
   MemoryKind,
   MemoryRecord,
   MemoryRecordStatus,

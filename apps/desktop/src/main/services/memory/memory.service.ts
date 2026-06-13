@@ -18,6 +18,7 @@ import type {
   MemorySettings,
   MemorySourceRef,
 } from '@megumi/shared/memory';
+import { createDefaultMemorySettings } from '@megumi/shared/memory';
 import {
   createRuntimeMemoryAccessRecordedEvent,
   createRuntimeMemoryCandidateAcceptedEvent,
@@ -82,7 +83,7 @@ export interface MemoryRecallPreviewInput {
 }
 
 export interface MemoryService {
-  getSettings(workspaceId: string): MemorySettings;
+  getSettings(): MemorySettings;
   updateSettings(settings: MemorySettings): MemorySettings;
   proposeCandidate(input: ProposeMemoryCandidateInput): MemoryCandidate;
   listCandidates(filter: { workspaceId?: string; sessionId?: string; status?: MemoryCandidateStatus }): MemoryCandidate[];
@@ -117,13 +118,8 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
     };
   }
 
-  function getSettings(workspaceId: string): MemorySettings {
-    return deps.repository.getSettings(workspaceId) ?? {
-      workspaceId,
-      autoCaptureEnabled: true,
-      defaultCandidateReviewMode: 'manual',
-      updatedAt: deps.now(),
-    };
+  function getSettings(): MemorySettings {
+    return deps.repository.getSettings() ?? createDefaultMemorySettings(deps.now());
   }
 
   function statusChange(memoryId: string, to: MemoryRecordStatus, updatedAt: string): MemoryRecord {
@@ -165,10 +161,10 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
     getSettings,
     updateSettings: (settings) => deps.repository.saveSettings(settings),
     proposeCandidate(input) {
-      const settings = input.workspaceId ? getSettings(input.workspaceId) : undefined;
+      const settings = getSettings();
       const policy = createDefaultMemoryPolicy({
         now: deps.now(),
-        autoCaptureEnabled: settings?.autoCaptureEnabled ?? true,
+        autoCaptureEnabled: settings.autoCaptureEnabled,
       });
       const decision = evaluateMemoryCandidatePolicy({
         policy,

@@ -8,6 +8,7 @@
   MemorySourceKind,
   MemorySourceRef,
 } from '@megumi/shared/memory';
+import { DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED } from '@megumi/shared/memory';
 
 export * from './text-normalization';
 export * from './memory-security-policy';
@@ -40,7 +41,7 @@ export function createDefaultMemoryPolicy(input: DefaultMemoryPolicyInput): Memo
     blockedSourceKinds: [],
     requiresReviewRiskLevels: ['medium', 'high'],
     blockedPatterns: BLOCKED_PATTERNS.map((pattern) => pattern.source),
-    autoCaptureEnabled: input.autoCaptureEnabled ?? true,
+    autoCaptureEnabled: input.autoCaptureEnabled ?? DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED,
     createdAt: input.now,
     updatedAt: input.now,
   };

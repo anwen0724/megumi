@@ -990,13 +990,13 @@ describe('agent context runtime IPC schemas', () => {
 
     expect(MemorySettingsGetRequestSchema.parse({
       requestId: 'ipc-memory-settings-get-1',
-      payload: { workspaceId: 'workspace-1' },
+      payload: {},
       meta: {
         channel: IPC_CHANNELS.memory.settingsGet,
         createdAt: '2026-05-17T00:00:00.000Z',
         source: 'renderer',
       },
-    }).payload.workspaceId).toBe('workspace-1');
+    }).payload).toEqual({});
   });
 
   it('keeps context channel in request.meta.channel instead of top-level channel', () => {
@@ -1419,7 +1419,6 @@ describe('agent memory ipc payload and data schemas', () => {
   it('parses strict memory payload schemas before channels are wired', () => {
     expect(
       MemorySettingsUpdatePayloadSchema.parse({
-        workspaceId: 'workspace:1',
         autoCaptureEnabled: false,
         defaultCandidateReviewMode: 'manual',
         updatedAt: '2026-05-16T00:00:00.000Z',
@@ -1488,7 +1487,7 @@ describe('agent memory runtime ipc channels', () => {
   it('keeps channel in request meta and rejects top-level channel', () => {
     const request = MemorySettingsGetRequestSchema.parse({
       requestId: 'request:memory:settings',
-      payload: { workspaceId: 'workspace:1' },
+      payload: {},
       meta: {
         channel: IPC_CHANNELS.memory.settingsGet,
         createdAt: '2026-05-16T00:00:00.000Z',
@@ -1521,7 +1520,6 @@ describe('agent memory runtime ipc channels', () => {
       ok: true,
       data: {
         settings: {
-          workspaceId: 'workspace:1',
           autoCaptureEnabled: true,
           defaultCandidateReviewMode: 'manual',
           updatedAt: '2026-05-16T00:00:00.000Z',

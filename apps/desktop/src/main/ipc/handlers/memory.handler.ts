@@ -57,7 +57,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     channel: IPC_CHANNELS.memory.settingsGet,
     requestSchema: MemorySettingsGetRequestSchema,
     logger,
-    handle: (request) => ({ settings: memoryService.getSettings(request.payload.workspaceId) }),
+    handle: () => ({ settings: memoryService.getSettings() }),
     mapError: mapMemoryIpcError,
   }));
 

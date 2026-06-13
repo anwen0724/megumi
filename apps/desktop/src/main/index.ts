@@ -13,6 +13,7 @@ import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createChatStreamEvent } from '@megumi/shared/chat-stream';
+import { DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED } from '@megumi/shared/memory';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { loadEnvFile } from './config/env';
 import { initializeElectronMegumiHomeSync } from './services/project/megumi-home.service';
@@ -102,6 +103,15 @@ const providerRuntimeService = new ProviderRuntimeService({
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
+if (memoryRepository.getSettings()?.autoCaptureEnabled ?? DEFAULT_MEMORY_AUTO_CAPTURE_ENABLED) {
+  void memoryRuntime.markdownSyncService.syncUserMirrorOnAppStart({
+    homePath: megumiHomePaths.homePath,
+  }).catch((error) => {
+    runtimeLogger.warn('memory_user_markdown_startup_sync_failed', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
 const agentInstructionSourceService = new AgentInstructionSourceService();
 const timelineMessageRepository = new TimelineMessageRepository(database);
 const sessionRunRepository = new SessionRunRepository(database);
@@ -176,6 +186,12 @@ const sessionRunService = new SessionRunService({
   timelineMessageRepository,
   memoryRecallService: memoryRuntime.recallService,
   memoryCaptureService: memoryRuntime.captureService,
+  memorySettingsProvider: {
+    getMemorySettings() {
+      return memoryRepository.getSettings() ?? undefined;
+    },
+  },
+  memoryMarkdownSyncService: memoryRuntime.markdownSyncService,
   megumiHomePath: megumiHomePaths.homePath,
 });
 const toolService = new ToolService({
@@ -242,6 +258,7 @@ function createMemoryRuntime(
 ): {
   recallService: MemoryRecallRuntimeService;
   captureService: MemoryRuntimeCaptureService;
+  markdownSyncService: MemoryMarkdownSyncService;
 } {
   const fileSystem = createNodeMemoryRuntimeFileSystem();
   const diagnostics = new MemoryDiagnosticWriter({
@@ -269,6 +286,7 @@ function createMemoryRuntime(
   });
 
   return {
+    markdownSyncService: markdownSync,
     recallService: new MemoryRecallRuntimeService({
       repository,
       markdownSync,

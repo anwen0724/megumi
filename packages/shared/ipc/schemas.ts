@@ -590,15 +590,10 @@ export const ArtifactReferenceDataSchema = z
   })
   .strict();
 
-export const MemorySettingsGetPayloadSchema = z
-  .object({
-    workspaceId: z.string().min(1),
-  })
-  .strict();
+export const MemorySettingsGetPayloadSchema = z.object({}).strict();
 
 export const MemorySettingsUpdatePayloadSchema = z
   .object({
-    workspaceId: z.string().min(1),
     autoCaptureEnabled: z.boolean(),
     defaultCandidateReviewMode: z.literal('manual'),
     updatedAt: IsoDateTimeSchema,
