@@ -802,37 +802,55 @@ describe('ChatPage flow', () => {
     });
 
     activateCanonicalSession([
-      committedUser('message-1', 'hello'),
+      committedUser('message-failed', 'failed prompt', 'run-failed'),
       committedAssistant('assistant:run-failed', 'run-failed', 'failed answer'),
+      committedUser('message-cancelled', 'cancelled prompt', 'run-cancelled'),
       committedAssistant('assistant:run-cancelled', 'run-cancelled', 'cancelled answer'),
+      committedUser('message-interrupted', 'interrupted prompt', 'run-interrupted'),
       committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
     ]);
 
     render(<ChatPage />);
 
     expect(await screen.findAllByRole('button', { name: 'Retry' })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Rerun' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark cancelled' })).toBeInTheDocument();
+    const cancelledActions = screen.getByLabelText('Recoverable actions for Cancelled run');
+    const interruptedActions = screen.getByLabelText('Recoverable actions for Interrupted run');
+    expect(within(cancelledActions).getByRole('button', { name: 'Rerun' })).toBeInTheDocument();
+    expect(within(interruptedActions).getByRole('button', { name: 'Mark cancelled' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
     expect(screen.queryByText('Other session run')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0]);
-    expect(api.recovery.retry).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({ runId: 'run-failed', retryKind: 'manual_retry', reason: 'failed' }),
+    expect(api.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        message: expect.objectContaining({ content: 'failed prompt' }),
+        context: expect.objectContaining({ permissionMode: 'default' }),
+        modelId: 'deepseek-v4-flash',
+      }),
+    }));
+    expect(api.recovery.retry).not.toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ runId: 'run-failed' }),
     }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rerun' }));
-    expect(api.recovery.retry).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({ runId: 'run-cancelled', retryKind: 'manual_retry', reason: 'cancelled' }),
+    await userEvent.click(within(cancelledActions).getByRole('button', { name: 'Rerun' }));
+    expect(api.session.message.send).toHaveBeenLastCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        message: expect.objectContaining({ content: 'cancelled prompt' }),
+        context: expect.objectContaining({ permissionMode: 'default' }),
+        modelId: 'deepseek-v4-flash',
+      }),
+    }));
+    expect(api.recovery.retry).not.toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ runId: 'run-cancelled' }),
     }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Mark cancelled' }));
+    await userEvent.click(within(interruptedActions).getByRole('button', { name: 'Mark cancelled' }));
     expect(api.recovery.cancel).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({ runId: 'run-interrupted', reason: 'user_requested' }),
     }));
   });
 
-  it('shows recoverable actions in ComposerDock instead of inside the timeline log', async () => {
+  it('renders matched recoverable actions with the failed timeline response and unmatched fallback in ComposerDock', async () => {
     const api = installMegumiMock();
     api.recovery.listRecoverableRuns.mockResolvedValue({
       ok: true,
@@ -854,14 +872,15 @@ describe('ChatPage flow', () => {
     expect(await screen.findByLabelText('Recoverable actions for Unmatched failed run')).toBeInTheDocument();
     expect(screen.getByLabelText('Recoverable actions for Visible failed run')).toBeInTheDocument();
     const timeline = screen.getByRole('log', { name: 'Chat timeline' });
-    expect(within(timeline).queryByLabelText('Recoverable actions for Visible failed run')).not.toBeInTheDocument();
+    expect(within(timeline).getByLabelText('Recoverable actions for Visible failed run')).toBeInTheDocument();
     const composerDock = screen.getByTestId('composer-dock');
-    expect(within(composerDock).getByLabelText('Recoverable actions for Visible failed run')).toBeInTheDocument();
+    expect(within(composerDock).queryByLabelText('Recoverable actions for Visible failed run')).not.toBeInTheDocument();
+    expect(within(composerDock).getByLabelText('Recoverable actions for Unmatched failed run')).toBeInTheDocument();
   });
 
   it('prevents duplicate recoverable action requests while a request is pending', async () => {
     const api = installMegumiMock();
-    const retryDeferred = createDeferred<Awaited<ReturnType<typeof api.recovery.retry>>>();
+    const retryDeferred = createDeferred<Awaited<ReturnType<typeof api.session.message.send>>>();
     const cancelDeferred = createDeferred<Awaited<ReturnType<typeof api.recovery.cancel>>>();
     api.recovery.listRecoverableRuns
       .mockResolvedValueOnce({
@@ -888,11 +907,12 @@ describe('ChatPage flow', () => {
         data: { runs: [] },
         meta: recoveryMeta(IPC_CHANNELS.recovery.recoverableRunsList),
       });
-    api.recovery.retry.mockReturnValueOnce(retryDeferred.promise);
+    api.session.message.send.mockReturnValueOnce(retryDeferred.promise);
     api.recovery.cancel.mockReturnValueOnce(cancelDeferred.promise);
     activateCanonicalSession([
-      committedUser('message-1', 'hello'),
+      committedUser('message-failed', 'failed prompt', 'run-failed'),
       committedAssistant('assistant:run-failed', 'run-failed', 'failed answer'),
+      committedUser('message-interrupted', 'interrupted prompt', 'run-interrupted'),
       committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
     ]);
 
@@ -902,13 +922,12 @@ describe('ChatPage flow', () => {
     const retryButton = within(retryActions).getByRole('button', { name: 'Retry' });
     await userEvent.dblClick(retryButton);
 
-    expect(api.recovery.retry).toHaveBeenCalledTimes(1);
+    expect(api.session.message.send).toHaveBeenCalledTimes(1);
     expect(retryButton).toBeDisabled();
 
     retryDeferred.resolve({
       ok: true,
-      data: { request: createRetryRequest('run-failed') },
-      meta: recoveryMeta(IPC_CHANNELS.recovery.retry),
+      requestId: 'request-retry-run-failed',
     });
     await waitFor(() => {
       expect(screen.queryByLabelText('Recoverable actions for Failed run')).not.toBeInTheDocument();
@@ -948,6 +967,7 @@ describe('ChatPage flow', () => {
         ok: true,
         data: {
           runs: [
+            { runId: 'run-failed', sessionId: 'session-1', status: 'failed', reason: 'failed', title: 'Failed run' },
             { runId: 'run-cancelled', sessionId: 'session-1', status: 'cancelled', reason: 'cancelled', title: 'Cancelled run' },
             { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
           ],
@@ -958,6 +978,7 @@ describe('ChatPage flow', () => {
         ok: true,
         data: {
           runs: [
+            { runId: 'run-cancelled', sessionId: 'session-1', status: 'cancelled', reason: 'cancelled', title: 'Cancelled run' },
             { runId: 'run-interrupted', sessionId: 'session-1', status: 'running', reason: 'interrupted', title: 'Interrupted run' },
           ],
         },
@@ -979,9 +1000,11 @@ describe('ChatPage flow', () => {
       meta: recoveryMeta(IPC_CHANNELS.recovery.cancel),
     });
     activateCanonicalSession([
-      committedUser('message-1', 'hello'),
+      committedUser('message-failed', 'failed prompt', 'run-failed'),
       committedAssistant('assistant:run-failed', 'run-failed', 'failed answer'),
+      committedUser('message-cancelled', 'cancelled prompt', 'run-cancelled'),
       committedAssistant('assistant:run-cancelled', 'run-cancelled', 'cancelled answer'),
+      committedUser('message-interrupted', 'interrupted prompt', 'run-interrupted'),
       committedAssistant('assistant:run-interrupted', 'run-interrupted', 'interrupted answer'),
     ]);
 

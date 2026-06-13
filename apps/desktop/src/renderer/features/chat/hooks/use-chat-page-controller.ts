@@ -12,6 +12,10 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import { chatStreamSessionKey, useChatStreamStore } from '../../chat-stream';
 import { useSessionTimeline } from './use-session-timeline';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/Composer';
+import {
+  DEFAULT_COMPOSER_MODEL,
+  DEFAULT_COMPOSER_PERMISSION_MODE,
+} from '../components/composer-options';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
 
@@ -63,6 +67,58 @@ function canShowUserMessageActions(
   );
 
   return assistant !== undefined && !isActiveTimelineAssistantMessage(assistant);
+}
+
+function getUserMessageText(message: CanonicalTimelineMessage): string | null {
+  if (message.role !== 'user') {
+    return null;
+  }
+
+  const text = message.blocks
+    .filter((block) => block.kind === 'user_text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
+
+  return text.length > 0 ? text : null;
+}
+
+function createRetryPayloadFromTimelineRun(
+  runId: string,
+  messages: CanonicalTimelineMessage[],
+): ComposerSubmitPayload | null {
+  const directlyMatchedUser = [...messages]
+    .reverse()
+    .find((message) => message.role === 'user' && message.runId === runId);
+  const directText = directlyMatchedUser ? getUserMessageText(directlyMatchedUser) : null;
+
+  if (directText) {
+    return {
+      message: directText,
+      permissionMode: DEFAULT_COMPOSER_PERMISSION_MODE,
+      model: DEFAULT_COMPOSER_MODEL,
+    };
+  }
+
+  const assistantIndex = messages.findIndex((message) => message.role === 'assistant' && message.runId === runId);
+  if (assistantIndex <= 0) {
+    return null;
+  }
+
+  const nearestPreviousUser = [...messages.slice(0, assistantIndex)]
+    .reverse()
+    .find((message) => message.role === 'user');
+  const inferredText = nearestPreviousUser ? getUserMessageText(nearestPreviousUser) : null;
+
+  if (!inferredText) {
+    return null;
+  }
+
+  return {
+    message: inferredText,
+    permissionMode: DEFAULT_COMPOSER_PERMISSION_MODE,
+    model: DEFAULT_COMPOSER_MODEL,
+  };
 }
 
 export function recoverableActionsFor(run: RecoverableRunSummary): RecoverableAction[] {
@@ -126,6 +182,7 @@ export function useChatPageController() {
   const runs = useRunStore((state) => state.runs);
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const [recoverableRuns, setRecoverableRuns] = useState<RecoverableRunSummary[]>([]);
+  const [dismissedRecoverableRunIds, setDismissedRecoverableRunIds] = useState<Set<string>>(() => new Set());
   const [pendingRecoverableRunIds, setPendingRecoverableRunIds] = useState<Set<string>>(() => new Set());
   const [pendingWorkspaceChangeSetIds, setPendingWorkspaceChangeSetIds] = useState<Set<string>>(() => new Set());
   const [restoreFeedback, setRestoreFeedback] = useState<RestoreFeedback | null>(null);
@@ -151,8 +208,8 @@ export function useChatPageController() {
   ));
   const timelineMessages = canonicalMessages;
   const visibleRecoverableRuns = useMemo(
-    () => recoverableRuns.filter((run) => run.sessionId === activeSessionId),
-    [activeSessionId, recoverableRuns],
+    () => recoverableRuns.filter((run) => run.sessionId === activeSessionId && !dismissedRecoverableRunIds.has(run.runId)),
+    [activeSessionId, dismissedRecoverableRunIds, recoverableRuns],
   );
   const recoverableRunsByRunId = useMemo(() => {
     const byRunId = new Map<string, RecoverableRunSummary>();
@@ -257,6 +314,10 @@ export function useChatPageController() {
   }, [activeRun?.runId, activeRun?.status, loadRecoverableRuns]);
 
   useEffect(() => {
+    setDismissedRecoverableRunIds(new Set());
+  }, [activeSessionId]);
+
+  useEffect(() => {
     if (!restoreFeedback || restoreFeedback.persistent) {
       return;
     }
@@ -298,6 +359,21 @@ export function useChatPageController() {
       pendingRecoverableRunIdsRef.current.delete(run.runId);
       setPendingRecoverableRunIds(new Set(pendingRecoverableRunIdsRef.current));
     }
+  }
+
+  async function resendRecoverableRun(run: RecoverableRunSummary) {
+    const retryPayload = createRetryPayloadFromTimelineRun(run.runId, timelineMessages);
+    await runRecoverableAction(run, async () => {
+      if (!retryPayload) {
+        return { ok: false };
+      }
+
+      const sent = await sendSessionMessage(retryPayload);
+      if (sent) {
+        setDismissedRecoverableRunIds((current) => new Set(current).add(run.runId));
+      }
+      return { ok: sent };
+    });
   }
 
   async function switchNewSessionProject(projectId: string) {
@@ -342,21 +418,11 @@ export function useChatPageController() {
   }
 
   async function retryRecoverableRun(run: RecoverableRunSummary) {
-    await runRecoverableAction(run, () => recoveryBridge?.retry(createRendererRuntimeIpcRequest(IPC_CHANNELS.recovery.retry, {
-      runId: run.runId,
-      requestedBy: 'user',
-      retryKind: 'manual_retry',
-      reason: run.reason === 'interrupted' ? 'interrupted' : 'failed',
-    })));
+    await resendRecoverableRun(run);
   }
 
   async function rerunRecoverableRun(run: RecoverableRunSummary) {
-    await runRecoverableAction(run, () => recoveryBridge?.retry(createRendererRuntimeIpcRequest(IPC_CHANNELS.recovery.retry, {
-      runId: run.runId,
-      requestedBy: 'user',
-      retryKind: 'manual_retry',
-      reason: 'cancelled',
-    })));
+    await resendRecoverableRun(run);
   }
 
   async function markRecoverableRunCancelled(run: RecoverableRunSummary) {

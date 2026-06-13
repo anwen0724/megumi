@@ -2,6 +2,8 @@
 // Runtime validation remains in Desktop Main; this hook only prepares UI input.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import {
+  DEFAULT_COMPOSER_MODEL,
+  DEFAULT_COMPOSER_PERMISSION_MODE,
   type ComposerModel,
   type ComposerPermissionMode,
 } from '../components/composer-options';
@@ -54,8 +56,8 @@ export function useComposerController({
   const modelId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(initialValue);
-  const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>('default');
-  const [model, setModel] = useState<ComposerModel>('deepseek-v4-flash');
+  const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
+  const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
   const [commandSelectionIndex, setCommandSelectionIndex] = useState(0);
   const [commandAutocompleteDismissedFor, setCommandAutocompleteDismissedFor] = useState<string | null>(null);
   const trimmedValue = value.trim();

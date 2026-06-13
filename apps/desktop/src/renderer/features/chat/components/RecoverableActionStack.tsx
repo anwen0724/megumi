@@ -5,6 +5,8 @@ import { recoverableActionsFor } from '../hooks/use-chat-page-controller';
 interface RecoverableActionStackProps {
   runs: RecoverableRunSummary[];
   pendingRunIds: Set<string>;
+  ariaLabel?: string;
+  className?: string;
   onRetry: (run: RecoverableRunSummary) => void;
   onRerun: (run: RecoverableRunSummary) => void;
   onMarkCancelled: (run: RecoverableRunSummary) => void;
@@ -13,6 +15,8 @@ interface RecoverableActionStackProps {
 export function RecoverableActionStack({
   runs,
   pendingRunIds,
+  ariaLabel = 'Recoverable run fallback actions',
+  className = 'space-y-2',
   onRetry,
   onRerun,
   onMarkCancelled,
@@ -20,7 +24,7 @@ export function RecoverableActionStack({
   if (runs.length === 0) return null;
 
   return (
-    <section aria-label="Recoverable run fallback actions" className="space-y-2">
+    <section aria-label={ariaLabel} className={className}>
       {runs.map((run) => {
         const actions = recoverableActionsFor(run);
         if (actions.length === 0) return null;

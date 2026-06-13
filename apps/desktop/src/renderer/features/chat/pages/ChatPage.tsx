@@ -69,9 +69,20 @@ export function ChatPage() {
               scrollPanel={scrollPanel}
               messageColumn={{
                 timelineMessages: controller.timelineMessages,
+                recoverableRunsByRunId: controller.recoverableRunsByRunId,
                 pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
+                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
                 bottomSpacerHeight,
                 canShowUserMessageActions: controller.canShowUserMessageActions,
+                onRetryRecoverableRun: (run) => {
+                  void controller.retryRecoverableRun(run);
+                },
+                onRerunRecoverableRun: (run) => {
+                  void controller.rerunRecoverableRun(run);
+                },
+                onMarkRecoverableRunCancelled: (run) => {
+                  void controller.markRecoverableRunCancelled(run);
+                },
                 onBranchFromMessage: (message) => {
                   void controller.createBranchDraft({ messageId: message.messageId, intent: 'branch' });
                 },
@@ -91,7 +102,7 @@ export function ChatPage() {
             status={controller.composerStatus}
             branchDraft={branchDraft}
             pendingApprovals={controller.pendingApprovals}
-            recoverableRuns={controller.visibleRecoverableRuns}
+            recoverableRuns={controller.unmatchedRecoverableRuns}
             pendingRecoverableRunIds={controller.pendingRecoverableRunIds}
             onApprovalResolve={(payload) => {
               void controller.resolveApproval(payload);
@@ -132,9 +143,14 @@ export function ChatPage() {
               scrollPanel={scrollPanel}
               messageColumn={{
                 timelineMessages: [],
+                recoverableRunsByRunId: controller.recoverableRunsByRunId,
                 pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
+                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
                 bottomSpacerHeight: 0,
                 canShowUserMessageActions: controller.canShowUserMessageActions,
+                onRetryRecoverableRun: () => undefined,
+                onRerunRecoverableRun: () => undefined,
+                onMarkRecoverableRunCancelled: () => undefined,
                 onBranchFromMessage: () => undefined,
                 onRerunMessage: () => undefined,
                 onOpenWorkspaceChangedFile: () => undefined,

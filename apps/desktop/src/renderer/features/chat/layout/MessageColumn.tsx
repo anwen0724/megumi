@@ -1,14 +1,21 @@
 ﻿import type { ReactNode } from 'react';
+import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline';
+import { RecoverableActionStack } from '../components/RecoverableActionStack';
 import { TimelineMessage } from '../components/TimelineMessage';
 import { WorkspaceChangeFooter } from '../components/WorkspaceChangeFooter';
 import { BottomSpacer } from './BottomSpacer';
 
 interface MessageColumnProps {
   timelineMessages: CanonicalTimelineMessage[];
+  recoverableRunsByRunId: Map<string, RecoverableRunSummary>;
   pendingWorkspaceChangeSetIds: Set<string>;
+  pendingRecoverableRunIds: Set<string>;
   bottomSpacerHeight: number;
   canShowUserMessageActions: (message: CanonicalTimelineMessage) => boolean;
+  onRetryRecoverableRun: (run: RecoverableRunSummary) => void;
+  onRerunRecoverableRun: (run: RecoverableRunSummary) => void;
+  onMarkRecoverableRunCancelled: (run: RecoverableRunSummary) => void;
   onBranchFromMessage: (message: CanonicalTimelineMessage) => void;
   onRerunMessage: (message: CanonicalTimelineMessage) => void;
   onOpenWorkspaceChangedFile: (projectPath: string) => void;
@@ -17,9 +24,14 @@ interface MessageColumnProps {
 
 export function MessageColumn({
   timelineMessages,
+  recoverableRunsByRunId,
   pendingWorkspaceChangeSetIds,
+  pendingRecoverableRunIds,
   bottomSpacerHeight,
   canShowUserMessageActions,
+  onRetryRecoverableRun,
+  onRerunRecoverableRun,
+  onMarkRecoverableRunCancelled,
   onBranchFromMessage,
   onRerunMessage,
   onOpenWorkspaceChangedFile,
@@ -29,9 +41,21 @@ export function MessageColumn({
     if (message.role !== 'assistant') {
       return null;
     }
+    const recoverableRun = message.runId ? recoverableRunsByRunId.get(message.runId) : undefined;
 
     return (
       <>
+        {recoverableRun ? (
+          <RecoverableActionStack
+            runs={[recoverableRun]}
+            pendingRunIds={pendingRecoverableRunIds}
+            ariaLabel="Recoverable response actions"
+            className="mt-3 space-y-2"
+            onRetry={onRetryRecoverableRun}
+            onRerun={onRerunRecoverableRun}
+            onMarkCancelled={onMarkRecoverableRunCancelled}
+          />
+        ) : null}
         {message.workspaceChangeFooter ? (
           <WorkspaceChangeFooter
             footer={message.workspaceChangeFooter}

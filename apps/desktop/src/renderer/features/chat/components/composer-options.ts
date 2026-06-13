@@ -14,6 +14,9 @@ export type ComposerModel =
   | 'claude-sonnet-4-6'
   | 'claude-haiku-4-5-20251001';
 
+export const DEFAULT_COMPOSER_PERMISSION_MODE: ComposerPermissionMode = 'default';
+export const DEFAULT_COMPOSER_MODEL: ComposerModel = 'deepseek-v4-flash';
+
 interface ComposerOption<TValue extends string> {
   value: TValue;
   label: string;

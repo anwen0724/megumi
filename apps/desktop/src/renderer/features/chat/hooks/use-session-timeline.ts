@@ -250,14 +250,14 @@ export function useSessionTimeline() {
     });
   }, []);
 
-  const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload) => {
+  const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload): Promise<boolean> => {
     lastPayloadRef.current = payload;
     const runSessionId = ensureActiveLocalSession(payload);
     runSessionIdRef.current = runSessionId;
 
     if (!runSessionId) {
       failSessionMessageSend('Select a project before sending a message.');
-      return;
+      return false;
     }
 
     const sessionState = useSessionStore.getState();
@@ -267,7 +267,7 @@ export function useSessionTimeline() {
 
     if (!projectId) {
       failSessionMessageSend('Select a project before sending a message.', runSessionId);
-      return;
+      return false;
     }
 
     renameEmptyManualSessionFromPrompt(payload, activeCanonicalMessageCount(projectId, runSessionId));
@@ -308,20 +308,22 @@ export function useSessionTimeline() {
 
     if (!result.ok) {
       failSessionMessageSend(result.error.message, runSessionId);
-      return;
+      return false;
     }
 
     if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {
       updateBranchDraft(null);
     }
+
+    return true;
   }, [branchDraft, updateBranchDraft]);
 
-  const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'permissionMode' | 'model'>) => {
+  const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'permissionMode' | 'model'>): Promise<boolean> => {
     if (!lastPayloadRef.current) {
-      return;
+      return false;
     }
 
-    await sendSessionMessage({
+    return sendSessionMessage({
       ...lastPayloadRef.current,
       ...override,
     });
