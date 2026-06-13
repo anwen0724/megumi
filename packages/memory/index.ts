@@ -40,7 +40,7 @@ export function createDefaultMemoryPolicy(input: DefaultMemoryPolicyInput): Memo
     blockedSourceKinds: [],
     requiresReviewRiskLevels: ['medium', 'high'],
     blockedPatterns: BLOCKED_PATTERNS.map((pattern) => pattern.source),
-    autoCaptureEnabled: input.autoCaptureEnabled ?? true,
+    autoCaptureEnabled: input.autoCaptureEnabled ?? false,
     createdAt: input.now,
     updatedAt: input.now,
   };

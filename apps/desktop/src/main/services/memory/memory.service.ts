@@ -119,7 +119,7 @@ export function createMemoryService(deps: MemoryServiceDependencies): MemoryServ
 
   function getSettings(): MemorySettings {
     return deps.repository.getSettings() ?? {
-      autoCaptureEnabled: true,
+      autoCaptureEnabled: false,
       defaultCandidateReviewMode: 'manual',
       updatedAt: deps.now(),
     };

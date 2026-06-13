@@ -10,7 +10,7 @@ type MemorySettingsStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
 function defaultMemorySettings(): MemorySettings {
   return {
-    autoCaptureEnabled: true,
+    autoCaptureEnabled: false,
     defaultCandidateReviewMode: 'manual',
     updatedAt: new Date().toISOString(),
   };

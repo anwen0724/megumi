@@ -563,12 +563,12 @@ export class SessionRunService {
 
   private resolveMemoryEnabled(): boolean {
     if (!this.memorySettingsProvider) {
-      return true;
+      return false;
     }
     try {
-      return this.memorySettingsProvider.getMemorySettings()?.autoCaptureEnabled ?? true;
+      return this.memorySettingsProvider.getMemorySettings()?.autoCaptureEnabled ?? false;
     } catch {
-      return true;
+      return false;
     }
   }
 

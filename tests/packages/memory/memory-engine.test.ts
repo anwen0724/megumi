@@ -56,6 +56,7 @@ describe('memory engine', () => {
     expect(policy.allowedScopes).toEqual(['user', 'project']);
     expect(policy.allowedKinds).toEqual(['preference', 'constraint', 'fact', 'decision']);
     expect(policy.requiresReviewRiskLevels).toEqual(['medium', 'high']);
+    expect(policy.autoCaptureEnabled).toBe(false);
 
     expect(
       evaluateMemoryCandidatePolicy({
@@ -68,6 +69,31 @@ describe('memory engine', () => {
     ).toMatchObject({
       allowed: false,
       riskLevel: 'blocked',
+    });
+  });
+
+  it('requires explicit opt-in before automatic memory capture policy allows candidates', () => {
+    const disabledPolicy = createDefaultMemoryPolicy({ now });
+    expect(evaluateMemoryCandidatePolicy({
+      policy: disabledPolicy,
+      scope: 'project',
+      kind: 'constraint',
+      sourceKinds: ['message'],
+      content: 'Use Vitest for unit tests.',
+    })).toMatchObject({
+      allowed: false,
+      reason: 'auto_capture_disabled',
+    });
+
+    const enabledPolicy = createDefaultMemoryPolicy({ now, autoCaptureEnabled: true });
+    expect(evaluateMemoryCandidatePolicy({
+      policy: enabledPolicy,
+      scope: 'project',
+      kind: 'constraint',
+      sourceKinds: ['message'],
+      content: 'Use Vitest for unit tests.',
+    })).toMatchObject({
+      allowed: true,
     });
   });
 

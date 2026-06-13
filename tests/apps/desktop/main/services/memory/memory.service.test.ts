@@ -26,8 +26,13 @@ describe('MemoryService', () => {
     const { service, database, events } = createService();
     try {
       expect(service.getSettings()).toMatchObject({
+        autoCaptureEnabled: false,
+        defaultCandidateReviewMode: 'manual',
+      });
+      service.updateSettings({
         autoCaptureEnabled: true,
         defaultCandidateReviewMode: 'manual',
+        updatedAt: now,
       });
 
       const candidate = service.proposeCandidate({
@@ -83,6 +88,11 @@ describe('MemoryService', () => {
   it('updates lifecycle and recall preview with access logs', () => {
     const { service, database } = createService();
     try {
+      service.updateSettings({
+        autoCaptureEnabled: true,
+        defaultCandidateReviewMode: 'manual',
+        updatedAt: now,
+      });
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
         projectId: 'project:1',
@@ -133,6 +143,11 @@ describe('MemoryService', () => {
   it('applies candidate edits before accepting memory records', () => {
     const { service, database } = createService();
     try {
+      service.updateSettings({
+        autoCaptureEnabled: true,
+        defaultCandidateReviewMode: 'manual',
+        updatedAt: now,
+      });
       const candidate = service.proposeCandidate({
         workspaceId: 'workspace:1',
         projectId: 'project:1',

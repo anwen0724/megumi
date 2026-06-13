@@ -42,7 +42,7 @@ describe('SettingsPage', () => {
             ok: true,
             data: {
               settings: {
-                autoCaptureEnabled: true,
+                autoCaptureEnabled: false,
                 defaultCandidateReviewMode: 'manual',
                 updatedAt: '2026-06-13T00:00:00.000Z',
               },
@@ -53,7 +53,7 @@ describe('SettingsPage', () => {
             ok: true,
             data: {
               settings: {
-                autoCaptureEnabled: false,
+                autoCaptureEnabled: true,
                 defaultCandidateReviewMode: 'manual',
                 updatedAt: '2026-06-13T00:01:00.000Z',
               },
@@ -157,13 +157,13 @@ describe('SettingsPage', () => {
     });
 
     const toggle = await screen.findByRole('switch', { name: 'Long-term memory' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
 
     await userEvent.click(toggle);
 
     expect(window.megumi.memory.settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
-        autoCaptureEnabled: false,
+        autoCaptureEnabled: true,
         defaultCandidateReviewMode: 'manual',
         updatedAt: expect.any(String),
       },

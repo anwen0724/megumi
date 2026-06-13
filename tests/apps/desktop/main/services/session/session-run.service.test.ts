@@ -3353,6 +3353,69 @@ describe('SessionRunService', () => {
     ]);
   });
 
+  it('defaults missing memory settings to disabled for recall and completed-run capture', async () => {
+    const recallForNewUserInput = vi.fn(async () => ({
+      memoryRecallSources: [],
+      diagnostics: [],
+    }));
+    const getMemorySettings = vi.fn(() => undefined);
+    const memoryCaptureService = {
+      calls: [] as unknown[],
+      async evaluateRunCompletedCapture(input: unknown) {
+        this.calls.push(input);
+        return { status: 'skipped' as const, reason: 'memory_disabled' };
+      },
+    };
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      megumiHomePath: 'C:/megumi-home',
+      memoryRecallService: { recallForNewUserInput },
+      memoryCaptureService,
+      memorySettingsProvider: {
+        getMemorySettings,
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-memory-missing-settings',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Please remember this preference.',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(recallForNewUserInput).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: false,
+    }));
+    expect(getMemorySettings).toHaveBeenCalledWith();
+    expect(memoryCaptureService.calls).toEqual([
+      expect.objectContaining({
+        memoryEnabled: false,
+      }),
+    ]);
+  });
+
   it('schedules project markdown sync when creating a project session', () => {
     const memoryMarkdownSyncService = {
       calls: [] as unknown[],
@@ -3364,6 +3427,13 @@ describe('SessionRunService', () => {
     const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
       megumiHomePath: 'C:/megumi-home',
       memoryMarkdownSyncService,
+      memorySettingsProvider: {
+        getMemorySettings: () => ({
+          autoCaptureEnabled: true,
+          defaultCandidateReviewMode: 'manual',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        }),
+      },
     });
 
     service.createSession({

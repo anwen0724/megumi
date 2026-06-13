@@ -102,7 +102,7 @@ const providerRuntimeService = new ProviderRuntimeService({
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
-if (memoryRepository.getSettings()?.autoCaptureEnabled ?? true) {
+if (memoryRepository.getSettings()?.autoCaptureEnabled ?? false) {
   void memoryRuntime.markdownSyncService.syncUserMirrorOnAppStart({
     homePath: megumiHomePaths.homePath,
   }).catch((error) => {
