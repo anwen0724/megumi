@@ -256,11 +256,14 @@ function createServiceWithModelStepStream(
   modelStepInputBuildService?: SessionRunServiceOptions['modelStepInputBuildService'];
   memoryRecallService?: SessionRunServiceOptions['memoryRecallService'];
   memoryCaptureService?: SessionRunServiceOptions['memoryCaptureService'];
+  memorySettingsProvider?: SessionRunServiceOptions['memorySettingsProvider'];
+  memoryMarkdownSyncService?: SessionRunServiceOptions['memoryMarkdownSyncService'];
   megumiHomePath?: string;
   globalInstructionDirectoryProvider?: SessionRunServiceOptions['globalInstructionDirectoryProvider'];
   sessionInstructionSourceProvider?: SessionRunServiceOptions['sessionInstructionSourceProvider'];
   runEffectiveCwdProvider?: SessionRunServiceOptions['runEffectiveCwdProvider'];
   activePathRepository?: SessionActivePathRepository;
+  workspaceChanges?: SessionRunServiceOptions['workspaceChanges'];
   runId?: () => string;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
@@ -283,6 +286,8 @@ function createServiceWithModelStepStream(
     ...(options?.modelStepInputBuildService ? { modelStepInputBuildService: options.modelStepInputBuildService } : {}),
     ...(options?.memoryRecallService ? { memoryRecallService: options.memoryRecallService } : {}),
     ...(options?.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
+    ...(options?.memorySettingsProvider ? { memorySettingsProvider: options.memorySettingsProvider } : {}),
+    ...(options?.memoryMarkdownSyncService ? { memoryMarkdownSyncService: options.memoryMarkdownSyncService } : {}),
     ...(options?.megumiHomePath ? { megumiHomePath: options.megumiHomePath } : {}),
     ...(options?.globalInstructionDirectoryProvider ? {
       globalInstructionDirectoryProvider: options.globalInstructionDirectoryProvider,
@@ -292,6 +297,7 @@ function createServiceWithModelStepStream(
     } : {}),
     ...(options?.runEffectiveCwdProvider ? { runEffectiveCwdProvider: options.runEffectiveCwdProvider } : {}),
     ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
+    ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         callIndex += 1;
@@ -3280,6 +3286,100 @@ describe('SessionRunService', () => {
     expect(requests[0]?.inputContext.parts.some((part) => part.kind === 'memory')).toBe(false);
   });
 
+  it('passes disabled memory settings to recall and completed-run capture', async () => {
+    const recallForNewUserInput = vi.fn(async () => ({
+      memoryRecallSources: [],
+      diagnostics: [],
+    }));
+    const memoryCaptureService = {
+      calls: [] as unknown[],
+      async evaluateRunCompletedCapture(input: unknown) {
+        this.calls.push(input);
+        return { status: 'skipped' as const, reason: 'memory_disabled' };
+      },
+    };
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      megumiHomePath: 'C:/megumi-home',
+      memoryRecallService: { recallForNewUserInput },
+      memoryCaptureService,
+      memorySettingsProvider: {
+        getMemorySettings: vi.fn(() => ({
+          workspaceId: 'workspace-1',
+          autoCaptureEnabled: false,
+          defaultCandidateReviewMode: 'manual' as const,
+          updatedAt: '2026-05-17T00:00:00.000Z',
+        })),
+      },
+    });
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-memory-disabled',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-4.1',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Please remember this preference.',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/project',
+          permissionMode: 'default',
+        },
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(recallForNewUserInput).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: false,
+    }));
+    expect(memoryCaptureService.calls).toEqual([
+      expect.objectContaining({
+        memoryEnabled: false,
+      }),
+    ]);
+  });
+
+  it('schedules project markdown sync when creating a project session', () => {
+    const memoryMarkdownSyncService = {
+      calls: [] as unknown[],
+      async syncProjectMirrorOnProjectOpened(input: unknown) {
+        this.calls.push(input);
+        return { status: 'synced' as const };
+      },
+    };
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      megumiHomePath: 'C:/megumi-home',
+      memoryMarkdownSyncService,
+    });
+
+    service.createSession({
+      title: 'Project session',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/project',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    expect(memoryMarkdownSyncService.calls).toEqual([
+      {
+        homePath: 'C:/megumi-home',
+        projectId: 'workspace-1',
+      },
+    ]);
+  });
+
   it('schedules memory capture after a completed run without writing memory to transcript', async () => {
     const memoryCaptureService = {
       calls: [] as unknown[],
@@ -3335,6 +3435,61 @@ describe('SessionRunService', () => {
     const transcriptRoles = service.listMessagesBySession('session-1').map((message) => message.role);
     expect(transcriptRoles).toHaveLength(2);
     expect(transcriptRoles).toEqual(expect.arrayContaining(['user', 'assistant']));
+  });
+
+  it('passes source-of-truth workspace change metadata to completed-run capture', async () => {
+    const memoryCaptureService = {
+      calls: [] as unknown[],
+      async evaluateRunCompletedCapture(input: unknown) {
+        this.calls.push(input);
+        return { status: 'skipped' as const, reason: 'no_long_term_signal' };
+      },
+    };
+    const workspaceChanges = {
+      listChangedFilesByRun: vi.fn(() => [
+        workspaceChangedFile({
+          projectPath: '.local-docs/specs/18-context-instruction-and-long-term-memory-foundation/02-long-term-memory-runtime-loop.md',
+        }),
+      ]),
+    };
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      memoryCaptureService,
+      megumiHomePath: 'C:/megumi-home',
+      workspaceChanges,
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      workspacePath: 'C:/workspace/project',
+      createdAt: '2026-06-13T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: '同意，按这个 spec 执行。',
+          createdAt: '2026-06-13T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-13T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // drain stream
+    }
+
+    expect(workspaceChanges.listChangedFilesByRun).toHaveBeenCalledWith('run-1');
+    expect(memoryCaptureService.calls).toEqual([
+      expect.objectContaining({
+        signals: expect.arrayContaining(['source_of_truth_doc_changed']),
+        toolActivitySummary: expect.stringContaining('02-long-term-memory-runtime-loop.md'),
+      }),
+    ]);
   });
 
   it('does not schedule memory capture for provider failed runs', async () => {

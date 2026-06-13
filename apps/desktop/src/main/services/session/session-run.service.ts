@@ -80,6 +80,7 @@ import {
 } from '@megumi/shared/runtime';
 import type { SessionRetryAttempt } from '@megumi/shared/session';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { MemoryCaptureSignal, MemorySettings } from '@megumi/shared/memory';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
@@ -233,9 +234,18 @@ export interface SessionRunMemoryCaptureService {
     userText: string;
     assistantText?: string;
     toolActivitySummary?: string;
+    signals?: MemoryCaptureSignal[];
     memoryEnabled?: boolean;
     hasProject?: boolean;
   }): Promise<{ status: string; reason?: string; savedMemoryIds?: string[] }>;
+}
+
+export interface SessionRunMemorySettingsProvider {
+  getMemorySettings(input: { workspaceId: string; sessionId?: string | null }): MemorySettings | undefined;
+}
+
+export interface SessionRunMemoryMarkdownSyncService {
+  syncProjectMirrorOnProjectOpened(input: { homePath: string; projectId: string }): Promise<unknown>;
 }
 
 export interface SessionRunGlobalInstructionDirectoryProvider {
@@ -309,6 +319,8 @@ export interface SessionRunServiceOptions {
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
   memoryRecallService?: SessionRunMemoryRecallService;
   memoryCaptureService?: SessionRunMemoryCaptureService;
+  memorySettingsProvider?: SessionRunMemorySettingsProvider;
+  memoryMarkdownSyncService?: SessionRunMemoryMarkdownSyncService;
   megumiHomePath?: string;
   globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
@@ -406,6 +418,8 @@ export class SessionRunService {
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
   private readonly memoryCaptureService?: SessionRunMemoryCaptureService;
+  private readonly memorySettingsProvider?: SessionRunMemorySettingsProvider;
+  private readonly memoryMarkdownSyncService?: SessionRunMemoryMarkdownSyncService;
   private readonly megumiHomePath?: string;
   private readonly globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
@@ -441,6 +455,8 @@ export class SessionRunService {
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.memoryRecallService = options.memoryRecallService;
     this.memoryCaptureService = options.memoryCaptureService;
+    this.memorySettingsProvider = options.memorySettingsProvider;
+    this.memoryMarkdownSyncService = options.memoryMarkdownSyncService;
     this.megumiHomePath = options.megumiHomePath;
     this.globalInstructionDirectoryProvider = options.globalInstructionDirectoryProvider;
     this.sessionInstructionSourceProvider = options.sessionInstructionSourceProvider;
@@ -513,6 +529,7 @@ export class SessionRunService {
     queryText: string;
     providerId?: string;
     modelId?: string;
+    enabled?: boolean;
     createdAt: string;
   }): Promise<SessionRunMemoryRecallSnapshot> {
     if (!this.memoryRecallService || !this.megumiHomePath) {
@@ -531,6 +548,7 @@ export class SessionRunService {
         queryText: input.queryText,
         ...(input.providerId ? { providerId: input.providerId } : {}),
         ...(input.modelId ? { modelId: input.modelId } : {}),
+        ...(typeof input.enabled === 'boolean' ? { enabled: input.enabled } : {}),
         createdAt: input.createdAt,
       });
 
@@ -543,8 +561,41 @@ export class SessionRunService {
     }
   }
 
+  private resolveMemoryEnabled(input: { workspaceId?: string | null; sessionId?: string | null }): boolean {
+    if (!input.workspaceId || !this.memorySettingsProvider) {
+      return true;
+    }
+    try {
+      return this.memorySettingsProvider.getMemorySettings({
+        workspaceId: String(input.workspaceId),
+        ...(input.sessionId ? { sessionId: String(input.sessionId) } : {}),
+      })?.autoCaptureEnabled ?? true;
+    } catch {
+      return true;
+    }
+  }
+
+  private scheduleProjectMemoryMirrorSync(session: Session): void {
+    if (!this.megumiHomePath || !this.memoryMarkdownSyncService || !session.workspaceId) {
+      return;
+    }
+    if (!this.resolveMemoryEnabled({
+      workspaceId: String(session.workspaceId),
+      sessionId: String(session.sessionId),
+    })) {
+      return;
+    }
+
+    void this.memoryMarkdownSyncService.syncProjectMirrorOnProjectOpened({
+      homePath: this.megumiHomePath,
+      projectId: String(session.workspaceId),
+    }).catch(() => {
+      // Memory Markdown sync is best-effort and must not block session creation.
+    });
+  }
+
   createSession(payload: SessionCreatePayload): Session {
-    return this.repository.saveSession({
+    const session = this.repository.saveSession({
       sessionId: this.ids.sessionId(),
       title: payload.title,
       ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),
@@ -553,6 +604,8 @@ export class SessionRunService {
       createdAt: payload.createdAt,
       updatedAt: payload.createdAt,
     });
+    this.scheduleProjectMemoryMirrorSync(session);
+    return session;
   }
 
   listSessions(): Session[] {
@@ -1391,6 +1444,10 @@ export class SessionRunService {
       input.session.workspacePath,
       modelInputSourceOverrides.requestedCwd,
     );
+    const memoryEnabled = this.resolveMemoryEnabled({
+      ...(input.session.workspaceId ? { workspaceId: String(input.session.workspaceId) } : {}),
+      sessionId: String(input.session.sessionId),
+    });
     const memoryRecall = await this.recallMemoryForNewUserInput({
       ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
@@ -1401,6 +1458,7 @@ export class SessionRunService {
       queryText: input.inputPreprocessing.effectiveUserText,
       providerId: input.payload.providerId,
       modelId: input.payload.modelId,
+      enabled: memoryEnabled,
       createdAt: input.payload.createdAt,
     });
     const compactionProbeModelInput = await this.modelStepInputBuildService.buildModelStepInput({
@@ -1579,6 +1637,7 @@ export class SessionRunService {
     userText: string;
     assistantText: string;
     hasProject: boolean;
+    memoryEnabled?: boolean;
   }): void {
     if (!this.memoryCaptureService || !this.megumiHomePath) {
       return;
@@ -1586,6 +1645,7 @@ export class SessionRunService {
 
     // Capture is a hidden post-completion hook. It must never write transcript
     // messages or alter the already completed user-visible run stream.
+    const activity = this.createMemoryCaptureActivitySummary(input.runId);
     void this.memoryCaptureService.evaluateRunCompletedCapture({
       homePath: this.megumiHomePath,
       runId: input.runId,
@@ -1596,11 +1656,56 @@ export class SessionRunService {
       runStatus: 'completed',
       userText: input.userText,
       assistantText: input.assistantText,
+      ...(activity.summary ? { toolActivitySummary: activity.summary } : {}),
+      ...(activity.signals.length > 0 ? { signals: activity.signals } : {}),
+      ...(typeof input.memoryEnabled === 'boolean' ? { memoryEnabled: input.memoryEnabled } : {}),
       hasProject: input.hasProject,
     }).catch(() => {
       // Memory capture is best-effort. Runtime diagnostics are handled inside
       // the memory service when available; session-run must not fail here.
     });
+  }
+
+  private createMemoryCaptureActivitySummary(runId: string): { signals: MemoryCaptureSignal[]; summary?: string } {
+    const summaryParts: string[] = [];
+    const signals = new Set<MemoryCaptureSignal>();
+    const sourceFiles = this.listSourceOfTruthChangedFiles(runId);
+    if (sourceFiles.length > 0) {
+      signals.add('source_of_truth_doc_changed');
+      summaryParts.push(`Source-of-truth files changed: ${sourceFiles.slice(0, 5).join(', ')}`);
+    }
+
+    const toolSummaries = this.repository.listRuntimeEventsByRun(runId)
+      .filter((event) => event.eventType === 'tool.result.created')
+      .map((event) => {
+        if (!isObjectRecord(event.payload) || typeof event.payload.summary !== 'string') {
+          return undefined;
+        }
+        return clipMemoryRuntimeSummary(event.payload.summary);
+      })
+      .filter((summary): summary is string => Boolean(summary));
+    if (toolSummaries.length > 0) {
+      summaryParts.push(`Tool results observed: ${toolSummaries.slice(0, 5).join(' | ')}`);
+    }
+
+    const summary = clipMemoryRuntimeSummary(summaryParts.join('\n'), 1200);
+    return {
+      signals: [...signals],
+      ...(summary ? { summary } : {}),
+    };
+  }
+
+  private listSourceOfTruthChangedFiles(runId: string): string[] {
+    if (!this.workspaceChanges) {
+      return [];
+    }
+    try {
+      return this.workspaceChanges.listChangedFilesByRun(runId)
+        .map((file) => file.projectPath)
+        .filter((projectPath) => isSourceOfTruthMemoryPath(projectPath));
+    } catch {
+      return [];
+    }
   }
 
   private async *failRunBeforeModelStep(input: {
@@ -2075,6 +2180,10 @@ export class SessionRunService {
             .trim(),
           assistantText: assistantContent,
           hasProject: Boolean(input.projectRoot),
+          memoryEnabled: this.resolveMemoryEnabled({
+            ...(input.projectId ? { workspaceId: input.projectId } : {}),
+            sessionId: String(input.request.sessionId),
+          }),
         });
       }
       yield eventWithRequest;
@@ -3207,6 +3316,26 @@ async function sleepRetryBackoff(input: { delayMs: number }): Promise<void> {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isSourceOfTruthMemoryPath(projectPath: string): boolean {
+  const normalized = projectPath.replace(/\\/g, '/').toLowerCase();
+  return normalized === 'agents.md'
+    || normalized === 'readme.md'
+    || normalized.startsWith('.local-docs/specs/')
+    || normalized.startsWith('.local-docs/architecture/')
+    || normalized.startsWith('.local-docs/decisions/');
+}
+
+function clipMemoryRuntimeSummary(value: string, maxLength = 240): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
 function toModelVisiblePermissionSnapshot(

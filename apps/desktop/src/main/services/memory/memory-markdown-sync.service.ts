@@ -162,6 +162,19 @@ export class MemoryMarkdownSyncService {
 
     try {
       const parsed = parseMemoryMarkdown({ scope: input.scope, markdown: read.content });
+      this.saveAudit({
+        operation: 'markdown_import_parsed',
+        targetKind: 'markdown_mirror',
+        targetId: target.mirrorId,
+        projectId: input.projectId,
+        reason: 'markdown_import',
+        metadata: {
+          scope: input.scope,
+          entryCount: parsed.entries.length,
+          diagnosticCount: parsed.diagnostics.length,
+          contentHash: hashText(read.content),
+        },
+      });
       for (const diagnostic of parsed.diagnostics) {
         await this.writeDiagnostic({
           input,
@@ -217,6 +230,19 @@ export class MemoryMarkdownSyncService {
           });
           continue;
         }
+        this.saveAudit({
+          operation: 'candidate_imported',
+          targetKind: 'candidate',
+          targetId: entry.memoryId ?? `markdown:${hashText(validation.candidate.normalizedText).slice(0, 16)}`,
+          projectId: input.projectId,
+          reason: 'markdown_import',
+          metadata: {
+            scope: validation.candidate.scope,
+            kind: validation.candidate.kind,
+            candidateHash: hashText(validation.candidate.normalizedText),
+            hasMemoryId: Boolean(entry.memoryId),
+          },
+        });
 
         if (entry.memoryId) {
           const current = this.options.repository.getMemory(entry.memoryId);

@@ -1,17 +1,9 @@
 // Classifies whether a completed run should start memory extraction. This is
 // deterministic and intentionally does not call an LLM or inspect persistence.
+import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 import { normalizeMemoryPatternText } from './text-normalization';
 
 export type MemoryCaptureRunStatus = 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'running';
-
-export type MemoryCaptureSignal =
-  | 'explicit_remember'
-  | 'explicit_forget_or_correction'
-  | 'future_preference'
-  | 'project_rule'
-  | 'confirmed_decision'
-  | 'stable_project_fact'
-  | 'source_of_truth_doc_changed';
 
 export interface MemoryCaptureTriggerInput {
   runStatus: MemoryCaptureRunStatus;

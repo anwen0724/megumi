@@ -64,6 +64,15 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /@megumi\/memory|MemoryRepository|@megumi\/db\/repos\/memory|memory-runtime-capture\.service|memory-recall-runtime\.service|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
   });
 
+  it('wires memory markdown lifecycle sync through Desktop Main composition', () => {
+    const index = read(join(root, 'apps', 'desktop', 'src', 'main', 'index.ts'));
+    const sessionRun = read(join(root, 'apps', 'desktop', 'src', 'main', 'services', 'session', 'session-run.service.ts'));
+
+    expect(index).toContain('syncUserMirrorOnAppStart');
+    expect(index).toContain('memoryMarkdownSyncService: memoryRuntime.markdownSyncService');
+    expect(sessionRun).toContain('syncProjectMirrorOnProjectOpened');
+  });
+
   it('keeps renderer free from legacy memory panel and recall preview UI', () => {
     const files = productionFilesUnder('apps', 'desktop', 'src', 'renderer');
     expect(offenders(files, /MemoryPanelTab|entities\/memory|entities\\memory|useMemoryStore|MemoryNoteCard|recallPreview|candidateList/)).toEqual([]);

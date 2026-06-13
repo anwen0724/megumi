@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MEMORY_AUDIT_OPERATIONS,
+  MEMORY_CAPTURE_SIGNALS,
   MEMORY_KINDS,
   MEMORY_MARKDOWN_MIRROR_STATUSES,
   MEMORY_RECORD_SOURCES,
   MEMORY_RECORD_STATUSES,
   MEMORY_SCOPES,
   MemoryAuditLogSchema,
+  MemoryCaptureSignalSchema,
   MemoryMarkdownMirrorSchema,
   MemoryRecallRequestSchema,
   MemoryRecallResultSchema,
@@ -30,6 +32,20 @@ describe('memory shared contracts', () => {
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ kind: 'fact' })).success).toBe(true);
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ kind: 'project_fact' })).success).toBe(false);
     expect(MemoryRecordSchema.safeParse(validMemoryRecord({ kind: 'workflow' })).success).toBe(false);
+  });
+
+  it('exposes deterministic capture signals across runtime boundaries', () => {
+    expect(MEMORY_CAPTURE_SIGNALS).toEqual([
+      'explicit_remember',
+      'explicit_forget_or_correction',
+      'future_preference',
+      'project_rule',
+      'confirmed_decision',
+      'stable_project_fact',
+      'source_of_truth_doc_changed',
+    ]);
+    expect(MemoryCaptureSignalSchema.safeParse('source_of_truth_doc_changed').success).toBe(true);
+    expect(MemoryCaptureSignalSchema.safeParse('session_summary_changed').success).toBe(false);
   });
 
   it('exposes only 18.02 record lifecycle statuses', () => {

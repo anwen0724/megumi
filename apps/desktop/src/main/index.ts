@@ -102,6 +102,13 @@ const providerRuntimeService = new ProviderRuntimeService({
 });
 const modelStepProviderService = createModelStepProviderService(providerRuntimeService);
 const memoryRuntime = createMemoryRuntime(memoryRepository, modelStepProviderService);
+void memoryRuntime.markdownSyncService.syncUserMirrorOnAppStart({
+  homePath: megumiHomePaths.homePath,
+}).catch((error) => {
+  runtimeLogger.warn('memory_user_markdown_startup_sync_failed', {
+    message: error instanceof Error ? error.message : String(error),
+  });
+});
 const agentInstructionSourceService = new AgentInstructionSourceService();
 const timelineMessageRepository = new TimelineMessageRepository(database);
 const sessionRunRepository = new SessionRunRepository(database);
@@ -176,6 +183,12 @@ const sessionRunService = new SessionRunService({
   timelineMessageRepository,
   memoryRecallService: memoryRuntime.recallService,
   memoryCaptureService: memoryRuntime.captureService,
+  memorySettingsProvider: {
+    getMemorySettings({ workspaceId }) {
+      return memoryRepository.getSettings(workspaceId) ?? undefined;
+    },
+  },
+  memoryMarkdownSyncService: memoryRuntime.markdownSyncService,
   megumiHomePath: megumiHomePaths.homePath,
 });
 const toolService = new ToolService({
@@ -242,6 +255,7 @@ function createMemoryRuntime(
 ): {
   recallService: MemoryRecallRuntimeService;
   captureService: MemoryRuntimeCaptureService;
+  markdownSyncService: MemoryMarkdownSyncService;
 } {
   const fileSystem = createNodeMemoryRuntimeFileSystem();
   const diagnostics = new MemoryDiagnosticWriter({
@@ -269,6 +283,7 @@ function createMemoryRuntime(
   });
 
   return {
+    markdownSyncService: markdownSync,
     recallService: new MemoryRecallRuntimeService({
       repository,
       markdownSync,
