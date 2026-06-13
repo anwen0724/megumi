@@ -110,7 +110,6 @@ import {
   type BuildModelStepInputInput,
   type BuildModelStepInputResult,
 } from './model-step-input-build.service';
-import type { RecallForNewUserInput } from '../memory/memory-recall-runtime.service';
 import {
   SessionCompactionOrchestrator,
   type CompactIfNeededInput,
@@ -197,8 +196,26 @@ export interface SessionRunModelStepInputBuildService {
   buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
 }
 
+export interface SessionRunMemoryRecallInput {
+  enabled?: boolean;
+  homePath: string;
+  sessionId: string;
+  runId: string;
+  modelStepId?: string | null;
+  projectId?: string | null;
+  projectRoot?: string | null;
+  effectiveCwd?: string | null;
+  queryText: string;
+  providerId?: string | null;
+  modelId?: string | null;
+  maxResults?: number;
+  maxTokens?: number;
+  createdAt?: string;
+  toolSummaryMetadata?: JsonObject;
+}
+
 export interface SessionRunMemoryRecallService {
-  recallForNewUserInput(input: RecallForNewUserInput): Promise<{
+  recallForNewUserInput(input: SessionRunMemoryRecallInput): Promise<{
     memoryRecallSources: ModelInputMemoryRecallSource[];
     memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
   }>;

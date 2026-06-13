@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = process.cwd();
@@ -7,6 +7,9 @@ const root = process.cwd();
 function productionFilesUnder(...segments: string[]): string[] {
   const start = join(root, ...segments);
   const files: string[] = [];
+  if (!existsSync(start)) {
+    return files;
+  }
   function walk(dir: string) {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);
@@ -51,14 +54,26 @@ describe('memory foundation boundaries', () => {
 
   it('keeps provider adapters and prompt mappers away from memory persistence and recall scoring', () => {
     const files = productionFilesUnder('packages', 'ai');
-    expect(offenders(files, /MemoryRepository|@megumi\/db|better-sqlite3|memory-markdown-sync|memory-recall-runtime|recall-scoring|@megumi\/memory/)).toEqual([]);
+    expect(offenders(files, /MemoryRepository|@megumi\/db|better-sqlite3|memory-markdown-sync|memory-recall-runtime|memory-runtime-capture|recall-scoring|@megumi\/memory/)).toEqual([]);
   });
 
   it('keeps SessionRunService orchestration behind the recall port instead of recall scoring', () => {
     const files = [
       join(root, 'apps', 'desktop', 'src', 'main', 'services', 'session', 'session-run.service.ts'),
     ];
-    expect(offenders(files, /@megumi\/memory|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
+    expect(offenders(files, /@megumi\/memory|MemoryRepository|@megumi\/db\/repos\/memory|memory-runtime-capture\.service|memory-recall-runtime\.service|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
+  });
+
+  it('keeps renderer free from legacy memory panel and recall preview UI', () => {
+    const files = productionFilesUnder('apps', 'desktop', 'src', 'renderer');
+    expect(offenders(files, /MemoryPanelTab|entities\/memory|entities\\memory|useMemoryStore|MemoryNoteCard|recallPreview|candidateList/)).toEqual([]);
+  });
+
+  it('keeps internal memory extraction client behind model-step provider boundary', () => {
+    const files = [
+      join(root, 'apps', 'desktop', 'src', 'main', 'services', 'memory', 'memory-extraction-model-client.service.ts'),
+    ];
+    expect(offenders(files, /MemoryRepository|better-sqlite3|memory-markdown-sync|memory-runtime-capture|packages\/ai\/providers|@megumi\/ai\/providers|openai-compatible/)).toEqual([]);
   });
 
   it('keeps renderer out of hidden model-input memory injection plumbing', () => {
