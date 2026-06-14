@@ -98,8 +98,13 @@ function ItemIcon({ item }: { item: ProcessDisclosureItem }) {
 }
 
 function ThinkingItemView({ item }: { item: ThinkingItem }) {
-  const [expanded, setExpanded] = useState(false);
+  const defaultExpanded = item.status === 'streaming';
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const label = item.status === 'streaming' ? '正在思考' : '思考完成';
+
+  useEffect(() => {
+    setExpanded(defaultExpanded);
+  }, [item.itemId, defaultExpanded]);
 
   return (
     <div>

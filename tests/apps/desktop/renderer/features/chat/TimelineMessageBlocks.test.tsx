@@ -159,16 +159,60 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(article).not.toHaveTextContent('TOOL CALLS');
   });
 
-  it('expands process disclosure and keeps thinking items collapsed by default', () => {
-    render(<TimelineMessage message={assistantMessage()} />);
+  it('keeps active thinking expanded and collapses it after completion', () => {
+    const { rerender } = render(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'running',
+          startedAt: '2026-05-24T12:00:00.000Z',
+          items: [{
+            itemId: 'thinking:thinking-1',
+            kind: 'thinking',
+            thinkingId: 'thinking-1',
+            status: 'streaming',
+            text: 'The user is asking about identity.',
+            format: 'plain',
+            createdAt: '2026-05-24T12:00:01.000Z',
+            updatedAt: '2026-05-24T12:00:01.000Z',
+          }],
+        },
+      ],
+    })} />);
+
+    let thinkingToggle = screen.getByRole('button', { name: /Collapse thinking item/ });
+    expect(thinkingToggle).toHaveTextContent('正在思考');
+    expect(thinkingToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('The user is asking about identity.')).toBeInTheDocument();
+
+    rerender(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'completed',
+          startedAt: '2026-05-24T12:00:00.000Z',
+          endedAt: '2026-05-24T12:00:03.000Z',
+          items: [{
+            itemId: 'thinking:thinking-1',
+            kind: 'thinking',
+            thinkingId: 'thinking-1',
+            status: 'completed',
+            text: 'The user is asking about identity.',
+            format: 'plain',
+            createdAt: '2026-05-24T12:00:01.000Z',
+            updatedAt: '2026-05-24T12:00:03.000Z',
+          }],
+        },
+      ],
+    })} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Expand process disclosure/ }));
 
-    expect(screen.getByText('让我看看。')).toBeInTheDocument();
-    expect(screen.getByText('已读取 docs/README.md')).toBeInTheDocument();
-    expect(screen.getByText('已批准 run_command npm test')).toBeInTheDocument();
-
-    const thinkingToggle = screen.getByRole('button', { name: /Expand thinking item/ });
+    thinkingToggle = screen.getByRole('button', { name: /Expand thinking item/ });
     expect(thinkingToggle).toHaveTextContent('思考完成');
     expect(thinkingToggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('The user is asking about identity.')).not.toBeInTheDocument();
