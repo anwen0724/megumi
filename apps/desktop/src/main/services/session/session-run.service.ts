@@ -1,7 +1,13 @@
 // Orchestrates Desktop Main session runs by bridging IPC payloads, persistence,
 // permission snapshots, context construction, and model-step execution.
 import path from 'node:path';
-import { runTurn } from '@megumi/core/agent-runtime';
+import {
+  assertRunStatusTransition,
+  canCancelRunStatus,
+  canResumeApprovalFromRunStatus,
+  isTerminalRunStatus,
+  runTurn,
+} from '@megumi/core/agent-runtime';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/agent-runtime';
 import type { AiModelStepCompletionResult } from '@megumi/ai/types';
 import {
@@ -26,6 +32,7 @@ import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
+import type { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
@@ -325,6 +332,7 @@ export interface SessionRunServiceOptions {
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
+  toolRepository?: Pick<ToolRepository, 'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun'>;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
   memoryRecallService?: SessionRunMemoryRecallService;
@@ -426,6 +434,7 @@ export class SessionRunService {
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
+  private readonly toolRepository?: Pick<ToolRepository, 'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun'>;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
   private readonly memoryCaptureService?: SessionRunMemoryCaptureService;
@@ -465,6 +474,7 @@ export class SessionRunService {
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.providerCapabilitySummaryProvider = options.providerCapabilitySummaryProvider;
+    this.toolRepository = options.toolRepository;
     this.memoryRecallService = options.memoryRecallService;
     this.memoryCaptureService = options.memoryCaptureService;
     this.memorySettingsProvider = options.memorySettingsProvider;
@@ -1256,8 +1266,11 @@ export class SessionRunService {
     }
 
     const persistedRun = this.repository.getRun(activeRun.runId);
-    if (!persistedRun || ['completed', 'failed', 'cancelled'].includes(persistedRun.status)) {
+    if (!persistedRun || isTerminalRunStatus(persistedRun.status)) {
       this.activeSessionMessageRuns.delete(payload.targetRequestId);
+      return providerCancelled;
+    }
+    if (!canCancelRunStatus(persistedRun.status)) {
       return providerCancelled;
     }
 
@@ -1275,8 +1288,47 @@ export class SessionRunService {
       });
     }
 
-    this.repository.saveRun({
+    assertRunStatusTransition(persistedRun.status, 'cancelling');
+    const cancellingRun = this.repository.saveRun({
       ...persistedRun,
+      status: 'cancelling',
+    });
+    const cancelRequestId = this.ids.cancelRequestId();
+    this.appendRuntimeEvent(createRunStatusChangedEvent({
+      eventId: this.ids.eventId(),
+      sessionId: activeRun.sessionId,
+      runId: activeRun.runId,
+      sequence: lastSequence + 1,
+      createdAt: cancelledAt,
+      from: persistedRun.status,
+      to: 'cancelling',
+    }), activeRun.chatStreamAdapter);
+    this.appendRuntimeEvent(createRuntimeEvent({
+      eventId: this.ids.eventId(),
+      eventType: 'run.cancelling',
+      runId: activeRun.runId,
+      sessionId: activeRun.sessionId,
+      stepId: runningStep?.stepId ?? activeRun.stepId,
+      requestId: payload.targetRequestId,
+      sequence: lastSequence + 2,
+      createdAt: cancelledAt,
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: { cancelRequestId },
+    }), activeRun.chatStreamAdapter);
+    this.cancelPendingApprovalGroupsByRun(activeRun.runId);
+    this.toolRepository?.cancelPendingApprovalRequestsByRun({
+      runId: activeRun.runId,
+      resolvedAt: cancelledAt,
+    });
+    this.toolRepository?.cancelPendingToolExecutionsByRun({
+      runId: activeRun.runId,
+      completedAt: cancelledAt,
+    });
+    assertRunStatusTransition(cancellingRun.status, 'cancelled');
+    this.repository.saveRun({
+      ...cancellingRun,
       status: 'cancelled',
       cancelledAt,
     });
@@ -1287,7 +1339,7 @@ export class SessionRunService {
       sessionId: activeRun.sessionId,
       stepId: runningStep?.stepId ?? activeRun.stepId,
       requestId: payload.targetRequestId,
-      sequence: lastSequence + 1,
+      sequence: lastSequence + 3,
       createdAt: cancelledAt,
       source: 'core',
       visibility: 'user',
@@ -1303,9 +1355,9 @@ export class SessionRunService {
       eventId: this.ids.eventId(),
       sessionId: activeRun.sessionId,
       runId: activeRun.runId,
-      sequence: lastSequence + 2,
+      sequence: lastSequence + 4,
       createdAt: cancelledAt,
-      from: persistedRun.status,
+      from: 'cancelling',
       to: 'cancelled',
     }), activeRun.chatStreamAdapter);
     this.activeSessionMessageRuns.delete(payload.targetRequestId);
@@ -1315,6 +1367,11 @@ export class SessionRunService {
   resumeApproval(input: ToolApprovalResumeInput): AsyncIterable<RuntimeEvent> | undefined {
     const continuation = this.pendingApprovals.get(input.approvalRequestId);
     if (!continuation) {
+      return undefined;
+    }
+    const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
+    if (!canResumeApprovalFromRunStatus(persistedRun.status)) {
+      this.cancelPendingApprovalGroupsByRun(continuation.request.runId);
       return undefined;
     }
 
@@ -1370,7 +1427,11 @@ export class SessionRunService {
     try {
       yield* events;
     } finally {
-      this.activeSessionMessageRuns.delete(requestId);
+      const activeRun = this.activeSessionMessageRuns.get(requestId);
+      const persistedRun = activeRun ? this.repository.getRun(activeRun.runId) : undefined;
+      if (persistedRun?.status !== 'waiting_for_approval') {
+        this.activeSessionMessageRuns.delete(requestId);
+      }
     }
   }
 
@@ -1836,8 +1897,10 @@ export class SessionRunService {
         return registeredPendingGroup;
       }
 
+      const currentRun = this.repository.getRun(input.request.runId) ?? input.run;
+      assertRunStatusTransition(currentRun.status, 'waiting_for_approval');
       const waitingRun = this.repository.saveRun({
-        ...input.run,
+        ...currentRun,
         status: 'waiting_for_approval',
       });
       const waitingStep = this.repository.saveStep({
@@ -2731,6 +2794,18 @@ export class SessionRunService {
     }
   }
 
+  private cancelPendingApprovalGroupsByRun(runId: string): void {
+    for (const [groupId, group] of this.pendingApprovalGroups.entries()) {
+      if (group.request.runId !== runId) {
+        continue;
+      }
+      for (const approvalRequestId of group.pendingByApprovalId.keys()) {
+        this.pendingApprovals.delete(approvalRequestId);
+      }
+      this.pendingApprovalGroups.delete(groupId);
+    }
+  }
+
   private publishWorkspaceChangeFooter(input: {
     runId: string;
     createdAt: string;
@@ -2846,6 +2921,7 @@ export class SessionRunService {
 
     this.pendingApprovalGroups.delete(continuation.groupId);
     const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
+    assertRunStatusTransition(persistedRun.status, 'running');
     const runningRun = this.repository.saveRun({
       ...persistedRun,
       status: 'running',

@@ -28,7 +28,7 @@ import type { ModelInputContextSourceKind } from '@megumi/shared/model';
 import type { RunContext } from '@megumi/shared/run';
 import type { RunAction } from '@megumi/shared/session';
 import type { SessionSourceEntry } from '@megumi/shared/session';
-import type { ApprovalRequest, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
+import type { ApprovalRequest, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type {
@@ -265,14 +265,16 @@ function createServiceWithModelStepStream(
   runEffectiveCwdProvider?: SessionRunServiceOptions['runEffectiveCwdProvider'];
   activePathRepository?: SessionActivePathRepository;
   workspaceChanges?: SessionRunServiceOptions['workspaceChanges'];
+  createToolRepository?: (database: Database.Database) => ToolRepository;
   runId?: () => string;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
+  const toolRepository = options?.createToolRepository?.(db);
   let callIndex = 0;
-  return new SessionRunService({
+  const serviceOptions: SessionRunServiceOptions & { toolRepository?: ToolRepository } = {
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
     ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
@@ -302,6 +304,7 @@ function createServiceWithModelStepStream(
     ...(options?.runEffectiveCwdProvider ? { runEffectiveCwdProvider: options.runEffectiveCwdProvider } : {}),
     ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
+    ...(toolRepository ? { toolRepository } : {}),
     modelStepProvider: {
       streamModelStep: async function* (request) {
         callIndex += 1;
@@ -341,7 +344,8 @@ function createServiceWithModelStepStream(
         };
       })(),
     },
-  });
+  };
+  return new SessionRunService(serviceOptions);
 }
 
 function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
@@ -1270,6 +1274,72 @@ function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
     createdAt: '2026-05-17T00:00:02.500Z',
     ...overrides,
   };
+}
+
+function createDurablePendingApprovalRows(toolRepository: ToolRepository, input: {
+  runId?: string;
+  stepId?: string;
+  toolCallId?: string;
+  toolExecutionId?: string;
+  approvalRequestId?: string;
+} = {}): void {
+  const runId = input.runId ?? 'run-1';
+  const stepId = input.stepId ?? 'step-1';
+  const toolCallId = input.toolCallId ?? 'tool-call-1';
+  const toolExecutionId = input.toolExecutionId ?? 'tool-execution-1';
+  const approvalRequestId = input.approvalRequestId ?? 'approval-request-1';
+  const toolCall: ToolCall = {
+    toolCallId,
+    runId,
+    modelStepId: 'model-step-1',
+    providerToolCallId: 'provider-tool-call-1',
+    toolName: 'read_file',
+    input: { path: 'package.json' },
+    inputPreview: {
+      summary: 'Read package.json',
+      redacted: false,
+    },
+    status: 'created',
+    createdAt: '2026-05-17T00:00:02.000Z',
+  };
+  const toolExecution: ToolExecution = {
+    toolExecutionId,
+    toolCallId,
+    runId,
+    stepId,
+    toolName: 'read_file',
+    input: toolCall.input,
+    inputPreview: toolCall.inputPreview,
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    sideEffect: 'none',
+    approvalRequestId,
+    status: 'pending_approval',
+    requestedAt: '2026-05-17T00:00:02.250Z',
+  };
+  const approvalRequest: ApprovalRequest = {
+    approvalRequestId,
+    toolCallId,
+    toolExecutionId,
+    runId,
+    stepId,
+    toolName: 'read_file',
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    title: 'Approve read_file',
+    summary: 'User approval is required.',
+    preview: {
+      action: 'read_file',
+      targets: [],
+    },
+    requestedScope: 'once',
+    status: 'pending',
+    createdAt: '2026-05-17T00:00:02.300Z',
+  };
+
+  toolRepository.saveToolCall(toolCall);
+  toolRepository.saveToolExecution(toolExecution);
+  toolRepository.saveApprovalRequest(approvalRequest);
 }
 
 afterEach(() => {
@@ -5915,6 +5985,257 @@ describe('SessionRunService', () => {
     expect(repository.getRun('run-1')).toMatchObject({
       status: 'completed',
     });
+    expect(service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-17T00:00:06.000Z',
+    })).toBeUndefined();
+    expect(resumeInputs).toHaveLength(1);
+  });
+
+  it('continues the model loop with a user_rejected tool result after approval denial', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const rejectedToolResult = createToolResult({
+      toolResultId: 'tool-result-denied',
+      toolExecutionId: 'tool-execution-1',
+      kind: 'user_rejected',
+      structuredContent: undefined,
+      textContent: undefined,
+      denialReason: 'User denied the request.',
+    });
+    const service = createServiceWithModelStepStream((request, callIndex) => {
+      requests.push(request);
+      if (callIndex === 1) {
+        return [
+          toolUseCreatedEvent(1),
+          modelStepCompletedEvent(2),
+        ];
+      }
+      return [assistantOutputCompletedEvent(1)];
+    }, {
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolCalls(input) {
+              const toolUse = input.toolCalls[0];
+              if (!toolUse) {
+                throw new Error('Expected one tool use.');
+              }
+              const toolExecution: ToolExecution = {
+                toolExecutionId: 'tool-execution-1',
+                toolCallId: toolUse.toolCallId,
+                runId: toolUse.runId,
+                stepId: 'step-1',
+                toolName: toolUse.toolName,
+                input: toolUse.input,
+                inputPreview: toolUse.inputPreview,
+                capabilities: ['project_read'],
+                riskLevel: 'low',
+                sideEffect: 'none',
+                status: 'pending_approval',
+                requestedAt: '2026-05-17T00:00:02.250Z',
+              };
+              const approvalRequest: ApprovalRequest = {
+                approvalRequestId: 'approval-request-1',
+                toolCallId: toolUse.toolCallId,
+                toolExecutionId: toolExecution.toolExecutionId,
+                runId: toolUse.runId,
+                stepId: toolExecution.stepId,
+                toolName: toolUse.toolName,
+                capabilities: toolExecution.capabilities,
+                riskLevel: toolExecution.riskLevel,
+                title: 'Approve read_file',
+                summary: 'User approval is required.',
+                preview: { action: 'read_file', targets: [] },
+                requestedScope: 'once',
+                status: 'pending',
+                createdAt: '2026-05-17T00:00:02.300Z',
+              };
+
+              return {
+                toolResults: [],
+                pendingApprovals: [{
+                  approvalRequest,
+                  toolCall: toolUse,
+                  toolExecution,
+                }],
+              };
+            },
+            async resumeToolApproval() {
+              return {
+                toolResult: rejectedToolResult,
+                runtimeEvents: approvalResumeRuntimeEvents(rejectedToolResult, 'denied'),
+              };
+            },
+          };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain until waiting for approval.
+    }
+
+    const resumeEvents = service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'denied',
+      decidedAt: '2026-05-17T00:00:05.000Z',
+    });
+    expect(resumeEvents).toBeDefined();
+    for await (const _event of resumeEvents ?? []) {
+      // Drain resumed run.
+    }
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'tool_continuation',
+        toolResultId: 'tool-result-denied',
+        text: expect.stringContaining('User denied the request.'),
+      }),
+    ]));
+    expect(JSON.stringify(requests[1]?.inputContext.parts)).toContain('user_rejected');
+  });
+
+  it('cancels a waiting approval run without resuming approval continuation', async () => {
+    let toolRepository: ToolRepository | undefined;
+    const resumeToolApproval = vi.fn(async () => ({
+      toolResult: createToolResult(),
+    }));
+    const service = createServiceWithModelStepStream((request, callIndex) => {
+      if (callIndex === 1) {
+        return [
+          toolUseCreatedEvent(1),
+          modelStepCompletedEvent(2),
+        ];
+      }
+      return [assistantOutputCompletedEvent(1)];
+    }, {
+      createToolRepository(database) {
+        toolRepository = new ToolRepository(database);
+        return toolRepository;
+      },
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolCalls(input) {
+              const toolUse = input.toolCalls[0];
+              if (!toolUse) {
+                throw new Error('Expected one tool use.');
+              }
+              const toolExecution: ToolExecution = {
+                toolExecutionId: 'tool-execution-1',
+                toolCallId: toolUse.toolCallId,
+                runId: toolUse.runId,
+                stepId: 'step-1',
+                toolName: toolUse.toolName,
+                input: toolUse.input,
+                inputPreview: toolUse.inputPreview,
+                capabilities: ['project_read'],
+                riskLevel: 'low',
+                sideEffect: 'none',
+                status: 'pending_approval',
+                requestedAt: '2026-05-17T00:00:02.250Z',
+              };
+              const approvalRequest: ApprovalRequest = {
+                approvalRequestId: 'approval-request-1',
+                toolCallId: toolUse.toolCallId,
+                toolExecutionId: toolExecution.toolExecutionId,
+                runId: toolUse.runId,
+                stepId: toolExecution.stepId,
+                toolName: toolUse.toolName,
+                capabilities: toolExecution.capabilities,
+                riskLevel: toolExecution.riskLevel,
+                title: 'Approve read_file',
+                summary: 'User approval is required.',
+                preview: { action: 'read_file', targets: [] },
+                requestedScope: 'once',
+                status: 'pending',
+                createdAt: '2026-05-17T00:00:02.300Z',
+              };
+
+              return {
+                toolResults: [],
+                pendingApprovals: [{
+                  approvalRequest,
+                  toolCall: toolUse,
+                  toolExecution,
+                }],
+              };
+            },
+            resumeToolApproval,
+          };
+        },
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain until waiting for approval.
+    }
+    if (!toolRepository) {
+      throw new Error('Expected test tool repository.');
+    }
+    createDurablePendingApprovalRows(toolRepository);
+    expect(toolRepository.listPendingApprovalRequestsByRun('run-1')).toHaveLength(1);
+    expect(toolRepository.listPendingToolExecutionsByRun('run-1')).toHaveLength(1);
+
+    expect(service.cancelSessionMessage({ targetRequestId: 'ipc-session-message-send-1' })).toBe(true);
+
+    expect(toolRepository.getApprovalRequest('approval-request-1')).toMatchObject({
+      status: 'cancelled',
+      resolvedAt: '2026-05-17T00:00:00.000Z',
+    });
+    expect(toolRepository.getToolExecution('tool-execution-1')).toMatchObject({
+      status: 'cancelled',
+      completedAt: '2026-05-17T00:00:00.000Z',
+    });
+    expect(service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-17T00:00:05.000Z',
+    })).toBeUndefined();
+    expect(resumeToolApproval).not.toHaveBeenCalled();
+    expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).not.toContain('tool.result.created');
   });
 
   it('waits for all pending approvals from one model step before resuming once with all tool results', async () => {
