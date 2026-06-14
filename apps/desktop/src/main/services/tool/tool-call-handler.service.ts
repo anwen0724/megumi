@@ -210,7 +210,7 @@ async function resumeToolApproval(
 
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
-    status: toolResult.kind === 'success' ? 'completed' : 'failed',
+    status: toolResult.kind === 'success' || toolResult.kind === 'redacted' ? 'completed' : 'failed',
     completedAt: toolResult.createdAt,
     resultPreview: toolResult.textContent,
     ...(toolResult.error ? { error: toolResult.error } : {}),
@@ -222,7 +222,7 @@ async function resumeToolApproval(
     toolResult: savedToolResult,
     runtimeEvents: [
       createToolExecutionStartedRuntimeEventFromToolExecution(runningToolExecution),
-      toolResult.kind === 'success'
+      toolResult.kind === 'success' || toolResult.kind === 'redacted'
         ? createToolExecutionCompletedRuntimeEventFromToolExecution(completedToolExecution)
         : createToolExecutionFailedRuntimeEventFromToolExecution(completedToolExecution, toolResult.error),
       createToolResultCreatedRuntimeEventFromToolResult(savedToolResult),
@@ -244,14 +244,24 @@ async function handleSingleToolCall(
 
   if (!definition) {
     return {
-      toolResult: saveImmediateToolError(options, toolCall, `Unknown tool: ${toolCall.toolName}`),
+      toolResult: saveImmediateToolError(
+        options,
+        toolCall,
+        `Unknown tool: ${toolCall.toolName}`,
+        'invalid_tool_call',
+      ),
     };
   }
 
   const validation = validateToolInput(definition, toolCall.input);
   if (!validation.ok) {
     return {
-      toolResult: saveImmediateToolError(options, toolCall, validation.errorMessage),
+      toolResult: saveImmediateToolError(
+        options,
+        toolCall,
+        validation.errorMessage,
+        'invalid_tool_input',
+      ),
     };
   }
 
@@ -336,13 +346,13 @@ async function handleSingleToolCall(
   );
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
-    status: result.kind === 'success' ? 'completed' : 'failed',
+    status: result.kind === 'success' || result.kind === 'redacted' ? 'completed' : 'failed',
     completedAt: result.createdAt,
     resultPreview: result.textContent,
     ...(result.error ? { error: result.error } : {}),
   });
   runtimeEvents.push(
-    result.kind === 'success'
+    result.kind === 'success' || result.kind === 'redacted'
       ? createToolExecutionCompletedRuntimeEvent(request, completedToolExecution)
       : createToolExecutionFailedRuntimeEvent(request, completedToolExecution, result.error),
     createToolResultCreatedRuntimeEvent(request, result),
@@ -745,12 +755,13 @@ function saveImmediateToolError(
   options: Pick<ResolvedToolCallHandlerServiceOptions, 'repository' | 'ids' | 'now'>,
   toolCall: ToolCall,
   message: string,
+  kind: 'invalid_tool_call' | 'invalid_tool_input' | 'tool_error' = 'tool_error',
 ): ToolResult {
   return options.repository.saveToolResult({
     toolResultId: options.ids.toolResultId(),
     toolCallId: toolCall.toolCallId,
     runId: toolCall.runId,
-    kind: 'tool_error',
+    kind,
     textContent: message,
     denialReason: message,
     redactionState: 'none',

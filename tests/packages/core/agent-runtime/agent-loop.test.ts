@@ -744,6 +744,168 @@ describe('run model tool loop', () => {
     expect(handleToolCallsCallCount).toBe(0);
   });
 
+  it('continues after an invalid tool call ToolResult instead of failing the run', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      aiPort: {
+        async *streamModelStep(input) {
+          requests.push(input.request);
+          if (requests.length === 1) {
+            yield toolCallCreatedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            });
+            yield modelStepCompletedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            });
+            return;
+          }
+          yield assistantCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+          });
+        },
+      },
+      toolCallHandler: {
+        async handleToolCalls(input) {
+          const toolCall = input.toolCalls[0]!;
+          return {
+            toolResults: [createToolResult({
+              toolResultId: 'tool-result-invalid-tool',
+              toolCallId: toolCall.toolCallId,
+              kind: 'invalid_tool_call',
+              textContent: 'Unknown tool: missing_tool',
+            })],
+          };
+        },
+      },
+      ids: {
+        nextEventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        nextStepId: () => `step-${requests.length + 1}`,
+        nextModelStepId: () => `model-step-${requests.length + 1}`,
+      },
+    }));
+
+    expect(requests).toHaveLength(2);
+    expect(events.map((event) => event.eventType)).toContain('tool.result.created');
+    expect(events.find((event) => event.eventType === 'tool.result.created')).toMatchObject({
+      payload: { kind: 'invalid_tool_call' },
+    });
+    expect(events.map((event) => event.eventType)).toContain('assistant.output.completed');
+    expect(events.map((event) => event.eventType)).not.toContain('run.failed');
+  });
+
+  it('fails with terminal reason when tool results are empty after tool calls', async () => {
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      aiPort: {
+        async *streamModelStep(input) {
+          yield toolCallCreatedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+          yield modelStepCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+        },
+      },
+      toolCallHandler: {
+        async handleToolCalls() {
+          return { toolResults: [] };
+        },
+      },
+      ids: {
+        nextEventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+    }));
+
+    expect(events.at(-1)).toMatchObject({
+      eventType: 'run.failed',
+      payload: {
+        error: {
+          details: {
+            reason: 'runtime_invariant_violation',
+          },
+        },
+      },
+    });
+  });
+
+  it('preserves tool result ordering for multiple tool calls in the conservative 19.01 path', async () => {
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      aiPort: {
+        async *streamModelStep(input) {
+          yield toolCallCreatedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+          yield {
+            ...toolCallCreatedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            }),
+            payload: {
+              toolCallId: 'call-read-2',
+              modelStepId: String(input.request.modelStepId),
+              providerToolCallId: 'provider-call-read-2',
+              toolName: 'read_file',
+              input: { path: 'README.md' },
+            },
+          };
+          yield modelStepCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+            modelStepId: String(input.request.modelStepId),
+          });
+        },
+      },
+      toolCallHandler: {
+        async handleToolCalls(input) {
+          return {
+            toolResults: input.toolCalls.map((toolCall, index) => createToolResult({
+              toolResultId: `tool-result-${index + 1}`,
+              toolCallId: toolCall.toolCallId,
+              textContent: `result-${index + 1}`,
+            })),
+          };
+        },
+      },
+      ids: {
+        nextEventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+      maxModelSteps: 1,
+    }));
+
+    expect(events
+      .filter((event) => event.eventType === 'tool.result.created')
+      .map((event) => (event.payload as { toolResultId: string }).toolResultId)).toEqual([
+      'tool-result-1',
+      'tool-result-2',
+    ]);
+  });
+
   it('emits run failed instead of throwing when model step limit is exhausted', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
@@ -801,7 +963,7 @@ describe('run model tool loop', () => {
           retryable: false,
           source: 'core',
           details: {
-            reason: 'runtime_loop_limit_exceeded',
+            reason: 'loop_limit_exceeded',
             maxModelSteps: 1,
           },
         },

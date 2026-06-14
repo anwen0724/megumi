@@ -187,6 +187,13 @@ export interface SessionRunToolDefinitionProvider {
   }): ToolDefinition[];
 }
 
+export interface SessionRunProviderCapabilitySummaryProvider {
+  getProviderCapabilitySummary(input: {
+    providerId: string;
+    modelId: string;
+  }): { supportsToolCall?: boolean };
+}
+
 export interface SessionRunAgentInstructionSourceService {
   loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
 }
@@ -317,6 +324,7 @@ export interface SessionRunServiceOptions {
   modelStepProvider?: SessionRunModelStepProvider;
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
+  providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
   memoryRecallService?: SessionRunMemoryRecallService;
@@ -417,6 +425,7 @@ export class SessionRunService {
   private readonly modelStepProvider?: SessionRunModelStepProvider;
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
+  private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
   private readonly memoryCaptureService?: SessionRunMemoryCaptureService;
@@ -455,6 +464,7 @@ export class SessionRunService {
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
+    this.providerCapabilitySummaryProvider = options.providerCapabilitySummaryProvider;
     this.memoryRecallService = options.memoryRecallService;
     this.memoryCaptureService = options.memoryCaptureService;
     this.memorySettingsProvider = options.memorySettingsProvider;
@@ -1419,11 +1429,15 @@ export class SessionRunService {
         session: input.session,
       });
       const budgetPolicy = context?.contextBudgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
+      const providerCapabilitySummary = this.providerCapabilitySummaryProvider?.getProviderCapabilitySummary({
+        providerId: input.payload.providerId,
+        modelId: input.payload.modelId,
+      }) ?? { supportsToolCall: true };
       const toolDefinitions = input.session.workspacePath && this.toolDefinitionProvider
         ? this.toolDefinitionProvider.listDefinitions({
             runId: String(input.run.runId),
             permissionMode: input.permissionMode,
-            providerCapabilitySummary: { supportsToolCall: true },
+            providerCapabilitySummary,
           })
         : undefined;
       const sessionContext = this.sessionContextInputService.buildSessionContextInput({

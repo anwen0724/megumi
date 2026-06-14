@@ -13,6 +13,7 @@ import {
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { AiModelStepPort } from '../ports/ai-port';
 import { runModelStep } from './model-step';
+import { createTerminalRuntimeError } from './state-policy';
 
 export interface PendingToolApproval {
   approvalRequest: ApprovalRequest;
@@ -84,6 +85,7 @@ export interface RunModelToolLoopInput {
   ids: ModelToolLoopIds;
   signal?: AbortSignal;
   maxModelSteps?: number;
+  maxToolRounds?: number;
   onPendingApproval?: (continuation: PendingToolApprovalContinuation) => void;
   buildContinuationInputContext?: (
     input: ToolContinuationInputContextBuilderInput
@@ -92,8 +94,10 @@ export interface RunModelToolLoopInput {
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {
   const maxModelSteps = input.maxModelSteps ?? 8;
+  const maxToolRounds = input.maxToolRounds ?? maxModelSteps;
   let request = input.request;
   let sequenceOffset = 0;
+  let toolRoundCount = 0;
   let accumulatedToolCalls: ToolCall[] = [];
   let accumulatedToolResults: ToolResult[] = [];
   let accumulatedProviderStates: ModelStepProviderState[] = [];
@@ -129,6 +133,33 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     sequenceOffset = stepMaxSequence;
 
     if (toolCalls.length === 0) {
+      return;
+    }
+
+    toolRoundCount += 1;
+    if (toolRoundCount > maxToolRounds) {
+      yield createRunFailedEvent({
+        eventId: input.ids.nextEventId(),
+        request: {
+          requestId: request.requestId,
+          sessionId: request.sessionId,
+          providerId: request.providerId,
+          modelId: request.modelId,
+          runtimeContext: request.runtimeContext,
+        },
+        runId: request.runId,
+        sequence: sequenceOffset + 1,
+        createdAt: new Date().toISOString(),
+        error: createTerminalRuntimeError({
+          reason: 'loop_limit_exceeded',
+          code: 'runtime_protocol_violation',
+          message: `Model tool loop exceeded maxToolRounds (${maxToolRounds}).`,
+          source: 'core',
+          retryable: false,
+          debugId: request.runtimeContext?.debugId ?? `debug:${request.requestId}`,
+          details: { maxToolRounds },
+        }),
+      });
       return;
     }
 
@@ -239,6 +270,27 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     }
 
     if (toolResults.length === 0) {
+      yield createRunFailedEvent({
+        eventId: input.ids.nextEventId(),
+        request: {
+          requestId: request.requestId,
+          sessionId: request.sessionId,
+          providerId: request.providerId,
+          modelId: request.modelId,
+          runtimeContext: request.runtimeContext,
+        },
+        runId: request.runId,
+        sequence: sequenceOffset + 1,
+        createdAt: new Date().toISOString(),
+        error: createTerminalRuntimeError({
+          reason: 'runtime_invariant_violation',
+          code: 'runtime_protocol_violation',
+          message: 'Tool calls were produced but no tool results or pending approvals were returned.',
+          source: 'core',
+          retryable: false,
+          debugId: request.runtimeContext?.debugId ?? `debug:${request.requestId}`,
+        }),
+      });
       return;
     }
 
@@ -271,18 +323,15 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     runId: request.runId,
     sequence: sequenceOffset + 1,
     createdAt: new Date().toISOString(),
-    error: {
+    error: createTerminalRuntimeError({
+      reason: 'loop_limit_exceeded',
       code: 'runtime_protocol_violation',
       message: `Model tool loop exceeded maxModelSteps (${maxModelSteps}).`,
-      severity: 'error',
-      retryable: false,
       source: 'core',
-      details: {
-        reason: 'runtime_loop_limit_exceeded',
-        maxModelSteps,
-      },
+      retryable: false,
       debugId: request.runtimeContext?.debugId ?? `debug:${request.requestId}`,
-    },
+      details: { maxModelSteps },
+    }),
   });
 }
 

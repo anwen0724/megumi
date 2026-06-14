@@ -249,6 +249,7 @@ function createServiceWithModelStepStream(
   permissionSnapshotService?: SessionRunServiceOptions['permissionSnapshotService'];
   toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
   toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
+  providerCapabilitySummaryProvider?: SessionRunServiceOptions['providerCapabilitySummaryProvider'];
   timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   agentInstructionSourceService?: SessionRunServiceOptions['agentInstructionSourceService'];
   sessionContextInputService?: SessionRunServiceOptions['sessionContextInputService'];
@@ -277,6 +278,9 @@ function createServiceWithModelStepStream(
     ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
+    ...(options?.providerCapabilitySummaryProvider ? {
+      providerCapabilitySummaryProvider: options.providerCapabilitySummaryProvider,
+    } : {}),
     ...(options?.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
     ...(options?.agentInstructionSourceService ? { agentInstructionSourceService: options.agentInstructionSourceService } : {}),
     ...(options?.sessionContextInputService ? { sessionContextInputService: options.sessionContextInputService } : {}),
@@ -4457,6 +4461,49 @@ describe('SessionRunService', () => {
         text: expect.stringContaining('Current working directory: .'),
       }),
     ]));
+  });
+
+  it('does not expose tool definitions when provider capability says tool calls are unsupported', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const listDefinitions = vi.fn((): ToolDefinition[] => []);
+    const service = createServiceWithModelStepStream((request) => {
+      requests.push(request);
+      return [assistantOutputCompletedEvent(1)];
+    }, {
+      toolDefinitionProvider: { listDefinitions },
+      providerCapabilitySummaryProvider: {
+        getProviderCapabilitySummary: () => ({ supportsToolCall: false }),
+      },
+    });
+    service.createSession({
+      title: 'Provider without tool calling',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-provider-no-tools',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'basic-chat',
+        modelId: 'chat-only',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-06-14T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-14T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain.
+    }
+
+    expect(listDefinitions).toHaveBeenCalledWith(expect.objectContaining({
+      providerCapabilitySummary: { supportsToolCall: false },
+    }));
+    expect(requests[0]?.toolDefinitions ?? []).toEqual([]);
   });
 
   it('builds session message model input from persisted SessionContextInput', async () => {

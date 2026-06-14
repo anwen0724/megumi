@@ -13,6 +13,131 @@ import type {
 } from '@megumi/shared/tool';
 
 describe('ToolCallHandlerService', () => {
+  it('saves unknown tools as invalid_tool_call ToolResult without executing a tool', async () => {
+    const repository = fakeRepository();
+    const executor = { executeToolExecution: vi.fn(), finalizeWorkspaceChangeSet: vi.fn() };
+    const handler = createToolCallHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const outcome = await handler.handleToolCalls({
+      request: modelRequest(),
+      toolCalls: [toolCall('missing_tool', { path: 'README.md' })],
+    });
+
+    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: 'tool-call-1',
+      providerToolCallId: 'provider-tool-call-1',
+      toolName: 'missing_tool',
+    }));
+    expect(executor.executeToolExecution).not.toHaveBeenCalled();
+    expect(repository.saveToolExecution).not.toHaveBeenCalled();
+    expect(outcome.pendingApprovals).toEqual([]);
+    expect(outcome.toolResults).toEqual([expect.objectContaining({
+      kind: 'invalid_tool_call',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+      textContent: 'Unknown tool: missing_tool',
+    })]);
+    expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'invalid_tool_call',
+      toolCallId: 'tool-call-1',
+    }));
+  });
+
+  it('saves schema validation failures as invalid_tool_input ToolResult without executing a tool', async () => {
+    const repository = fakeRepository();
+    const executor = { executeToolExecution: vi.fn(), finalizeWorkspaceChangeSet: vi.fn() };
+    const handler = createToolCallHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const outcome = await handler.handleToolCalls({
+      request: modelRequest(),
+      toolCalls: [toolCall('read_file', { path: 123 })],
+    });
+
+    expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
+      toolCallId: 'tool-call-1',
+      providerToolCallId: 'provider-tool-call-1',
+      toolName: 'read_file',
+    }));
+    expect(executor.executeToolExecution).not.toHaveBeenCalled();
+    expect(repository.saveToolExecution).not.toHaveBeenCalled();
+    expect(outcome.pendingApprovals).toEqual([]);
+    expect(outcome.toolResults).toEqual([expect.objectContaining({
+      kind: 'invalid_tool_input',
+      toolCallId: 'tool-call-1',
+      runId: 'run-1',
+    })]);
+    expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'invalid_tool_input',
+      toolCallId: 'tool-call-1',
+    }));
+  });
+
+  it('returns redacted tool results to the loop as model-consumable ToolResult facts', async () => {
+    const repository = fakeRepository();
+    const executor = {
+      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
+        toolResultId: 'tool-result-redacted',
+        toolCallId: toolExecution.toolCallId,
+        toolExecutionId: toolExecution.toolExecutionId,
+        runId: toolExecution.runId,
+        kind: 'redacted',
+        textContent: 'secret=[redacted]',
+        redactionState: 'redacted',
+        structuredContent: { content: 'secret=[redacted]', truncated: true },
+        createdAt: '2026-05-20T00:00:02.000Z',
+      })),
+      finalizeWorkspaceChangeSet: vi.fn(),
+    };
+    const handler = createToolCallHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const outcome = await handler.handleToolCalls({
+      request: modelRequest(),
+      toolCalls: [toolCall('read_file', { path: 'README.md' })],
+    });
+
+    expect(outcome.toolResults).toEqual([expect.objectContaining({
+      kind: 'redacted',
+      redactionState: 'redacted',
+      textContent: 'secret=[redacted]',
+    })]);
+    expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.execution.requested',
+      'tool.execution.policy_decided',
+      'permission.decision.created',
+      'tool.execution.started',
+      'tool.execution.completed',
+      'tool.result.created',
+    ]);
+    expect(executor.executeToolExecution).toHaveBeenCalledTimes(1);
+  });
+
   it('persists policy decisions, executes allowed tools, and returns saved ToolResult records', async () => {
     const repository = fakeRepository();
     const executor = {
