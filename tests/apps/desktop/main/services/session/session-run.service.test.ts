@@ -1299,7 +1299,8 @@ function createDurablePendingApprovalRows(toolRepository: ToolRepository, input:
     input: { path: 'package.json' },
     inputPreview: {
       summary: 'Read package.json',
-      redacted: false,
+      targets: [],
+      redactionState: 'none',
     },
     status: 'created',
     createdAt: '2026-05-17T00:00:02.000Z',
@@ -4688,7 +4689,7 @@ describe('SessionRunService', () => {
       requestId: 'request-provider-no-tools',
       payload: {
         sessionId: 'session-1',
-        providerId: 'basic-chat',
+        providerId: 'deepseek',
         modelId: 'chat-only',
         messages: [{
           id: 'message-local-user',

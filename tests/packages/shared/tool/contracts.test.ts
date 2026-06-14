@@ -346,7 +346,7 @@ describe('tool-contracts', () => {
   });
 
   it('accepts recoverable invalid tool result kinds in runtime event schemas', () => {
-    expect(RuntimeEventSchema.parse({
+    const invalidToolCallEvent = RuntimeEventSchema.parse({
       eventId: 'event-invalid-tool-result',
       schemaVersion: 1,
       eventType: 'tool.result.created',
@@ -362,9 +362,13 @@ describe('tool-contracts', () => {
         kind: 'invalid_tool_call',
         summary: 'Tool missing_tool is not available.',
       },
-    }).payload.kind).toBe('invalid_tool_call');
+    });
+    if (invalidToolCallEvent.eventType !== 'tool.result.created') {
+      throw new Error('Expected tool.result.created event.');
+    }
+    expect(invalidToolCallEvent.payload.kind).toBe('invalid_tool_call');
 
-    expect(RuntimeEventSchema.parse({
+    const invalidToolInputEvent = RuntimeEventSchema.parse({
       eventId: 'event-invalid-input-result',
       schemaVersion: 1,
       eventType: 'tool.result.created',
@@ -380,7 +384,11 @@ describe('tool-contracts', () => {
         kind: 'invalid_tool_input',
         summary: 'Tool input did not match schema.',
       },
-    }).payload.kind).toBe('invalid_tool_input');
+    });
+    if (invalidToolInputEvent.eventType !== 'tool.result.created') {
+      throw new Error('Expected tool.result.created event.');
+    }
+    expect(invalidToolInputEvent.payload.kind).toBe('invalid_tool_input');
   });
 
   it('parses approval requests with both toolCallId and toolExecutionId', () => {
