@@ -1,4 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
+import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import {
   APPROVAL_SCOPES,
   COMMAND_CLASSIFIER_LABELS,
@@ -105,7 +106,15 @@ describe('tool-contracts', () => {
       'secret_or_env',
       'unknown',
     ]);
-    expect(TOOL_RESULT_KINDS).toEqual(['success', 'tool_error', 'policy_denied', 'user_rejected', 'redacted']);
+    expect(TOOL_RESULT_KINDS).toEqual([
+      'success',
+      'tool_error',
+      'policy_denied',
+      'user_rejected',
+      'redacted',
+      'invalid_tool_call',
+      'invalid_tool_input',
+    ]);
     expect(TOOL_POLICY_DECISIONS).toEqual(['allow', 'ask', 'deny']);
   });
 
@@ -312,6 +321,66 @@ describe('tool-contracts', () => {
       redactionState: 'none',
       createdAt: '2026-05-20T00:00:04.000Z',
     }).toolExecutionId).toBeUndefined();
+  });
+
+  it('accepts recoverable invalid tool result kinds', () => {
+    expect(ToolResultSchema.parse({
+      toolResultId: 'tool-result-invalid-tool',
+      toolCallId: 'tool-call-invalid-tool',
+      runId: 'run-1',
+      kind: 'invalid_tool_call',
+      textContent: 'Tool missing_tool is not available.',
+      redactionState: 'none',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    }).kind).toBe('invalid_tool_call');
+
+    expect(ToolResultSchema.parse({
+      toolResultId: 'tool-result-invalid-input',
+      toolCallId: 'tool-call-invalid-input',
+      runId: 'run-1',
+      kind: 'invalid_tool_input',
+      textContent: 'Tool input did not match schema.',
+      redactionState: 'none',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    }).kind).toBe('invalid_tool_input');
+  });
+
+  it('accepts recoverable invalid tool result kinds in runtime event schemas', () => {
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-invalid-tool-result',
+      schemaVersion: 1,
+      eventType: 'tool.result.created',
+      runId: 'run-1',
+      sequence: 1,
+      createdAt: '2026-06-14T00:00:00.000Z',
+      source: 'tool',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        toolResultId: 'tool-result-invalid-tool',
+        toolCallId: 'tool-call-invalid-tool',
+        kind: 'invalid_tool_call',
+        summary: 'Tool missing_tool is not available.',
+      },
+    }).payload.kind).toBe('invalid_tool_call');
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-invalid-input-result',
+      schemaVersion: 1,
+      eventType: 'tool.result.created',
+      runId: 'run-1',
+      sequence: 2,
+      createdAt: '2026-06-14T00:00:00.000Z',
+      source: 'tool',
+      visibility: 'user',
+      persist: 'required',
+      payload: {
+        toolResultId: 'tool-result-invalid-input',
+        toolCallId: 'tool-call-invalid-input',
+        kind: 'invalid_tool_input',
+        summary: 'Tool input did not match schema.',
+      },
+    }).payload.kind).toBe('invalid_tool_input');
   });
 
   it('parses approval requests with both toolCallId and toolExecutionId', () => {

@@ -9,3 +9,4 @@ export * from './permission-instruction';
 export * from './run-lifecycle';
 export * from './types';
 export * from './errors';
+export * from './state-policy';

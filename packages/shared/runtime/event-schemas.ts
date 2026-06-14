@@ -439,7 +439,15 @@ const ToolResultCreatedPayloadSchema = z
     toolResultId: z.string().min(1),
     toolCallId: z.string().min(1),
     toolExecutionId: z.string().min(1).optional(),
-    kind: z.enum(['success', 'tool_error', 'policy_denied', 'user_rejected', 'redacted']),
+    kind: z.enum([
+      'success',
+      'tool_error',
+      'policy_denied',
+      'user_rejected',
+      'redacted',
+      'invalid_tool_call',
+      'invalid_tool_input',
+    ]),
     summary: z.string().min(1),
   })
   .strict();

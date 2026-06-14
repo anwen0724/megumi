@@ -46,6 +46,21 @@ export const RUN_STATUSES = [
 ] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
+export const RUN_TERMINAL_REASONS = [
+  'assistant_completed',
+  'user_cancelled',
+  'provider_transient_retry_exhausted',
+  'provider_non_transient_failure',
+  'provider_protocol_violation',
+  'runtime_invariant_violation',
+  'loop_limit_exceeded',
+  'model_input_context_build_failed',
+  'runtime_restarted_with_active_run',
+  'unknown_runtime_failure',
+] as const;
+export type RunTerminalReason = (typeof RUN_TERMINAL_REASONS)[number];
+export const RunTerminalReasonSchema = z.enum(RUN_TERMINAL_REASONS);
+
 export const RUN_STEP_STATUSES = [
   'pending',
   'running',

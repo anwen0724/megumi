@@ -409,7 +409,14 @@ export interface ToolResultCreatedPayload {
   toolResultId: string;
   toolCallId: string;
   toolExecutionId?: string;
-  kind: 'success' | 'tool_error' | 'policy_denied' | 'user_rejected' | 'redacted';
+  kind:
+    | 'success'
+    | 'tool_error'
+    | 'policy_denied'
+    | 'user_rejected'
+    | 'redacted'
+    | 'invalid_tool_call'
+    | 'invalid_tool_input';
   summary: string;
 }
 

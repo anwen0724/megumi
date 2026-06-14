@@ -85,6 +85,8 @@ export const TOOL_RESULT_KINDS = [
   'policy_denied',
   'user_rejected',
   'redacted',
+  'invalid_tool_call',
+  'invalid_tool_input',
 ] as const;
 export type ToolResultKind = (typeof TOOL_RESULT_KINDS)[number];
 
