@@ -49,7 +49,8 @@ describe('workspace change managed write source guards', () => {
   it('keeps run_command executor path away from workspace restore record writes', () => {
     const files = [
       'apps/desktop/src/main/services/tool/tool-executors/run-command.executor.ts',
-      'apps/desktop/src/main/services/tool/project-tool-executor.service.ts',
+      'apps/desktop/src/main/services/tool/built-in-tool-source-executor.service.ts',
+      'apps/desktop/src/main/services/tool/tool-execution-router.service.ts',
       'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
     ];
     const forbidden = [

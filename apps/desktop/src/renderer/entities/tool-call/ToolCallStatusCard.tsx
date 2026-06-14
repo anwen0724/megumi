@@ -60,6 +60,7 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
   const config = statusConfig[toolCall.status];
   const StatusIcon = config.icon;
   const spinning = toolCall.status === 'running';
+  const displayToolName = toolCall.modelVisibleName ?? toolCall.toolName;
 
   return (
     <Panel className="overflow-hidden">
@@ -75,7 +76,7 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{toolCall.toolName}</h3>
+            <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{displayToolName}</h3>
             <Badge variant={config.badge}>{config.label}</Badge>
           </div>
 

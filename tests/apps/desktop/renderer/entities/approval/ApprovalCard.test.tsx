@@ -65,5 +65,40 @@ describe('ApprovalCard', () => {
       scope: 'project',
     });
   });
+
+  it('prefers modelVisibleName over legacy toolName for visible labels and actions', async () => {
+    const onResolve = vi.fn();
+
+    render(
+      <ApprovalCard
+        request={{
+          ...request,
+          toolName: 'echo',
+          modelVisibleName: 'demo_echo',
+          canonicalToolId: 'external_test:demo:echo',
+          sourceId: 'external_test',
+          namespace: 'demo',
+          sourceToolName: 'echo',
+          summary: 'Echo hello',
+          preview: {
+            action: 'hello',
+            targets: [],
+          },
+        }}
+        onResolve={onResolve}
+      />,
+    );
+
+    expect(screen.getByText('demo_echo')).toBeInTheDocument();
+    expect(screen.queryByText('external_test:demo:echo')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Approve demo_echo' }));
+
+    expect(onResolve).toHaveBeenCalledWith({
+      approvalRequestId: 'approval-1',
+      decision: 'approved',
+      scope: 'once',
+    });
+  });
 });
 

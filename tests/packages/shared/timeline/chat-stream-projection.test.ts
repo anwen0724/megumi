@@ -280,6 +280,42 @@ describe('chat stream to timeline projection reducer', () => {
     });
   });
 
+  it('projects model-visible external tool names without canonical identity', () => {
+    const messages = reduceEvents([
+      chatEvent({ eventType: 'turn.started', seq: 1, userMessageId: 'message-user-1' }),
+      chatEvent({
+        eventType: 'tool.started',
+        seq: 2,
+        toolCallId: 'tool-call-demo-echo',
+        toolExecutionId: 'tool-execution-demo-echo',
+        toolName: 'demo_echo',
+        displayName: 'Demo echo',
+        inputSummary: 'hello',
+      }),
+      chatEvent({
+        eventType: 'tool.completed',
+        seq: 3,
+        toolCallId: 'tool-call-demo-echo',
+        toolExecutionId: 'tool-execution-demo-echo',
+        toolResultId: 'tool-result-demo-echo',
+        toolName: 'demo_echo',
+        displayName: 'Demo echo',
+        inputSummary: 'hello',
+        resultSummary: 'hello',
+      }),
+    ]);
+
+    const [item] = processBlock(assistantMessage(messages)).items;
+    expect(item).toMatchObject({
+      kind: 'tool_activity',
+      toolName: 'demo_echo',
+      displayName: 'Demo echo',
+      status: 'succeeded',
+    });
+    expect(JSON.stringify(item)).not.toContain('external_test:demo:echo');
+    expect(JSON.stringify(item)).not.toContain('sourceId');
+  });
+
   it('reclassifies live answer text into prelude when a tool call appears later in the model step', () => {
     const messages = reduceEvents([
       chatEvent({ eventType: 'turn.started', seq: 1, userMessageId: 'message-user-1' }),

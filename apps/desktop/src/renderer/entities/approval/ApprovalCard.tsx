@@ -19,6 +19,7 @@ const approvalScopes: ApprovalScope[] = ['once', 'run', 'project', 'local'];
 
 export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
   const [scope, setScope] = useState<ApprovalScope>(request.requestedScope);
+  const displayToolName = request.modelVisibleName ?? request.toolName;
 
   function resolve(decision: 'approved' | 'denied') {
     onResolve({
@@ -36,7 +37,7 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{request.toolName}</h3>
+            <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{displayToolName}</h3>
             <Badge variant="approval">Approval needed</Badge>
           </div>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">{request.summary}</p>
@@ -60,10 +61,10 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
                 </option>
               ))}
             </select>
-            <Button size="sm" variant="primary" onClick={() => resolve('approved')} aria-label={`Approve ${request.toolName}`}>
+            <Button size="sm" variant="primary" onClick={() => resolve('approved')} aria-label={`Approve ${displayToolName}`}>
               Approve
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => resolve('denied')} aria-label={`Deny ${request.toolName}`}>
+            <Button size="sm" variant="secondary" onClick={() => resolve('denied')} aria-label={`Deny ${displayToolName}`}>
               Deny
             </Button>
           </div>

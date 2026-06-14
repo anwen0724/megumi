@@ -84,6 +84,27 @@ describe('ToolCallStatusCard', () => {
     expect(screen.getByText('Found 3 matches')).toBeInTheDocument();
   });
 
+  it('prefers modelVisibleName over legacy toolName for display', () => {
+    render(
+      <ToolCallStatusCard
+        toolCall={createToolExecution({
+          toolName: 'echo',
+          modelVisibleName: 'demo_echo',
+          canonicalToolId: 'external_test:demo:echo',
+          sourceId: 'external_test',
+          namespace: 'demo',
+          sourceToolName: 'echo',
+          status: 'completed',
+          resultPreview: 'hello',
+        })}
+      />,
+    );
+
+    expect(screen.getByText('demo_echo')).toBeInTheDocument();
+    expect(screen.queryByText('echo')).not.toBeInTheDocument();
+    expect(screen.queryByText('external_test:demo:echo')).not.toBeInTheDocument();
+  });
+
   it('renders a failed tool execution with the error message', () => {
     render(
       <ToolCallStatusCard

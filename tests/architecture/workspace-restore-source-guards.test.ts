@@ -71,7 +71,8 @@ const runtimeAndIpcSchemaFiles = [
 const runCommandExecutorPath = 'apps/desktop/src/main/services/tool/tool-executors/run-command.executor.ts';
 const runCommandPathFiles = [
   runCommandExecutorPath,
-  'apps/desktop/src/main/services/tool/project-tool-executor.service.ts',
+  'apps/desktop/src/main/services/tool/built-in-tool-source-executor.service.ts',
+  'apps/desktop/src/main/services/tool/tool-execution-router.service.ts',
   'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
 ];
 

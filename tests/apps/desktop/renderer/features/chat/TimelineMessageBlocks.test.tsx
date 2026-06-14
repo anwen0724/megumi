@@ -317,6 +317,36 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('renders external model-visible tool activity without canonical identity', () => {
+    render(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'running',
+          startedAt: '2026-06-14T12:00:00.000Z',
+          items: [{
+            itemId: 'tool:tool-call-demo-echo',
+            kind: 'tool_activity',
+            toolCallId: 'tool-call-demo-echo',
+            toolExecutionId: 'tool-execution-demo-echo',
+            toolResultId: 'tool-result-demo-echo',
+            toolName: 'demo_echo',
+            displayName: 'Demo echo',
+            inputSummary: 'hello',
+            resultSummary: 'hello',
+            status: 'succeeded',
+          }],
+        },
+      ],
+    })} />);
+
+    expect(screen.getByText('已读取 hello')).toBeInTheDocument();
+    expect(screen.getByText('hello')).toBeInTheDocument();
+    expect(screen.queryByText('external_test:demo:echo')).not.toBeInTheDocument();
+  });
+
   it('renders italic markdown in answer text without literal delimiters', () => {
     render(<TimelineMessage message={assistantMessage({
       blocks: [

@@ -164,6 +164,42 @@ describe('timeline message and block contracts', () => {
     expect(TimelineMessageSchema.parse(message).role).toBe('assistant');
   });
 
+  it('keeps tool activity user-visible and rejects source identity fields', () => {
+    const item = ToolActivityItemSchema.parse({
+      itemId: 'tool:tool-call-demo-echo',
+      kind: 'tool_activity',
+      toolCallId: 'tool-call-demo-echo',
+      toolExecutionId: 'tool-execution-demo-echo',
+      toolResultId: 'tool-result-demo-echo',
+      toolName: 'demo_echo',
+      displayName: 'Demo echo',
+      inputSummary: 'hello',
+      resultSummary: 'hello',
+      status: 'succeeded',
+    });
+
+    expect(item.toolName).toBe('demo_echo');
+    expect(JSON.stringify(item)).not.toContain('external_test:demo:echo');
+
+    expect(() => ToolActivityItemSchema.parse({
+      itemId: 'tool:tool-call-demo-echo',
+      kind: 'tool_activity',
+      toolCallId: 'tool-call-demo-echo',
+      toolName: 'demo_echo',
+      status: 'succeeded',
+      canonicalToolId: 'external_test:demo:echo',
+    })).toThrow();
+
+    expect(() => ToolActivityItemSchema.parse({
+      itemId: 'tool:tool-call-demo-echo',
+      kind: 'tool_activity',
+      toolCallId: 'tool-call-demo-echo',
+      toolName: 'demo_echo',
+      status: 'succeeded',
+      sourceId: 'external_test',
+    })).toThrow();
+  });
+
   it('parses assistant messages with workspace change footer facts outside process disclosure blocks', () => {
     const parsed = TimelineAssistantMessageSchema.parse({
       messageId: 'assistant:run-1',

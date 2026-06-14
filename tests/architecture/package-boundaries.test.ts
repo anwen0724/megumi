@@ -71,6 +71,21 @@ describe('package dependency boundaries', () => {
     ).toEqual([]);
   });
 
+  it('keeps packages/ai consuming only model-visible tool definitions', () => {
+    const source = walkSourceFiles(path.join(root, 'packages/ai'))
+      .map((file) => fs.readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(source).not.toMatch(/\bToolSource\b/);
+    expect(source).not.toMatch(/\bToolRegistration\b/);
+    expect(source).not.toMatch(/\bToolRegistrySnapshot\b/);
+    expect(source).not.toMatch(/\bSnapshotToolEntry\b/);
+    expect(source).not.toMatch(/\bToolExecutionRouter\b/);
+    expect(source).not.toMatch(/\bToolRepository\b/);
+    expect(source).not.toMatch(/\bcanonicalToolId\b/);
+    expect(source).not.toMatch(/\bmodelVisibleName\b/);
+  });
+
   it('keeps packages/core independent from concrete providers, db, Electron, and app code', () => {
     expect(
       findForbiddenReferences('packages/core', [
@@ -148,13 +163,69 @@ describe('package dependency boundaries', () => {
     expect(source).not.toContain('createRunCommandExecutor');
   });
 
+  it('keeps legacy project tool executor wrapper removed', () => {
+    const legacyWrapperFileName = `project-tool-${'executor.service'}.ts`;
+    const legacyFactoryName = `createProjectTool${'Executor'}`;
+    const legacyModulePath = `project-tool-${'executor.service'}`;
+
+    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/services/tool', legacyWrapperFileName))).toBe(false);
+
+    const source = [
+      ...walkSourceFiles(path.join(root, 'apps')),
+      ...walkSourceFiles(path.join(root, 'packages')),
+      ...walkSourceFiles(path.join(root, 'tests')),
+    ]
+      .filter((file) => relativePath(file) !== 'tests/architecture/package-boundaries.test.ts')
+      .map((file) => fs.readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(source).not.toContain(legacyFactoryName);
+    expect(source).not.toContain(legacyModulePath);
+  });
+
   it('does not add non-goal source executors to the desktop tool services', () => {
     const source = walkSourceFiles(path.join(root, 'apps/desktop/src/main/services/tool'))
       .map((file) => fs.readFileSync(file, 'utf8'))
       .join('\n');
 
+    expect(source).toContain('createBuiltInToolSourceExecutor');
+    expect(source).toContain('createExternalTestToolSourceExecutor');
     expect(source).not.toMatch(/McpToolSourceExecutor/);
     expect(source).not.toMatch(/PluginToolSourceExecutor/);
     expect(source).not.toMatch(/ProjectLocalToolSourceExecutor/);
+    expect(source).not.toMatch(/createMcpToolSourceExecutor/);
+    expect(source).not.toMatch(/createPluginToolSourceExecutor/);
+    expect(source).not.toMatch(/createProjectLocalToolSourceExecutor/);
+  });
+
+  it('keeps 19.02 tool handling sequential without batch orchestration', () => {
+    const handler = fs.readFileSync(
+      path.join(root, 'apps/desktop/src/main/services/tool/tool-call-handler.service.ts'),
+      'utf8',
+    );
+    const router = fs.readFileSync(
+      path.join(root, 'apps/desktop/src/main/services/tool/tool-execution-router.service.ts'),
+      'utf8',
+    );
+
+    expect(handler).not.toContain('Promise.all');
+    expect(handler).not.toMatch(/\bToolBatch\b/);
+    expect(handler).not.toMatch(/\bBatchToolCall\b/);
+    expect(router).not.toContain('Promise.all');
+    expect(router).not.toMatch(/\bToolBatch\b/);
+  });
+
+  it('keeps structured output out of 19.02 tool registry runtime', () => {
+    const source = [
+      ...walkSourceFiles(path.join(root, 'apps/desktop/src/main/services/tool')),
+      ...walkSourceFiles(path.join(root, 'packages/tools')),
+    ]
+      .map((file) => fs.readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(source).not.toMatch(/\bstructuredOutput\b/);
+    expect(source).not.toMatch(/\bstructured_result\b/);
+    expect(source).not.toMatch(/\bresponse_format\b/);
+    expect(source).not.toMatch(/\bjson_schema\b/);
   });
 });

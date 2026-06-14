@@ -97,7 +97,8 @@ describe('built-in tools and host adapters source guards', () => {
     const combined = [
       ...listSourceFiles('packages/tools/built-ins'),
       'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
-      'apps/desktop/src/main/services/tool/project-tool-executor.service.ts',
+      'apps/desktop/src/main/services/tool/built-in-tool-source-executor.service.ts',
+      'apps/desktop/src/main/services/tool/tool-execution-router.service.ts',
       ...listSourceFiles('apps/desktop/src/main/services/tool/tool-executors'),
     ].map(read).join('\n');
 

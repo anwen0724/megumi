@@ -150,6 +150,69 @@ describe('OpenAI-compatible message mapper', () => {
     });
   });
 
+  it('maps external_test model-visible tools without source identity leakage', () => {
+    const demoEchoTool: ToolDefinition = {
+      name: 'demo_echo',
+      description: 'Echo a demo message for external source integration tests.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          message: { type: 'string' },
+        },
+        required: ['message'],
+        additionalProperties: false,
+      },
+      capabilities: ['external_app'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      availability: { status: 'available' },
+      executionMode: 'sequential',
+      modelFacingDescription: 'Echo a demo message.',
+      permissionMetadata: { ruleToolName: 'demo_echo' },
+    };
+
+    const inputContext = buildModelInputContext({
+      contextId: 'model-input-context:demo-echo-tools',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      buildReason: 'initial_model_step',
+      builtAt,
+      parts: [
+        currentTurnPart({
+          text: 'Echo hello through demo_echo.',
+        }),
+      ],
+    });
+
+    const requestBody = messageMapper.mapModelStepToOpenAICompatibleRequest({
+      requestId: 'request-demo-echo',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      inputContext,
+      toolDefinitions: [demoEchoTool],
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+
+    expect(requestBody.tools).toEqual([
+      {
+        type: 'function',
+        function: {
+          name: 'demo_echo',
+          description: 'Echo a demo message for external source integration tests.',
+          parameters: demoEchoTool.inputSchema,
+        },
+      },
+    ]);
+    expect(JSON.stringify(requestBody.tools)).not.toContain('external_test:demo:echo');
+    expect(JSON.stringify(requestBody.tools)).not.toContain('sourceId');
+    expect(JSON.stringify(requestBody.tools)).not.toContain('canonicalToolId');
+    expect(JSON.stringify(requestBody.tools)).not.toContain('registrySnapshotId');
+  });
+
   it('preserves provider-native tool replay for continuation requests with input context', () => {
     const toolUse: ToolCall = {
       toolCallId: 'tool-use-1',
