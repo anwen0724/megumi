@@ -371,7 +371,7 @@ const DEFAULT_CONTEXT_BUDGET_POLICY: ContextBudgetPolicy = {
 };
 
 const DEFAULT_AUTOMATIC_RETRY: SessionRunAutomaticRetryOptions = {
-  maxAttempts: 3,
+  maxAttempts: 2,
   baseDelayMs: 2000,
   maxDelayMs: 8000,
 };
@@ -1892,6 +1892,9 @@ export class SessionRunService {
         request,
         run: input.run,
         stream: (nextRequest) => modelStepProvider.streamModelStep(nextRequest),
+        transientAttemptEventSink: input.chatStreamAdapter
+          ? (event) => input.chatStreamAdapter?.handleRuntimeEvent(event)
+          : undefined,
       });
     const modelEvents = toolRuntime
       ? runModelToolLoop({
@@ -2217,6 +2220,7 @@ export class SessionRunService {
     request: ModelStepRuntimeRequest;
     run: Run;
     stream: (request: ModelStepRuntimeRequest) => AsyncIterable<RuntimeEvent>;
+    transientAttemptEventSink?: (event: RuntimeEvent) => void;
   }): AsyncIterable<RuntimeEvent> {
     return this.doStreamModelStepWithAutomaticRetry(input);
   }
@@ -2225,12 +2229,16 @@ export class SessionRunService {
     request: ModelStepRuntimeRequest;
     run: Run;
     stream: (request: ModelStepRuntimeRequest) => AsyncIterable<RuntimeEvent>;
+    transientAttemptEventSink?: (event: RuntimeEvent) => void;
   }): AsyncIterable<RuntimeEvent> {
     let retryAttemptNumber = 0;
     let currentAttempt: SessionRetryAttempt | undefined;
 
     while (true) {
-      const bufferedEvents: RuntimeEvent[] = currentAttempt ? [] : [];
+      const stagedEvents: Array<{
+        event: RuntimeEvent;
+        forwardedTransient: boolean;
+      }> = [];
       let retryableFailureEvent: RuntimeEvent | undefined;
       let retryableFailureError: RuntimeError | undefined;
       let shouldRetry = false;
@@ -2255,11 +2263,11 @@ export class SessionRunService {
             }
           }
 
-          if (currentAttempt) {
-            bufferedEvents.push(event);
-          } else {
-            yield event;
+          const forwardedTransient = isTransientAssistantAttemptEvent(event);
+          if (forwardedTransient) {
+            input.transientAttemptEventSink?.(event);
           }
+          stagedEvents.push({ event, forwardedTransient });
         }
       } catch (error) {
         const runtimeError = createModelStepRuntimeErrorFromUnknown(error);
@@ -2287,12 +2295,14 @@ export class SessionRunService {
       }
 
       if (!retryableFailureError) {
+        for (const { event, forwardedTransient } of stagedEvents) {
+          if (!forwardedTransient) {
+            yield event;
+          }
+        }
         if (currentAttempt) {
           const completedAt = this.clock.now();
           this.saveRetryAttemptUpdate(currentAttempt, 'succeeded', { completedAt });
-          for (const event of bufferedEvents) {
-            yield event;
-          }
           yield this.createRetryAuditEvent({
             request: input.request,
             eventType: 'retry.completed',
@@ -2311,8 +2321,10 @@ export class SessionRunService {
           });
         }
         if (retryableFailureEvent) {
-          for (const event of bufferedEvents) {
-            yield event;
+          for (const { event, forwardedTransient } of stagedEvents) {
+            if (!forwardedTransient) {
+              yield event;
+            }
           }
           yield retryableFailureEvent;
           return;
@@ -2334,8 +2346,10 @@ export class SessionRunService {
           createdAt: this.clock.now(),
         });
         if (retryableFailureEvent) {
-          for (const event of bufferedEvents) {
-            yield event;
+          for (const { event, forwardedTransient } of stagedEvents) {
+            if (!forwardedTransient) {
+              yield event;
+            }
           }
           yield retryableFailureEvent;
           return;
@@ -3521,6 +3535,15 @@ async function* coalesceTextDeltaRuntimeEvents(
 
 function isTextDeltaRuntimeEvent(event: RuntimeEvent): boolean {
   return event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta';
+}
+
+function isTransientAssistantAttemptEvent(event: RuntimeEvent): boolean {
+  return event.persist === 'transient'
+    && event.visibility === 'user'
+    && (
+      event.eventType === 'assistant.output.delta'
+      || event.eventType === 'model.output.delta'
+    );
 }
 
 function canMergeTextDelta(left: RuntimeEvent, right: RuntimeEvent): boolean {

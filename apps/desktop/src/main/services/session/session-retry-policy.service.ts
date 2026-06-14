@@ -7,6 +7,9 @@ export interface AutomaticModelStepRetryDecision {
 }
 
 const NON_RETRYABLE_PATTERNS = [
+  /401|403|unauthorized|forbidden|auth|authentication|api key|invalid key/i,
+  /invalid model|model not found|unknown model/i,
+  /invalid request|payload invalid|bad request|400/i,
   /context window|context length|maximum context|context_budget|context overflow/i,
   /insufficient_quota|billing|balance|quota exceeded|out of budget|usage limit/i,
   /permission denied|policy denied|approval rejected|user rejected/i,

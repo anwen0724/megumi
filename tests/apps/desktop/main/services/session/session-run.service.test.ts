@@ -1489,6 +1489,136 @@ describe('SessionRunService', () => {
     expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([]);
   });
 
+  it.each([
+    {
+      code: 'provider_auth_failed',
+      message: '401 unauthorized',
+    },
+    {
+      code: 'provider_forbidden',
+      message: '403 forbidden',
+    },
+    {
+      code: 'provider_invalid_model',
+      message: 'invalid model',
+    },
+    {
+      code: 'provider_invalid_request',
+      message: 'request payload invalid',
+    },
+    {
+      code: 'runtime_protocol_violation',
+      message: 'protocol violation',
+    },
+  ] as const)('does not retry provider non-transient failure $code', async ({ code, message }) => {
+    const failure: RuntimeError = {
+      code,
+      message,
+      severity: 'error',
+      retryable: true,
+      source: 'provider',
+    };
+    const providerRequests: ModelStepRuntimeRequest[] = [];
+    const { service, activePathRepo } = createServiceWithAutomaticRetryStream((request) => {
+      providerRequests.push(request);
+      return [providerRunFailedEvent({
+        eventId: `event-${failure.code}`,
+        stepId: request.stepId,
+        error: failure,
+      })];
+    });
+    service.createSession({
+      title: `Retry classification ${failure.code}`,
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: `request-${failure.code}`,
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: failure.code,
+          createdAt: '2026-06-14T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-14T00:00:00.000Z',
+      },
+    });
+
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(providerRequests).toHaveLength(1);
+    expect(streamed.map((event) => event.eventType)).not.toContain('retry.started');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1')).toEqual([]);
+  });
+
+  it('does not persist failed-attempt assistant deltas when provider retry succeeds', async () => {
+    const { service } = createServiceWithAutomaticRetryStream((request, callIndex) => {
+      if (callIndex === 1) {
+        return [
+          {
+            eventId: 'event-partial-delta',
+            schemaVersion: 1,
+            eventType: 'assistant.output.delta',
+            sessionId: 'session-1',
+            runId: 'run-1',
+            stepId: request.stepId,
+            sequence: 1,
+            createdAt: '2026-06-14T00:00:01.000Z',
+            source: 'provider',
+            visibility: 'user',
+            persist: 'transient',
+            payload: { delta: 'partial failed attempt' },
+          },
+          providerRunFailedEvent({
+            eventId: 'event-provider-timeout',
+            stepId: request.stepId,
+            error: {
+              code: 'provider_network_error',
+              message: 'request timed out',
+              severity: 'error',
+              retryable: true,
+              source: 'provider',
+            },
+          }),
+        ];
+      }
+      return [assistantOutputCompletedEvent(1)];
+    });
+    service.createSession({
+      title: 'Partial delta retry',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-partial-delta',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Retry after partial delta',
+          createdAt: '2026-06-14T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-14T00:00:00.000Z',
+      },
+    });
+
+    for await (const _event of result.events) {
+      // Drain.
+    }
+
+    expect(JSON.stringify(service.listRuntimeEventsByRun('run-1'))).not.toContain('partial failed attempt');
+  });
+
   it('does not automatically retry a transient provider failure after managed file changes', async () => {
     const providerRequests: ModelStepRuntimeRequest[] = [];
     const workspaceChangedFiles: WorkspaceChangedFile[] = [
@@ -1647,6 +1777,7 @@ describe('SessionRunService', () => {
 
     expect(streamed.map((event) => event.eventType).filter((type) => type === 'retry.started')).toHaveLength(2);
     expect(streamed.map((event) => event.eventType)).toContain('run.failed');
+    expect(activePathRepo.listRetryAttemptsByRun('run-1').map((attempt) => attempt.attemptNumber)).toEqual([1, 2]);
     expect(activePathRepo.listRetryAttemptsByRun('run-1').at(-1)).toMatchObject({
       attemptNumber: 2,
       status: 'exhausted',
