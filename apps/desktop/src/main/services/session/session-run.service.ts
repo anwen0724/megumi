@@ -2362,10 +2362,7 @@ export class SessionRunService {
     let currentAttempt: SessionRetryAttempt | undefined;
 
     while (true) {
-      const stagedEvents: Array<{
-        event: RuntimeEvent;
-        forwardedTransient: boolean;
-      }> = [];
+      const stagedEvents: RuntimeEvent[] = [];
       let retryableFailureEvent: RuntimeEvent | undefined;
       let retryableFailureError: RuntimeError | undefined;
       let shouldRetry = false;
@@ -2390,11 +2387,7 @@ export class SessionRunService {
             }
           }
 
-          const forwardedTransient = isTransientAssistantAttemptEvent(event);
-          if (forwardedTransient) {
-            input.transientAttemptEventSink?.(event);
-          }
-          stagedEvents.push({ event, forwardedTransient });
+          stagedEvents.push(event);
         }
       } catch (error) {
         const runtimeError = createModelStepRuntimeErrorFromUnknown(error);
@@ -2422,10 +2415,8 @@ export class SessionRunService {
       }
 
       if (!retryableFailureError) {
-        for (const { event, forwardedTransient } of stagedEvents) {
-          if (!forwardedTransient) {
-            yield event;
-          }
+        for (const event of stagedEvents) {
+          yield event;
         }
         if (currentAttempt) {
           const completedAt = this.clock.now();
@@ -2448,10 +2439,8 @@ export class SessionRunService {
           });
         }
         if (retryableFailureEvent) {
-          for (const { event, forwardedTransient } of stagedEvents) {
-            if (!forwardedTransient) {
-              yield event;
-            }
+          for (const event of stagedEvents) {
+            yield event;
           }
           yield retryableFailureEvent;
           return;
@@ -2473,10 +2462,8 @@ export class SessionRunService {
           createdAt: this.clock.now(),
         });
         if (retryableFailureEvent) {
-          for (const { event, forwardedTransient } of stagedEvents) {
-            if (!forwardedTransient) {
-              yield event;
-            }
+          for (const event of stagedEvents) {
+            yield event;
           }
           yield retryableFailureEvent;
           return;
@@ -2489,6 +2476,11 @@ export class SessionRunService {
           completedAt: this.clock.now(),
           error: retryableFailureError,
         });
+      }
+      for (const event of stagedEvents) {
+        if (isTransientAssistantAttemptEvent(event)) {
+          input.transientAttemptEventSink?.(event);
+        }
       }
 
       retryAttemptNumber += 1;
