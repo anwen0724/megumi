@@ -6,9 +6,14 @@ import type {
   ToolCall,
   ToolExecution,
   ToolObservation,
+  ToolRegistrySnapshot,
   ToolResult,
+  ToolSource,
 } from '@megumi/shared/tool';
 
+interface ToolSourceRow { source_json: string }
+interface ToolRegistrySnapshotRow { snapshot_json: string }
+interface ToolRegistrySnapshotEntryRow { entry_json: string }
 interface ToolCallRow { tool_call_json: string }
 interface ToolExecutionRow { tool_execution_json: string }
 interface PermissionDecisionRow { decision_json: string }
@@ -19,15 +24,201 @@ interface ToolObservationRow { observation_json: string }
 export class ToolRepository {
   constructor(private readonly database: MegumiDatabase) {}
 
+  saveToolSource(source: ToolSource): ToolSource {
+    this.database.prepare(`
+      INSERT INTO tool_sources (
+        source_id, source_kind, namespace, display_name, configured, enabled,
+        availability_status, availability_reason, health_checked_at, config_json,
+        created_at, updated_at, source_json
+      ) VALUES (
+        @source_id, @source_kind, @namespace, @display_name, @configured, @enabled,
+        @availability_status, @availability_reason, @health_checked_at, @config_json,
+        @created_at, @updated_at, @source_json
+      )
+      ON CONFLICT(source_id) DO UPDATE SET
+        source_kind = excluded.source_kind,
+        namespace = excluded.namespace,
+        display_name = excluded.display_name,
+        configured = excluded.configured,
+        enabled = excluded.enabled,
+        availability_status = excluded.availability_status,
+        availability_reason = excluded.availability_reason,
+        health_checked_at = excluded.health_checked_at,
+        config_json = excluded.config_json,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at,
+        source_json = excluded.source_json
+    `).run({
+      source_id: source.sourceId,
+      source_kind: source.sourceKind,
+      namespace: source.namespace,
+      display_name: source.displayName,
+      configured: source.configured ? 1 : 0,
+      enabled: source.enabled ? 1 : 0,
+      availability_status: source.availabilityStatus,
+      availability_reason: source.availabilityReason ?? null,
+      health_checked_at: source.healthCheckedAt ?? null,
+      config_json: stringifyJson(source.config),
+      created_at: source.createdAt,
+      updated_at: source.updatedAt,
+      source_json: stringifyJson(source),
+    });
+    return source;
+  }
+
+  getToolSource(sourceId: string): ToolSource | undefined {
+    const row = this.database.prepare('SELECT source_json FROM tool_sources WHERE source_id = ?').get(sourceId) as ToolSourceRow | undefined;
+    return row ? JSON.parse(row.source_json) as ToolSource : undefined;
+  }
+
+  listToolSources(): ToolSource[] {
+    return (this.database.prepare('SELECT source_json FROM tool_sources ORDER BY source_id ASC').all() as ToolSourceRow[])
+      .map((row) => JSON.parse(row.source_json) as ToolSource);
+  }
+
+  seedDefaultToolSources(now: string): ToolSource[] {
+    const defaultSources: ToolSource[] = [
+      {
+        sourceId: 'built_in',
+        sourceKind: 'built_in',
+        namespace: 'megumi',
+        displayName: 'Built-in tools',
+        configured: true,
+        enabled: true,
+        availabilityStatus: 'available',
+        config: {},
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        sourceId: 'external_test',
+        sourceKind: 'external_test',
+        namespace: 'demo',
+        displayName: 'External test tools',
+        configured: true,
+        enabled: false,
+        availabilityStatus: 'available',
+        config: {},
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    for (const source of defaultSources) {
+      if (!this.getToolSource(source.sourceId)) {
+        this.saveToolSource(source);
+      }
+    }
+    return this.listToolSources();
+  }
+
+  saveToolRegistrySnapshot(snapshot: ToolRegistrySnapshot): ToolRegistrySnapshot {
+    const saveSnapshot = this.database.transaction((value: ToolRegistrySnapshot) => {
+      this.database.prepare(`
+        INSERT INTO tool_registry_snapshots (
+          snapshot_id, run_id, project_id, permission_mode, model_id, created_at,
+          registry_version, source_version_hash, source_entries_json, snapshot_json
+        ) VALUES (
+          @snapshot_id, @run_id, @project_id, @permission_mode, @model_id, @created_at,
+          @registry_version, @source_version_hash, @source_entries_json, @snapshot_json
+        )
+        ON CONFLICT(snapshot_id) DO UPDATE SET
+          run_id = excluded.run_id,
+          project_id = excluded.project_id,
+          permission_mode = excluded.permission_mode,
+          model_id = excluded.model_id,
+          created_at = excluded.created_at,
+          registry_version = excluded.registry_version,
+          source_version_hash = excluded.source_version_hash,
+          source_entries_json = excluded.source_entries_json,
+          snapshot_json = excluded.snapshot_json
+      `).run({
+        snapshot_id: value.snapshotId,
+        run_id: value.runId,
+        project_id: value.projectId,
+        permission_mode: value.permissionMode,
+        model_id: value.modelId,
+        created_at: value.createdAt,
+        registry_version: value.registryVersion,
+        source_version_hash: value.sourceVersionHash,
+        source_entries_json: stringifyJson(value.sourceEntries),
+        snapshot_json: stringifyJson(value),
+      });
+
+      this.database.prepare('DELETE FROM tool_registry_snapshot_entries WHERE snapshot_id = ?').run(value.snapshotId);
+      const insertEntry = this.database.prepare(`
+        INSERT INTO tool_registry_snapshot_entries (
+          snapshot_entry_id, snapshot_id, registration_id, canonical_tool_id,
+          model_visible_name, source_id, namespace, source_tool_name,
+          definition_json, effective_status, disabled_reason, unavailable_reason,
+          conflict_reason, exposed_to_model, execution_mode, created_at, entry_json
+        ) VALUES (
+          @snapshot_entry_id, @snapshot_id, @registration_id, @canonical_tool_id,
+          @model_visible_name, @source_id, @namespace, @source_tool_name,
+          @definition_json, @effective_status, @disabled_reason, @unavailable_reason,
+          @conflict_reason, @exposed_to_model, @execution_mode, @created_at, @entry_json
+        )
+      `);
+      for (const entry of value.entries) {
+        insertEntry.run({
+          snapshot_entry_id: entry.snapshotEntryId,
+          snapshot_id: entry.snapshotId,
+          registration_id: entry.registrationId,
+          canonical_tool_id: entry.canonicalToolId,
+          model_visible_name: entry.modelVisibleName,
+          source_id: entry.sourceId,
+          namespace: entry.namespace,
+          source_tool_name: entry.sourceToolName,
+          definition_json: stringifyJson(entry.definition),
+          effective_status: entry.effectiveStatus,
+          disabled_reason: entry.disabledReason ?? null,
+          unavailable_reason: entry.unavailableReason ?? null,
+          conflict_reason: entry.conflictReason ?? null,
+          exposed_to_model: entry.exposedToModel ? 1 : 0,
+          execution_mode: entry.executionMode,
+          created_at: entry.createdAt,
+          entry_json: stringifyJson(entry),
+        });
+      }
+    });
+
+    saveSnapshot(snapshot);
+    return snapshot;
+  }
+
+  getToolRegistrySnapshot(snapshotId: string): ToolRegistrySnapshot | undefined {
+    const row = this.database.prepare('SELECT snapshot_json FROM tool_registry_snapshots WHERE snapshot_id = ?').get(snapshotId) as ToolRegistrySnapshotRow | undefined;
+    return row ? JSON.parse(row.snapshot_json) as ToolRegistrySnapshot : undefined;
+  }
+
+  getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined {
+    const row = this.database.prepare('SELECT snapshot_json FROM tool_registry_snapshots WHERE run_id = ?').get(runId) as ToolRegistrySnapshotRow | undefined;
+    return row ? JSON.parse(row.snapshot_json) as ToolRegistrySnapshot : undefined;
+  }
+
+  listToolRegistrySnapshotEntries(snapshotId: string): ToolRegistrySnapshot['entries'] {
+    return (this.database.prepare(`
+      SELECT entry_json
+      FROM tool_registry_snapshot_entries
+      WHERE snapshot_id = ?
+      ORDER BY created_at ASC, snapshot_entry_id ASC
+    `).all(snapshotId) as ToolRegistrySnapshotEntryRow[])
+      .map((row) => JSON.parse(row.entry_json) as ToolRegistrySnapshot['entries'][number]);
+  }
+
   saveToolCall(toolCall: ToolCall): ToolCall {
     this.database.prepare(`
       INSERT INTO tool_calls (
         tool_call_id, run_id, model_step_id, provider_tool_call_id, tool_name,
-        input_json, input_preview_json, status, created_at, completed_at,
+        registry_snapshot_id, snapshot_entry_id, model_visible_name, canonical_tool_id,
+        source_id, namespace, source_tool_name, input_json, input_preview_json,
+        status, created_at, completed_at,
         error_json, metadata_json, tool_call_json
       ) VALUES (
         @tool_call_id, @run_id, @model_step_id, @provider_tool_call_id, @tool_name,
-        @input_json, @input_preview_json, @status, @created_at, @completed_at,
+        @registry_snapshot_id, @snapshot_entry_id, @model_visible_name, @canonical_tool_id,
+        @source_id, @namespace, @source_tool_name, @input_json, @input_preview_json,
+        @status, @created_at, @completed_at,
         @error_json, @metadata_json, @tool_call_json
       )
       ON CONFLICT(tool_call_id) DO UPDATE SET
@@ -35,6 +226,13 @@ export class ToolRepository {
         model_step_id = excluded.model_step_id,
         provider_tool_call_id = excluded.provider_tool_call_id,
         tool_name = excluded.tool_name,
+        registry_snapshot_id = excluded.registry_snapshot_id,
+        snapshot_entry_id = excluded.snapshot_entry_id,
+        model_visible_name = excluded.model_visible_name,
+        canonical_tool_id = excluded.canonical_tool_id,
+        source_id = excluded.source_id,
+        namespace = excluded.namespace,
+        source_tool_name = excluded.source_tool_name,
         input_json = excluded.input_json,
         input_preview_json = excluded.input_preview_json,
         status = excluded.status,
@@ -49,6 +247,7 @@ export class ToolRepository {
       model_step_id: toolCall.modelStepId,
       provider_tool_call_id: toolCall.providerToolCallId,
       tool_name: toolCall.toolName,
+      ...identityParams(toolCall),
       input_json: stringifyJson(toolCall.input),
       input_preview_json: stringifyJson(toolCall.inputPreview),
       status: toolCall.status,
@@ -75,13 +274,15 @@ export class ToolRepository {
     this.database.prepare(`
       INSERT INTO tool_executions (
         tool_execution_id, tool_call_id, run_id, step_id, action_id, tool_name,
-        input_json, input_preview_json, capabilities_json, risk_level, side_effect,
-        result_preview, status, requested_at, started_at, completed_at,
+        registry_snapshot_id, snapshot_entry_id, model_visible_name, canonical_tool_id,
+        source_id, namespace, source_tool_name, input_json, input_preview_json,
+        capabilities_json, risk_level, side_effect, result_preview, status, requested_at, started_at, completed_at,
         error_json, metadata_json, tool_execution_json
       ) VALUES (
         @tool_execution_id, @tool_call_id, @run_id, @step_id, @action_id, @tool_name,
-        @input_json, @input_preview_json, @capabilities_json, @risk_level, @side_effect,
-        @result_preview, @status, @requested_at, @started_at, @completed_at,
+        @registry_snapshot_id, @snapshot_entry_id, @model_visible_name, @canonical_tool_id,
+        @source_id, @namespace, @source_tool_name, @input_json, @input_preview_json,
+        @capabilities_json, @risk_level, @side_effect, @result_preview, @status, @requested_at, @started_at, @completed_at,
         @error_json, @metadata_json, @tool_execution_json
       )
       ON CONFLICT(tool_execution_id) DO UPDATE SET
@@ -90,6 +291,13 @@ export class ToolRepository {
         step_id = excluded.step_id,
         action_id = excluded.action_id,
         tool_name = excluded.tool_name,
+        registry_snapshot_id = excluded.registry_snapshot_id,
+        snapshot_entry_id = excluded.snapshot_entry_id,
+        model_visible_name = excluded.model_visible_name,
+        canonical_tool_id = excluded.canonical_tool_id,
+        source_id = excluded.source_id,
+        namespace = excluded.namespace,
+        source_tool_name = excluded.source_tool_name,
         input_json = excluded.input_json,
         input_preview_json = excluded.input_preview_json,
         capabilities_json = excluded.capabilities_json,
@@ -110,6 +318,7 @@ export class ToolRepository {
       step_id: toolExecution.stepId,
       action_id: toolExecution.actionId ?? null,
       tool_name: toolExecution.toolName,
+      ...identityParams(toolExecution),
       input_json: stringifyJson(toolExecution.input),
       input_preview_json: stringifyJson(toolExecution.inputPreview),
       capabilities_json: stringifyJson(toolExecution.capabilities),
@@ -141,12 +350,14 @@ export class ToolRepository {
     this.database.prepare(`
       INSERT INTO permission_decisions (
         permission_decision_id, tool_call_id, tool_execution_id, run_id, decision,
-        source, mode, reason, classifier_label, capability, side_effect,
+        registry_snapshot_id, snapshot_entry_id, model_visible_name, canonical_tool_id,
+        source_id, namespace, source_tool_name, source, mode, reason, classifier_label, capability, side_effect,
         matched_rule_json, target, effective_risk_level, required_approval_json,
         required_sandbox_json, evaluated_at, metadata_json, decision_json
       ) VALUES (
         @permission_decision_id, @tool_call_id, @tool_execution_id, @run_id, @decision,
-        @source, @mode, @reason, @classifier_label, @capability, @side_effect,
+        @registry_snapshot_id, @snapshot_entry_id, @model_visible_name, @canonical_tool_id,
+        @source_id, @namespace, @source_tool_name, @source, @mode, @reason, @classifier_label, @capability, @side_effect,
         @matched_rule_json, @target, @effective_risk_level, @required_approval_json,
         @required_sandbox_json, @evaluated_at, @metadata_json, @decision_json
       )
@@ -155,6 +366,13 @@ export class ToolRepository {
         tool_execution_id = excluded.tool_execution_id,
         run_id = excluded.run_id,
         decision = excluded.decision,
+        registry_snapshot_id = excluded.registry_snapshot_id,
+        snapshot_entry_id = excluded.snapshot_entry_id,
+        model_visible_name = excluded.model_visible_name,
+        canonical_tool_id = excluded.canonical_tool_id,
+        source_id = excluded.source_id,
+        namespace = excluded.namespace,
+        source_tool_name = excluded.source_tool_name,
         source = excluded.source,
         mode = excluded.mode,
         reason = excluded.reason,
@@ -175,6 +393,7 @@ export class ToolRepository {
       tool_execution_id: decision.toolExecutionId ?? null,
       run_id: decision.runId,
       decision: decision.decision,
+      ...identityParams(decision),
       source: decision.source,
       mode: decision.mode,
       reason: decision.reason,
@@ -212,6 +431,9 @@ export class ToolRepository {
     if (request.stepId !== toolExecution.stepId) {
       throw new Error(`Approval request stepId ${request.stepId} does not match tool execution stepId ${toolExecution.stepId}`);
     }
+    if (request.snapshotEntryId && toolExecution.snapshotEntryId && request.snapshotEntryId !== toolExecution.snapshotEntryId) {
+      throw new Error(`Approval request snapshotEntryId ${request.snapshotEntryId} does not match tool execution snapshotEntryId ${toolExecution.snapshotEntryId}`);
+    }
     if (request.permissionDecisionId) {
       const permissionDecision = this.getPermissionDecision(request.permissionDecisionId);
       if (!permissionDecision) {
@@ -226,17 +448,22 @@ export class ToolRepository {
       if (permissionDecision.runId !== request.runId) {
         throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to runId ${permissionDecision.runId}, not ${request.runId}`);
       }
+      if (permissionDecision.snapshotEntryId && request.snapshotEntryId && permissionDecision.snapshotEntryId !== request.snapshotEntryId) {
+        throw new Error(`Approval request permissionDecisionId ${request.permissionDecisionId} belongs to snapshotEntryId ${permissionDecision.snapshotEntryId}, not ${request.snapshotEntryId}`);
+      }
     }
 
     this.database.prepare(`
       INSERT INTO approval_requests (
         approval_request_id, tool_call_id, tool_execution_id, permission_decision_id,
         run_id, step_id, tool_name, status, requested_scope, risk_level,
-        created_at, expires_at, resolved_at, request_json
+        registry_snapshot_id, snapshot_entry_id, model_visible_name, canonical_tool_id,
+        source_id, namespace, source_tool_name, created_at, expires_at, resolved_at, request_json
       ) VALUES (
         @approval_request_id, @tool_call_id, @tool_execution_id, @permission_decision_id,
         @run_id, @step_id, @tool_name, @status, @requested_scope, @risk_level,
-        @created_at, @expires_at, @resolved_at, @request_json
+        @registry_snapshot_id, @snapshot_entry_id, @model_visible_name, @canonical_tool_id,
+        @source_id, @namespace, @source_tool_name, @created_at, @expires_at, @resolved_at, @request_json
       )
       ON CONFLICT(approval_request_id) DO UPDATE SET
         tool_call_id = excluded.tool_call_id,
@@ -248,6 +475,13 @@ export class ToolRepository {
         status = excluded.status,
         requested_scope = excluded.requested_scope,
         risk_level = excluded.risk_level,
+        registry_snapshot_id = excluded.registry_snapshot_id,
+        snapshot_entry_id = excluded.snapshot_entry_id,
+        model_visible_name = excluded.model_visible_name,
+        canonical_tool_id = excluded.canonical_tool_id,
+        source_id = excluded.source_id,
+        namespace = excluded.namespace,
+        source_tool_name = excluded.source_tool_name,
         created_at = excluded.created_at,
         expires_at = excluded.expires_at,
         resolved_at = excluded.resolved_at,
@@ -263,6 +497,7 @@ export class ToolRepository {
       status: request.status,
       requested_scope: request.requestedScope,
       risk_level: request.riskLevel,
+      ...identityParams(request),
       created_at: request.createdAt,
       expires_at: request.expiresAt ?? null,
       resolved_at: request.resolvedAt ?? null,
@@ -460,6 +695,34 @@ export class ToolRepository {
     return (this.database.prepare('SELECT observation_json FROM tool_observations WHERE tool_execution_id = ? ORDER BY created_at ASC').all(toolExecutionId) as ToolObservationRow[])
       .map((row) => JSON.parse(row.observation_json) as ToolObservation);
   }
+}
+
+function identityParams(value: {
+  registrySnapshotId?: string;
+  snapshotEntryId?: string;
+  modelVisibleName?: string;
+  canonicalToolId?: string;
+  sourceId?: string;
+  namespace?: string;
+  sourceToolName?: string;
+}): {
+  registry_snapshot_id: string | null;
+  snapshot_entry_id: string | null;
+  model_visible_name: string | null;
+  canonical_tool_id: string | null;
+  source_id: string | null;
+  namespace: string | null;
+  source_tool_name: string | null;
+} {
+  return {
+    registry_snapshot_id: value.registrySnapshotId ?? null,
+    snapshot_entry_id: value.snapshotEntryId ?? null,
+    model_visible_name: value.modelVisibleName ?? null,
+    canonical_tool_id: value.canonicalToolId ?? null,
+    source_id: value.sourceId ?? null,
+    namespace: value.namespace ?? null,
+    source_tool_name: value.sourceToolName ?? null,
+  };
 }
 
 function stringifyJson(value: unknown): string {

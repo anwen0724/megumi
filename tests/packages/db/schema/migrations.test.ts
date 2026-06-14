@@ -52,6 +52,16 @@ function tableExists(database: Database.Database, tableName: string): boolean {
   );
 }
 
+const toolIdentityColumns = [
+  'registry_snapshot_id',
+  'snapshot_entry_id',
+  'model_visible_name',
+  'canonical_tool_id',
+  'source_id',
+  'namespace',
+  'source_tool_name',
+] as const;
+
 function seedLegacyToolPersistenceSchema(database: Database.Database): void {
   database.exec(`
     CREATE TABLE tool_calls (
@@ -258,6 +268,199 @@ function seedLegacyToolPersistenceSchema(database: Database.Database): void {
   `);
 }
 
+function seedCanonicalToolPersistenceSchemaWithoutIdentity(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE tool_calls (
+      tool_call_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      model_step_id TEXT NOT NULL,
+      provider_tool_call_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      input_json TEXT NOT NULL,
+      input_preview_json TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      error_json TEXT,
+      metadata_json TEXT,
+      tool_call_json TEXT NOT NULL
+    );
+
+    CREATE TABLE tool_executions (
+      tool_execution_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      action_id TEXT,
+      tool_name TEXT NOT NULL,
+      input_json TEXT NOT NULL,
+      input_preview_json TEXT NOT NULL,
+      capabilities_json TEXT NOT NULL,
+      risk_level TEXT NOT NULL,
+      side_effect TEXT NOT NULL,
+      result_preview TEXT,
+      status TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      started_at TEXT,
+      completed_at TEXT,
+      error_json TEXT,
+      metadata_json TEXT,
+      tool_execution_json TEXT NOT NULL
+    );
+
+    CREATE TABLE permission_decisions (
+      permission_decision_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      tool_execution_id TEXT,
+      run_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      source TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      classifier_label TEXT,
+      capability TEXT NOT NULL,
+      side_effect TEXT NOT NULL,
+      matched_rule_json TEXT,
+      target TEXT,
+      effective_risk_level TEXT NOT NULL,
+      required_approval_json TEXT,
+      required_sandbox_json TEXT,
+      evaluated_at TEXT NOT NULL,
+      metadata_json TEXT,
+      decision_json TEXT NOT NULL
+    );
+
+    CREATE TABLE approval_requests (
+      approval_request_id TEXT PRIMARY KEY,
+      tool_call_id TEXT NOT NULL,
+      tool_execution_id TEXT NOT NULL,
+      permission_decision_id TEXT,
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_scope TEXT NOT NULL,
+      risk_level TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT,
+      resolved_at TEXT,
+      request_json TEXT NOT NULL
+    );
+
+    INSERT INTO tool_calls (
+      tool_call_id,
+      run_id,
+      model_step_id,
+      provider_tool_call_id,
+      tool_name,
+      input_json,
+      input_preview_json,
+      status,
+      created_at,
+      tool_call_json
+    ) VALUES (
+      'tool-call-canonical',
+      'run-canonical',
+      'model-step-canonical',
+      'provider-tool-call-canonical',
+      'read_file',
+      '{}',
+      '{}',
+      'created',
+      '2026-06-14T00:00:00.000Z',
+      '{"toolCallId":"tool-call-canonical"}'
+    );
+
+    INSERT INTO tool_executions (
+      tool_execution_id,
+      tool_call_id,
+      run_id,
+      step_id,
+      tool_name,
+      input_json,
+      input_preview_json,
+      capabilities_json,
+      risk_level,
+      side_effect,
+      status,
+      requested_at,
+      tool_execution_json
+    ) VALUES (
+      'tool-execution-canonical',
+      'tool-call-canonical',
+      'run-canonical',
+      'step-canonical',
+      'read_file',
+      '{}',
+      '{}',
+      '["project_read"]',
+      'low',
+      'none',
+      'running',
+      '2026-06-14T00:00:01.000Z',
+      '{"toolExecutionId":"tool-execution-canonical"}'
+    );
+
+    INSERT INTO permission_decisions (
+      permission_decision_id,
+      tool_call_id,
+      tool_execution_id,
+      run_id,
+      decision,
+      source,
+      mode,
+      reason,
+      capability,
+      side_effect,
+      effective_risk_level,
+      evaluated_at,
+      decision_json
+    ) VALUES (
+      'permission-decision-canonical',
+      'tool-call-canonical',
+      'tool-execution-canonical',
+      'run-canonical',
+      'allow',
+      'permission_mode',
+      'default',
+      'canonical decision',
+      'project_read',
+      'none',
+      'low',
+      '2026-06-14T00:00:02.000Z',
+      '{"permissionDecisionId":"permission-decision-canonical"}'
+    );
+
+    INSERT INTO approval_requests (
+      approval_request_id,
+      tool_call_id,
+      tool_execution_id,
+      permission_decision_id,
+      run_id,
+      step_id,
+      tool_name,
+      status,
+      requested_scope,
+      risk_level,
+      created_at,
+      request_json
+    ) VALUES (
+      'approval-request-canonical',
+      'tool-call-canonical',
+      'tool-execution-canonical',
+      'permission-decision-canonical',
+      'run-canonical',
+      'step-canonical',
+      'read_file',
+      'pending',
+      'once',
+      'low',
+      '2026-06-14T00:00:03.000Z',
+      '{"approvalRequestId":"approval-request-canonical"}'
+    );
+  `);
+}
+
 function seedActivePathOwnershipBase(database: Database.Database): void {
   database.exec(`
     INSERT INTO sessions (
@@ -348,6 +551,9 @@ describe('database migrations', () => {
       'model_steps',
       'session_messages',
       'runtime_events',
+      'tool_sources',
+      'tool_registry_snapshots',
+      'tool_registry_snapshot_entries',
       'tool_calls',
       'tool_executions',
       'tool_observations',
@@ -377,18 +583,145 @@ describe('database migrations', () => {
       'idx_runs_session_id',
       'idx_run_steps_run_id',
       'idx_approval_requests_tool_execution_id',
+      'idx_approval_requests_snapshot_entry_id',
       'idx_model_steps_run_id',
       'idx_session_messages_session_id',
       'idx_runtime_events_run_sequence',
+      'idx_tool_sources_kind_namespace',
+      'idx_tool_registry_snapshots_run_id',
+      'idx_tool_registry_snapshot_entries_snapshot_id',
+      'idx_tool_registry_snapshot_entries_model_visible_name',
+      'idx_tool_registry_snapshot_entries_canonical_tool_id',
       'idx_tool_calls_run_id',
       'idx_tool_calls_model_step_id',
+      'idx_tool_calls_registry_snapshot_id',
+      'idx_tool_calls_snapshot_entry_id',
       'idx_tool_executions_run_id',
       'idx_tool_executions_status',
       'idx_tool_executions_tool_call_id',
+      'idx_tool_executions_snapshot_entry_id',
       'idx_tool_observations_tool_execution_id',
       'idx_tool_results_tool_call_id',
       'idx_permission_decisions_tool_call_id',
+      'idx_permission_decisions_snapshot_entry_id',
       'idx_timeline_messages_session_order',
+    ]));
+  });
+
+  it('creates tool source and registry snapshot persistence schema', () => {
+    const database = createTestDb();
+
+    migrateDatabase(database);
+
+    const sourceColumns = tableColumns(database, 'tool_sources');
+    expect(sourceColumns.map((column) => column.name)).toEqual([
+      'source_id',
+      'source_kind',
+      'namespace',
+      'display_name',
+      'configured',
+      'enabled',
+      'availability_status',
+      'availability_reason',
+      'health_checked_at',
+      'config_json',
+      'created_at',
+      'updated_at',
+      'source_json',
+    ]);
+    expect(columnByName(sourceColumns, 'source_id')).toMatchObject({ type: 'TEXT', pk: 1 });
+    for (const requiredColumn of [
+      'source_kind',
+      'namespace',
+      'display_name',
+      'configured',
+      'enabled',
+      'availability_status',
+      'config_json',
+      'created_at',
+      'updated_at',
+      'source_json',
+    ]) {
+      expect(columnByName(sourceColumns, requiredColumn)?.notnull).toBe(1);
+    }
+
+    const snapshotColumns = tableColumns(database, 'tool_registry_snapshots');
+    expect(snapshotColumns.map((column) => column.name)).toEqual([
+      'snapshot_id',
+      'run_id',
+      'project_id',
+      'permission_mode',
+      'model_id',
+      'created_at',
+      'registry_version',
+      'source_version_hash',
+      'source_entries_json',
+      'snapshot_json',
+    ]);
+    expect(columnByName(snapshotColumns, 'snapshot_id')).toMatchObject({ type: 'TEXT', pk: 1 });
+    for (const column of snapshotColumns.filter((item) => item.name !== 'snapshot_id')) {
+      expect(column.notnull).toBe(1);
+    }
+
+    const snapshotRunIndex = database
+      .prepare("SELECT name, [unique] FROM pragma_index_list('tool_registry_snapshots') WHERE name = 'idx_tool_registry_snapshots_run_id'")
+      .get() as { name: string; unique: 0 | 1 };
+    expect(snapshotRunIndex).toEqual({ name: 'idx_tool_registry_snapshots_run_id', unique: 1 });
+    expect(foreignKeys(database, 'tool_registry_snapshots')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: 'run_id', table: 'runs', to: 'run_id', on_delete: 'CASCADE' }),
+      expect.objectContaining({ from: 'project_id', table: 'projects', to: 'project_id', on_delete: 'CASCADE' }),
+    ]));
+
+    const entryColumns = tableColumns(database, 'tool_registry_snapshot_entries');
+    expect(entryColumns.map((column) => column.name)).toEqual([
+      'snapshot_entry_id',
+      'snapshot_id',
+      'registration_id',
+      'canonical_tool_id',
+      'model_visible_name',
+      'source_id',
+      'namespace',
+      'source_tool_name',
+      'definition_json',
+      'effective_status',
+      'disabled_reason',
+      'unavailable_reason',
+      'conflict_reason',
+      'exposed_to_model',
+      'execution_mode',
+      'created_at',
+      'entry_json',
+    ]);
+    for (const requiredColumn of [
+      'snapshot_id',
+      'registration_id',
+      'canonical_tool_id',
+      'model_visible_name',
+      'source_id',
+      'namespace',
+      'source_tool_name',
+      'definition_json',
+      'effective_status',
+      'exposed_to_model',
+      'execution_mode',
+      'created_at',
+      'entry_json',
+    ]) {
+      expect(columnByName(entryColumns, requiredColumn)?.notnull).toBe(1);
+    }
+    expect(foreignKeys(database, 'tool_registry_snapshot_entries')).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'snapshot_id',
+        table: 'tool_registry_snapshots',
+        to: 'snapshot_id',
+        on_delete: 'CASCADE',
+      }),
+      expect.objectContaining({
+        from: 'source_id',
+        table: 'tool_sources',
+        to: 'source_id',
+        on_delete: 'RESTRICT',
+      }),
     ]));
   });
 
@@ -1544,6 +1877,7 @@ describe('database migrations', () => {
       'model_step_id',
       'provider_tool_call_id',
       'tool_name',
+      ...toolIdentityColumns,
       'input_json',
       'input_preview_json',
       'status',
@@ -1566,6 +1900,9 @@ describe('database migrations', () => {
     ]) {
       expect(columnByName(toolCallColumns, requiredColumn)?.notnull).toBe(1);
     }
+    for (const identityColumn of toolIdentityColumns) {
+      expect(columnByName(toolCallColumns, identityColumn)?.notnull).toBe(0);
+    }
 
     const toolExecutionColumns = tableColumns(database, 'tool_executions');
     expect(toolExecutionColumns.map((column) => column.name)).toEqual([
@@ -1575,6 +1912,7 @@ describe('database migrations', () => {
       'step_id',
       'action_id',
       'tool_name',
+      ...toolIdentityColumns,
       'input_json',
       'input_preview_json',
       'capabilities_json',
@@ -1606,6 +1944,9 @@ describe('database migrations', () => {
       expect(columnByName(toolExecutionColumns, requiredColumn)?.notnull).toBe(1);
     }
     expect(columnByName(toolExecutionColumns, 'action_id')?.notnull).toBe(0);
+    for (const identityColumn of toolIdentityColumns) {
+      expect(columnByName(toolExecutionColumns, identityColumn)?.notnull).toBe(0);
+    }
 
     const toolResultColumns = tableColumns(database, 'tool_results');
     expect(toolResultColumns.map((column) => column.name)).toEqual([
@@ -1642,6 +1983,7 @@ describe('database migrations', () => {
       'tool_call_id',
       'tool_execution_id',
       'run_id',
+      ...toolIdentityColumns,
       'decision',
       'source',
       'mode',
@@ -1674,6 +2016,9 @@ describe('database migrations', () => {
       expect(columnByName(permissionDecisionColumns, requiredColumn)?.notnull).toBe(1);
     }
     expect(columnByName(permissionDecisionColumns, 'tool_execution_id')?.notnull).toBe(0);
+    for (const identityColumn of toolIdentityColumns) {
+      expect(columnByName(permissionDecisionColumns, identityColumn)?.notnull).toBe(0);
+    }
 
     const approvalRequestColumns = tableColumns(database, 'approval_requests');
     expect(approvalRequestColumns.map((column) => column.name)).toEqual([
@@ -1684,6 +2029,7 @@ describe('database migrations', () => {
       'run_id',
       'step_id',
       'tool_name',
+      ...toolIdentityColumns,
       'status',
       'requested_scope',
       'risk_level',
@@ -1707,6 +2053,9 @@ describe('database migrations', () => {
       expect(columnByName(approvalRequestColumns, requiredColumn)?.notnull).toBe(1);
     }
     expect(columnByName(approvalRequestColumns, 'permission_decision_id')?.notnull).toBe(0);
+    for (const identityColumn of toolIdentityColumns) {
+      expect(columnByName(approvalRequestColumns, identityColumn)?.notnull).toBe(0);
+    }
 
     const approvalRecordColumns = tableColumns(database, 'approval_records');
     expect(approvalRecordColumns.map((column) => column.name)).toEqual([
@@ -1833,6 +2182,47 @@ describe('database migrations', () => {
       { name: 'idx_tool_executions_status', tbl_name: 'tool_executions' },
       { name: 'idx_tool_observations_tool_execution_id', tbl_name: 'tool_observations' },
     ]);
+  });
+
+  it('adds tool identity columns to existing canonical tool persistence tables', () => {
+    const database = createTestDb();
+    seedCanonicalToolPersistenceSchemaWithoutIdentity(database);
+
+    migrateDatabase(database);
+    migrateDatabase(database);
+
+    expect(tableExists(database, 'tool_calls_legacy_08')).toBe(false);
+    for (const tableName of [
+      'tool_calls',
+      'tool_executions',
+      'permission_decisions',
+      'approval_requests',
+    ]) {
+      const columns = tableColumns(database, tableName);
+      for (const identityColumn of toolIdentityColumns) {
+        expect(columnByName(columns, identityColumn)).toMatchObject({
+          type: 'TEXT',
+          notnull: 0,
+        });
+      }
+    }
+
+    expect(database.prepare('SELECT tool_call_id, tool_name FROM tool_calls').get()).toEqual({
+      tool_call_id: 'tool-call-canonical',
+      tool_name: 'read_file',
+    });
+    expect(database.prepare('SELECT tool_execution_id, tool_name FROM tool_executions').get()).toEqual({
+      tool_execution_id: 'tool-execution-canonical',
+      tool_name: 'read_file',
+    });
+    expect(database.prepare('SELECT permission_decision_id, decision FROM permission_decisions').get()).toEqual({
+      permission_decision_id: 'permission-decision-canonical',
+      decision: 'allow',
+    });
+    expect(database.prepare('SELECT approval_request_id, tool_name FROM approval_requests').get()).toEqual({
+      approval_request_id: 'approval-request-canonical',
+      tool_name: 'read_file',
+    });
   });
 
   it('creates permission snapshot and implementation plan tables', () => {

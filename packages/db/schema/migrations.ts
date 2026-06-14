@@ -714,6 +714,59 @@ export function migrateDatabase(database: MegumiDatabase): void {
   archiveLegacyToolPersistenceTables(database);
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS tool_sources (
+      source_id TEXT PRIMARY KEY,
+      source_kind TEXT NOT NULL,
+      namespace TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      configured INTEGER NOT NULL,
+      enabled INTEGER NOT NULL,
+      availability_status TEXT NOT NULL,
+      availability_reason TEXT,
+      health_checked_at TEXT,
+      config_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      source_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS tool_registry_snapshots (
+      snapshot_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL UNIQUE,
+      project_id TEXT NOT NULL,
+      permission_mode TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      registry_version INTEGER NOT NULL,
+      source_version_hash TEXT NOT NULL,
+      source_entries_json TEXT NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE,
+      FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS tool_registry_snapshot_entries (
+      snapshot_entry_id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL,
+      registration_id TEXT NOT NULL,
+      canonical_tool_id TEXT NOT NULL,
+      model_visible_name TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      namespace TEXT NOT NULL,
+      source_tool_name TEXT NOT NULL,
+      definition_json TEXT NOT NULL,
+      effective_status TEXT NOT NULL,
+      disabled_reason TEXT,
+      unavailable_reason TEXT,
+      conflict_reason TEXT,
+      exposed_to_model INTEGER NOT NULL,
+      execution_mode TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      entry_json TEXT NOT NULL,
+      FOREIGN KEY(snapshot_id) REFERENCES tool_registry_snapshots(snapshot_id) ON DELETE CASCADE,
+      FOREIGN KEY(source_id) REFERENCES tool_sources(source_id) ON DELETE RESTRICT
+    );
+
     CREATE TABLE IF NOT EXISTS model_steps (
       model_step_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
@@ -736,6 +789,13 @@ export function migrateDatabase(database: MegumiDatabase): void {
       model_step_id TEXT NOT NULL,
       provider_tool_call_id TEXT NOT NULL,
       tool_name TEXT NOT NULL,
+      registry_snapshot_id TEXT,
+      snapshot_entry_id TEXT,
+      model_visible_name TEXT,
+      canonical_tool_id TEXT,
+      source_id TEXT,
+      namespace TEXT,
+      source_tool_name TEXT,
       input_json TEXT NOT NULL,
       input_preview_json TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -755,6 +815,13 @@ export function migrateDatabase(database: MegumiDatabase): void {
       step_id TEXT NOT NULL,
       action_id TEXT,
       tool_name TEXT NOT NULL,
+      registry_snapshot_id TEXT,
+      snapshot_entry_id TEXT,
+      model_visible_name TEXT,
+      canonical_tool_id TEXT,
+      source_id TEXT,
+      namespace TEXT,
+      source_tool_name TEXT,
       input_json TEXT NOT NULL,
       input_preview_json TEXT NOT NULL,
       capabilities_json TEXT NOT NULL,
@@ -799,6 +866,13 @@ export function migrateDatabase(database: MegumiDatabase): void {
       tool_call_id TEXT NOT NULL,
       tool_execution_id TEXT,
       run_id TEXT NOT NULL,
+      registry_snapshot_id TEXT,
+      snapshot_entry_id TEXT,
+      model_visible_name TEXT,
+      canonical_tool_id TEXT,
+      source_id TEXT,
+      namespace TEXT,
+      source_tool_name TEXT,
       decision TEXT NOT NULL,
       source TEXT NOT NULL,
       mode TEXT NOT NULL,
@@ -827,6 +901,13 @@ export function migrateDatabase(database: MegumiDatabase): void {
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
       tool_name TEXT NOT NULL,
+      registry_snapshot_id TEXT,
+      snapshot_entry_id TEXT,
+      model_visible_name TEXT,
+      canonical_tool_id TEXT,
+      source_id TEXT,
+      namespace TEXT,
+      source_tool_name TEXT,
       status TEXT NOT NULL,
       requested_scope TEXT NOT NULL,
       risk_level TEXT NOT NULL,
@@ -877,6 +958,22 @@ export function migrateDatabase(database: MegumiDatabase): void {
       FOREIGN KEY(step_id) REFERENCES run_steps(step_id) ON DELETE CASCADE
     );
   `);
+
+  const toolIdentityColumns = [
+    ['registry_snapshot_id', 'TEXT'],
+    ['snapshot_entry_id', 'TEXT'],
+    ['model_visible_name', 'TEXT'],
+    ['canonical_tool_id', 'TEXT'],
+    ['source_id', 'TEXT'],
+    ['namespace', 'TEXT'],
+    ['source_tool_name', 'TEXT'],
+  ] as const;
+  for (const [columnName, definition] of toolIdentityColumns) {
+    addColumnIfMissing(database, 'tool_calls', columnName, definition);
+    addColumnIfMissing(database, 'tool_executions', columnName, definition);
+    addColumnIfMissing(database, 'permission_decisions', columnName, definition);
+    addColumnIfMissing(database, 'approval_requests', columnName, definition);
+  }
 
   database.exec(`
     CREATE TABLE IF NOT EXISTS checkpoints (
@@ -1510,11 +1607,32 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_model_steps_run_id
     ON model_steps(run_id);
 
+    CREATE INDEX IF NOT EXISTS idx_tool_sources_kind_namespace
+    ON tool_sources(source_kind, namespace);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_registry_snapshots_run_id
+    ON tool_registry_snapshots(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_registry_snapshot_entries_snapshot_id
+    ON tool_registry_snapshot_entries(snapshot_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_registry_snapshot_entries_model_visible_name
+    ON tool_registry_snapshot_entries(snapshot_id, model_visible_name);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_registry_snapshot_entries_canonical_tool_id
+    ON tool_registry_snapshot_entries(snapshot_id, canonical_tool_id);
+
     CREATE INDEX IF NOT EXISTS idx_tool_calls_run_id
     ON tool_calls(run_id);
 
     CREATE INDEX IF NOT EXISTS idx_tool_calls_model_step_id
     ON tool_calls(model_step_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_registry_snapshot_id
+    ON tool_calls(registry_snapshot_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_calls_snapshot_entry_id
+    ON tool_calls(snapshot_entry_id);
 
     CREATE INDEX IF NOT EXISTS idx_tool_executions_run_id
     ON tool_executions(run_id);
@@ -1525,14 +1643,23 @@ export function migrateDatabase(database: MegumiDatabase): void {
     CREATE INDEX IF NOT EXISTS idx_tool_executions_tool_call_id
     ON tool_executions(tool_call_id);
 
+    CREATE INDEX IF NOT EXISTS idx_tool_executions_snapshot_entry_id
+    ON tool_executions(snapshot_entry_id);
+
     CREATE INDEX IF NOT EXISTS idx_tool_results_tool_call_id
     ON tool_results(tool_call_id);
 
     CREATE INDEX IF NOT EXISTS idx_permission_decisions_tool_call_id
     ON permission_decisions(tool_call_id);
 
+    CREATE INDEX IF NOT EXISTS idx_permission_decisions_snapshot_entry_id
+    ON permission_decisions(snapshot_entry_id);
+
     CREATE INDEX IF NOT EXISTS idx_approval_requests_tool_execution_id
     ON approval_requests(tool_execution_id);
+
+    CREATE INDEX IF NOT EXISTS idx_approval_requests_snapshot_entry_id
+    ON approval_requests(snapshot_entry_id);
 
     CREATE INDEX IF NOT EXISTS idx_tool_observations_tool_execution_id
     ON tool_observations(tool_execution_id);

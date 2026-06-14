@@ -10,7 +10,9 @@ import type {
   ToolCall,
   ToolExecution,
   ToolObservation,
+  ToolRegistrySnapshot,
   ToolResult,
+  ToolSource,
 } from '@megumi/shared/tool';
 
 let db: Database.Database | null = null;
@@ -34,6 +36,116 @@ describe('ToolRepository', () => {
     expect(tableNames()).toContain('tool_calls');
     expect(tableNames()).toContain('tool_executions');
     expect(tableNames()).not.toContain('tool_uses');
+  });
+
+  it('seeds default tool sources without overwriting enablement', () => {
+    const repo = createRepo();
+
+    repo.seedDefaultToolSources('2026-06-14T00:00:00.000Z');
+
+    expect(repo.getToolSource('built_in')).toMatchObject({
+      enabled: true,
+      namespace: 'megumi',
+      availabilityStatus: 'available',
+    });
+    expect(repo.getToolSource('external_test')).toMatchObject({
+      enabled: false,
+      namespace: 'demo',
+      availabilityStatus: 'available',
+    });
+
+    const externalTest = repo.getToolSource('external_test');
+    if (!externalTest) {
+      throw new Error('Expected external_test source.');
+    }
+    repo.saveToolSource({
+      ...externalTest,
+      enabled: true,
+      updatedAt: '2026-06-14T00:00:01.000Z',
+    });
+    repo.seedDefaultToolSources('2026-06-14T00:00:02.000Z');
+
+    expect(repo.getToolSource('external_test')?.enabled).toBe(true);
+  });
+
+  it('saves and reads tool sources', () => {
+    const repo = createRepo();
+    const source = createToolSource({
+      sourceId: 'test_external',
+      sourceKind: 'external_test',
+      namespace: 'demo',
+      displayName: 'Test external tools',
+      enabled: false,
+    });
+
+    repo.saveToolSource(source);
+
+    expect(repo.getToolSource('test_external')).toEqual(source);
+    expect(repo.listToolSources()).toContainEqual(source);
+
+    const row = currentDb().prepare(`
+      SELECT source_id, source_kind, namespace, enabled, availability_status, config_json, source_json
+      FROM tool_sources
+      WHERE source_id = 'test_external'
+    `).get() as {
+      source_id: string;
+      source_kind: string;
+      namespace: string;
+      enabled: number;
+      availability_status: string;
+      config_json: string;
+      source_json: string;
+    };
+    expect(row).toMatchObject({
+      source_id: 'test_external',
+      source_kind: 'external_test',
+      namespace: 'demo',
+      enabled: 0,
+      availability_status: 'available',
+    });
+    expect(JSON.parse(row.config_json)).toEqual({});
+    expect(JSON.parse(row.source_json)).toEqual(source);
+  });
+
+  it('saves and reads run-level registry snapshots with entries', () => {
+    const repo = createRepo();
+    const source = createToolSource();
+    const snapshot = createToolRegistrySnapshot();
+
+    repo.saveToolSource(source);
+    repo.saveToolRegistrySnapshot(snapshot);
+
+    expect(repo.getToolRegistrySnapshot('tool-registry-snapshot-1')).toEqual(snapshot);
+    expect(repo.getToolRegistrySnapshotByRun('run-1')).toEqual(snapshot);
+    expect(repo.listToolRegistrySnapshotEntries('tool-registry-snapshot-1')).toEqual(snapshot.entries);
+
+    const snapshotRow = currentDb().prepare(`
+      SELECT run_id, project_id, source_entries_json, snapshot_json
+      FROM tool_registry_snapshots
+      WHERE snapshot_id = 'tool-registry-snapshot-1'
+    `).get() as {
+      run_id: string;
+      project_id: string;
+      source_entries_json: string;
+      snapshot_json: string;
+    };
+    expect(snapshotRow.run_id).toBe('run-1');
+    expect(snapshotRow.project_id).toBe('project-1');
+    expect(JSON.parse(snapshotRow.source_entries_json)).toEqual(snapshot.sourceEntries);
+    expect(JSON.parse(snapshotRow.snapshot_json)).toEqual(snapshot);
+
+    const entryRow = currentDb().prepare(`
+      SELECT model_visible_name, canonical_tool_id, entry_json
+      FROM tool_registry_snapshot_entries
+      WHERE snapshot_entry_id = 'snapshot-entry-read-file'
+    `).get() as {
+      model_visible_name: string;
+      canonical_tool_id: string;
+      entry_json: string;
+    };
+    expect(entryRow.model_visible_name).toBe('read_file');
+    expect(entryRow.canonical_tool_id).toBe('built_in:megumi:read_file');
+    expect(JSON.parse(entryRow.entry_json)).toEqual(snapshot.entries[0]);
   });
 
   it('saves and reads model-side tool calls and host tool executions', () => {
@@ -82,6 +194,71 @@ describe('ToolRepository', () => {
       status: 'pending_approval',
     });
     expect(JSON.parse(executionRow.tool_execution_json)).toEqual(execution);
+  });
+
+  it('stores formal source identity columns on tool lifecycle facts', () => {
+    const repo = createRepo();
+    const source = createToolSource();
+    const snapshot = createToolRegistrySnapshot();
+    const identity = {
+      registrySnapshotId: 'tool-registry-snapshot-1',
+      snapshotEntryId: 'snapshot-entry-read-file',
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
+    } as const;
+
+    repo.saveToolSource(source);
+    repo.saveToolRegistrySnapshot(snapshot);
+    repo.saveToolCall(createToolCall(identity));
+    repo.saveToolExecution(createToolExecution(identity));
+    repo.savePermissionDecision(createPermissionDecision(identity));
+    repo.saveApprovalRequest(createApprovalRequest(identity));
+
+    for (const [tableName, idColumn, idValue] of [
+      ['tool_calls', 'tool_call_id', 'tool-call-1'],
+      ['tool_executions', 'tool_execution_id', 'tool-execution-1'],
+      ['permission_decisions', 'permission_decision_id', 'permission-decision-1'],
+      ['approval_requests', 'approval_request_id', 'approval-1'],
+    ] as const) {
+      const row = currentDb().prepare(`
+        SELECT
+          registry_snapshot_id,
+          snapshot_entry_id,
+          model_visible_name,
+          canonical_tool_id,
+          source_id,
+          namespace,
+          source_tool_name
+        FROM ${tableName}
+        WHERE ${idColumn} = ?
+      `).get(idValue) as Record<string, string>;
+
+      expect(row).toMatchObject({
+        registry_snapshot_id: 'tool-registry-snapshot-1',
+        snapshot_entry_id: 'snapshot-entry-read-file',
+        model_visible_name: 'read_file',
+        canonical_tool_id: 'built_in:megumi:read_file',
+        source_id: 'built_in',
+        namespace: 'megumi',
+        source_tool_name: 'read_file',
+      });
+    }
+
+    for (const [tableName, idColumn, idValue] of [
+      ['tool_calls', 'tool_call_id', 'tool-call-1'],
+      ['tool_executions', 'tool_execution_id', 'tool-execution-1'],
+      ['approval_requests', 'approval_request_id', 'approval-1'],
+    ] as const) {
+      const row = currentDb().prepare(`
+        SELECT tool_name, model_visible_name
+        FROM ${tableName}
+        WHERE ${idColumn} = ?
+      `).get(idValue) as { tool_name: string; model_visible_name: string };
+      expect(row.tool_name).toBe(row.model_visible_name);
+    }
   });
 
   it('updates durable columns on upsert and keeps canonical list ordering in sync', () => {
@@ -401,6 +578,85 @@ function tableNames(): string[] {
     .map((row) => (row as { name: string }).name);
 }
 
+function createToolSource(overrides: Partial<ToolSource> = {}): ToolSource {
+  return {
+    sourceId: 'built_in',
+    sourceKind: 'built_in',
+    namespace: 'megumi',
+    displayName: 'Built-in tools',
+    configured: true,
+    enabled: true,
+    availabilityStatus: 'available',
+    config: {},
+    createdAt: '2026-06-14T00:00:00.000Z',
+    updatedAt: '2026-06-14T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function createToolRegistrySnapshot(overrides: Partial<ToolRegistrySnapshot> = {}): ToolRegistrySnapshot {
+  const source = createToolSource();
+  const snapshot: ToolRegistrySnapshot = {
+    snapshotId: 'tool-registry-snapshot-1',
+    runId: 'run-1',
+    projectId: 'project-1',
+    permissionMode: 'default',
+    modelId: 'gpt-5',
+    createdAt: '2026-06-14T00:00:00.000Z',
+    registryVersion: 1,
+    sourceVersionHash: 'source-version-hash-1',
+    sourceEntries: [{
+      sourceId: source.sourceId,
+      sourceKind: source.sourceKind,
+      namespace: source.namespace,
+      displayName: source.displayName,
+      configured: source.configured,
+      enabled: source.enabled,
+      availabilityStatus: source.availabilityStatus,
+    }],
+    entries: [{
+      snapshotEntryId: 'snapshot-entry-read-file',
+      snapshotId: 'tool-registry-snapshot-1',
+      registrationId: 'registration-built-in-read-file',
+      canonicalToolId: 'built_in:megumi:read_file',
+      modelVisibleName: 'read_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
+      definition: {
+        name: 'read_file',
+        title: 'Read file',
+        description: 'Read a normal project file.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+          },
+          required: ['path'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            content: { type: 'string' },
+          },
+        },
+        capabilities: ['project_read'],
+        riskLevel: 'low',
+        sideEffect: 'none',
+        availability: { status: 'available' },
+      },
+      effectiveStatus: 'available',
+      exposedToModel: true,
+      executionMode: 'sequential',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    }],
+  };
+  return {
+    ...snapshot,
+    ...overrides,
+  };
+}
+
 function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
   return {
     toolCallId: 'tool-call-1',
@@ -530,6 +786,10 @@ function inputPreview(path: string) {
 }
 
 function seedLifecycle(database: Database.Database): void {
+  database.prepare(`
+    INSERT INTO projects (project_id, name, repo_path, repo_path_key, status, created_at, last_opened_at)
+    VALUES ('project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
+  `).run();
   database.prepare(`
     INSERT INTO sessions (session_id, title, status, created_at, updated_at)
     VALUES ('session-1', 'Tool session', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
