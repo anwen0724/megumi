@@ -114,7 +114,7 @@ export function createToolRegistrySnapshot(
     });
 
     return {
-      snapshotEntryId: `tool-registry-snapshot-entry-${input.runId}-${canonicalToolId.replaceAll(':', '-')}`,
+      snapshotEntryId: `tool-registry-snapshot-entry-${input.runId}-${safeIdSegment(registration.registrationId)}-${canonicalToolId.replaceAll(':', '-')}`,
       snapshotId,
       registrationId: registration.registrationId,
       canonicalToolId,
@@ -319,4 +319,8 @@ function sourceVersionHash(input: ToolRegistrySnapshotResolutionInput, registryV
     `sources:${sourceSegments.join(',')}`,
     `registrations:${registrationSegments.join(',')}`,
   ].join('|');
+}
+
+function safeIdSegment(value: string): string {
+  return value.replaceAll(':', '-');
 }

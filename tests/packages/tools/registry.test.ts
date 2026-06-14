@@ -243,6 +243,7 @@ describe('createToolRegistrySnapshot', () => {
 
     const duplicatedEntries = snapshot.entries.filter((entry) => entry.canonicalToolId === 'built_in:megumi:read_file');
     expect(duplicatedEntries).toHaveLength(2);
+    expect(new Set(duplicatedEntries.map((entry) => entry.snapshotEntryId)).size).toBe(2);
     expect(duplicatedEntries).toEqual(expect.arrayContaining([
       expect.objectContaining({
         effectiveStatus: 'conflicted',
