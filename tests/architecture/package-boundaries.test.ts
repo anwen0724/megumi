@@ -63,6 +63,9 @@ describe('package dependency boundaries', () => {
     expect(
       findForbiddenReferences('packages/ai', [
         /@megumi\/core(\/|['"]|$)/,
+        /@megumi\/db(\/|['"]|$)/,
+        /@megumi\/tools(\/|['"]|$)/,
+        /@megumi\/security(\/|['"]|$)/,
         /apps\/desktop/,
       ]),
     ).toEqual([]);
@@ -101,6 +104,20 @@ describe('package dependency boundaries', () => {
         /@megumi\/ai(\/|['"]|$)/,
         /@megumi\/core(\/|['"]|$)/,
         /from ['"]electron['"]/,
+        /apps\/desktop/,
+      ]),
+    ).toEqual([]);
+  });
+
+  it('keeps packages/tools independent from host, db, provider adapters, and app code', () => {
+    expect(
+      findForbiddenReferences('packages/tools', [
+        /@megumi\/db(\/|['"]|$)/,
+        /@megumi\/ai(\/|['"]|$)/,
+        /@megumi\/security(\/|['"]|$)/,
+        /from ['"]electron['"]/,
+        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
+        /from ['"]fs(?:\/[^'"]+)?['"]/,
         /apps\/desktop/,
       ]),
     ).toEqual([]);

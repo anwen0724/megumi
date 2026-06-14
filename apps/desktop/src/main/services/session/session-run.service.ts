@@ -89,6 +89,10 @@ import {
   createSessionActiveLeafChangedEvent,
   createSessionBranchDraftCancelledEvent,
   createSessionBranchMarkerCreatedEvent,
+  createToolRegistryEntryResolvedEvent,
+  createToolRegistryModelVisibleToolsDerivedEvent,
+  createToolRegistrySnapshotCreatedEvent,
+  createToolRegistrySourcesEnsuredEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
@@ -133,6 +137,11 @@ import {
   isWorkspaceChangeFooterProjectorPort,
   type WorkspaceChangeFooterProjectorService,
 } from '../workspace/workspace-change-footer-projector.service';
+import {
+  ToolRegistrySnapshotService,
+  type RunToolRegistrySnapshotBuildInput,
+  type RunToolRegistrySnapshotBuildResult,
+} from '../tool/tool-registry-snapshot.service';
 
 export interface SessionRunServiceClock {
   now(): string;
@@ -199,6 +208,10 @@ export interface SessionRunProviderCapabilitySummaryProvider {
     providerId: string;
     modelId: string;
   }): { supportsToolCall?: boolean };
+}
+
+export interface SessionRunToolRegistrySnapshotService {
+  createRunSnapshot(input: RunToolRegistrySnapshotBuildInput): RunToolRegistrySnapshotBuildResult;
 }
 
 export interface SessionRunAgentInstructionSourceService {
@@ -324,6 +337,7 @@ export interface SessionRunServiceOptions {
   modelStepProvider?: SessionRunModelStepProvider;
   toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
+  toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
   providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
   toolRepository?: Pick<ToolRepository, 'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun'>;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
@@ -419,6 +433,7 @@ export class SessionRunService {
   private readonly modelStepProvider?: SessionRunModelStepProvider;
   private readonly toolRuntimeFactory?: SessionRunToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
+  private readonly toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
   private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
   private readonly toolRepository?: Pick<ToolRepository, 'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun'>;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
@@ -458,6 +473,7 @@ export class SessionRunService {
     this.modelStepProvider = options.modelStepProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
+    this.toolRegistrySnapshotService = options.toolRegistrySnapshotService;
     this.providerCapabilitySummaryProvider = options.providerCapabilitySummaryProvider;
     this.toolRepository = options.toolRepository;
     this.memoryRecallService = options.memoryRecallService;
@@ -1538,13 +1554,98 @@ export class SessionRunService {
         providerId: input.payload.providerId,
         modelId: input.payload.modelId,
       }) ?? { supportsToolCall: true };
-      const toolDefinitions = input.session.workspacePath && this.toolDefinitionProvider
-        ? this.toolDefinitionProvider.listDefinitions({
+      let toolDefinitions: ToolDefinition[] | undefined;
+      if (input.session.workspacePath && input.session.workspaceId && this.toolRegistrySnapshotService) {
+        const registrySnapshotResult = this.toolRegistrySnapshotService.createRunSnapshot({
+          runId: String(input.run.runId),
+          projectId: String(input.session.workspaceId),
+          permissionMode: input.permissionMode,
+          modelId: input.payload.modelId,
+          createdAt: input.payload.createdAt,
+          providerCapabilitySummary,
+        });
+        toolDefinitions = registrySnapshotResult.modelVisibleToolDefinitions;
+        const registryEvents = [
+          createToolRegistrySourcesEnsuredEvent({
+            eventId: this.ids.eventId(),
+            runId: String(input.run.runId),
+            sessionId: String(input.session.sessionId),
+            sequence: lastSequence += 1,
+            createdAt: input.payload.createdAt,
+            payload: {
+              sourceIds: registrySnapshotResult.diagnostics.sourceIds,
+              createdSourceIds: registrySnapshotResult.diagnostics.createdSourceIds,
+            },
+          }),
+          createToolRegistrySnapshotCreatedEvent({
+            eventId: this.ids.eventId(),
+            runId: String(input.run.runId),
+            sessionId: String(input.session.sessionId),
+            sequence: lastSequence += 1,
+            createdAt: input.payload.createdAt,
+            payload: {
+              snapshotId: registrySnapshotResult.snapshot.snapshotId,
+              projectId: registrySnapshotResult.snapshot.projectId,
+              permissionMode: registrySnapshotResult.snapshot.permissionMode,
+              modelId: registrySnapshotResult.snapshot.modelId,
+              registryVersion: registrySnapshotResult.snapshot.registryVersion,
+              sourceVersionHash: registrySnapshotResult.snapshot.sourceVersionHash,
+              sourceCount: registrySnapshotResult.snapshot.sourceEntries.length,
+              entryCount: registrySnapshotResult.snapshot.entries.length,
+              exposedCount: registrySnapshotResult.snapshot.entries.filter((entry) => entry.exposedToModel).length,
+            },
+          }),
+          ...registrySnapshotResult.snapshot.entries.map((entry) => createToolRegistryEntryResolvedEvent({
+            eventId: this.ids.eventId(),
+            runId: String(input.run.runId),
+            sessionId: String(input.session.sessionId),
+            sequence: lastSequence += 1,
+            createdAt: input.payload.createdAt,
+            payload: {
+              snapshotId: entry.snapshotId,
+              snapshotEntryId: entry.snapshotEntryId,
+              registrationId: entry.registrationId,
+              canonicalToolId: entry.canonicalToolId,
+              modelVisibleName: entry.modelVisibleName,
+              sourceId: entry.sourceId,
+              namespace: entry.namespace,
+              sourceToolName: entry.sourceToolName,
+              effectiveStatus: entry.effectiveStatus,
+              exposedToModel: entry.exposedToModel,
+              ...(entry.disabledReason ? { disabledReason: entry.disabledReason } : {}),
+              ...(entry.unavailableReason ? { unavailableReason: entry.unavailableReason } : {}),
+              ...(entry.conflictReason ? { conflictReason: entry.conflictReason } : {}),
+            },
+          })),
+          createToolRegistryModelVisibleToolsDerivedEvent({
+            eventId: this.ids.eventId(),
+            runId: String(input.run.runId),
+            sessionId: String(input.session.sessionId),
+            sequence: lastSequence += 1,
+            createdAt: input.payload.createdAt,
+            payload: {
+              snapshotId: registrySnapshotResult.snapshot.snapshotId,
+              modelId: registrySnapshotResult.snapshot.modelId,
+              modelSupportsToolCall: registrySnapshotResult.diagnostics.modelSupportsToolCall,
+              toolNames: registrySnapshotResult.diagnostics.modelVisibleToolNames,
+              hiddenCount: registrySnapshotResult.diagnostics.hiddenCount,
+            },
+          }),
+        ].map((event) => withSessionMessageRequestMetadata(event, {
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+        }));
+
+        for (const event of registryEvents) {
+          this.appendRuntimeEvent(event, input.chatStreamAdapter);
+        }
+      } else if (input.session.workspacePath && this.toolDefinitionProvider) {
+        toolDefinitions = this.toolDefinitionProvider.listDefinitions({
             runId: String(input.run.runId),
             permissionMode: input.permissionMode,
             providerCapabilitySummary,
-          })
-        : undefined;
+          });
+      }
       const sessionContext = this.sessionContextInputService.buildSessionContextInput({
         sessionId: String(input.session.sessionId),
         currentRunId: String(input.run.runId),
@@ -1629,6 +1730,10 @@ export class SessionRunService {
 
       yield runStarted;
       runStartedYielded = true;
+      for (const event of this.repository.listRuntimeEventsByRun(String(input.run.runId)).filter((event) =>
+        event.sequence > runStarted.sequence && event.eventType.startsWith('tool.registry.'))) {
+        yield event;
+      }
       const compaction = await compactionPromise;
 
       for (const event of compaction.events) {
@@ -3407,6 +3512,7 @@ export function createDefaultSessionRunService(
     repository: new SessionRunRepository(database),
     activePathRepository,
     toolRepository,
+    toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),
     permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),

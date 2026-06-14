@@ -40,8 +40,10 @@ import {
 import {
   APPROVAL_SCOPES,
   ApprovalRequestSchema,
+  TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES,
   PermissionDecisionSchema,
   ToolExecutionSchema,
+  ToolNameSchema,
   ToolPolicyDecisionSchema,
   type ApprovalScope,
 } from '../tool/contracts';
@@ -449,6 +451,55 @@ const ToolResultCreatedPayloadSchema = z
       'invalid_tool_input',
     ]),
     summary: z.string().min(1),
+  })
+  .strict();
+
+const ToolRegistrySourcesEnsuredPayloadSchema = z
+  .object({
+    sourceIds: z.array(z.string().min(1)),
+    createdSourceIds: z.array(z.string().min(1)),
+  })
+  .strict();
+
+const ToolRegistrySnapshotCreatedPayloadSchema = z
+  .object({
+    snapshotId: z.string().min(1),
+    projectId: z.string().min(1),
+    permissionMode: z.string().min(1),
+    modelId: z.string().min(1),
+    registryVersion: z.number().int().positive(),
+    sourceVersionHash: z.string().min(1),
+    sourceCount: z.number().int().nonnegative(),
+    entryCount: z.number().int().nonnegative(),
+    exposedCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const ToolRegistryEntryResolvedPayloadSchema = z
+  .object({
+    snapshotId: z.string().min(1),
+    snapshotEntryId: z.string().min(1),
+    registrationId: z.string().min(1),
+    canonicalToolId: z.string().min(1),
+    modelVisibleName: ToolNameSchema,
+    sourceId: z.string().min(1),
+    namespace: z.string().min(1),
+    sourceToolName: ToolNameSchema,
+    effectiveStatus: z.enum(TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES),
+    exposedToModel: z.boolean(),
+    disabledReason: z.string().min(1).optional(),
+    unavailableReason: z.string().min(1).optional(),
+    conflictReason: z.string().min(1).optional(),
+  })
+  .strict();
+
+const ToolRegistryModelVisibleToolsDerivedPayloadSchema = z
+  .object({
+    snapshotId: z.string().min(1),
+    modelId: z.string().min(1),
+    modelSupportsToolCall: z.boolean(),
+    toolNames: z.array(ToolNameSchema),
+    hiddenCount: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -944,6 +995,22 @@ export const ModelToolCallDetectedEventSchema = eventSchema('model.tool_call.det
 export const ModelStepCompletedEventSchema = eventSchema('model.step.completed', ModelStepCompletedPayloadSchema);
 export const ToolCallCreatedEventSchema = eventSchema('tool.call.created', ToolCallCreatedPayloadSchema);
 export const ToolResultCreatedEventSchema = eventSchema('tool.result.created', ToolResultCreatedPayloadSchema);
+export const ToolRegistrySourcesEnsuredEventSchema = eventSchema(
+  'tool.registry.sources.ensured',
+  ToolRegistrySourcesEnsuredPayloadSchema,
+);
+export const ToolRegistrySnapshotCreatedEventSchema = eventSchema(
+  'tool.registry.snapshot.created',
+  ToolRegistrySnapshotCreatedPayloadSchema,
+);
+export const ToolRegistryEntryResolvedEventSchema = eventSchema(
+  'tool.registry.entry.resolved',
+  ToolRegistryEntryResolvedPayloadSchema,
+);
+export const ToolRegistryModelVisibleToolsDerivedEventSchema = eventSchema(
+  'tool.registry.model_visible_tools.derived',
+  ToolRegistryModelVisibleToolsDerivedPayloadSchema,
+);
 export const ToolExecutionRequestedEventSchema = eventSchema(
   'tool.execution.requested',
   ToolExecutionRequestedPayloadSchema,
@@ -1079,6 +1146,10 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ModelStepCompletedEventSchema,
   ToolCallCreatedEventSchema,
   ToolResultCreatedEventSchema,
+  ToolRegistrySourcesEnsuredEventSchema,
+  ToolRegistrySnapshotCreatedEventSchema,
+  ToolRegistryEntryResolvedEventSchema,
+  ToolRegistryModelVisibleToolsDerivedEventSchema,
   ToolExecutionRequestedEventSchema,
   ToolExecutionValidatedEventSchema,
   ToolExecutionPolicyDecidedEventSchema,

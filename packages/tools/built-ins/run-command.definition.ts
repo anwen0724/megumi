@@ -35,5 +35,8 @@ export const runCommandDefinition: ToolDefinition = {
   riskLevel: 'medium',
   sideEffect: 'execute_command',
   availability: { status: 'available' },
+  executionMode: 'sequential',
+  permissionMetadata: { ruleToolName: 'run_command' },
+  modelFacingDescription: 'Run a project-scoped command through the host command adapter and return redacted output previews.',
 };
 

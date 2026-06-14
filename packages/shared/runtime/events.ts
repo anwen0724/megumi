@@ -31,7 +31,9 @@ import type {
   ApprovalStatus,
   PermissionDecision,
   ToolExecution,
+  ToolName,
   ToolPolicyDecision,
+  ToolRegistrySnapshotEntryStatus,
 } from '../tool/contracts';
 import type {
   CancelReason,
@@ -110,6 +112,10 @@ export const RUNTIME_EVENT_TYPES = [
   'model.step.completed',
   'tool.call.created',
   'tool.result.created',
+  'tool.registry.sources.ensured',
+  'tool.registry.snapshot.created',
+  'tool.registry.entry.resolved',
+  'tool.registry.model_visible_tools.derived',
   'tool.execution.requested',
   'tool.execution.validated',
   'tool.execution.policy_decided',
@@ -417,6 +423,47 @@ export interface ToolResultCreatedPayload {
     | 'invalid_tool_call'
     | 'invalid_tool_input';
   summary: string;
+}
+
+export interface ToolRegistrySourcesEnsuredPayload {
+  sourceIds: string[];
+  createdSourceIds: string[];
+}
+
+export interface ToolRegistrySnapshotCreatedPayload {
+  snapshotId: string;
+  projectId: string;
+  permissionMode: string;
+  modelId: string;
+  registryVersion: number;
+  sourceVersionHash: string;
+  sourceCount: number;
+  entryCount: number;
+  exposedCount: number;
+}
+
+export interface ToolRegistryEntryResolvedPayload {
+  snapshotId: string;
+  snapshotEntryId: string;
+  registrationId: string;
+  canonicalToolId: string;
+  modelVisibleName: ToolName;
+  sourceId: string;
+  namespace: string;
+  sourceToolName: ToolName;
+  effectiveStatus: ToolRegistrySnapshotEntryStatus;
+  exposedToModel: boolean;
+  disabledReason?: string;
+  unavailableReason?: string;
+  conflictReason?: string;
+}
+
+export interface ToolRegistryModelVisibleToolsDerivedPayload {
+  snapshotId: string;
+  modelId: string;
+  modelSupportsToolCall: boolean;
+  toolNames: ToolName[];
+  hiddenCount: number;
 }
 
 export interface RunCompletedPayload {
@@ -760,6 +807,10 @@ export type RuntimeEventPayloadByType = {
   'model.step.completed': ModelStepCompletedPayload;
   'tool.call.created': ToolCallCreatedPayload;
   'tool.result.created': ToolResultCreatedPayload;
+  'tool.registry.sources.ensured': ToolRegistrySourcesEnsuredPayload;
+  'tool.registry.snapshot.created': ToolRegistrySnapshotCreatedPayload;
+  'tool.registry.entry.resolved': ToolRegistryEntryResolvedPayload;
+  'tool.registry.model_visible_tools.derived': ToolRegistryModelVisibleToolsDerivedPayload;
   'tool.execution.requested': ToolExecutionRequestedPayload;
   'tool.execution.validated': ToolExecutionValidatedPayload;
   'tool.execution.policy_decided': ToolExecutionPolicyDecidedPayload;

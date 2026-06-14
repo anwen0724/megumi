@@ -8,6 +8,7 @@ import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
+import { ToolRegistrySnapshotService } from '@megumi/desktop/main/services/tool/tool-registry-snapshot.service';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import {
   SessionRunService,
@@ -249,6 +250,7 @@ function createServiceWithModelStepStream(
   permissionSnapshotService?: SessionRunServiceOptions['permissionSnapshotService'];
   toolRuntimeFactory?: SessionRunServiceOptions['toolRuntimeFactory'];
   toolDefinitionProvider?: SessionRunServiceOptions['toolDefinitionProvider'];
+  toolRegistrySnapshotService?: SessionRunServiceOptions['toolRegistrySnapshotService'];
   providerCapabilitySummaryProvider?: SessionRunServiceOptions['providerCapabilitySummaryProvider'];
   timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   agentInstructionSourceService?: SessionRunServiceOptions['agentInstructionSourceService'];
@@ -267,6 +269,7 @@ function createServiceWithModelStepStream(
   workspaceChanges?: SessionRunServiceOptions['workspaceChanges'];
   createToolRepository?: (database: Database.Database) => ToolRepository;
   runId?: () => string;
+  stepId?: () => string;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
@@ -280,6 +283,7 @@ function createServiceWithModelStepStream(
     ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
+    ...(options?.toolRegistrySnapshotService ? { toolRegistrySnapshotService: options.toolRegistrySnapshotService } : {}),
     ...(options?.providerCapabilitySummaryProvider ? {
       providerCapabilitySummaryProvider: options.providerCapabilitySummaryProvider,
     } : {}),
@@ -318,7 +322,7 @@ function createServiceWithModelStepStream(
     ids: {
       sessionId: () => 'session-1',
       runId: options?.runId ?? (() => 'run-1'),
-      stepId: () => 'step-1',
+      stepId: options?.stepId ?? (() => 'step-1'),
       actionId: () => 'action-1',
       observationId: () => 'observation-1',
       eventId: () => `event-${Math.random().toString(36).slice(2)}`,
@@ -4024,6 +4028,230 @@ describe('SessionRunService', () => {
     expect(requests[0]?.toolDefinitions ?? []).toEqual([]);
   });
 
+  it('creates a run tool registry snapshot and passes model-visible definitions to the provider request', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    let toolRepository: ToolRepository | undefined;
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      createToolRepository(database) {
+        seedProject(database);
+        toolRepository = new ToolRepository(database);
+        return toolRepository;
+      },
+      toolRegistrySnapshotService: {
+        createRunSnapshot(input) {
+          if (!toolRepository) {
+            throw new Error('Tool repository was not initialized.');
+          }
+          return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(input);
+        },
+      },
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-17T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-registry-snapshot',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'List docs files',
+          createdAt: '2026-05-17T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-17T00:00:00.000Z',
+      },
+    });
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(toolRepository?.getToolRegistrySnapshotByRun('run-1')).toBeDefined();
+    expect(requests[0]?.toolDefinitions?.map((definition) => definition.name)).toEqual([
+      'read_file',
+      'list_directory',
+      'glob',
+      'search_text',
+      'edit_file',
+      'write_file',
+      'run_command',
+    ]);
+    expect(streamed.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'tool.registry.sources.ensured',
+      'tool.registry.snapshot.created',
+      'tool.registry.entry.resolved',
+      'tool.registry.model_visible_tools.derived',
+    ]));
+  });
+
+  it('does not expose model tools but still persists snapshot diagnostics when model tool calls are unsupported', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    let toolRepository: ToolRepository | undefined;
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      createToolRepository(database) {
+        seedProject(database);
+        toolRepository = new ToolRepository(database);
+        return toolRepository;
+      },
+      toolRegistrySnapshotService: {
+        createRunSnapshot(input) {
+          if (!toolRepository) {
+            throw new Error('Tool repository was not initialized.');
+          }
+          return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(input);
+        },
+      },
+      providerCapabilitySummaryProvider: {
+        getProviderCapabilitySummary: () => ({ supportsToolCall: false }),
+      },
+      onRequest: (request) => requests.push(request),
+    });
+    service.createSession({
+      title: 'Provider without tool calling',
+      workspaceId: 'project-1',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-registry-no-tools',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'chat-only',
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Read package.json',
+          createdAt: '2026-06-14T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-14T00:00:00.000Z',
+      },
+    });
+    const streamed: RuntimeEvent[] = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(requests[0]?.toolDefinitions).toBeUndefined();
+    expect(toolRepository?.getToolRegistrySnapshotByRun('run-1')?.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          disabledReason: 'model_tools_unsupported',
+          exposedToModel: false,
+        }),
+      ]),
+    );
+    expect(streamed.find((event) => event.eventType === 'tool.registry.model_visible_tools.derived')?.payload).toMatchObject({
+      modelSupportsToolCall: false,
+      toolNames: [],
+    });
+  });
+
+  it('does not recreate run snapshot after source state changes during the same run', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    let toolRepository: ToolRepository | undefined;
+    let runIndex = 0;
+    let stepIndex = 0;
+    const service = createServiceWithModelStepStream((request, callIndex) => {
+      requests.push(request);
+      if (callIndex === 1 && toolRepository) {
+        const externalTest = toolRepository.getToolSource('external_test');
+        if (!externalTest) {
+          throw new Error('Expected external_test source.');
+        }
+        toolRepository.saveToolSource({
+          ...externalTest,
+          enabled: true,
+          updatedAt: '2026-06-14T00:00:01.000Z',
+        });
+      }
+      return [assistantOutputCompletedEvent(callIndex)];
+    }, {
+      createToolRepository(database) {
+        seedProject(database);
+        toolRepository = new ToolRepository(database);
+        return toolRepository;
+      },
+      toolRegistrySnapshotService: {
+        createRunSnapshot(input) {
+          if (!toolRepository) {
+            throw new Error('Tool repository was not initialized.');
+          }
+          return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(input);
+        },
+      },
+      runId: () => {
+        runIndex += 1;
+        return `run-${runIndex}`;
+      },
+      stepId: () => {
+        stepIndex += 1;
+        return `step-${stepIndex}`;
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+
+    const first = await service.sendSessionMessage({
+      requestId: 'request-registry-run-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user-1',
+          role: 'user',
+          content: 'First run',
+          createdAt: '2026-06-14T00:00:00.000Z',
+        }],
+        createdAt: '2026-06-14T00:00:00.000Z',
+      },
+    });
+    for await (const _event of first.events) {
+      // Drain first run.
+    }
+    const second = await service.sendSessionMessage({
+      requestId: 'request-registry-run-2',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        messages: [{
+          id: 'message-local-user-2',
+          role: 'user',
+          content: 'Second run',
+          createdAt: '2026-06-14T00:00:02.000Z',
+        }],
+        createdAt: '2026-06-14T00:00:02.000Z',
+      },
+    });
+    for await (const _event of second.events) {
+      // Drain second run.
+    }
+
+    expect(toolRepository?.getToolRegistrySnapshotByRun('run-1')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
+      exposedToModel: false,
+    });
+    expect(toolRepository?.getToolRegistrySnapshotByRun('run-2')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
+      exposedToModel: true,
+    });
+    expect(requests[0]?.toolDefinitions?.map((definition) => definition.name)).not.toContain('demo_echo');
+    expect(requests[1]?.toolDefinitions?.map((definition) => definition.name)).toContain('demo_echo');
+  });
+
   it('builds session message model input from persisted SessionContextInput', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
@@ -7142,3 +7370,10 @@ describe('SessionRunService', () => {
     ]);
   });
 });
+
+function seedProject(database: Database.Database): void {
+  database.prepare(`
+    INSERT OR IGNORE INTO projects (project_id, name, repo_path, repo_path_key, status, created_at, last_opened_at)
+    VALUES ('project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
+  `).run();
+}

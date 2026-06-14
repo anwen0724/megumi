@@ -237,6 +237,58 @@ export function createToolResultCreatedEvent(
   return createRuntimeEvent(input);
 }
 
+export function createToolRegistrySourcesEnsuredEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.registry.sources.ensured'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.registry.sources.ensured'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.registry.sources.ensured',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createToolRegistrySnapshotCreatedEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.registry.snapshot.created'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.registry.snapshot.created'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.registry.snapshot.created',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createToolRegistryEntryResolvedEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.registry.entry.resolved'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.registry.entry.resolved'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.registry.entry.resolved',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createToolRegistryModelVisibleToolsDerivedEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.registry.model_visible_tools.derived'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.registry.model_visible_tools.derived'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.registry.model_visible_tools.derived',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
 export function createToolExecutionRequestedEvent(
   input: RunRuntimeEventFactoryInput<'tool.execution.requested'>,
 ): TypedRuntimeEvent<'tool.execution.requested'> {

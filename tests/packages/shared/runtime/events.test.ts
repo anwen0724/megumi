@@ -48,6 +48,10 @@ import {
   createToolExecutionRequestedEvent,
   createToolExecutionStartedEvent,
   createToolExecutionValidatedEvent,
+  createToolRegistryEntryResolvedEvent,
+  createToolRegistryModelVisibleToolsDerivedEvent,
+  createToolRegistrySnapshotCreatedEvent,
+  createToolRegistrySourcesEnsuredEvent,
   createWorkspaceRestoreCompletedEvent,
   createWorkspaceRestoreRequestedEvent,
 } from '@megumi/shared/runtime';
@@ -599,6 +603,88 @@ describe('context runtime events', () => {
 });
 
 describe('tool and approval runtime events', () => {
+  it('accepts tool registry resolution diagnostic events', () => {
+    expect(RuntimeEventTypeSchema.parse('tool.registry.sources.ensured')).toBe('tool.registry.sources.ensured');
+    expect(RuntimeEventTypeSchema.parse('tool.registry.snapshot.created')).toBe('tool.registry.snapshot.created');
+    expect(RuntimeEventTypeSchema.parse('tool.registry.entry.resolved')).toBe('tool.registry.entry.resolved');
+    expect(RuntimeEventTypeSchema.parse('tool.registry.model_visible_tools.derived')).toBe(
+      'tool.registry.model_visible_tools.derived',
+    );
+
+    const base = {
+      runId: 'run-1',
+      sequence: 1,
+      createdAt: '2026-06-14T00:00:00.000Z',
+    };
+    const sourcesEnsured = createToolRegistrySourcesEnsuredEvent({
+      ...base,
+      eventId: 'event-tool-registry-sources-ensured',
+      payload: {
+        sourceIds: ['built_in', 'external_test'],
+        createdSourceIds: ['built_in'],
+      },
+    });
+    const snapshotCreated = createToolRegistrySnapshotCreatedEvent({
+      ...base,
+      eventId: 'event-tool-registry-snapshot-created',
+      sequence: 2,
+      payload: {
+        snapshotId: 'tool-registry-snapshot-run-1',
+        projectId: 'project-1',
+        permissionMode: 'default',
+        modelId: 'gpt-5',
+        registryVersion: 1,
+        sourceVersionHash: 'registry-version-1',
+        sourceCount: 2,
+        entryCount: 8,
+        exposedCount: 7,
+      },
+    });
+    const entryResolved = createToolRegistryEntryResolvedEvent({
+      ...base,
+      eventId: 'event-tool-registry-entry-resolved',
+      sequence: 3,
+      payload: {
+        snapshotId: 'tool-registry-snapshot-run-1',
+        snapshotEntryId: 'tool-registry-snapshot-entry-run-1-built_in-megumi-read_file',
+        registrationId: 'tool-registration-built_in-read_file',
+        canonicalToolId: 'built_in:megumi:read_file',
+        modelVisibleName: 'read_file',
+        sourceId: 'built_in',
+        namespace: 'megumi',
+        sourceToolName: 'read_file',
+        effectiveStatus: 'available',
+        exposedToModel: true,
+      },
+    });
+    const modelVisibleToolsDerived = createToolRegistryModelVisibleToolsDerivedEvent({
+      ...base,
+      eventId: 'event-tool-registry-visible-tools-derived',
+      sequence: 4,
+      payload: {
+        snapshotId: 'tool-registry-snapshot-run-1',
+        modelId: 'gpt-5',
+        modelSupportsToolCall: true,
+        toolNames: ['read_file', 'list_directory'],
+        hiddenCount: 0,
+      },
+    });
+
+    for (const event of [
+      sourcesEnsured,
+      snapshotCreated,
+      entryResolved,
+      modelVisibleToolsDerived,
+    ]) {
+      expect(event).toMatchObject({
+        source: 'tool',
+        visibility: 'debug',
+        persist: 'required',
+      });
+      expect(RuntimeEventSchema.parse(event)).toEqual(event);
+    }
+  });
+
   it('accepts requested tool and approval events with full shared objects', () => {
     const base = {
       eventId: 'event-tool-requested',
