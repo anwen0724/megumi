@@ -133,4 +133,28 @@ describe('package dependency boundaries', () => {
       ]),
     ).toEqual([]);
   });
+
+  it('keeps ToolCallHandlerService behind the source-aware execution router', () => {
+    const source = fs.readFileSync(
+      path.join(root, 'apps/desktop/src/main/services/tool/tool-call-handler.service.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('ToolExecutionRouter');
+    expect(source).toContain('toolExecutionRouter');
+    expect(source).not.toContain('ProjectToolExecutor');
+    expect(source).not.toContain('createReadFileExecutor');
+    expect(source).not.toContain('createWriteFileExecutor');
+    expect(source).not.toContain('createRunCommandExecutor');
+  });
+
+  it('does not add non-goal source executors to the desktop tool services', () => {
+    const source = walkSourceFiles(path.join(root, 'apps/desktop/src/main/services/tool'))
+      .map((file) => fs.readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(source).not.toMatch(/McpToolSourceExecutor/);
+    expect(source).not.toMatch(/PluginToolSourceExecutor/);
+    expect(source).not.toMatch(/ProjectLocalToolSourceExecutor/);
+  });
 });

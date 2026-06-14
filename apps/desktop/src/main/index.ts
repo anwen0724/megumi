@@ -28,8 +28,10 @@ import { ProviderSettingsService } from './services/provider/provider-settings.s
 import { PermissionSnapshotService } from './services/security/permission-snapshot.service';
 import { createDefaultRunContextService } from './services/runtime/run-context.service';
 import { ToolService } from './services/tool/tool.service';
+import { createBuiltInToolSourceExecutor } from './services/tool/built-in-tool-source-executor.service';
+import { createExternalTestToolSourceExecutor } from './services/tool/external-test-tool-source-executor.service';
 import { createToolCallHandlerService } from './services/tool/tool-call-handler.service';
-import { createProjectToolExecutor } from './services/tool/project-tool-executor.service';
+import { createToolExecutionRouter } from './services/tool/tool-execution-router.service';
 import { ToolRegistrySnapshotService } from './services/tool/tool-registry-snapshot.service';
 import { WorkspaceChangeTrackerService } from './services/workspace/workspace-change-tracker.service';
 import { WorkspaceRestoreService } from './services/workspace/workspace-restore.service';
@@ -158,9 +160,14 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
       permissionMode,
       projectRoot,
       settings: await permissionSettingsService.loadForProject(projectRoot),
-      projectExecutor: createProjectToolExecutor({
-        projectRoot,
-        workspaceChangeTracker,
+      toolExecutionRouter: createToolExecutionRouter({
+        sourceExecutors: [
+          createBuiltInToolSourceExecutor({
+            projectRoot,
+            workspaceChangeTracker,
+          }),
+          createExternalTestToolSourceExecutor(),
+        ],
       }),
     });
   },

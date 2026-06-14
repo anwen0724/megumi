@@ -27,6 +27,7 @@ import {
   createToolExecutionFailedEvent,
   createToolExecutionPolicyDecidedEvent,
   createToolExecutionRequestedEvent,
+  createToolExecutionRoutedEvent,
   createToolExecutionStartedEvent,
   createToolInputValidationFailedEvent,
   createToolResultCreatedEvent,
@@ -42,7 +43,10 @@ import type {
   ToolResult,
   ToolSourceIdentity,
 } from '@megumi/shared/tool';
-import type { ProjectToolExecutor } from './project-tool-executor.service';
+import type {
+  ToolExecutionRouter,
+  ToolExecutionRouting,
+} from './tool-execution-router.service';
 import type { WorkspaceChangeExecutionScope } from '../workspace/workspace-change-tracker.service';
 
 export interface ToolCallHandlerRepositoryPort {
@@ -64,7 +68,7 @@ export interface ToolCallHandlerServiceOptions {
   permissionMode: PermissionMode;
   projectRoot: string;
   settings: MergedPermissionSettings;
-  projectExecutor: ProjectToolExecutor;
+  toolExecutionRouter: ToolExecutionRouter;
   now?: () => string;
   ids?: {
     toolExecutionId(): string;
@@ -137,7 +141,7 @@ export function createToolCallHandlerService(
       }
 
       if (executedToolCount > 0) {
-        resolvedOptions.projectExecutor.finalizeWorkspaceChangeSet?.(workspaceChangeScope);
+        resolvedOptions.toolExecutionRouter.finalizeWorkspaceChangeSet?.(workspaceChangeScope);
       }
 
       return { toolResults, pendingApprovals, runtimeEvents };
@@ -219,10 +223,11 @@ async function resumeToolApproval(
     runId: String(runningToolExecution.runId),
     stepId: String(runningToolExecution.stepId),
   };
-  const toolResult = withToolResultSourceIdentity(await options.projectExecutor.executeToolExecution(
+  const routedResult = await options.toolExecutionRouter.executeToolExecution(
     runningToolExecution,
     workspaceChangeScope,
-  ), sourceIdentityFromRecord(runningToolExecution));
+  );
+  const toolResult = withToolResultSourceIdentity(routedResult.toolResult, sourceIdentityFromRecord(runningToolExecution));
 
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
@@ -233,11 +238,18 @@ async function resumeToolApproval(
   });
 
   const savedToolResult = options.repository.saveToolResult(toolResult);
-  options.projectExecutor.finalizeWorkspaceChangeSet?.(workspaceChangeScope);
+  options.toolExecutionRouter.finalizeWorkspaceChangeSet?.(workspaceChangeScope);
   return {
     toolResult: savedToolResult,
     runtimeEvents: [
       createToolExecutionStartedRuntimeEventFromToolExecution(runningToolExecution),
+      ...(routedResult.routed
+        ? [createToolExecutionRoutedRuntimeEventFromRouting(
+          runningToolExecution,
+          routedResult.routing,
+          runningToolExecution.startedAt ?? toolResult.createdAt,
+        )]
+        : []),
       toolResult.kind === 'success' || toolResult.kind === 'redacted'
         ? createToolExecutionCompletedRuntimeEventFromToolExecution(completedToolExecution)
         : createToolExecutionFailedRuntimeEventFromToolExecution(completedToolExecution, toolResult.error),
@@ -409,10 +421,18 @@ async function handleSingleToolCall(
     startedAt: options.now(),
   });
   runtimeEvents.push(createToolExecutionStartedRuntimeEvent(request, runningToolExecution));
-  const result = withToolResultSourceIdentity(await options.projectExecutor.executeToolExecution(
+  const routedResult = await options.toolExecutionRouter.executeToolExecution(
     runningToolExecution,
     workspaceChangeScope,
-  ), sourceIdentity);
+  );
+  const result = withToolResultSourceIdentity(routedResult.toolResult, sourceIdentity);
+  if (routedResult.routed) {
+    runtimeEvents.push(createToolExecutionRoutedRuntimeEvent(
+      request,
+      routedResult.routing,
+      runningToolExecution.startedAt ?? result.createdAt,
+    ));
+  }
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
     status: result.kind === 'success' || result.kind === 'redacted' ? 'completed' : 'failed',
@@ -580,6 +600,28 @@ function createToolExecutionStartedRuntimeEventFromToolExecution(toolExecution: 
       toolExecutionId: toolExecution.toolExecutionId,
       ...(toolExecution.startedAt ? { startedAt: toolExecution.startedAt } : {}),
     },
+  });
+}
+
+function createToolExecutionRoutedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  routing: ToolExecutionRouting,
+  createdAt: string,
+): RuntimeEvent {
+  return createToolExecutionRoutedEvent({
+    ...runtimeEventBase(request, `event:${routing.toolExecutionId}:routed`, createdAt),
+    payload: routing,
+  });
+}
+
+function createToolExecutionRoutedRuntimeEventFromRouting(
+  toolExecution: ToolExecution,
+  routing: ToolExecutionRouting,
+  createdAt: string,
+): RuntimeEvent {
+  return createToolExecutionRoutedEvent({
+    ...runtimeEventBaseForToolExecution(toolExecution, `event:${routing.toolExecutionId}:routed`, createdAt),
+    payload: routing,
   });
 }
 

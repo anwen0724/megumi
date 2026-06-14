@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management';
 import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool/tool-call-handler.service';
+import type { RoutedToolExecutionResult } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import { createToolRegistrySnapshot } from '@megumi/tools/registry';
 import {
@@ -30,7 +31,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -74,7 +75,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -128,7 +129,7 @@ describe('ToolCallHandlerService', () => {
         permissionMode: 'default',
         projectRoot: 'C:/project',
         settings: { allow: [], ask: [], deny: [] },
-        projectExecutor: executor,
+        toolExecutionRouter: executor,
         now: () => '2026-05-20T00:00:01.000Z',
         ids: fixedIds(),
       });
@@ -157,7 +158,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -201,7 +202,7 @@ describe('ToolCallHandlerService', () => {
   it('returns redacted tool results to the loop as model-consumable ToolResult facts', async () => {
     const repository = fakeRepository();
     const executor = {
-      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<RoutedToolExecutionResult> => routedToolResult(toolExecution, {
         toolResultId: 'tool-result-redacted',
         toolCallId: toolExecution.toolCallId,
         toolExecutionId: toolExecution.toolExecutionId,
@@ -220,7 +221,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -241,6 +242,7 @@ describe('ToolCallHandlerService', () => {
       'tool.execution.policy_decided',
       'permission.decision.created',
       'tool.execution.started',
+      'tool.execution.routed',
       'tool.execution.completed',
       'tool.result.created',
     ]);
@@ -250,7 +252,7 @@ describe('ToolCallHandlerService', () => {
   it('persists policy decisions, executes allowed tools, and returns saved ToolResult records', async () => {
     const repository = fakeRepository();
     const executor = {
-      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<RoutedToolExecutionResult> => routedToolResult(toolExecution, {
         toolResultId: 'tool-result-1',
         toolCallId: toolExecution.toolCallId,
         toolExecutionId: toolExecution.toolExecutionId,
@@ -269,7 +271,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -343,6 +345,7 @@ describe('ToolCallHandlerService', () => {
       'tool.execution.policy_decided',
       'permission.decision.created',
       'tool.execution.started',
+      'tool.execution.routed',
       'tool.execution.completed',
       'tool.result.created',
     ]);
@@ -360,6 +363,62 @@ describe('ToolCallHandlerService', () => {
     }));
   });
 
+  it('records unrouted tool errors without a routed runtime event', async () => {
+    const repository = fakeRepository();
+    const executor = {
+      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<RoutedToolExecutionResult> => ({
+        routed: false,
+        toolResult: {
+          toolResultId: 'tool-result-unrouted',
+          toolCallId: toolExecution.toolCallId,
+          toolExecutionId: toolExecution.toolExecutionId,
+          runId: toolExecution.runId,
+          kind: 'tool_error',
+          textContent: 'Tool execution is missing source identity.',
+          error: {
+            code: 'tool_execution_failed',
+            message: 'Tool execution is missing source identity.',
+            severity: 'error',
+            retryable: false,
+            source: 'tool',
+          },
+          redactionState: 'none',
+          createdAt: '2026-05-20T00:00:02.000Z',
+        },
+      })),
+      finalizeWorkspaceChangeSet: vi.fn(),
+    };
+    const handler = createToolCallHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      toolExecutionRouter: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    const outcome = await handler.handleToolCalls({
+      request: modelRequest(),
+      toolCalls: [toolCall('read_file', { path: 'README.md' })],
+    });
+
+    expect(outcome.toolResults).toEqual([expect.objectContaining({
+      kind: 'tool_error',
+      textContent: 'Tool execution is missing source identity.',
+    })]);
+    expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.resolved',
+      'tool.execution.requested',
+      'tool.execution.policy_decided',
+      'permission.decision.created',
+      'tool.execution.started',
+      'tool.execution.failed',
+      'tool.result.created',
+    ]);
+  });
+
   it('does not execute denied tools and returns a saved policy_denied ToolResult', async () => {
     const repository = fakeRepository();
     const executor = { executeToolExecution: vi.fn(), finalizeWorkspaceChangeSet: vi.fn() };
@@ -369,7 +428,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'plan',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -427,7 +486,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -483,7 +542,7 @@ describe('ToolCallHandlerService', () => {
   it('finalizes executed workspace changes when a later tool pauses for approval', async () => {
     const repository = fakeRepository();
     const executor = {
-      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (toolExecution: ToolExecution): Promise<RoutedToolExecutionResult> => routedToolResult(toolExecution, {
         toolResultId: 'tool-result-1',
         toolCallId: toolExecution.toolCallId,
         toolExecutionId: toolExecution.toolExecutionId,
@@ -501,7 +560,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'accept_edits',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -534,7 +593,7 @@ describe('ToolCallHandlerService', () => {
       approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
     });
     const executor = {
-      executeToolExecution: vi.fn(async (runningToolExecution: ToolExecution): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (runningToolExecution: ToolExecution): Promise<RoutedToolExecutionResult> => routedToolResult(runningToolExecution, {
         toolResultId: 'tool-result-executed',
         toolCallId: runningToolExecution.toolCallId,
         toolExecutionId: runningToolExecution.toolExecutionId,
@@ -552,7 +611,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -613,6 +672,7 @@ describe('ToolCallHandlerService', () => {
     });
     expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
       'tool.execution.started',
+      'tool.execution.routed',
       'tool.execution.completed',
       'tool.result.created',
     ]);
@@ -628,7 +688,7 @@ describe('ToolCallHandlerService', () => {
       approvalRequests: new Map([[approvalRequest.approvalRequestId, approvalRequest]]),
     });
     const executor = {
-      executeToolExecution: vi.fn(async (runningToolExecution: ToolExecution): Promise<ToolResult> => ({
+      executeToolExecution: vi.fn(async (runningToolExecution: ToolExecution): Promise<RoutedToolExecutionResult> => routedToolResult(runningToolExecution, {
         toolResultId: 'tool-result-failed',
         toolCallId: runningToolExecution.toolCallId,
         toolExecutionId: runningToolExecution.toolExecutionId,
@@ -653,7 +713,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -675,6 +735,7 @@ describe('ToolCallHandlerService', () => {
     });
     expect(result?.runtimeEvents?.map((event) => event.eventType)).toEqual([
       'tool.execution.started',
+      'tool.execution.routed',
       'tool.execution.failed',
       'tool.result.created',
     ]);
@@ -705,7 +766,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -744,7 +805,7 @@ describe('ToolCallHandlerService', () => {
       permissionMode: 'default',
       projectRoot: 'C:/project',
       settings: { allow: [], ask: [], deny: [] },
-      projectExecutor: executor,
+      toolExecutionRouter: executor,
       now: () => '2026-05-20T00:00:01.000Z',
       ids: fixedIds(),
     });
@@ -914,6 +975,28 @@ function pendingApprovalRequest(toolCall: ToolCall, toolExecution: ToolExecution
     requestedScope: 'once',
     status: 'pending',
     createdAt: '2026-05-20T00:00:02.000Z',
+  };
+}
+
+function routedToolResult(
+  toolExecution: ToolExecution,
+  toolResult: ToolResult,
+): RoutedToolExecutionResult {
+  return {
+    routed: true,
+    routing: {
+      toolExecutionId: String(toolExecution.toolExecutionId),
+      toolName: toolExecution.toolName,
+      registrySnapshotId: String(toolExecution.registrySnapshotId),
+      snapshotEntryId: String(toolExecution.snapshotEntryId),
+      modelVisibleName: toolExecution.modelVisibleName!,
+      canonicalToolId: String(toolExecution.canonicalToolId),
+      sourceId: String(toolExecution.sourceId),
+      namespace: String(toolExecution.namespace),
+      sourceToolName: toolExecution.sourceToolName!,
+      executorKind: 'built_in',
+    },
+    toolResult,
   };
 }
 

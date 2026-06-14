@@ -35,6 +35,7 @@ import type {
   ToolPolicyDecision,
   ToolRegistrySnapshotEntryStatus,
   ToolSourceIdentity,
+  ToolSourceKind,
 } from '../tool/contracts';
 import type {
   CancelReason,
@@ -126,6 +127,7 @@ export const RUNTIME_EVENT_TYPES = [
   'permission.decision.created',
   'tool.execution.approval_requested',
   'tool.execution.started',
+  'tool.execution.routed',
   'tool.execution.completed',
   'tool.execution.failed',
   'tool.execution.denied',
@@ -645,6 +647,12 @@ export interface ToolExecutionStartedPayload {
   startedAt?: string;
 }
 
+export interface ToolExecutionRoutedPayload extends ToolSourceIdentity {
+  toolExecutionId: string;
+  toolName: ToolName;
+  executorKind: ToolSourceKind;
+}
+
 export interface ToolExecutionCompletedPayload {
   toolExecutionId: string;
   completedAt?: string;
@@ -855,6 +863,7 @@ export type RuntimeEventPayloadByType = {
   'permission.decision.created': PermissionDecisionCreatedPayload;
   'tool.execution.approval_requested': ToolExecutionApprovalRequestedPayload;
   'tool.execution.started': ToolExecutionStartedPayload;
+  'tool.execution.routed': ToolExecutionRoutedPayload;
   'tool.execution.completed': ToolExecutionCompletedPayload;
   'tool.execution.failed': ToolExecutionFailedPayload;
   'tool.execution.denied': ToolExecutionDeniedPayload;

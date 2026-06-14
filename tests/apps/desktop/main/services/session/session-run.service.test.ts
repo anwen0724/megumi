@@ -8,8 +8,11 @@ import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
+import { createExternalTestToolSourceExecutor } from '@megumi/desktop/main/services/tool/external-test-tool-source-executor.service';
 import { ToolRegistrySnapshotService } from '@megumi/desktop/main/services/tool/tool-registry-snapshot.service';
 import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool/tool-call-handler.service';
+import { createToolExecutionRouter } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
+import type { ToolSourceExecutor } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import {
   SessionRunService,
@@ -27,6 +30,7 @@ import { PermissionSnapshotService } from '@megumi/desktop/main/services/securit
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelInputContext, ModelStepRuntimeRequest, SessionInstructionSourceSnapshot } from '@megumi/shared/model';
 import type { ModelInputContextSourceKind } from '@megumi/shared/model';
+import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { RunContext } from '@megumi/shared/run';
 import type { RunAction } from '@megumi/shared/session';
 import type { SessionSourceEntry } from '@megumi/shared/session';
@@ -357,6 +361,8 @@ function createServiceWithModelStepStream(
 function createServiceWithRealToolResolution(input: {
   toolCall: RuntimeEvent;
   permissionMode?: 'default' | 'plan';
+  enableExternalTestSource?: boolean;
+  settings?: MergedPermissionSettings;
 }) {
   const requests: ModelStepRuntimeRequest[] = [];
   let toolRepository: ToolRepository | undefined;
@@ -383,6 +389,18 @@ function createServiceWithRealToolResolution(input: {
     createToolRepository(database) {
       seedProject(database);
       toolRepository = new ToolRepository(database);
+      if (input.enableExternalTestSource) {
+        toolRepository.seedDefaultToolSources('2026-05-17T00:00:00.000Z');
+        const externalTest = toolRepository.getToolSource('external_test');
+        if (!externalTest) {
+          throw new Error('Expected external_test source.');
+        }
+        toolRepository.saveToolSource({
+          ...externalTest,
+          enabled: true,
+          updatedAt: '2026-05-17T00:00:01.000Z',
+        });
+      }
       return toolRepository;
     },
     toolRegistrySnapshotService: {
@@ -399,6 +417,12 @@ function createServiceWithRealToolResolution(input: {
           throw new Error('Tool repository was not initialized.');
         }
         const repository = toolRepository;
+        const builtInExecutor: ToolSourceExecutor = {
+          sourceId: 'built_in',
+          sourceKind: 'built_in',
+          executeToolExecution,
+          finalizeWorkspaceChangeSet: vi.fn(),
+        };
         return createToolCallHandlerService({
           registry,
           repository: {
@@ -415,11 +439,16 @@ function createServiceWithRealToolResolution(input: {
           },
           permissionMode,
           projectRoot,
-          settings: { allow: [], ask: [], deny: [] },
-          projectExecutor: {
-            executeToolExecution,
-            finalizeWorkspaceChangeSet: vi.fn(),
-          },
+          settings: input.settings ?? { allow: [], ask: [], deny: [] },
+          toolExecutionRouter: createToolExecutionRouter({
+            sourceExecutors: [
+              builtInExecutor,
+              createExternalTestToolSourceExecutor({
+                now: () => '2026-05-17T00:00:02.500Z',
+                ids: { toolResultId: () => 'tool-result:external-test' },
+              }),
+            ],
+          }),
           now: () => '2026-05-17T00:00:02.500Z',
         });
       },
@@ -438,6 +467,8 @@ function createServiceWithRealToolResolution(input: {
 async function runRealToolResolutionContinuation(input: {
   toolCall: RuntimeEvent;
   permissionMode?: 'default' | 'plan';
+  enableExternalTestSource?: boolean;
+  settings?: MergedPermissionSettings;
   userContent?: string;
 }) {
   const setup = createServiceWithRealToolResolution(input);
@@ -4723,6 +4754,54 @@ describe('SessionRunService', () => {
     expectToolContinuationKind(requests[1], 'policy_denied');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).toContain('tool.execution.denied');
+    expect(executeToolExecution).not.toHaveBeenCalled();
+  });
+
+  it('continues the agent loop after external_test demo_echo tool results', async () => {
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+      enableExternalTestSource: true,
+      settings: {
+        allow: [{ scope: 'project', pattern: 'demo_echo(*)' }],
+        ask: [],
+        deny: [],
+      },
+      toolCall: toolUseCreatedEventFor({
+        sequence: 1,
+        toolCallId: 'tool-call-demo-echo',
+        providerToolCallId: 'provider-tool-call-demo-echo',
+        toolName: 'demo_echo',
+        input: { message: 'hello external test' },
+      }),
+      userContent: 'Echo a demo message',
+    });
+
+    expect(requests).toHaveLength(2);
+    expectToolContinuationKind(requests[1], 'success');
+    expect(JSON.stringify(requests[1]?.inputContext.parts)).toContain('hello external test');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.execution.routed');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
+    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
+    expect(executeToolExecution).not.toHaveBeenCalled();
+  });
+
+  it('continues the agent loop when external_test demo_echo is disabled', async () => {
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+      toolCall: toolUseCreatedEventFor({
+        sequence: 1,
+        toolCallId: 'tool-call-demo-echo-disabled',
+        providerToolCallId: 'provider-tool-call-demo-echo-disabled',
+        toolName: 'demo_echo',
+        input: { message: 'hello external test' },
+      }),
+      userContent: 'Echo while demo source is disabled',
+    });
+
+    expect(requests).toHaveLength(2);
+    expectToolContinuationKind(requests[1], 'invalid_tool_call');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.call.resolution_failed');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
+    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
+    expect(streamed.map((event) => event.eventType)).not.toContain('tool.execution.routed');
     expect(executeToolExecution).not.toHaveBeenCalled();
   });
 

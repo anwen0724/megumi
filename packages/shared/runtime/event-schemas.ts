@@ -40,6 +40,7 @@ import {
 import {
   APPROVAL_SCOPES,
   ApprovalRequestSchema,
+  TOOL_SOURCE_KINDS,
   TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES,
   PermissionDecisionSchema,
   ToolExecutionSchema,
@@ -712,6 +713,12 @@ const ToolExecutionStartedPayloadSchema = z
   })
   .strict();
 
+const ToolExecutionRoutedPayloadSchema = ToolSourceIdentitySchema.extend({
+  toolExecutionId: z.string().min(1),
+  toolName: ToolNameSchema,
+  executorKind: z.enum(TOOL_SOURCE_KINDS),
+}).strict();
+
 const ToolExecutionCompletedPayloadSchema = z
   .object({
     toolExecutionId: z.string().min(1),
@@ -1075,6 +1082,7 @@ export const ToolExecutionApprovalRequestedEventSchema = eventSchema(
   ToolExecutionApprovalRequestedPayloadSchema,
 );
 export const ToolExecutionStartedEventSchema = eventSchema('tool.execution.started', ToolExecutionStartedPayloadSchema);
+export const ToolExecutionRoutedEventSchema = eventSchema('tool.execution.routed', ToolExecutionRoutedPayloadSchema);
 export const ToolExecutionCompletedEventSchema = eventSchema('tool.execution.completed', ToolExecutionCompletedPayloadSchema);
 export const ToolExecutionFailedEventSchema = eventSchema('tool.execution.failed', ToolExecutionFailedPayloadSchema);
 export const ToolExecutionDeniedEventSchema = eventSchema('tool.execution.denied', ToolExecutionDeniedPayloadSchema);
@@ -1205,6 +1213,7 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   PermissionDecisionCreatedEventSchema,
   ToolExecutionApprovalRequestedEventSchema,
   ToolExecutionStartedEventSchema,
+  ToolExecutionRoutedEventSchema,
   ToolExecutionCompletedEventSchema,
   ToolExecutionFailedEventSchema,
   ToolExecutionDeniedEventSchema,

@@ -57,7 +57,7 @@ describe('built-in tools and host adapters source guards', () => {
     const handler = read('apps/desktop/src/main/services/tool/tool-call-handler.service.ts');
     const handleSingleToolCall = functionSection(handler, 'handleSingleToolCall', 'runtimeEventBase');
     const policyIndex = handleSingleToolCall.indexOf('evaluatePermissionPolicy({');
-    const executeIndex = handleSingleToolCall.indexOf('projectExecutor.executeToolExecution');
+    const executeIndex = handleSingleToolCall.indexOf('toolExecutionRouter.executeToolExecution');
 
     expect(policyIndex).toBeGreaterThan(-1);
     expect(executeIndex).toBeGreaterThan(-1);
@@ -78,7 +78,7 @@ describe('built-in tools and host adapters source guards', () => {
       'repository.saveApprovalRequest',
       sessionLookupIndex,
     );
-    const executeIndex = resumeToolApproval.indexOf('projectExecutor.executeToolExecution');
+    const executeIndex = resumeToolApproval.indexOf('toolExecutionRouter.executeToolExecution');
     const deniedBranch = resumeToolApproval.slice(deniedBranchIndex, sessionLookupIndex);
     const deniedSaveApprovalIndex = deniedBranch.indexOf('repository.saveApprovalRequest');
 

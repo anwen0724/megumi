@@ -15,7 +15,7 @@ describe('ProjectToolExecutor', () => {
       ids: { toolResultId: () => 'tool-result-1' },
     });
 
-    const result = await executor.executeToolExecution(toolCall('read_file', { path: 'README.md' }));
+    const result = await executeToolResult(executor, toolCall('read_file', { path: 'README.md' }));
 
     expect(result).toMatchObject({
       toolResultId: 'tool-result-1',
@@ -44,16 +44,16 @@ describe('ProjectToolExecutor', () => {
       ids: { toolResultId: () => 'tool-result-1' },
     });
 
-    await expect(executor.executeToolExecution(toolCall('read_file', { path: '../outside.txt' })))
+    await expect(executeToolResult(executor, toolCall('read_file', { path: '../outside.txt' })))
       .resolves.toMatchObject({ kind: 'tool_error' });
 
-    expect(await executor.executeToolExecution(toolCall('list_directory', { path: 'src' })))
+    expect(await executeToolResult(executor, toolCall('list_directory', { path: 'src' })))
       .toMatchObject({ structuredContent: { entries: [{ name: 'index.ts', kind: 'file' }] } });
 
-    expect(await executor.executeToolExecution(toolCall('glob', { pattern: 'src/*.ts' })))
+    expect(await executeToolResult(executor, toolCall('glob', { pattern: 'src/*.ts' })))
       .toMatchObject({ structuredContent: { matches: ['src/index.ts'] } });
 
-    expect(await executor.executeToolExecution(toolCall('search_text', { query: 'answer', path: 'src' })))
+    expect(await executeToolResult(executor, toolCall('search_text', { query: 'answer', path: 'src' })))
       .toMatchObject({ structuredContent: { matches: [{ path: 'src/index.ts', line: 1 }] } });
   });
 
@@ -68,14 +68,14 @@ describe('ProjectToolExecutor', () => {
       ids: { toolResultId: () => 'tool-result-1' },
     });
 
-    expect(await executor.executeToolExecution(toolCall('edit_file', {
+    expect(await executeToolResult(executor, toolCall('edit_file', {
       path: 'src/index.ts',
       oldText: '41',
       newText: '42',
     }))).toMatchObject({ structuredContent: { replacements: 1 } });
     expect(files.get('C:\\project\\src\\index.ts')).toBe('export const answer = 42;');
 
-    expect(await executor.executeToolExecution(toolCall('write_file', {
+    expect(await executeToolResult(executor, toolCall('write_file', {
       path: 'src/new.ts',
       content: 'export {}',
     }))).toMatchObject({ structuredContent: { created: true, overwritten: false } });
@@ -125,7 +125,7 @@ describe('ProjectToolExecutor', () => {
       ids: { toolResultId: () => 'tool-result-1' },
     });
 
-    await expect(executor.executeToolExecution(toolCall('run_command', { command: 'npm test' })))
+    await expect(executeToolResult(executor, toolCall('run_command', { command: 'npm test' })))
       .resolves.toMatchObject({
         kind: 'success',
         structuredContent: {
@@ -168,6 +168,15 @@ describe('ProjectToolExecutor', () => {
   });
 });
 
+async function executeToolResult(
+  executor: ReturnType<typeof createProjectToolExecutor>,
+  toolExecution: ToolExecution,
+): Promise<import('@megumi/shared/tool').ToolResult> {
+  const routedResult = await executor.executeToolExecution(toolExecution);
+  expect(routedResult.routed).toBe(true);
+  return routedResult.toolResult;
+}
+
 function toolCall(toolName: string, input: Record<string, unknown>): ToolExecution {
   return {
     toolExecutionId: 'tool-execution-1',
@@ -175,6 +184,13 @@ function toolCall(toolName: string, input: Record<string, unknown>): ToolExecuti
     runId: 'run-1',
     stepId: 'step-1',
     toolName,
+    registrySnapshotId: 'tool-registry-snapshot-run-1',
+    snapshotEntryId: `tool-registry-snapshot-entry-run-1-tool-registration-built_in-${toolName}-built_in-megumi-${toolName}`,
+    modelVisibleName: toolName as ToolExecution['modelVisibleName'],
+    canonicalToolId: `built_in:megumi:${toolName}`,
+    sourceId: 'built_in',
+    namespace: 'megumi',
+    sourceToolName: toolName as ToolExecution['sourceToolName'],
     input: input as ToolExecution['input'],
     inputPreview: {
       summary: `${toolName}`,

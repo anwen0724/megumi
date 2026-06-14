@@ -364,6 +364,19 @@ export function createToolExecutionStartedEvent(
   return createRuntimeEvent(input);
 }
 
+export function createToolExecutionRoutedEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.execution.routed'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.execution.routed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.execution.routed',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
 export function createToolExecutionCompletedEvent(
   input: RunRuntimeEventFactoryInput<'tool.execution.completed'>,
 ): TypedRuntimeEvent<'tool.execution.completed'> {

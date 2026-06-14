@@ -45,6 +45,7 @@ import {
   createToolExecutionDeniedEvent,
   createToolExecutionFailedEvent,
   createToolExecutionPolicyDecidedEvent,
+  createToolExecutionRoutedEvent,
   createToolExecutionRequestedEvent,
   createToolExecutionStartedEvent,
   createToolExecutionValidatedEvent,
@@ -683,6 +684,68 @@ describe('tool and approval runtime events', () => {
       });
       expect(RuntimeEventSchema.parse(event)).toEqual(event);
     }
+  });
+
+  it('accepts tool execution routing runtime events', () => {
+    expect(RuntimeEventTypeSchema.parse('tool.execution.routed')).toBe('tool.execution.routed');
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-tool-execution-routed',
+      schemaVersion: 1,
+      eventType: 'tool.execution.routed',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-06-14T00:00:00.000Z',
+      source: 'tool',
+      visibility: 'debug',
+      persist: 'required',
+      payload: {
+        toolExecutionId: 'tool-execution-1',
+        toolName: 'demo_echo',
+        executorKind: 'external_test',
+        registrySnapshotId: 'tool-registry-snapshot-run-1',
+        snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-external_test-echo-external_test-demo-echo',
+        modelVisibleName: 'demo_echo',
+        canonicalToolId: 'external_test:demo:echo',
+        sourceId: 'external_test',
+        namespace: 'demo',
+        sourceToolName: 'echo',
+      },
+    }).eventType).toBe('tool.execution.routed');
+
+    const event = createToolExecutionRoutedEvent({
+      eventId: 'event-tool-execution-routed',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-06-14T00:00:00.000Z',
+      payload: {
+        toolExecutionId: 'tool-execution-1',
+        toolName: 'read_file',
+        executorKind: 'built_in',
+        registrySnapshotId: 'tool-registry-snapshot-run-1',
+        snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+        modelVisibleName: 'read_file',
+        canonicalToolId: 'built_in:megumi:read_file',
+        sourceId: 'built_in',
+        namespace: 'megumi',
+        sourceToolName: 'read_file',
+      },
+    });
+
+    expect(event).toMatchObject({
+      eventType: 'tool.execution.routed',
+      source: 'tool',
+      visibility: 'debug',
+      persist: 'required',
+      payload: {
+        toolExecutionId: 'tool-execution-1',
+        executorKind: 'built_in',
+        canonicalToolId: 'built_in:megumi:read_file',
+      },
+    });
+    expect(RuntimeEventSchema.parse(event)).toEqual(event);
   });
 
   it('accepts tool call resolution and validation runtime events', () => {
