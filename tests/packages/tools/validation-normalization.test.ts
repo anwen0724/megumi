@@ -100,6 +100,27 @@ describe('tool validation and normalization', () => {
 });
 
 describe('validateToolInput JSON Schema subset', () => {
+  it('defaults root tool input schemas to object when type is omitted', () => {
+    expect(validateToolInput(definitionWithSchema({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+    }), 'not-an-object')).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $: expected object.',
+    });
+    expect(validateToolInput(definitionWithSchema({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+    }), { path: 'README.md' }).ok).toBe(true);
+  });
+
+  it('allows explicit non-object root schemas', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'string',
+    }), 'message')).toEqual({
+      ok: true,
+      value: 'message',
+    });
+  });
+
   it('validates nested objects and required properties', () => {
     const schema = {
       type: 'object',

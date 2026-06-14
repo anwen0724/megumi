@@ -10,12 +10,23 @@ export function validateToolInput(
   input: unknown,
 ): ToolInputValidationResult {
   const schema = definition.inputSchema as JsonObject;
-  const failure = validateAgainstSchema(input, schema, '$');
+  const failure = validateAgainstSchema(input, withDefaultRootObjectType(schema), '$');
   if (failure) {
     return { ok: false, errorMessage: failure };
   }
 
   return { ok: true, value: input };
+}
+
+function withDefaultRootObjectType(schema: JsonObject): JsonObject {
+  if (typeof schema.type === 'string') {
+    return schema;
+  }
+
+  return {
+    ...schema,
+    type: inferTypeFromSchema(schema) ?? 'object',
+  };
 }
 
 function validateAgainstSchema(value: unknown, schema: JsonObject, path: string): string | undefined {
