@@ -4778,7 +4778,14 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(2);
     expectToolContinuationKind(requests[1], 'success');
     expect(JSON.stringify(requests[1]?.inputContext.parts)).toContain('hello external test');
-    expect(streamed.map((event) => event.eventType)).toContain('tool.execution.routed');
+    expect(streamed.find((event) => event.eventType === 'tool.execution.routed')?.payload).toEqual(expect.objectContaining({
+      executorKind: 'external_test',
+      modelVisibleName: 'demo_echo',
+      canonicalToolId: 'external_test:demo:echo',
+      sourceId: 'external_test',
+      namespace: 'demo',
+      sourceToolName: 'echo',
+    }));
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(executeToolExecution).not.toHaveBeenCalled();

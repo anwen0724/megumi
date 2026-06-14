@@ -1,4 +1,4 @@
-// Adapts existing project-local built-in tool executors to the source-aware ToolSourceExecutor port.
+// Adapts Desktop Main built-in tool executors to the source-aware ToolSourceExecutor port.
 import fs from 'fs-extra';
 import { normalizeToolError } from '@megumi/tools/normalization';
 import type { ToolExecution, ToolResult, ToolSourceIdentity } from '@megumi/shared/tool';

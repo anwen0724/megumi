@@ -84,9 +84,32 @@ describe('ToolExecutionRouter', () => {
       toolName: 'demo_echo',
     }));
 
-    expect(result.routed).toBe(true);
+    expect(result.routed).toBe(false);
+    expect(result).not.toHaveProperty('routing');
     expect(result.toolResult.kind).toBe('tool_error');
     expect(result.toolResult.textContent).toContain('Unsupported tool source: external_test');
+  });
+
+  it('does not coerce unknown sourceId into executorKind when sourceId differs from source kind', async () => {
+    const router = createToolExecutionRouter({
+      sourceExecutors: [externalTestExecutor('external_test')],
+      now: () => '2026-06-14T00:00:00.000Z',
+      ids: { toolResultId: () => 'tool-result-error' },
+    });
+
+    const result = await router.executeToolExecution(toolExecution({
+      sourceId: 'another_external',
+      namespace: 'demo',
+      sourceToolName: 'echo',
+      canonicalToolId: 'another_external:demo:echo',
+      modelVisibleName: 'demo_echo',
+      toolName: 'demo_echo',
+    }));
+
+    expect(result.routed).toBe(false);
+    expect(result).not.toHaveProperty('routing');
+    expect(result.toolResult.kind).toBe('tool_error');
+    expect(result.toolResult.textContent).toContain('Unsupported tool source: another_external');
   });
 
   it('normalizes thrown source executor failures as tool_error', async () => {
@@ -133,6 +156,14 @@ function toolExecution(overrides: Partial<ToolExecution> = {}): ToolExecution {
     status: 'running',
     requestedAt: '2026-06-14T00:00:00.000Z',
     ...overrides,
+  };
+}
+
+function externalTestExecutor(sourceId: string) {
+  return {
+    sourceId,
+    sourceKind: 'external_test' as const,
+    executeToolExecution: vi.fn(async () => successToolResult()),
   };
 }
 

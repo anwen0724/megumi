@@ -60,17 +60,10 @@ export function createToolExecutionRouter(input: {
       }
 
       const executor = executorsBySourceId.get(sourceIdentity.sourceId);
-      const routing: ToolExecutionRouting = {
-        ...sourceIdentity,
-        toolExecutionId: String(toolExecution.toolExecutionId),
-        toolName: toolExecution.toolName,
-        executorKind: executor?.sourceKind ?? (sourceIdentity.sourceId as ToolSourceKind),
-      };
 
       if (!executor) {
         return {
-          routed: true,
-          routing,
+          routed: false,
           toolResult: createToolErrorResult(toolExecution, {
             ids,
             now,
@@ -79,6 +72,13 @@ export function createToolExecutionRouter(input: {
           }),
         };
       }
+
+      const routing: ToolExecutionRouting = {
+        ...sourceIdentity,
+        toolExecutionId: String(toolExecution.toolExecutionId),
+        toolName: toolExecution.toolName,
+        executorKind: executor.sourceKind,
+      };
 
       try {
         return {
