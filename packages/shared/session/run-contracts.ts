@@ -49,7 +49,6 @@ export type RunStatus = (typeof RUN_STATUSES)[number];
 export const RUN_TERMINAL_REASONS = [
   'assistant_completed',
   'user_cancelled',
-  'provider_transient_retry_exhausted',
   'provider_non_transient_failure',
   'provider_protocol_violation',
   'runtime_invariant_violation',

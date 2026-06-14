@@ -119,33 +119,28 @@ describe('recovery contracts', () => {
     ).toBe('retry_action');
   });
 
-  it('accepts 10.01 retry request kinds while keeping legacy recovery kinds', () => {
+  it('accepts manual retry request kinds while keeping legacy recovery kinds', () => {
     expect(RETRY_KINDS).toEqual(expect.arrayContaining([
       'retry_action',
       'retry_step',
       'retry_run_from_checkpoint',
-      'automatic_model_step',
       'manual_retry',
       'manual_rerun',
     ]));
     expect(RETRY_REASONS).toEqual(expect.arrayContaining([
-      'provider_overload',
-      'rate_limited',
-      'service_unavailable',
-      'network_timeout',
-      'premature_stream_end',
-      'runtime_provider_error',
+      'failed',
+      'cancelled',
       'interrupted',
     ]));
 
     expect(RetryRequestSchema.parse({
-      retryRequestId: 'retry_request_auto',
+      retryRequestId: 'retry_request_manual_retry',
       runId: 'run_123',
-      requestedBy: 'runtime',
-      retryKind: 'automatic_model_step',
-      reason: 'rate_limited',
+      requestedBy: 'user',
+      retryKind: 'manual_retry',
+      reason: 'failed',
       createdAt: '2026-06-01T10:00:00.000Z',
-    }).retryKind).toBe('automatic_model_step');
+    }).retryKind).toBe('manual_retry');
 
     expect(RetryRequestSchema.parse({
       retryRequestId: 'retry_request_manual',
@@ -237,7 +232,6 @@ describe('recovery contracts', () => {
       'retry_action',
       'retry_step',
       'retry_run_from_checkpoint',
-      'automatic_model_step',
       'manual_retry',
       'manual_rerun',
     ]);
@@ -247,12 +241,6 @@ describe('recovery contracts', () => {
       'cancelled',
       'approval_resolved',
       'runtime_error',
-      'provider_overload',
-      'rate_limited',
-      'service_unavailable',
-      'network_timeout',
-      'premature_stream_end',
-      'runtime_provider_error',
       'interrupted',
     ]);
   });

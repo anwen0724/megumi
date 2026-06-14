@@ -154,7 +154,6 @@ export const RUNTIME_EVENT_TYPES = [
   'memory.recall.completed',
   'memory.recall.failed',
   'memory.access.recorded',
-  'workspace.changes.detected_before_retry',
   'workspace.restore.requested',
   'workspace.restore.completed',
 ] as const;
@@ -706,13 +705,6 @@ export interface WorkspaceRestoreRequestedPayload {
   requestedBy: WorkspaceRestoreRequestedBy;
 }
 
-export interface WorkspaceChangesDetectedBeforeRetryPayload {
-  runId: string;
-  changedFileCount: number;
-  restorableCount: number;
-  changeSetIds: string[];
-}
-
 export interface WorkspaceRestoreCompletedPayload {
   restoreRequestId: string;
   restoreResultId: string;
@@ -812,7 +804,6 @@ export type RuntimeEventPayloadByType = {
   'memory.recall.completed': MemoryRecallCompletedPayload;
   'memory.recall.failed': MemoryRecallFailedPayload;
   'memory.access.recorded': MemoryAccessRecordedPayload;
-  'workspace.changes.detected_before_retry': WorkspaceChangesDetectedBeforeRetryPayload;
   'workspace.restore.requested': WorkspaceRestoreRequestedPayload;
   'workspace.restore.completed': WorkspaceRestoreCompletedPayload;
 };

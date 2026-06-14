@@ -9,7 +9,6 @@ import {
   ToolExecutionDeniedEventSchema,
   ToolExecutionPolicyDecidedEventSchema,
   ToolExecutionRequestedEventSchema,
-  WorkspaceChangesDetectedBeforeRetryEventSchema,
   isTerminalRuntimeEvent,
   createRuntimeEventSchema,
 } from '@megumi/shared/runtime';
@@ -49,7 +48,6 @@ import {
   createToolExecutionRequestedEvent,
   createToolExecutionStartedEvent,
   createToolExecutionValidatedEvent,
-  createWorkspaceChangesDetectedBeforeRetryEvent,
   createWorkspaceRestoreCompletedEvent,
   createWorkspaceRestoreRequestedEvent,
 } from '@megumi/shared/runtime';
@@ -450,51 +448,6 @@ describe('runtime event contracts', () => {
     expect(serialized).not.toContain('contentText');
   });
 
-  it('creates workspace change retry guard events without paths or raw content', () => {
-    const event = createWorkspaceChangesDetectedBeforeRetryEvent({
-      eventId: 'event-workspace-changes-detected',
-      runId: 'run-restore-1',
-      sessionId: 'session-restore-1',
-      requestId: 'request-restore-1',
-      sequence: 3,
-      createdAt: '2026-06-05T10:00:02.000Z',
-      source: 'main',
-      payload: {
-        runId: 'run-restore-1',
-        changedFileCount: 3,
-        restorableCount: 1,
-        changeSetIds: ['change-set-1', 'change-set-2'],
-      },
-    });
-
-    expect(WorkspaceChangesDetectedBeforeRetryEventSchema.parse(event)).toEqual(event);
-    expect(RuntimeEventSchema.parse(event)).toEqual(event);
-    expect(event).toMatchObject({
-      eventType: 'workspace.changes.detected_before_retry',
-      visibility: 'system',
-      persist: 'required',
-    });
-    expect(RUNTIME_EVENT_TYPES).toContain('workspace.changes.detected_before_retry');
-    expect(Object.keys(event.payload).sort()).toEqual([
-      'changeSetIds',
-      'changedFileCount',
-      'restorableCount',
-      'runId',
-    ]);
-    expect(() => RuntimeEventSchema.parse({
-      ...event,
-      payload: {
-        ...event.payload,
-        projectPath: 'src/app.ts',
-      },
-    })).toThrow();
-    const serialized = JSON.stringify(event);
-    expect(serialized).not.toContain('src/app.ts');
-    expect(serialized).not.toContain('C:\\project');
-    expect(serialized).not.toContain('before secret');
-    expect(serialized).not.toContain('after secret');
-    expect(serialized).not.toContain('contentText');
-  });
 });
 
 describe('agent lifecycle runtime events', () => {

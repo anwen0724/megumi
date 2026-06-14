@@ -27,19 +27,12 @@ export const SESSION_BRANCH_MARKER_REASONS = [
 export type SessionBranchMarkerReason = (typeof SESSION_BRANCH_MARKER_REASONS)[number];
 
 export const SESSION_RETRY_KINDS = [
-  'automatic_model_step',
   'manual_retry',
   'manual_rerun',
 ] as const;
 export type SessionRetryKind = (typeof SESSION_RETRY_KINDS)[number];
 
 export const SESSION_RETRY_REASONS = [
-  'provider_overload',
-  'rate_limited',
-  'service_unavailable',
-  'network_timeout',
-  'premature_stream_end',
-  'runtime_provider_error',
   'user_requested',
   'failed',
   'cancelled',

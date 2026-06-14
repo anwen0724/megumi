@@ -49,7 +49,12 @@ import type {
 } from '@megumi/shared/model';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
-import type { SessionActivePath, SessionBranchMarker, SessionSourceEntry } from '@megumi/shared/session';
+import type {
+  SessionActivePath,
+  SessionBranchMarker,
+  SessionRetryAttempt,
+  SessionSourceEntry,
+} from '@megumi/shared/session';
 import {
   isPermissionMode,
   type PermissionMode,
@@ -85,9 +90,7 @@ import {
   createSessionBranchDraftCancelledEvent,
   createSessionBranchMarkerCreatedEvent,
   createToolResultCreatedEvent,
-  createWorkspaceChangesDetectedBeforeRetryEvent,
 } from '@megumi/shared/runtime';
-import type { SessionRetryAttempt } from '@megumi/shared/session';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 import type {
@@ -125,10 +128,6 @@ import {
   type CompactIfNeededInput,
   type SessionCompactionOrchestrationResult,
 } from './session-compaction-orchestrator.service';
-import {
-  classifyAutomaticModelStepRetry,
-  createAutomaticRetryBackoffMs,
-} from './session-retry-policy.service';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
@@ -282,13 +281,6 @@ export interface SessionRunEffectiveCwdProvider {
   getRunEffectiveCwd(input: { sessionId: string; runId: string; stepId: string }): string | undefined;
 }
 
-export interface SessionRunAutomaticRetryOptions {
-  maxAttempts: number;
-  baseDelayMs: number;
-  maxDelayMs: number;
-  sleep?: (input: { delayMs: number; attemptNumber: number; runId: string }) => Promise<void>;
-}
-
 export interface SessionRunWorkspaceChangeReadPort {
   listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
   listChangeSetsByRun?(runId: string): WorkspaceChangeSet[];
@@ -349,7 +341,6 @@ export interface SessionRunServiceOptions {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
   activePathRepository?: SessionActivePathRepository;
-  automaticRetry?: Partial<SessionRunAutomaticRetryOptions>;
   workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
@@ -377,12 +368,6 @@ const DEFAULT_CONTEXT_BUDGET_POLICY: ContextBudgetPolicy = {
   modelContextWindow: 8192,
   reservedOutputTokens: 1024,
   keepRecentTokens: 7168,
-};
-
-const DEFAULT_AUTOMATIC_RETRY: SessionRunAutomaticRetryOptions = {
-  maxAttempts: 2,
-  baseDelayMs: 2000,
-  maxDelayMs: 8000,
 };
 
 class EmptySessionActivePathRepository {
@@ -455,7 +440,6 @@ export class SessionRunService {
   private readonly timelineMessageRepository?: SessionRunServiceOptions['timelineMessageRepository'];
   private readonly clock: SessionRunServiceClock;
   private readonly ids: SessionRunServiceIds;
-  private readonly automaticRetry: SessionRunAutomaticRetryOptions;
   private readonly workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
   private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
@@ -501,10 +485,6 @@ export class SessionRunService {
       : undefined;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
-    this.automaticRetry = {
-      ...DEFAULT_AUTOMATIC_RETRY,
-      ...(options.automaticRetry ?? {}),
-    };
     this.workspaceChanges = options.workspaceChanges;
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
       ?? (options.modelStepProvider
@@ -2015,14 +1995,7 @@ export class SessionRunService {
     const modelStepProvider = this.requireModelStepProvider();
     const toolRuntime = input.toolRuntime;
     const streamProviderModelStep = (request: ModelStepRuntimeRequest) =>
-      this.streamModelStepWithAutomaticRetry({
-        request,
-        run: input.run,
-        stream: (nextRequest) => modelStepProvider.streamModelStep(nextRequest),
-        transientAttemptEventSink: input.chatStreamAdapter
-          ? (event) => input.chatStreamAdapter?.handleRuntimeEvent(event)
-          : undefined,
-      });
+      modelStepProvider.streamModelStep(request);
     const modelEvents = toolRuntime
       ? runModelToolLoop({
           request: input.request,
@@ -2343,235 +2316,6 @@ export class SessionRunService {
     }
   }
 
-  private streamModelStepWithAutomaticRetry(input: {
-    request: ModelStepRuntimeRequest;
-    run: Run;
-    stream: (request: ModelStepRuntimeRequest) => AsyncIterable<RuntimeEvent>;
-    transientAttemptEventSink?: (event: RuntimeEvent) => void;
-  }): AsyncIterable<RuntimeEvent> {
-    return this.doStreamModelStepWithAutomaticRetry(input);
-  }
-
-  private async *doStreamModelStepWithAutomaticRetry(input: {
-    request: ModelStepRuntimeRequest;
-    run: Run;
-    stream: (request: ModelStepRuntimeRequest) => AsyncIterable<RuntimeEvent>;
-    transientAttemptEventSink?: (event: RuntimeEvent) => void;
-  }): AsyncIterable<RuntimeEvent> {
-    let retryAttemptNumber = 0;
-    let currentAttempt: SessionRetryAttempt | undefined;
-
-    while (true) {
-      const stagedEvents: RuntimeEvent[] = [];
-      let retryableFailureEvent: RuntimeEvent | undefined;
-      let retryableFailureError: RuntimeError | undefined;
-      let shouldRetry = false;
-      let terminalAttemptStatus: SessionRetryAttempt['status'] = 'exhausted';
-
-      try {
-        for await (const event of input.stream(input.request)) {
-          if (event.eventType === 'run.failed') {
-            const error = getRunFailedError(event.payload);
-            const decision = error ? classifyAutomaticModelStepRetry(error) : { retryable: false };
-            if (error && decision.retryable) {
-              retryableFailureEvent = event;
-              retryableFailureError = error;
-              shouldRetry = retryAttemptNumber < this.automaticRetry.maxAttempts;
-              break;
-            }
-            if (error && currentAttempt) {
-              retryableFailureEvent = event;
-              retryableFailureError = error;
-              terminalAttemptStatus = 'failed';
-              break;
-            }
-          }
-
-          stagedEvents.push(event);
-        }
-      } catch (error) {
-        const runtimeError = createModelStepRuntimeErrorFromUnknown(error);
-        const decision = classifyAutomaticModelStepRetry(runtimeError);
-        if (!decision.retryable) {
-          if (currentAttempt) {
-            this.saveRetryAttemptUpdate(currentAttempt, 'failed', {
-              completedAt: this.clock.now(),
-              error: runtimeError,
-            });
-          }
-          throw runtimeError;
-        }
-        retryableFailureError = runtimeError;
-        shouldRetry = retryAttemptNumber < this.automaticRetry.maxAttempts;
-        if (!shouldRetry) {
-          if (currentAttempt) {
-            this.saveRetryAttemptUpdate(currentAttempt, 'exhausted', {
-              completedAt: this.clock.now(),
-              error: runtimeError,
-            });
-          }
-          throw runtimeError;
-        }
-      }
-
-      if (!retryableFailureError) {
-        for (const event of stagedEvents) {
-          yield event;
-        }
-        if (currentAttempt) {
-          const completedAt = this.clock.now();
-          this.saveRetryAttemptUpdate(currentAttempt, 'succeeded', { completedAt });
-          yield this.createRetryAuditEvent({
-            request: input.request,
-            eventType: 'retry.completed',
-            retryAttemptId: currentAttempt.retryAttemptId,
-            createdAt: completedAt,
-          });
-        }
-        return;
-      }
-
-      if (!shouldRetry) {
-        if (currentAttempt) {
-          this.saveRetryAttemptUpdate(currentAttempt, terminalAttemptStatus, {
-            completedAt: this.clock.now(),
-            error: retryableFailureError,
-          });
-        }
-        if (retryableFailureEvent) {
-          for (const event of stagedEvents) {
-            yield event;
-          }
-          yield retryableFailureEvent;
-          return;
-        }
-        throw retryableFailureError;
-      }
-
-      const retryBlockingChanges = this.getRetryBlockingWorkspaceChanges(input.request.runId);
-      if (retryBlockingChanges.length > 0) {
-        if (currentAttempt) {
-          this.saveRetryAttemptUpdate(currentAttempt, 'failed', {
-            completedAt: this.clock.now(),
-            error: retryableFailureError,
-          });
-        }
-        yield this.createWorkspaceChangesDetectedBeforeRetryEvent({
-          request: input.request,
-          changedFiles: retryBlockingChanges,
-          createdAt: this.clock.now(),
-        });
-        if (retryableFailureEvent) {
-          for (const event of stagedEvents) {
-            yield event;
-          }
-          yield retryableFailureEvent;
-          return;
-        }
-        throw retryableFailureError;
-      }
-
-      if (currentAttempt) {
-        this.saveRetryAttemptUpdate(currentAttempt, 'failed', {
-          completedAt: this.clock.now(),
-          error: retryableFailureError,
-        });
-      }
-      for (const event of stagedEvents) {
-        if (isTransientAssistantAttemptEvent(event)) {
-          input.transientAttemptEventSink?.(event);
-        }
-      }
-
-      retryAttemptNumber += 1;
-      currentAttempt = this.createRunningAutomaticRetryAttempt({
-        request: input.request,
-        run: input.run,
-        attemptNumber: retryAttemptNumber,
-        error: retryableFailureError,
-      });
-      yield this.createRetryAuditEvent({
-        request: input.request,
-        eventType: 'retry.started',
-        retryAttemptId: currentAttempt.retryAttemptId,
-        createdAt: currentAttempt.createdAt,
-      });
-
-      if (this.repository.getRun(input.request.runId)?.status === 'cancelled') {
-        this.saveRetryAttemptUpdate(currentAttempt, 'cancelled', {
-          completedAt: this.clock.now(),
-        });
-        return;
-      }
-
-      const delayMs = createAutomaticRetryBackoffMs({
-        attemptNumber: retryAttemptNumber,
-        baseDelayMs: this.automaticRetry.baseDelayMs,
-        maxDelayMs: this.automaticRetry.maxDelayMs,
-      });
-      await (this.automaticRetry.sleep ?? sleepRetryBackoff)({
-        delayMs,
-        attemptNumber: retryAttemptNumber,
-        runId: input.request.runId,
-      });
-
-      if (this.repository.getRun(input.request.runId)?.status === 'cancelled') {
-        this.saveRetryAttemptUpdate(currentAttempt, 'cancelled', {
-          completedAt: this.clock.now(),
-        });
-        return;
-      }
-    }
-  }
-
-  private getRetryBlockingWorkspaceChanges(runId: string): WorkspaceChangedFile[] {
-    return (this.workspaceChanges?.listChangedFilesByRun(runId) ?? [])
-      .filter((changedFile) => (
-        changedFile.restoreState === 'restorable'
-        || changedFile.restoreState === 'conflict'
-        || changedFile.restoreState === 'restore_failed'
-      ));
-  }
-
-  private createRunningAutomaticRetryAttempt(input: {
-    request: ModelStepRuntimeRequest;
-    run: Run;
-    attemptNumber: number;
-    error: RuntimeError;
-  }): SessionRetryAttempt {
-    const decision = classifyAutomaticModelStepRetry(input.error);
-    return this.requireActivePathRepository().saveRetryAttempt({
-      retryAttemptId: this.ids.retryAttemptId(),
-      sessionId: input.request.sessionId,
-      runId: input.request.runId,
-      baseRunId: input.run.runId,
-      attemptNumber: input.attemptNumber,
-      retryKind: 'automatic_model_step',
-      reason: decision.reason ?? 'runtime_provider_error',
-      status: 'running',
-      retryable: true,
-      createdAt: this.clock.now(),
-      metadata: {
-        requestId: input.request.requestId,
-        providerId: input.request.providerId,
-        modelId: input.request.modelId,
-      },
-    });
-  }
-
-  private saveRetryAttemptUpdate(
-    attempt: SessionRetryAttempt,
-    status: SessionRetryAttempt['status'],
-    updates: Pick<SessionRetryAttempt, 'completedAt'> & Partial<Pick<SessionRetryAttempt, 'error'>>,
-  ): SessionRetryAttempt {
-    return this.requireActivePathRepository().saveRetryAttempt({
-      ...attempt,
-      status,
-      completedAt: updates.completedAt,
-      ...(updates.error ? { error: updates.error } : {}),
-    });
-  }
-
   private recordManualRerunAttemptForBranchDraft(input: {
     requestId: string;
     sessionId: string;
@@ -2754,56 +2498,6 @@ export class SessionRunService {
     }
 
     return activePathRepository.listChildSourceEntries(markerSourceEntry.sourceEntryId).length > 0;
-  }
-
-  private createRetryAuditEvent(input: {
-    request: ModelStepRuntimeRequest;
-    eventType: 'retry.started' | 'retry.completed';
-    retryAttemptId: string;
-    createdAt: string;
-  }): RuntimeEvent {
-    return createRuntimeEvent({
-      eventId: this.ids.eventId(),
-      eventType: input.eventType,
-      sessionId: input.request.sessionId,
-      runId: input.request.runId,
-      stepId: input.request.stepId,
-      requestId: input.request.requestId,
-      sequence: 0,
-      createdAt: input.createdAt,
-      source: 'main',
-      visibility: 'system',
-      persist: 'required',
-      payload: {
-        retryRequestId: input.retryAttemptId,
-        retryKind: 'automatic_model_step',
-      },
-    });
-  }
-
-  private createWorkspaceChangesDetectedBeforeRetryEvent(input: {
-    request: ModelStepRuntimeRequest;
-    changedFiles: WorkspaceChangedFile[];
-    createdAt: string;
-  }): RuntimeEvent {
-    const changeSetIds = [...new Set(input.changedFiles.map((changedFile) => changedFile.changeSetId))];
-
-    return createWorkspaceChangesDetectedBeforeRetryEvent({
-      eventId: this.ids.eventId(),
-      sessionId: input.request.sessionId,
-      runId: input.request.runId,
-      stepId: input.request.stepId,
-      requestId: input.request.requestId,
-      sequence: 0,
-      createdAt: input.createdAt,
-      source: 'main',
-      payload: {
-        runId: input.request.runId,
-        changedFileCount: input.changedFiles.length,
-        restorableCount: input.changedFiles.filter((changedFile) => changedFile.restoreState === 'restorable').length,
-        changeSetIds,
-      },
-    });
   }
 
   private appendSourceAndMoveLeaf(input: {
@@ -3411,26 +3105,6 @@ function createRuntimeErrorFromUnknown(error: unknown): RuntimeError {
   };
 }
 
-function createModelStepRuntimeErrorFromUnknown(error: unknown): RuntimeError {
-  if (isRuntimeError(error)) {
-    return error;
-  }
-
-  const message = error instanceof Error && error.message
-    ? error.message
-    : 'Model step provider failed.';
-  const looksProviderTransient = /rate.?limit|too many requests|429|timeout|timed out|network|overload|503|unavailable|premature|stream ended/i
-    .test(message);
-
-  return {
-    code: looksProviderTransient ? 'provider_network_error' : 'runtime_unknown',
-    message,
-    severity: 'error',
-    retryable: looksProviderTransient,
-    source: looksProviderTransient ? 'provider' : 'core',
-  };
-}
-
 function isRuntimeError(value: unknown): value is RuntimeError {
   return isObjectRecord(value)
     && typeof value.code === 'string'
@@ -3471,16 +3145,6 @@ function withSequenceAfter(event: RuntimeEvent, lastSequence: number): RuntimeEv
     ...event,
     sequence: lastSequence + 1,
   };
-}
-
-async function sleepRetryBackoff(input: { delayMs: number }): Promise<void> {
-  if (input.delayMs <= 0) {
-    return;
-  }
-
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, input.delayMs);
-  });
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -3667,15 +3331,6 @@ async function* coalesceTextDeltaRuntimeEvents(
 
 function isTextDeltaRuntimeEvent(event: RuntimeEvent): boolean {
   return event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta';
-}
-
-function isTransientAssistantAttemptEvent(event: RuntimeEvent): boolean {
-  return event.persist === 'transient'
-    && event.visibility === 'user'
-    && (
-      event.eventType === 'assistant.output.delta'
-      || event.eventType === 'model.output.delta'
-    );
 }
 
 function canMergeTextDelta(left: RuntimeEvent, right: RuntimeEvent): boolean {

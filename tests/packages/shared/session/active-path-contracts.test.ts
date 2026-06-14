@@ -158,7 +158,7 @@ describe('session active path contracts', () => {
     })).toThrow();
   });
 
-  it('parses retry attempt audit records without raw provider bodies', () => {
+  it('parses manual retry attempt audit records without raw provider bodies', () => {
     const parsed = SessionRetryAttemptSchema.parse({
       retryAttemptId: 'retry-attempt-1',
       sessionId: 'session-1',
@@ -166,8 +166,8 @@ describe('session active path contracts', () => {
       baseRunId: 'run-0',
       baseSourceEntryId: rootEntry.sourceEntryId,
       attemptNumber: 1,
-      retryKind: 'automatic_model_step',
-      reason: 'rate_limited',
+      retryKind: 'manual_retry',
+      reason: 'failed',
       status: 'failed',
       retryable: true,
       createdAt: now,
@@ -182,8 +182,8 @@ describe('session active path contracts', () => {
       metadata: { backoffMs: 250 },
     });
 
-    expect(parsed.retryKind).toBe('automatic_model_step');
-    expect(parsed.reason).toBe('rate_limited');
+    expect(parsed.retryKind).toBe('manual_retry');
+    expect(parsed.reason).toBe('failed');
     expect(JSON.stringify(parsed)).not.toContain('rawProviderBody');
     expect(() => SessionRetryAttemptSchema.parse({
       ...parsed,
@@ -230,11 +230,10 @@ describe('session active path contracts', () => {
       'branch_cancelled',
     ]);
     expect(SESSION_RETRY_KINDS).toEqual([
-      'automatic_model_step',
       'manual_retry',
       'manual_rerun',
     ]);
-    expect(SESSION_RETRY_REASONS).toContain('rate_limited');
+    expect(SESSION_RETRY_REASONS).toContain('failed');
     expect(SESSION_RETRY_REASONS).toContain('interrupted');
     expect(SESSION_RETRY_ATTEMPT_STATUSES).toEqual([
       'pending',

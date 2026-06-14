@@ -802,15 +802,6 @@ const MemoryAccessRecordedPayloadSchema = z
   })
   .strict();
 
-const WorkspaceChangesDetectedBeforeRetryPayloadSchema = z
-  .object({
-    runId: z.string().min(1),
-    changedFileCount: z.number().int().nonnegative(),
-    restorableCount: z.number().int().nonnegative(),
-    changeSetIds: z.array(z.string().min(1)),
-  })
-  .strict();
-
 const WorkspaceRestoreRequestedPayloadSchema = z
   .object({
     restoreRequestId: z.string().min(1),
@@ -1036,10 +1027,6 @@ export const MemoryRecallRequestedEventSchema = eventSchema('memory.recall.reque
 export const MemoryRecallCompletedEventSchema = eventSchema('memory.recall.completed', MemoryRecallCompletedPayloadSchema);
 export const MemoryRecallFailedEventSchema = eventSchema('memory.recall.failed', MemoryRecallFailedPayloadSchema);
 export const MemoryAccessRecordedEventSchema = eventSchema('memory.access.recorded', MemoryAccessRecordedPayloadSchema);
-export const WorkspaceChangesDetectedBeforeRetryEventSchema = eventSchema(
-  'workspace.changes.detected_before_retry',
-  WorkspaceChangesDetectedBeforeRetryPayloadSchema,
-);
 export const WorkspaceRestoreRequestedEventSchema = eventSchema(
   'workspace.restore.requested',
   WorkspaceRestoreRequestedPayloadSchema,
@@ -1136,7 +1123,6 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   MemoryRecallCompletedEventSchema,
   MemoryRecallFailedEventSchema,
   MemoryAccessRecordedEventSchema,
-  WorkspaceChangesDetectedBeforeRetryEventSchema,
   WorkspaceRestoreRequestedEventSchema,
   WorkspaceRestoreCompletedEventSchema,
 ]);

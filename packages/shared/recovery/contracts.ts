@@ -71,7 +71,6 @@ export const RETRY_KINDS = [
   'retry_action',
   'retry_step',
   'retry_run_from_checkpoint',
-  'automatic_model_step',
   'manual_retry',
   'manual_rerun',
 ] as const;
@@ -81,12 +80,6 @@ export const RETRY_REASONS = [
   'cancelled',
   'approval_resolved',
   'runtime_error',
-  'provider_overload',
-  'rate_limited',
-  'service_unavailable',
-  'network_timeout',
-  'premature_stream_end',
-  'runtime_provider_error',
   'interrupted',
 ] as const;
 
