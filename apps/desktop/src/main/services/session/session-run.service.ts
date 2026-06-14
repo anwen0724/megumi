@@ -5,6 +5,7 @@ import {
   assertRunStatusTransition,
   canCancelRunStatus,
   canResumeApprovalFromRunStatus,
+  createTerminalRuntimeError,
   isTerminalRunStatus,
   runTurn,
 } from '@megumi/core/agent-runtime';
@@ -32,7 +33,7 @@ import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
-import type { ToolRepository } from '@megumi/db/repos/tool.repo';
+import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
@@ -1376,6 +1377,69 @@ export class SessionRunService {
     }
 
     return this.resumeApprovalContinuation(continuation, input);
+  }
+
+  cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] } {
+    const cleanupAt = this.clock.now();
+    const activeRuns = this.repository.listRunsByStatuses([
+      'running',
+      'waiting_for_approval',
+      'cancelling',
+    ]);
+    const cleanedRunIds: string[] = [];
+
+    for (const run of activeRuns) {
+      const lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(run.runId)));
+      const error = createTerminalRuntimeError({
+        reason: 'runtime_restarted_with_active_run',
+        code: 'runtime_restarted_with_active_run',
+        message: 'Runtime restarted while this run was active; pending continuation is not recoverable in 19.01.',
+        source: 'main',
+        retryable: false,
+        details: {
+          previousStatus: run.status,
+          startupCleanup: true,
+        },
+      });
+      this.toolRepository?.cancelPendingApprovalRequestsByRun({
+        runId: String(run.runId),
+        resolvedAt: cleanupAt,
+      });
+      this.toolRepository?.cancelPendingToolExecutionsByRun({
+        runId: String(run.runId),
+        completedAt: cleanupAt,
+      });
+      this.repository.saveRun({
+        ...run,
+        status: 'failed',
+        completedAt: cleanupAt,
+        error,
+      });
+      this.repository.appendRuntimeEvent(createRuntimeEvent({
+        eventId: this.ids.eventId(),
+        eventType: 'run.failed',
+        runId: String(run.runId),
+        sessionId: String(run.sessionId),
+        sequence: lastSequence + 1,
+        createdAt: cleanupAt,
+        source: 'main',
+        visibility: 'user',
+        persist: 'required',
+        payload: { error },
+      }));
+      this.repository.appendRuntimeEvent(createRunStatusChangedEvent({
+        eventId: this.ids.eventId(),
+        sessionId: String(run.sessionId),
+        runId: String(run.runId),
+        sequence: lastSequence + 2,
+        createdAt: cleanupAt,
+        from: run.status,
+        to: 'failed',
+      }));
+      cleanedRunIds.push(String(run.runId));
+    }
+
+    return { cleanedRunIds };
   }
 
   private createInitialContextForRun(input: {
@@ -3690,10 +3754,12 @@ export function createDefaultSessionRunService(
   migrateDatabase(database);
   const permissionSnapshotRepository = new PermissionSnapshotRepository(database);
   const activePathRepository = new SessionActivePathRepository(database);
+  const toolRepository = new ToolRepository(database);
 
-  return new SessionRunService({
+  const service = new SessionRunService({
     repository: new SessionRunRepository(database),
     activePathRepository,
+    toolRepository,
     permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
@@ -3703,4 +3769,6 @@ export function createDefaultSessionRunService(
       listGlobalInstructionDirs: () => [homePaths.homePath],
     },
   });
+  service.cleanupInterruptedRunsOnStartup();
+  return service;
 }

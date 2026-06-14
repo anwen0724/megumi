@@ -21,6 +21,7 @@ export const RUNTIME_ERROR_CODES = [
   'runtime_cancelled',
   'context_budget_exceeded',
   'runtime_protocol_violation',
+  'runtime_restarted_with_active_run',
   'runtime_unknown',
   'tool_input_invalid',
   'tool_execution_failed',

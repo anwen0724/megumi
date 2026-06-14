@@ -1279,19 +1279,21 @@ function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
 function createDurablePendingApprovalRows(toolRepository: ToolRepository, input: {
   runId?: string;
   stepId?: string;
+  modelStepId?: string;
   toolCallId?: string;
   toolExecutionId?: string;
   approvalRequestId?: string;
 } = {}): void {
   const runId = input.runId ?? 'run-1';
   const stepId = input.stepId ?? 'step-1';
+  const modelStepId = input.modelStepId ?? 'model-step-1';
   const toolCallId = input.toolCallId ?? 'tool-call-1';
   const toolExecutionId = input.toolExecutionId ?? 'tool-execution-1';
   const approvalRequestId = input.approvalRequestId ?? 'approval-request-1';
   const toolCall: ToolCall = {
     toolCallId,
     runId,
-    modelStepId: 'model-step-1',
+    modelStepId,
     providerToolCallId: 'provider-tool-call-1',
     toolName: 'read_file',
     input: { path: 'package.json' },
@@ -6236,6 +6238,100 @@ describe('SessionRunService', () => {
     })).toBeUndefined();
     expect(resumeToolApproval).not.toHaveBeenCalled();
     expect(service.listRuntimeEventsByRun('run-1').map((event) => event.eventType)).not.toContain('tool.result.created');
+  });
+
+  it('cleans up active runs left from a previous runtime on startup', () => {
+    db = new Database(':memory:');
+    migrateDatabase(db);
+    const repository = new SessionRunRepository(db);
+    const toolRepository = new ToolRepository(db);
+    repository.saveSession({
+      sessionId: 'session-1',
+      title: 'Startup cleanup',
+      status: 'active',
+      createdAt: '2026-06-14T00:00:00.000Z',
+      updatedAt: '2026-06-14T00:00:00.000Z',
+    });
+    repository.saveRun({
+      runId: 'run-waiting',
+      sessionId: 'session-1',
+      mode: 'default',
+      goal: 'Waiting',
+      status: 'waiting_for_approval',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+    repository.saveStep({
+      stepId: 'step-waiting',
+      runId: 'run-waiting',
+      kind: 'model',
+      status: 'waiting_for_approval',
+    });
+    repository.saveModelStep({
+      modelStepId: 'model-step-waiting',
+      runId: 'run-waiting',
+      stepId: 'step-waiting',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      status: 'waiting_for_approval',
+      startedAt: '2026-06-14T00:00:00.000Z',
+    });
+    createDurablePendingApprovalRows(toolRepository, {
+      runId: 'run-waiting',
+      stepId: 'step-waiting',
+      modelStepId: 'model-step-waiting',
+      toolCallId: 'tool-call-waiting',
+      toolExecutionId: 'tool-execution-waiting',
+      approvalRequestId: 'approval-waiting',
+    });
+    const service = new SessionRunService({
+      repository,
+      toolRepository,
+      clock: { now: () => '2026-06-14T00:01:00.000Z' },
+      ids: {
+        eventId: (() => {
+          let index = 0;
+          return () => {
+            index += 1;
+            return `cleanup-event-${index}`;
+          };
+        })(),
+      },
+    });
+
+    const result = service.cleanupInterruptedRunsOnStartup();
+
+    expect(result.cleanedRunIds).toEqual(['run-waiting']);
+    expect(repository.getRun('run-waiting')).toMatchObject({
+      status: 'failed',
+      completedAt: '2026-06-14T00:01:00.000Z',
+      error: {
+        code: 'runtime_restarted_with_active_run',
+        details: {
+          reason: 'runtime_restarted_with_active_run',
+        },
+      },
+    });
+    expect(toolRepository.getApprovalRequest('approval-waiting')).toMatchObject({
+      status: 'cancelled',
+      resolvedAt: '2026-06-14T00:01:00.000Z',
+    });
+    expect(toolRepository.getToolExecution('tool-execution-waiting')).toMatchObject({
+      status: 'cancelled',
+      completedAt: '2026-06-14T00:01:00.000Z',
+    });
+    expect(repository.listRuntimeEventsByRun('run-waiting').map((event) => event.eventType)).toEqual([
+      'run.failed',
+      'run.status.changed',
+    ]);
+    expect(repository.listRuntimeEventsByRun('run-waiting')[0]?.payload).toMatchObject({
+      error: {
+        details: {
+          reason: 'runtime_restarted_with_active_run',
+          previousStatus: 'waiting_for_approval',
+          startupCleanup: true,
+        },
+      },
+    });
   });
 
   it('waits for all pending approvals from one model step before resuming once with all tool results', async () => {
