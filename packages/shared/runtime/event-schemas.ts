@@ -45,6 +45,7 @@ import {
   ToolExecutionSchema,
   ToolNameSchema,
   ToolPolicyDecisionSchema,
+  ToolSourceIdentitySchema,
   type ApprovalScope,
 } from '../tool/contracts';
 import {
@@ -436,6 +437,41 @@ const ToolCallCreatedPayloadSchema = z
   })
   .strict();
 
+const ToolCallResolvedPayloadSchema = ToolSourceIdentitySchema.extend({
+  toolCallId: z.string().min(1),
+  providerToolCallId: z.string().min(1),
+  requestedToolName: z.string().min(1),
+}).strict();
+
+const ToolCallResolutionFailedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    providerToolCallId: z.string().min(1),
+    requestedToolName: z.string().min(1),
+    reason: z.enum([
+      'unknown_tool',
+      'tool_disabled',
+      'tool_unavailable',
+      'tool_conflicted',
+      'tool_not_exposed',
+    ]),
+    message: z.string().min(1),
+    sourceIdentity: ToolSourceIdentitySchema.optional(),
+  })
+  .strict();
+
+const ToolInputValidationFailedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    modelVisibleName: ToolNameSchema,
+    registrySnapshotId: z.string().min(1),
+    snapshotEntryId: z.string().min(1),
+    reason: z.literal('invalid_tool_input'),
+    message: z.string().min(1),
+    sourceIdentity: ToolSourceIdentitySchema,
+  })
+  .strict();
+
 const ToolResultCreatedPayloadSchema = z
   .object({
     toolResultId: z.string().min(1),
@@ -451,6 +487,7 @@ const ToolResultCreatedPayloadSchema = z
       'invalid_tool_input',
     ]),
     summary: z.string().min(1),
+    sourceIdentity: ToolSourceIdentitySchema.optional(),
   })
   .strict();
 
@@ -994,6 +1031,15 @@ export const ModelThinkingCompletedEventSchema = eventSchema(
 export const ModelToolCallDetectedEventSchema = eventSchema('model.tool_call.detected', ModelToolCallDetectedPayloadSchema);
 export const ModelStepCompletedEventSchema = eventSchema('model.step.completed', ModelStepCompletedPayloadSchema);
 export const ToolCallCreatedEventSchema = eventSchema('tool.call.created', ToolCallCreatedPayloadSchema);
+export const ToolCallResolvedEventSchema = eventSchema('tool.call.resolved', ToolCallResolvedPayloadSchema);
+export const ToolCallResolutionFailedEventSchema = eventSchema(
+  'tool.call.resolution_failed',
+  ToolCallResolutionFailedPayloadSchema,
+);
+export const ToolInputValidationFailedEventSchema = eventSchema(
+  'tool.input.validation_failed',
+  ToolInputValidationFailedPayloadSchema,
+);
 export const ToolResultCreatedEventSchema = eventSchema('tool.result.created', ToolResultCreatedPayloadSchema);
 export const ToolRegistrySourcesEnsuredEventSchema = eventSchema(
   'tool.registry.sources.ensured',
@@ -1145,6 +1191,9 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ModelToolCallDetectedEventSchema,
   ModelStepCompletedEventSchema,
   ToolCallCreatedEventSchema,
+  ToolCallResolvedEventSchema,
+  ToolCallResolutionFailedEventSchema,
+  ToolInputValidationFailedEventSchema,
   ToolResultCreatedEventSchema,
   ToolRegistrySourcesEnsuredEventSchema,
   ToolRegistrySnapshotCreatedEventSchema,

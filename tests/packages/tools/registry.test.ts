@@ -3,6 +3,9 @@ import {
   createStaticToolRegistry,
   createToolRegistrySnapshot,
   listModelVisibleToolDefinitions,
+  modelVisibleDefinitionForSnapshotEntry,
+  resolveToolCallFromSnapshot,
+  toolSourceIdentityForSnapshotEntry,
 } from '@megumi/tools/registry';
 import { BUILT_IN_TOOL_NAMES } from '@megumi/tools/built-ins';
 import {
@@ -313,6 +316,97 @@ describe('createToolRegistrySnapshot', () => {
 
     expect(listModelVisibleToolDefinitions(snapshot)[0].description).not.toBe('mutated');
     expect(createToolRegistrySnapshot(createSnapshotInput()).entries[0].definition.description).not.toBe('mutated snapshot');
+  });
+});
+
+describe('resolveToolCallFromSnapshot', () => {
+  it('resolves model visible tool calls from a run snapshot', () => {
+    const snapshot = createToolRegistrySnapshot(createSnapshotInput());
+    const resolution = resolveToolCallFromSnapshot(snapshot, 'read_file');
+
+    expect(resolution).toMatchObject({
+      ok: true,
+      entry: { modelVisibleName: 'read_file' },
+      sourceIdentity: { canonicalToolId: 'built_in:megumi:read_file' },
+    });
+    if (!resolution.ok) {
+      throw new Error('Expected read_file to resolve.');
+    }
+    expect(modelVisibleDefinitionForSnapshotEntry(resolution.entry).name).toBe('read_file');
+  });
+
+  it('rejects unknown model visible tool names without selecting an executor', () => {
+    const snapshot = createToolRegistrySnapshot(createSnapshotInput());
+    const resolution = resolveToolCallFromSnapshot(snapshot, 'missing_tool');
+
+    expect(resolution).toEqual({
+      ok: false,
+      reason: 'unknown_tool',
+      message: 'Unknown tool: missing_tool',
+    });
+    expect(resolution).not.toHaveProperty('entry');
+  });
+
+  it('rejects disabled unavailable and conflicted snapshot entries', () => {
+    const disabledSnapshot = createToolRegistrySnapshot(createSnapshotInput());
+    expect(resolveToolCallFromSnapshot(disabledSnapshot, 'demo_echo')).toMatchObject({
+      ok: false,
+      reason: 'tool_disabled',
+      message: expect.stringContaining('source_disabled'),
+    });
+
+    const unavailableSnapshot = createToolRegistrySnapshot(createSnapshotInput({
+      sources: [
+        createSource({
+          sourceId: 'built_in',
+          sourceKind: 'built_in',
+          namespace: 'megumi',
+          availabilityStatus: 'unavailable',
+          availabilityReason: 'built-in unavailable',
+        }),
+        createSource({ sourceId: 'external_test', sourceKind: 'external_test', namespace: 'demo', enabled: false }),
+      ],
+    }));
+    expect(resolveToolCallFromSnapshot(unavailableSnapshot, 'read_file')).toMatchObject({
+      ok: false,
+      reason: 'tool_unavailable',
+      message: expect.stringContaining('built-in unavailable'),
+    });
+
+    const externalA = cloneRegistration(createExternalTestToolRegistrations()[0]);
+    const externalB = cloneRegistration(createExternalTestToolRegistrations()[0]);
+    externalB.registrationId = 'tool-registration-another_external-echo';
+    externalB.sourceId = 'another_external';
+    const conflictedSnapshot = createToolRegistrySnapshot(createSnapshotInput({
+      sources: [
+        createSource({ sourceId: 'external_test', sourceKind: 'external_test', namespace: 'demo', enabled: true }),
+        createSource({ sourceId: 'another_external', sourceKind: 'external_test', namespace: 'demo', enabled: true }),
+      ],
+      registrations: [externalA, externalB],
+    }));
+    expect(resolveToolCallFromSnapshot(conflictedSnapshot, 'demo_echo')).toMatchObject({
+      ok: false,
+      reason: 'tool_conflicted',
+      message: expect.stringContaining('demo_echo'),
+    });
+  });
+
+  it('creates stable source identity objects from snapshot entries', () => {
+    const snapshot = createToolRegistrySnapshot(createSnapshotInput());
+    const entry = snapshot.entries.find((candidate) => candidate.modelVisibleName === 'read_file');
+    if (!entry) {
+      throw new Error('Expected read_file snapshot entry.');
+    }
+
+    expect(toolSourceIdentityForSnapshotEntry(snapshot, entry)).toEqual({
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      snapshotEntryId: entry.snapshotEntryId,
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
+    });
   });
 });
 

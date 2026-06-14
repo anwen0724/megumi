@@ -30,6 +30,7 @@ import { createDefaultRunContextService } from './services/runtime/run-context.s
 import { ToolService } from './services/tool/tool.service';
 import { createToolCallHandlerService } from './services/tool/tool-call-handler.service';
 import { createProjectToolExecutor } from './services/tool/project-tool-executor.service';
+import { ToolRegistrySnapshotService } from './services/tool/tool-registry-snapshot.service';
 import { WorkspaceChangeTrackerService } from './services/workspace/workspace-change-tracker.service';
 import { WorkspaceRestoreService } from './services/workspace/workspace-restore.service';
 import { createPermissionSettingsService } from './services/security/permission-settings.service';
@@ -148,6 +149,7 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
         saveApprovalRequest: (approvalRequest) => toolRepository.saveApprovalRequest(approvalRequest),
         getApprovalRequest: (approvalRequestId) => toolRepository.getApprovalRequest(approvalRequestId),
         saveToolResult: (toolResult) => toolRepository.saveToolResult(toolResult),
+        getToolRegistrySnapshotByRun: (runId) => toolRepository.getToolRegistrySnapshotByRun(runId),
         getRunSessionId(runId) {
           const run = sessionRunRepository.getRun(runId);
           return run ? String(run.sessionId) : undefined;
@@ -167,6 +169,7 @@ const sessionRunService = new SessionRunService({
   repository: sessionRunRepository,
   activePathRepository,
   permissionSnapshotService: permissionSnapshotService,
+  toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),
   contextService: runContextService,
   modelStepProvider: modelStepProviderService,
   agentInstructionSourceService,

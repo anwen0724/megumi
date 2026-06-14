@@ -9,6 +9,7 @@ import { SessionActivePathRepository } from '@megumi/db/repos/session-active-pat
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { ToolRegistrySnapshotService } from '@megumi/desktop/main/services/tool/tool-registry-snapshot.service';
+import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool/tool-call-handler.service';
 import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
 import {
   SessionRunService,
@@ -32,6 +33,7 @@ import type { SessionSourceEntry } from '@megumi/shared/session';
 import type { ApprovalRequest, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
+import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
@@ -350,6 +352,129 @@ function createServiceWithModelStepStream(
     },
   };
   return new SessionRunService(serviceOptions);
+}
+
+function createServiceWithRealToolResolution(input: {
+  toolCall: RuntimeEvent;
+  permissionMode?: 'default' | 'plan';
+}) {
+  const requests: ModelStepRuntimeRequest[] = [];
+  let toolRepository: ToolRepository | undefined;
+  const registry = createBuiltInToolRegistry();
+  const executeToolExecution = vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
+    toolResultId: `tool-result:${toolExecution.toolExecutionId}`,
+    toolCallId: toolExecution.toolCallId,
+    toolExecutionId: toolExecution.toolExecutionId,
+    runId: toolExecution.runId,
+    kind: 'success',
+    textContent: 'executed',
+    redactionState: 'none',
+    createdAt: '2026-05-17T00:00:02.500Z',
+  }));
+
+  const service = createServiceWithModelStepStream((request, callIndex) => {
+    requests.push(request);
+    if (callIndex === 1) {
+      return [input.toolCall, modelStepCompletedEvent(2)];
+    }
+
+    return [assistantOutputCompletedEvent(1)];
+  }, {
+    createToolRepository(database) {
+      seedProject(database);
+      toolRepository = new ToolRepository(database);
+      return toolRepository;
+    },
+    toolRegistrySnapshotService: {
+      createRunSnapshot(snapshotInput) {
+        if (!toolRepository) {
+          throw new Error('Tool repository was not initialized.');
+        }
+        return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(snapshotInput);
+      },
+    },
+    toolRuntimeFactory: {
+      async create({ projectRoot, permissionMode }) {
+        if (!toolRepository) {
+          throw new Error('Tool repository was not initialized.');
+        }
+        const repository = toolRepository;
+        return createToolCallHandlerService({
+          registry,
+          repository: {
+            saveToolCall: (toolCall) => repository.saveToolCall(toolCall),
+            getToolCall: (toolCallId) => repository.getToolCall(toolCallId),
+            saveToolExecution: (toolExecution) => repository.saveToolExecution(toolExecution),
+            getToolExecution: (toolExecutionId) => repository.getToolExecution(toolExecutionId),
+            savePermissionDecision: (decision) => repository.savePermissionDecision(decision),
+            saveApprovalRequest: (approvalRequest) => repository.saveApprovalRequest(approvalRequest),
+            getApprovalRequest: (approvalRequestId) => repository.getApprovalRequest(approvalRequestId),
+            saveToolResult: (toolResult) => repository.saveToolResult(toolResult),
+            getToolRegistrySnapshotByRun: (runId) => repository.getToolRegistrySnapshotByRun(runId),
+            getRunSessionId: () => 'session-1',
+          },
+          permissionMode,
+          projectRoot,
+          settings: { allow: [], ask: [], deny: [] },
+          projectExecutor: {
+            executeToolExecution,
+            finalizeWorkspaceChangeSet: vi.fn(),
+          },
+          now: () => '2026-05-17T00:00:02.500Z',
+        });
+      },
+    },
+  });
+  service.createSession({
+    title: 'Session',
+    workspaceId: 'project-1',
+    workspacePath: 'C:/all/work/study/megumi',
+    createdAt: '2026-05-17T00:00:00.000Z',
+  });
+
+  return { service, requests, executeToolExecution };
+}
+
+async function runRealToolResolutionContinuation(input: {
+  toolCall: RuntimeEvent;
+  permissionMode?: 'default' | 'plan';
+  userContent?: string;
+}) {
+  const setup = createServiceWithRealToolResolution(input);
+  const result = await setup.service.sendSessionMessage({
+    requestId: `request-${input.toolCall.eventId}`,
+    payload: {
+      sessionId: 'session-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      context: { permissionMode: input.permissionMode ?? 'default' },
+      messages: [{
+        id: 'message-local-user',
+        role: 'user',
+        content: input.userContent ?? 'Use a tool',
+        createdAt: '2026-05-17T00:00:00.000Z',
+      }],
+      createdAt: '2026-05-17T00:00:00.000Z',
+    },
+  });
+  const streamed: RuntimeEvent[] = [];
+  for await (const event of result.events) {
+    streamed.push(event);
+  }
+
+  return { ...setup, streamed };
+}
+
+function expectToolContinuationKind(
+  request: ModelStepRuntimeRequest | undefined,
+  kind: ToolResult['kind'],
+) {
+  expect(request?.inputContext.parts).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      kind: 'tool_continuation',
+      metadata: expect.objectContaining({ kind }),
+    }),
+  ]));
 }
 
 function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
@@ -4541,6 +4666,64 @@ describe('SessionRunService', () => {
         status: 'completed',
       }),
     ]);
+  });
+
+  it('continues the agent loop after invalid tool calls from the model', async () => {
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+      toolCall: toolUseCreatedEventFor({
+        sequence: 1,
+        toolCallId: 'tool-call-invalid',
+        providerToolCallId: 'provider-tool-call-invalid',
+        toolName: 'missing_tool',
+        input: { path: 'README.md' },
+      }),
+      userContent: 'Call a missing tool',
+    });
+
+    expect(requests).toHaveLength(2);
+    expectToolContinuationKind(requests[1], 'invalid_tool_call');
+    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
+    expect(executeToolExecution).not.toHaveBeenCalled();
+  });
+
+  it('continues the agent loop after invalid tool input from the model', async () => {
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+      toolCall: toolUseCreatedEventFor({
+        sequence: 1,
+        toolCallId: 'tool-call-invalid-input',
+        providerToolCallId: 'provider-tool-call-invalid-input',
+        toolName: 'read_file',
+        input: { path: 123 },
+      }),
+      userContent: 'Read a file with bad input',
+    });
+
+    expect(requests).toHaveLength(2);
+    expectToolContinuationKind(requests[1], 'invalid_tool_input');
+    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.input.validation_failed');
+    expect(executeToolExecution).not.toHaveBeenCalled();
+  });
+
+  it('continues the agent loop after policy denied tool results', async () => {
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+      toolCall: toolUseCreatedEventFor({
+        sequence: 1,
+        toolCallId: 'tool-call-denied',
+        providerToolCallId: 'provider-tool-call-denied',
+        toolName: 'write_file',
+        input: { path: 'src/index.ts', content: 'export {}' },
+      }),
+      permissionMode: 'plan',
+      userContent: 'Write a file in plan mode',
+    });
+
+    expect(requests).toHaveLength(2);
+    expectToolContinuationKind(requests[1], 'policy_denied');
+    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.execution.denied');
+    expect(executeToolExecution).not.toHaveBeenCalled();
   });
 
   it('persists model step records before tool handlers persist model tool uses', async () => {

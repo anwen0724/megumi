@@ -685,6 +685,128 @@ describe('tool and approval runtime events', () => {
     }
   });
 
+  it('accepts tool call resolution and validation runtime events', () => {
+    expect(RuntimeEventTypeSchema.parse('tool.call.resolved')).toBe('tool.call.resolved');
+    expect(RuntimeEventTypeSchema.parse('tool.call.resolution_failed')).toBe('tool.call.resolution_failed');
+    expect(RuntimeEventTypeSchema.parse('tool.input.validation_failed')).toBe('tool.input.validation_failed');
+
+    const base = {
+      eventId: 'event-tool-call-resolution',
+      schemaVersion: 1 as const,
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-06-14T00:00:00.000Z',
+      source: 'tool' as const,
+      visibility: 'debug' as const,
+      persist: 'required' as const,
+    };
+    const sourceIdentity = {
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
+    };
+
+    expect(RuntimeEventSchema.parse({
+      ...base,
+      eventType: 'tool.call.resolved',
+      payload: {
+        toolCallId: 'tool-call-1',
+        providerToolCallId: 'provider-tool-call-1',
+        requestedToolName: 'read_file',
+        ...sourceIdentity,
+      },
+    }).payload).toEqual({
+      toolCallId: 'tool-call-1',
+      providerToolCallId: 'provider-tool-call-1',
+      requestedToolName: 'read_file',
+      ...sourceIdentity,
+    });
+
+    expect(RuntimeEventSchema.parse({
+      ...base,
+      eventId: 'event-tool-call-resolution-failed',
+      eventType: 'tool.call.resolution_failed',
+      sequence: 2,
+      payload: {
+        toolCallId: 'tool-call-1',
+        providerToolCallId: 'provider-tool-call-1',
+        requestedToolName: 'missing_tool',
+        reason: 'unknown_tool',
+        message: 'Unknown tool: missing_tool',
+      },
+    }).payload).toEqual({
+      toolCallId: 'tool-call-1',
+      providerToolCallId: 'provider-tool-call-1',
+      requestedToolName: 'missing_tool',
+      reason: 'unknown_tool',
+      message: 'Unknown tool: missing_tool',
+    });
+
+    expect(RuntimeEventSchema.parse({
+      ...base,
+      eventId: 'event-tool-input-validation-failed',
+      eventType: 'tool.input.validation_failed',
+      sequence: 3,
+      payload: {
+        toolCallId: 'tool-call-1',
+        modelVisibleName: 'read_file',
+        registrySnapshotId: 'tool-registry-snapshot-run-1',
+        snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+        reason: 'invalid_tool_input',
+        message: 'Invalid tool input at $.path: expected string.',
+        sourceIdentity,
+      },
+    }).payload).toEqual({
+      toolCallId: 'tool-call-1',
+      modelVisibleName: 'read_file',
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+      reason: 'invalid_tool_input',
+      message: 'Invalid tool input at $.path: expected string.',
+      sourceIdentity,
+    });
+  });
+
+  it('includes optional source identity on tool result created events', () => {
+    const sourceIdentity = {
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
+    };
+
+    expect(RuntimeEventSchema.parse({
+      eventId: 'event-tool-result-with-source',
+      schemaVersion: 1,
+      eventType: 'tool.result.created',
+      runId: 'run-1',
+      stepId: 'step-1',
+      sequence: 1,
+      createdAt: '2026-06-14T00:00:00.000Z',
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolResultId: 'tool-result-1',
+        toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-execution-1',
+        kind: 'success',
+        summary: 'Read file.',
+        sourceIdentity,
+      },
+    }).payload).toMatchObject({
+      sourceIdentity,
+    });
+  });
+
   it('accepts requested tool and approval events with full shared objects', () => {
     const base = {
       eventId: 'event-tool-requested',

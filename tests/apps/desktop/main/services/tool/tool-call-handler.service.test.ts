@@ -3,13 +3,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildModelStepInputContextFromSources } from '@megumi/context-management';
 import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool/tool-call-handler.service';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
+import { createToolRegistrySnapshot } from '@megumi/tools/registry';
+import {
+  createBuiltInToolRegistrations,
+  createExternalTestToolRegistrations,
+} from '@megumi/tools/sources';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
   ToolExecution,
+  ToolRegistration,
+  ToolRegistrySnapshot,
   ToolResult,
+  ToolSource,
 } from '@megumi/shared/tool';
 
 describe('ToolCallHandlerService', () => {
@@ -50,6 +58,94 @@ describe('ToolCallHandlerService', () => {
       kind: 'invalid_tool_call',
       toolCallId: 'tool-call-1',
     }));
+    expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.resolution_failed',
+      'tool.result.created',
+    ]);
+    expect(repository.getToolRegistrySnapshotByRun).toHaveBeenCalledWith('run-1');
+  });
+
+  it('rejects tool calls when the run snapshot is missing', async () => {
+    const repository = fakeRepository({ snapshots: new Map() });
+    const executor = { executeToolExecution: vi.fn(), finalizeWorkspaceChangeSet: vi.fn() };
+    const handler = createToolCallHandlerService({
+      registry: createBuiltInToolRegistry(),
+      repository,
+      permissionMode: 'default',
+      projectRoot: 'C:/project',
+      settings: { allow: [], ask: [], deny: [] },
+      projectExecutor: executor,
+      now: () => '2026-05-20T00:00:01.000Z',
+      ids: fixedIds(),
+    });
+
+    await expect(handler.handleToolCalls({
+      request: modelRequest(),
+      toolCalls: [toolCall('read_file', { path: 'README.md' })],
+    })).rejects.toMatchObject({
+      code: 'tool_registry_snapshot_missing',
+      severity: 'error',
+      retryable: false,
+      source: 'tool',
+    });
+
+    expect(repository.saveToolResult).not.toHaveBeenCalled();
+    expect(repository.saveToolExecution).not.toHaveBeenCalled();
+    expect(executor.executeToolExecution).not.toHaveBeenCalled();
+  });
+
+  it('rejects disabled, unavailable, and conflicted snapshot entries before permission evaluation', async () => {
+    const disabledRegistrations = createBuiltInToolRegistrations().map((registration) => (
+      registration.sourceToolName === 'read_file' ? { ...registration, enabled: false } : registration
+    ));
+    const conflictingRegistrations = [
+      ...createExternalTestToolRegistrations(),
+      {
+        ...createExternalTestToolRegistrations()[0],
+        registrationId: 'tool-registration-other_external-echo',
+        sourceId: 'other_external',
+      },
+    ];
+    const conflictingSources = [
+      externalTestSource(),
+      externalTestSource({ sourceId: 'other_external', displayName: 'Other external tools' }),
+    ];
+
+    for (const [runId, snapshot, reason] of [
+      ['disabled-run', createRunSnapshot({ runId: 'disabled-run', registrations: disabledRegistrations }), 'tool_disabled'],
+      ['unavailable-run', createRunSnapshot({
+        runId: 'unavailable-run',
+        sources: [builtInSource({ availabilityStatus: 'unavailable', availabilityReason: 'Built-in source is offline.' })],
+        registrations: createBuiltInToolRegistrations(),
+      }), 'tool_unavailable'],
+      ['conflicted-run', createRunSnapshot({ runId: 'conflicted-run', sources: conflictingSources, registrations: conflictingRegistrations }), 'tool_conflicted'],
+    ] as const) {
+      const repository = fakeRepository({ snapshots: new Map([[runId, snapshot]]) });
+      const executor = { executeToolExecution: vi.fn(), finalizeWorkspaceChangeSet: vi.fn() };
+      const handler = createToolCallHandlerService({
+        registry: createBuiltInToolRegistry(),
+        repository,
+        permissionMode: 'default',
+        projectRoot: 'C:/project',
+        settings: { allow: [], ask: [], deny: [] },
+        projectExecutor: executor,
+        now: () => '2026-05-20T00:00:01.000Z',
+        ids: fixedIds(),
+      });
+
+      const toolName = reason === 'tool_conflicted' ? 'demo_echo' : 'read_file';
+      const outcome = await handler.handleToolCalls({
+        request: modelRequest({ runId }),
+        toolCalls: [{ ...toolCall(toolName, { path: 'README.md' }), runId }],
+      });
+
+      expect(outcome.toolResults).toEqual([expect.objectContaining({ kind: 'invalid_tool_call' })]);
+      expect(outcome.runtimeEvents?.[0]?.eventType).toBe('tool.call.resolution_failed');
+      expect(outcome.runtimeEvents?.[0]?.payload).toEqual(expect.objectContaining({ reason }));
+      expect(repository.savePermissionDecision).not.toHaveBeenCalled();
+      expect(repository.saveToolExecution).not.toHaveBeenCalled();
+      expect(executor.executeToolExecution).not.toHaveBeenCalled();
+    }
   });
 
   it('saves schema validation failures as invalid_tool_input ToolResult without executing a tool', async () => {
@@ -87,7 +183,19 @@ describe('ToolCallHandlerService', () => {
     expect(repository.saveToolResult).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'invalid_tool_input',
       toolCallId: 'tool-call-1',
+      metadata: expect.objectContaining({
+        toolSourceIdentity: expect.objectContaining({
+          registrySnapshotId: 'tool-registry-snapshot-run-1',
+          modelVisibleName: 'read_file',
+          canonicalToolId: 'built_in:megumi:read_file',
+        }),
+      }),
     }));
+    expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.resolved',
+      'tool.input.validation_failed',
+      'tool.result.created',
+    ]);
   });
 
   it('returns redacted tool results to the loop as model-consumable ToolResult facts', async () => {
@@ -128,6 +236,7 @@ describe('ToolCallHandlerService', () => {
       textContent: 'secret=[redacted]',
     })]);
     expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.resolved',
       'tool.execution.requested',
       'tool.execution.policy_decided',
       'permission.decision.created',
@@ -173,11 +282,21 @@ describe('ToolCallHandlerService', () => {
     expect(repository.saveToolCall).toHaveBeenCalledWith(expect.objectContaining({
       toolCallId: 'tool-call-1',
       toolName: 'read_file',
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      snapshotEntryId: expect.stringContaining('built_in-megumi-read_file'),
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
     }));
     expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
       toolExecutionId: 'tool-execution-1',
       toolCallId: 'tool-call-1',
       toolName: 'read_file',
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
       status: 'pending_approval',
     }));
     expect(repository.savePermissionDecision).toHaveBeenCalledWith(expect.objectContaining({
@@ -186,6 +305,9 @@ describe('ToolCallHandlerService', () => {
       toolExecutionId: 'tool-execution-1',
       decision: 'allow',
       mode: 'default',
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
     }));
     expect(executor.executeToolExecution).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -216,6 +338,7 @@ describe('ToolCallHandlerService', () => {
     })]);
     expect(outcome.pendingApprovals).toEqual([]);
     expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.resolved',
       'tool.execution.requested',
       'tool.execution.policy_decided',
       'permission.decision.created',
@@ -227,6 +350,13 @@ describe('ToolCallHandlerService', () => {
       kind: 'success',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
+      metadata: expect.objectContaining({
+        toolSourceIdentity: expect.objectContaining({
+          registrySnapshotId: 'tool-registry-snapshot-run-1',
+          modelVisibleName: 'read_file',
+          canonicalToolId: 'built_in:megumi:read_file',
+        }),
+      }),
     }));
   });
 
@@ -268,6 +398,7 @@ describe('ToolCallHandlerService', () => {
     })]);
     expect(outcome.pendingApprovals).toEqual([]);
     expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.resolved',
       'tool.execution.requested',
       'tool.execution.policy_decided',
       'permission.decision.created',
@@ -278,6 +409,12 @@ describe('ToolCallHandlerService', () => {
       kind: 'policy_denied',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
+      metadata: expect.objectContaining({
+        toolSourceIdentity: expect.objectContaining({
+          modelVisibleName: 'write_file',
+          canonicalToolId: 'built_in:megumi:write_file',
+        }),
+      }),
     }));
   });
 
@@ -307,6 +444,9 @@ describe('ToolCallHandlerService', () => {
         toolCallId: 'tool-call-1',
         toolExecutionId: 'tool-execution-1',
         permissionDecisionId: 'permission-decision-1',
+        registrySnapshotId: 'tool-registry-snapshot-run-1',
+        modelVisibleName: 'run_command',
+        canonicalToolId: 'built_in:megumi:run_command',
         status: 'pending',
       }),
       toolCall: expect.objectContaining({ toolCallId: 'tool-call-1' }),
@@ -316,6 +456,7 @@ describe('ToolCallHandlerService', () => {
       }),
     })]);
     expect(outcome.runtimeEvents?.map((event) => event.eventType)).toEqual([
+      'tool.call.resolved',
       'tool.execution.requested',
       'tool.execution.policy_decided',
       'permission.decision.created',
@@ -328,6 +469,9 @@ describe('ToolCallHandlerService', () => {
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
       permissionDecisionId: 'permission-decision-1',
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      modelVisibleName: 'run_command',
+      canonicalToolId: 'built_in:megumi:run_command',
       status: 'pending',
     }));
     expect(repository.saveToolExecution).toHaveBeenCalledWith(expect.objectContaining({
@@ -456,6 +600,12 @@ describe('ToolCallHandlerService', () => {
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
       kind: 'success',
+      metadata: expect.objectContaining({
+        toolSourceIdentity: expect.objectContaining({
+          modelVisibleName: 'read_file',
+          canonicalToolId: 'built_in:megumi:read_file',
+        }),
+      }),
     }));
     expect(result?.toolResult).toMatchObject({
       toolResultId: 'tool-result-executed',
@@ -623,6 +773,12 @@ describe('ToolCallHandlerService', () => {
       toolExecutionId: 'tool-execution-1',
       kind: 'user_rejected',
       denialReason: 'Not now',
+      metadata: expect.objectContaining({
+        toolSourceIdentity: expect.objectContaining({
+          modelVisibleName: 'read_file',
+          canonicalToolId: 'built_in:megumi:read_file',
+        }),
+      }),
     }));
     expect(result?.toolResult).toMatchObject({
       kind: 'user_rejected',
@@ -635,19 +791,20 @@ describe('ToolCallHandlerService', () => {
   });
 });
 
-function modelRequest(): ModelStepRuntimeRequest {
+function modelRequest(input?: { runId?: string }): ModelStepRuntimeRequest {
   const createdAt = '2026-05-20T00:00:00.000Z';
+  const runId = input?.runId ?? 'run-1';
   return {
     requestId: 'request-1',
     sessionId: 'session-1',
-    runId: 'run-1',
+    runId,
     stepId: 'step-1',
     providerId: 'openai',
     modelId: 'gpt-5.2',
     inputContext: buildModelStepInputContextFromSources({
       contextId: 'model-input-context:tool-handler',
       sessionId: 'session-1',
-      runId: 'run-1',
+      runId,
       stepId: 'step-1',
       buildReason: 'test',
       builtAt: createdAt,
@@ -687,6 +844,18 @@ function fixedIds() {
   };
 }
 
+function readFileSourceIdentity() {
+  return {
+    registrySnapshotId: 'tool-registry-snapshot-run-1',
+    snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+    modelVisibleName: 'read_file' as const,
+    canonicalToolId: 'built_in:megumi:read_file',
+    sourceId: 'built_in',
+    namespace: 'megumi' as const,
+    sourceToolName: 'read_file' as const,
+  };
+}
+
 function waitingToolCall(): ToolCall {
   return {
     toolCallId: 'tool-call-1',
@@ -694,6 +863,7 @@ function waitingToolCall(): ToolCall {
     modelStepId: 'model-step-1',
     providerToolCallId: 'provider-tool-call-1',
     toolName: 'read_file',
+    ...readFileSourceIdentity(),
     input: { path: 'README.md' },
     inputPreview: {
       summary: 'read_file',
@@ -712,6 +882,7 @@ function waitingToolExecution(toolCall: ToolCall): ToolExecution {
     runId: toolCall.runId,
     stepId: 'step-1',
     toolName: toolCall.toolName,
+    ...readFileSourceIdentity(),
     input: toolCall.input,
     inputPreview: toolCall.inputPreview,
     capabilities: ['project_read'],
@@ -731,6 +902,7 @@ function pendingApprovalRequest(toolCall: ToolCall, toolExecution: ToolExecution
     runId: toolCall.runId,
     stepId: String(toolExecution.stepId),
     toolName: toolCall.toolName,
+    ...readFileSourceIdentity(),
     capabilities: toolExecution.capabilities,
     riskLevel: toolExecution.riskLevel,
     title: 'Approve read_file',
@@ -749,10 +921,14 @@ function fakeRepository(initial?: {
   toolCalls?: Map<string, ToolCall>;
   toolExecutions?: Map<string, ToolExecution>;
   approvalRequests?: Map<string, ApprovalRequest>;
+  snapshots?: Map<string, ToolRegistrySnapshot>;
 }) {
   const toolCalls = initial?.toolCalls ?? new Map<string, ToolCall>();
   const toolExecutions = initial?.toolExecutions ?? new Map<string, ToolExecution>();
   const approvalRequests = initial?.approvalRequests ?? new Map<string, ApprovalRequest>();
+  const snapshots = initial?.snapshots ?? new Map<string, ToolRegistrySnapshot>([
+    ['run-1', createRunSnapshot()],
+  ]);
 
   return {
     saveToolCall: vi.fn((value: ToolCall) => {
@@ -773,6 +949,62 @@ function fakeRepository(initial?: {
     getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
     saveToolResult: vi.fn((value: ToolResult) => value),
     getRunSessionId: vi.fn((runId: string) => (runId === 'run-1' ? 'session-1' : undefined)),
+    getToolRegistrySnapshotByRun: vi.fn((runId: string) => snapshots.get(runId)),
+  };
+}
+
+function createRunSnapshot(input?: {
+  runId?: string;
+  sources?: ToolSource[];
+  registrations?: ToolRegistration[];
+}): ToolRegistrySnapshot {
+  return createToolRegistrySnapshot({
+    runId: input?.runId ?? 'run-1',
+    projectId: 'project-1',
+    permissionMode: 'default',
+    modelId: 'gpt-5.2',
+    createdAt: '2026-05-20T00:00:00.000Z',
+    sources: input?.sources ?? [
+      builtInSource(),
+      externalTestSource({ enabled: false, availabilityStatus: 'unavailable', availabilityReason: 'External test source is disabled.' }),
+    ],
+    registrations: input?.registrations ?? [
+      ...createBuiltInToolRegistrations(),
+      ...createExternalTestToolRegistrations(),
+    ],
+    providerCapabilitySummary: { supportsToolCall: true },
+  });
+}
+
+function builtInSource(input?: Partial<ToolSource>): ToolSource {
+  return {
+    sourceId: 'built_in',
+    sourceKind: 'built_in',
+    namespace: 'megumi',
+    displayName: 'Megumi built-in tools',
+    configured: true,
+    enabled: true,
+    availabilityStatus: 'available',
+    config: {},
+    createdAt: '2026-05-20T00:00:00.000Z',
+    updatedAt: '2026-05-20T00:00:00.000Z',
+    ...input,
+  };
+}
+
+function externalTestSource(input?: Partial<ToolSource>): ToolSource {
+  return {
+    sourceId: 'external_test',
+    sourceKind: 'external_test',
+    namespace: 'demo',
+    displayName: 'External test tools',
+    configured: true,
+    enabled: true,
+    availabilityStatus: 'available',
+    config: {},
+    createdAt: '2026-05-20T00:00:00.000Z',
+    updatedAt: '2026-05-20T00:00:00.000Z',
+    ...input,
   };
 }
 

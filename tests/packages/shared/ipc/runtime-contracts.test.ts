@@ -132,6 +132,7 @@ describe('runtime ipc error schemas', () => {
       'runtime_protocol_violation',
       'runtime_restarted_with_active_run',
       'runtime_unknown',
+      'tool_registry_snapshot_missing',
       'tool_input_invalid',
       'tool_execution_failed',
       'approval_denied',

@@ -99,3 +99,153 @@ describe('tool validation and normalization', () => {
   });
 });
 
+describe('validateToolInput JSON Schema subset', () => {
+  it('validates nested objects and required properties', () => {
+    const schema = {
+      type: 'object',
+      required: ['path', 'options'],
+      properties: {
+        path: { type: 'string' },
+        options: {
+          type: 'object',
+          required: ['limit'],
+          properties: {
+            limit: { type: 'integer' },
+          },
+        },
+      },
+    };
+
+    expect(validateToolInput(definitionWithSchema(schema), {
+      path: 'README.md',
+      options: { limit: 10 },
+    }).ok).toBe(true);
+    expect(validateToolInput(definitionWithSchema(schema), {
+      path: 'README.md',
+      options: { limit: 1.5 },
+    })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.options.limit: expected integer.',
+    });
+  });
+
+  it('rejects additional properties when additionalProperties is false', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      additionalProperties: false,
+    }), { path: 'README.md', extra: true })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.extra: additional properties are not allowed.',
+    });
+  });
+
+  it('validates arrays and item schemas', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { name: { type: 'string' } },
+          },
+        },
+      },
+    }), { items: [{ name: 123 }] })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.items[0].name: expected string.',
+    });
+  });
+
+  it('validates enum values', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        mode: { enum: ['read', 'write'] },
+      },
+    }), { mode: 'delete' })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.mode: expected one of ["read","write"].',
+    });
+  });
+
+  it('validates string minLength and maxLength', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string', minLength: 2, maxLength: 5 },
+      },
+    }), { path: 'a' })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.path: expected string with minLength 2.',
+    });
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string', minLength: 2, maxLength: 5 },
+      },
+    }), { path: 'abcdef' })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.path: expected string with maxLength 5.',
+    });
+  });
+
+  it('validates number minimum and maximum', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        count: { type: 'number', minimum: 1, maximum: 3 },
+      },
+    }), { count: 0 })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.count: expected number >= 1.',
+    });
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        count: { type: 'number', minimum: 1, maximum: 3 },
+      },
+    }), { count: 4 })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.count: expected number <= 3.',
+    });
+  });
+
+  it('validates integer separately from number', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        limit: { type: 'integer' },
+      },
+    }), { limit: 1.25 })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.limit: expected integer.',
+    });
+  });
+
+  it('reports stable json paths in validation errors', () => {
+    expect(validateToolInput(definitionWithSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+      },
+    }), { path: 123 })).toEqual({
+      ok: false,
+      errorMessage: 'Invalid tool input at $.path: expected string.',
+    });
+  });
+});
+
+function definitionWithSchema(inputSchema: ToolDefinition['inputSchema']): ToolDefinition {
+  return {
+    name: 'demo_tool',
+    description: 'Demo tool.',
+    inputSchema,
+    capabilities: ['project_read'],
+    riskLevel: 'low',
+    sideEffect: 'none',
+    availability: { status: 'available' },
+  };
+}
+

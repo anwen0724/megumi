@@ -34,6 +34,7 @@ import type {
   ToolName,
   ToolPolicyDecision,
   ToolRegistrySnapshotEntryStatus,
+  ToolSourceIdentity,
 } from '../tool/contracts';
 import type {
   CancelReason,
@@ -111,6 +112,9 @@ export const RUNTIME_EVENT_TYPES = [
   'model.tool_call.detected',
   'model.step.completed',
   'tool.call.created',
+  'tool.call.resolved',
+  'tool.call.resolution_failed',
+  'tool.input.validation_failed',
   'tool.result.created',
   'tool.registry.sources.ensured',
   'tool.registry.snapshot.created',
@@ -410,6 +414,36 @@ export interface ToolCallCreatedPayload {
   input: JsonValue;
 }
 
+export interface ToolCallResolvedPayload extends ToolSourceIdentity {
+  toolCallId: string;
+  providerToolCallId: string;
+  requestedToolName: string;
+}
+
+export interface ToolCallResolutionFailedPayload {
+  toolCallId: string;
+  providerToolCallId: string;
+  requestedToolName: string;
+  reason:
+    | 'unknown_tool'
+    | 'tool_disabled'
+    | 'tool_unavailable'
+    | 'tool_conflicted'
+    | 'tool_not_exposed';
+  message: string;
+  sourceIdentity?: ToolSourceIdentity;
+}
+
+export interface ToolInputValidationFailedPayload {
+  toolCallId: string;
+  modelVisibleName: ToolName;
+  registrySnapshotId: string;
+  snapshotEntryId: string;
+  reason: 'invalid_tool_input';
+  message: string;
+  sourceIdentity: ToolSourceIdentity;
+}
+
 export interface ToolResultCreatedPayload {
   toolResultId: string;
   toolCallId: string;
@@ -423,6 +457,7 @@ export interface ToolResultCreatedPayload {
     | 'invalid_tool_call'
     | 'invalid_tool_input';
   summary: string;
+  sourceIdentity?: ToolSourceIdentity;
 }
 
 export interface ToolRegistrySourcesEnsuredPayload {
@@ -806,6 +841,9 @@ export type RuntimeEventPayloadByType = {
   'model.tool_call.detected': ModelToolCallDetectedPayload;
   'model.step.completed': ModelStepCompletedPayload;
   'tool.call.created': ToolCallCreatedPayload;
+  'tool.call.resolved': ToolCallResolvedPayload;
+  'tool.call.resolution_failed': ToolCallResolutionFailedPayload;
+  'tool.input.validation_failed': ToolInputValidationFailedPayload;
   'tool.result.created': ToolResultCreatedPayload;
   'tool.registry.sources.ensured': ToolRegistrySourcesEnsuredPayload;
   'tool.registry.snapshot.created': ToolRegistrySnapshotCreatedPayload;

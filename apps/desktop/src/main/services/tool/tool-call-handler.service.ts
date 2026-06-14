@@ -1,6 +1,11 @@
 ﻿import { evaluatePermissionPolicy } from '@megumi/security/tool-policy';
+import {
+  modelVisibleDefinitionForSnapshotEntry,
+  resolveToolCallFromSnapshot,
+} from '@megumi/tools/registry';
 import { validateToolInput } from '@megumi/tools/validation';
 import type { ToolRegistry } from '@megumi/tools/registry';
+import type { JsonObject } from '@megumi/shared/primitives/json';
 import type {
   PendingToolApproval,
   ToolApprovalResumeInput,
@@ -14,6 +19,8 @@ import type { PermissionMode } from '@megumi/shared/permission';
 import {
   createApprovalRequestedEvent,
   createPermissionDecisionCreatedEvent,
+  createToolCallResolvedEvent,
+  createToolCallResolutionFailedEvent,
   createToolExecutionApprovalRequestedEvent,
   createToolExecutionCompletedEvent,
   createToolExecutionDeniedEvent,
@@ -21,6 +28,7 @@ import {
   createToolExecutionPolicyDecidedEvent,
   createToolExecutionRequestedEvent,
   createToolExecutionStartedEvent,
+  createToolInputValidationFailedEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
@@ -30,7 +38,9 @@ import type {
   PermissionDecision,
   ToolCall,
   ToolExecution,
+  ToolRegistrySnapshot,
   ToolResult,
+  ToolSourceIdentity,
 } from '@megumi/shared/tool';
 import type { ProjectToolExecutor } from './project-tool-executor.service';
 import type { WorkspaceChangeExecutionScope } from '../workspace/workspace-change-tracker.service';
@@ -45,6 +55,7 @@ export interface ToolCallHandlerRepositoryPort {
   getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined;
   saveToolResult(toolResult: ToolResult): ToolResult;
   getRunSessionId(runId: string): string | undefined;
+  getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined;
 }
 
 export interface ToolCallHandlerServiceOptions {
@@ -100,12 +111,16 @@ export function createToolCallHandlerService(
         runId: String(input.request.runId),
         stepId: String(input.request.stepId),
       };
+      const snapshot = resolvedOptions.repository.getToolRegistrySnapshotByRun(String(input.request.runId));
+      if (!snapshot) {
+        throw createToolRegistrySnapshotMissingError(String(input.request.runId));
+      }
 
       for (const toolCall of input.toolCalls) {
-        resolvedOptions.repository.saveToolCall(toolCall);
         const outcome = await handleSingleToolCall(
           resolvedOptions,
           input.request,
+          snapshot,
           toolCall,
           workspaceChangeScope,
         );
@@ -170,6 +185,7 @@ async function resumeToolApproval(
       denialReason: input.reason ?? 'User rejected the requested tool execution.',
       redactionState: 'none',
       createdAt: input.decidedAt,
+      metadata: metadataWithSourceIdentity(undefined, sourceIdentityFromRecord(deniedToolExecution)),
     });
     return {
       toolResult,
@@ -203,10 +219,10 @@ async function resumeToolApproval(
     runId: String(runningToolExecution.runId),
     stepId: String(runningToolExecution.stepId),
   };
-  const toolResult = await options.projectExecutor.executeToolExecution(
+  const toolResult = withToolResultSourceIdentity(await options.projectExecutor.executeToolExecution(
     runningToolExecution,
     workspaceChangeScope,
-  );
+  ), sourceIdentityFromRecord(runningToolExecution));
 
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
@@ -233,55 +249,108 @@ async function resumeToolApproval(
 async function handleSingleToolCall(
   options: ResolvedToolCallHandlerServiceOptions,
   request: ModelStepRuntimeRequest,
+  snapshot: ToolRegistrySnapshot,
   toolCall: ToolCall,
   workspaceChangeScope: WorkspaceChangeExecutionScope,
 ): Promise<SingleToolCallOutcome> {
-  const definition = options.registry.getDefinition(toolCall.toolName, {
-    runId: String(request.runId),
-    permissionMode: options.permissionMode,
-    providerCapabilitySummary: { supportsToolCall: true },
-  });
-
-  if (!definition) {
-    return {
-      toolResult: saveImmediateToolError(
-        options,
-        toolCall,
-        `Unknown tool: ${toolCall.toolName}`,
-        'invalid_tool_call',
+  const resolution = resolveToolCallFromSnapshot(snapshot, toolCall.toolName);
+  if (!resolution.ok) {
+    const failedToolCall = options.repository.saveToolCall({
+      ...toolCall,
+      ...(resolution.sourceIdentity ?? {}),
+      status: 'failed',
+      completedAt: options.now(),
+      error: createToolRuntimeError(resolution.message),
+      metadata: metadataWithSourceIdentity(
+        { resolutionReason: resolution.reason },
+        resolution.sourceIdentity,
       ),
+    });
+    const toolResult = saveImmediateToolError(
+      options,
+      failedToolCall,
+      resolution.message,
+      'invalid_tool_call',
+      resolution.sourceIdentity,
+      { error: 'invalid_tool_call', reason: resolution.reason, message: resolution.message },
+    );
+    return {
+      toolResult,
+      runtimeEvents: [
+        createToolCallResolutionFailedRuntimeEvent(
+          request,
+          failedToolCall,
+          resolution.reason,
+          resolution.message,
+          resolution.sourceIdentity,
+        ),
+        createToolResultCreatedRuntimeEvent(request, toolResult),
+      ],
     };
   }
 
-  const validation = validateToolInput(definition, toolCall.input);
+  const sourceIdentity = resolution.sourceIdentity;
+  const definition = modelVisibleDefinitionForSnapshotEntry(resolution.entry);
+  const resolvedToolCall: ToolCall = {
+    ...toolCall,
+    ...sourceIdentity,
+  };
+  const runtimeEvents: RuntimeEvent[] = [
+    createToolCallResolvedRuntimeEvent(request, resolvedToolCall, sourceIdentity),
+  ];
+
+  const validation = validateToolInput(definition, resolvedToolCall.input);
   if (!validation.ok) {
-    return {
-      toolResult: saveImmediateToolError(
-        options,
-        toolCall,
-        validation.errorMessage,
-        'invalid_tool_input',
+    const failedToolCall = options.repository.saveToolCall({
+      ...resolvedToolCall,
+      status: 'failed',
+      completedAt: options.now(),
+      error: createToolRuntimeError(validation.errorMessage),
+      metadata: metadataWithSourceIdentity(
+        { validationReason: 'invalid_tool_input' },
+        sourceIdentity,
       ),
+    });
+    const toolResult = saveImmediateToolError(
+      options,
+      failedToolCall,
+      validation.errorMessage,
+      'invalid_tool_input',
+      sourceIdentity,
+      { error: 'invalid_tool_input', message: validation.errorMessage },
+    );
+    runtimeEvents.push(
+      createToolInputValidationFailedRuntimeEvent(request, failedToolCall, sourceIdentity, validation.errorMessage),
+      createToolResultCreatedRuntimeEvent(request, toolResult),
+    );
+    return {
+      toolResult,
+      runtimeEvents,
     };
   }
+
+  const savedToolCall = options.repository.saveToolCall({
+    ...resolvedToolCall,
+    toolName: definition.name,
+    status: 'validated',
+  });
 
   const requestedToolExecution = options.repository.saveToolExecution({
     toolExecutionId: options.ids.toolExecutionId(),
-    toolCallId: toolCall.toolCallId,
-    runId: toolCall.runId,
+    toolCallId: savedToolCall.toolCallId,
+    runId: savedToolCall.runId,
     stepId: request.stepId,
     toolName: definition.name,
-    input: toolCall.input,
-    inputPreview: toolCall.inputPreview,
+    ...sourceIdentity,
+    input: savedToolCall.input,
+    inputPreview: savedToolCall.inputPreview,
     capabilities: definition.capabilities,
     riskLevel: definition.riskLevel,
     sideEffect: definition.sideEffect,
     status: 'pending_approval',
     requestedAt: options.now(),
   });
-  const runtimeEvents: RuntimeEvent[] = [
-    createToolExecutionRequestedRuntimeEvent(request, requestedToolExecution),
-  ];
+  runtimeEvents.push(createToolExecutionRequestedRuntimeEvent(request, requestedToolExecution));
 
   const evaluatedDecision = evaluatePermissionPolicy({
     definition,
@@ -314,7 +383,7 @@ async function handleSingleToolCall(
 
   if (decision.decision === 'ask') {
     const approvalRequest = options.repository.saveApprovalRequest(
-      createApprovalRequest(options, request, toolCall, requestedToolExecution, decision),
+      createApprovalRequest(options, request, savedToolCall, requestedToolExecution, decision),
     );
     const waitingToolExecution = options.repository.saveToolExecution({
       ...requestedToolExecution,
@@ -327,7 +396,7 @@ async function handleSingleToolCall(
       createApprovalRequestedRuntimeEvent(request, approvalRequest),
     );
     return {
-      pendingApproval: { approvalRequest, toolCall, toolExecution: waitingToolExecution },
+      pendingApproval: { approvalRequest, toolCall: savedToolCall, toolExecution: waitingToolExecution },
       runtimeEvents,
     };
   }
@@ -340,10 +409,10 @@ async function handleSingleToolCall(
     startedAt: options.now(),
   });
   runtimeEvents.push(createToolExecutionStartedRuntimeEvent(request, runningToolExecution));
-  const result = await options.projectExecutor.executeToolExecution(
+  const result = withToolResultSourceIdentity(await options.projectExecutor.executeToolExecution(
     runningToolExecution,
     workspaceChangeScope,
-  );
+  ), sourceIdentity);
   const completedToolExecution = options.repository.saveToolExecution({
     ...runningToolExecution,
     status: result.kind === 'success' || result.kind === 'redacted' ? 'completed' : 'failed',
@@ -645,6 +714,7 @@ function createToolResultCreatedRuntimeEvent(
       ...(toolResult.toolExecutionId ? { toolExecutionId: toolResult.toolExecutionId } : {}),
       kind: toolResult.kind,
       summary: createToolResultSummary(toolResult),
+      ...(sourceIdentityFromToolResult(toolResult) ? { sourceIdentity: sourceIdentityFromToolResult(toolResult) } : {}),
     },
   });
 }
@@ -662,6 +732,7 @@ function createToolResultCreatedRuntimeEventFromToolResult(toolResult: ToolResul
       ...(toolResult.toolExecutionId ? { toolExecutionId: toolResult.toolExecutionId } : {}),
       kind: toolResult.kind,
       summary: createToolResultSummary(toolResult),
+      ...(sourceIdentityFromToolResult(toolResult) ? { sourceIdentity: sourceIdentityFromToolResult(toolResult) } : {}),
     },
   });
 }
@@ -691,6 +762,7 @@ function createApprovalRequest(
     runId: toolExecution.runId,
     stepId: request.stepId,
     toolName: toolExecution.toolName,
+    ...sourceIdentityFromRecord(toolExecution),
     capabilities: toolExecution.capabilities,
     riskLevel: decision.effectiveRiskLevel,
     title: `Approve ${toolExecution.toolName}`,
@@ -748,6 +820,7 @@ function saveDeniedResult(
     denialReason: decision.reason,
     redactionState: 'none',
     createdAt: options.now(),
+    metadata: metadataWithSourceIdentity(undefined, sourceIdentityFromRecord(toolExecution)),
   });
 }
 
@@ -756,17 +829,144 @@ function saveImmediateToolError(
   toolCall: ToolCall,
   message: string,
   kind: 'invalid_tool_call' | 'invalid_tool_input' | 'tool_error' = 'tool_error',
+  sourceIdentity?: ToolSourceIdentity,
+  structuredContent?: JsonObject,
 ): ToolResult {
   return options.repository.saveToolResult({
     toolResultId: options.ids.toolResultId(),
     toolCallId: toolCall.toolCallId,
     runId: toolCall.runId,
     kind,
+    ...(structuredContent ? { structuredContent } : {}),
     textContent: message,
     denialReason: message,
     redactionState: 'none',
     createdAt: options.now(),
+    metadata: metadataWithSourceIdentity(undefined, sourceIdentity),
   });
+}
+
+function createToolCallResolvedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  sourceIdentity: ToolSourceIdentity,
+): RuntimeEvent {
+  return createToolCallResolvedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:resolved`, toolCall.createdAt),
+    payload: {
+      toolCallId: String(toolCall.toolCallId),
+      providerToolCallId: toolCall.providerToolCallId,
+      requestedToolName: toolCall.toolName,
+      ...sourceIdentity,
+    },
+  });
+}
+
+function createToolCallResolutionFailedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  reason: 'unknown_tool' | 'tool_disabled' | 'tool_unavailable' | 'tool_conflicted' | 'tool_not_exposed',
+  message: string,
+  sourceIdentity?: ToolSourceIdentity,
+): RuntimeEvent {
+  return createToolCallResolutionFailedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:resolution-failed`, toolCall.completedAt ?? toolCall.createdAt),
+    payload: {
+      toolCallId: String(toolCall.toolCallId),
+      providerToolCallId: toolCall.providerToolCallId,
+      requestedToolName: toolCall.toolName,
+      reason,
+      message,
+      ...(sourceIdentity ? { sourceIdentity } : {}),
+    },
+  });
+}
+
+function createToolInputValidationFailedRuntimeEvent(
+  request: ModelStepRuntimeRequest,
+  toolCall: ToolCall,
+  sourceIdentity: ToolSourceIdentity,
+  message: string,
+): RuntimeEvent {
+  return createToolInputValidationFailedEvent({
+    ...runtimeEventBase(request, `event:${toolCall.toolCallId}:input-validation-failed`, toolCall.completedAt ?? toolCall.createdAt),
+    payload: {
+      toolCallId: String(toolCall.toolCallId),
+      modelVisibleName: sourceIdentity.modelVisibleName,
+      registrySnapshotId: sourceIdentity.registrySnapshotId,
+      snapshotEntryId: sourceIdentity.snapshotEntryId,
+      reason: 'invalid_tool_input',
+      message,
+      sourceIdentity,
+    },
+  });
+}
+
+function createToolRegistrySnapshotMissingError(runId: string): RuntimeError & Error {
+  return Object.assign(new Error(`Tool registry snapshot is missing for run ${runId}.`), {
+    code: 'tool_registry_snapshot_missing' as const,
+    severity: 'error' as const,
+    retryable: false,
+    source: 'tool' as const,
+  });
+}
+
+function withToolResultSourceIdentity(toolResult: ToolResult, sourceIdentity?: ToolSourceIdentity): ToolResult {
+  if (!sourceIdentity) {
+    return toolResult;
+  }
+
+  return {
+    ...toolResult,
+    metadata: metadataWithSourceIdentity(toolResult.metadata, sourceIdentity),
+  };
+}
+
+function metadataWithSourceIdentity(
+  metadata: JsonObject | undefined,
+  sourceIdentity: ToolSourceIdentity | undefined,
+): JsonObject | undefined {
+  if (!sourceIdentity) {
+    return metadata;
+  }
+
+  return {
+    ...(metadata ?? {}),
+    toolSourceIdentity: sourceIdentity,
+  };
+}
+
+function sourceIdentityFromRecord(record: Partial<ToolSourceIdentity>): ToolSourceIdentity | undefined {
+  if (
+    typeof record.registrySnapshotId !== 'string'
+    || typeof record.snapshotEntryId !== 'string'
+    || typeof record.modelVisibleName !== 'string'
+    || typeof record.canonicalToolId !== 'string'
+    || typeof record.sourceId !== 'string'
+    || typeof record.namespace !== 'string'
+    || typeof record.sourceToolName !== 'string'
+  ) {
+    return undefined;
+  }
+
+  return {
+    registrySnapshotId: record.registrySnapshotId,
+    snapshotEntryId: record.snapshotEntryId,
+    modelVisibleName: record.modelVisibleName,
+    canonicalToolId: record.canonicalToolId,
+    sourceId: record.sourceId,
+    namespace: record.namespace,
+    sourceToolName: record.sourceToolName,
+  };
+}
+
+function sourceIdentityFromToolResult(toolResult: ToolResult): ToolSourceIdentity | undefined {
+  const value = toolResult.metadata?.toolSourceIdentity;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return sourceIdentityFromRecord(value);
 }
 
 

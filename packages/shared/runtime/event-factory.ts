@@ -231,6 +231,45 @@ export function createToolCallCreatedEvent(
   return createRuntimeEvent(input);
 }
 
+export function createToolCallResolvedEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.call.resolved'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.call.resolved'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.call.resolved',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createToolCallResolutionFailedEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.call.resolution_failed'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.call.resolution_failed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.call.resolution_failed',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
+export function createToolInputValidationFailedEvent(input: Omit<
+  RunRuntimeEventFactoryInput<'tool.input.validation_failed'>,
+  'eventType' | 'source' | 'visibility' | 'persist'
+>): TypedRuntimeEvent<'tool.input.validation_failed'> {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.input.validation_failed',
+    source: 'tool',
+    visibility: 'debug',
+    persist: 'required',
+  });
+}
+
 export function createToolResultCreatedEvent(
   input: RunRuntimeEventFactoryInput<'tool.result.created'>,
 ): TypedRuntimeEvent<'tool.result.created'> {

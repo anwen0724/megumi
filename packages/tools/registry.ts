@@ -7,6 +7,7 @@ import {
   type ToolRegistration,
   type ToolRegistrySnapshot,
   type ToolRegistrySnapshotSourceEntry,
+  type ToolSourceIdentity,
   type ToolSource,
 } from '@megumi/shared/tool';
 
@@ -46,6 +47,26 @@ export interface ToolRegistrySnapshotResolutionTrace {
   modelSupportsToolCall: boolean;
   modelVisibleToolNames: string[];
 }
+
+export type ToolCallSnapshotResolution =
+  | {
+      ok: true;
+      entry: SnapshotToolEntry;
+      sourceIdentity: ToolSourceIdentity;
+      definition: ToolDefinition;
+    }
+  | {
+      ok: false;
+      reason:
+        | 'unknown_tool'
+        | 'tool_disabled'
+        | 'tool_unavailable'
+        | 'tool_conflicted'
+        | 'tool_not_exposed';
+      message: string;
+      entry?: SnapshotToolEntry;
+      sourceIdentity?: ToolSourceIdentity;
+    };
 
 function cloneToolDefinition(definition: ToolDefinition): ToolDefinition {
   return JSON.parse(JSON.stringify(definition)) as ToolDefinition;
@@ -153,11 +174,95 @@ export function createToolRegistrySnapshot(
 export function listModelVisibleToolDefinitions(snapshot: ToolRegistrySnapshot): ToolDefinition[] {
   return snapshot.entries
     .filter((entry) => entry.exposedToModel)
-    .map((entry) => ({
-      ...cloneToolDefinition(entry.definition),
-      name: entry.modelVisibleName,
-      description: entry.definition.modelFacingDescription ?? entry.definition.description,
-    }));
+    .map(modelVisibleDefinitionForSnapshotEntry);
+}
+
+export function resolveToolCallFromSnapshot(
+  snapshot: ToolRegistrySnapshot,
+  modelVisibleName: string,
+): ToolCallSnapshotResolution {
+  const matchingEntries = snapshot.entries.filter((entry) => entry.modelVisibleName === modelVisibleName);
+  const availableEntry = matchingEntries.find((entry) =>
+    entry.exposedToModel === true && entry.effectiveStatus === 'available',
+  );
+
+  if (availableEntry) {
+    return {
+      ok: true,
+      entry: availableEntry,
+      sourceIdentity: toolSourceIdentityForSnapshotEntry(snapshot, availableEntry),
+      definition: modelVisibleDefinitionForSnapshotEntry(availableEntry),
+    };
+  }
+
+  const entry = matchingEntries[0];
+  if (!entry) {
+    return {
+      ok: false,
+      reason: 'unknown_tool',
+      message: `Unknown tool: ${modelVisibleName}`,
+    };
+  }
+
+  const sourceIdentity = toolSourceIdentityForSnapshotEntry(snapshot, entry);
+  if (entry.effectiveStatus === 'disabled') {
+    return {
+      ok: false,
+      reason: 'tool_disabled',
+      message: `Tool is disabled: ${modelVisibleName}${entry.disabledReason ? ` (${entry.disabledReason})` : ''}`,
+      entry,
+      sourceIdentity,
+    };
+  }
+  if (entry.effectiveStatus === 'unavailable') {
+    return {
+      ok: false,
+      reason: 'tool_unavailable',
+      message: `Tool is unavailable: ${modelVisibleName}${entry.unavailableReason ? ` (${entry.unavailableReason})` : ''}`,
+      entry,
+      sourceIdentity,
+    };
+  }
+  if (entry.effectiveStatus === 'conflicted') {
+    return {
+      ok: false,
+      reason: 'tool_conflicted',
+      message: `Tool is conflicted: ${modelVisibleName}${entry.conflictReason ? ` (${entry.conflictReason})` : ''}`,
+      entry,
+      sourceIdentity,
+    };
+  }
+
+  return {
+    ok: false,
+    reason: 'tool_not_exposed',
+    message: `Tool is not exposed to the model: ${modelVisibleName}`,
+    entry,
+    sourceIdentity,
+  };
+}
+
+export function toolSourceIdentityForSnapshotEntry(
+  snapshot: ToolRegistrySnapshot,
+  entry: SnapshotToolEntry,
+): ToolSourceIdentity {
+  return {
+    registrySnapshotId: snapshot.snapshotId,
+    snapshotEntryId: entry.snapshotEntryId,
+    modelVisibleName: entry.modelVisibleName,
+    canonicalToolId: entry.canonicalToolId,
+    sourceId: entry.sourceId,
+    namespace: entry.namespace,
+    sourceToolName: entry.sourceToolName,
+  };
+}
+
+export function modelVisibleDefinitionForSnapshotEntry(entry: SnapshotToolEntry): ToolDefinition {
+  return {
+    ...cloneToolDefinition(entry.definition),
+    name: entry.modelVisibleName,
+    description: entry.definition.modelFacingDescription ?? entry.definition.description,
+  };
 }
 
 export function getToolRegistrySnapshotResolutionTrace(

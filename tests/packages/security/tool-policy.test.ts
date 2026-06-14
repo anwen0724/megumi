@@ -639,5 +639,92 @@ describe('evaluatePermissionPolicy', () => {
 
     expect(evaluatePermissionPolicy(input).decision).toBe('allow');
   });
+
+  it('copies source identity from tool execution into permission decisions', () => {
+    const decision = evaluatePermissionPolicy({
+      definition: readDefinition,
+      toolExecution: {
+        ...callFor(readDefinition, { path: 'README.md' }),
+        registrySnapshotId: 'tool-registry-snapshot-run-1',
+        snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+        modelVisibleName: 'read_file',
+        canonicalToolId: 'built_in:megumi:read_file',
+        sourceId: 'built_in',
+        namespace: 'megumi',
+        sourceToolName: 'read_file',
+      },
+      permissionMode: 'default',
+      projectRoot,
+      evaluatedAt,
+    });
+
+    expect(decision).toMatchObject({
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-read_file-built_in-megumi-read_file',
+      modelVisibleName: 'read_file',
+      canonicalToolId: 'built_in:megumi:read_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
+    });
+  });
+
+  it('matches permission rules against model visible tool names', () => {
+    const demoDefinition: ToolDefinition = {
+      name: 'demo_echo',
+      description: 'Echo through the external demo source.',
+      inputSchema: {
+        type: 'object',
+        properties: { message: { type: 'string' } },
+        required: ['message'],
+      },
+      capabilities: ['external_app'],
+      riskLevel: 'low',
+      sideEffect: 'read_external',
+      availability: { status: 'available' },
+    };
+    const toolExecution: ToolExecution = {
+      ...callFor(demoDefinition, { message: 'hello' }),
+      registrySnapshotId: 'tool-registry-snapshot-run-1',
+      snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-external_test-echo-external_test-demo-echo',
+      modelVisibleName: 'demo_echo',
+      canonicalToolId: 'external_test:demo:echo',
+      sourceId: 'external_test',
+      namespace: 'demo',
+      sourceToolName: 'echo',
+    };
+
+    expect(evaluatePermissionPolicy({
+      definition: demoDefinition,
+      toolExecution,
+      permissionMode: 'default',
+      projectRoot,
+      settings: {
+        allow: [{ scope: 'project', pattern: 'demo_echo' }],
+        ask: [],
+        deny: [],
+      },
+      evaluatedAt,
+    })).toMatchObject({
+      decision: 'allow',
+      matchedRule: { pattern: 'demo_echo' },
+    });
+
+    expect(evaluatePermissionPolicy({
+      definition: demoDefinition,
+      toolExecution,
+      permissionMode: 'default',
+      projectRoot,
+      settings: {
+        allow: [{ scope: 'project', pattern: 'external_test:demo:echo' }],
+        ask: [],
+        deny: [],
+      },
+      evaluatedAt,
+    })).toMatchObject({
+      decision: 'ask',
+      source: 'permission_mode',
+    });
+  });
 });
 

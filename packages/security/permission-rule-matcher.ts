@@ -35,6 +35,13 @@ export function matchPermissionRule(
 }
 
 function parsePermissionRulePattern(pattern: string): ParsedPermissionRulePattern | undefined {
+  if (/^[a-z][a-z0-9_]{0,63}$/.test(pattern)) {
+    return {
+      toolName: pattern,
+      argumentPattern: '*',
+    };
+  }
+
   const match = /^([a-z][a-z0-9_]{0,63})\((.*)\)$/.exec(pattern);
   if (!match) {
     return undefined;

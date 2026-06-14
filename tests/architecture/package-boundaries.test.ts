@@ -122,4 +122,15 @@ describe('package dependency boundaries', () => {
       ]),
     ).toEqual([]);
   });
+
+  it('keeps packages/security independent from db, tool registry, provider adapters, and app code', () => {
+    expect(
+      findForbiddenReferences('packages/security', [
+        /@megumi\/db(\/|['"]|$)/,
+        /@megumi\/tools(\/|['"]|$)/,
+        /@megumi\/ai(\/|['"]|$)/,
+        /apps\/desktop/,
+      ]),
+    ).toEqual([]);
+  });
 });
