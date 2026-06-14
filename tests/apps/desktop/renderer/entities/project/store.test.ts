@@ -46,6 +46,11 @@ function fail<C extends string>(channel: C) {
 
 beforeEach(() => {
   useProjectStore.setState(useProjectStore.getState().getInitialState());
+  useSessionStore.setState({
+    sessions: [],
+    activeSessionId: null,
+    activeAgentType: 'free',
+  });
   window.megumi = {
     project: {
       list: vi.fn(async () => ok({ projects: [projectRecord] }, IPC_CHANNELS.project.list)),
@@ -123,6 +128,71 @@ describe('useProjectStore', () => {
       payload: { projectId: projectRecord.projectId },
     }));
     expect(useProjectStore.getState().currentProjectId).toBe(projectRecord.projectId);
+  });
+
+  it('keeps existing project order and display metadata when selecting a known project', async () => {
+    const otherProjectRecord = {
+      ...projectRecord,
+      projectId: 'project:other',
+      name: 'other',
+      repoPath: 'C:/all/work/study/other',
+      repoPathKey: 'c:/all/work/study/other',
+      lastOpenedAt: '2026-05-18T00:00:00.000Z',
+    };
+    const openedOtherProjectRecord = {
+      ...otherProjectRecord,
+      lastOpenedAt: '2026-05-20T00:00:00.000Z',
+    };
+    vi.mocked(window.megumi.project.open).mockResolvedValueOnce(
+      ok({ project: openedOtherProjectRecord }, IPC_CHANNELS.project.open),
+    );
+    useProjectStore.setState({
+      projects: [
+        useProjectStore.getState().mapProjectRecord(projectRecord),
+        useProjectStore.getState().mapProjectRecord(otherProjectRecord),
+      ],
+      currentProjectId: projectRecord.projectId,
+    });
+
+    await useProjectStore.getState().openProject(otherProjectRecord.projectId);
+
+    expect(useProjectStore.getState().currentProjectId).toBe(otherProjectRecord.projectId);
+    expect(useProjectStore.getState().projects.map((project) => project.id)).toEqual([
+      projectRecord.projectId,
+      otherProjectRecord.projectId,
+    ]);
+    expect(useProjectStore.getState().projects[1]?.lastOpenedAt).toBe(otherProjectRecord.lastOpenedAt);
+  });
+
+  it('clears active session when opening a different project', async () => {
+    const otherProjectRecord = {
+      ...projectRecord,
+      projectId: 'project:other',
+      name: 'other',
+      repoPath: 'C:/all/work/study/other',
+      repoPathKey: 'c:/all/work/study/other',
+      lastOpenedAt: '2026-05-19T00:00:02.000Z',
+    };
+    vi.mocked(window.megumi.project.open).mockResolvedValueOnce(
+      ok({ project: otherProjectRecord }, IPC_CHANNELS.project.open),
+    );
+    useProjectStore.setState({
+      projects: [
+        useProjectStore.getState().mapProjectRecord(projectRecord),
+        useProjectStore.getState().mapProjectRecord(otherProjectRecord),
+      ],
+      currentProjectId: projectRecord.projectId,
+    });
+    const session = useSessionStore.getState().createLocalSession({
+      projectId: projectRecord.projectId,
+      title: 'Existing session',
+    });
+
+    await useProjectStore.getState().openProject(otherProjectRecord.projectId);
+
+    expect(useProjectStore.getState().currentProjectId).toBe(otherProjectRecord.projectId);
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(useSessionStore.getState().sessions.find((item) => item.id === session.id)).toEqual(session);
   });
 
   it('removes projects and clears current project and session state if active', async () => {

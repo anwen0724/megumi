@@ -28,12 +28,35 @@ const initialState = {
 };
 
 function upsertProject(projects: Project[], project: Project): Project[] {
-  const rest = projects.filter((item) => item.id !== project.id);
-  return [project, ...rest].sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt));
+  const existingProject = projects.find((item) => item.id === project.id);
+  if (existingProject) {
+    return projects;
+  }
+
+  return [...projects, project];
 }
 
-function sortProjectsByLastOpened(projects: Project[]): Project[] {
-  return [...projects].sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt));
+function getMostRecentlyOpenedProjectId(projects: Project[]): string | null {
+  return projects.reduce<Project | null>((mostRecent, project) => {
+    if (!mostRecent || project.lastOpenedAt.localeCompare(mostRecent.lastOpenedAt) > 0) {
+      return project;
+    }
+
+    return mostRecent;
+  }, null)?.id ?? null;
+}
+
+function clearActiveSessionOutsideProject(projectId: string): void {
+  const sessionState = useSessionStore.getState();
+  const activeSessionId = sessionState.activeSessionId;
+  if (!activeSessionId) {
+    return;
+  }
+
+  const activeSession = sessionState.sessions.find((session) => session.id === activeSessionId);
+  if (!activeSession || activeSession.projectId !== projectId) {
+    sessionState.setActiveSession(null);
+  }
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -53,14 +76,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return;
     }
 
-    const projects = sortProjectsByLastOpened(result.data.projects.map(projectFromRecord));
+    const projects = result.data.projects.map(projectFromRecord);
     const currentProjectStillExists = projects.some((project) => project.id === get().currentProjectId);
 
     set({
       projects,
       currentProjectId: currentProjectStillExists
         ? get().currentProjectId
-        : projects[0]?.id ?? null,
+        : getMostRecentlyOpenedProjectId(projects),
       loading: false,
       error: null,
     });
@@ -82,6 +105,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
 
     const project = projectFromRecord(result.data.project);
+    clearActiveSessionOutsideProject(project.id);
+    useSessionStore.getState().setNewSessionDraftTargetProject(null);
     set((state) => ({
       projects: upsertProject(state.projects, project),
       currentProjectId: project.id,
@@ -102,6 +127,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
 
     const project = projectFromRecord(result.data.project);
+    clearActiveSessionOutsideProject(project.id);
+    useSessionStore.getState().setNewSessionDraftTargetProject(null);
     set((state) => ({
       projects: upsertProject(state.projects, project),
       currentProjectId: project.id,

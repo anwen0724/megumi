@@ -15,6 +15,7 @@ export function useAppBodyController() {
   const sessions = useSessionStore((state) => state.sessions);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
+  const startNewSessionDraft = useSessionStore((state) => state.startNewSessionDraft);
   const { hydrateSessions, hydrateSessionTimeline } = useSessionHistoryHydration();
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
@@ -30,10 +31,7 @@ export function useAppBodyController() {
 
   const sidebarProjects = useMemo<SidebarProjectItem[]>(
     () => {
-      const sorted = [...projects].sort(
-        (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
-      );
-      const limited = sorted.slice(0, 8);
+      const limited = projects.slice(0, 8);
       return limited.map((project) => ({
         id: project.id,
         name: project.name,
@@ -60,8 +58,8 @@ export function useAppBodyController() {
     }
 
     setSettingsOpen(false);
-    setActiveSession(null);
-  }, [currentProject, setActiveSession]);
+    startNewSessionDraft(currentProject.id);
+  }, [currentProject, startNewSessionDraft]);
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeSessionId) {

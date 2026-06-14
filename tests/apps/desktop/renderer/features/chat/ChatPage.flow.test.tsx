@@ -437,6 +437,80 @@ describe('ChatPage flow', () => {
     expect(composerForm).not.toHaveClass('min-w-[38rem]');
   });
 
+  it('shows the welcome state when active session belongs to a different project', async () => {
+    installMegumiMock();
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          projectId: 'project-1',
+          name: 'Megumi',
+          repoPath: 'C:/all/work/study/megumi',
+          repoPathKey: 'c:/all/work/study/megumi',
+          status: 'available',
+          createdAt: '2026-05-10T12:00:00.000Z',
+          lastOpenedAt: '2026-05-10T12:00:00.000Z',
+        },
+        {
+          id: 'project-2',
+          projectId: 'project-2',
+          name: 'Other',
+          repoPath: 'C:/all/work/study/other',
+          repoPathKey: 'c:/all/work/study/other',
+          status: 'available',
+          createdAt: '2026-05-10T12:00:00.000Z',
+          lastOpenedAt: '2026-05-10T12:01:00.000Z',
+        },
+      ],
+      currentProjectId: 'project-2',
+      loading: false,
+      error: null,
+    });
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-project-1',
+        projectId: 'project-1',
+        title: 'Old project session',
+        agentType: 'free',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        updatedAt: '2026-05-10T12:00:00.000Z',
+      }],
+      activeSessionId: 'session-project-1',
+      activeAgentType: 'free',
+    });
+    window.megumi.project.open = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      data: {
+        project: {
+          projectId: 'project-1',
+          name: 'Megumi',
+          repoPath: 'C:/all/work/study/megumi',
+          repoPathKey: 'c:/all/work/study/megumi',
+          status: 'available',
+          createdAt: '2026-05-10T12:00:00.000Z',
+          lastOpenedAt: '2026-05-10T12:02:00.000Z',
+        },
+      },
+      meta: {
+        requestId: 'ipc-project-open',
+        channel: IPC_CHANNELS.project.open,
+        handledAt: '2026-05-10T12:02:00.000Z',
+      },
+    }) as typeof window.megumi.project.open;
+
+    render(<ChatPage />);
+
+    expect(screen.getByTestId('welcome-chat-layout')).toBeInTheDocument();
+    expect(screen.getByText('Welcome to Megumi')).toBeInTheDocument();
+    expect(screen.queryByRole('log', { name: 'Chat timeline' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Select project: Other'));
+    await userEvent.click(screen.getByRole('menuitem', { name: /Megumi/ }));
+
+    expect(useSessionStore.getState().newSessionDraftTargetProjectId).toBe('project-1');
+    expect(window.megumi.project.open).not.toHaveBeenCalled();
+  });
+
   it('keeps an existing empty history session in timeline mode instead of showing the new-session welcome', () => {
     selectMegumiProject();
     useSessionStore.setState({
@@ -456,7 +530,7 @@ describe('ChatPage flow', () => {
     render(<ChatPage />);
 
     expect(screen.queryByText('Welcome to Megumi')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('New session project: Megumi')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Select project: Megumi')).not.toBeInTheDocument();
     expect(screen.getByRole('log', { name: 'Chat timeline' })).toBeInTheDocument();
     expect(screen.getByTestId('composer-dock')).toContainElement(
       screen.getByRole('form', { name: 'Message composer' }),
@@ -465,6 +539,7 @@ describe('ChatPage flow', () => {
 
   it('renders pending approvals in blocking controls without the separate tool-call card section', () => {
     installMegumiMock();
+    activateCanonicalSession([]);
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useToolCallStore.getState().upsertToolCall(createToolCall());
     useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
@@ -483,6 +558,7 @@ describe('ChatPage flow', () => {
 
   it('resolves pending approvals through the approval preload API', async () => {
     const megumi = installMegumiMock();
+    activateCanonicalSession([]);
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
 
@@ -511,6 +587,7 @@ describe('ChatPage flow', () => {
 
   it('keeps approval controls outside the timeline log while retaining resolve actions', async () => {
     const megumi = installMegumiMock();
+    activateCanonicalSession([]);
     useRunStore.getState().applyRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
     useApprovalStore.getState().upsertApprovalRequest(createApprovalRequest());
 

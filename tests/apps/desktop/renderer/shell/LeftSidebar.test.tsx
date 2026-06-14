@@ -184,11 +184,13 @@ describe('LeftSidebar', () => {
     expect(screen.queryByRole('button', { name: /了解项目/ })).not.toBeInTheDocument();
   });
 
-  it('project row has no icon and no active styling', () => {
+  it('renders project rows with folder icons and a visible theme hover state', () => {
     render(<LeftSidebar {...defaultProps} />);
 
-    expect(screen.queryByTestId('project-row-icon')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'megumi' })).not.toHaveAttribute('aria-current');
+    const projectRow = screen.getByRole('button', { name: 'megumi' });
+    expect(screen.getByTestId('project-row-icon-project-1')).toBeInTheDocument();
+    expect(projectRow).toHaveClass('hover:bg-[var(--color-accent-soft)]');
+    expect(projectRow).not.toHaveAttribute('aria-current');
   });
 
   it('clicking project row does not trigger session select', async () => {
@@ -213,12 +215,34 @@ describe('LeftSidebar', () => {
       />,
     );
 
+    const projectActionsButton = screen.getByRole('button', { name: 'Project actions' });
+    projectActionsButton.getBoundingClientRect = vi.fn(() => ({
+      x: 244,
+      y: 4,
+      left: 244,
+      top: 4,
+      right: 276,
+      bottom: 36,
+      width: 32,
+      height: 32,
+      toJSON: () => ({}),
+    }));
+
     // Open project menu
-    await userEvent.click(screen.getByRole('button', { name: 'Project actions' }));
+    await userEvent.click(projectActionsButton);
 
     expect(screen.getByRole('menuitem', { name: 'Open project' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'New project' })).toBeDisabled();
     expect(screen.getByRole('menuitem', { name: 'Manage projects' })).toBeInTheDocument();
+
+    const menu = screen.getByRole('menu');
+    expect(menu).toHaveClass('fixed');
+    expect(menu).not.toHaveClass('absolute');
+    expect(menu).toHaveStyle({ left: '244px', top: '40px' });
+    expect(menu).toHaveClass('bg-[var(--color-surface-muted)]');
+    expect(screen.getByTestId('project-menu-open-icon')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Open project' })).toHaveClass('hover:bg-[var(--color-accent-soft)]');
+    expect(screen.getByRole('menuitem', { name: 'Manage projects' })).toHaveClass('hover:bg-[var(--color-accent-soft)]');
 
     // Click use existing project
     await userEvent.click(screen.getByRole('menuitem', { name: 'Open project' }));

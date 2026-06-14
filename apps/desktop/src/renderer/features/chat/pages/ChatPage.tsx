@@ -78,6 +78,7 @@ export function ChatPage() {
                   void useProjectStore.getState().useExistingProject();
                 },
                 onToggleProjectPicker: () => controller.setProjectPickerOpen((value) => !value),
+                onCloseProjectPicker: () => controller.setProjectPickerOpen(false),
                 onSwitchProject: (projectId) => {
                   void controller.switchNewSessionProject(projectId);
                 },
@@ -153,6 +154,7 @@ export function ChatPage() {
                   void useProjectStore.getState().useExistingProject();
                 },
                 onToggleProjectPicker: () => controller.setProjectPickerOpen((value) => !value),
+                onCloseProjectPicker: () => controller.setProjectPickerOpen(false),
                 onSwitchProject: (projectId) => {
                   void controller.switchNewSessionProject(projectId);
                 },

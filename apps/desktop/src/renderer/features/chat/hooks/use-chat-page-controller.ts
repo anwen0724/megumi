@@ -173,8 +173,9 @@ function restoreFeedbackFromData(data: WorkspaceRestoreData): RestoreFeedback {
 }
 
 export function useChatPageController() {
-  const agentStatus = useChatUiStore((state) => state.agentStatus);
+  const rawAgentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
+  const newSessionDraftTargetProjectId = useSessionStore((state) => state.newSessionDraftTargetProjectId);
   const sessions = useSessionStore((state) => state.sessions);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const projects = useProjectStore((state) => state.projects);
@@ -189,8 +190,16 @@ export function useChatPageController() {
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const pendingRecoverableRunIdsRef = useRef(new Set<string>());
   const pendingWorkspaceChangeSetIdsRef = useRef(new Set<string>());
-  const currentProject = projects.find((p) => p.id === currentProjectId) ?? null;
-  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
+  const activeSession = sessions.find((session) =>
+    session.id === activeSessionId && session.projectId === currentProjectId
+  ) ?? null;
+  const effectiveActiveSessionId = activeSession?.id ?? null;
+  const isDraftNewSession = !effectiveActiveSessionId;
+  const effectiveProjectId = effectiveActiveSessionId
+    ? currentProjectId
+    : newSessionDraftTargetProjectId ?? currentProjectId;
+  const currentProject = projects.find((p) => p.id === effectiveProjectId) ?? null;
+  const agentStatus = isDraftNewSession ? 'idle' : rawAgentStatus;
   const {
     sendSessionMessage,
     cancelSessionMessage,
@@ -198,8 +207,8 @@ export function useChatPageController() {
     createBranchDraft,
     cancelBranchDraft,
   } = useSessionTimeline();
-  const activeChatStreamSessionKey = currentProjectId && activeSessionId
-    ? chatStreamSessionKey(currentProjectId, activeSessionId)
+  const activeChatStreamSessionKey = currentProjectId && effectiveActiveSessionId
+    ? chatStreamSessionKey(currentProjectId, effectiveActiveSessionId)
     : null;
   const canonicalMessages = useChatStreamStore((state) => (
     activeChatStreamSessionKey
@@ -208,8 +217,8 @@ export function useChatPageController() {
   ));
   const timelineMessages = canonicalMessages;
   const visibleRecoverableRuns = useMemo(
-    () => recoverableRuns.filter((run) => run.sessionId === activeSessionId && !dismissedRecoverableRunIds.has(run.runId)),
-    [activeSessionId, dismissedRecoverableRunIds, recoverableRuns],
+    () => recoverableRuns.filter((run) => run.sessionId === effectiveActiveSessionId && !dismissedRecoverableRunIds.has(run.runId)),
+    [effectiveActiveSessionId, dismissedRecoverableRunIds, recoverableRuns],
   );
   const recoverableRunsByRunId = useMemo(() => {
     const byRunId = new Map<string, RecoverableRunSummary>();
@@ -244,7 +253,7 @@ export function useChatPageController() {
   ])), [timelineMessages]);
 
   const activeRunCandidate = activeRunId ? runs[activeRunId] : null;
-  const activeRun = activeRunCandidate && (!activeSessionId || !activeRunCandidate.sessionId || activeRunCandidate.sessionId === activeSessionId)
+  const activeRun = activeRunCandidate && !isDraftNewSession && (!activeRunCandidate.sessionId || activeRunCandidate.sessionId === effectiveActiveSessionId)
     ? activeRunCandidate
     : null;
   const recoveryBridge = window.megumi?.recovery;
@@ -271,7 +280,7 @@ export function useChatPageController() {
     activeSession?.title === 'New session' &&
     activeSession.projectId === currentProjectId &&
     timelineMessages.length === 0;
-  const canShowNewSessionWelcome = !activeSessionId || activeEmptyNewSession;
+  const canShowNewSessionWelcome = !effectiveActiveSessionId || activeEmptyNewSession;
   const hasTimelineContent =
     timelineMessages.length > 0 ||
     pendingApprovals.length > 0 ||
@@ -283,12 +292,11 @@ export function useChatPageController() {
     Boolean(currentProject) &&
     agentStatus === 'idle' &&
     !activeRun &&
-    timelineMessages.length === 0 &&
     pendingApprovals.length === 0 &&
-    (!activeSessionId || activeEmptyNewSession);
+    (isDraftNewSession || activeEmptyNewSession);
 
   const loadRecoverableRuns = useCallback(async ({ clearOnFailure }: { clearOnFailure: boolean }) => {
-    if (!activeSessionId || !recoveryBridge) {
+    if (!effectiveActiveSessionId || !recoveryBridge) {
       setRecoverableRuns([]);
       return;
     }
@@ -307,7 +315,7 @@ export function useChatPageController() {
         setRecoverableRuns([]);
       }
     }
-  }, [activeSessionId, recoveryBridge]);
+  }, [effectiveActiveSessionId, recoveryBridge]);
 
   useEffect(() => {
     void loadRecoverableRuns({ clearOnFailure: true });
@@ -315,7 +323,7 @@ export function useChatPageController() {
 
   useEffect(() => {
     setDismissedRecoverableRunIds(new Set());
-  }, [activeSessionId]);
+  }, [effectiveActiveSessionId]);
 
   useEffect(() => {
     if (!restoreFeedback || restoreFeedback.persistent) {
@@ -377,14 +385,18 @@ export function useChatPageController() {
   }
 
   async function switchNewSessionProject(projectId: string) {
+    if (isDraftNewSession) {
+      useSessionStore.getState().setNewSessionDraftTargetProject(projectId);
+      setProjectPickerOpen(false);
+      return;
+    }
+
     if (projectId === currentProjectId) {
       setProjectPickerOpen(false);
       return;
     }
 
-    const sessionBeforeOpen = activeSessionId
-      ? useSessionStore.getState().sessions.find((session) => session.id === activeSessionId)
-      : null;
+    const sessionBeforeOpen = activeSession;
     const canMoveActiveSession =
       !sessionBeforeOpen ||
       (
@@ -507,8 +519,8 @@ export function useChatPageController() {
 
   return {
     agentStatus,
-    activeSessionId,
-    currentProjectId,
+    activeSessionId: effectiveActiveSessionId,
+    currentProjectId: effectiveProjectId,
     currentProject,
     projects,
     activeRun,

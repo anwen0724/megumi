@@ -25,6 +25,17 @@ const project: Project = {
   status: 'available' as const,
 };
 
+const otherProject: Project = {
+  id: 'project-2',
+  name: 'Other',
+  repoPath: 'C:/all/work/study/other',
+  createdAt: '2026-05-10T00:00:00.000Z',
+  projectId: 'project-2',
+  repoPathKey: 'c:/all/work/study/other',
+  lastOpenedAt: '2026-05-20T00:00:00.000Z',
+  status: 'available' as const,
+};
+
 function resetStores() {
   useProjectStore.setState({
     projects: [project],
@@ -121,6 +132,20 @@ function expectCanonicalUserMessage(sessionId: string, text: string) {
   ]);
 }
 
+function expectCanonicalUserMessageForProject(projectId: string, sessionId: string, text: string) {
+  expect(useChatStreamStore.getState().sessions[
+    chatStreamSessionKey(projectId, sessionId)
+  ].messages).toEqual([
+    expect.objectContaining({
+      role: 'user',
+      blocks: [expect.objectContaining({
+        kind: 'user_text',
+        text,
+      })],
+    }),
+  ]);
+}
+
 describe('auto session on first send', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -150,6 +175,39 @@ describe('auto session on first send', () => {
       updatedAt: '2026-05-10T12:00:00.000Z',
     });
     expectCanonicalUserMessage(state.sessions[0].id, 'first line\nsecond line');
+  });
+
+  it('creates the first local session in the draft target project and then makes it current', () => {
+    useProjectStore.setState({
+      projects: [project, otherProject],
+      currentProjectId: project.id,
+      loading: false,
+    });
+    useSessionStore.getState().setNewSessionDraftTargetProject(otherProject.id);
+
+    render(<ChatPage />);
+
+    submitPrompt('Send this to the draft target');
+
+    const state = useSessionStore.getState();
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions[0]).toMatchObject({
+      projectId: otherProject.id,
+      title: 'Send this to the draft t...',
+    });
+    expect(state.activeSessionId).toBe(state.sessions[0].id);
+    expect(state.newSessionDraftTargetProjectId).toBeNull();
+    expect(useProjectStore.getState().currentProjectId).toBe(otherProject.id);
+    expectCanonicalUserMessageForProject(otherProject.id, state.sessions[0].id, 'Send this to the draft target');
+    expect(window.megumi.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        context: expect.objectContaining({
+          workspaceId: otherProject.id,
+          workspaceLabel: otherProject.name,
+          workspacePath: otherProject.repoPath,
+        }),
+      }),
+    }));
   });
 
   it('does not create or send a runtime session when no project is selected', () => {

@@ -212,7 +212,7 @@ describe('App shell layout contract', () => {
     expect(screen.queryByText('Assistant activity')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chat-page-root')).queryByText('C:/all/work/study/megumi')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chat-page-root')).getByRole('log', { name: 'Chat timeline' })).toBeInTheDocument();
-    expect(within(screen.getByTestId('chat-page-root')).queryByLabelText('New session project: Megumi')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('chat-page-root')).queryByLabelText('Select project: Megumi')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open project sidebar' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Artifacts' })).not.toBeInTheDocument();
@@ -323,7 +323,7 @@ describe('App shell layout contract', () => {
     expect(state.sessions).toHaveLength(2);
     expect(state.activeSessionId).toBeNull();
     expect(screen.queryByRole('button', { name: /Open session New session/ })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select project: Megumi')).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'Switch project');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -384,22 +384,169 @@ describe('App shell layout contract', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'New session' }));
 
-    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select project: Megumi')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /New session project: Megumi/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Select project: Megumi/ }));
     const menu = screen.getByRole('menu', { name: 'Choose project for new session' });
     await userEvent.click(within(menu).getByRole('menuitem', { name: /Other/ }));
 
     await waitFor(() => {
-      expect(useProjectStore.getState().currentProjectId).toBe('project-2');
+      expect(useSessionStore.getState().newSessionDraftTargetProjectId).toBe('project-2');
     });
+    expect(useProjectStore.getState().currentProjectId).toBe('project-1');
     expect(useSessionStore.getState().activeSessionId).toBeNull();
     expect(useSessionStore.getState().sessions).toHaveLength(2);
-    expect(window.megumi.project.open).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { projectId: 'project-2' },
-    }));
-    expect(screen.getByLabelText('New session project: Other')).toBeInTheDocument();
+    expect(window.megumi.project.open).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Select project: Other')).toBeInTheDocument();
     expect(within(screen.getByTestId('chat-page-root')).getByText('C:/all/work/study/other')).toBeInTheDocument();
+  });
+
+  it('keeps project switching enabled for a new draft after leaving a populated session', async () => {
+    const otherProjectRecord = {
+      projectId: 'project-2',
+      name: 'Other',
+      repoPath: 'C:/all/work/study/other',
+      repoPathKey: 'c:/all/work/study/other',
+      status: 'available' as const,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      lastOpenedAt: '2026-05-20T00:00:00.000Z',
+    };
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce({
+      ok: true,
+      data: { projects: [DEFAULT_PROJECT_RECORD, otherProjectRecord] },
+      meta: {
+        requestId: 'ipc-project-list-draft-switch-after-session-test',
+        channel: 'project:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
+    });
+    useChatStreamStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      committedUser('message-old-session', 'session-1', 'Old session message'),
+    ]);
+
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    const projectButton = screen.getByRole('button', { name: /Select project: Megumi/ });
+    expect(projectButton).toBeEnabled();
+
+    await userEvent.click(projectButton);
+
+    expect(screen.getByRole('menu', { name: 'Choose project for new session' })).toBeInTheDocument();
+  });
+
+  it('keeps project switching enabled for a new draft when the previous session has active run state', async () => {
+    const otherProjectRecord = {
+      projectId: 'project-2',
+      name: 'Other',
+      repoPath: 'C:/all/work/study/other',
+      repoPathKey: 'c:/all/work/study/other',
+      status: 'available' as const,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      lastOpenedAt: '2026-05-20T00:00:00.000Z',
+    };
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce({
+      ok: true,
+      data: { projects: [DEFAULT_PROJECT_RECORD, otherProjectRecord] },
+      meta: {
+        requestId: 'ipc-project-list-draft-switch-with-old-run-test',
+        channel: 'project:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
+    });
+    useChatUiStore.setState({
+      activeSessionId: 'session-1',
+      agentStatus: 'running',
+      lastError: null,
+      sessionStates: {
+        'session-1': {
+          agentStatus: 'running',
+          lastError: null,
+        },
+      },
+    });
+    useRunStore.setState({
+      activeRunId: 'run-session-1',
+      runs: {
+        'run-session-1': {
+          runId: 'run-session-1',
+          sessionId: 'session-1',
+          status: 'running',
+          updatedAt: '2026-05-10T12:00:00.000Z',
+        },
+      },
+      eventsByRun: {},
+      stepsByRun: {},
+      lastError: null,
+    });
+
+    renderShell();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+
+    const projectButton = screen.getByRole('button', { name: /Select project: Megumi/ });
+    expect(projectButton).toBeEnabled();
+
+    await userEvent.click(projectButton);
+
+    expect(screen.getByRole('menu', { name: 'Choose project for new session' })).toBeInTheDocument();
+  });
+
+  it('keeps the left sidebar project order stable when switching project from the welcome state', async () => {
+    const otherProjectRecord = {
+      projectId: 'project-2',
+      name: 'Other',
+      repoPath: 'C:/all/work/study/other',
+      repoPathKey: 'c:/all/work/study/other',
+      status: 'available' as const,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      lastOpenedAt: '2026-05-20T00:00:00.000Z',
+    };
+    vi.mocked(window.megumi.project.list).mockResolvedValueOnce({
+      ok: true,
+      data: { projects: [DEFAULT_PROJECT_RECORD, otherProjectRecord] },
+      meta: {
+        requestId: 'ipc-project-list-stable-sidebar-order-test',
+        channel: 'project:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
+    });
+    vi.mocked(window.megumi.project.open).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        project: {
+          ...otherProjectRecord,
+          lastOpenedAt: '2026-05-21T00:00:00.000Z',
+        },
+      },
+      meta: {
+        requestId: 'ipc-project-open-stable-sidebar-order-test',
+        channel: 'project:open',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
+    });
+
+    renderShell();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Megumi' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Other' })).toBeInTheDocument();
+    });
+    const megumiProjectRow = screen.getByRole('button', { name: 'Megumi' });
+    const otherProjectRow = screen.getByRole('button', { name: 'Other' });
+    expect(megumiProjectRow.compareDocumentPosition(otherProjectRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New session' }));
+    await userEvent.click(screen.getByRole('button', { name: /Select project: Megumi/ }));
+    const menu = screen.getByRole('menu', { name: 'Choose project for new session' });
+    await userEvent.click(within(menu).getByRole('menuitem', { name: /Other/ }));
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().newSessionDraftTargetProjectId).toBe('project-2');
+    });
+    expect(useProjectStore.getState().currentProjectId).toBe('project-1');
+    expect(megumiProjectRow.compareDocumentPosition(otherProjectRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('uses existing project flow instead of creating a session when no project is selected', async () => {
@@ -507,7 +654,7 @@ describe('App shell layout contract', () => {
     expect(useSessionStore.getState().activeSessionId).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
-    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select project: Megumi')).toBeInTheDocument();
   });
 
   it('opens and closes settings as the main area page from the expanded sidebar', async () => {
@@ -562,7 +709,7 @@ describe('App shell layout contract', () => {
     expect(useSessionStore.getState().activeSessionId).toBeNull();
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-page-root')).toBeInTheDocument();
-    expect(screen.getByLabelText('New session project: Megumi')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select project: Megumi')).toBeInTheDocument();
   });
 
   it('clears the center timeline when creating a new local session', async () => {

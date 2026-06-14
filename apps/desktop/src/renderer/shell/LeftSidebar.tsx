@@ -1,10 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ClipboardList, FolderOpen, MessageSquarePlus, PanelLeftOpen, Settings } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Folder,
+  FolderOpen,
+  MessageSquarePlus,
+  PanelLeftOpen,
+  Plus,
+  Settings,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { Button, IconButton, cx } from '../shared/ui';
 import { ProjectManagerModal } from './ProjectManagerModal';
 import type { Project } from '../entities/project/types';
 
 const VISIBLE_SESSION_COUNT = 5;
+const ACTION_MENU_WIDTH = 208;
+const ACTION_MENU_GAP = 4;
+const ACTION_MENU_VIEWPORT_PADDING = 8;
 
 export interface SidebarSessionItem {
   id: string;
@@ -53,8 +67,28 @@ export function LeftSidebar({
   );
   const [showAllByProject, setShowAllByProject] = useState<Record<string, boolean>>({});
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [projectMenuPosition, setProjectMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const [manageModalOpen, setManageModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const projectMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const getProjectMenuPosition = useCallback(() => {
+    const buttonRect = projectMenuButtonRef.current?.getBoundingClientRect();
+    if (!buttonRect) {
+      return null;
+    }
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const maxLeft = Math.max(
+      ACTION_MENU_VIEWPORT_PADDING,
+      viewportWidth - ACTION_MENU_WIDTH - ACTION_MENU_VIEWPORT_PADDING,
+    );
+
+    return {
+      left: Math.max(ACTION_MENU_VIEWPORT_PADDING, Math.min(buttonRect.left, maxLeft)),
+      top: buttonRect.bottom + ACTION_MENU_GAP,
+    };
+  }, []);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects((prev) => {
@@ -77,7 +111,18 @@ export function LeftSidebar({
 
   const closeMenu = useCallback(() => {
     setProjectMenuOpen(false);
+    setProjectMenuPosition(null);
   }, []);
+
+  const toggleProjectMenu = useCallback(() => {
+    if (projectMenuOpen) {
+      closeMenu();
+      return;
+    }
+
+    setProjectMenuPosition(getProjectMenuPosition());
+    setProjectMenuOpen(true);
+  }, [closeMenu, getProjectMenuPosition, projectMenuOpen]);
 
   useEffect(() => {
     if (!projectMenuOpen) {
@@ -152,29 +197,38 @@ export function LeftSidebar({
           <div className="mb-1 flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--color-text-muted)]">Projects</span>
             <div ref={menuRef} className="relative">
-              <IconButton
-                label="Project actions"
-                onClick={() => setProjectMenuOpen((prev) => !prev)}
-                size="sm"
-                variant="ghost"
+              <button
+                ref={projectMenuButtonRef}
+                type="button"
+                aria-label="Project actions"
+                title="Project actions"
+                onClick={toggleProjectMenu}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent bg-transparent text-[var(--color-text-muted)] transition hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FolderOpen size={14} aria-hidden="true" />
-              </IconButton>
+              </button>
 
               {projectMenuOpen ? (
                 <div
                   role="menu"
-                  className="absolute right-0 z-40 mt-1 w-44 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)]"
+                  style={(projectMenuPosition ?? undefined) as CSSProperties | undefined}
+                  className="fixed z-40 w-52 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-1 shadow-[var(--shadow-soft)]"
                 >
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center px-3 py-2 text-left text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface)]"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-accent-soft)]"
                     onClick={() => {
                       onUseExistingProject();
                       closeMenu();
                     }}
                   >
+                    <FolderOpen
+                      data-testid="project-menu-open-icon"
+                      size={15}
+                      className="shrink-0 text-[var(--color-text-muted)]"
+                      aria-hidden="true"
+                    />
                     Open project
                   </button>
                   <button
@@ -182,20 +236,22 @@ export function LeftSidebar({
                     role="menuitem"
                     disabled
                     aria-disabled="true"
-                    className="flex w-full items-center px-3 py-2 text-left text-sm text-[var(--color-text-muted)] transition disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text-muted)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
+                    <Plus size={15} className="shrink-0" aria-hidden="true" />
                     New project
                   </button>
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex w-full items-center px-3 py-2 text-left text-sm text-[var(--color-text)] transition hover:bg-[var(--color-surface)]"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-accent-soft)]"
                     onClick={() => {
                       onManageProjects();
                       setManageModalOpen(true);
                       closeMenu();
                     }}
                   >
+                    <SlidersHorizontal size={15} className="shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
                     Manage projects
                   </button>
                 </div>
@@ -220,9 +276,23 @@ export function LeftSidebar({
                     type="button"
                     onClick={() => toggleProject(project.id)}
                     aria-expanded={isExpanded}
-                    className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
+                    className="group flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
                   >
-                    {project.name}
+                    <Folder
+                      data-testid={`project-row-icon-${project.id}`}
+                      size={15}
+                      className="shrink-0 text-[var(--color-text-muted)] transition-colors group-hover:text-[var(--color-text)]"
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                    <ChevronRight
+                      size={14}
+                      className={cx(
+                        'shrink-0 text-[var(--color-text-muted)] transition-transform',
+                        isExpanded ? 'rotate-90' : 'rotate-0',
+                      )}
+                      aria-hidden="true"
+                    />
                   </button>
 
                   {isExpanded ? (

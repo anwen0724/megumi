@@ -42,12 +42,17 @@ function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null
   }
 
   const projectState = useProjectStore.getState();
-  if (!projectState.currentProjectId) {
+  const targetProjectId = sessionState.newSessionDraftTargetProjectId ?? projectState.currentProjectId;
+  if (!targetProjectId) {
     return null;
   }
 
+  if (projectState.currentProjectId !== targetProjectId) {
+    projectState.setCurrentProject(targetProjectId);
+  }
+
   const session = sessionState.createLocalSession({
-    projectId: projectState.currentProjectId,
+    projectId: targetProjectId,
     title: createSessionTitleFromPrompt(payload.message),
     agentType: sessionState.activeAgentType,
   });
@@ -92,7 +97,10 @@ function createSessionMessageSendPayload(
   const projectState = useProjectStore.getState();
   const providerId = getProviderIdForModel(payload.model);
   const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
-  const activeProject = projectState.projects.find((project) => project.id === projectState.currentProjectId);
+  const projectId = activeSession?.projectId
+    ?? sessionState.newSessionDraftTargetProjectId
+    ?? projectState.currentProjectId;
+  const activeProject = projectState.projects.find((project) => project.id === projectId);
 
   const sendPayload: SessionMessageSendPayload = {
     sessionId: sessionState.activeSessionId ?? undefined,
@@ -104,7 +112,7 @@ function createSessionMessageSendPayload(
       createdAt: messageCreatedAt,
     },
     context: {
-      workspaceId: projectState.currentProjectId ?? undefined,
+      workspaceId: projectId ?? undefined,
       workspaceLabel: activeProject?.name ?? undefined,
       workspacePath: activeProject?.repoPath ?? undefined,
       sessionTitle: activeSession?.title ?? undefined,
