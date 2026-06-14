@@ -156,6 +156,34 @@ describe('SessionRunRepository', () => {
     expect(repo.listRunsBySession('session-1').map((run) => run.runId)).toEqual(['run-1', 'run-2']);
   });
 
+  it('lists active runs by status for startup cleanup', () => {
+    const repo = createRepo();
+    repo.saveSession({
+      sessionId: 'session-orphan',
+      title: 'Orphan cleanup',
+      status: 'active',
+      createdAt: '2026-06-14T00:00:00.000Z',
+      updatedAt: '2026-06-14T00:00:00.000Z',
+    });
+    const statuses = ['queued', 'running', 'waiting_for_approval', 'cancelling', 'completed'] as const;
+    for (const [index, status] of statuses.entries()) {
+      repo.saveRun({
+        runId: `run-${status}`,
+        sessionId: 'session-orphan',
+        mode: 'default',
+        goal: status,
+        status,
+        createdAt: `2026-06-14T00:00:0${index}.000Z`,
+      });
+    }
+
+    expect(repo.listRunsByStatuses(['running', 'waiting_for_approval', 'cancelling']).map((run) => run.runId)).toEqual([
+      'run-running',
+      'run-waiting_for_approval',
+      'run-cancelling',
+    ]);
+  });
+
   it('gets one session message by id', () => {
     const repo = createRepo();
     repo.saveSession({

@@ -281,6 +281,54 @@ export class ToolRepository {
     return row ? JSON.parse(row.request_json) as ApprovalRequest : undefined;
   }
 
+  listPendingApprovalRequestsByRun(runId: string): ApprovalRequest[] {
+    return (this.database.prepare(`
+      SELECT request_json
+      FROM approval_requests
+      WHERE run_id = ?
+        AND status = 'pending'
+      ORDER BY created_at ASC, approval_request_id ASC
+    `).all(runId) as ApprovalRequestRow[])
+      .map((row) => JSON.parse(row.request_json) as ApprovalRequest);
+  }
+
+  listPendingToolExecutionsByRun(runId: string): ToolExecution[] {
+    return (this.database.prepare(`
+      SELECT tool_execution_json
+      FROM tool_executions
+      WHERE run_id = ?
+        AND status IN ('pending_approval', 'running')
+      ORDER BY requested_at ASC, tool_execution_id ASC
+    `).all(runId) as ToolExecutionRow[])
+      .map((row) => JSON.parse(row.tool_execution_json) as ToolExecution);
+  }
+
+  cancelPendingApprovalRequestsByRun(input: { runId: string; resolvedAt: string }): ApprovalRequest[] {
+    const pending = this.listPendingApprovalRequestsByRun(input.runId);
+    const cancelled = pending.map((request) => ({
+      ...request,
+      status: 'cancelled' as const,
+      resolvedAt: input.resolvedAt,
+    }));
+    for (const request of cancelled) {
+      this.saveApprovalRequest(request);
+    }
+    return cancelled;
+  }
+
+  cancelPendingToolExecutionsByRun(input: { runId: string; completedAt: string }): ToolExecution[] {
+    const pending = this.listPendingToolExecutionsByRun(input.runId);
+    const cancelled = pending.map((execution) => ({
+      ...execution,
+      status: 'cancelled' as const,
+      completedAt: input.completedAt,
+    }));
+    for (const execution of cancelled) {
+      this.saveToolExecution(execution);
+    }
+    return cancelled;
+  }
+
   saveApprovalRecord(record: ApprovalRecord): ApprovalRecord {
     const request = this.getApprovalRequest(record.approvalRequestId);
     if (!request) {

@@ -230,6 +230,80 @@ describe('ToolRepository', () => {
     });
   });
 
+  it('lists and updates pending approval and tool execution facts by run', () => {
+    const repo = createRepo();
+    repo.saveToolCall({
+      toolCallId: 'tool-call-pending',
+      runId: 'run-1',
+      modelStepId: 'model-step-1',
+      providerToolCallId: 'provider-tool-call-pending',
+      toolName: 'read_file',
+      input: { path: 'package.json' },
+      inputPreview: {
+        summary: 'read_file',
+        targets: [],
+        redactionState: 'none',
+      },
+      status: 'created',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+    repo.saveToolExecution({
+      toolExecutionId: 'tool-execution-pending',
+      toolCallId: 'tool-call-pending',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'read_file',
+      input: { path: 'package.json' },
+      inputPreview: {
+        summary: 'read_file',
+        targets: [],
+        redactionState: 'none',
+      },
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      status: 'pending_approval',
+      requestedAt: '2026-06-14T00:00:00.000Z',
+    });
+    repo.saveApprovalRequest({
+      approvalRequestId: 'approval-pending',
+      toolCallId: 'tool-call-pending',
+      toolExecutionId: 'tool-execution-pending',
+      runId: 'run-1',
+      stepId: 'step-1',
+      toolName: 'read_file',
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      title: 'Approve read_file',
+      summary: 'Approval required.',
+      preview: { action: 'read_file', targets: [] },
+      requestedScope: 'once',
+      status: 'pending',
+      createdAt: '2026-06-14T00:00:00.000Z',
+    });
+
+    expect(repo.listPendingApprovalRequestsByRun('run-1')).toHaveLength(1);
+    expect(repo.listPendingToolExecutionsByRun('run-1')).toHaveLength(1);
+
+    repo.cancelPendingApprovalRequestsByRun({
+      runId: 'run-1',
+      resolvedAt: '2026-06-14T00:00:05.000Z',
+    });
+    repo.cancelPendingToolExecutionsByRun({
+      runId: 'run-1',
+      completedAt: '2026-06-14T00:00:05.000Z',
+    });
+
+    expect(repo.getApprovalRequest('approval-pending')).toMatchObject({
+      status: 'cancelled',
+      resolvedAt: '2026-06-14T00:00:05.000Z',
+    });
+    expect(repo.getToolExecution('tool-execution-pending')).toMatchObject({
+      status: 'cancelled',
+      completedAt: '2026-06-14T00:00:05.000Z',
+    });
+  });
+
   it('rejects approval requests and records that do not match referenced lifecycle facts', () => {
     const repo = createRepo();
     seedSecondRunStep(currentDb());

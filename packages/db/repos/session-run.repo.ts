@@ -385,6 +385,22 @@ export class SessionRunRepository {
       .all(sessionId) as RunRow[]).map(fromRunRow);
   }
 
+  listRunsByStatuses(statuses: Run['status'][]): Run[] {
+    if (statuses.length === 0) {
+      return [];
+    }
+
+    const placeholders = statuses.map(() => '?').join(', ');
+    return (this.database
+      .prepare(`
+        SELECT *
+        FROM runs
+        WHERE status IN (${placeholders})
+        ORDER BY created_at ASC, run_id ASC
+      `)
+      .all(...statuses) as RunRow[]).map(fromRunRow);
+  }
+
   saveStep(step: RunStep): RunStep {
     this.database.prepare(`
       INSERT INTO run_steps (
