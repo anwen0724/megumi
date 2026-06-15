@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { createToolExecutionRouter } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
-import type { ToolExecution, ToolResult } from '@megumi/shared/tool';
+import type { RawToolResult, ToolExecution } from '@megumi/shared/tool';
 
 describe('ToolExecutionRouter', () => {
   it('routes executions by source identity instead of toolName', async () => {
@@ -22,20 +22,7 @@ describe('ToolExecutionRouter', () => {
 
     expect(sourceExecutor.executeToolExecution).toHaveBeenCalledOnce();
     expect(sourceExecutor.executeToolExecution).toHaveBeenCalledWith(execution, undefined);
-    expect(result).toMatchObject({
-      routed: true,
-      routing: {
-        toolExecutionId: 'tool-execution-1',
-        toolName: 'renamed_read_file',
-        executorKind: 'built_in',
-        modelVisibleName: 'read_file',
-        canonicalToolId: 'built_in:megumi:read_file',
-        sourceId: 'built_in',
-        namespace: 'megumi',
-        sourceToolName: 'read_file',
-      },
-      toolResult: expect.objectContaining({ kind: 'success' }),
-    });
+    expect(result).toBe(toolResult);
   });
 
   it('returns tool_error when source identity is missing', async () => {
@@ -58,10 +45,9 @@ describe('ToolExecutionRouter', () => {
     const result = await router.executeToolExecution(execution);
 
     expect(sourceExecutor.executeToolExecution).not.toHaveBeenCalled();
-    expect(result.routed).toBe(false);
-    expect(result.toolResult.kind).toBe('tool_error');
-    expect(result.toolResult.error?.code).toBe('tool_execution_failed');
-    expect(result.toolResult.textContent).toBe('Tool execution is missing source identity.');
+    expect(result.isError).toBe(true);
+    expect(result.outputKind).toBe('error');
+    expect(result.content).toBe('Tool execution is missing source identity.');
   });
 
   it('returns tool_error when no executor is registered for source', async () => {
@@ -84,10 +70,9 @@ describe('ToolExecutionRouter', () => {
       toolName: 'demo_echo',
     }));
 
-    expect(result.routed).toBe(false);
-    expect(result).not.toHaveProperty('routing');
-    expect(result.toolResult.kind).toBe('tool_error');
-    expect(result.toolResult.textContent).toContain('Unsupported tool source: external_test');
+    expect(result.isError).toBe(true);
+    expect(result.outputKind).toBe('error');
+    expect(result.content).toContain('Unsupported tool source: external_test');
   });
 
   it('does not coerce unknown sourceId into executorKind when sourceId differs from source kind', async () => {
@@ -106,10 +91,9 @@ describe('ToolExecutionRouter', () => {
       toolName: 'demo_echo',
     }));
 
-    expect(result.routed).toBe(false);
-    expect(result).not.toHaveProperty('routing');
-    expect(result.toolResult.kind).toBe('tool_error');
-    expect(result.toolResult.textContent).toContain('Unsupported tool source: another_external');
+    expect(result.isError).toBe(true);
+    expect(result.outputKind).toBe('error');
+    expect(result.content).toContain('Unsupported tool source: another_external');
   });
 
   it('normalizes thrown source executor failures as tool_error', async () => {
@@ -127,10 +111,12 @@ describe('ToolExecutionRouter', () => {
 
     const result = await router.executeToolExecution(toolExecution());
 
-    expect(result.routed).toBe(true);
-    expect(result.toolResult.kind).toBe('tool_error');
-    expect(result.toolResult.error?.debugId).toBe('tool-error:tool-execution-1');
-    expect(result.toolResult.error?.message).toBe('boom');
+    expect(result.isError).toBe(true);
+    expect(result.outputKind).toBe('error');
+    expect(result.content).toMatchObject({
+      debugId: 'tool-error:tool-execution-1',
+      message: 'boom',
+    });
   });
 });
 
@@ -167,15 +153,14 @@ function externalTestExecutor(sourceId: string) {
   };
 }
 
-function successToolResult(): ToolResult {
+function successToolResult(): RawToolResult {
   return {
-    toolResultId: 'tool-result-1',
+    rawToolResultId: 'tool-result-1',
     toolCallId: 'tool-call-1',
     toolExecutionId: 'tool-execution-1',
-    runId: 'run-1',
-    kind: 'success',
-    textContent: 'ok',
-    redactionState: 'none',
+    isError: false,
+    outputKind: 'text',
+    content: 'ok',
     createdAt: '2026-06-14T00:00:01.000Z',
   };
 }

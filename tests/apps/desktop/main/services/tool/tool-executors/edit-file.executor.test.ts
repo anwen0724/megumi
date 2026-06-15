@@ -18,8 +18,11 @@ describe('EditFileExecutor', () => {
       oldText: '41',
       newText: '42',
     }))).resolves.toMatchObject({
-      kind: 'success',
-      structuredContent: { path: 'src/index.ts', replacements: 1 },
+      isError: false,
+      outputKind: 'diff',
+      content: {
+        structuredContent: { path: 'src/index.ts', replacements: 1 },
+      },
     });
     expect(files.get('C:\\project\\src\\index.ts')).toBe('export const answer = 42;');
   });

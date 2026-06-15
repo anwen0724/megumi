@@ -124,7 +124,7 @@ function createToolCall(overrides: Partial<ToolExecution> = {}): ToolExecution {
       },
       evaluatedAt: '2026-05-20T00:00:01.000Z',
     },
-    status: 'pending_approval',
+    status: 'awaitingApproval',
     requestedAt: '2026-05-20T00:00:00.000Z',
     ...overrides,
   };

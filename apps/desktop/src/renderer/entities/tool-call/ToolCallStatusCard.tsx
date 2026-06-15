@@ -71,6 +71,7 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
   const StatusIcon = config.icon;
   const spinning = toolCall.status === 'running';
   const displayToolName = toolCall.modelVisibleName ?? toolCall.toolName;
+  const inputPreview = readableInputPreview(toolCall.inputPreview);
 
   return (
     <Panel className="overflow-hidden">
@@ -90,11 +91,11 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
             <Badge variant={config.badge}>{config.label}</Badge>
           </div>
 
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">{toolCall.inputPreview.summary}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">{inputPreview.summary}</p>
 
-          {toolCall.inputPreview.targets.length > 0 ? (
+          {inputPreview.targets.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {toolCall.inputPreview.targets.map((target) => (
+              {inputPreview.targets.map((target) => (
                 <Badge key={`${target.kind}-${target.label}`} variant="neutral">
                   {target.label}
                 </Badge>
@@ -110,7 +111,7 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
 
           {toolCall.resultPreview ? (
             <p className="mt-2 rounded-md bg-[var(--color-surface-muted)] px-2 py-1.5 text-xs text-[var(--color-text)]">
-              {toolCall.resultPreview}
+              {formatPreview(toolCall.resultPreview)}
             </p>
           ) : null}
 
@@ -123,5 +124,34 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
       </div>
     </Panel>
   );
+}
+
+function readableInputPreview(inputPreview: ToolExecution['inputPreview']): {
+  summary: string;
+  targets: Array<{ kind: string; label: string }>;
+} {
+  if (!inputPreview || typeof inputPreview !== 'object' || Array.isArray(inputPreview)) {
+    return { summary: 'Tool input', targets: [] };
+  }
+  const summary = typeof inputPreview.summary === 'string' ? inputPreview.summary : 'Tool input';
+  const targets = Array.isArray(inputPreview.targets)
+    ? inputPreview.targets.flatMap((target) => (
+      target && typeof target === 'object' && !Array.isArray(target)
+        && typeof target.kind === 'string' && typeof target.label === 'string'
+        ? [{ kind: target.kind, label: target.label }]
+        : []
+    ))
+    : [];
+  return { summary, targets };
+}
+
+function formatPreview(value: ToolExecution['resultPreview']): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value === undefined || value === null) {
+    return '';
+  }
+  return JSON.stringify(value);
 }
 

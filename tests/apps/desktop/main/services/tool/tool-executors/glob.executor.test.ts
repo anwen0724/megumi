@@ -18,9 +18,12 @@ describe('GlobExecutor', () => {
 
     await expect(executor.execute(toolCall('glob', { pattern: 'src/*' })))
       .resolves.toMatchObject({
-        kind: 'success',
-        structuredContent: {
-          matches: ['src/index.ts', 'src/readme.md'],
+        isError: false,
+        outputKind: 'json',
+        content: {
+          structuredContent: {
+            matches: ['src/index.ts', 'src/readme.md'],
+          },
         },
       });
   });

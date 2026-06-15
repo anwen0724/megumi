@@ -57,7 +57,7 @@ export function registerToolHandlers(
       handle: (
         request: RuntimeIpcRequest<ToolExecutionGetPayload, typeof IPC_CHANNELS.tool.executionGet>,
       ): ToolExecutionGetData => ({
-        toolExecution: service.getToolExecution(request.payload.toolExecutionId),
+        toolExecution: service.getToolExecution(request.payload.toolExecutionId) as ToolExecutionGetData['toolExecution'],
       }),
       mapError: mapToolIpcError,
     }),

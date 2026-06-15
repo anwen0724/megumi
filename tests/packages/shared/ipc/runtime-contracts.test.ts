@@ -1144,6 +1144,8 @@ describe('agent tool approval runtime IPC schemas', () => {
       toolCallId: 'tool-call-1',
       runId: 'run-1',
       stepId: 'step-1',
+      assistantMessageId: 'assistant-message-1',
+      callOrder: 0,
       toolName: 'read_file',
       input: { path: 'README.md' },
       inputPreview: {
@@ -1154,8 +1156,9 @@ describe('agent tool approval runtime IPC schemas', () => {
       capabilities: ['project_read'],
       riskLevel: 'low',
       sideEffect: 'none',
-      status: 'pending_approval',
+      status: 'awaitingApproval',
       requestedAt: '2026-05-16T00:00:00.000Z',
+      continuationEmitted: false,
     };
 
     expect(ToolExecutionGetDataSchema.parse({ toolExecution }).toolExecution?.toolExecutionId).toBe('tool-execution-1');

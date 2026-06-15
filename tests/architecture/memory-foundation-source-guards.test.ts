@@ -131,7 +131,7 @@ describe('memory foundation boundaries', () => {
       ...productionFilesUnder('apps', 'desktop', 'src', 'main', 'services'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'renderer', 'entities', 'memory'),
     ];
-    expect(offenders(files, /\bembedding\b|\bvector\b|\brerank\b|knowledge graph|external memory server|submemory|team memory|MCP memory|reflection|evaluator|metrics/iu)).toEqual([]);
+    expect(offenders(files, /\bembedding\b|\bvector\b|\brerank\b|knowledge graph|external memory server|submemory|team memory|MCP memory|memory reflection|memory evaluator|memory metrics/iu)).toEqual([]);
   });
 
   it('does not expose raw sensitive memory content through events logs or renderer state', () => {

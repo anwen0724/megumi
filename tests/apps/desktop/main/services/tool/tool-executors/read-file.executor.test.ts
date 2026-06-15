@@ -16,13 +16,17 @@ describe('ReadFileExecutor', () => {
 
     await expect(executor.execute(toolCall('read_file', { path: 'src/index.ts' })))
       .resolves.toMatchObject({
-        kind: 'success',
-        structuredContent: {
-          path: 'src/index.ts',
-          content: 'const token = "[redacted]";',
-          truncated: false,
+        isError: false,
+        outputKind: 'file',
+        content: {
+          structuredContent: {
+            path: 'src/index.ts',
+            content: 'const token = "[redacted]";',
+            truncated: false,
+          },
+          textContent: 'const token = "[redacted]";',
+          redactionState: 'redacted',
         },
-        textContent: 'const token = "[redacted]";',
       });
   });
 

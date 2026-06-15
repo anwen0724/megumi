@@ -37,7 +37,7 @@ export function createToolOrchestratorHarness(input: {
     orchestrator,
     repository,
     executor,
-    recordsByCallOrder: () => repository.records().sort((a, b) => a.callOrder - b.callOrder),
+    recordsByCallOrder: () => repository.records().sort((a, b) => (a.callOrder ?? 0) - (b.callOrder ?? 0)),
   };
 }
 
@@ -57,7 +57,7 @@ export function modelRequest(): ModelStepRuntimeRequest {
     modelStepId: 'assistant-message:1',
     providerId: 'openai',
     modelId: 'test-model',
-    inputContext: { kind: 'model_input_context', parts: [] },
+    inputContext: { parts: [] } as unknown as ModelStepRuntimeRequest['inputContext'],
     createdAt: '2026-06-15T00:00:00.000Z',
   };
 }
@@ -216,7 +216,7 @@ function createInMemoryToolRepository(initialRecords: readonly ToolExecutionReco
     getToolExecutionByToolCallId: vi.fn((input: { toolCallId: string }) =>
       [...records.values()].find((record) => record.toolCallId === input.toolCallId)),
     listToolExecutionsByAssistantMessage: vi.fn(() =>
-      [...records.values()].sort((a, b) => a.callOrder - b.callOrder)),
+      [...records.values()].sort((a, b) => (a.callOrder ?? 0) - (b.callOrder ?? 0))),
     savePermissionDecision: vi.fn((decision: PermissionDecision) => decision),
     saveApprovalRequest: vi.fn((approval: ApprovalRequest) => {
       approvals.set(String(approval.approvalRequestId), approval);

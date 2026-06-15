@@ -34,7 +34,7 @@ import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { RunContext } from '@megumi/shared/run';
 import type { RunAction } from '@megumi/shared/session';
 import type { SessionSourceEntry } from '@megumi/shared/session';
-import type { ApprovalRequest, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
+import type { ApprovalRequest, RawToolResult, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
@@ -367,14 +367,13 @@ function createServiceWithRealToolResolution(input: {
   const requests: ModelStepRuntimeRequest[] = [];
   let toolRepository: ToolRepository | undefined;
   const registry = createBuiltInToolRegistry();
-  const executeToolExecution = vi.fn(async (toolExecution: ToolExecution): Promise<ToolResult> => ({
-    toolResultId: `tool-result:${toolExecution.toolExecutionId}`,
+  const executeToolExecution = vi.fn(async (toolExecution: ToolExecution): Promise<RawToolResult> => ({
+    rawToolResultId: `raw-tool-result:${toolExecution.toolExecutionId}`,
     toolCallId: toolExecution.toolCallId,
     toolExecutionId: toolExecution.toolExecutionId,
-    runId: toolExecution.runId,
-    kind: 'success',
-    textContent: 'executed',
-    redactionState: 'none',
+    isError: false,
+    outputKind: 'text',
+    content: 'executed',
     createdAt: '2026-05-17T00:00:02.500Z',
   }));
 
@@ -5463,8 +5462,8 @@ describe('SessionRunService', () => {
                 runId: toolUse.runId,
                 stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolExecution.capabilities,
-                riskLevel: toolExecution.riskLevel,
+                capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+                riskLevel: toolExecution.riskLevel ?? 'low',
                 title: 'Approve write_file',
                 summary: 'Writing project file requires approval.',
                 preview: { action: 'write_file', targets: [] },
@@ -5630,8 +5629,8 @@ describe('SessionRunService', () => {
                 runId: toolUse.runId,
                 stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolExecution.capabilities,
-                riskLevel: toolExecution.riskLevel,
+                capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+                riskLevel: toolExecution.riskLevel ?? 'low',
                 title: 'Approve read_file',
                 summary: 'User approval is required.',
                 preview: {
@@ -5852,8 +5851,8 @@ describe('SessionRunService', () => {
                 runId: toolUse.runId,
                 stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolExecution.capabilities,
-                riskLevel: toolExecution.riskLevel,
+                capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+                riskLevel: toolExecution.riskLevel ?? 'low',
                 title: 'Approve read_file',
                 summary: 'User approval is required.',
                 preview: { action: 'read_file', targets: [] },
@@ -5974,8 +5973,8 @@ describe('SessionRunService', () => {
                 runId: toolUse.runId,
                 stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolExecution.capabilities,
-                riskLevel: toolExecution.riskLevel,
+                capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+                riskLevel: toolExecution.riskLevel ?? 'low',
                 title: 'Approve read_file',
                 summary: 'User approval is required.',
                 preview: { action: 'read_file', targets: [] },
@@ -6263,8 +6262,8 @@ describe('SessionRunService', () => {
                     runId: toolUse.runId,
                     stepId: toolExecution.stepId,
                     toolName: toolUse.toolName,
-                    capabilities: toolExecution.capabilities,
-                    riskLevel: toolExecution.riskLevel,
+                    capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+                    riskLevel: toolExecution.riskLevel ?? 'low',
                     title: `Approve ${toolUse.toolName}`,
                     summary: 'User approval is required.',
                     preview: {
@@ -6799,8 +6798,8 @@ describe('SessionRunService', () => {
                 runId: toolUse.runId,
                 stepId: toolExecution.stepId,
                 toolName: toolUse.toolName,
-                capabilities: toolExecution.capabilities,
-                riskLevel: toolExecution.riskLevel,
+                capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+                riskLevel: toolExecution.riskLevel ?? 'low',
                 title: `Approve ${toolUse.toolName}`,
                 summary: 'User approval is required.',
                 preview: {

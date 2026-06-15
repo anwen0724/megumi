@@ -185,7 +185,7 @@ function createToolExecution(toolCall: ToolCall, overrides: Partial<ToolExecutio
     capabilities: ['project_read'],
     riskLevel: 'low',
     sideEffect: 'none',
-    status: 'pending_approval',
+    status: 'awaitingApproval',
     requestedAt: '2026-05-17T00:00:02.250Z',
     ...overrides,
   };
@@ -203,8 +203,8 @@ function createApprovalRequest(
     runId: toolCall.runId,
     stepId: String(toolExecution.stepId),
     toolName: toolCall.toolName,
-    capabilities: toolExecution.capabilities,
-    riskLevel: toolExecution.riskLevel,
+    capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+    riskLevel: toolExecution.riskLevel ?? 'low',
     title: 'Approve read_file',
     summary: 'User approval is required.',
     preview: {
@@ -547,7 +547,7 @@ describe('run model tool loop', () => {
           toolExecution: expect.objectContaining({
             toolExecutionId: 'tool-execution-1',
             toolCallId: 'call-read',
-            status: 'pending_approval',
+            status: 'awaitingApproval',
           }),
         }),
         request: expect.objectContaining({
@@ -851,19 +851,19 @@ describe('run model tool loop', () => {
       request: createRequest(),
       aiPort: {
         async *streamModelStep(request) {
-          requests.push(request);
+          requests.push(request.request);
           if (requests.length === 1) {
             yield toolCallCreatedEvent({
               eventId: 'event-tool-call',
               sequence: 1,
-              stepId: String(request.stepId),
-              modelStepId: String(request.modelStepId),
+              stepId: String(request.request.stepId),
+              modelStepId: String(request.request.modelStepId),
             });
             yield modelStepCompletedEvent({
               eventId: 'event-model-completed',
               sequence: 2,
-              stepId: String(request.stepId),
-              modelStepId: String(request.modelStepId),
+              stepId: String(request.request.stepId),
+              modelStepId: String(request.request.modelStepId),
             });
           }
         },

@@ -18,8 +18,11 @@ describe('WriteFileExecutor', () => {
       path: 'src/new.ts',
       content: 'export {}',
     }))).resolves.toMatchObject({
-      kind: 'success',
-      structuredContent: { path: 'src/new.ts', created: true, overwritten: false },
+      isError: false,
+      outputKind: 'diff',
+      content: {
+        structuredContent: { path: 'src/new.ts', created: true, overwritten: false },
+      },
     });
     expect(files.get('C:\\project\\src\\new.ts')).toBe('export {}');
     expect(madeDirectories).toContain('C:\\project\\src');

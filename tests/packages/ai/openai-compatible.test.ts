@@ -104,6 +104,9 @@ function toolContinuationParts(toolCalls: ToolCall[], toolResults: ToolResult[])
       ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
       toolResultId: String(toolResult.toolResultId),
       toolResultContent: toolResultContent(toolResult),
+      metadata: {
+        observationId: String(toolResult.metadata?.observationId ?? `observation:${toolResult.toolResultId}`),
+      },
       sourceRefs: [sourceRef(`tool-result:${toolResult.toolResultId}`, 'tool_result')],
       priority: 85,
       budgetStatus: 'included_full',
@@ -883,6 +886,7 @@ describe('OpenAI-compatible adapter', () => {
           toolCallId: 'tool-call-1',
           toolExecutionId: 'tool-execution-1',
           runId: 'run-1',
+          observationId: 'observation-tool-result-1',
           kind: 'success',
           textContent: 'File contents',
           redactionState: 'none',

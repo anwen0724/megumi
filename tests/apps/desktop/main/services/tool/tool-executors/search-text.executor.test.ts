@@ -17,14 +17,18 @@ describe('SearchTextExecutor', () => {
 
     await expect(executor.execute(toolCall('search_text', { query: 'token', path: 'src' })))
       .resolves.toMatchObject({
-        kind: 'success',
-        structuredContent: {
-          path: 'src',
-          matches: [{
-            path: 'src/index.ts',
-            line: 1,
-            snippet: 'const token = "[redacted]";',
-          }],
+        isError: false,
+        outputKind: 'json',
+        content: {
+          structuredContent: {
+            path: 'src',
+            matches: [{
+              path: 'src/index.ts',
+              line: 1,
+              snippet: 'const token = "[redacted]";',
+            }],
+          },
+          redactionState: 'redacted',
         },
       });
   });
@@ -41,14 +45,17 @@ describe('SearchTextExecutor', () => {
 
     await expect(executor.execute(toolCall('search_text', { query: 'needle', path: '.\\src' })))
       .resolves.toMatchObject({
-        kind: 'success',
-        structuredContent: {
-          path: 'src',
-          matches: [{
-            path: 'src/nested/index.ts',
-            line: 1,
-            snippet: 'needle',
-          }],
+        isError: false,
+        outputKind: 'json',
+        content: {
+          structuredContent: {
+            path: 'src',
+            matches: [{
+              path: 'src/nested/index.ts',
+              line: 1,
+              snippet: 'needle',
+            }],
+          },
         },
       });
   });

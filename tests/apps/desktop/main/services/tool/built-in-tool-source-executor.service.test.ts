@@ -27,8 +27,11 @@ describe('BuiltInToolSourceExecutor', () => {
       input: { path: 'README.md' },
     }));
     expect(readResult).toMatchObject({
-      kind: 'success',
-      textContent: 'hello from built-in source',
+      isError: false,
+      content: {
+        textContent: 'hello from built-in source',
+        structuredContent: { content: 'hello from built-in source' },
+      },
     });
 
     await executor.executeToolExecution(
@@ -68,8 +71,10 @@ describe('BuiltInToolSourceExecutor', () => {
       input: { message: 'hello' },
     }));
 
-    expect(result.kind).toBe('tool_error');
-    expect(result.textContent).toContain('Unsupported built-in tool source');
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatchObject({
+      message: expect.stringContaining('Unsupported built-in tool source'),
+    });
   });
 });
 

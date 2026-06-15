@@ -588,8 +588,8 @@ export interface ToolExecution {
   toolCallId: ToolCallId | string;
   runId: RunId | string;
   stepId: RunStepId | string;
-  assistantMessageId: string;
-  callOrder: number;
+  assistantMessageId?: string;
+  callOrder?: number;
   actionId?: RunActionId | string;
   toolName: ToolName;
   registrySnapshotId?: string;
@@ -601,7 +601,7 @@ export interface ToolExecution {
   sourceToolName?: ToolName;
   input: JsonValue;
   inputPreview: JsonValue;
-  capabilities?: readonly ToolCapability[];
+  capabilities?: ToolCapability[];
   riskLevel?: ToolRiskLevel;
   sideEffect?: ToolSideEffect;
   decision?: ToolExecutionDecision;
@@ -615,7 +615,7 @@ export interface ToolExecution {
   completedAt?: IsoDateTime;
   rawResultRef?: string;
   observation?: ToolObservation;
-  continuationEmitted: boolean;
+  continuationEmitted?: boolean;
   resultPreview?: JsonValue;
   error?: RuntimeError;
   metadata?: JsonObject;

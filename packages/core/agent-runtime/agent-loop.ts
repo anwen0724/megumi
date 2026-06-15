@@ -22,9 +22,9 @@ export interface PendingToolApproval {
 }
 
 export interface ToolCallHandlerOutcome {
-  toolResults?: ToolResult[];
-  pendingApprovals?: PendingToolApproval[];
-  runtimeEvents?: RuntimeEvent[];
+  toolResults?: readonly ToolResult[];
+  pendingApprovals?: readonly PendingToolApproval[];
+  runtimeEvents?: readonly RuntimeEvent[];
   continuationReady?: boolean;
   assistantMessageId?: string;
 }

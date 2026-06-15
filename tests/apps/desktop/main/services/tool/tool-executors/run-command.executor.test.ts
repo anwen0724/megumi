@@ -68,20 +68,22 @@ describe('RunCommandExecutor', () => {
 
     await expect(executor.execute(toolCall({ command: 'npm test' })))
       .resolves.toMatchObject({
-        toolResultId: 'tool-result-1',
+        rawToolResultId: 'tool-result-1',
         toolCallId: 'tool-call-1',
         toolExecutionId: 'tool-execution-1',
-        runId: 'run-1',
-        kind: 'success',
-        structuredContent: {
-          exitCode: 1,
-          stdoutPreview: 'passed\n',
-          stderrPreview: 'warn token=[redacted]\n',
-          durationMs: 8,
-          truncated: false,
+        isError: true,
+        outputKind: 'command',
+        content: {
+          structuredContent: {
+            exitCode: 1,
+            stdoutPreview: 'passed\n',
+            stderrPreview: 'warn token=[redacted]\n',
+            durationMs: 8,
+            truncated: false,
+          },
+          textContent: expect.stringContaining('stdout:\npassed\n'),
+          redactionState: 'redacted',
         },
-        textContent: expect.stringContaining('stdout:\npassed\n'),
-        redactionState: 'redacted',
         createdAt: '2026-05-20T00:00:00.000Z',
       });
   });
@@ -152,9 +154,12 @@ describe('RunCommandExecutor', () => {
     try {
       await expect(executor.execute(toolCall({ command: 'npm test', envPolicy: 'minimal' })))
         .resolves.toMatchObject({
-          kind: 'success',
-          structuredContent: {
-            stdoutPreview: 'ok\n',
+          isError: false,
+          outputKind: 'command',
+          content: {
+            structuredContent: {
+              stdoutPreview: 'ok\n',
+            },
           },
         });
 

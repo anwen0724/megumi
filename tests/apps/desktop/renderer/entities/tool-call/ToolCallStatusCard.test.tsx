@@ -20,7 +20,7 @@ function createToolExecution(overrides: Partial<ToolExecution> = {}): ToolExecut
     capabilities: ['command_run'],
     riskLevel: 'medium',
     sideEffect: 'execute_command',
-    status: 'pending_approval',
+    status: 'awaitingApproval',
     requestedAt: '2026-05-20T00:00:00.000Z',
     ...overrides,
   };
@@ -74,13 +74,13 @@ describe('ToolCallStatusCard', () => {
           capabilities: ['project_read'],
           riskLevel: 'low',
           sideEffect: 'none',
-          status: 'completed',
+          status: 'succeeded',
           resultPreview: 'Found 3 matches',
         })}
       />,
     );
 
-    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Succeeded')).toBeInTheDocument();
     expect(screen.getByText('Found 3 matches')).toBeInTheDocument();
   });
 
@@ -94,7 +94,7 @@ describe('ToolCallStatusCard', () => {
           sourceId: 'external_test',
           namespace: 'demo',
           sourceToolName: 'echo',
-          status: 'completed',
+          status: 'succeeded',
           resultPreview: 'hello',
         })}
       />,

@@ -18,13 +18,16 @@ describe('ListDirectoryExecutor', () => {
 
     await expect(executor.execute(toolCall('list_directory', { path: 'src' })))
       .resolves.toMatchObject({
-        kind: 'success',
-        structuredContent: {
-          path: 'src',
-          entries: [
-            { name: 'lib', kind: 'directory' },
-            { name: 'index.ts', kind: 'file' },
-          ],
+        isError: false,
+        outputKind: 'json',
+        content: {
+          structuredContent: {
+            path: 'src',
+            entries: [
+              { name: 'lib', kind: 'directory' },
+              { name: 'index.ts', kind: 'file' },
+            ],
+          },
         },
       });
   });

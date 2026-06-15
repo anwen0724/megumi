@@ -186,6 +186,8 @@ describe('runtime event dispatcher', () => {
         toolCallId: 'tool-call-1',
         runId: 'run-1',
         stepId: 'step-1',
+        assistantMessageId: 'assistant-message-1',
+        callOrder: 0,
         toolName: 'edit_file',
         input: { path: 'src/app.ts' },
         inputPreview: {
@@ -198,6 +200,7 @@ describe('runtime event dispatcher', () => {
         sideEffect: 'project_file_operation',
         status: 'running',
         requestedAt: '2026-05-20T00:00:00.000Z',
+        continuationEmitted: false,
       },
     }));
     dispatchRuntimeEvent(runtimeEvent('tool.execution.denied', 2, {
@@ -208,7 +211,7 @@ describe('runtime event dispatcher', () => {
     const storedToolCall = useToolCallStore.getState().toolCallsById['tool-execution-1'];
     expect(ToolExecutionSchema.parse(storedToolCall)).toEqual(storedToolCall);
     expect(storedToolCall).toMatchObject({
-      status: 'denied',
+      status: 'rejected',
       error: {
         code: 'approval_denied',
         message: 'User denied the requested tool call.',

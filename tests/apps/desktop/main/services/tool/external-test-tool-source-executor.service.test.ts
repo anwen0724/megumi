@@ -13,14 +13,16 @@ describe('ExternalTestToolSourceExecutor', () => {
     const result = await executor.executeToolExecution(toolExecution());
 
     expect(result).toEqual({
-      toolResultId: 'tool-result-1',
-      toolCallId: 'tool-call-1',
+      rawToolResultId: 'tool-result-1',
       toolExecutionId: 'tool-execution-1',
-      runId: 'run-1',
-      kind: 'success',
-      structuredContent: { message: 'hello' },
-      textContent: 'hello',
-      redactionState: 'none',
+      toolCallId: 'tool-call-1',
+      isError: false,
+      outputKind: 'text',
+      content: {
+        structuredContent: { message: 'hello' },
+        textContent: 'hello',
+        redactionState: 'none',
+      },
       createdAt: '2026-06-14T00:00:00.000Z',
       metadata: {
         toolSourceIdentity: {
@@ -47,8 +49,10 @@ describe('ExternalTestToolSourceExecutor', () => {
       canonicalToolId: 'external_test:demo:unknown',
     }));
 
-    expect(result.kind).toBe('tool_error');
-    expect(result.textContent).toContain('Unsupported external_test tool: unknown');
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatchObject({
+      message: expect.stringContaining('Unsupported external_test tool: unknown'),
+    });
   });
 });
 

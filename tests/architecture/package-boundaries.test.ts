@@ -151,7 +151,7 @@ describe('package dependency boundaries', () => {
 
   it('keeps ToolCallHandlerService behind the source-aware execution router', () => {
     const source = fs.readFileSync(
-      path.join(root, 'apps/desktop/src/main/services/tool/tool-call-handler.service.ts'),
+      path.join(root, 'apps/desktop/src/main/services/tool/tool-orchestrator.service.ts'),
       'utf8',
     );
 

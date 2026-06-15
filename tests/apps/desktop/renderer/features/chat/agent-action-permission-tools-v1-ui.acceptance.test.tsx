@@ -63,7 +63,7 @@ describe('agent action permission tools v1 renderer acceptance', () => {
         effectiveRiskLevel: 'medium',
         evaluatedAt: '2026-05-20T00:00:00.000Z',
       },
-      status: 'completed',
+      status: 'succeeded',
       requestedAt: '2026-05-20T00:00:00.000Z',
       completedAt: '2026-05-20T00:00:01.000Z',
     }} />);

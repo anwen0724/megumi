@@ -92,6 +92,7 @@ export interface ToolOrchestratorRepositoryPort {
 }
 
 export interface ToolOrchestratorServiceOptions {
+  registry?: unknown;
   repository: ToolOrchestratorRepositoryPort;
   permissionMode: PermissionMode;
   projectRoot: string;
@@ -204,15 +205,16 @@ async function resumeToolApproval(
     });
   }
 
+  const assistantMessageId = approvedRecord.assistantMessageId ?? String(approvedRecord.stepId);
   await applyDecisionsToCreated(options, {
     runId: String(approvedRecord.runId),
-    assistantMessageId: approvedRecord.assistantMessageId,
+    assistantMessageId,
   });
   const records = await advanceExecutionWindows(options, {
     runId: String(approvedRecord.runId),
-    assistantMessageId: approvedRecord.assistantMessageId,
+    assistantMessageId,
   });
-  return outcomeFromRecords(options, approvedRecord.assistantMessageId, records, input.decidedAt);
+  return outcomeFromRecords(options, assistantMessageId, records, input.decidedAt);
 }
 
 async function prepareRecords(
@@ -414,7 +416,7 @@ async function advanceExecutionWindows(
 function nextExecutableWindow(records: readonly ToolExecutionRecord[]): ToolExecutionRecord[] {
   const window: ToolExecutionRecord[] = [];
 
-  for (const record of [...records].sort((a, b) => a.callOrder - b.callOrder)) {
+  for (const record of [...records].sort((a, b) => (a.callOrder ?? 0) - (b.callOrder ?? 0))) {
     if (isContinuationTerminal(record.status)) {
       continue;
     }
@@ -458,7 +460,10 @@ async function runRecord(
   });
 
   try {
-    const rawResult = await options.toolExecutionRouter.executeToolExecution(running, { signal });
+    const rawResult = await options.toolExecutionRouter.executeToolExecution(
+      running,
+      { signal } as unknown as Parameters<ToolExecutionRouter['executeToolExecution']>[1],
+    );
     const observation = createObservationFromRawToolResult({
       rawResult,
       profile: budgetProfileForRecord(running, rawResult),
@@ -520,8 +525,8 @@ function outcomeFromRecords(
   const toolResults = buildContinuationToolResults(options, { records, createdAt });
   return {
     assistantMessageId,
-    toolResults,
-    pendingApprovals: pendingApprovalsFromRecords(options, records),
+      toolResults,
+      pendingApprovals: pendingApprovalsFromRecords(options, records),
     runtimeEvents: [],
     continuationReady: continuationReady(records),
   };
@@ -532,7 +537,7 @@ function buildContinuationToolResults(
   input: { records: readonly ToolExecutionRecord[]; createdAt: string },
 ): ToolResult[] {
   return [...input.records]
-    .sort((a, b) => a.callOrder - b.callOrder)
+    .sort((a, b) => (a.callOrder ?? 0) - (b.callOrder ?? 0))
     .filter((record) => isContinuationTerminal(record.status))
     .map((record) => {
       if (!record.observation) {
@@ -549,8 +554,8 @@ function buildContinuationToolResults(
         redactionState: 'none',
         createdAt: input.createdAt,
         metadata: {
-          callOrder: record.callOrder,
-          assistantMessageId: record.assistantMessageId,
+          callOrder: record.callOrder ?? 0,
+    assistantMessageId: record.assistantMessageId ?? String(record.stepId),
         },
       });
     });
@@ -784,15 +789,34 @@ function createApprovalRequest(
       action: typeof record.inputPreview === 'object' && record.inputPreview && 'summary' in record.inputPreview
         ? String(record.inputPreview.summary)
         : `Run ${record.toolName}`,
-      targets: typeof record.inputPreview === 'object' && record.inputPreview && 'targets' in record.inputPreview
-        && Array.isArray(record.inputPreview.targets)
-        ? record.inputPreview.targets
-        : [],
+      targets: previewTargets(record.inputPreview),
     },
     requestedScope: 'once',
     status: 'pending',
     createdAt: options.now(),
   };
+}
+
+function previewTargets(inputPreview: ToolExecutionRecord['inputPreview']): ApprovalRequest['preview']['targets'] {
+  if (!inputPreview || typeof inputPreview !== 'object' || Array.isArray(inputPreview) || !('targets' in inputPreview)) {
+    return [];
+  }
+  const targets = inputPreview.targets;
+  if (!Array.isArray(targets)) {
+    return [];
+  }
+  return targets.flatMap((target) => (
+    target && typeof target === 'object' && !Array.isArray(target)
+      && typeof target.kind === 'string' && typeof target.label === 'string'
+      ? [{
+        kind: target.kind as ApprovalRequest['preview']['targets'][number]['kind'],
+        label: target.label,
+        ...(typeof target.sensitivity === 'string'
+          ? { sensitivity: target.sensitivity as ApprovalRequest['preview']['targets'][number]['sensitivity'] }
+          : {}),
+      }]
+      : []
+  ));
 }
 
 function budgetProfileForRecord(
@@ -818,7 +842,7 @@ function toolCallFromRecord(record: ToolExecutionRecord): ToolCall {
       ? record.metadata.providerToolCallId
       : String(record.toolCallId),
     runId: record.runId,
-    modelStepId: record.assistantMessageId,
+    modelStepId: record.assistantMessageId ?? String(record.stepId),
     toolName: record.toolName,
     registrySnapshotId: record.registrySnapshotId,
     snapshotEntryId: record.snapshotEntryId,
