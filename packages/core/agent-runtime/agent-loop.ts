@@ -25,6 +25,8 @@ export interface ToolCallHandlerOutcome {
   toolResults?: ToolResult[];
   pendingApprovals?: PendingToolApproval[];
   runtimeEvents?: RuntimeEvent[];
+  continuationReady?: boolean;
+  assistantMessageId?: string;
 }
 
 export interface ToolCallHandlerPort {
@@ -43,13 +45,19 @@ export interface ToolApprovalResumeInput {
 }
 
 export interface ToolApprovalResumeOutcome {
-  toolResult: ToolResult;
-  runtimeEvents?: RuntimeEvent[];
+  assistantMessageId?: string;
+  toolResults?: readonly ToolResult[];
+  toolResult?: ToolResult;
+  pendingApprovals?: readonly PendingToolApproval[];
+  runtimeEvents?: readonly RuntimeEvent[];
+  continuationReady?: boolean;
 }
 
 export interface ToolApprovalResumePort {
   resumeToolApproval(input: ToolApprovalResumeInput): Promise<ToolApprovalResumeOutcome | undefined>;
 }
+
+export interface ToolOrchestratorPort extends ToolCallHandlerPort, ToolApprovalResumePort {}
 
 export interface PendingToolApprovalContinuation {
   pendingApproval: PendingToolApproval;
@@ -175,6 +183,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     const toolResults = outcome.toolResults ?? [];
     const runtimeEvents = outcome.runtimeEvents ?? [];
     const hasPendingApprovals = Boolean(outcome.pendingApprovals && outcome.pendingApprovals.length > 0);
+    const continuationReady = outcome.continuationReady ?? true;
     const normalizedRuntimeEvents: RuntimeEvent[] = [];
 
     for (const event of runtimeEvents) {
@@ -231,7 +240,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
 
     accumulatedToolResults = [...accumulatedToolResults, ...toolResults];
 
-    if (hasPendingApprovals) {
+    if (hasPendingApprovals || !continuationReady) {
       const continuationRequest = await createContinuationRequest({
         request,
         stepId: request.stepId,

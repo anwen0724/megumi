@@ -845,7 +845,7 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     },
   }));
 
-  const toolResultParts = (input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => ({
+  const toolResultParts = orderToolResultsForContinuation(input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => ({
     partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
     kind: 'tool_continuation',
     text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}: ${toolResultSummary(toolResult)}.`,
@@ -859,6 +859,8 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     metadata: {
       kind: toolResult.kind,
       redactionState: toolResult.redactionState,
+      ...(toolResult.observationId ? { observationId: toolResult.observationId } : {}),
+      ...(toolResult.metadata?.callOrder !== undefined ? { callOrder: toolResult.metadata.callOrder } : {}),
     },
   }));
 
@@ -888,6 +890,14 @@ function toolContinuationParts(input: BuildModelStepInputContextFromSourcesInput
     ...toolResultParts,
     ...providerStateParts,
   ];
+}
+
+function orderToolResultsForContinuation(toolResults: readonly ToolResult[]): ToolResult[] {
+  return [...toolResults].sort((left, right) => {
+    const leftOrder = Number(left.metadata?.callOrder ?? Number.MAX_SAFE_INTEGER);
+    const rightOrder = Number(right.metadata?.callOrder ?? Number.MAX_SAFE_INTEGER);
+    return leftOrder - rightOrder;
+  });
 }
 
 function sessionMessageSourceRef(

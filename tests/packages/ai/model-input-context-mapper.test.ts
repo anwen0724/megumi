@@ -111,6 +111,7 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
           toolCallId: 'tool-use:1',
           toolResultId: 'tool-result:1',
           toolResultContent: 'read_file returned the current provider mapper.',
+          metadata: { observationId: 'observation:1' },
         } as Partial<ModelInputContextPart>),
         basePart({
           partId: 'part:memory:preference',
@@ -350,6 +351,7 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
           toolCallId: 'local-tool-use-1',
           toolResultId: 'tool-result:provider-id',
           toolResultContent: 'read_file returned package metadata.',
+          metadata: { observationId: 'observation:provider-id' },
         } as Partial<ModelInputContextPart>),
       ],
     });
@@ -406,6 +408,7 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
           toolCallId: 'tool-use:matched-provider-state',
           toolResultId: 'tool-result:matched-provider-state',
           toolResultContent: 'read_file returned package metadata.',
+          metadata: { observationId: 'observation:matched-provider-state' },
         } as Partial<ModelInputContextPart>),
         basePart({
           partId: 'part:provider-state:matched',
@@ -483,6 +486,7 @@ describe('ModelInputContext OpenAI-compatible mapper', () => {
           toolCallId: 'tool-use:matched',
           toolResultId: 'tool-result:matched',
           toolResultContent: 'read_file returned package metadata.',
+          metadata: { observationId: 'observation:matched' },
         } as Partial<ModelInputContextPart>),
         basePart({
           partId: 'part:tool-result:unmatched',

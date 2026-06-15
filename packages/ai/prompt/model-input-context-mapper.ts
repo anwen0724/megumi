@@ -84,6 +84,7 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
   };
 
   for (const toolResultPart of toolResultParts) {
+    assertObservationDerivedToolResult(toolResultPart);
     const toolCall = toolCallById.get(String(toolResultPart.toolCallId));
     const modelStepId = toolCall?.modelStepId;
 
@@ -120,6 +121,12 @@ function hasNativeToolCallFields(part: ToolContinuationPart): boolean {
 
 function hasNativeToolResultFields(part: ToolContinuationPart): boolean {
   return Boolean(part.toolCallId && part.toolResultId && part.toolResultContent !== undefined);
+}
+
+function assertObservationDerivedToolResult(part: ToolContinuationPart): void {
+  if (!part.toolResultId || !part.metadata || part.metadata.observationId === undefined) {
+    throw new Error(`ToolResult ${part.toolResultId ?? 'unknown'} is missing observationId.`);
+  }
 }
 
 function mapToolCallPartToOpenAICompatibleToolCall(part: ToolContinuationPart): OpenAICompatibleToolCall {

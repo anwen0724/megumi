@@ -430,6 +430,8 @@ function createServiceWithRealToolResolution(input: {
             getToolCall: (toolCallId) => repository.getToolCall(toolCallId),
             saveToolExecution: (toolExecution) => repository.saveToolExecution(toolExecution),
             getToolExecution: (toolExecutionId) => repository.getToolExecution(toolExecutionId),
+            getToolExecutionByToolCallId: (lookup) => repository.getToolExecutionByToolCallId(lookup),
+            listToolExecutionsByAssistantMessage: (lookup) => repository.listToolExecutionsByAssistantMessage(lookup),
             savePermissionDecision: (decision) => repository.savePermissionDecision(decision),
             saveApprovalRequest: (approvalRequest) => repository.saveApprovalRequest(approvalRequest),
             getApprovalRequest: (approvalRequestId) => repository.getApprovalRequest(approvalRequestId),
@@ -500,10 +502,13 @@ function expectToolContinuationKind(
   request: ModelStepRuntimeRequest | undefined,
   kind: ToolResult['kind'],
 ) {
+  const expectedKind = kind === 'invalid_tool_call' || kind === 'invalid_tool_input' || kind === 'policy_denied'
+    ? 'tool_error'
+    : kind;
   expect(request?.inputContext.parts).toEqual(expect.arrayContaining([
     expect.objectContaining({
       kind: 'tool_continuation',
-      metadata: expect.objectContaining({ kind }),
+      metadata: expect.objectContaining({ kind: expectedKind }),
     }),
   ]));
 }
@@ -1464,7 +1469,7 @@ function createDurablePendingApprovalRows(toolRepository: ToolRepository, input:
     riskLevel: 'low',
     sideEffect: 'none',
     approvalRequestId,
-    status: 'pending_approval',
+    status: 'awaitingApproval',
     requestedAt: '2026-05-17T00:00:02.250Z',
   };
   const approvalRequest: ApprovalRequest = {
@@ -4733,7 +4738,7 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(2);
     expectToolContinuationKind(requests[1], 'invalid_tool_input');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
-    expect(streamed.map((event) => event.eventType)).toContain('tool.input.validation_failed');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(executeToolExecution).not.toHaveBeenCalled();
   });
 
@@ -4753,7 +4758,7 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(2);
     expectToolContinuationKind(requests[1], 'policy_denied');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
-    expect(streamed.map((event) => event.eventType)).toContain('tool.execution.denied');
+    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(executeToolExecution).not.toHaveBeenCalled();
   });
 
@@ -4778,14 +4783,6 @@ describe('SessionRunService', () => {
     expect(requests).toHaveLength(2);
     expectToolContinuationKind(requests[1], 'success');
     expect(JSON.stringify(requests[1]?.inputContext.parts)).toContain('hello external test');
-    expect(streamed.find((event) => event.eventType === 'tool.execution.routed')?.payload).toEqual(expect.objectContaining({
-      executorKind: 'external_test',
-      modelVisibleName: 'demo_echo',
-      canonicalToolId: 'external_test:demo:echo',
-      sourceId: 'external_test',
-      namespace: 'demo',
-      sourceToolName: 'echo',
-    }));
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(executeToolExecution).not.toHaveBeenCalled();
@@ -4805,7 +4802,6 @@ describe('SessionRunService', () => {
 
     expect(requests).toHaveLength(2);
     expectToolContinuationKind(requests[1], 'invalid_tool_call');
-    expect(streamed.map((event) => event.eventType)).toContain('tool.call.resolution_failed');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).not.toContain('tool.execution.routed');
@@ -5457,7 +5453,7 @@ describe('SessionRunService', () => {
                 capabilities: ['project_write'],
                 riskLevel: 'medium',
                 sideEffect: 'project_file_operation',
-                status: 'pending_approval',
+                status: 'awaitingApproval',
                 requestedAt: '2026-05-24T00:00:00.000Z',
               };
               const approvalRequest: ApprovalRequest = {
@@ -5624,7 +5620,7 @@ describe('SessionRunService', () => {
                 capabilities: ['project_read'],
                 riskLevel: 'low',
                 sideEffect: 'none',
-                status: 'pending_approval',
+                status: 'awaitingApproval',
                 requestedAt: '2026-05-17T00:00:02.250Z',
               };
               const approvalRequest: ApprovalRequest = {
@@ -5846,7 +5842,7 @@ describe('SessionRunService', () => {
                 capabilities: ['project_read'],
                 riskLevel: 'low',
                 sideEffect: 'none',
-                status: 'pending_approval',
+                status: 'awaitingApproval',
                 requestedAt: '2026-05-17T00:00:02.250Z',
               };
               const approvalRequest: ApprovalRequest = {
@@ -5968,7 +5964,7 @@ describe('SessionRunService', () => {
                 capabilities: ['project_read'],
                 riskLevel: 'low',
                 sideEffect: 'none',
-                status: 'pending_approval',
+                status: 'awaitingApproval',
                 requestedAt: '2026-05-17T00:00:02.250Z',
               };
               const approvalRequest: ApprovalRequest = {
@@ -6215,7 +6211,7 @@ describe('SessionRunService', () => {
                     capabilities: ['project_read'],
                     riskLevel: 'low',
                     sideEffect: 'none',
-                    status: 'pending_approval',
+                    status: 'awaitingApproval',
                     requestedAt: '2026-05-17T00:00:02.250Z',
                   };
                   const approvalRequest: ApprovalRequest = {
@@ -6751,7 +6747,7 @@ describe('SessionRunService', () => {
                 capabilities: ['project_read'],
                 riskLevel: 'low',
                 sideEffect: 'none',
-                status: 'pending_approval',
+                status: 'awaitingApproval',
                 requestedAt: '2026-05-17T00:00:02.250Z',
               };
               const approvalRequest: ApprovalRequest = {

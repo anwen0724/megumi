@@ -2715,13 +2715,13 @@ export class SessionRunService {
     if (!resumeOutcome) {
       return;
     }
-    const { toolResult } = resumeOutcome;
+    const toolResults = [...(resumeOutcome.toolResults ?? (resumeOutcome.toolResult ? [resumeOutcome.toolResult] : []))];
     const chatStreamAdapter = continuation.chatStreamAdapter;
 
     let lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(continuation.request.runId));
     continuation.pendingByApprovalId.delete(input.approvalRequestId);
     this.pendingApprovals.delete(input.approvalRequestId);
-    continuation.resolvedResults.push(toolResult);
+    continuation.resolvedResults.push(...toolResults);
 
     const approvalResolvedEvent = withRequestMetadata(createRuntimeEvent({
       eventId: this.ids.eventId(),
@@ -2746,7 +2746,11 @@ export class SessionRunService {
     this.appendRuntimeEvent(approvalResolvedEvent, chatStreamAdapter);
     yield approvalResolvedEvent;
 
-    if (continuation.pendingByApprovalId.size > 0) {
+    if (
+      continuation.pendingByApprovalId.size > 0
+      || (resumeOutcome.pendingApprovals?.length ?? 0) > 0
+      || resumeOutcome.continuationReady === false
+    ) {
       const resumeEvents = this.persistResumeRuntimeEvents({
         request: continuation.request,
         stepId: continuation.step.stepId,
@@ -2761,7 +2765,10 @@ export class SessionRunService {
         }
         yield event;
       }
-      if (!resumeEvents.hasToolResultEvent) {
+      for (const toolResult of toolResults) {
+        if (resumeEvents.toolResultIdsWithEvents.has(String(toolResult.toolResultId))) {
+          continue;
+        }
         const toolResultEvent = this.createToolResultRuntimeEvent({
           request: continuation.request,
           stepId: continuation.step.stepId,
@@ -2809,7 +2816,10 @@ export class SessionRunService {
       yield event;
     }
 
-    if (!resumeEvents.hasToolResultEvent) {
+    for (const toolResult of toolResults) {
+      if (resumeEvents.toolResultIdsWithEvents.has(String(toolResult.toolResultId))) {
+        continue;
+      }
       const toolResultEvent = this.createToolResultRuntimeEvent({
         request: continuation.request,
         stepId: continuation.step.stepId,
@@ -2903,11 +2913,11 @@ export class SessionRunService {
   }): {
     events: RuntimeEvent[];
     lastSequence: number;
-    hasToolResultEvent: boolean;
+    toolResultIdsWithEvents: Set<string>;
   } {
     let lastSequence = input.lastSequence;
     const events: RuntimeEvent[] = [];
-    let hasToolResultEvent = false;
+    const toolResultIdsWithEvents = new Set<string>();
 
     for (const event of input.outcome.runtimeEvents ?? []) {
       const eventWithRequest = withSequenceAfter(withRequestMetadata({
@@ -2916,13 +2926,17 @@ export class SessionRunService {
         stepId: event.stepId ?? String(input.stepId),
       }, input.request), lastSequence);
       lastSequence = eventWithRequest.sequence;
-      hasToolResultEvent ||= eventWithRequest.eventType === 'tool.result.created'
-        && getToolResultEventId(eventWithRequest.payload) === String(input.outcome.toolResult.toolResultId);
+      if (eventWithRequest.eventType === 'tool.result.created') {
+        const toolResultId = getToolResultEventId(eventWithRequest.payload);
+        if (toolResultId) {
+          toolResultIdsWithEvents.add(toolResultId);
+        }
+      }
       this.repository.appendRuntimeEvent(eventWithRequest);
       events.push(eventWithRequest);
     }
 
-    return { events, lastSequence, hasToolResultEvent };
+    return { events, lastSequence, toolResultIdsWithEvents };
   }
 
   private createToolResultRuntimeEvent(input: {

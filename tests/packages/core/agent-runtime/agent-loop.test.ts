@@ -845,6 +845,54 @@ describe('run model tool loop', () => {
     });
   });
 
+  it('does not continue to the provider when tool observations are not continuation-ready', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+    const events = await collect(runModelToolLoop({
+      request: createRequest(),
+      aiPort: {
+        async *streamModelStep(request) {
+          requests.push(request);
+          if (requests.length === 1) {
+            yield toolCallCreatedEvent({
+              eventId: 'event-tool-call',
+              sequence: 1,
+              stepId: String(request.stepId),
+              modelStepId: String(request.modelStepId),
+            });
+            yield modelStepCompletedEvent({
+              eventId: 'event-model-completed',
+              sequence: 2,
+              stepId: String(request.stepId),
+              modelStepId: String(request.modelStepId),
+            });
+          }
+        },
+      },
+      toolCallHandler: {
+        async handleToolCalls(input) {
+          return {
+            assistantMessageId: String(input.request.modelStepId),
+            toolResults: [createToolResult({
+              observationId: 'observation:call-read',
+              metadata: { callOrder: 0 },
+            })],
+            pendingApprovals: [],
+            continuationReady: false,
+          };
+        },
+      },
+      ids: {
+        nextEventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        nextStepId: () => 'step-continuation',
+        nextModelStepId: () => 'model-step-continuation',
+      },
+    }));
+
+    expect(requests).toHaveLength(1);
+    expect(events.map((event) => event.eventType)).toContain('tool.result.created');
+    expect(events.map((event) => event.eventType)).not.toContain('run.continued');
+  });
+
   it('preserves tool result ordering for multiple tool calls in the conservative 19.01 path', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
