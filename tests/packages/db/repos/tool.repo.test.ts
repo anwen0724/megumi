@@ -191,7 +191,7 @@ describe('ToolRepository', () => {
     expect(executionRow).toMatchObject({
       tool_execution_id: 'tool-execution-1',
       tool_call_id: 'tool-call-1',
-      status: 'pending_approval',
+      status: 'awaitingApproval',
     });
     expect(JSON.parse(executionRow.tool_execution_json)).toEqual(execution);
   });
@@ -307,7 +307,8 @@ describe('ToolRepository', () => {
 
     const laterExecution = createToolExecution({
       toolExecutionId: 'tool-execution-later',
-      toolCallId: 'tool-call-upsert',
+      toolCallId: 'tool-call-later',
+      callOrder: 1,
       requestedAt: '2026-05-20T00:00:20.000Z',
     });
     const execution = createToolExecution({
@@ -327,6 +328,10 @@ describe('ToolRepository', () => {
       requestedAt: '2026-05-20T00:00:14.000Z',
     });
     seedRunAction(currentDb());
+    repo.saveToolCall(createToolCall({
+      toolCallId: 'tool-call-later',
+      providerToolCallId: 'provider-tool-call-later',
+    }));
     repo.saveToolExecution(laterExecution);
     repo.saveToolExecution(execution);
     repo.saveToolExecution(updatedExecution);
@@ -407,6 +412,69 @@ describe('ToolRepository', () => {
     });
   });
 
+  it('persists execution records with decision, observation, and continuation marker', () => {
+    const repo = createRepo();
+    const record = createToolExecution({
+      assistantMessageId: 'assistant-message:1',
+      callOrder: 0,
+      status: 'succeeded',
+      decision: {
+        outcome: 'allow',
+        reasonCode: 'BUILTIN_READ_ALLOWED',
+        reason: 'Read-only built-in tool is allowed.',
+        executionClass: 'readOnly',
+        executionMode: 'parallel',
+      },
+      observation: createToolObservation({ content: 'file content' }),
+      continuationEmitted: false,
+    });
+
+    repo.saveToolCall(createToolCall());
+    repo.saveToolExecution(record);
+
+    expect(repo.getToolExecution(record.toolExecutionId)).toMatchObject({
+      assistantMessageId: 'assistant-message:1',
+      callOrder: 0,
+      status: 'succeeded',
+      continuationEmitted: false,
+    });
+    expect(repo.getToolExecution(record.toolExecutionId)?.decision?.reasonCode).toBe('BUILTIN_READ_ALLOWED');
+    expect(repo.getToolExecution(record.toolExecutionId)?.observation?.content).toBe('file content');
+  });
+
+  it('lists conceptual batch records by callOrder', () => {
+    const repo = createRepo();
+    repo.saveToolCall(createToolCall({ toolCallId: 'call:2', providerToolCallId: 'provider-call:2' }));
+    repo.saveToolCall(createToolCall({ toolCallId: 'call:0', providerToolCallId: 'provider-call:0' }));
+    repo.saveToolCall(createToolCall({ toolCallId: 'call:1', providerToolCallId: 'provider-call:1' }));
+    repo.saveToolExecution(createToolExecution({ toolExecutionId: 'exec:2', toolCallId: 'call:2', callOrder: 2 }));
+    repo.saveToolExecution(createToolExecution({ toolExecutionId: 'exec:0', toolCallId: 'call:0', callOrder: 0 }));
+    repo.saveToolExecution(createToolExecution({ toolExecutionId: 'exec:1', toolCallId: 'call:1', callOrder: 1 }));
+
+    const records = repo.listToolExecutionsByAssistantMessage({
+      runId: 'run-1',
+      assistantMessageId: 'assistant-message-1',
+    });
+
+    expect(records.map((record) => record.callOrder)).toEqual([0, 1, 2]);
+  });
+
+  it('marks continuation emitted without changing terminal execution outcome', () => {
+    const repo = createRepo();
+    repo.saveToolCall(createToolCall());
+    repo.saveToolExecution(createToolExecution({ status: 'failed', continuationEmitted: false }));
+
+    repo.markToolContinuationEmitted({
+      toolExecutionIds: ['tool-execution-1'],
+      emittedAt: '2026-06-15T00:00:01.000Z',
+    });
+
+    const record = repo.getToolExecution('tool-execution-1');
+    expect(record?.status).toBe('failed');
+    expect(record?.continuationEmitted).toBe(true);
+    expect(record?.metadata?.continuationEmittedAt).toBe('2026-06-15T00:00:01.000Z');
+  });
+
   it('lists and updates pending approval and tool execution facts by run', () => {
     const repo = createRepo();
     repo.saveToolCall({
@@ -429,6 +497,8 @@ describe('ToolRepository', () => {
       toolCallId: 'tool-call-pending',
       runId: 'run-1',
       stepId: 'step-1',
+      assistantMessageId: 'assistant-message-1',
+      callOrder: 0,
       toolName: 'read_file',
       input: { path: 'package.json' },
       inputPreview: {
@@ -439,8 +509,9 @@ describe('ToolRepository', () => {
       capabilities: ['project_read'],
       riskLevel: 'low',
       sideEffect: 'none',
-      status: 'pending_approval',
+      status: 'awaitingApproval',
       requestedAt: '2026-06-14T00:00:00.000Z',
+      continuationEmitted: false,
     });
     repo.saveApprovalRequest({
       approvalRequestId: 'approval-pending',
@@ -647,7 +718,7 @@ function createToolRegistrySnapshot(overrides: Partial<ToolRegistrySnapshot> = {
       },
       effectiveStatus: 'available',
       exposedToModel: true,
-      executionMode: 'sequential',
+      executionMode: 'parallel',
       createdAt: '2026-06-14T00:00:00.000Z',
     }],
   };
@@ -684,7 +755,11 @@ function createToolExecution(overrides: Partial<ToolExecution> = {}): ToolExecut
     capabilities: ['project_read'],
     riskLevel: 'low',
     sideEffect: 'none',
-    status: 'pending_approval',
+    assistantMessageId: 'assistant-message-1',
+    callOrder: 0,
+    executionMode: 'parallel',
+    continuationEmitted: false,
+    status: 'awaitingApproval',
     requestedAt: '2026-05-20T00:00:02.000Z',
     ...overrides,
   };
@@ -767,11 +842,14 @@ function createToolObservation(overrides: Partial<ToolObservation> = {}): ToolOb
   return {
     observationId: 'observation-1',
     toolExecutionId: 'tool-execution-1',
+    toolCallId: 'tool-call-1',
     runId: 'run-1',
     stepId: 'step-1',
-    status: 'succeeded',
-    summary: 'Read file.',
-    textPreview: 'export {}',
+    kind: 'text',
+    isError: false,
+    content: 'export {}',
+    truncated: false,
+    byteLength: 9,
     createdAt: '2026-05-20T00:00:05.000Z',
     ...overrides,
   };

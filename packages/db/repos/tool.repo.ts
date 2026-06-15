@@ -21,6 +21,8 @@ interface ApprovalRequestRow { request_json: string }
 interface ToolResultRow { result_json: string }
 interface ToolObservationRow { observation_json: string }
 
+const ACTIVE_TOOL_EXECUTION_STATUSES = ['created', 'awaitingApproval', 'queued', 'running'] as const;
+
 export class ToolRepository {
   constructor(private readonly database: MegumiDatabase) {}
 
@@ -273,22 +275,26 @@ export class ToolRepository {
   saveToolExecution(toolExecution: ToolExecution): ToolExecution {
     this.database.prepare(`
       INSERT INTO tool_executions (
-        tool_execution_id, tool_call_id, run_id, step_id, action_id, tool_name,
+        tool_execution_id, tool_call_id, run_id, step_id, assistant_message_id, call_order, action_id, tool_name,
         registry_snapshot_id, snapshot_entry_id, model_visible_name, canonical_tool_id,
         source_id, namespace, source_tool_name, input_json, input_preview_json,
-        capabilities_json, risk_level, side_effect, result_preview, status, requested_at, started_at, completed_at,
+        capabilities_json, risk_level, side_effect, decision_json, execution_mode, raw_result_ref, observation_json,
+        continuation_emitted, result_preview, status, requested_at, started_at, completed_at,
         error_json, metadata_json, tool_execution_json
       ) VALUES (
-        @tool_execution_id, @tool_call_id, @run_id, @step_id, @action_id, @tool_name,
+        @tool_execution_id, @tool_call_id, @run_id, @step_id, @assistant_message_id, @call_order, @action_id, @tool_name,
         @registry_snapshot_id, @snapshot_entry_id, @model_visible_name, @canonical_tool_id,
         @source_id, @namespace, @source_tool_name, @input_json, @input_preview_json,
-        @capabilities_json, @risk_level, @side_effect, @result_preview, @status, @requested_at, @started_at, @completed_at,
+        @capabilities_json, @risk_level, @side_effect, @decision_json, @execution_mode, @raw_result_ref, @observation_json,
+        @continuation_emitted, @result_preview, @status, @requested_at, @started_at, @completed_at,
         @error_json, @metadata_json, @tool_execution_json
       )
       ON CONFLICT(tool_execution_id) DO UPDATE SET
         tool_call_id = excluded.tool_call_id,
         run_id = excluded.run_id,
         step_id = excluded.step_id,
+        assistant_message_id = excluded.assistant_message_id,
+        call_order = excluded.call_order,
         action_id = excluded.action_id,
         tool_name = excluded.tool_name,
         registry_snapshot_id = excluded.registry_snapshot_id,
@@ -303,6 +309,11 @@ export class ToolRepository {
         capabilities_json = excluded.capabilities_json,
         risk_level = excluded.risk_level,
         side_effect = excluded.side_effect,
+        decision_json = excluded.decision_json,
+        execution_mode = excluded.execution_mode,
+        raw_result_ref = excluded.raw_result_ref,
+        observation_json = excluded.observation_json,
+        continuation_emitted = excluded.continuation_emitted,
         result_preview = excluded.result_preview,
         status = excluded.status,
         requested_at = excluded.requested_at,
@@ -316,15 +327,22 @@ export class ToolRepository {
       tool_call_id: toolExecution.toolCallId,
       run_id: toolExecution.runId,
       step_id: toolExecution.stepId,
+      assistant_message_id: toolExecution.assistantMessageId,
+      call_order: toolExecution.callOrder,
       action_id: toolExecution.actionId ?? null,
       tool_name: toolExecution.toolName,
       ...identityParams(toolExecution),
       input_json: stringifyJson(toolExecution.input),
       input_preview_json: stringifyJson(toolExecution.inputPreview),
-      capabilities_json: stringifyJson(toolExecution.capabilities),
-      risk_level: toolExecution.riskLevel,
-      side_effect: toolExecution.sideEffect,
-      result_preview: toolExecution.resultPreview ?? null,
+      capabilities_json: stringifyJson(toolExecution.capabilities ?? []),
+      risk_level: toolExecution.riskLevel ?? 'low',
+      side_effect: toolExecution.sideEffect ?? 'none',
+      decision_json: toolExecution.decision ? stringifyJson(toolExecution.decision) : null,
+      execution_mode: toolExecution.executionMode ?? toolExecution.decision?.executionMode ?? null,
+      raw_result_ref: toolExecution.rawResultRef ?? null,
+      observation_json: toolExecution.observation ? stringifyJson(toolExecution.observation) : null,
+      continuation_emitted: toolExecution.continuationEmitted ? 1 : 0,
+      result_preview: formatResultPreview(toolExecution.resultPreview),
       status: toolExecution.status,
       requested_at: toolExecution.requestedAt,
       started_at: toolExecution.startedAt ?? null,
@@ -344,6 +362,55 @@ export class ToolRepository {
   listToolExecutionsByRun(runId: string): ToolExecution[] {
     return (this.database.prepare('SELECT tool_execution_json FROM tool_executions WHERE run_id = ? ORDER BY requested_at ASC').all(runId) as ToolExecutionRow[])
       .map((row) => JSON.parse(row.tool_execution_json) as ToolExecution);
+  }
+
+  listToolExecutionsByAssistantMessage(input: {
+    runId: string;
+    assistantMessageId: string;
+  }): ToolExecution[] {
+    return (this.database.prepare(`
+      SELECT tool_execution_json
+      FROM tool_executions
+      WHERE run_id = ? AND assistant_message_id = ?
+      ORDER BY call_order ASC, requested_at ASC, tool_execution_id ASC
+    `).all(input.runId, input.assistantMessageId) as ToolExecutionRow[])
+      .map((row) => JSON.parse(row.tool_execution_json) as ToolExecution);
+  }
+
+  getToolExecutionByToolCallId(input: {
+    runId: string;
+    assistantMessageId: string;
+    toolCallId: string;
+  }): ToolExecution | undefined {
+    const row = this.database.prepare(`
+      SELECT tool_execution_json
+      FROM tool_executions
+      WHERE run_id = ? AND assistant_message_id = ? AND tool_call_id = ?
+    `).get(input.runId, input.assistantMessageId, input.toolCallId) as ToolExecutionRow | undefined;
+    return row ? JSON.parse(row.tool_execution_json) as ToolExecution : undefined;
+  }
+
+  markToolContinuationEmitted(input: {
+    toolExecutionIds: readonly string[];
+    emittedAt: string;
+  }): void {
+    const update = this.database.transaction((ids: readonly string[]) => {
+      for (const id of ids) {
+        const record = this.getToolExecution(id);
+        if (!record) {
+          continue;
+        }
+        this.saveToolExecution({
+          ...record,
+          continuationEmitted: true,
+          metadata: {
+            ...(record.metadata ?? {}),
+            continuationEmittedAt: input.emittedAt,
+          },
+        });
+      }
+    });
+    update(input.toolExecutionIds);
   }
 
   savePermissionDecision(decision: PermissionDecision): PermissionDecision {
@@ -528,13 +595,14 @@ export class ToolRepository {
   }
 
   listPendingToolExecutionsByRun(runId: string): ToolExecution[] {
+    const placeholders = ACTIVE_TOOL_EXECUTION_STATUSES.map(() => '?').join(', ');
     return (this.database.prepare(`
       SELECT tool_execution_json
       FROM tool_executions
       WHERE run_id = ?
-        AND status IN ('pending_approval', 'running')
+        AND status IN (${placeholders})
       ORDER BY requested_at ASC, tool_execution_id ASC
-    `).all(runId) as ToolExecutionRow[])
+    `).all(runId, ...ACTIVE_TOOL_EXECUTION_STATUSES) as ToolExecutionRow[])
       .map((row) => JSON.parse(row.tool_execution_json) as ToolExecution);
   }
 
@@ -680,11 +748,11 @@ export class ToolRepository {
       tool_execution_id: observation.toolExecutionId,
       run_id: observation.runId,
       step_id: observation.stepId,
-      status: observation.status,
-      summary: observation.summary,
-      text_preview: observation.textPreview ?? null,
-      content_refs_json: observation.contentRefs ? stringifyJson(observation.contentRefs) : null,
-      error_json: observation.error ? stringifyJson(observation.error) : null,
+      status: observation.isError ? 'failed' : 'succeeded',
+      summary: observation.content,
+      text_preview: observation.content,
+      content_refs_json: null,
+      error_json: null,
       created_at: observation.createdAt,
       observation_json: stringifyJson(observation),
     });
@@ -727,5 +795,12 @@ function identityParams(value: {
 
 function stringifyJson(value: unknown): string {
   return JSON.stringify(value);
+}
+
+function formatResultPreview(value: ToolExecution['resultPreview']): string | null {
+  if (value === undefined) {
+    return null;
+  }
+  return typeof value === 'string' ? value : stringifyJson(value);
 }
 

@@ -813,6 +813,8 @@ export function migrateDatabase(database: MegumiDatabase): void {
       tool_call_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
       step_id TEXT NOT NULL,
+      assistant_message_id TEXT,
+      call_order INTEGER,
       action_id TEXT,
       tool_name TEXT NOT NULL,
       registry_snapshot_id TEXT,
@@ -827,6 +829,11 @@ export function migrateDatabase(database: MegumiDatabase): void {
       capabilities_json TEXT NOT NULL,
       risk_level TEXT NOT NULL,
       side_effect TEXT NOT NULL,
+      decision_json TEXT,
+      execution_mode TEXT,
+      raw_result_ref TEXT,
+      observation_json TEXT,
+      continuation_emitted INTEGER NOT NULL DEFAULT 0,
       result_preview TEXT,
       status TEXT NOT NULL,
       requested_at TEXT NOT NULL,
@@ -973,6 +980,18 @@ export function migrateDatabase(database: MegumiDatabase): void {
     addColumnIfMissing(database, 'tool_executions', columnName, definition);
     addColumnIfMissing(database, 'permission_decisions', columnName, definition);
     addColumnIfMissing(database, 'approval_requests', columnName, definition);
+  }
+
+  for (const [columnName, definition] of [
+    ['assistant_message_id', 'TEXT'],
+    ['call_order', 'INTEGER'],
+    ['decision_json', 'TEXT'],
+    ['execution_mode', 'TEXT'],
+    ['raw_result_ref', 'TEXT'],
+    ['observation_json', 'TEXT'],
+    ['continuation_emitted', 'INTEGER NOT NULL DEFAULT 0'],
+  ] as const) {
+    addColumnIfMissing(database, 'tool_executions', columnName, definition);
   }
 
   database.exec(`
@@ -1645,6 +1664,16 @@ export function migrateDatabase(database: MegumiDatabase): void {
 
     CREATE INDEX IF NOT EXISTS idx_tool_executions_snapshot_entry_id
     ON tool_executions(snapshot_entry_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_executions_run_assistant_order
+    ON tool_executions(run_id, assistant_message_id, call_order);
+
+    CREATE INDEX IF NOT EXISTS idx_tool_executions_run_status_1903
+    ON tool_executions(run_id, status);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_executions_run_assistant_tool_call
+    ON tool_executions(run_id, assistant_message_id, tool_call_id)
+    WHERE assistant_message_id IS NOT NULL;
 
     CREATE INDEX IF NOT EXISTS idx_tool_results_tool_call_id
     ON tool_results(tool_call_id);

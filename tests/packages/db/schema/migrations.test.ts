@@ -1910,6 +1910,8 @@ describe('database migrations', () => {
       'tool_call_id',
       'run_id',
       'step_id',
+      'assistant_message_id',
+      'call_order',
       'action_id',
       'tool_name',
       ...toolIdentityColumns,
@@ -1918,6 +1920,11 @@ describe('database migrations', () => {
       'capabilities_json',
       'risk_level',
       'side_effect',
+      'decision_json',
+      'execution_mode',
+      'raw_result_ref',
+      'observation_json',
+      'continuation_emitted',
       'result_preview',
       'status',
       'requested_at',
@@ -1947,6 +1954,17 @@ describe('database migrations', () => {
     for (const identityColumn of toolIdentityColumns) {
       expect(columnByName(toolExecutionColumns, identityColumn)?.notnull).toBe(0);
     }
+    for (const recordColumn of [
+      'assistant_message_id',
+      'call_order',
+      'decision_json',
+      'execution_mode',
+      'raw_result_ref',
+      'observation_json',
+    ]) {
+      expect(columnByName(toolExecutionColumns, recordColumn)?.notnull).toBe(0);
+    }
+    expect(columnByName(toolExecutionColumns, 'continuation_emitted')).toMatchObject({ notnull: 1 });
 
     const toolResultColumns = tableColumns(database, 'tool_results');
     expect(toolResultColumns.map((column) => column.name)).toEqual([
@@ -2119,6 +2137,29 @@ describe('database migrations', () => {
       expect.objectContaining({ from: 'tool_call_id', table: 'tool_calls', on_delete: 'CASCADE' }),
       expect.objectContaining({ from: 'tool_execution_id', table: 'tool_executions', on_delete: 'CASCADE' }),
     ]));
+  });
+
+  it('adds 19.03 execution record columns without creating a batch table', () => {
+    const database = createTestDb();
+    migrateDatabase(database);
+
+    const executionColumns = database
+      .prepare("PRAGMA table_info('tool_executions')")
+      .all()
+      .map((row) => (row as { name: string }).name);
+
+    expect(executionColumns).toContain('assistant_message_id');
+    expect(executionColumns).toContain('call_order');
+    expect(executionColumns).toContain('decision_json');
+    expect(executionColumns).toContain('execution_mode');
+    expect(executionColumns).toContain('raw_result_ref');
+    expect(executionColumns).toContain('observation_json');
+    expect(executionColumns).toContain('continuation_emitted');
+
+    const table = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tool_call_batches'")
+      .get();
+    expect(table).toBeUndefined();
   });
 
   it('archives incompatible legacy tool persistence tables before creating target schema', () => {

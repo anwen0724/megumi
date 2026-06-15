@@ -8,8 +8,10 @@ import {
   SANDBOX_LEVELS,
   TOOL_CAPABILITIES,
   TOOL_CALL_STATUSES,
+  TOOL_EXECUTION_DECISION_OUTCOMES,
   TOOL_EXECUTION_MODES,
   TOOL_EXECUTION_STATUSES,
+  TOOL_OBSERVATION_BUDGET_PROFILES,
   TOOL_POLICY_DECISIONS,
   TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES,
   TOOL_RESULT_KINDS,
@@ -29,6 +31,9 @@ import {
   ToolResultSchema,
   ToolSourceIdentitySchema,
   ToolSourceSchema,
+  type RawToolResult,
+  type ToolExecutionDecision,
+  type ToolExecutionRecord,
 } from '@megumi/shared/tool';
 
 const inputPreview = {
@@ -133,11 +138,13 @@ describe('tool-contracts', () => {
       'failed',
     ]);
     expect(TOOL_EXECUTION_STATUSES).toEqual([
-      'pending_approval',
+      'created',
+      'awaitingApproval',
+      'rejected',
+      'queued',
       'running',
-      'completed',
+      'succeeded',
       'failed',
-      'denied',
       'cancelled',
     ]);
     expect(PERMISSION_DECISION_SOURCES).toEqual([
@@ -189,15 +196,15 @@ describe('tool-contracts', () => {
   it('separates tool definition from source identity', () => {
     const definition = ToolDefinitionSchema.parse({
       ...toolDefinition,
-      executionMode: 'sequential',
+      executionMode: 'serial',
       permissionMetadata: { defaultDecision: 'allow' },
       modelFacingDescription: 'Read project files for context.',
     });
 
-    expect(definition.executionMode).toBe('sequential');
+    expect(definition.executionMode).toBe('serial');
     expect(definition.permissionMetadata).toEqual({ defaultDecision: 'allow' });
     expect(definition.modelFacingDescription).toBe('Read project files for context.');
-    expect(TOOL_EXECUTION_MODES).toEqual(['sequential', 'parallel_eligible', 'exclusive']);
+    expect(TOOL_EXECUTION_MODES).toEqual(['parallel', 'serial']);
     expect(() => ToolDefinitionSchema.parse({ ...toolDefinition, sourceId: 'built_in' })).toThrow();
     expect(() => ToolDefinitionSchema.parse({
       ...toolDefinition,
@@ -244,7 +251,7 @@ describe('tool-contracts', () => {
       definition: toolDefinition,
       effectiveStatus: 'available',
       exposedToModel: true,
-      executionMode: 'sequential',
+      executionMode: 'parallel',
       createdAt: '2026-06-14T00:00:00.000Z',
     });
     const snapshot = ToolRegistrySnapshotSchema.parse({
@@ -278,7 +285,7 @@ describe('tool-contracts', () => {
       sourceToolName: 'read_file',
       effectiveStatus: 'available',
       exposedToModel: true,
-      executionMode: 'sequential',
+      executionMode: 'parallel',
     });
   });
 
@@ -308,8 +315,11 @@ describe('tool-contracts', () => {
       capabilities: ['project_read'],
       riskLevel: 'low',
       sideEffect: 'none',
+      assistantMessageId: 'assistant-message-1',
+      callOrder: 0,
       status: 'running',
       requestedAt: '2026-06-14T00:00:00.000Z',
+      continuationEmitted: false,
     })).toMatchObject(toolSourceIdentity);
     expect(PermissionDecisionSchema.parse({
       permissionDecisionId: 'permission-decision-identity',
@@ -395,8 +405,11 @@ describe('tool-contracts', () => {
       capabilities: ['project_read'],
       riskLevel: 'low',
       sideEffect: 'none',
-      status: 'pending_approval',
+      assistantMessageId: 'assistant-message-1',
+      callOrder: 0,
+      status: 'awaitingApproval',
       requestedAt: '2026-05-20T00:00:01.000Z',
+      continuationEmitted: false,
     });
 
     expect(execution).toMatchObject({
@@ -496,6 +509,7 @@ describe('tool-contracts', () => {
       toolResultId: 'tool-result-1',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
+      observationId: 'tool-observation-1',
       runId: 'run-1',
       kind: 'success',
       structuredContent: { content: 'export {}' },
@@ -506,6 +520,7 @@ describe('tool-contracts', () => {
       kind: 'success',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
+      observationId: 'tool-observation-1',
     });
 
     expect(ToolResultSchema.parse({
@@ -626,17 +641,19 @@ describe('tool-contracts', () => {
     const observation = ToolObservationSchema.parse({
       observationId: 'observation-1',
       toolExecutionId: 'tool-execution-1',
+      toolCallId: 'tool-call-1',
       runId: 'run-1',
       stepId: 'step-1',
-      status: 'succeeded',
-      summary: 'Read file.',
-      structuredContent: { content: 'export {}' },
-      textPreview: 'export {}',
+      kind: 'text',
+      isError: false,
+      content: 'export {}',
+      truncated: false,
+      byteLength: 9,
       createdAt: '2026-05-20T00:00:07.000Z',
     });
 
     expect(observation.toolExecutionId).toBe('tool-execution-1');
-    expect(observation).not.toHaveProperty('toolCallId');
+    expect(observation.toolCallId).toBe('tool-call-1');
   });
 
   it('rejects legacy actionKind and workspace sandbox values', () => {
@@ -664,6 +681,95 @@ describe('tool-contracts', () => {
     expect(() => SandboxRequirementSchema.parse({ level: 'workspace_read' })).toThrow();
     expect(() => SandboxRequirementSchema.parse({ level: 'workspace_write' })).toThrow();
     expect(() => SandboxRequirementSchema.parse({ level: 'workspace_write', networkPolicy: 'deny' })).toThrow();
+  });
+});
+
+describe('19.03 tool execution contracts', () => {
+  it('uses only 19.03 execution modes', () => {
+    expect(TOOL_EXECUTION_MODES).toEqual(['parallel', 'serial']);
+    expect(TOOL_EXECUTION_MODES).not.toContain('concurrent');
+    expect(TOOL_EXECUTION_MODES).not.toContain('sequential');
+    expect(TOOL_EXECUTION_MODES).not.toContain('exclusive');
+  });
+
+  it('uses durable record statuses required by the spec', () => {
+    expect(TOOL_EXECUTION_STATUSES).toEqual([
+      'created',
+      'awaitingApproval',
+      'rejected',
+      'queued',
+      'running',
+      'succeeded',
+      'failed',
+      'cancelled',
+    ]);
+  });
+
+  it('keeps decision outcomes distinct from approval responses', () => {
+    expect(TOOL_EXECUTION_DECISION_OUTCOMES).toEqual(['allow', 'requireApproval', 'reject']);
+    const decision: ToolExecutionDecision = {
+      outcome: 'requireApproval',
+      reasonCode: 'WORKSPACE_MUTATION_REQUIRES_APPROVAL',
+      reason: 'Workspace mutation requires approval in the current permission posture.',
+      executionClass: 'workspaceMutation',
+      executionMode: 'serial',
+    };
+    expect(decision.outcome).toBe('requireApproval');
+  });
+
+  it('models raw result separately from bounded observation', () => {
+    const raw: RawToolResult = {
+      rawToolResultId: 'raw:1',
+      toolExecutionId: 'tool-execution:1',
+      toolCallId: 'tool-call:1',
+      isError: false,
+      outputKind: 'text',
+      content: 'large raw content',
+      createdAt: '2026-06-15T00:00:00.000Z',
+    };
+    const observation = ToolObservationSchema.parse({
+      observationId: 'tool-observation:1',
+      toolExecutionId: 'tool-execution:1',
+      toolCallId: 'tool-call:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      kind: 'text',
+      isError: false,
+      content: 'bounded content',
+      truncated: false,
+      byteLength: 15,
+      createdAt: '2026-06-15T00:00:00.000Z',
+    });
+    expect(raw.content).not.toBe(observation.content);
+  });
+
+  it('requires callOrder and assistantMessageId on execution records', () => {
+    const record = {
+      toolExecutionId: 'tool-execution:1',
+      toolCallId: 'tool-call:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+      assistantMessageId: 'model-step:assistant:1',
+      callOrder: 0,
+      toolName: 'read_file',
+      input: { path: 'README.md' },
+      inputPreview: { path: 'README.md' },
+      status: 'created',
+      requestedAt: '2026-06-15T00:00:00.000Z',
+      continuationEmitted: false,
+    } satisfies ToolExecutionRecord;
+    expect(record.callOrder).toBe(0);
+    expect(record.assistantMessageId).toBe('model-step:assistant:1');
+  });
+
+  it('declares the first observation budget profiles', () => {
+    expect(TOOL_OBSERVATION_BUDGET_PROFILES).toEqual([
+      'smallText',
+      'largeText',
+      'commandOutput',
+      'fileRead',
+      'error',
+    ]);
   });
 });
 

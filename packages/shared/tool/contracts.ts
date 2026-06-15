@@ -62,7 +62,7 @@ export type ToolSourceKind = (typeof TOOL_SOURCE_KINDS)[number];
 export const TOOL_SOURCE_AVAILABILITY_STATUSES = ['available', 'unavailable', 'unknown'] as const;
 export type ToolSourceAvailabilityStatus = (typeof TOOL_SOURCE_AVAILABILITY_STATUSES)[number];
 
-export const TOOL_EXECUTION_MODES = ['sequential', 'parallel_eligible', 'exclusive'] as const;
+export const TOOL_EXECUTION_MODES = ['parallel', 'serial'] as const;
 export type ToolExecutionMode = (typeof TOOL_EXECUTION_MODES)[number];
 
 export const TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES = ['available', 'disabled', 'unavailable', 'conflicted'] as const;
@@ -79,17 +79,86 @@ export const TOOL_CALL_STATUSES = [
 export type ToolCallStatus = (typeof TOOL_CALL_STATUSES)[number];
 
 export const TOOL_EXECUTION_STATUSES = [
-  'pending_approval',
+  'created',
+  'awaitingApproval',
+  'rejected',
+  'queued',
   'running',
-  'completed',
+  'succeeded',
   'failed',
-  'denied',
   'cancelled',
 ] as const;
 export type ToolExecutionStatus = (typeof TOOL_EXECUTION_STATUSES)[number];
 
-export const TOOL_OBSERVATION_STATUSES = ['succeeded', 'failed', 'denied'] as const;
-export type ToolObservationStatus = (typeof TOOL_OBSERVATION_STATUSES)[number];
+export const TOOL_EXECUTION_DECISION_OUTCOMES = ['allow', 'requireApproval', 'reject'] as const;
+export type ToolExecutionDecisionOutcome = (typeof TOOL_EXECUTION_DECISION_OUTCOMES)[number];
+
+export const TOOL_EXECUTION_CLASSES = [
+  'readOnly',
+  'workspaceMutation',
+  'processExecution',
+  'unknown',
+] as const;
+export type ToolExecutionClass = (typeof TOOL_EXECUTION_CLASSES)[number];
+
+export const TOOL_EXECUTION_DECISION_REASON_CODES = [
+  'BUILTIN_READ_ALLOWED',
+  'WORKSPACE_MUTATION_REQUIRES_APPROVAL',
+  'WORKSPACE_MUTATION_ALLOWED_BY_POSTURE',
+  'PROCESS_REQUIRES_APPROVAL',
+  'PROCESS_ALLOWED_BY_POSTURE',
+  'CUSTOM_TOOL_REQUIRES_APPROVAL',
+  'CUSTOM_TOOL_REJECTED',
+  'TOOL_NOT_FOUND',
+  'INVALID_ARGUMENTS',
+  'PATH_OUTSIDE_WORKSPACE',
+  'CAPABILITY_DISABLED',
+] as const;
+export type ToolExecutionDecisionReasonCode = (typeof TOOL_EXECUTION_DECISION_REASON_CODES)[number];
+
+export interface ToolExecutionDecision {
+  outcome: ToolExecutionDecisionOutcome;
+  reasonCode: ToolExecutionDecisionReasonCode;
+  reason: string;
+  executionClass: ToolExecutionClass;
+  executionMode: ToolExecutionMode;
+}
+
+export const TOOL_OBSERVATION_BUDGET_PROFILES = [
+  'smallText',
+  'largeText',
+  'commandOutput',
+  'fileRead',
+  'error',
+] as const;
+export type ToolObservationBudgetProfile = (typeof TOOL_OBSERVATION_BUDGET_PROFILES)[number];
+
+export const TOOL_OBSERVATION_TRUNCATION_REASONS = [
+  'lineLimit',
+  'byteLimit',
+  'tokenBudget',
+  'policy',
+] as const;
+export type ToolObservationTruncationReason = (typeof TOOL_OBSERVATION_TRUNCATION_REASONS)[number];
+
+export type RawToolResultOutputKind =
+  | 'text'
+  | 'json'
+  | 'command'
+  | 'file'
+  | 'diff'
+  | 'error';
+
+export interface RawToolResult {
+  rawToolResultId: string;
+  toolExecutionId: string;
+  toolCallId: string;
+  isError: boolean;
+  outputKind: RawToolResultOutputKind;
+  content: unknown;
+  metadata?: JsonObject;
+  createdAt: string;
+}
 
 export const TOOL_RESULT_KINDS = [
   'success',
@@ -517,6 +586,8 @@ export interface ToolExecution {
   toolCallId: ToolCallId | string;
   runId: RunId | string;
   stepId: RunStepId | string;
+  assistantMessageId: string;
+  callOrder: number;
   actionId?: RunActionId | string;
   toolName: ToolName;
   registrySnapshotId?: string;
@@ -527,21 +598,28 @@ export interface ToolExecution {
   namespace?: ToolNamespace;
   sourceToolName?: ToolName;
   input: JsonValue;
-  inputPreview: ToolInputPreview;
-  capabilities: ToolCapability[];
-  riskLevel: ToolRiskLevel;
-  sideEffect: ToolSideEffect;
+  inputPreview: JsonValue;
+  capabilities?: readonly ToolCapability[];
+  riskLevel?: ToolRiskLevel;
+  sideEffect?: ToolSideEffect;
+  decision?: ToolExecutionDecision;
   policyDecision?: PermissionDecision;
   approvalRequestId?: string;
   sandboxRequirement?: SandboxRequirement;
+  executionMode?: ToolExecutionMode;
   status: ToolExecutionStatus;
   requestedAt: IsoDateTime;
   startedAt?: IsoDateTime;
   completedAt?: IsoDateTime;
-  resultPreview?: string;
+  rawResultRef?: string;
+  observation?: ToolObservation;
+  continuationEmitted: boolean;
+  resultPreview?: JsonValue;
   error?: RuntimeError;
   metadata?: JsonObject;
 }
+
+export type ToolExecutionRecord = ToolExecution;
 
 export const ToolExecutionSchema = z
   .object({
@@ -549,22 +627,35 @@ export const ToolExecutionSchema = z
     toolCallId: IdSchema,
     runId: IdSchema,
     stepId: IdSchema,
+    assistantMessageId: IdSchema,
+    callOrder: z.number().int().nonnegative(),
     actionId: IdSchema.optional(),
     toolName: ToolNameSchema,
     ...optionalToolSourceIdentitySchema,
     input: JsonValueSchema,
-    inputPreview: ToolInputPreviewSchema,
-    capabilities: z.array(z.enum(TOOL_CAPABILITIES)).min(1),
-    riskLevel: z.enum(TOOL_RISK_LEVELS),
-    sideEffect: z.enum(TOOL_SIDE_EFFECTS),
+    inputPreview: JsonValueSchema,
+    capabilities: z.array(z.enum(TOOL_CAPABILITIES)).optional(),
+    riskLevel: z.enum(TOOL_RISK_LEVELS).optional(),
+    sideEffect: z.enum(TOOL_SIDE_EFFECTS).optional(),
+    decision: z.object({
+      outcome: z.enum(TOOL_EXECUTION_DECISION_OUTCOMES),
+      reasonCode: z.enum(TOOL_EXECUTION_DECISION_REASON_CODES),
+      reason: z.string().min(1),
+      executionClass: z.enum(TOOL_EXECUTION_CLASSES),
+      executionMode: z.enum(TOOL_EXECUTION_MODES),
+    }).strict().optional(),
     policyDecision: PermissionDecisionSchema.optional(),
     approvalRequestId: IdSchema.optional(),
     sandboxRequirement: SandboxRequirementSchema.optional(),
+    executionMode: z.enum(TOOL_EXECUTION_MODES).optional(),
     status: z.enum(TOOL_EXECUTION_STATUSES),
     requestedAt: IsoDateTimeSchema,
     startedAt: IsoDateTimeSchema.optional(),
     completedAt: IsoDateTimeSchema.optional(),
-    resultPreview: z.string().optional(),
+    rawResultRef: z.string().min(1).optional(),
+    observation: z.lazy(() => ToolObservationSchema).optional(),
+    continuationEmitted: z.boolean(),
+    resultPreview: JsonValueSchema.optional(),
     error: RuntimeErrorSchema.optional(),
     metadata: JsonObjectSchema.optional(),
   })
@@ -637,6 +728,7 @@ export interface ToolResult {
   toolResultId: ToolResultId | string;
   toolCallId: ToolCallId | string;
   toolExecutionId?: ToolExecutionId | string;
+  observationId?: string;
   runId: RunId | string;
   kind: ToolResultKind;
   structuredContent?: JsonValue;
@@ -654,6 +746,7 @@ export const ToolResultSchema = z
     toolResultId: IdSchema,
     toolCallId: IdSchema,
     toolExecutionId: IdSchema.optional(),
+    observationId: IdSchema.optional(),
     runId: IdSchema,
     kind: z.enum(TOOL_RESULT_KINDS),
     structuredContent: JsonValueSchema.optional(),
@@ -675,14 +768,18 @@ export type ToolError = z.infer<typeof ToolErrorSchema>;
 export interface ToolObservation {
   observationId: RunObservationId | string;
   toolExecutionId: ToolExecutionId | string;
+  toolCallId: ToolCallId | string;
   runId: RunId | string;
   stepId: RunStepId | string;
-  status: ToolObservationStatus;
-  summary: string;
-  structuredContent?: JsonValue;
-  textPreview?: string;
-  contentRefs?: ToolContentRef[];
-  error?: ToolError;
+  kind: 'text';
+  isError: boolean;
+  content: string;
+  truncated: boolean;
+  truncationReason?: ToolObservationTruncationReason;
+  rawResultRef?: string;
+  continuationHint?: string;
+  byteLength: number;
+  tokenEstimate?: number;
   createdAt: IsoDateTime;
   metadata?: JsonObject;
 }
@@ -691,14 +788,18 @@ export const ToolObservationSchema = z
   .object({
     observationId: IdSchema,
     toolExecutionId: IdSchema,
+    toolCallId: IdSchema,
     runId: IdSchema,
     stepId: IdSchema,
-    status: z.enum(TOOL_OBSERVATION_STATUSES),
-    summary: z.string().min(1),
-    structuredContent: JsonValueSchema.optional(),
-    textPreview: z.string().optional(),
-    contentRefs: z.array(ToolContentRefSchema).optional(),
-    error: ToolErrorSchema.optional(),
+    kind: z.literal('text'),
+    isError: z.boolean(),
+    content: z.string(),
+    truncated: z.boolean(),
+    truncationReason: z.enum(TOOL_OBSERVATION_TRUNCATION_REASONS).optional(),
+    rawResultRef: z.string().min(1).optional(),
+    continuationHint: z.string().min(1).optional(),
+    byteLength: z.number().int().nonnegative(),
+    tokenEstimate: z.number().int().nonnegative().optional(),
     createdAt: IsoDateTimeSchema,
     metadata: JsonObjectSchema.optional(),
   })
