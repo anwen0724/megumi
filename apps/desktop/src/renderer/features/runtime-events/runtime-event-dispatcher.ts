@@ -72,7 +72,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
       store.upsertToolCall({
         ...payload.toolExecution,
         approvalRequestId,
-        status: 'pending_approval',
+        status: 'awaitingApproval',
       });
     } else {
       const current = store.toolCallsById[payload.toolExecutionId];
@@ -80,7 +80,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
         store.upsertToolCall({
           ...current,
           approvalRequestId,
-          status: 'pending_approval',
+          status: 'awaitingApproval',
         });
       }
     }
@@ -107,7 +107,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     if (current) {
       store.upsertToolCall({
         ...current,
-        status: 'completed',
+        status: 'succeeded',
         completedAt: payload.completedAt ?? event.createdAt,
       });
     }
@@ -132,7 +132,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     if (current) {
       store.upsertToolCall({
         ...current,
-        status: 'denied',
+        status: 'rejected',
         error: {
           code: 'approval_denied',
           message: payload.reason ?? 'Tool call was denied.',
@@ -161,8 +161,8 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     const status = payload.kind === 'tool_error'
       ? 'failed'
       : payload.kind === 'policy_denied' || payload.kind === 'user_rejected'
-        ? 'denied'
-        : 'completed';
+        ? 'rejected'
+        : 'succeeded';
 
     store.upsertToolCall({
       ...current,

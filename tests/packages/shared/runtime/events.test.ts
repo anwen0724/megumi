@@ -68,6 +68,18 @@ const runtimeContext = {
 } as const;
 
 describe('runtime event contracts', () => {
+  it('declares 19.03 tool runtime events for decisions, observations, and continuations', () => {
+    expect(RUNTIME_EVENT_TYPES).toEqual(expect.arrayContaining([
+      'tool.execution.decided',
+      'tool.execution.queued',
+      'tool.execution.rejected',
+      'tool.execution.cancelled',
+      'tool.observation.ready',
+      'tool.continuation.ready',
+      'tool.continuation.emitted',
+    ]));
+  });
+
   it('accepts run.started events', () => {
     const event = {
       eventId: 'event-1',
@@ -888,6 +900,8 @@ describe('tool and approval runtime events', () => {
       toolCallId: 'tool-call-1',
       runId: 'run-1',
       stepId: 'step-1',
+      assistantMessageId: 'model-step-1',
+      callOrder: 0,
       actionId: 'action-1',
       toolName: 'read_file',
       input: { path: 'README.md' },
@@ -899,8 +913,9 @@ describe('tool and approval runtime events', () => {
       capabilities: ['project_read' as const],
       riskLevel: 'low' as const,
       sideEffect: 'none' as const,
-      status: 'pending_approval' as const,
+      status: 'awaitingApproval' as const,
       requestedAt: '2026-05-20T00:00:00.000Z',
+      continuationEmitted: false,
     };
     const approvalRequest = {
       approvalRequestId: 'approval-1',
@@ -1105,6 +1120,8 @@ describe('tool and approval runtime events', () => {
       toolCallId: 'tool-call-1',
       runId: 'run-1',
       stepId: 'step-1',
+      assistantMessageId: 'model-step-1',
+      callOrder: 0,
       toolName: 'read_file',
       input: { path: 'README.md' },
       inputPreview: {
@@ -1115,8 +1132,9 @@ describe('tool and approval runtime events', () => {
       capabilities: ['project_read' as const],
       riskLevel: 'low' as const,
       sideEffect: 'none' as const,
-      status: 'pending_approval' as const,
+      status: 'awaitingApproval' as const,
       requestedAt: '2026-05-16T00:00:00.000Z',
+      continuationEmitted: false,
     };
 
     const events = [

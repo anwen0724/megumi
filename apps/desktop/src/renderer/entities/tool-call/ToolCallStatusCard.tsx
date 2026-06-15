@@ -11,18 +11,33 @@ const statusConfig: Record<ToolExecutionStatus, {
   badge: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'approval';
   icon: typeof Clock;
 }> = {
-  pending_approval: {
+  created: {
+    label: 'Created',
+    badge: 'neutral',
+    icon: Clock,
+  },
+  awaitingApproval: {
     label: 'Waiting for approval',
     badge: 'approval',
     icon: ShieldCheck,
+  },
+  rejected: {
+    label: 'Rejected',
+    badge: 'danger',
+    icon: XCircle,
+  },
+  queued: {
+    label: 'Queued',
+    badge: 'neutral',
+    icon: Clock,
   },
   running: {
     label: 'Running',
     badge: 'accent',
     icon: Loader2,
   },
-  completed: {
-    label: 'Completed',
+  succeeded: {
+    label: 'Succeeded',
     badge: 'success',
     icon: CheckCircle2,
   },
@@ -30,11 +45,6 @@ const statusConfig: Record<ToolExecutionStatus, {
     label: 'Failed',
     badge: 'danger',
     icon: AlertCircle,
-  },
-  denied: {
-    label: 'Denied',
-    badge: 'danger',
-    icon: XCircle,
   },
   cancelled: {
     label: 'Cancelled',
@@ -44,13 +54,13 @@ const statusConfig: Record<ToolExecutionStatus, {
 };
 
 function iconTone(status: ToolExecutionStatus): string {
-  if (status === 'failed' || status === 'denied' || status === 'cancelled') {
+  if (status === 'failed' || status === 'rejected' || status === 'cancelled') {
     return 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]';
   }
-  if (status === 'completed') {
+  if (status === 'succeeded') {
     return 'bg-[var(--color-success-soft)] text-[var(--color-success)]';
   }
-  if (status === 'pending_approval') {
+  if (status === 'awaitingApproval') {
     return 'bg-[var(--color-approval-soft)] text-[var(--color-approval)]';
   }
   return 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]';

@@ -619,8 +619,14 @@ export class ToolRepository {
     return cancelled;
   }
 
-  cancelPendingToolExecutionsByRun(input: { runId: string; completedAt: string }): ToolExecution[] {
-    const pending = this.listPendingToolExecutionsByRun(input.runId);
+  cancelPendingToolExecutionsByRun(input: {
+    runId: string;
+    completedAt: string;
+    statuses?: readonly ToolExecution['status'][];
+  }): ToolExecution[] {
+    const statuses = input.statuses ?? ACTIVE_TOOL_EXECUTION_STATUSES;
+    const pending = this.listToolExecutionsByRun(input.runId)
+      .filter((execution) => statuses.includes(execution.status));
     const cancelled = pending.map((execution) => ({
       ...execution,
       status: 'cancelled' as const,
@@ -630,6 +636,35 @@ export class ToolRepository {
       this.saveToolExecution(execution);
     }
     return cancelled;
+  }
+
+  failRunningToolExecutionsByRun(input: {
+    runId: string;
+    completedAt: string;
+    createObservation(record: ToolExecution): ToolObservation;
+  }): ToolExecution[] {
+    const runningRecords = this.listToolExecutionsByRun(input.runId)
+      .filter((record) => record.status === 'running');
+    const failedRecords: ToolExecution[] = [];
+
+    for (const record of runningRecords) {
+      const observation = input.createObservation(record);
+      failedRecords.push(this.saveToolExecution({
+        ...record,
+        status: 'failed',
+        completedAt: input.completedAt,
+        observation,
+        error: {
+          code: 'runtime_interrupted',
+          message: 'Tool execution was interrupted before completion.',
+          severity: 'error',
+          retryable: false,
+          source: 'tool',
+        },
+      }));
+    }
+
+    return failedRecords;
   }
 
   saveApprovalRecord(record: ApprovalRecord): ApprovalRecord {

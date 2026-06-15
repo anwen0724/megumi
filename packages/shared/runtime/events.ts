@@ -123,6 +123,10 @@ export const RUNTIME_EVENT_TYPES = [
   'tool.registry.model_visible_tools.derived',
   'tool.execution.requested',
   'tool.execution.validated',
+  'tool.execution.decided',
+  'tool.execution.queued',
+  'tool.execution.rejected',
+  'tool.execution.cancelled',
   'tool.execution.policy_decided',
   'permission.decision.created',
   'tool.execution.approval_requested',
@@ -131,6 +135,9 @@ export const RUNTIME_EVENT_TYPES = [
   'tool.execution.completed',
   'tool.execution.failed',
   'tool.execution.denied',
+  'tool.observation.ready',
+  'tool.continuation.ready',
+  'tool.continuation.emitted',
   'approval.requested',
   'approval.resolved',
   'approval.expired',
@@ -669,6 +676,39 @@ export interface ToolExecutionDeniedPayload {
   reason: string;
 }
 
+export interface ToolExecutionRuntimeRecordPayload {
+  assistantMessageId: string;
+  toolExecutionId: string;
+  toolCallId: string;
+  toolName: string;
+  callOrder: number;
+  status: string;
+}
+
+export interface ToolExecutionDecisionRuntimePayload extends ToolExecutionRuntimeRecordPayload {
+  decision: {
+    outcome: 'allow' | 'requireApproval' | 'reject';
+    reasonCode: string;
+    executionClass: 'readOnly' | 'workspaceMutation' | 'processExecution' | 'unknown';
+    executionMode: 'parallel' | 'serial';
+  };
+}
+
+export interface ToolObservationReadyPayload extends ToolExecutionRuntimeRecordPayload {
+  observationId: string;
+  isError: boolean;
+  truncated: boolean;
+}
+
+export interface ToolContinuationReadyPayload {
+  assistantMessageId: string;
+  toolExecutionIds: string[];
+}
+
+export interface ToolContinuationEmittedPayload extends ToolContinuationReadyPayload {
+  emittedAt: string;
+}
+
 export interface ApprovalRequestedPayload {
   approvalRequest: ApprovalRequest;
 }
@@ -859,6 +899,10 @@ export type RuntimeEventPayloadByType = {
   'tool.registry.model_visible_tools.derived': ToolRegistryModelVisibleToolsDerivedPayload;
   'tool.execution.requested': ToolExecutionRequestedPayload;
   'tool.execution.validated': ToolExecutionValidatedPayload;
+  'tool.execution.decided': ToolExecutionDecisionRuntimePayload;
+  'tool.execution.queued': ToolExecutionRuntimeRecordPayload;
+  'tool.execution.rejected': ToolExecutionDecisionRuntimePayload;
+  'tool.execution.cancelled': ToolExecutionRuntimeRecordPayload;
   'tool.execution.policy_decided': ToolExecutionPolicyDecidedPayload;
   'permission.decision.created': PermissionDecisionCreatedPayload;
   'tool.execution.approval_requested': ToolExecutionApprovalRequestedPayload;
@@ -867,6 +911,9 @@ export type RuntimeEventPayloadByType = {
   'tool.execution.completed': ToolExecutionCompletedPayload;
   'tool.execution.failed': ToolExecutionFailedPayload;
   'tool.execution.denied': ToolExecutionDeniedPayload;
+  'tool.observation.ready': ToolObservationReadyPayload;
+  'tool.continuation.ready': ToolContinuationReadyPayload;
+  'tool.continuation.emitted': ToolContinuationEmittedPayload;
   'approval.requested': ApprovalRequestedPayload;
   'approval.resolved': ApprovalResolvedPayload;
   'approval.expired': ApprovalExpiredPayload;

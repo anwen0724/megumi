@@ -340,6 +340,30 @@ export function createToolExecutionValidatedEvent(
   return createRuntimeEvent(input);
 }
 
+export function createToolExecutionDecidedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.decided'>,
+): TypedRuntimeEvent<'tool.execution.decided'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolExecutionQueuedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.queued'>,
+): TypedRuntimeEvent<'tool.execution.queued'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolExecutionRejectedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.rejected'>,
+): TypedRuntimeEvent<'tool.execution.rejected'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolExecutionCancelledEvent(
+  input: RunRuntimeEventFactoryInput<'tool.execution.cancelled'>,
+): TypedRuntimeEvent<'tool.execution.cancelled'> {
+  return createRuntimeEvent(input);
+}
+
 export function createToolExecutionPolicyDecidedEvent(
   input: RunRuntimeEventFactoryInput<'tool.execution.policy_decided'>,
 ): TypedRuntimeEvent<'tool.execution.policy_decided'> {
@@ -392,6 +416,24 @@ export function createToolExecutionFailedEvent(
 export function createToolExecutionDeniedEvent(
   input: RunRuntimeEventFactoryInput<'tool.execution.denied'>,
 ): TypedRuntimeEvent<'tool.execution.denied'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolObservationReadyEvent(
+  input: RunRuntimeEventFactoryInput<'tool.observation.ready'>,
+): TypedRuntimeEvent<'tool.observation.ready'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolContinuationReadyEvent(
+  input: RunRuntimeEventFactoryInput<'tool.continuation.ready'>,
+): TypedRuntimeEvent<'tool.continuation.ready'> {
+  return createRuntimeEvent(input);
+}
+
+export function createToolContinuationEmittedEvent(
+  input: RunRuntimeEventFactoryInput<'tool.continuation.emitted'>,
+): TypedRuntimeEvent<'tool.continuation.emitted'> {
   return createRuntimeEvent(input);
 }
 

@@ -6091,6 +6091,40 @@ describe('SessionRunService', () => {
       toolExecutionId: 'tool-execution-waiting',
       approvalRequestId: 'approval-waiting',
     });
+    toolRepository.saveToolCall({
+      toolCallId: 'tool-call-running',
+      runId: 'run-waiting',
+      modelStepId: 'model-step-waiting',
+      providerToolCallId: 'provider-tool-call-running',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
+      inputPreview: {
+        summary: 'read README.md',
+        targets: [{ kind: 'file', label: 'README.md' }],
+        redactionState: 'none',
+      },
+      status: 'created',
+      createdAt: '2026-06-14T00:00:10.000Z',
+    });
+    toolRepository.saveToolExecution({
+      toolExecutionId: 'tool-execution-running',
+      toolCallId: 'tool-call-running',
+      runId: 'run-waiting',
+      stepId: 'step-waiting',
+      assistantMessageId: 'model-step-waiting',
+      callOrder: 1,
+      toolName: 'read_file',
+      input: { path: 'README.md' },
+      inputPreview: {
+        summary: 'read README.md',
+        targets: [{ kind: 'file', label: 'README.md' }],
+        redactionState: 'none',
+      },
+      status: 'running',
+      requestedAt: '2026-06-14T00:00:10.000Z',
+      startedAt: '2026-06-14T00:00:11.000Z',
+      continuationEmitted: false,
+    });
     const service = new SessionRunService({
       repository,
       toolRepository,
@@ -6126,6 +6160,14 @@ describe('SessionRunService', () => {
     expect(toolRepository.getToolExecution('tool-execution-waiting')).toMatchObject({
       status: 'cancelled',
       completedAt: '2026-06-14T00:01:00.000Z',
+    });
+    expect(toolRepository.getToolExecution('tool-execution-running')).toMatchObject({
+      status: 'failed',
+      completedAt: '2026-06-14T00:01:00.000Z',
+      observation: expect.objectContaining({
+        isError: true,
+        content: expect.stringContaining('Tool execution was interrupted before completion.'),
+      }),
     });
     expect(repository.listRuntimeEventsByRun('run-waiting').map((event) => event.eventType)).toEqual([
       'run.failed',

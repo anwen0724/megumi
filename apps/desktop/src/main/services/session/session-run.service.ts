@@ -34,6 +34,7 @@ import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
+import { createInterruptedExecutionObservation } from '@megumi/tools/observation-shaper';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
@@ -339,7 +340,10 @@ export interface SessionRunServiceOptions {
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
   providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
-  toolRepository?: Pick<ToolRepository, 'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun'>;
+  toolRepository?: Pick<
+    ToolRepository,
+    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun'
+  >;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
   memoryRecallService?: SessionRunMemoryRecallService;
@@ -435,7 +439,10 @@ export class SessionRunService {
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
   private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
-  private readonly toolRepository?: Pick<ToolRepository, 'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun'>;
+  private readonly toolRepository?: Pick<
+    ToolRepository,
+    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun'
+  >;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
   private readonly memoryCaptureService?: SessionRunMemoryCaptureService;
@@ -1401,9 +1408,19 @@ export class SessionRunService {
         runId: String(run.runId),
         resolvedAt: cleanupAt,
       });
+      this.toolRepository?.failRunningToolExecutionsByRun({
+        runId: String(run.runId),
+        completedAt: cleanupAt,
+        createObservation: (record) => createInterruptedExecutionObservation({
+          record,
+          ids: { observationId: () => `tool-observation:${record.toolExecutionId}:interrupted` },
+          now: () => cleanupAt,
+        }),
+      });
       this.toolRepository?.cancelPendingToolExecutionsByRun({
         runId: String(run.runId),
         completedAt: cleanupAt,
+        statuses: ['created', 'awaitingApproval', 'queued'],
       });
       this.repository.saveRun({
         ...run,
