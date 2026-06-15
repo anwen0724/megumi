@@ -1,6 +1,6 @@
 // Implements the external_test demo source executor used to prove source-aware execution without MCP or plugins.
-import { normalizeToolError } from '@megumi/tools/normalization';
-import type { ToolExecution, ToolResult, ToolSourceIdentity } from '@megumi/shared/tool';
+import { createRawToolResultFromContent, normalizeToolError } from '@megumi/tools/normalization';
+import type { RawToolResult, ToolExecution, ToolSourceIdentity } from '@megumi/shared/tool';
 import type { ToolSourceExecutor } from './tool-execution-router.service';
 
 export function createExternalTestToolSourceExecutor(input: {
@@ -33,14 +33,16 @@ export function createExternalTestToolSourceExecutor(input: {
 
         const sourceIdentity = sourceIdentityFromExecution(toolExecution);
         return {
-          toolResultId: ids.toolResultId(),
-          toolCallId: toolExecution.toolCallId,
-          toolExecutionId: toolExecution.toolExecutionId,
-          runId: toolExecution.runId,
-          kind: 'success',
-          structuredContent: { message },
-          textContent: message,
-          redactionState: 'none',
+          rawToolResultId: ids.toolResultId(),
+          toolExecutionId: String(toolExecution.toolExecutionId),
+          toolCallId: String(toolExecution.toolCallId),
+          isError: false,
+          outputKind: 'text',
+          content: {
+            structuredContent: { message },
+            textContent: message,
+            redactionState: 'none',
+          },
           createdAt: now(),
           ...(sourceIdentity ? { metadata: { toolSourceIdentity: sourceIdentity } } : {}),
         };
@@ -64,23 +66,21 @@ function createToolErrorResult(
     error: unknown;
     sourceIdentity?: ToolSourceIdentity;
   },
-): ToolResult {
+): RawToolResult {
   const error = normalizeToolError(input.error, {
     debugId: `tool-error:${toolExecution.toolExecutionId}`,
     fallbackMessage: 'Tool execution failed.',
   });
-  return {
-    toolResultId: input.ids.toolResultId(),
-    toolCallId: toolExecution.toolCallId,
-    toolExecutionId: toolExecution.toolExecutionId,
-    runId: toolExecution.runId,
-    kind: 'tool_error',
-    textContent: error.message,
-    error,
-    redactionState: 'none',
+  return createRawToolResultFromContent({
+    rawToolResultId: input.ids.toolResultId(),
+    toolExecutionId: String(toolExecution.toolExecutionId),
+    toolCallId: String(toolExecution.toolCallId),
+    isError: true,
+    outputKind: 'error',
+    content: error,
+    metadata: input.sourceIdentity ? { toolSourceIdentity: input.sourceIdentity } : undefined,
     createdAt: input.now(),
-    ...(input.sourceIdentity ? { metadata: { toolSourceIdentity: input.sourceIdentity } } : {}),
-  };
+  });
 }
 
 function sourceIdentityFromExecution(toolExecution: ToolExecution): ToolSourceIdentity | undefined {

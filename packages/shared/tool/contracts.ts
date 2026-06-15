@@ -457,6 +457,7 @@ export interface ToolCall {
   modelStepId: ModelStepId | string;
   providerToolCallId: string;
   toolName: ToolName;
+  callOrder?: number;
   registrySnapshotId?: string;
   snapshotEntryId?: string;
   modelVisibleName?: ToolName;
@@ -480,6 +481,7 @@ export const ToolCallSchema = z
     modelStepId: IdSchema,
     providerToolCallId: IdSchema,
     toolName: ToolNameSchema,
+    callOrder: z.number().int().nonnegative().optional(),
     ...optionalToolSourceIdentitySchema,
     input: JsonValueSchema,
     inputPreview: ToolInputPreviewSchema,

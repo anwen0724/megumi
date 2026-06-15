@@ -6,7 +6,8 @@ import {
 } from '@megumi/security/project-boundary-policy';
 import { redactRuntimeMessage } from '@megumi/security/redaction';
 import { normalizeToolResult } from '@megumi/tools/normalization';
-import type { ToolExecution, ToolResult } from '@megumi/shared/tool';
+import { createRawToolResultFromContent } from '@megumi/tools/normalization';
+import type { RawToolResult, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { WorkspaceChangeTrackerService } from '../../workspace/workspace-change-tracker.service';
 import type { SpawnLike } from './run-command.executor';
 
@@ -30,6 +31,7 @@ export interface ProjectToolExecutorOptions {
   now?: () => string;
   ids?: {
     toolResultId(): string;
+    rawToolResultId?(): string;
   };
 }
 
@@ -41,11 +43,12 @@ export interface ProjectToolExecutorContext {
   now: () => string;
   ids: {
     toolResultId(): string;
+    rawToolResultId?(): string;
   };
 }
 
 export interface SingleProjectToolExecutor {
-  execute(toolExecution: ToolExecution): Promise<ToolResult>;
+  execute(toolExecution: ToolExecution): Promise<RawToolResult>;
 }
 
 export interface ProjectFileEntry {
@@ -61,15 +64,30 @@ export function successResult(
     textContent?: string;
     redactionState?: ToolResult['redactionState'];
     metadata?: ToolResult['metadata'];
+    outputKind?: RawToolResult['outputKind'];
   },
-): ToolResult {
-  return normalizeToolResult(toolExecution, {
+): RawToolResult {
+  const normalized = normalizeToolResult(toolExecution, {
     toolResultId: context.ids.toolResultId(),
     structuredContent: input.structuredContent,
     textContent: input.textContent,
     redactionState: input.redactionState,
     metadata: input.metadata,
     createdAt: context.now(),
+  });
+  return createRawToolResultFromContent({
+    rawToolResultId: context.ids.rawToolResultId?.() ?? normalized.toolResultId,
+    toolExecutionId: String(toolExecution.toolExecutionId),
+    toolCallId: String(toolExecution.toolCallId),
+    isError: false,
+    outputKind: input.outputKind ?? (input.structuredContent ? 'json' : 'text'),
+    content: {
+      structuredContent: normalized.structuredContent,
+      textContent: normalized.textContent,
+      redactionState: normalized.redactionState,
+      metadata: normalized.metadata,
+    },
+    createdAt: normalized.createdAt,
   });
 }
 

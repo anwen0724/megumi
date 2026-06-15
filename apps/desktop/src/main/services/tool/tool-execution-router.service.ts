@@ -1,8 +1,8 @@
 // Routes validated ToolExecution records to Desktop Main source executors using run snapshot identity.
-import { normalizeToolError } from '@megumi/tools/normalization';
+import { createRawToolResultFromContent, normalizeToolError } from '@megumi/tools/normalization';
 import type {
+  RawToolResult,
   ToolExecution,
-  ToolResult,
   ToolSourceIdentity,
   ToolSourceKind,
 } from '@megumi/shared/tool';
@@ -14,7 +14,7 @@ export interface ToolSourceExecutor {
   executeToolExecution(
     toolExecution: ToolExecution,
     scope?: WorkspaceChangeExecutionScope,
-  ): Promise<ToolResult>;
+  ): Promise<RawToolResult>;
   finalizeWorkspaceChangeSet?(scope: WorkspaceChangeExecutionScope): unknown;
 }
 
@@ -25,14 +25,14 @@ export interface ToolExecutionRouting extends ToolSourceIdentity {
 }
 
 export type RoutedToolExecutionResult =
-  | { routed: true; routing: ToolExecutionRouting; toolResult: ToolResult }
-  | { routed: false; toolResult: ToolResult };
+  | { routed: true; routing: ToolExecutionRouting; rawResult: RawToolResult }
+  | { routed: false; rawResult: RawToolResult };
 
 export interface ToolExecutionRouter {
   executeToolExecution(
     toolExecution: ToolExecution,
     scope?: WorkspaceChangeExecutionScope,
-  ): Promise<RoutedToolExecutionResult>;
+  ): Promise<RawToolResult>;
   finalizeWorkspaceChangeSet?(scope: WorkspaceChangeExecutionScope): unknown;
 }
 
@@ -49,28 +49,22 @@ export function createToolExecutionRouter(input: {
     async executeToolExecution(toolExecution, scope) {
       const sourceIdentity = sourceIdentityFromExecution(toolExecution);
       if (!sourceIdentity) {
-        return {
-          routed: false,
-          toolResult: createToolErrorResult(toolExecution, {
-            ids,
-            now,
-            message: 'Tool execution is missing source identity.',
-          }),
-        };
+        return createToolErrorResult(toolExecution, {
+          ids,
+          now,
+          message: 'Tool execution is missing source identity.',
+        });
       }
 
       const executor = executorsBySourceId.get(sourceIdentity.sourceId);
 
       if (!executor) {
-        return {
-          routed: false,
-          toolResult: createToolErrorResult(toolExecution, {
-            ids,
-            now,
-            message: `Unsupported tool source: ${sourceIdentity.sourceId}`,
-            sourceIdentity,
-          }),
-        };
+        return createToolErrorResult(toolExecution, {
+          ids,
+          now,
+          message: `Unsupported tool source: ${sourceIdentity.sourceId}`,
+          sourceIdentity,
+        });
       }
 
       const routing: ToolExecutionRouting = {
@@ -81,23 +75,17 @@ export function createToolExecutionRouter(input: {
       };
 
       try {
-        return {
-          routed: true,
-          routing,
-          toolResult: await executor.executeToolExecution(toolExecution, scope),
-        };
+        void routing;
+        return await executor.executeToolExecution(toolExecution, scope);
       } catch (error) {
-        return {
-          routed: true,
-          routing,
-          toolResult: createToolErrorResult(toolExecution, {
-            ids,
-            now,
-            message: 'Tool execution failed.',
-            error,
-            sourceIdentity,
-          }),
-        };
+        void routing;
+        return createToolErrorResult(toolExecution, {
+          ids,
+          now,
+          message: 'Tool execution failed.',
+          error,
+          sourceIdentity,
+        });
       }
     },
     finalizeWorkspaceChangeSet(scope) {
@@ -117,23 +105,21 @@ function createToolErrorResult(
     error?: unknown;
     sourceIdentity?: ToolSourceIdentity;
   },
-): ToolResult {
+): RawToolResult {
   const error = normalizeToolError(input.error ?? new Error(input.message), {
     debugId: `tool-error:${toolExecution.toolExecutionId}`,
     fallbackMessage: input.message,
   });
-  return {
-    toolResultId: input.ids.toolResultId(),
-    toolCallId: toolExecution.toolCallId,
-    toolExecutionId: toolExecution.toolExecutionId,
-    runId: toolExecution.runId,
-    kind: 'tool_error',
-    textContent: input.error ? error.message : input.message,
-    error,
-    redactionState: 'none',
+  return createRawToolResultFromContent({
+    rawToolResultId: input.ids.toolResultId(),
+    toolExecutionId: String(toolExecution.toolExecutionId),
+    toolCallId: String(toolExecution.toolCallId),
+    isError: true,
+    outputKind: 'error',
+    content: input.error ? error : input.message,
+    metadata: input.sourceIdentity ? { toolSourceIdentity: input.sourceIdentity } : undefined,
     createdAt: input.now(),
-    ...(input.sourceIdentity ? { metadata: { toolSourceIdentity: input.sourceIdentity } } : {}),
-  };
+  });
 }
 
 function sourceIdentityFromExecution(toolExecution: ToolExecution): ToolSourceIdentity | undefined {

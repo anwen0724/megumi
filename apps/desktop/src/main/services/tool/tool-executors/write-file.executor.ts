@@ -27,6 +27,7 @@ export function createWriteFileExecutor(context: ProjectToolExecutorContext): Si
           overwritten,
         },
         textContent: `${overwritten ? 'Overwrote' : 'Created'} ${resolved.relativePath}.`,
+        outputKind: 'diff',
       });
     },
   };

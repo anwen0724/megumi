@@ -34,6 +34,7 @@ export function createReadFileExecutor(context: ProjectToolExecutorContext): Sin
         },
         textContent: redacted.content,
         redactionState: redacted.redactionState,
+        outputKind: 'file',
       });
     },
   };

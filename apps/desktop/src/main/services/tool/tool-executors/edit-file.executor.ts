@@ -34,6 +34,7 @@ export function createEditFileExecutor(context: ProjectToolExecutorContext): Sin
           replacements,
         },
         textContent: `Replaced ${replacements} occurrence${replacements === 1 ? '' : 's'} in ${resolved.relativePath}.`,
+        outputKind: 'diff',
       });
     },
   };

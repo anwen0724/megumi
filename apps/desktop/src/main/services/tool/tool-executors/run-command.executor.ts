@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
 import { classifyProjectPath } from '@megumi/security/project-boundary-policy';
 import { redactRuntimeMessage } from '@megumi/security/redaction';
-import { normalizeToolResult } from '@megumi/tools/normalization';
+import { createRawToolResultFromContent } from '@megumi/tools/normalization';
 import {
   inputRecord,
   optionalPositiveInteger,
@@ -132,17 +132,23 @@ export function createRunCommandExecutor(options: RunCommandExecutorOptions): Ru
         ? 'redacted'
         : 'none';
 
-      return normalizeToolResult(toolCall, {
-        toolResultId: options.ids.toolResultId(),
-        structuredContent: {
-          exitCode: result.exitCode,
-          stdoutPreview: result.stdoutPreview,
-          stderrPreview: result.stderrPreview,
-          durationMs: result.durationMs,
-          truncated: result.truncated,
+      return createRawToolResultFromContent({
+        rawToolResultId: options.ids.rawToolResultId?.() ?? options.ids.toolResultId(),
+        toolExecutionId: String(toolCall.toolExecutionId),
+        toolCallId: String(toolCall.toolCallId),
+        isError: result.exitCode !== 0,
+        outputKind: 'command',
+        content: {
+          structuredContent: {
+            exitCode: result.exitCode,
+            stdoutPreview: result.stdoutPreview,
+            stderrPreview: result.stderrPreview,
+            durationMs: result.durationMs,
+            truncated: result.truncated,
+          },
+          textContent: formatRunCommandText(result),
+          redactionState,
         },
-        textContent: formatRunCommandText(result),
-        redactionState,
         createdAt: options.now(),
       });
     },

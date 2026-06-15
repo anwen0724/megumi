@@ -147,6 +147,8 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
         getToolCall: (toolCallId) => toolRepository.getToolCall(toolCallId),
         saveToolExecution: (toolExecution) => toolRepository.saveToolExecution(toolExecution),
         getToolExecution: (toolExecutionId) => toolRepository.getToolExecution(toolExecutionId),
+        getToolExecutionByToolCallId: (input) => toolRepository.getToolExecutionByToolCallId(input),
+        listToolExecutionsByAssistantMessage: (input) => toolRepository.listToolExecutionsByAssistantMessage(input),
         savePermissionDecision: (permissionDecision) => toolRepository.savePermissionDecision(permissionDecision),
         saveApprovalRequest: (approvalRequest) => toolRepository.saveApprovalRequest(approvalRequest),
         getApprovalRequest: (approvalRequestId) => toolRepository.getApprovalRequest(approvalRequestId),
@@ -165,6 +167,10 @@ const toolRuntimeFactory: SessionRunToolRuntimeFactory = {
           createBuiltInToolSourceExecutor({
             projectRoot,
             workspaceChangeTracker,
+            ids: {
+              toolResultId: () => `tool-result:${crypto.randomUUID()}`,
+              rawToolResultId: () => `raw-tool-result:${crypto.randomUUID()}`,
+            },
           }),
           createExternalTestToolSourceExecutor(),
         ],
