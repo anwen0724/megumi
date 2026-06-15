@@ -8,12 +8,17 @@ import type {
 } from '@megumi/shared/tool';
 import type { WorkspaceChangeExecutionScope } from '../workspace/workspace-change-tracker.service';
 
+export interface ToolExecutionRunOptions {
+  scope?: WorkspaceChangeExecutionScope;
+  signal?: AbortSignal;
+}
+
 export interface ToolSourceExecutor {
   readonly sourceId: string;
   readonly sourceKind: ToolSourceKind;
   executeToolExecution(
     toolExecution: ToolExecution,
-    scope?: WorkspaceChangeExecutionScope,
+    options?: ToolExecutionRunOptions,
   ): Promise<RawToolResult>;
   finalizeWorkspaceChangeSet?(scope: WorkspaceChangeExecutionScope): unknown;
 }
@@ -31,7 +36,7 @@ export type RoutedToolExecutionResult =
 export interface ToolExecutionRouter {
   executeToolExecution(
     toolExecution: ToolExecution,
-    scope?: WorkspaceChangeExecutionScope,
+    options?: ToolExecutionRunOptions,
   ): Promise<RawToolResult>;
   finalizeWorkspaceChangeSet?(scope: WorkspaceChangeExecutionScope): unknown;
 }
@@ -46,7 +51,7 @@ export function createToolExecutionRouter(input: {
   const ids = input.ids ?? { toolResultId: () => `tool-result:${crypto.randomUUID()}` };
 
   return {
-    async executeToolExecution(toolExecution, scope) {
+    async executeToolExecution(toolExecution, options) {
       const sourceIdentity = sourceIdentityFromExecution(toolExecution);
       if (!sourceIdentity) {
         return createToolErrorResult(toolExecution, {
@@ -76,7 +81,7 @@ export function createToolExecutionRouter(input: {
 
       try {
         void routing;
-        return await executor.executeToolExecution(toolExecution, scope);
+        return await executor.executeToolExecution(toolExecution, options);
       } catch (error) {
         void routing;
         return createToolErrorResult(toolExecution, {

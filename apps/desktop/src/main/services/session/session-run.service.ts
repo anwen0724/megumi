@@ -94,6 +94,7 @@ import {
   createToolRegistryModelVisibleToolsDerivedEvent,
   createToolRegistrySnapshotCreatedEvent,
   createToolRegistrySourcesEnsuredEvent,
+  createToolContinuationEmittedEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
@@ -342,7 +343,7 @@ export interface SessionRunServiceOptions {
   providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
   toolRepository?: Pick<
     ToolRepository,
-    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun'
+    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun' | 'markToolContinuationEmitted'
   >;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelStepInputBuildService?: SessionRunModelStepInputBuildService;
@@ -441,7 +442,7 @@ export class SessionRunService {
   private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
   private readonly toolRepository?: Pick<
     ToolRepository,
-    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun'
+    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun' | 'markToolContinuationEmitted'
   >;
   private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
@@ -2145,6 +2146,16 @@ export class SessionRunService {
           onPendingApproval: (pending) => {
             pendingContinuations.push(pending);
           },
+          onToolContinuationEmitted: ({ request, toolResults, emittedAt }) => {
+            const event = this.markToolContinuationEmitted({
+              request,
+              stepId: request.stepId,
+              toolResults,
+              emittedAt,
+              sequence: 0,
+            });
+            return event ? [event] : [];
+          },
           buildContinuationInputContext: async (contextInput) => {
             const continuationInput = await this.modelStepInputBuildService.buildModelStepInput({
               baseInputContext: contextInput.baseInputContext,
@@ -2897,6 +2908,17 @@ export class SessionRunService {
       });
       return;
     }
+    const continuationEmittedEvent = this.markToolContinuationEmitted({
+      request: pending.request,
+      stepId: resumedStep.stepId,
+      toolResults: resumedToolResults,
+      emittedAt: input.decidedAt,
+      sequence: lastSequence += 1,
+    });
+    if (continuationEmittedEvent) {
+      this.appendRuntimeEvent(continuationEmittedEvent, chatStreamAdapter);
+      yield continuationEmittedEvent;
+    }
     const resumedRequest: ModelStepRuntimeRequest = {
       ...pending.request,
       stepId: resumedStep.stepId,
@@ -2954,6 +2976,53 @@ export class SessionRunService {
     }
 
     return { events, lastSequence, toolResultIdsWithEvents };
+  }
+
+  private markToolContinuationEmitted(input: {
+    request: ModelStepRuntimeRequest;
+    stepId: RunStep['stepId'];
+    toolResults: readonly ToolResult[];
+    emittedAt: string;
+    sequence: number;
+  }): RuntimeEvent | undefined {
+    const toolExecutionIds = [
+      ...new Set(input.toolResults
+        .map((result) => result.toolExecutionId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)),
+    ];
+    if (toolExecutionIds.length === 0) {
+      return undefined;
+    }
+
+    this.toolRepository?.markToolContinuationEmitted({
+      toolExecutionIds,
+      emittedAt: input.emittedAt,
+    });
+
+    const assistantMessageId = input.toolResults
+      .map((result) => result.metadata?.assistantMessageId)
+      .find((value): value is string => typeof value === 'string' && value.length > 0)
+      ?? String(input.request.modelStepId ?? input.request.stepId);
+
+    return withRequestMetadata(createToolContinuationEmittedEvent({
+      eventId: this.ids.eventId(),
+      eventType: 'tool.continuation.emitted',
+      runId: input.request.runId,
+      sessionId: input.request.sessionId,
+      stepId: String(input.stepId),
+      requestId: input.request.requestId,
+      runtimeContext: input.request.runtimeContext,
+      sequence: input.sequence,
+      createdAt: input.emittedAt,
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        assistantMessageId,
+        toolExecutionIds,
+        emittedAt: input.emittedAt,
+      },
+    }), input.request);
   }
 
   private createToolResultRuntimeEvent(input: {

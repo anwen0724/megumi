@@ -42,7 +42,7 @@ describe('BuiltInToolSourceExecutor', () => {
         modelVisibleName: 'write_file',
         input: { path: 'src/new.ts', content: 'export {}' },
       }),
-      { sessionId: 'session-1', runId: 'run-1', stepId: 'step-1' },
+      { scope: { sessionId: 'session-1', runId: 'run-1', stepId: 'step-1' } },
     );
 
     expect(workspaceChangeTracker.trackToolExecution).toHaveBeenCalledWith(expect.objectContaining({

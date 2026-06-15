@@ -5571,7 +5571,8 @@ describe('SessionRunService', () => {
   it('marks session message runs waiting and resumes live continuation after approval resolution', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const resumeInputs: unknown[] = [];
-    const toolResult = createToolResult();
+    const markToolContinuationEmitted = vi.fn();
+    const toolResult = createToolResult({ toolExecutionId: 'tool-execution-1' });
     db = new Database(':memory:');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
@@ -5664,6 +5665,12 @@ describe('SessionRunService', () => {
             },
           };
         },
+      },
+      toolRepository: {
+        cancelPendingApprovalRequestsByRun: vi.fn(() => []),
+        cancelPendingToolExecutionsByRun: vi.fn(() => []),
+        failRunningToolExecutionsByRun: vi.fn(() => []),
+        markToolContinuationEmitted,
       },
       clock: { now: () => '2026-05-17T00:00:04.000Z' },
       ids: {
@@ -5772,12 +5779,17 @@ describe('SessionRunService', () => {
         text: expect.stringContaining('Need to read package.json before answering.'),
       }),
     ]));
+    expect(markToolContinuationEmitted).toHaveBeenCalledWith({
+      toolExecutionIds: ['tool-execution-1'],
+      emittedAt: '2026-05-17T00:00:05.000Z',
+    });
     expect(resumed.map((event) => event.eventType)).toEqual([
       'approval.resolved',
       'run.status.changed',
       'tool.execution.started',
       'tool.execution.completed',
       'tool.result.created',
+      'tool.continuation.emitted',
       'assistant.output.completed',
       'step.status.changed',
       'step.completed',
@@ -6398,6 +6410,7 @@ describe('SessionRunService', () => {
       'tool.execution.started',
       'tool.execution.completed',
       'tool.result.created',
+      'tool.continuation.emitted',
       'assistant.output.completed',
       'step.status.changed',
       'step.completed',

@@ -16,8 +16,9 @@ import type {
 export function createToolOrchestratorHarness(input: {
   decisions?: readonly ToolExecutionDecision[];
   existingRecords?: readonly ToolExecutionRecord[];
+  snapshot?: ToolRegistrySnapshot;
 } = {}) {
-  const repository = createInMemoryToolRepository(input.existingRecords ?? []);
+  const repository = createInMemoryToolRepository(input.existingRecords ?? [], input.snapshot);
   const executor = createRecordingRawExecutor();
   const decisions = [...(input.decisions ?? [])];
   const orchestrator = createToolOrchestratorService({
@@ -187,7 +188,10 @@ function observationFor(
   };
 }
 
-function createInMemoryToolRepository(initialRecords: readonly ToolExecutionRecord[]) {
+function createInMemoryToolRepository(
+  initialRecords: readonly ToolExecutionRecord[],
+  snapshot?: ToolRegistrySnapshot,
+) {
   const records = new Map(initialRecords.map((record) => [String(record.toolExecutionId), record]));
   const toolCalls = new Map<string, ToolCall>();
   const approvals = new Map<string, ApprovalRequest>();
@@ -227,7 +231,7 @@ function createInMemoryToolRepository(initialRecords: readonly ToolExecutionReco
       toolResults.push(result);
       return result;
     }),
-    getToolRegistrySnapshotByRun: vi.fn(() => undefined as ToolRegistrySnapshot | undefined),
+    getToolRegistrySnapshotByRun: vi.fn(() => snapshot),
     getRunSessionId: vi.fn(() => 'session:1'),
   };
 }

@@ -95,6 +95,11 @@ export interface RunModelToolLoopInput {
   maxModelSteps?: number;
   maxToolRounds?: number;
   onPendingApproval?: (continuation: PendingToolApprovalContinuation) => void;
+  onToolContinuationEmitted?: (input: {
+    request: ModelStepRuntimeRequest;
+    toolResults: readonly ToolResult[];
+    emittedAt: string;
+  }) => readonly RuntimeEvent[] | void | Promise<readonly RuntimeEvent[] | void>;
   buildContinuationInputContext?: (
     input: ToolContinuationInputContextBuilderInput
   ) => ModelInputContext | Promise<ModelInputContext>;
@@ -318,6 +323,23 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       accumulatedProviderStates,
       buildContinuationInputContext: input.buildContinuationInputContext,
     });
+    const emittedEvents = await input.onToolContinuationEmitted?.({
+      request,
+      toolResults,
+      emittedAt: nextCreatedAt,
+    }) ?? [];
+    for (const event of emittedEvents) {
+      sequenceOffset += 1;
+      yield {
+        ...event,
+        runId: event.runId ?? request.runId,
+        sessionId: event.sessionId ?? request.sessionId,
+        stepId: event.stepId ?? request.stepId,
+        requestId: event.requestId ?? request.requestId,
+        ...(event.context ? { context: event.context } : request.runtimeContext ? { context: request.runtimeContext } : {}),
+        sequence: sequenceOffset,
+      };
+    }
   }
 
   yield createRunFailedEvent({

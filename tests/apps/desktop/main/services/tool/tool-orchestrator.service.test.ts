@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createToolRegistrySnapshot } from '@megumi/tools/registry';
+import { createBuiltInToolRegistrations } from '@megumi/tools/sources';
+import type { ToolSource } from '@megumi/shared/tool';
 import {
   allowParallel,
   allowSerial,
@@ -68,6 +71,30 @@ describe('ToolOrchestrator source-order barrier', () => {
     ]);
   });
 
+  it('passes workspace scope separately from abort signal to routed executors', async () => {
+    const abortController = new AbortController();
+    const harness = createToolOrchestratorHarness({
+      decisions: [allowSerial('edit_file')],
+    });
+
+    await harness.orchestrator.handleToolCalls({
+      ...createHandleInput([toolCall('call:0', 'edit_file')]),
+      signal: abortController.signal,
+    });
+
+    expect(harness.executor.router.executeToolExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ toolCallId: 'call:0' }),
+      {
+        scope: {
+          sessionId: 'session:1',
+          runId: 'run:1',
+          stepId: 'step:1',
+        },
+        signal: abortController.signal,
+      },
+    );
+  });
+
   it('does not re-execute terminal records during resume', async () => {
     const harness = createToolOrchestratorHarness({
       existingRecords: [
@@ -117,7 +144,60 @@ describe('ToolOrchestrator source-order barrier', () => {
       'rejected',
       'succeeded',
     ]);
-    expect(outcome?.toolResults.map((result) => result.observationId)).toEqual(['obs:0', 'obs:0', 'obs:1']);
+    expect(outcome?.toolResults.map((result) => result.toolCallId)).toEqual(['call:1', 'call:2']);
     expect(outcome?.continuationReady).toBe(true);
   });
+
+  it('emits runtime events for decisions, observations, and continuation readiness', async () => {
+    const harness = createToolOrchestratorHarness({
+      decisions: [allowParallel('read_file')],
+    });
+
+    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+      toolCall('call:0', 'read_file'),
+    ]));
+
+    expect(outcome.runtimeEvents.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'tool.execution.decided',
+      'tool.execution.queued',
+      'tool.observation.ready',
+      'tool.continuation.ready',
+    ]));
+  });
+
+  it('rejects invalid arguments with INVALID_ARGUMENTS reason code', async () => {
+    const snapshot = createToolRegistrySnapshot({
+      runId: 'run:1',
+      projectId: 'project:1',
+      permissionMode: 'default',
+      modelId: 'test-model',
+      createdAt: '2026-06-15T00:00:00.000Z',
+      sources: [builtInToolSource()],
+      registrations: createBuiltInToolRegistrations(),
+      providerCapabilitySummary: { supportsToolCall: true },
+    });
+    const harness = createToolOrchestratorHarness({ snapshot });
+
+    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+      toolCall('call:0', 'read_file'),
+    ]));
+
+    expect(harness.recordsByCallOrder()[0]?.decision?.reasonCode).toBe('INVALID_ARGUMENTS');
+    expect(outcome.toolResults[0]?.textContent).toContain('INVALID_ARGUMENTS');
+  });
 });
+
+function builtInToolSource(): ToolSource {
+  return {
+    sourceId: 'built_in',
+    sourceKind: 'built_in',
+    namespace: 'megumi',
+    displayName: 'Built-in tools',
+    configured: true,
+    enabled: true,
+    availabilityStatus: 'available',
+    config: {},
+    createdAt: '2026-06-15T00:00:00.000Z',
+    updatedAt: '2026-06-15T00:00:00.000Z',
+  };
+}

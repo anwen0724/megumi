@@ -34,7 +34,7 @@ export function createBuiltInToolSourceExecutor(options: ProjectToolExecutorOpti
   return {
     sourceId: 'built_in',
     sourceKind: 'built_in',
-    async executeToolExecution(toolExecution, scope) {
+    async executeToolExecution(toolExecution, options) {
       try {
         if (toolExecution.sourceId !== 'built_in' || toolExecution.namespace !== 'megumi') {
           throw new Error(`Unsupported built-in tool source: ${toolExecution.sourceId ?? 'unknown'}`);
@@ -49,7 +49,7 @@ export function createBuiltInToolSourceExecutor(options: ProjectToolExecutorOpti
         const execute = async () => executor.execute(toolExecution);
         if (context.workspaceChangeTracker) {
           return await context.workspaceChangeTracker.trackToolExecution({
-            scope,
+            scope: options?.scope,
             toolExecution,
             execute,
           });

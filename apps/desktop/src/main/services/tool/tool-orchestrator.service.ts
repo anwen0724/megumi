@@ -22,7 +22,7 @@ import type {
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { PermissionMode } from '@megumi/shared/permission';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { createRuntimeEvent, type RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   ApprovalRequest,
   PermissionDecision,
@@ -40,7 +40,7 @@ import {
   evaluateToolExecutionDecision,
   type ToolExecutionDecisionInput,
 } from './tool-execution-decision.service';
-import type { ToolExecutionRouter } from './tool-execution-router.service';
+import type { ToolExecutionRouter, ToolExecutionRunOptions } from './tool-execution-router.service';
 
 export interface ToolOrchestratorHandleInput {
   request: ModelStepRuntimeRequest;
@@ -137,7 +137,7 @@ export function createToolOrchestratorService(
       const records = await advanceExecutionWindows(resolved, {
         runId: String(input.request.runId),
         assistantMessageId,
-        signal: input.signal,
+        executionOptions: executionOptionsFromRequest(input.request, input.signal),
       });
       return outcomeFromRecords(resolved, assistantMessageId, records, resolved.now());
     },
@@ -159,6 +159,14 @@ async function resumeToolApproval(
   if (!approvedRecord) {
     return undefined;
   }
+  const previouslyTerminalIds = new Set(
+    options.repository.listToolExecutionsByAssistantMessage({
+      runId: String(approvedRecord.runId),
+      assistantMessageId: approvedRecord.assistantMessageId ?? String(approvedRecord.stepId),
+    })
+      .filter((record) => isContinuationTerminal(record.status))
+      .map((record) => String(record.toolExecutionId)),
+  );
 
   options.repository.saveApprovalRequest({
     ...approval,
@@ -213,8 +221,22 @@ async function resumeToolApproval(
   const records = await advanceExecutionWindows(options, {
     runId: String(approvedRecord.runId),
     assistantMessageId,
+    executionOptions: executionOptionsFromRecord(options, approvedRecord),
   });
-  return outcomeFromRecords(options, assistantMessageId, records, input.decidedAt);
+  const changedToolExecutionIds = new Set(
+    records
+      .filter((record) => {
+        if (String(record.toolExecutionId) === String(approvedRecord.toolExecutionId)) {
+          return true;
+        }
+        return isContinuationTerminal(record.status)
+          && !previouslyTerminalIds.has(String(record.toolExecutionId));
+      })
+      .map((record) => String(record.toolExecutionId)),
+  );
+  return outcomeFromRecords(options, assistantMessageId, records, input.decidedAt, {
+    includeToolExecutionIds: changedToolExecutionIds,
+  });
 }
 
 async function prepareRecords(
@@ -251,7 +273,7 @@ async function prepareRecords(
       if (!validation.ok) {
         const failed = createRejectedRecord(options, input.request, toolCall, index, {
           reason: validation.errorMessage,
-          reasonCode: 'CUSTOM_TOOL_REJECTED',
+          reasonCode: 'INVALID_ARGUMENTS',
         });
         options.repository.saveToolExecution(failed);
         continue;
@@ -382,20 +404,24 @@ function applyDecision(
 
 async function advanceExecutionWindows(
   options: ResolvedToolOrchestratorOptions,
-  input: { runId: string; assistantMessageId: string; signal?: AbortSignal },
+  input: {
+    runId: string;
+    assistantMessageId: string;
+    executionOptions?: ToolExecutionRunOptions;
+  },
 ): Promise<ToolExecutionRecord[]> {
   let records = options.repository.listToolExecutionsByAssistantMessage(input);
 
-  while (!input.signal?.aborted) {
+  while (!input.executionOptions?.signal?.aborted) {
     const window = nextExecutableWindow(records);
     if (window.length === 0) {
       return records;
     }
 
     if (window.length === 1) {
-      await runRecord(options, window[0], input.signal);
+      await runRecord(options, window[0], input.executionOptions);
     } else {
-      await Promise.all(window.map((record) => runRecord(options, record, input.signal)));
+      await Promise.all(window.map((record) => runRecord(options, record, input.executionOptions)));
     }
 
     records = options.repository.listToolExecutionsByAssistantMessage(input);
@@ -447,7 +473,7 @@ function nextExecutableWindow(records: readonly ToolExecutionRecord[]): ToolExec
 async function runRecord(
   options: ResolvedToolOrchestratorOptions,
   record: ToolExecutionRecord,
-  signal?: AbortSignal,
+  executionOptions?: ToolExecutionRunOptions,
 ): Promise<ToolExecutionRecord> {
   if (isContinuationTerminal(record.status) || record.status === 'cancelled') {
     return record;
@@ -462,7 +488,7 @@ async function runRecord(
   try {
     const rawResult = await options.toolExecutionRouter.executeToolExecution(
       running,
-      { signal } as unknown as Parameters<ToolExecutionRouter['executeToolExecution']>[1],
+      executionOptions,
     );
     const observation = createObservationFromRawToolResult({
       rawResult,
@@ -521,13 +547,17 @@ function outcomeFromRecords(
   assistantMessageId: string,
   records: readonly ToolExecutionRecord[],
   createdAt: string,
+  filter: { includeToolExecutionIds?: ReadonlySet<string> } = {},
 ): ToolOrchestratorOutcome {
-  const toolResults = buildContinuationToolResults(options, { records, createdAt });
+  const eventRecords = filter.includeToolExecutionIds
+    ? records.filter((record) => filter.includeToolExecutionIds?.has(String(record.toolExecutionId)))
+    : records;
+  const toolResults = buildContinuationToolResults(options, { records: eventRecords, createdAt });
   return {
     assistantMessageId,
-      toolResults,
-      pendingApprovals: pendingApprovalsFromRecords(options, records),
-    runtimeEvents: [],
+    toolResults,
+    pendingApprovals: pendingApprovalsFromRecords(options, records),
+    runtimeEvents: runtimeEventsFromRecords(options, assistantMessageId, records, eventRecords, createdAt),
     continuationReady: continuationReady(records),
   };
 }
@@ -561,6 +591,146 @@ function buildContinuationToolResults(
     });
 }
 
+function runtimeEventsFromRecords(
+  options: ResolvedToolOrchestratorOptions,
+  assistantMessageId: string,
+  allRecords: readonly ToolExecutionRecord[],
+  eventRecords: readonly ToolExecutionRecord[],
+  createdAt: string,
+): RuntimeEvent[] {
+  const events: RuntimeEvent[] = [];
+
+  for (const record of eventRecords) {
+    if (record.decision) {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.decided',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt,
+        source: 'tool',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          ...recordEventPayload(record),
+          decision: {
+            outcome: record.decision.outcome,
+            reasonCode: record.decision.reasonCode,
+            executionClass: record.decision.executionClass,
+            executionMode: record.decision.executionMode,
+          },
+        },
+      }));
+    }
+    if (record.decision?.outcome === 'allow') {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.queued',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt,
+        source: 'tool',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          ...recordEventPayload(record),
+          status: 'queued',
+        },
+      }));
+    }
+    if (record.status === 'rejected' && record.decision) {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.rejected',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt,
+        source: 'tool',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          ...recordEventPayload(record),
+          decision: {
+            outcome: record.decision.outcome,
+            reasonCode: record.decision.reasonCode,
+            executionClass: record.decision.executionClass,
+            executionMode: record.decision.executionMode,
+          },
+        },
+      }));
+    }
+    if (record.status === 'cancelled') {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.cancelled',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt,
+        source: 'tool',
+        visibility: 'system',
+        persist: 'required',
+        payload: recordEventPayload(record),
+      }));
+    }
+    if (record.observation) {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.observation.ready',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt: record.observation.createdAt,
+        source: 'tool',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          ...recordEventPayload(record),
+          observationId: String(record.observation.observationId),
+          isError: record.observation.isError,
+          truncated: record.observation.truncated,
+        },
+      }));
+    }
+  }
+
+  if (continuationReady(allRecords)) {
+    events.push(createRuntimeEvent({
+      eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+      eventType: 'tool.continuation.ready',
+      runId: String(allRecords[0]?.runId ?? ''),
+      stepId: String(allRecords[0]?.stepId ?? ''),
+      sequence: 0,
+      createdAt,
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        assistantMessageId,
+        toolExecutionIds: allRecords
+          .filter((record) => isContinuationTerminal(record.status))
+          .map((record) => String(record.toolExecutionId)),
+      },
+    }));
+  }
+
+  return events;
+}
+
+function recordEventPayload(record: ToolExecutionRecord) {
+  return {
+    assistantMessageId: record.assistantMessageId ?? String(record.stepId),
+    toolExecutionId: String(record.toolExecutionId),
+    toolCallId: String(record.toolCallId),
+    toolName: record.toolName,
+    callOrder: record.callOrder ?? 0,
+    status: record.status,
+  };
+}
+
 function pendingApprovalsFromRecords(
   options: ResolvedToolOrchestratorOptions,
   records: readonly ToolExecutionRecord[],
@@ -582,6 +752,33 @@ function pendingApprovalsFromRecords(
         toolExecution: record,
       };
     });
+}
+
+function executionOptionsFromRequest(
+  request: ModelStepRuntimeRequest,
+  signal?: AbortSignal,
+): ToolExecutionRunOptions {
+  return {
+    scope: {
+      sessionId: String(request.sessionId),
+      runId: String(request.runId),
+      stepId: String(request.stepId),
+    },
+    ...(signal ? { signal } : {}),
+  };
+}
+
+function executionOptionsFromRecord(
+  options: ResolvedToolOrchestratorOptions,
+  record: ToolExecutionRecord,
+): ToolExecutionRunOptions {
+  return {
+    scope: {
+      sessionId: options.repository.getRunSessionId(String(record.runId)) ?? String(record.metadata?.sessionId ?? ''),
+      runId: String(record.runId),
+      stepId: String(record.stepId),
+    },
+  };
 }
 
 function continuationReady(records: readonly ToolExecutionRecord[]): boolean {
