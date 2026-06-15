@@ -146,7 +146,7 @@ export function createToolRegistrySnapshot(
       definition: cloneToolDefinition(registration.definition),
       ...status,
       exposedToModel: status.effectiveStatus === 'available',
-      executionMode: registration.definition.executionMode ?? 'sequential',
+      executionMode: registration.definition.executionMode ?? 'serial',
       createdAt: input.createdAt,
     } satisfies SnapshotToolEntry;
   });

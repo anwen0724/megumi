@@ -31,7 +31,7 @@ export const globDefinition: ToolDefinition = {
   riskLevel: 'low',
   sideEffect: 'none',
   availability: { status: 'available' },
-  executionMode: 'parallel_eligible',
+  executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'glob' },
   modelFacingDescription: 'Find project files matching a glob pattern without reading file content.',
 };

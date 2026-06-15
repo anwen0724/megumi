@@ -4,7 +4,7 @@
   ToolDefinition,
   ToolError,
   ToolPolicyDecision,
-  ToolResult,
+  RawToolResult,
 } from '@megumi/shared/tool';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 
@@ -18,6 +18,6 @@ export interface HostToolExecutionInput {
 }
 
 export interface HostToolExecutor {
-  execute(input: HostToolExecutionInput): Promise<ToolResult | ToolError>;
+  execute(input: HostToolExecutionInput): Promise<RawToolResult | ToolError>;
 }
 

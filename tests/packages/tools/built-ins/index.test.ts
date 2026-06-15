@@ -45,13 +45,13 @@ describe('built-in tool definitions', () => {
   it('includes registry-facing execution and permission metadata on every built-in definition', () => {
     const byName = Object.fromEntries(BUILT_IN_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]));
 
-    expect(byName.read_file.executionMode).toBe('parallel_eligible');
-    expect(byName.list_directory.executionMode).toBe('parallel_eligible');
-    expect(byName.glob.executionMode).toBe('parallel_eligible');
-    expect(byName.search_text.executionMode).toBe('parallel_eligible');
-    expect(byName.edit_file.executionMode).toBe('sequential');
-    expect(byName.write_file.executionMode).toBe('sequential');
-    expect(byName.run_command.executionMode).toBe('sequential');
+    expect(byName.read_file.executionMode).toBe('parallel');
+    expect(byName.list_directory.executionMode).toBe('parallel');
+    expect(byName.glob.executionMode).toBe('parallel');
+    expect(byName.search_text.executionMode).toBe('parallel');
+    expect(byName.edit_file.executionMode).toBe('serial');
+    expect(byName.write_file.executionMode).toBe('serial');
+    expect(byName.run_command.executionMode).toBe('serial');
 
     for (const definition of BUILT_IN_TOOL_DEFINITIONS) {
       expect(definition.outputSchema).toBeDefined();

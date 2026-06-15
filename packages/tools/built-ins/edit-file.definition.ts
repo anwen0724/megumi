@@ -29,7 +29,7 @@ export const editFileDefinition: ToolDefinition = {
   riskLevel: 'medium',
   sideEffect: 'project_file_operation',
   availability: { status: 'available' },
-  executionMode: 'sequential',
+  executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'edit_file' },
   modelFacingDescription: 'Apply an auditable exact text replacement to an existing project file.',
 };

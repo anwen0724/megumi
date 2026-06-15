@@ -27,7 +27,7 @@ export const readFileDefinition: ToolDefinition = {
   riskLevel: 'low',
   sideEffect: 'none',
   availability: { status: 'available' },
-  executionMode: 'parallel_eligible',
+  executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'read_file' },
   modelFacingDescription: 'Read a text file inside the current project and return redacted, size-limited content.',
 };

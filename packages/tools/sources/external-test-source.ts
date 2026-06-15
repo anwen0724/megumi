@@ -29,7 +29,7 @@ const externalTestEchoDefinition: ToolDefinition = {
   riskLevel: 'low',
   sideEffect: 'read_external',
   availability: { status: 'available' },
-  executionMode: 'sequential',
+  executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'demo_echo' },
 };
 

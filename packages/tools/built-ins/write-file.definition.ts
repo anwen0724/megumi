@@ -29,7 +29,7 @@ export const writeFileDefinition: ToolDefinition = {
   riskLevel: 'medium',
   sideEffect: 'project_file_operation',
   availability: { status: 'available' },
-  executionMode: 'sequential',
+  executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'write_file' },
   modelFacingDescription: 'Create or overwrite a project file with provided text content.',
 };

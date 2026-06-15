@@ -37,7 +37,7 @@ export const listDirectoryDefinition: ToolDefinition = {
   riskLevel: 'low',
   sideEffect: 'none',
   availability: { status: 'available' },
-  executionMode: 'parallel_eligible',
+  executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'list_directory' },
   modelFacingDescription: 'List entries inside a project directory with depth and result limits.',
 };

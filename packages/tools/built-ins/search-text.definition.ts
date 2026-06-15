@@ -38,7 +38,7 @@ export const searchTextDefinition: ToolDefinition = {
   riskLevel: 'low',
   sideEffect: 'none',
   availability: { status: 'available' },
-  executionMode: 'parallel_eligible',
+  executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'search_text' },
   modelFacingDescription: 'Search text inside project files and return redacted, size-limited matches.',
 };

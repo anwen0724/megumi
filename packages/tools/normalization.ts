@@ -1,9 +1,11 @@
 ﻿import type { RuntimeError } from '@megumi/shared/runtime';
 import type {
+  RawToolResult,
   ToolExecution,
   ToolError,
   ToolResult,
 } from '@megumi/shared/tool';
+import type { JsonObject } from '@megumi/shared/primitives/json';
 
 export interface NormalizeToolResultInput {
   toolResultId: ToolResult['toolResultId'];
@@ -31,6 +33,28 @@ export function normalizeToolResult(
     redactionState: input.redactionState ?? 'none',
     createdAt: input.createdAt,
     ...(input.metadata ? { metadata: input.metadata } : {}),
+  };
+}
+
+export function createRawToolResultFromContent(input: {
+  rawToolResultId: string;
+  toolExecutionId: string;
+  toolCallId: string;
+  isError: boolean;
+  outputKind: RawToolResult['outputKind'];
+  content: unknown;
+  metadata?: JsonObject;
+  createdAt: string;
+}): RawToolResult {
+  return {
+    rawToolResultId: input.rawToolResultId,
+    toolExecutionId: input.toolExecutionId,
+    toolCallId: input.toolCallId,
+    isError: input.isError,
+    outputKind: input.outputKind,
+    content: input.content,
+    ...(input.metadata ? { metadata: input.metadata } : {}),
+    createdAt: input.createdAt,
   };
 }
 
