@@ -95,6 +95,43 @@ describe('ToolOrchestrator source-order barrier', () => {
     );
   });
 
+  it('finalizes the workspace change scope after managed execution windows', async () => {
+    const harness = createToolOrchestratorHarness({
+      decisions: [allowSerial('write_file')],
+    });
+
+    await harness.orchestrator.handleToolCalls(createHandleInput([
+      toolCall('call:0', 'write_file'),
+    ]));
+
+    expect(harness.executor.router.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+    });
+  });
+
+  it('finalizes the workspace change scope after approval resume execution windows', async () => {
+    const harness = createToolOrchestratorHarness({
+      existingRecords: [
+        terminalSucceededRecord('call:0', 0),
+        awaitingApprovalRecord('call:1', 1),
+      ],
+    });
+
+    await harness.orchestrator.resumeToolApproval({
+      approvalRequestId: 'approval:1',
+      decision: 'approved',
+      decidedAt: '2026-06-15T00:00:10.000Z',
+    });
+
+    expect(harness.executor.router.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
+      sessionId: 'session:1',
+      runId: 'run:1',
+      stepId: 'step:1',
+    });
+  });
+
   it('does not re-execute terminal records during resume', async () => {
     const harness = createToolOrchestratorHarness({
       existingRecords: [

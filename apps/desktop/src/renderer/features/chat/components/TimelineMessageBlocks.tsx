@@ -12,12 +12,12 @@ function UserBlockView({ block }: { block: UserTimelineBlock }) {
     return <span>{block.name}</span>;
   }
 
-  return <p className="whitespace-pre-wrap">{block.text}</p>;
+  return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{block.text}</p>;
 }
 
 function AnswerTextBlockView({ block }: { block: AnswerTextBlock }) {
   return (
-    <div className="space-y-2 text-sm leading-7 text-[var(--color-text)]">
+    <div className="min-w-0 space-y-2 text-sm leading-7 text-[var(--color-text)]">
       <TimelineMarkdown text={block.text} />
       {block.status === 'failed' ? (
         <p className="text-xs text-[var(--color-text-muted)]">（回复中断）</p>
@@ -55,7 +55,7 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {message.blocks.map((block) => {
         if (block.kind === 'process_disclosure') {
           return <ProcessDisclosureBlockView key={block.blockId} block={block} />;

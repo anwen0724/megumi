@@ -5347,6 +5347,218 @@ describe('SessionRunService', () => {
     expect(chatEvents.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
+  it('publishes workspace change footer when approval resume emits terminal runtime events', async () => {
+    const chatEvents: ChatStreamEvent[] = [];
+    const changeSet: WorkspaceChangeSet = {
+      changeSetId: 'workspace-change-set-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      status: 'finalized',
+      changedFileCount: 1,
+      createdAt: '2026-05-24T00:00:00.000Z',
+      finalizedAt: '2026-05-24T00:00:03.000Z',
+    };
+    const summary: WorkspaceChangeSummary = {
+      changeSetId: 'workspace-change-set-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      changedFileCount: 1,
+      restorableCount: 1,
+      restoredCount: 0,
+      conflictCount: 0,
+      failedCount: 0,
+      hasRestorableChanges: true,
+      updatedAt: '2026-05-24T00:00:03.000Z',
+    };
+    const toolResult = createToolResult({
+      toolCallId: 'tool-use-1',
+      toolExecutionId: 'tool-execution-1',
+      textContent: 'Wrote src/app.ts',
+      createdAt: '2026-05-24T00:00:02.500Z',
+    });
+    const service = createServiceWithChatStreamSink((_request, callIndex) => {
+      if (callIndex === 1) {
+        return [
+          {
+            ...toolUseCreatedEventFor({
+              sequence: 1,
+              toolCallId: 'tool-use-1',
+              providerToolCallId: 'provider-tool-use-1',
+              toolName: 'write_file',
+              input: { path: 'src/app.ts' },
+            }),
+            createdAt: '2026-05-24T00:00:00.000Z',
+          },
+          {
+            ...modelStepCompletedEvent(2),
+            createdAt: '2026-05-24T00:00:00.000Z',
+          },
+        ];
+      }
+      return [];
+    }, chatEvents, {
+      workspaceChanges: {
+        listChangedFilesByRun: vi.fn(() => []),
+        listChangeSetsByRun: vi.fn(() => [changeSet]),
+        getChangeSummary: vi.fn(() => summary),
+        listChangedFilesByChangeSet: vi.fn(() => [
+          workspaceChangedFile({
+            changedFileId: 'workspace-changed-file-1',
+            changeSetId: 'workspace-change-set-1',
+            runId: 'run-1',
+            sessionId: 'session-1',
+            projectPath: 'src/app.ts',
+          }),
+        ]),
+      },
+      toolRuntimeFactory: {
+        async create() {
+          return {
+            async handleToolCalls(input) {
+              const toolUse = input.toolCalls[0];
+              if (!toolUse) {
+                throw new Error('Expected one tool use.');
+              }
+              const toolExecution: ToolExecution = {
+                toolExecutionId: 'tool-execution-1',
+                toolCallId: toolUse.toolCallId,
+                runId: toolUse.runId,
+                stepId: 'step-1',
+                toolName: toolUse.toolName,
+                input: toolUse.input,
+                inputPreview: toolUse.inputPreview,
+                capabilities: ['project_write'],
+                riskLevel: 'medium',
+                sideEffect: 'project_file_operation',
+                status: 'awaitingApproval',
+                requestedAt: '2026-05-24T00:00:00.000Z',
+              };
+              const approvalRequest: ApprovalRequest = {
+                approvalRequestId: 'approval-request-1',
+                toolCallId: toolUse.toolCallId,
+                toolExecutionId: toolExecution.toolExecutionId,
+                runId: toolUse.runId,
+                stepId: toolExecution.stepId,
+                toolName: toolUse.toolName,
+                capabilities: [...(toolExecution.capabilities ?? ['project_read'])],
+                riskLevel: toolExecution.riskLevel ?? 'low',
+                title: 'Approve write_file',
+                summary: 'Writing project file requires approval.',
+                preview: { action: 'write_file', targets: [] },
+                requestedScope: 'project',
+                status: 'pending',
+                createdAt: '2026-05-24T00:00:00.000Z',
+              };
+
+              return {
+                toolResults: [],
+                pendingApprovals: [{
+                  approvalRequest,
+                  toolCall: toolUse,
+                  toolExecution,
+                }],
+                runtimeEvents: [{
+                  eventId: 'event-approval-requested',
+                  schemaVersion: 1,
+                  eventType: 'approval.requested',
+                  runId: 'run-1',
+                  sessionId: 'session-1',
+                  stepId: 'step-1',
+                  sequence: 3,
+                  createdAt: '2026-05-24T00:00:00.000Z',
+                  source: 'approval',
+                  visibility: 'user',
+                  persist: 'required',
+                  payload: { approvalRequest },
+                }],
+              };
+            },
+            async resumeToolApproval() {
+              return {
+                toolResult,
+                continuationReady: false,
+                runtimeEvents: [
+                  ...approvalResumeRuntimeEvents(toolResult, 'success'),
+                  {
+                    eventId: 'event-run-completed-on-resume',
+                    schemaVersion: 1,
+                    eventType: 'run.completed',
+                    runId: 'run-1',
+                    sessionId: 'session-1',
+                    stepId: 'step-1',
+                    sequence: 4,
+                    createdAt: '2026-05-24T00:00:03.000Z',
+                    source: 'main',
+                    visibility: 'user',
+                    persist: 'required',
+                    payload: { completedAt: '2026-05-24T00:00:03.000Z' },
+                  },
+                ],
+              };
+            },
+          };
+        },
+      },
+      toolDefinitionProvider: {
+        listDefinitions: () => [{
+          name: 'write_file',
+          description: 'Write project file.',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: true,
+          },
+          capabilities: ['project_write'],
+          riskLevel: 'medium',
+          sideEffect: 'project_file_operation',
+          availability: { status: 'available' },
+        }],
+      },
+    });
+    service.createSession({
+      title: 'Session',
+      workspaceId: 'project-1',
+      workspacePath: 'C:/all/work/study/megumi',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'ipc-session-message-send-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        context: { permissionMode: 'default' },
+        messages: [{
+          id: 'message-local-user',
+          role: 'user',
+          content: 'Write a file',
+          createdAt: '2026-05-24T00:00:00.000Z',
+        }],
+        createdAt: '2026-05-24T00:00:00.000Z',
+      },
+    });
+    for await (const _event of result.events) {
+      // Drain initial run until waiting for approval.
+    }
+
+    const resumeEvents = service.resumeApproval({
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      decidedAt: '2026-05-24T00:00:02.000Z',
+    });
+    for await (const _event of resumeEvents ?? []) {
+      // Drain resumed terminal runtime events.
+    }
+
+    const footerIndex = chatEvents.findIndex((event) => event.eventType === 'workspace.change.footer.updated');
+    const terminalIndex = chatEvents.findIndex((event) => event.eventType === 'turn.completed');
+    expect(footerIndex).toBeGreaterThan(-1);
+    expect(terminalIndex).toBeGreaterThan(-1);
+    expect(footerIndex).toBeLessThan(terminalIndex);
+  });
+
   it('publishes terminal chat stream events without saving old flat assistant history', async () => {
     const chatEvents: ChatStreamEvent[] = [];
     const { service, repository } = createServiceWithChatStreamSinkAndRepository([

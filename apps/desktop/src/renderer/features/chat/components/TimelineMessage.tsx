@@ -52,7 +52,7 @@ function TimelineMessageComponent({
         aria-label="User message"
         className="flex w-full justify-end animate-[megumi-message-in_160ms_ease-out]"
       >
-        <div className="relative group flex max-w-3xl flex-col items-end text-right text-sm leading-7 text-[var(--color-text)]">
+        <div className="relative group flex min-w-0 max-w-3xl flex-col items-end text-right text-sm leading-7 text-[var(--color-text)]">
           {canBranch ? (
             <div className="absolute -left-24 top-0 flex opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
               <IconButton
@@ -76,7 +76,7 @@ function TimelineMessageComponent({
 
           <div
             data-testid="user-message-card"
-            className="max-w-full rounded-md bg-[var(--color-accent-soft)] px-3 py-2 text-left shadow-sm"
+            className="max-w-full min-w-0 rounded-md bg-[var(--color-accent-soft)] px-3 py-2 text-left shadow-sm"
           >
             <TimelineMessageBlocks message={message} />
           </div>
@@ -98,7 +98,7 @@ function TimelineMessageComponent({
       aria-label={isAssistant ? 'Megumi message' : `${role} message`}
       className="flex w-full animate-[megumi-message-in_160ms_ease-out] justify-start"
     >
-      <div className="max-w-3xl text-sm leading-7 w-full text-left text-[var(--color-text)]">
+      <div className="min-w-0 max-w-3xl text-sm leading-7 w-full text-left text-[var(--color-text)]">
         <div className="mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)] justify-start">
           <span>{isAssistant ? 'Megumi' : role}</span>
           <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>

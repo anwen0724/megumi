@@ -2787,10 +2787,7 @@ export class SessionRunService {
       });
       lastSequence = resumeEvents.lastSequence;
       for (const event of resumeEvents.events) {
-        chatStreamAdapter?.handleRuntimeEvent(event);
-        if (isRunTerminalRuntimeEvent(event)) {
-          chatStreamAdapter?.dispose();
-        }
+        this.appendRuntimeEvent(event, chatStreamAdapter);
         yield event;
       }
       for (const toolResult of toolResults) {
@@ -2837,10 +2834,7 @@ export class SessionRunService {
     });
     lastSequence = resumeEvents.lastSequence;
     for (const event of resumeEvents.events) {
-      chatStreamAdapter?.handleRuntimeEvent(event);
-      if (isRunTerminalRuntimeEvent(event)) {
-        chatStreamAdapter?.dispose();
-      }
+      this.appendRuntimeEvent(event, chatStreamAdapter);
       yield event;
     }
 
@@ -2971,7 +2965,6 @@ export class SessionRunService {
           toolResultIdsWithEvents.add(toolResultId);
         }
       }
-      this.repository.appendRuntimeEvent(eventWithRequest);
       events.push(eventWithRequest);
     }
 

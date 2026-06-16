@@ -119,8 +119,12 @@ function ThinkingItemView({ item }: { item: ThinkingItem }) {
         <span>{label}</span>
       </button>
       {expanded ? (
-        <div className="mt-2 border-l-2 border-[var(--color-border)] pl-3 text-xs italic leading-6 text-[var(--color-text-muted)]">
-          {item.format === 'markdown' ? <TimelineMarkdown text={item.text} /> : <p className="whitespace-pre-wrap">{item.text}</p>}
+        <div className="mt-2 min-w-0 border-l-2 border-[var(--color-border)] pl-3 text-xs italic leading-6 text-[var(--color-text-muted)]">
+          {item.format === 'markdown' ? (
+            <TimelineMarkdown text={item.text} />
+          ) : (
+            <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.text}</p>
+          )}
         </div>
       ) : null}
     </div>
@@ -129,8 +133,12 @@ function ThinkingItemView({ item }: { item: ThinkingItem }) {
 
 function PreludeTextItemView({ item }: { item: AssistantTextItem }) {
   return (
-    <div className="text-[var(--color-text)]">
-      {item.format === 'markdown' ? <TimelineMarkdown text={item.text} /> : <p className="whitespace-pre-wrap">{item.text}</p>}
+    <div className="min-w-0 text-[var(--color-text)]">
+      {item.format === 'markdown' ? (
+        <TimelineMarkdown text={item.text} />
+      ) : (
+        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.text}</p>
+      )}
     </div>
   );
 }
@@ -140,8 +148,10 @@ function ToolActivityItemView({ item }: { item: ToolActivityItem }) {
     <div className="flex min-w-0 items-start gap-2">
       <ItemIcon item={item} />
       <span className="min-w-0">
-        <span className="block text-[var(--color-text)]">{toolLabel(item)}</span>
-        {item.resultSummary ? <span className="block text-xs text-[var(--color-text-muted)]">{item.resultSummary}</span> : null}
+        <span className="block break-words text-[var(--color-text)] [overflow-wrap:anywhere]">{toolLabel(item)}</span>
+        {item.resultSummary ? (
+          <span className="block break-words text-xs text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{item.resultSummary}</span>
+        ) : null}
       </span>
     </div>
   );
@@ -152,8 +162,10 @@ function ApprovalActivityItemView({ item }: { item: ApprovalActivityItem }) {
     <div className="flex min-w-0 items-start gap-2">
       <ItemIcon item={item} />
       <span className="min-w-0">
-        <span className="block text-[var(--color-text)]">{approvalLabel(item)}</span>
-        {item.description ? <span className="block text-xs text-[var(--color-text-muted)]">{item.description}</span> : null}
+        <span className="block break-words text-[var(--color-text)] [overflow-wrap:anywhere]">{approvalLabel(item)}</span>
+        {item.description ? (
+          <span className="block break-words text-xs text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{item.description}</span>
+        ) : null}
       </span>
     </div>
   );
@@ -163,7 +175,7 @@ function ErrorActivityItemView({ item }: { item: ErrorActivityItem }) {
   return (
     <div className="flex min-w-0 items-start gap-2 text-[var(--color-danger)]">
       <ItemIcon item={item} />
-      <span>{item.errorMessage}</span>
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.errorMessage}</span>
     </div>
   );
 }
@@ -172,7 +184,7 @@ function CancelledActivityItemView({ item }: { item: CancelledActivityItem }) {
   return (
     <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
       <ItemIcon item={item} />
-      <span>{item.reason ?? '已取消本次运行。'}</span>
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.reason ?? '已取消本次运行。'}</span>
     </div>
   );
 }
@@ -181,7 +193,7 @@ function CompactionActivityItemView({ item }: { item: CompactionActivityItem }) 
   return (
     <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
       <ItemIcon item={item} />
-      <span>{item.label}</span>
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.label}</span>
     </div>
   );
 }
@@ -191,8 +203,10 @@ function RetryActivityItemView({ item }: { item: RetryActivityItem }) {
     <div className="flex min-w-0 items-start gap-2">
       <ItemIcon item={item} />
       <span className="min-w-0">
-        <span className="block text-[var(--color-text)]">{item.label}</span>
-        {item.reason ? <span className="block text-xs text-[var(--color-text-muted)]">{item.reason}</span> : null}
+        <span className="block break-words text-[var(--color-text)] [overflow-wrap:anywhere]">{item.label}</span>
+        {item.reason ? (
+          <span className="block break-words text-xs text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{item.reason}</span>
+        ) : null}
       </span>
     </div>
   );
@@ -202,7 +216,7 @@ function RecoveryActivityItemView({ item }: { item: RecoveryActivityItem }) {
   return (
     <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
       <ItemIcon item={item} />
-      <span>{item.label}</span>
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.label}</span>
     </div>
   );
 }
@@ -237,7 +251,7 @@ export function ProcessDisclosureBlockView({ block }: ProcessDisclosureBlockView
   const duration = formatDuration(block.startedAt, block.endedAt);
 
   return (
-    <section aria-label="Process disclosure" className="space-y-2">
+    <section aria-label="Process disclosure" className="min-w-0 space-y-2">
       <button
         type="button"
         aria-expanded={expanded}
@@ -255,7 +269,7 @@ export function ProcessDisclosureBlockView({ block }: ProcessDisclosureBlockView
       </button>
 
       {expanded ? (
-        <div className="space-y-3 border-l border-[var(--color-border)] pl-5 text-sm">
+        <div className="min-w-0 space-y-3 border-l border-[var(--color-border)] pl-5 text-sm">
           {block.items.length > 0 ? (
             block.items.map((item) => <ProcessItemView key={item.itemId} item={item} />)
           ) : (

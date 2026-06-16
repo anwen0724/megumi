@@ -410,33 +410,48 @@ async function advanceExecutionWindows(
     executionOptions?: ToolExecutionRunOptions;
   },
 ): Promise<ToolExecutionRecord[]> {
-  let records = options.repository.listToolExecutionsByAssistantMessage(input);
+  try {
+    let records = options.repository.listToolExecutionsByAssistantMessage(input);
 
-  while (!input.executionOptions?.signal?.aborted) {
-    const window = nextExecutableWindow(records);
-    if (window.length === 0) {
-      return records;
+    while (!input.executionOptions?.signal?.aborted) {
+      const window = nextExecutableWindow(records);
+      if (window.length === 0) {
+        return records;
+      }
+
+      if (window.length === 1) {
+        await runRecord(options, window[0], input.executionOptions);
+      } else {
+        await Promise.all(window.map((record) => runRecord(options, record, input.executionOptions)));
+      }
+
+      records = options.repository.listToolExecutionsByAssistantMessage(input);
     }
 
-    if (window.length === 1) {
-      await runRecord(options, window[0], input.executionOptions);
-    } else {
-      await Promise.all(window.map((record) => runRecord(options, record, input.executionOptions)));
+    for (const record of records) {
+      if (isActiveStatus(record.status)) {
+        options.repository.saveToolExecution({
+          ...record,
+          status: 'cancelled',
+          completedAt: options.now(),
+        });
+      }
     }
+    return options.repository.listToolExecutionsByAssistantMessage(input);
+  } finally {
+    finalizeWorkspaceChangeSet(options, input.executionOptions);
+  }
+}
 
-    records = options.repository.listToolExecutionsByAssistantMessage(input);
+function finalizeWorkspaceChangeSet(
+  options: ResolvedToolOrchestratorOptions,
+  executionOptions?: ToolExecutionRunOptions,
+): void {
+  if (!executionOptions?.scope) {
+    return;
   }
 
-  for (const record of records) {
-    if (isActiveStatus(record.status)) {
-      options.repository.saveToolExecution({
-        ...record,
-        status: 'cancelled',
-        completedAt: options.now(),
-      });
-    }
-  }
-  return options.repository.listToolExecutionsByAssistantMessage(input);
+  options.toolExecutionRouter.finalizeWorkspaceChangeSet?.(executionOptions.scope);
 }
 
 function nextExecutableWindow(records: readonly ToolExecutionRecord[]): ToolExecutionRecord[] {

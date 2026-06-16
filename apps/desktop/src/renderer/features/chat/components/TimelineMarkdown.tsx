@@ -18,7 +18,7 @@ function renderInline(text: string): ReactNode[] {
       parts.push(<em key={`${match.index}:italic`}>{token.slice(1, -1)}</em>);
     } else if (token.startsWith('`') && token.endsWith('`')) {
       parts.push(
-        <code key={`${match.index}:code`} className="rounded bg-[var(--color-surface-muted)] px-1 py-0.5 text-[0.92em]">
+        <code key={`${match.index}:code`} className="rounded bg-[var(--color-surface-muted)] px-1 py-0.5 text-[0.92em] break-words [overflow-wrap:anywhere]">
           {token.slice(1, -1)}
         </code>,
       );
@@ -30,7 +30,7 @@ function renderInline(text: string): ReactNode[] {
           <a
             key={`${match.index}:link`}
             href={href}
-            className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+            className="break-words text-[var(--color-accent)] underline-offset-2 hover:underline [overflow-wrap:anywhere]"
             rel="noreferrer"
             target="_blank"
           >
@@ -97,7 +97,7 @@ export function TimelineMarkdown({ text }: TimelineMarkdownProps) {
       }
       index += 1;
       nodes.push(
-        <pre key={`code:${nodes.length}`} className="overflow-x-auto rounded-md bg-[var(--color-surface-muted)] p-3 text-xs leading-6">
+        <pre key={`code:${nodes.length}`} className="max-w-full overflow-x-auto rounded-md bg-[var(--color-surface-muted)] p-3 text-xs leading-6">
           <code>{codeLines.join('\n')}</code>
         </pre>,
       );
@@ -109,7 +109,7 @@ export function TimelineMarkdown({ text }: TimelineMarkdownProps) {
       const content = line.replace(/^#{1,3}\s+/, '');
       const className = level === 1 ? 'text-lg font-semibold' : level === 2 ? 'text-base font-semibold' : 'text-sm font-semibold';
       nodes.push(
-        <h3 key={paragraphKey(index, line)} className={className}>
+        <h3 key={paragraphKey(index, line)} className={`${className} break-words [overflow-wrap:anywhere]`}>
           {renderInline(content)}
         </h3>,
       );
@@ -124,7 +124,7 @@ export function TimelineMarkdown({ text }: TimelineMarkdownProps) {
         index += 1;
       }
       nodes.push(
-        <blockquote key={`quote:${nodes.length}`} className="border-l-2 border-[var(--color-border-strong)] pl-3 text-[var(--color-text-muted)]">
+        <blockquote key={`quote:${nodes.length}`} className="break-words border-l-2 border-[var(--color-border-strong)] pl-3 text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
           {quoteLines.map((quoteLine, quoteIndex) => (
             <Fragment key={`${quoteIndex}:${quoteLine}`}>{quoteIndex > 0 ? <br /> : null}{renderInline(quoteLine)}</Fragment>
           ))}
@@ -141,7 +141,9 @@ export function TimelineMarkdown({ text }: TimelineMarkdownProps) {
       }
       nodes.push(
         <ul key={`list:${nodes.length}`} className="list-disc space-y-1 pl-5">
-          {items.map((item) => <li key={item}>{renderInline(item)}</li>)}
+          {items.map((item) => (
+            <li key={item} className="break-words [overflow-wrap:anywhere]">{renderInline(item)}</li>
+          ))}
         </ul>,
       );
       continue;
@@ -161,11 +163,11 @@ export function TimelineMarkdown({ text }: TimelineMarkdownProps) {
     }
     const paragraph = paragraphLines.join('\n');
     nodes.push(
-      <p key={paragraphKey(index, paragraph)} className="whitespace-pre-wrap">
+      <p key={paragraphKey(index, paragraph)} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
         {renderInline(paragraph)}
       </p>,
     );
   }
 
-  return <div className="space-y-3">{nodes}</div>;
+  return <div className="min-w-0 space-y-3 break-words [overflow-wrap:anywhere]">{nodes}</div>;
 }

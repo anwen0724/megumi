@@ -250,6 +250,45 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.queryByText('Streaming')).not.toBeInTheDocument();
   });
 
+  it('wraps long unbroken process and answer text without widening the timeline', () => {
+    const longProcessText = `context:${'x'.repeat(180)}:${'y'.repeat(180)}`;
+    const longAnswerText = `result:${'a'.repeat(180)}:${'b'.repeat(180)}`;
+
+    render(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'running',
+          startedAt: '2026-05-24T12:00:00.000Z',
+          items: [{
+            itemId: 'thinking:thinking-1',
+            kind: 'thinking',
+            thinkingId: 'thinking-1',
+            status: 'streaming',
+            text: longProcessText,
+            format: 'plain',
+          }],
+        },
+        {
+          blockId: 'answer:run-1',
+          kind: 'answer_text',
+          runId: 'run-1',
+          textId: 'text-answer-1',
+          status: 'completed',
+          text: longAnswerText,
+          format: 'markdown',
+        },
+      ],
+    })} />);
+
+    expect(screen.getByText(longProcessText)).toHaveClass('break-words');
+    expect(screen.getByText(longProcessText)).toHaveClass('[overflow-wrap:anywhere]');
+    expect(screen.getByText(longAnswerText).closest('p')).toHaveClass('break-words');
+    expect(screen.getByText(longAnswerText).closest('p')).toHaveClass('[overflow-wrap:anywhere]');
+  });
+
   it('does not reset a manually collapsed running process disclosure on answer text rerender', () => {
     const { rerender } = render(<TimelineMessage message={assistantMessage({
       blocks: [
