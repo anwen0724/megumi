@@ -520,13 +520,26 @@ describe('Composer', () => {
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
   });
 
-  it('locks input during approval without rendering approval status controls in the composer', () => {
-    render(<Composer status="waiting-approval" onSubmit={() => undefined} />);
+  it('keeps drafting available during approval and exposes Stop for the active run', async () => {
+    const onSubmit = vi.fn();
+    const onStop = vi.fn();
+
+    render(<Composer status="waiting-approval" onSubmit={onSubmit} onStop={onStop} />);
 
     expect(screen.queryByText('Waiting for approval')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Review approval' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Message Megumi')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(screen.getByLabelText('Message Megumi')).toBeEnabled();
+    expect(screen.getByLabelText('Permission mode')).toBeEnabled();
+    expect(screen.getByLabelText('Model')).toBeEnabled();
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), 'new draft while waiting');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
+
+    expect(screen.getByLabelText('Message Megumi')).toHaveValue('new draft while waiting');
+    expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it('does not render run error status inside the composer', () => {

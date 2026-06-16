@@ -67,10 +67,10 @@ export function useComposerController({
   const [commandSelectionIndex, setCommandSelectionIndex] = useState(0);
   const [commandAutocompleteDismissedFor, setCommandAutocompleteDismissedFor] = useState<string | null>(null);
   const trimmedValue = value.trim();
-  const inputLocked = status === 'waiting-approval';
+  const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canSend = trimmedValue.length > 0 && !sendLocked && modelOptions.length > 0;
-  const showStop = status === 'sending' || status === 'running';
+  const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
   const commandSuggestions = listInputCommandSuggestions(value);
   const showCommandAutocomplete =
