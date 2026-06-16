@@ -9,6 +9,7 @@ import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
 import { useChatStreamStore } from '../chat-stream';
+import { dispatchRuntimeEvent } from '../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import {
   hydratedRuntimeEventsForRuns,
@@ -123,7 +124,7 @@ export function useSessionHistoryHydration() {
 
     resetHydratedRunProjection();
     for (const event of hydratedRuntimeEventsForRuns(runsResult.data.runs, eventsByRun)) {
-      useRunStore.getState().applyRuntimeEvent(event);
+      dispatchRuntimeEvent(event, { sessionId });
     }
   }, []);
 

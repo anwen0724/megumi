@@ -169,6 +169,18 @@ describe('createToolRegistrySnapshot', () => {
     );
   });
 
+  it('keeps snapshot entry ids inside the shared id contract for long run identities', () => {
+    const longRunId = [
+      'run',
+      '550e8400-e29b-41d4-a716-446655440000',
+      'project-C-Users-anwen-Desktop-test-with-a-very-long-workspace-path',
+    ].join(':');
+    const snapshot = createToolRegistrySnapshot(createSnapshotInput({ runId: longRunId }));
+
+    expect(snapshot.entries.every((entry) => entry.snapshotEntryId.length <= 128)).toBe(true);
+    expect(new Set(snapshot.entries.map((entry) => entry.snapshotEntryId)).size).toBe(snapshot.entries.length);
+  });
+
   it('records unavailable sources without exposing their tools', () => {
     const snapshot = createToolRegistrySnapshot(createSnapshotInput({
       sources: [

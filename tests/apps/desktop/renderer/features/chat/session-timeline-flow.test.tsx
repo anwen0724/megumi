@@ -10,6 +10,7 @@ import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import {
   chatStreamSessionKey,
   useChatStreamStore,
@@ -264,6 +265,7 @@ describe('useSessionTimeline', () => {
     });
     useArtifactStore.getState().clearArtifacts();
     useRunStore.getState().resetRuns();
+    useApprovalStore.getState().reset();
     useChatStreamStore.getState().reset();
   });
 
@@ -1726,6 +1728,106 @@ describe('useSessionTimeline', () => {
       expect.objectContaining({
         messageId: 'assistant:run-history',
         role: 'assistant',
+      }),
+    ]);
+  });
+
+  it('hydrates pending approval events through the runtime dispatcher', async () => {
+    const { session, run } = installMegumiMock();
+    session.timeline.list.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        messages: [],
+        diagnostics: [],
+      },
+    });
+    run.listBySession.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        runs: [{
+          runId: 'run-waiting',
+          sessionId: 'session-1',
+          status: 'waiting_for_approval',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:02.000Z',
+        }],
+      },
+    });
+    run.events.list.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        events: [
+          runtimeEvent({
+            eventId: 'event-approval-requested',
+            eventType: 'approval.requested',
+            runId: 'run-waiting',
+            sessionId: 'session-1',
+            sequence: 1,
+            createdAt: '2026-05-24T00:00:01.000Z',
+            source: 'approval',
+            payload: {
+              approvalRequest: {
+                approvalRequestId: 'approval-1',
+                toolCallId: 'tool-call-1',
+                toolExecutionId: 'tool-execution-1',
+                runId: 'run-waiting',
+                stepId: 'step-1',
+                toolName: 'write_file',
+                capabilities: ['project_write'],
+                riskLevel: 'medium',
+                title: 'Approve write_file',
+                summary: 'Write draft.md',
+                preview: {
+                  action: 'Write file',
+                  targets: [{ kind: 'file', label: 'draft.md', sensitivity: 'normal' }],
+                },
+                requestedScope: 'once',
+                status: 'pending',
+                createdAt: '2026-05-24T00:00:01.000Z',
+              },
+            },
+          }),
+          runtimeEvent({
+            eventId: 'event-waiting',
+            eventType: 'run.status.changed',
+            runId: 'run-waiting',
+            sessionId: 'session-1',
+            sequence: 2,
+            createdAt: '2026-05-24T00:00:02.000Z',
+            payload: {
+              from: 'running',
+              to: 'waiting_for_approval',
+            },
+          }),
+        ],
+      },
+    });
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-1',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'Waiting approval',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-1',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    await act(async () => {
+      await result.current.hydrateSessionTimeline('session-1');
+    });
+
+    expect(useRunStore.getState().runs['run-waiting']).toMatchObject({
+      status: 'waiting_for_approval',
+    });
+    expect(useChatUiStore.getState().agentStatus).toBe('waiting-approval');
+    expect(useApprovalStore.getState().pendingApprovals()).toEqual([
+      expect.objectContaining({
+        approvalRequestId: 'approval-1',
+        status: 'pending',
       }),
     ]);
   });

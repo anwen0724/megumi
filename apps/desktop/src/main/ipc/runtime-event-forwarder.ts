@@ -29,6 +29,11 @@ export async function forwardRuntimeEvents(
       logger.warn('runtime_event_invalid', {
         ...eventDiagnostics(runtimeEvent),
         issueCount: parsed.error.issues.length,
+        issues: parsed.error.issues.map((issue) => redactRuntimeValue({
+          path: issue.path.join('.'),
+          message: runtimeEventIssueMessage(issue),
+          code: issue.code,
+        })),
       });
       continue;
     }
@@ -59,6 +64,13 @@ function eventDiagnostics(event: unknown): Record<string, unknown> {
     operationName: value.context?.operationName,
     source: value.source,
   }) as Record<string, unknown>;
+}
+
+function runtimeEventIssueMessage(issue: { code: string; message: string }): string {
+  if (issue.code === 'unrecognized_keys') {
+    return 'Runtime event contains unrecognized object keys.';
+  }
+  return issue.message;
 }
 
 

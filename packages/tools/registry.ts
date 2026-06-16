@@ -125,7 +125,7 @@ export function createToolRegistrySnapshot(
   const sourceById = new Map(input.sources.map((source) => [source.sourceId, source]));
   const modelSupportsToolCall = input.providerCapabilitySummary?.supportsToolCall !== false;
   const sourceEntries = input.sources.map(sourceEntryFor);
-  const entries = input.registrations.map((registration) => {
+  const entries = input.registrations.map((registration, index) => {
     const canonicalToolId = canonicalToolIdFor(registration);
     const modelVisibleName = modelVisibleNameFor(registration);
     const status = resolveEntryStatus({
@@ -135,7 +135,12 @@ export function createToolRegistrySnapshot(
     });
 
     return {
-      snapshotEntryId: `tool-registry-snapshot-entry-${input.runId}-${safeIdSegment(registration.registrationId)}-${canonicalToolId.replaceAll(':', '-')}`,
+      snapshotEntryId: snapshotEntryIdFor({
+        runId: input.runId,
+        registrationId: registration.registrationId,
+        canonicalToolId,
+        index,
+      }),
       snapshotId,
       registrationId: registration.registrationId,
       canonicalToolId,
@@ -426,6 +431,26 @@ function sourceVersionHash(input: ToolRegistrySnapshotResolutionInput, registryV
   ].join('|');
 }
 
-function safeIdSegment(value: string): string {
-  return value.replaceAll(':', '-');
+function snapshotEntryIdFor(input: {
+  runId: string;
+  registrationId: string;
+  canonicalToolId: string;
+  index: number;
+}): string {
+  const identity = [
+    input.runId,
+    input.registrationId,
+    input.canonicalToolId,
+    input.index.toString(),
+  ].join('\0');
+  return `tool-registry-entry:${input.index}:${stableShortHash(identity)}`;
+}
+
+function stableShortHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
 }
