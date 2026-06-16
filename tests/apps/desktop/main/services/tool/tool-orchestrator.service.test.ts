@@ -165,6 +165,29 @@ describe('ToolOrchestrator source-order barrier', () => {
     ]));
   });
 
+  it('emits approval request runtime events for approval barriers', async () => {
+    const harness = createToolOrchestratorHarness({
+      decisions: [requireApprovalSerial('write_file')],
+    });
+
+    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+      toolCall('call:0', 'write_file'),
+    ]));
+
+    expect(outcome.pendingApprovals).toHaveLength(1);
+    expect(outcome.runtimeEvents.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'tool.execution.decided',
+      'tool.execution.approval_requested',
+      'approval.requested',
+    ]));
+    expect(outcome.runtimeEvents.find((event) => event.eventType === 'approval.requested')?.payload).toMatchObject({
+      approvalRequest: expect.objectContaining({
+        approvalRequestId: outcome.pendingApprovals[0]?.approvalRequest.approvalRequestId,
+        toolName: 'write_file',
+      }),
+    });
+  });
+
   it('rejects invalid arguments with INVALID_ARGUMENTS reason code', async () => {
     const snapshot = createToolRegistrySnapshot({
       runId: 'run:1',

@@ -640,6 +640,41 @@ function runtimeEventsFromRecords(
         },
       }));
     }
+    if (record.status === 'awaitingApproval' && record.approvalRequestId) {
+      const approvalRequest = options.repository.getApprovalRequest(String(record.approvalRequestId));
+      if (approvalRequest) {
+        events.push(createRuntimeEvent({
+          eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+          eventType: 'tool.execution.approval_requested',
+          runId: String(record.runId),
+          stepId: String(record.stepId),
+          sequence: 0,
+          createdAt: approvalRequest.createdAt,
+          source: 'tool',
+          visibility: 'system',
+          persist: 'required',
+          payload: {
+            toolExecutionId: String(record.toolExecutionId),
+            toolName: record.toolName,
+            approvalRequest,
+          },
+        }));
+        events.push(createRuntimeEvent({
+          eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+          eventType: 'approval.requested',
+          runId: String(record.runId),
+          stepId: String(record.stepId),
+          sequence: 0,
+          createdAt: approvalRequest.createdAt,
+          source: 'approval',
+          visibility: 'system',
+          persist: 'required',
+          payload: {
+            approvalRequest,
+          },
+        }));
+      }
+    }
     if (record.status === 'rejected' && record.decision) {
       events.push(createRuntimeEvent({
         eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
