@@ -22,7 +22,7 @@ import type {
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { PermissionMode } from '@megumi/shared/permission';
-import { createRuntimeEvent, type RuntimeEvent } from '@megumi/shared/runtime';
+import { createRuntimeEvent, type RuntimeError, type RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   ApprovalRequest,
   PermissionDecision,
@@ -616,6 +616,20 @@ function runtimeEventsFromRecords(
   const events: RuntimeEvent[] = [];
 
   for (const record of eventRecords) {
+    events.push(createRuntimeEvent({
+      eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+      eventType: 'tool.execution.requested',
+      runId: String(record.runId),
+      stepId: String(record.stepId),
+      sequence: 0,
+      createdAt: record.requestedAt,
+      source: 'tool',
+      visibility: 'system',
+      persist: 'required',
+      payload: {
+        toolExecution: record,
+      },
+    }));
     if (record.decision) {
       events.push(createRuntimeEvent({
         eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
@@ -652,6 +666,23 @@ function runtimeEventsFromRecords(
         payload: {
           ...recordEventPayload(record),
           status: 'queued',
+        },
+      }));
+    }
+    if (record.startedAt) {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.started',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt: record.startedAt,
+        source: 'tool',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          toolExecutionId: String(record.toolExecutionId),
+          startedAt: record.startedAt,
         },
       }));
     }
@@ -711,6 +742,21 @@ function runtimeEventsFromRecords(
           },
         },
       }));
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.denied',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt: record.completedAt ?? createdAt,
+        source: 'tool',
+        visibility: 'user',
+        persist: 'required',
+        payload: {
+          toolExecutionId: String(record.toolExecutionId),
+          reason: record.decision.reason,
+        },
+      }));
     }
     if (record.status === 'cancelled') {
       events.push(createRuntimeEvent({
@@ -724,6 +770,41 @@ function runtimeEventsFromRecords(
         visibility: 'system',
         persist: 'required',
         payload: recordEventPayload(record),
+      }));
+    }
+    if (record.status === 'succeeded') {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.completed',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt: record.completedAt ?? createdAt,
+        source: 'tool',
+        visibility: 'system',
+        persist: 'required',
+        payload: {
+          toolExecutionId: String(record.toolExecutionId),
+          ...(record.completedAt ? { completedAt: record.completedAt } : {}),
+        },
+      }));
+    }
+    if (record.status === 'failed') {
+      events.push(createRuntimeEvent({
+        eventId: options.ids.eventId?.() ?? `event:${crypto.randomUUID()}`,
+        eventType: 'tool.execution.failed',
+        runId: String(record.runId),
+        stepId: String(record.stepId),
+        sequence: 0,
+        createdAt: record.completedAt ?? createdAt,
+        source: 'tool',
+        visibility: 'user',
+        persist: 'required',
+        payload: {
+          toolExecutionId: String(record.toolExecutionId),
+          error: runtimeErrorFromFailedRecord(record),
+          ...(record.completedAt ? { completedAt: record.completedAt } : {}),
+        },
       }));
     }
     if (record.observation) {
@@ -768,6 +849,17 @@ function runtimeEventsFromRecords(
   }
 
   return events;
+}
+
+function runtimeErrorFromFailedRecord(record: ToolExecutionRecord): RuntimeError {
+  return {
+    code: record.error?.code ?? 'tool_execution_failed',
+    message: record.error?.message ?? 'Tool execution failed.',
+    severity: record.error?.severity ?? 'error',
+    retryable: record.error?.retryable ?? false,
+    source: record.error?.source ?? 'tool',
+    ...(record.error?.debugId ? { debugId: record.error.debugId } : {}),
+  };
 }
 
 function recordEventPayload(record: ToolExecutionRecord) {

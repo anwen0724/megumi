@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import { createToolRegistrySnapshot } from '@megumi/tools/registry';
 import { createBuiltInToolRegistrations } from '@megumi/tools/sources';
 import type { ToolSource } from '@megumi/shared/tool';
@@ -200,6 +201,82 @@ describe('ToolOrchestrator source-order barrier', () => {
       'tool.observation.ready',
       'tool.continuation.ready',
     ]));
+  });
+
+  it('emits legacy projection events for requested, started, and completed tool execution facts', async () => {
+    const harness = createToolOrchestratorHarness({
+      decisions: [allowParallel('read_file')],
+    });
+
+    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+      toolCall('call:0', 'read_file'),
+    ]));
+
+    expect(outcome.runtimeEvents.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'tool.execution.requested',
+      'tool.execution.started',
+      'tool.execution.completed',
+      'tool.execution.decided',
+      'tool.execution.queued',
+      'tool.observation.ready',
+    ]));
+    expect(outcome.runtimeEvents.map((event, index) => RuntimeEventSchema.safeParse({
+      ...event,
+      sequence: index + 1,
+      sessionId: event.sessionId ?? 'session:1',
+    }).success)).toEqual(
+      outcome.runtimeEvents.map(() => true),
+    );
+  });
+
+  it('emits legacy denial projection events for rejected records', async () => {
+    const harness = createToolOrchestratorHarness({
+      decisions: [{
+        outcome: 'reject',
+        reasonCode: 'CUSTOM_TOOL_REJECTED',
+        reason: 'Tool is rejected by test policy.',
+        executionClass: 'unknown',
+        executionMode: 'serial',
+      }],
+    });
+
+    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+      toolCall('call:0', 'custom_tool'),
+    ]));
+
+    expect(outcome.runtimeEvents.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'tool.execution.rejected',
+      'tool.execution.denied',
+      'tool.observation.ready',
+    ]));
+  });
+
+  it('emits legacy failure projection events for failed records', async () => {
+    const harness = createToolOrchestratorHarness({
+      decisions: [allowParallel('read_file')],
+      failedToolCallIds: ['call:0'],
+    });
+
+    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+      toolCall('call:0', 'read_file'),
+    ]));
+
+    expect(outcome.runtimeEvents.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'tool.execution.requested',
+      'tool.execution.started',
+      'tool.execution.failed',
+      'tool.observation.ready',
+    ]));
+    expect(outcome.runtimeEvents.find((event) => event.eventType === 'tool.execution.failed')?.payload).toMatchObject({
+      toolExecutionId: 'exec:new:0',
+      error: {
+        code: 'tool_failed',
+        message: 'failed call:0',
+        severity: 'error',
+        retryable: false,
+        source: 'tool',
+      },
+    });
   });
 
   it('emits approval request runtime events for approval barriers', async () => {

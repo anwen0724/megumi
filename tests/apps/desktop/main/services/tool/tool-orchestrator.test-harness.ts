@@ -17,9 +17,10 @@ export function createToolOrchestratorHarness(input: {
   decisions?: readonly ToolExecutionDecision[];
   existingRecords?: readonly ToolExecutionRecord[];
   snapshot?: ToolRegistrySnapshot;
+  failedToolCallIds?: readonly string[];
 } = {}) {
   const repository = createInMemoryToolRepository(input.existingRecords ?? [], input.snapshot);
-  const executor = createRecordingRawExecutor();
+  const executor = createRecordingRawExecutor(new Set(input.failedToolCallIds ?? []));
   const decisions = [...(input.decisions ?? [])];
   const orchestrator = createToolOrchestratorService({
     repository,
@@ -236,7 +237,7 @@ function createInMemoryToolRepository(
   };
 }
 
-function createRecordingRawExecutor() {
+function createRecordingRawExecutor(failedToolCallIds: ReadonlySet<string>) {
   const started: string[] = [];
   const windows: string[][] = [];
   return {
@@ -244,6 +245,23 @@ function createRecordingRawExecutor() {
       executeToolExecution: vi.fn(async (record: ToolExecutionRecord): Promise<RawToolResult> => {
         started.push(String(record.toolCallId));
         windows.push([String(record.toolCallId)]);
+        if (failedToolCallIds.has(String(record.toolCallId))) {
+          return {
+            rawToolResultId: `raw:${record.callOrder}`,
+            toolExecutionId: record.toolExecutionId,
+            toolCallId: record.toolCallId,
+            isError: true,
+            outputKind: 'error',
+            content: {
+              code: 'tool_failed',
+              message: `failed ${record.toolCallId}`,
+              severity: 'error',
+              retryable: false,
+              source: 'tool',
+            },
+            createdAt: '2026-06-15T00:00:00.000Z',
+          };
+        }
         return {
           rawToolResultId: `raw:${record.callOrder}`,
           toolExecutionId: record.toolExecutionId,
