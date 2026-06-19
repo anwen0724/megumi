@@ -28,7 +28,7 @@ export async function handleRecoveryOperation(operation: string, payload: unknow
     if (!changeSetId) throw unavailable(operation, 'changeSetId is required');
     const changeSet = await runtime.workspaceRepository.getChangeSet(changeSetId);
     if (!changeSet) throw unavailable(operation, 'workspace change set was not found');
-    const request = runtime.workspaceManager.createRestoreRequestForChangeSet({ changeSet, requestedBy });
+    const request = await runtime.workspaceManager.createRestoreRequestForChangeSet({ changeSet, requestedBy });
     const restoreWorkspace = runtime.workspaceManager.restoreChangeSet.bind(runtime.workspaceManager);
     const result = await restoreWorkspace(changeSet, { request });
     return { restore: mapWorkspaceRestoreResult(result) };

@@ -8,6 +8,8 @@ import {
   createPermissionRecord,
   createPermissionSnapshot,
   type PermissionEvaluator,
+  type PermissionOperation,
+  type PermissionRecord,
   type PermissionRepository,
   type PolicyDecision,
   resolveApprovalRequest,
@@ -407,10 +409,24 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         continue;
       }
 
-      const decision = options.permissionEvaluator.evaluate({
-        ...preflight.permissionInput,
-        mode: input.permissionMode,
+      const reusable = await options.permissionRepository.findReusablePermissionRecord({
+        operation: preflight.permissionInput.operation,
+        target: permissionTarget(preflight.permissionInput),
+        sessionId: input.run.sessionId,
+        now: options.now(),
       });
+      const decision = reusable
+        ? createReusableAllowDecision({
+            id: createId('permission-decision', `${call.id}-${reusable.id}`),
+            permissionInput: preflight.permissionInput,
+            mode: input.permissionMode,
+            record: reusable,
+            createdAt: options.now(),
+          })
+        : options.permissionEvaluator.evaluate({
+            ...preflight.permissionInput,
+            mode: input.permissionMode,
+          });
       await options.permissionRepository.savePolicyDecision(decision.id, decision);
 
       if (decision.kind === 'deny') {
@@ -680,6 +696,38 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
       payload: { toolCallId: call.id, toolName: call.name, status: result.status },
     });
   }
+}
+
+function permissionTarget(input: { operation: PermissionOperation; target?: string; command?: string }): string {
+  return input.target ?? input.command ?? input.operation;
+}
+
+function createReusableAllowDecision(input: {
+  id: string;
+  permissionInput: { operation: PermissionOperation; actionName?: string; target?: string; command?: string; primaryArgument?: string };
+  mode: PolicyDecision['mode'];
+  record: PermissionRecord;
+  createdAt: string;
+}): PolicyDecision {
+  return {
+    id: input.id,
+    kind: 'allow',
+    reason: `Allowed by reusable session permission ${input.record.id}.`,
+    mode: input.mode,
+    operation: input.permissionInput.operation,
+    ...(input.permissionInput.actionName ? { actionName: input.permissionInput.actionName } : {}),
+    ...(input.permissionInput.target ? { target: input.permissionInput.target } : {}),
+    ...(input.permissionInput.command ? { command: input.permissionInput.command } : {}),
+    risk: input.record.decision.risk,
+    ...(input.record.decision.matchedRules ? { matchedRules: input.record.decision.matchedRules } : {}),
+    ...(input.record.decision.classifierLabel ? { classifierLabel: input.record.decision.classifierLabel } : {}),
+    createdAt: input.createdAt,
+    metadata: {
+      reusedPermissionRecordId: input.record.id,
+      sourcePolicyDecisionId: input.record.decision.id,
+      ...(input.record.sourceApprovalRequestId ? { sourceApprovalRequestId: input.record.sourceApprovalRequestId } : {}),
+    },
+  };
 }
 
 function serializeParsedInputForSession(parsedInput: ParsedInput, runId: string): JsonObject {

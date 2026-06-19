@@ -33,6 +33,7 @@ export interface ToolExecutionService {
 
 export function createToolExecutionService(options: ToolExecutionServiceOptions): ToolExecutionService {
   const repository = options.executionRepository ?? createInMemoryToolExecutionRepository();
+  let auditSequence = 0;
   const executionContext: ToolExecutionContext = {
     workspace: options.workspace,
     ...(options.processHost ? { processHost: options.processHost } : {}),
@@ -45,7 +46,7 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
     decision?: PolicyDecision,
   ): Promise<ToolResult> => {
     await repository.saveAuditRecord({
-      id: options.createId('tool-audit', call.id),
+      id: options.createId('tool-audit', `${call.id}-${auditSequence += 1}`),
       toolCallId: call.id,
       toolName: call.name,
       status: result.status,
@@ -116,12 +117,12 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
 
       const execution = createExecution(call, 'running', options, context);
       await repository.createExecution(execution);
+      const tracksWorkspaceChanges = preflight.executionConstraint.mutation === 'mutation';
       try {
         const executor = options.registry.getExecutor(call.name);
         if (!executor) {
           throw new Error(`Missing executor for tool: ${call.name}`);
         }
-        const tracksWorkspaceChanges = preflight.executionConstraint.mutation === 'mutation';
         if (tracksWorkspaceChanges) {
           options.workspace.beginChangeSet({
             sessionId: context.sessionId,
@@ -134,13 +135,19 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
         const workspaceChangeSet = tracksWorkspaceChanges ? await options.workspace.finalizeActiveChangeSet() : undefined;
         await repository.updateExecution({
           ...execution,
-          status: 'succeeded',
+          status: statusFromToolResult(result),
           endedAt: options.now(),
           ...(workspaceChangeSet ? { workspaceChangeSetId: String(workspaceChangeSet.id) } : {}),
         });
         return audit(call, result, context, decision);
       } catch (error) {
-        await repository.updateExecution({ ...execution, status: 'failed', endedAt: options.now() });
+        const workspaceChangeSet = await finalizeFailedWorkspaceChangeSet(options.workspace, tracksWorkspaceChanges);
+        await repository.updateExecution({
+          ...execution,
+          status: 'failed',
+          endedAt: options.now(),
+          ...(workspaceChangeSet ? { workspaceChangeSetId: String(workspaceChangeSet.id) } : {}),
+        });
         return audit(call, {
           status: 'error',
           toolCallId: call.id,
@@ -158,6 +165,20 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
       return repository.listExecutions();
     },
   };
+}
+
+async function finalizeFailedWorkspaceChangeSet(workspace: WorkspaceManager, tracksWorkspaceChanges: boolean) {
+  if (!tracksWorkspaceChanges) return undefined;
+  const activeChangeSet = workspace.getActiveChangeSet();
+  if (activeChangeSet.changes.length === 0) return undefined;
+  return workspace.finalizeActiveChangeSet();
+}
+
+function statusFromToolResult(result: ToolResult): ToolExecution['status'] {
+  if (result.status === 'success') return 'succeeded';
+  if (result.status === 'error') return 'failed';
+  if (result.status === 'rejected') return 'rejected';
+  return 'awaiting_approval';
 }
 
 function createExecution(

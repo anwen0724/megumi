@@ -60,14 +60,6 @@ export class SqliteToolExecutionRepository {
         @id, @toolCallId, @toolName, @status, @runId, @sessionId, @workspaceId, @createdAt,
         @errorJson, @decisionJson, @auditJson
       )
-      ON CONFLICT(id) DO UPDATE SET
-        status = excluded.status,
-        run_id = excluded.run_id,
-        session_id = excluded.session_id,
-        workspace_id = excluded.workspace_id,
-        error_json = excluded.error_json,
-        decision_json = excluded.decision_json,
-        audit_json = excluded.audit_json
     `).run({
       id: record.id,
       toolCallId: record.toolCallId,

@@ -49,7 +49,7 @@ export interface WorkspaceManager {
   discardCheckpoint(checkpoint: WorkspaceCheckpoint, reason: string): WorkspaceCheckpoint;
   createRestoreRequest(input: { checkpoint: WorkspaceCheckpoint; requestedBy: 'user' | 'system' }): WorkspaceRestoreRequest;
   restoreCheckpoint(checkpoint: WorkspaceCheckpoint, options?: { request?: WorkspaceRestoreRequest }): Promise<WorkspaceRestoreResult>;
-  createRestoreRequestForChangeSet(input: { changeSet: WorkspaceChangeSet; requestedBy: 'user' | 'system' }): WorkspaceRestoreRequest;
+  createRestoreRequestForChangeSet(input: { changeSet: WorkspaceChangeSet; requestedBy: 'user' | 'system' }): Promise<WorkspaceRestoreRequest>;
   restoreChangeSet(changeSet: WorkspaceChangeSet, options?: { request?: WorkspaceRestoreRequest }): Promise<WorkspaceRestoreResult>;
   finalizeActiveChangeSet(): Promise<WorkspaceChangeSet>;
   getWorkspaceChangeSummary(): WorkspaceChangeSummary;
@@ -312,11 +312,11 @@ export function createWorkspaceManager(options: WorkspaceManagerOptions): Worksp
       };
     },
 
-    createRestoreRequestForChangeSet(input) {
+    async createRestoreRequestForChangeSet(input) {
       const checkpoint = createCheckpointForChangeSet(input.changeSet);
       const request = createRestoreRequest({ checkpoint, requestedBy: input.requestedBy });
-      void options.repository?.saveCheckpoint(checkpoint);
-      void options.repository?.saveRestoreRequest(request);
+      await options.repository?.saveCheckpoint(checkpoint);
+      await options.repository?.saveRestoreRequest(request);
       return request;
     },
 

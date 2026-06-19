@@ -76,7 +76,7 @@ describe('workspace productized change tracking and restore', () => {
       changes: [expect.objectContaining({ path: 'src/a.ts', restoreState: 'not_restored' })],
     }));
 
-    const request = manager.createRestoreRequestForChangeSet({ changeSet: finalized, requestedBy: 'user' });
+    const request = await manager.createRestoreRequestForChangeSet({ changeSet: finalized, requestedBy: 'user' });
     const result = await manager.restoreChangeSet(finalized, { request });
 
     expect(result.status).toBe('completed');
@@ -85,5 +85,40 @@ describe('workspace productized change tracking and restore', () => {
     await expect(repository.getChangeSet(String(finalized.id))).resolves.toEqual(expect.objectContaining({
       changes: [expect.objectContaining({ restoreState: 'restored' })],
     }));
+  });
+
+  it('surfaces restore request persistence failures to the caller', async () => {
+    const baseRepository = createInMemoryWorkspaceRepository();
+    const repository = {
+      ...baseRepository,
+      async saveRestoreRequest() {
+        throw new Error('restore request persistence failed');
+      },
+    };
+    const workspace = createWorkspace({
+      id: 'workspace-local',
+      projectRoot: 'C:/repo',
+      name: 'repo',
+      createdAt: '2026-06-20T00:00:00.000Z',
+      updatedAt: '2026-06-20T00:00:00.000Z',
+    });
+    const manager = createWorkspaceManager({
+      workspace,
+      fileHost: createMemoryHost({ 'src/a.ts': 'before' }),
+      now: () => '2026-06-20T00:00:00.000Z',
+      createId: (prefix, value) => `${prefix}-${value}`,
+      repository,
+    });
+    manager.beginChangeSet({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
+    });
+    await manager.writeFile({ path: 'src/a.ts', content: 'after' });
+    const finalized = await manager.finalizeActiveChangeSet();
+
+    await expect(manager.createRestoreRequestForChangeSet({ changeSet: finalized, requestedBy: 'user' }))
+      .rejects.toThrow('restore request persistence failed');
   });
 });

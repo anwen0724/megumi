@@ -256,7 +256,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
         parsedInput,
         approvalRequestId: request.approvalRequestId,
         userDecision: {
-          kind: request.decision === 'deny' ? 'deny' : 'allow_once',
+          kind: resumeDecisionKind(request),
           decidedAt: now(),
         },
         options: {
@@ -591,6 +591,18 @@ function numberOption(value: unknown, fallback: number): number {
 
 function permissionModeOption(value: unknown): 'default' | 'plan' | 'accept_edits' | 'auto' {
   return value === 'plan' || value === 'accept_edits' || value === 'auto' ? value : 'default';
+}
+
+function resumeDecisionKind(request: AgentRuntimeResumeRequest): 'allow_once' | 'allow_for_session' | 'deny' {
+  if (request.decision === 'deny') return 'deny';
+  if (
+    request.metadata?.decision === 'allow_for_session'
+    || request.metadata?.approvalScope === 'session'
+    || request.metadata?.scope === 'session'
+  ) {
+    return 'allow_for_session';
+  }
+  return 'allow_once';
 }
 
 function isInputSourceKind(value: unknown): value is RawInput['source']['kind'] {
