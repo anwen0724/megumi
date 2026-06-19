@@ -7,6 +7,7 @@ import {
   mapRendererMessageSendToAppStartRun,
 } from '../mappers/app-request.mapper';
 import { mapAppResponseToRenderer } from '../mappers/app-response.mapper';
+import { mapBranchDraft, mapSessionToRendererSummary, mapTimelineHydration } from '../mappers/history.mapper';
 
 export async function handleSessionOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'session.message.send') {
@@ -25,22 +26,58 @@ export async function handleSessionOperation(operation: string, payload: unknown
   }
   if (operation === 'session.list') {
     const runtime = requireRuntime(context, operation);
-    return runtime.sessionRepository.listSessions();
+    return { sessions: runtime.sessionRepository.listSessions().map(mapSessionToRendererSummary) };
   }
   if (operation === 'session.timeline.list') {
     const runtime = requireRuntime(context, operation);
     const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
     if (!sessionId) throw unavailable(operation, 'sessionId is required');
-    return {
+    return mapTimelineHydration({
       sessionId,
       messages: runtime.sessionRepository.listMessagesForSession(sessionId),
-      activePath: runtime.sessionRepository.getActivePath(sessionId),
       runs: runtime.sessionRepository.listRunRecords(sessionId),
-    };
+      activePath: runtime.sessionRepository.getActivePath(sessionId),
+    });
   }
-  if (operation === 'session.branchDraft.create') throw unavailable(operation, 'src/session branch draft adapter is not implemented');
-  if (operation === 'session.branchDraft.cancel') throw unavailable(operation, 'src/session branch draft adapter is not implemented');
+  if (operation === 'session.branchDraft.create') {
+    const runtime = requireRuntime(context, operation);
+    const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
+    const messageId = typeof record.messageId === 'string' ? record.messageId : undefined;
+    const intent = record.intent === 'branch' || record.intent === 'rerun' ? record.intent : undefined;
+    if (!sessionId) throw unavailable(operation, 'sessionId is required');
+    if (!messageId) throw unavailable(operation, 'messageId is required');
+    if (!intent) throw unavailable(operation, 'intent must be branch or rerun');
+    const activePath = runtime.sessionRepository.getActivePath(sessionId);
+    const sourceEntry = activePath.find((entry) => entry.kind === 'message' && entry.ref.type === 'message' && String(entry.ref.messageId) === messageId);
+    if (!sourceEntry) throw unavailable(operation, `message is not on the active path: ${messageId}`);
+    const sourceMessage = runtime.sessionRepository.getMessage(messageId);
+    if (!sourceMessage) throw unavailable(operation, `message was not found: ${messageId}`);
+    const { marker } = runtime.sessionManager.createBranch({
+      idSeed: `${sessionId}-${messageId}-${intent}`,
+      sessionId,
+      fromSourceEntryId: sourceEntry.id,
+      label: intent === 'rerun' ? 'Rerun from message' : 'Branch from message',
+      metadata: { intent, sourceMessageId: messageId },
+    });
+    return { branchDraft: mapBranchDraft({ marker, sourceMessage, intent }) };
+  }
+  if (operation === 'session.branchDraft.cancel') {
+    const runtime = requireRuntime(context, operation);
+    const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
+    const branchMarkerId = typeof record.branchMarkerId === 'string' ? record.branchMarkerId : undefined;
+    if (!sessionId) throw unavailable(operation, 'sessionId is required');
+    if (!branchMarkerId) throw unavailable(operation, 'branchMarkerId is required');
+    const marker = runtime.sessionRepository.listBranchMarkers(sessionId).find((item) => item.id === branchMarkerId);
+    if (!marker) return { cancelled: false, reason: 'branch_marker_not_found' };
+    const activeLeaf = runtime.sessionRepository.getActiveLeaf(sessionId);
+    if (!activeLeaf || activeLeaf.id !== marker.sourceEntryId) {
+      return { cancelled: false, reason: 'branch_has_new_sources' };
+    }
+    return { cancelled: true };
+  }
   return undefined;
 }
 
