@@ -1,4 +1,4 @@
-// Converts renderer payloads into App API requests without parsing Agent input.
+// Converts renderer DTOs into App API requests without parsing Agent input.
 import type {
   AppCancelRunRequest,
   AppClientContext,
@@ -6,6 +6,10 @@ import type {
   AppRetryRunRequest,
   AppStartRunRequest,
 } from '../../app';
+import {
+  isSessionMessageSendRequestDto,
+  type SessionMessageSendRequestDto,
+} from '../../shared/renderer-contracts/session-message';
 
 function getRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -15,7 +19,28 @@ function getString(record: Record<string, unknown>, key: string): string | undef
   return typeof record[key] === 'string' ? record[key] : undefined;
 }
 
-export function createDesktopClientContext(): AppClientContext {
+function assertSessionMessageSendRequestDto(value: unknown): SessionMessageSendRequestDto {
+  if (!isSessionMessageSendRequestDto(value)) {
+    throw new Error('session.message.send expects SessionMessageSendRequestDto');
+  }
+  return value;
+}
+
+export function createDesktopClientContext(payload?: unknown): AppClientContext {
+  if (isSessionMessageSendRequestDto(payload)) {
+    return {
+      clientKind: 'desktop',
+      requestId: payload.requestId,
+      createdAt: payload.createdAt,
+      capabilities: { streaming: true, approval: true, filePicker: true, workspacePanel: true },
+      workspaceHint: payload.workspace?.path,
+      metadata: {
+        traceId: payload.traceId,
+        source: payload.source,
+      },
+    };
+  }
+
   return {
     clientKind: 'desktop',
     requestId: `request-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -25,19 +50,44 @@ export function createDesktopClientContext(): AppClientContext {
 }
 
 export function mapRendererMessageSendToAppStartRun(payload: unknown): AppStartRunRequest {
-  const record = getRecord(payload);
+  const request = assertSessionMessageSendRequestDto(payload);
   return {
     rawInput: {
-      text: getString(record, 'text') ?? getString(record, 'message') ?? '',
-      source: { kind: 'composer' },
-      createdAt: new Date().toISOString(),
-      metadata: record,
+      id: request.message.id,
+      text: request.message.text,
+      source: {
+        kind: 'composer',
+        requestId: request.requestId,
+        traceId: request.traceId,
+      },
+      attachments: [],
+      references: [],
+      selectedRanges: [],
+      createdAt: request.message.createdAt,
+      metadata: {
+        clientMessageId: request.metadata?.clientMessageId ?? request.message.id,
+        ...(request.workspace?.label ? { workspaceLabel: request.workspace.label } : {}),
+        ...(request.workspace?.path ? { workspacePath: request.workspace.path } : {}),
+        ...(request.sessionTitle ? { sessionTitle: request.sessionTitle } : {}),
+        ...(request.preprocessing !== undefined ? { preprocessing: request.preprocessing } : {}),
+        ...(request.branchDraft ? { branchDraft: request.branchDraft } : {}),
+      },
     },
-    sessionId: getString(record, 'sessionId'),
-    workspaceId: getString(record, 'workspaceId'),
-    modelId: getString(record, 'modelId'),
-    providerId: getString(record, 'providerId'),
-    metadata: record,
+    sessionId: request.sessionId,
+    workspaceId: request.workspace?.id,
+    modelId: request.modelId,
+    providerId: request.providerId,
+    permissionMode: request.permissionMode,
+    metadata: {
+      requestId: request.requestId,
+      traceId: request.traceId,
+      source: request.source,
+      ...(request.permissionSource ? { permissionSource: request.permissionSource } : {}),
+      ...(request.workspace?.label ? { workspaceLabel: request.workspace.label } : {}),
+      ...(request.workspace?.path ? { workspacePath: request.workspace.path } : {}),
+      ...(request.sessionTitle ? { sessionTitle: request.sessionTitle } : {}),
+      ...(request.branchDraft ? { branchDraft: request.branchDraft } : {}),
+    },
   };
 }
 
@@ -56,10 +106,10 @@ export function mapRendererApprovalToAppResume(payload: unknown): AppResumeRunRe
 export function mapRendererCancelToAppCancel(payload: unknown): AppCancelRunRequest {
   const record = getRecord(payload);
   return {
-    runId: getString(record, 'runId') ?? '',
+    runId: getString(record, 'runId') ?? getString(record, 'targetRunId') ?? '',
     sessionId: getString(record, 'sessionId'),
     workspaceId: getString(record, 'workspaceId'),
-    reason: getString(record, 'reason'),
+    reason: getString(record, 'reason') ?? getString(record, 'targetRequestId'),
     metadata: record,
   };
 }
