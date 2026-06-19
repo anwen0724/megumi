@@ -147,16 +147,19 @@ export class SqliteRecoveryRepository {
     return this.sessions.listSessions().flatMap((session) => this.sessions
       .listRunRecords(session.id)
       .filter((run) => isRecoverableStatus(run.status))
-      .map((run): RecoverableRunRecord => ({
-        runId: run.id,
-        sessionId: run.sessionId,
-        status: run.status as RecoveryRunStatus,
-        reason: recoverableReason(run.status),
-        title: session.title,
-        preview: run.inputSummary,
-        ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
-        ...(run.metadata ? { metadata: run.metadata } : {}),
-      })));
+      .map((run): RecoverableRunRecord => {
+        const status = run.status as RecoveryRunStatus;
+        return {
+          runId: run.id,
+          sessionId: run.sessionId,
+          status,
+          reason: recoverableReason(status),
+          title: session.title,
+          preview: run.inputSummary,
+          ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
+          ...(run.metadata ? { metadata: run.metadata } : {}),
+        };
+      }));
   }
 }
 

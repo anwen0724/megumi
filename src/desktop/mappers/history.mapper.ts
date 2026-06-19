@@ -65,7 +65,7 @@ export function mapRuntimeEventHistory(event: RuntimeEventRecord): RendererRunti
     ...(event.sessionId ? { sessionId: event.sessionId } : {}),
     ...(event.workspaceId ? { workspaceId: event.workspaceId } : {}),
     occurredAt: event.occurredAt,
-    payload: event.payload ?? {},
+    payload: jsonObjectOrEmpty(event.payload),
   };
 }
 
@@ -126,4 +126,8 @@ function messageSeedText(content: JsonValue): string {
     if (typeof record.content === 'string') return record.content;
   }
   return JSON.stringify(content);
+}
+
+function jsonObjectOrEmpty(value: unknown): JsonObject {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {};
 }
