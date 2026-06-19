@@ -84,4 +84,23 @@ export const DATABASE_MIGRATIONS: Migration[] = [
         ON session_runs(session_id, started_at);
     `,
   },
+  {
+    version: 2,
+    name: 'create-desktop-projects',
+    up: `
+      CREATE TABLE IF NOT EXISTS desktop_projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        path TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('available', 'missing')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_opened_at TEXT NOT NULL,
+        metadata_json TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_desktop_projects_last_opened
+        ON desktop_projects(last_opened_at);
+    `,
+  },
 ];

@@ -6,3 +6,4 @@ export * from './schema';
 export * from './transaction';
 export * from './json';
 export * from './repositories/session-state-repository';
+export * from './repositories/project-repository';
