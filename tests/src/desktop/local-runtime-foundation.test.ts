@@ -166,7 +166,6 @@ describe('local desktop runtime foundation', () => {
       },
     });
     unsubscribe();
-    await runtime.stop();
 
     expect(response.status).toBe('completed');
     expect(response.sessionId).toBe('session-1');
@@ -184,5 +183,6 @@ describe('local desktop runtime foundation', () => {
       status: 'active',
       workspaceId: 'workspace-local',
     });
+    await runtime.stop();
   });
 });

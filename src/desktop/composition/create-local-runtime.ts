@@ -82,7 +82,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   }
   const database = openSqliteDatabase(databasePath);
   runDatabaseMigrations(database, { now });
-  const sessionRepository = createInspectableSessionRepository(new SqliteSessionStateRepository(database));
+  const sessionRepository = new SqliteSessionStateRepository(database);
   const sessionManager = createSessionStateManager({ repository: sessionRepository, now, createId });
   const permissionRepository = createInMemoryPermissionRepository();
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
@@ -261,100 +261,6 @@ function ensureSession(input: {
     updatedAt: input.now(),
     metadata: { createdBy: 'desktop-runtime' },
   });
-}
-
-function createInspectableSessionRepository(delegate: SessionStateRepository): SessionStateRepository {
-  const sessions = new Map<string, Session>();
-
-  return {
-    transaction<T>(work: () => T): T {
-      return delegate.transaction(work);
-    },
-    createSession(session) {
-      const created = delegate.createSession(session);
-      sessions.set(String(created.id), created);
-      return created;
-    },
-    getSession(sessionId) {
-      try {
-        const session = delegate.getSession(sessionId);
-        if (session) sessions.set(String(session.id), session);
-        return session;
-      } catch (error) {
-        if (isClosedDatabaseError(error)) {
-          return sessions.get(String(sessionId));
-        }
-        throw error;
-      }
-    },
-    listSessions() {
-      try {
-        const listed = delegate.listSessions();
-        for (const session of listed) sessions.set(String(session.id), session);
-        return listed;
-      } catch (error) {
-        if (isClosedDatabaseError(error)) {
-          return Array.from(sessions.values());
-        }
-        throw error;
-      }
-    },
-    insertMessage(message) {
-      return delegate.insertMessage(message);
-    },
-    getMessage(messageId) {
-      return delegate.getMessage(messageId);
-    },
-    listMessagesForSession(sessionId) {
-      return delegate.listMessagesForSession(sessionId);
-    },
-    getMessagesForPath(path) {
-      return delegate.getMessagesForPath(path);
-    },
-    insertSourceEntry(entry) {
-      return delegate.insertSourceEntry(entry);
-    },
-    getSourceEntry(sourceEntryId) {
-      return delegate.getSourceEntry(sourceEntryId);
-    },
-    getActiveLeaf(sessionId) {
-      return delegate.getActiveLeaf(sessionId);
-    },
-    setActiveLeaf(sessionId, sourceEntryId) {
-      delegate.setActiveLeaf(sessionId, sourceEntryId);
-    },
-    getActivePath(sessionId) {
-      return delegate.getActivePath(sessionId);
-    },
-    insertBranchMarker(marker) {
-      return delegate.insertBranchMarker(marker);
-    },
-    listBranchMarkers(sessionId) {
-      return delegate.listBranchMarkers(sessionId);
-    },
-    insertRetryAttempt(attempt) {
-      return delegate.insertRetryAttempt(attempt);
-    },
-    listRetryAttempts(sessionId) {
-      return delegate.listRetryAttempts(sessionId);
-    },
-    insertRunRecord(run) {
-      return delegate.insertRunRecord(run);
-    },
-    updateRunRecord(run) {
-      return delegate.updateRunRecord(run);
-    },
-    getRunRecord(runId) {
-      return delegate.getRunRecord(runId);
-    },
-    listRunRecords(sessionId) {
-      return delegate.listRunRecords(sessionId);
-    },
-  };
-}
-
-function isClosedDatabaseError(error: unknown): boolean {
-  return error instanceof TypeError && error.message === 'The database connection is not open';
 }
 
 function parseRuntimeInput(
