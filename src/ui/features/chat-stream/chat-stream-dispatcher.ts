@@ -1,4 +1,5 @@
 import { ChatStreamEventSchema } from '@megumi/renderer-contracts/chat-stream';
+import type { ChatStreamEvent } from '@megumi/renderer-contracts/chat-stream';
 import { useChatStreamStore } from './chat-stream-store';
 
 export function dispatchChatStreamEvent(payload: unknown): void {
@@ -8,6 +9,10 @@ export function dispatchChatStreamEvent(payload: unknown): void {
     return;
   }
 
-  useChatStreamStore.getState().dispatch(parsed.data);
+  if (!('eventType' in parsed.data)) {
+    return;
+  }
+
+  useChatStreamStore.getState().dispatch(parsed.data as ChatStreamEvent);
 }
 

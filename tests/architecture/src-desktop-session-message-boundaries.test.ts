@@ -54,10 +54,11 @@ describe('src desktop session message boundaries', () => {
     expect(combined).not.toContain('openSqliteDatabase');
   });
 
-  it('does not switch Electron or Vite entrypoints in this plan', () => {
-    expect(read('forge.config.ts')).toContain('apps/desktop');
-    expect(read('vite.main.config.ts')).toContain('apps/desktop');
-    expect(read('vite.preload.config.ts')).toContain('apps/desktop');
-    expect(read('vite.renderer.config.ts')).toContain('apps/desktop');
+  it('keeps Electron and Vite entrypoints on src after Plan 6', () => {
+    expect(read('forge.config.ts')).toContain('src/desktop/main.ts');
+    expect(read('forge.config.ts')).toContain('src/desktop/preload/index.ts');
+    expect(read('vite.main.config.ts')).toContain("path.resolve(__dirname, 'src/desktop')");
+    expect(read('vite.preload.config.ts')).toContain("path.resolve(__dirname, 'src/desktop')");
+    expect(read('vite.renderer.config.ts')).toContain("root: 'src/ui'");
   });
 });

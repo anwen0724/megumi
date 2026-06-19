@@ -49,9 +49,12 @@ describe('src desktop infrastructure boundaries', () => {
     expect(files).not.toContain('createAgentRunner');
   });
 
-  it('keeps entrypoints unchanged in Plan 3', () => {
-    expect(read('forge.config.ts')).toContain('apps/desktop/src/main/index.ts');
-    expect(read('forge.config.ts')).toContain('apps/desktop/src/preload/index.ts');
-    expect(read('vite.renderer.config.ts')).toContain("root: 'apps/desktop/src/renderer'");
+  it('keeps the final entrypoints on src after Plan 6', () => {
+    expect(read('forge.config.ts')).toContain('src/desktop/main.ts');
+    expect(read('forge.config.ts')).toContain('src/desktop/preload/index.ts');
+    expect(read('vite.renderer.config.ts')).toContain("root: 'src/ui'");
+    expect(read('forge.config.ts')).not.toContain('apps/desktop/src/main/index.ts');
+    expect(read('forge.config.ts')).not.toContain('apps/desktop/src/preload/index.ts');
+    expect(read('vite.renderer.config.ts')).not.toContain("root: 'apps/desktop/src/renderer'");
   });
 });

@@ -37,11 +37,12 @@ describe('src history recovery boundaries', () => {
     expect(files).not.toContain('createAgentRunner');
   });
 
-  it('keeps Plan 4 out of entrypoint switching and Plan E owner modules', () => {
-    expect(read('forge.config.ts')).toContain('apps/desktop');
-    expect(read('vite.main.config.ts')).toContain('apps/desktop');
-    expect(read('vite.preload.config.ts')).toContain('apps/desktop');
-    expect(read('vite.renderer.config.ts')).toContain('apps/desktop');
+  it('keeps Plan 6 entrypoints while leaving Plan E owner modules delayed', () => {
+    expect(read('forge.config.ts')).toContain('src/desktop/main.ts');
+    expect(read('forge.config.ts')).toContain('src/desktop/preload/index.ts');
+    expect(read('vite.main.config.ts')).toContain("path.resolve(__dirname, 'src/desktop')");
+    expect(read('vite.preload.config.ts')).toContain("path.resolve(__dirname, 'src/desktop')");
+    expect(read('vite.renderer.config.ts')).toContain("root: 'src/ui'");
 
     const recoveryHandler = read('src/desktop/ipc/recovery.handler.ts');
     expect(recoveryHandler).not.toContain('restoreChangeSet(');

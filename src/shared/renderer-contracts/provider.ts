@@ -1,5 +1,5 @@
 // Renderer-facing provider DTOs. Plaintext credentials must never be exposed here.
-export type ProviderId = 'deepseek' | 'openai' | 'anthropic' | (string & {});
+export type ProviderId = 'deepseek' | 'openai' | 'anthropic';
 export type ProviderCredentialSource = 'settings' | 'environment' | 'missing';
 
 export interface ProviderPublicStatus {

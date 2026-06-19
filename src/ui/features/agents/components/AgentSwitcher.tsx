@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '../../../entities/session/store';
-import { AGENT_DESCRIPTIONS, AGENT_LABELS, AGENT_TYPES, type AgentType } from '@megumi/renderer-contracts/session';
+import { AGENT_DESCRIPTIONS, AGENT_LABELS, type AgentType } from '@megumi/renderer-contracts/session';
 
-const AGENT_COLORS: Record<AgentType, string> = {
+const DISPLAY_AGENT_TYPES: AgentType[] = ['analyst', 'architect', 'developer', 'reviewer', 'free'];
+
+const AGENT_COLORS: Partial<Record<AgentType, string>> = {
   analyst: 'bg-green-500',
   architect: 'bg-indigo-500',
   developer: 'bg-amber-500',
@@ -34,7 +36,7 @@ export default function AgentSwitcher() {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors duration-150"
       >
-        <div className={`w-5 h-5 rounded-full ${AGENT_COLORS[activeAgentType]} flex items-center justify-center text-white font-bold text-[10px]`}>
+        <div className={`w-5 h-5 rounded-full ${AGENT_COLORS[activeAgentType] ?? 'bg-gray-500'} flex items-center justify-center text-white font-bold text-[10px]`}>
           {activeLabel.slice(0, 1)}
         </div>
         <span className="text-gray-900">{activeLabel}</span>
@@ -46,7 +48,7 @@ export default function AgentSwitcher() {
       {open && (
         <div className="absolute top-full mt-1 left-0 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
           <div className="p-1.5">
-            {AGENT_TYPES.map((type) => {
+            {DISPLAY_AGENT_TYPES.map((type) => {
               const isActive = type === activeAgentType;
               return (
                 <button
@@ -59,7 +61,7 @@ export default function AgentSwitcher() {
                     isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded-full ${AGENT_COLORS[type]} flex items-center justify-center text-white font-bold text-[11px] shrink-0`}>
+                  <div className={`w-6 h-6 rounded-full ${AGENT_COLORS[type] ?? 'bg-gray-500'} flex items-center justify-center text-white font-bold text-[11px] shrink-0`}>
                     {AGENT_LABELS[type].slice(0, 1)}
                   </div>
                   <div>

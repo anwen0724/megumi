@@ -4,7 +4,7 @@ import type { RuntimeError } from './runtime';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'cancelled';
 export type ApprovalScope = 'once' | 'run' | 'project' | 'local';
-export type ToolExecutionStatus = 'created' | 'awaitingApproval' | 'rejected' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'pending' | 'success' | 'error';
+export type ToolExecutionStatus = 'created' | 'awaitingApproval' | 'rejected' | 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 export interface ApprovalPreview {
   action: string;
@@ -50,6 +50,7 @@ export interface ToolExecution {
   assistantMessageId?: string;
   callOrder?: number;
   toolName: string;
+  modelVisibleName?: string;
   input?: JsonValue;
   inputPreview?: JsonValue;
   policyDecision?: ToolPolicyDecision;

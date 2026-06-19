@@ -32,7 +32,11 @@ export type ChatStreamEventType =
   | 'assistant.delta'
   | 'assistant.completed';
 
-export interface ChatStreamEvent {
+export type AssistantTextPhase = 'prelude' | 'answer';
+export type ChatStreamKind = 'main' | (string & {});
+export type ChatStreamApprovalScope = 'user' | 'project' | 'local' | (string & {});
+
+export interface ChatStreamEventBase {
   eventId: string;
   eventType: ChatStreamEventType;
   projectId: string;
@@ -42,8 +46,37 @@ export interface ChatStreamEvent {
   streamKind: string;
   seq: number;
   createdAt: string;
-  [key: string]: unknown;
 }
+
+export interface AssistantTextDeltaEvent extends ChatStreamEventBase {
+  eventType: 'assistant.text.delta';
+  textId: string;
+  phase: AssistantTextPhase;
+  delta: string;
+}
+
+export interface AssistantThinkingDeltaEvent extends ChatStreamEventBase {
+  eventType: 'assistant.thinking.delta';
+  thinkingId: string;
+  delta: string;
+}
+
+export interface WorkspaceChangeFooterUpdatedEvent extends ChatStreamEventBase {
+  eventType: 'workspace.change.footer.updated';
+  footer: WorkspaceChangeFooterFact;
+}
+
+export type ChatStreamEvent =
+  | AssistantTextDeltaEvent
+  | AssistantThinkingDeltaEvent
+  | WorkspaceChangeFooterUpdatedEvent
+  | (ChatStreamEventBase & {
+      eventType: Exclude<
+        ChatStreamEventType,
+        'assistant.text.delta' | 'assistant.thinking.delta' | 'workspace.change.footer.updated'
+      >;
+      [key: string]: unknown;
+    });
 
 export interface RendererChatStreamEventDto {
   type: string;
@@ -51,11 +84,6 @@ export interface RendererChatStreamEventDto {
   sessionId?: string;
   runId?: string;
   payload: Record<string, unknown>;
-}
-
-export interface WorkspaceChangeFooterUpdatedEvent extends ChatStreamEvent {
-  eventType: 'workspace.change.footer.updated';
-  footer: WorkspaceChangeFooterFact;
 }
 
 export const ChatStreamEventSchema = z.union([

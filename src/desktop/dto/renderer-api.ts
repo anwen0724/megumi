@@ -8,6 +8,8 @@ import type {
   SessionMessageSendRequestDto,
 } from '../../shared/renderer-contracts/session-message';
 
+export type { RendererChatStreamEventDto, RendererRuntimeEventDto };
+
 export interface RendererIpcRequest<TPayload = unknown> {
   operation: string;
   payload?: TPayload;

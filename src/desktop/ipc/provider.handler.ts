@@ -5,8 +5,9 @@ import { unavailable } from './ipc-errors';
 
 export async function handleProviderOperation(operation: string, payload: unknown, context?: DesktopIpcContext): Promise<unknown> {
   const runtime = operation.startsWith('provider.') ? requireRuntime(context, operation) : undefined;
-  if (operation === 'provider.list') return { providers: runtime.providerSettingsStore.listProviderStatuses() };
+  if (operation === 'provider.list') return { providers: requireRuntime(context, operation).providerSettingsStore.listProviderStatuses() };
   if (operation === 'provider.update') {
+    const runtime = requireRuntime(context, operation);
     const record = asRecord(payload);
     const providerId = readProviderId(record);
     return { provider: runtime.providerSettingsStore.updateProviderSettings(providerId, {
@@ -18,6 +19,7 @@ export async function handleProviderOperation(operation: string, payload: unknow
     }) };
   }
   if (operation === 'provider.setApiKey') {
+    const runtime = requireRuntime(context, operation);
     const record = asRecord(payload);
     const providerId = readProviderId(record);
     const apiKey = typeof record.apiKey === 'string' ? record.apiKey : '';
@@ -25,6 +27,7 @@ export async function handleProviderOperation(operation: string, payload: unknow
     return { provider: runtime.providerSettingsStore.setProviderApiKey(providerId, apiKey) };
   }
   if (operation === 'provider.deleteApiKey') {
+    const runtime = requireRuntime(context, operation);
     const record = asRecord(payload);
     return { provider: runtime.providerSettingsStore.deleteProviderApiKey(readProviderId(record)) };
   }

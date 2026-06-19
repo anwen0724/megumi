@@ -43,11 +43,12 @@ describe('src tools permission workspace productization boundaries', () => {
     expect(ownerFiles).not.toContain('packages/');
   });
 
-  it('keeps Plan 5 out of entrypoint switching and delayed backends', () => {
-    expect(read('forge.config.ts')).toContain('apps/desktop');
-    expect(read('vite.main.config.ts')).toContain('apps/desktop');
-    expect(read('vite.preload.config.ts')).toContain('apps/desktop');
-    expect(read('vite.renderer.config.ts')).toContain('apps/desktop');
+  it('keeps Plan 6 entrypoints while leaving delayed backends out of scope', () => {
+    expect(read('forge.config.ts')).toContain('src/desktop/main.ts');
+    expect(read('forge.config.ts')).toContain('src/desktop/preload/index.ts');
+    expect(read('vite.main.config.ts')).toContain("path.resolve(__dirname, 'src/desktop')");
+    expect(read('vite.preload.config.ts')).toContain("path.resolve(__dirname, 'src/desktop')");
+    expect(read('vite.renderer.config.ts')).toContain("root: 'src/ui'");
 
     const changedScope = [
       'src/desktop/ipc/register-handlers.ts',

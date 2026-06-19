@@ -1,6 +1,7 @@
 // Renderer-facing IPC contracts used by src/ui and src/desktop preload.
 import { z } from 'zod';
 import type { JsonObject, JsonValue } from '../json';
+import type { RuntimeContext } from './runtime';
 
 export const IPC_CHANNELS = {
   runtimeInvoke: 'megumi:invoke',
@@ -74,9 +75,29 @@ export const IPC_CHANNELS = {
   artifacts: {
     listByRun: 'artifacts:list-by-run',
     listBySession: 'artifacts:list-by-session',
+    get: 'artifacts:get',
+    versionGet: 'artifacts:version:get',
+    versionCreate: 'artifacts:version:create',
+    statusUpdate: 'artifacts:status:update',
+    reference: 'artifacts:reference',
   },
   memory: {
     settingsGet: 'memory:settings:get',
+    candidateList: 'memory:candidate:list',
+    candidateAccept: 'memory:candidate:accept',
+    candidateReject: 'memory:candidate:reject',
+    candidateArchive: 'memory:candidate:archive',
+    candidateEditAndAccept: 'memory:candidate:edit-and-accept',
+    memoryList: 'memory:memory:list',
+    memoryGet: 'memory:memory:get',
+    memoryUpdate: 'memory:memory:update',
+    memoryArchive: 'memory:memory:archive',
+    memoryDelete: 'memory:memory:delete',
+    memoryDisable: 'memory:memory:disable',
+    memoryEnable: 'memory:memory:enable',
+    sourceRefsList: 'memory:source-refs:list',
+    accessLogsList: 'memory:access-logs:list',
+    recallPreview: 'memory:recall-preview',
   },
   workspace: {
     files: {
@@ -113,7 +134,7 @@ export interface RuntimeIpcRequest<
   requestId: string;
   payload: TPayload;
   meta: RuntimeIpcRequestMeta<TChannel>;
-  context?: JsonObject;
+  context?: RuntimeContext;
 }
 
 export interface RuntimeIpcError {
@@ -154,21 +175,28 @@ export type RuntimeIpcResult<
 
 export interface ApprovalResolvePayload {
   requestId?: string;
-  approvalRequestId?: string;
+  approvalRequestId: string;
   runId?: string;
   toolCallId?: string;
-  decision: 'approve' | 'deny' | 'approved' | 'denied';
-  scope?: 'once' | 'run' | 'project' | 'local' | 'session';
+  decision: 'approved' | 'denied';
+  scope: 'once' | 'run' | 'project' | 'local';
+  decidedAt: string;
   reason?: string;
   metadata?: JsonObject;
 }
 
 export interface WorkspaceRestoreData {
-  changeSetId: string;
-  restoreRequestId?: string;
-  workspaceId?: string;
-  dryRun?: boolean;
-  metadata?: JsonObject;
+  result: {
+    status: 'restored' | 'conflict' | 'failed' | 'partial' | 'noop';
+    error?: RuntimeIpcError;
+    metadata?: JsonObject;
+  };
+  fileResults: Array<{
+    projectPath: string;
+    status: 'restored' | 'conflict' | 'failed' | 'skipped' | 'noop';
+    error?: RuntimeIpcError;
+    metadata?: JsonObject;
+  }>;
 }
 
 export interface SessionMessageSendPayload {
@@ -203,6 +231,58 @@ export interface ProviderApiKeyPayload {
 }
 export interface ProviderDeleteApiKeyPayload {
   providerId: import('./provider').ProviderId;
+}
+
+export interface RecoverableRunListData {
+  runs: import('./recovery').RecoverableRunSummary[];
+}
+
+export interface RunResumePayload {
+  runId: string;
+  checkpointId?: string;
+  requestedBy?: 'user' | 'host' | 'system' | 'approval_flow' | 'retry_flow' | 'crash_recovery';
+  reason?: string;
+  resumeMode?: string;
+  metadata?: JsonObject;
+}
+
+export interface RunResumeData {
+  runId: string;
+  resumed: boolean;
+  resumeRequestId?: string;
+}
+
+export interface RunCancelPayload {
+  runId: string;
+  stepId?: string;
+  actionId?: string;
+  requestedBy: 'user' | 'host' | 'runtime';
+  reason: 'user_requested' | 'superseded_by_new_input' | 'permission_changed' | 'host_shutdown' | 'timeout' | 'policy_denied' | 'runtime_error';
+  scope: 'run' | 'step' | 'action' | 'background_process';
+  metadata?: JsonObject;
+}
+
+export interface RunCancelData {
+  runId: string;
+  cancelled: boolean;
+  cancelRequestId?: string;
+}
+
+export interface RunRetryPayload {
+  runId: string;
+  stepId?: string;
+  actionId?: string;
+  checkpointId?: string;
+  requestedBy?: 'user' | 'host' | 'runtime';
+  retryKind?: string;
+  reason?: string;
+  metadata?: JsonObject;
+}
+
+export interface RunRetryData {
+  runId: string;
+  retried: boolean;
+  retryRequestId?: string;
 }
 
 export const RuntimeIpcRequestSchema = z.object({

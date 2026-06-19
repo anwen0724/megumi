@@ -87,12 +87,12 @@ describe('src desktop host runtime boundaries', () => {
     ])).toEqual([]);
   });
 
-  it('allows desktop local runtime composition to wire owner modules but not switch Electron/Vite/Forge entrypoints in this plan', () => {
-    expect(read('forge.config.ts')).toContain('apps/desktop/src/main/index.ts');
-    expect(read('forge.config.ts')).toContain('apps/desktop/src/preload/index.ts');
-    expect(read('vite.renderer.config.ts')).toContain("root: 'apps/desktop/src/renderer'");
-    expect(read('forge.config.ts')).not.toContain('src/desktop/main.ts');
-    expect(read('forge.config.ts')).not.toContain('src/desktop/preload/index.ts');
-    expect(read('vite.renderer.config.ts')).not.toContain("root: 'src/ui'");
+  it('keeps the final Electron/Vite/Forge entrypoints on src after Plan 6', () => {
+    expect(read('forge.config.ts')).toContain('src/desktop/main.ts');
+    expect(read('forge.config.ts')).toContain('src/desktop/preload/index.ts');
+    expect(read('vite.renderer.config.ts')).toContain("root: 'src/ui'");
+    expect(read('forge.config.ts')).not.toContain('apps/desktop/src/main/index.ts');
+    expect(read('forge.config.ts')).not.toContain('apps/desktop/src/preload/index.ts');
+    expect(read('vite.renderer.config.ts')).not.toContain("root: 'apps/desktop/src/renderer'");
   });
 });

@@ -16,5 +16,11 @@ export default defineConfig({
       '@megumi/shared': path.resolve(__dirname, 'packages/shared'),
     },
   },
-  build: { outDir: '.vite/build', rollupOptions: { external: ['better-sqlite3', 'electron'] } },
+  build: {
+    outDir: '.vite/build',
+    rollupOptions: {
+      external: ['better-sqlite3', 'electron'],
+      output: { entryFileNames: 'index.js' },
+    },
+  },
 });

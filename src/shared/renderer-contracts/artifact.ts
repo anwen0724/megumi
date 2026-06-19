@@ -13,4 +13,4 @@ export type ArtifactKind =
   | 'document'
   | 'patch'
   | 'unknown';
-export type ArtifactStatus = 'draft' | 'active' | 'superseded' | 'archived' | 'failed' | 'deleted' | 'pending' | 'ready';
+export type ArtifactStatus = 'draft' | 'active' | 'superseded' | 'archived' | 'failed' | 'deleted';
