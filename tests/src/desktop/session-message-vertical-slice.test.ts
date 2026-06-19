@@ -43,11 +43,11 @@ describe('session message vertical slice', () => {
         return () => undefined;
       }),
     };
-    const context: DesktopIpcContext = {
-      appApi,
-      hosts: {},
-      getMainWindow: () => ({ webContents: { send } }),
-    };
+  const context: DesktopIpcContext = {
+    appApi,
+    hosts: {} as never,
+    getMainWindow: () => ({ webContents: { send } }) as never,
+  };
 
     registerChatStreamEventForwarder(context);
     registerRuntimeEventForwarder(context);

@@ -269,7 +269,7 @@ export function useSessionTimeline() {
     state.setAgentStatus('sending', runSessionId);
     state.setLastError(null, runSessionId);
 
-    const result = await window.megumi.session.message.send(request);
+    const result = await window.megumi.session.message.send(request as never);
 
     if (!result.ok) {
       failSessionMessageSend(result.error.message, runSessionId);

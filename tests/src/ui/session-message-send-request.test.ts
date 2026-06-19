@@ -6,10 +6,10 @@ describe('createSessionMessageSendRequestDto', () => {
     const request = createSessionMessageSendRequestDto({
       payload: {
         message: 'hello from ui',
-        model: 'deepseek-chat',
+        model: 'deepseek-chat' as never,
         permissionMode: 'auto',
-        permissionSource: 'composer',
-        preprocessing: { mentions: ['file-a'] },
+        permissionSource: 'composer' as never,
+        preprocessing: { mentions: ['file-a'] } as never,
       },
       clientMessageId: 'message-user-1',
       requestId: 'ipc-session-message-request-1',

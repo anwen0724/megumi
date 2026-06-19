@@ -43,7 +43,7 @@ function createContext() {
   };
   const context: DesktopIpcContext = {
     appApi,
-    hosts: {},
+    hosts: {} as never,
     getMainWindow: () => undefined,
   };
   return { context, startRun };
@@ -55,7 +55,7 @@ describe('handleSessionOperation session.message.send', () => {
     const result = await handleSessionOperation('session.message.send', createRequest(), context);
 
     expect(startRun).toHaveBeenCalledTimes(1);
-    const [request, client] = startRun.mock.calls[0] as [AppStartRunRequest, unknown];
+    const [request, client] = startRun.mock.calls[0] as unknown as [AppStartRunRequest, unknown];
     expect(request.rawInput.text).toBe('hello');
     expect(request.providerId).toBe('deepseek');
     expect(client).toMatchObject({

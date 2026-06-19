@@ -32,7 +32,7 @@ export function mapAppResponseToRenderer(value: unknown, rendererRequest?: unkno
     status: value.status,
     accepted: !value.error && value.status !== 'failed' && value.status !== 'cancelled',
     ...(value.waiting ? { waiting: value.waiting } : {}),
-    ...(value.error ? { error: value.error } : {}),
+    ...(value.error ? { error: value.error as unknown as Record<string, unknown> } : {}),
     ...(value.metadata ? { metadata: value.metadata } : {}),
   };
 
