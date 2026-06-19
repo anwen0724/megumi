@@ -8,6 +8,7 @@ import {
 } from '../mappers/app-request.mapper';
 import { mapAppResponseToRenderer } from '../mappers/app-response.mapper';
 import { mapBranchDraft, mapSessionToRendererSummary, mapTimelineHydration } from '../mappers/history.mapper';
+import { unwrapRendererRuntimePayload } from './runtime-request-payload';
 
 export async function handleSessionOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'session.message.send') {
@@ -30,19 +31,26 @@ export async function handleSessionOperation(operation: string, payload: unknown
   }
   if (operation === 'session.timeline.list') {
     const runtime = requireRuntime(context, operation);
-    const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
     if (!sessionId) throw unavailable(operation, 'sessionId is required');
+    const session = runtime.sessionRepository.getSession(sessionId);
+    const projectId = typeof record.projectId === 'string'
+      ? record.projectId
+      : session?.workspaceId ?? 'local';
+    const runs = runtime.sessionRepository.listRunRecords(sessionId);
     return mapTimelineHydration({
+      projectId,
       sessionId,
       messages: runtime.sessionRepository.listMessagesForSession(sessionId),
-      runs: runtime.sessionRepository.listRunRecords(sessionId),
+      runs,
       activePath: runtime.sessionRepository.getActivePath(sessionId),
+      runtimeEvents: runs.flatMap((run) => runtime.runtimeEventRepository.listEventsByRun(run.id)),
     });
   }
   if (operation === 'session.branchDraft.create') {
     const runtime = requireRuntime(context, operation);
-    const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
     const messageId = typeof record.messageId === 'string' ? record.messageId : undefined;
     const intent = record.intent === 'branch' || record.intent === 'rerun' ? record.intent : undefined;
@@ -70,7 +78,7 @@ export async function handleSessionOperation(operation: string, payload: unknown
   }
   if (operation === 'session.branchDraft.cancel') {
     const runtime = requireRuntime(context, operation);
-    const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
     const branchMarkerId = typeof record.branchMarkerId === 'string' ? record.branchMarkerId : undefined;
     if (!sessionId) throw unavailable(operation, 'sessionId is required');
@@ -111,4 +119,8 @@ export async function handleSessionOperation(operation: string, payload: unknown
 function requireRuntime(context: DesktopIpcContext, operation: string) {
   if (!context.runtime) throw unavailable(operation, 'desktop runtime services are not attached to IPC context');
   return context.runtime;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

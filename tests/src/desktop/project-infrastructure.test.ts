@@ -56,12 +56,12 @@ describe('project IPC infrastructure', () => {
 
     await expect(handleProjectOperation('project.open', { projectId: 'project-1' }, context)).resolves.toEqual({
       project: {
-        id: 'project-1',
+        projectId: 'project-1',
         name: 'megumi',
-        path: 'C:/all/work/study/megumi',
+        repoPath: 'C:/all/work/study/megumi',
+        repoPathKey: 'c:/all/work/study/megumi',
         status: 'available',
         createdAt: '2026-06-19T00:00:00.000Z',
-        updatedAt: '2026-06-19T00:00:00.000Z',
         lastOpenedAt: '2026-06-19T00:00:00.000Z',
       },
     });
@@ -75,15 +75,44 @@ describe('project IPC infrastructure', () => {
     await expect(handleProjectOperation('project.useExisting', {}, context)).resolves.toEqual({
       cancelled: false,
       project: {
-        id: 'project-2',
+        projectId: 'project-2',
         name: 'megumi',
-        path: 'C:/all/work/study/megumi',
+        repoPath: 'C:/all/work/study/megumi',
+        repoPathKey: 'c:/all/work/study/megumi',
         status: 'available',
         createdAt: expect.any(String),
-        updatedAt: expect.any(String),
         lastOpenedAt: expect.any(String),
       },
     });
     expect(context.runtime?.projectRepository.upsertFromPath).toHaveBeenCalled();
+  });
+
+  it('lists projects using the renderer project record contract', async () => {
+    const context = createContext();
+    vi.mocked(context.runtime!.projectRepository.listProjects).mockReturnValueOnce([
+      {
+        id: 'project-1',
+        name: 'test',
+        path: 'C:/all/work/study/test',
+        status: 'available',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        updatedAt: '2026-06-19T00:00:00.000Z',
+        lastOpenedAt: '2026-06-20T00:00:00.000Z',
+      },
+    ]);
+
+    await expect(handleProjectOperation('project.list', {}, context)).resolves.toEqual({
+      projects: [
+        {
+          projectId: 'project-1',
+          name: 'test',
+          repoPath: 'C:/all/work/study/test',
+          repoPathKey: 'c:/all/work/study/test',
+          status: 'available',
+          createdAt: '2026-06-19T00:00:00.000Z',
+          lastOpenedAt: '2026-06-20T00:00:00.000Z',
+        },
+      ],
+    });
   });
 });

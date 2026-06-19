@@ -57,11 +57,7 @@ export interface RuntimeEvent<TPayload = unknown> {
   payload: TPayload;
 }
 
-export interface RendererRuntimeEventDto {
-  type: string;
-  occurredAt: string;
-  payload: Record<string, unknown>;
-}
+export interface RendererRuntimeEventDto extends RuntimeEvent<Record<string, unknown>> {}
 
 export interface RunFailedPayload {
   error: RuntimeError;

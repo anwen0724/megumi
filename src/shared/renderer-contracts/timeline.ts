@@ -1,5 +1,5 @@
 // Renderer-facing timeline message contracts and chat stream reducer.
-import type { ChatStreamEvent } from './chat-stream';
+import type { AssistantTextPhase, ChatStreamEvent } from './chat-stream';
 import type { WorkspaceChangeFooterFact } from './workspace';
 
 export type TimelineMessageRole = 'user' | 'assistant' | 'separator';
@@ -277,6 +277,78 @@ function upsertProcessItem(block: ProcessDisclosureBlock, item: ProcessDisclosur
   }
 }
 
+function ensureThinkingItem(
+  process: ProcessDisclosureBlock,
+  thinkingId: string,
+  createdAt: string,
+): ThinkingItem {
+  const itemId = `thinking:${thinkingId}`;
+  const existing = process.items.find(
+    (item): item is ThinkingItem => item.kind === 'thinking' && item.itemId === itemId,
+  );
+  if (existing) return existing;
+  const item: ThinkingItem = {
+    itemId,
+    kind: 'thinking',
+    thinkingId,
+    status: 'streaming',
+    text: '',
+    format: 'plain',
+    createdAt,
+    updatedAt: createdAt,
+  };
+  process.items.push(item);
+  return item;
+}
+
+function ensurePreludeTextItem(
+  process: ProcessDisclosureBlock,
+  textId: string,
+  createdAt: string,
+): AssistantTextItem {
+  const itemId = `prelude:${textId}`;
+  const existing = process.items.find(
+    (item): item is AssistantTextItem => item.kind === 'assistant_text' && item.itemId === itemId,
+  );
+  if (existing) return existing;
+  const item: AssistantTextItem = {
+    itemId,
+    kind: 'assistant_text',
+    textId,
+    phase: 'prelude',
+    status: 'streaming',
+    text: '',
+    format: 'markdown',
+    createdAt,
+    updatedAt: createdAt,
+  };
+  process.items.push(item);
+  return item;
+}
+
+function reclassifyAssistantTextBlock(
+  assistant: TimelineAssistantMessage,
+  process: ProcessDisclosureBlock,
+  event: ChatStreamEvent & {
+    eventType: 'assistant.text.reclassified';
+    textId: string;
+    fromPhase: AssistantTextPhase;
+    toPhase: AssistantTextPhase;
+  },
+): void {
+  if (event.fromPhase !== 'answer' || event.toPhase !== 'prelude') return;
+  const answerIndex = assistant.blocks.findIndex(
+    (block): block is AnswerTextBlock => block.kind === 'answer_text' && block.textId === event.textId,
+  );
+  if (answerIndex === -1) return;
+  const answer = assistant.blocks[answerIndex] as AnswerTextBlock;
+  assistant.blocks.splice(answerIndex, 1);
+  const item = ensurePreludeTextItem(process, event.textId, event.createdAt);
+  item.text = answer.text;
+  item.status = answer.status;
+  item.updatedAt = event.createdAt;
+}
+
 function reduceLegacyChatStreamEvent(messages: TimelineMessage[], event: ChatStreamEvent): TimelineMessage[] {
   const nextMessages = cloneMessages(messages);
 
@@ -367,50 +439,56 @@ function reduceLegacyChatStreamEvent(messages: TimelineMessage[], event: ChatStr
       createdAt: event.createdAt,
       updatedAt: event.createdAt,
     });
-  } else if (event.eventType === 'assistant.text.delta') {
-    if (event.phase === 'prelude') {
-      upsertProcessItem(process, {
-        itemId: `prelude:${String(event.textId)}`,
-        kind: 'assistant_text',
-        textId: String(event.textId),
-        phase: 'prelude',
-        status: 'streaming',
-        text: String(event.delta ?? ''),
-        format: 'markdown',
-        createdAt: event.createdAt,
-        updatedAt: event.createdAt,
+  } else if (
+    event.eventType === 'assistant.text.started'
+    || event.eventType === 'assistant.text.delta'
+    || event.eventType === 'assistant.text.reclassified'
+    || event.eventType === 'assistant.text.completed'
+    || event.eventType === 'assistant.text.failed'
+    || event.eventType === 'assistant.text.cancelled_partial'
+  ) {
+    if (event.eventType === 'assistant.text.reclassified') {
+      reclassifyAssistantTextBlock(assistant, process, event as ChatStreamEvent & {
+        eventType: 'assistant.text.reclassified';
+        textId: string;
+        fromPhase: AssistantTextPhase;
+        toPhase: AssistantTextPhase;
       });
+    } else if (event.phase === 'prelude') {
+      const item = ensurePreludeTextItem(process, String(event.textId), event.createdAt);
+      if (event.eventType === 'assistant.text.delta') {
+        item.text += String(event.delta ?? '');
+      } else if (event.eventType === 'assistant.text.completed') {
+        item.status = 'completed';
+      } else if (event.eventType === 'assistant.text.failed') {
+        item.status = 'failed';
+      } else if (event.eventType === 'assistant.text.cancelled_partial') {
+        item.status = 'cancelled_partial';
+      }
+      item.updatedAt = event.createdAt;
     } else {
       const answer = ensureAnswerBlock(assistant, event, String(event.textId));
-      answer.text += String(event.delta ?? '');
+      if (event.eventType === 'assistant.text.delta') {
+        answer.text += String(event.delta ?? '');
+      } else if (event.eventType === 'assistant.text.completed') {
+        answer.status = 'completed';
+      } else if (event.eventType === 'assistant.text.failed') {
+        answer.status = 'failed';
+      } else if (event.eventType === 'assistant.text.cancelled_partial') {
+        answer.status = 'cancelled_partial';
+      }
       answer.updatedAt = event.createdAt;
     }
-  } else if (event.eventType === 'assistant.text.completed') {
-    const answer = ensureAnswerBlock(assistant, event, String(event.textId));
-    answer.status = 'completed';
-    answer.updatedAt = event.createdAt;
-  } else if (event.eventType === 'assistant.thinking.delta') {
-    upsertProcessItem(process, {
-      itemId: `thinking:${String(event.thinkingId)}`,
-      kind: 'thinking',
-      thinkingId: String(event.thinkingId),
-      status: 'streaming',
-      text: String(event.delta ?? ''),
-      format: 'plain',
-      createdAt: event.createdAt,
-      updatedAt: event.createdAt,
-    });
+  } else if (event.eventType === 'assistant.thinking.started' || event.eventType === 'assistant.thinking.delta') {
+    const item = ensureThinkingItem(process, String(event.thinkingId), event.createdAt);
+    if (event.eventType === 'assistant.thinking.delta') {
+      item.text += String(event.delta ?? '');
+    }
+    item.updatedAt = event.createdAt;
   } else if (event.eventType === 'assistant.thinking.completed') {
-    upsertProcessItem(process, {
-      itemId: `thinking:${String(event.thinkingId)}`,
-      kind: 'thinking',
-      thinkingId: String(event.thinkingId),
-      status: 'completed',
-      text: '',
-      format: 'plain',
-      createdAt: event.createdAt,
-      updatedAt: event.createdAt,
-    });
+    const item = ensureThinkingItem(process, String(event.thinkingId), event.createdAt);
+    item.status = 'completed';
+    item.updatedAt = event.createdAt;
   } else if (event.eventType === 'tool.started' || event.eventType === 'tool.completed' || event.eventType === 'tool.failed' || event.eventType === 'tool.denied') {
     upsertProcessItem(process, {
       itemId: `tool:${String(event.toolCallId)}`,
@@ -441,6 +519,12 @@ function reduceLegacyChatStreamEvent(messages: TimelineMessage[], event: ChatStr
       createdAt: event.createdAt,
       updatedAt: event.createdAt,
     });
+  } else if (
+    event.eventType === 'process.compaction.recorded'
+    || event.eventType === 'process.retry.recorded'
+    || event.eventType === 'process.recovery.recorded'
+  ) {
+    upsertProcessFactItem(process, event);
   } else if (event.eventType === 'workspace.change.footer.updated') {
     assistant.workspaceChangeFooter = event.footer as WorkspaceChangeFooterFact;
   }
@@ -448,4 +532,81 @@ function reduceLegacyChatStreamEvent(messages: TimelineMessage[], event: ChatStr
   process.updatedAt = event.createdAt;
   assistant.updatedAt = event.createdAt;
   return nextMessages;
+}
+
+function upsertProcessFactItem(
+  process: ProcessDisclosureBlock,
+  event: ChatStreamEvent,
+): void {
+  const item = processFactItem(event);
+  if (!item) {
+    return;
+  }
+
+  const existingIndex = process.items.findIndex((candidate) => candidate.itemId === item.itemId);
+  if (existingIndex === -1) {
+    process.items.push(item);
+  } else {
+    process.items[existingIndex] = item;
+  }
+}
+
+function processFactItem(event: ChatStreamEvent): ProcessDisclosureItem | undefined {
+  if (event.eventType === 'process.compaction.recorded') {
+    return {
+      itemId: `compaction:${String(event.compactionId ?? event.eventId)}`,
+      kind: 'compaction_activity',
+      compactionId: typeof event.compactionId === 'string' ? event.compactionId : undefined,
+      status: isCompactionStatus(event.status) ? event.status : 'completed',
+      label: typeof event.label === 'string' ? event.label : '已整理上下文',
+      createdAt: event.createdAt,
+      updatedAt: event.createdAt,
+    };
+  }
+
+  if (event.eventType === 'process.retry.recorded') {
+    return {
+      itemId: `retry:${String(event.retryAttemptId ?? event.eventId)}`,
+      kind: 'retry_activity',
+      retryAttemptId: String(event.retryAttemptId ?? event.eventId),
+      attemptNumber: typeof event.attemptNumber === 'number' ? event.attemptNumber : 1,
+      status: isRetryStatus(event.status) ? event.status : 'started',
+      label: typeof event.label === 'string' ? event.label : '已记录重试',
+      reason: typeof event.reason === 'string' ? event.reason : undefined,
+      createdAt: event.createdAt,
+      updatedAt: event.createdAt,
+    };
+  }
+
+  if (event.eventType === 'process.recovery.recorded') {
+    return {
+      itemId: `recovery:${event.runId}:${String(event.status ?? event.eventId)}`,
+      kind: 'recovery_activity',
+      status: isRecoveryStatus(event.status) ? event.status : 'interrupted',
+      label: typeof event.label === 'string' ? event.label : '已记录恢复状态',
+      createdAt: event.createdAt,
+      updatedAt: event.createdAt,
+    };
+  }
+
+  return undefined;
+}
+
+function isCompactionStatus(value: unknown): value is CompactionActivityItem['status'] {
+  return value === 'completed' || value === 'skipped' || value === 'boundary_unresolved';
+}
+
+function isRetryStatus(value: unknown): value is RetryActivityItem['status'] {
+  return value === 'started'
+    || value === 'failed'
+    || value === 'completed'
+    || value === 'exhausted'
+    || value === 'cancelled';
+}
+
+function isRecoveryStatus(value: unknown): value is RecoveryActivityItem['status'] {
+  return value === 'interrupted'
+    || value === 'manual_retry_requested'
+    || value === 'manual_rerun_requested'
+    || value === 'marked_cancelled';
 }

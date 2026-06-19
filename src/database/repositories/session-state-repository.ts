@@ -34,6 +34,7 @@ interface SessionRow {
   title: string;
   status: Session['status'];
   workspace_id: string | null;
+  workspace_path: string | null;
   created_at: string;
   updated_at: string;
   metadata_json: string | null;
@@ -102,8 +103,8 @@ export class SqliteSessionStateRepository implements SessionStateRepository {
     this.database
       .prepare(
         `
-        INSERT INTO sessions (id, title, status, workspace_id, created_at, updated_at, metadata_json)
-        VALUES (@id, @title, @status, @workspaceId, @createdAt, @updatedAt, @metadataJson)
+        INSERT INTO sessions (id, title, status, workspace_id, workspace_path, created_at, updated_at, metadata_json)
+        VALUES (@id, @title, @status, @workspaceId, @workspacePath, @createdAt, @updatedAt, @metadataJson)
       `,
       )
       .run({
@@ -111,6 +112,7 @@ export class SqliteSessionStateRepository implements SessionStateRepository {
         title: session.title,
         status: session.status,
         workspaceId: session.workspaceId ?? null,
+        workspacePath: session.workspacePath ?? null,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
         metadataJson: encodeJson(session.metadata),
@@ -395,6 +397,7 @@ function mapSession(row: SessionRow): Session {
       title: row.title,
       status: row.status,
       workspaceId: row.workspace_id ?? undefined,
+      workspacePath: row.workspace_path ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       metadata: decodeJsonField<JsonObject>({

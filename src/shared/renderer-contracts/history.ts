@@ -1,24 +1,20 @@
 // Defines renderer-facing history and recovery DTOs without exposing owner module internals.
 import type { JsonObject, JsonValue } from '../json';
+import type { RuntimeEvent } from './runtime';
+import type { TimelineMessage } from './timeline';
 
 export interface RendererSessionSummaryDto {
-  id: string;
+  sessionId: string;
   title: string;
   status: string;
   workspaceId?: string;
+  workspacePath?: string;
   createdAt: string;
   updatedAt: string;
   metadata?: JsonObject;
 }
 
-export interface RendererTimelineMessageDto {
-  messageId: string;
-  sessionId: string;
-  role: string;
-  content: JsonValue;
-  createdAt: string;
-  metadata?: JsonObject;
-}
+export type RendererTimelineMessageDto = TimelineMessage;
 
 export interface RendererRunSummaryDto {
   runId: string;
@@ -59,16 +55,7 @@ export interface RendererTimelineHydrationDto {
   diagnostics: Array<{ code: string; message: string; messageId?: string }>;
 }
 
-export interface RendererRuntimeEventHistoryDto {
-  eventId: string;
-  sequence: number;
-  type: string;
-  runId: string;
-  sessionId?: string;
-  workspaceId?: string;
-  occurredAt: string;
-  payload: JsonObject;
-}
+export interface RendererRuntimeEventHistoryDto extends RuntimeEvent<Record<string, unknown>> {}
 
 export interface RendererRecoverableRunDto {
   runId: string;

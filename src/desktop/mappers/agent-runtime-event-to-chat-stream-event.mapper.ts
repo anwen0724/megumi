@@ -25,6 +25,8 @@ export function mapAgentRuntimeEventToChatStreamEvent(
     };
   }
 
+  if (event.type === 'context.ready') return undefined;
+
   if (event.type === 'ai.message.event') {
     return mapAiMessageEvent(event, base);
   }

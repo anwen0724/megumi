@@ -20,11 +20,11 @@ async function tempRoot(): Promise<string> {
   return root;
 }
 
-function fakeHosts(root: string): DesktopHostAdapters {
+function fakeHosts(root: string, env: Record<string, string | undefined> = { DEEPSEEK_API_KEY: 'sk-env-secret' }): DesktopHostAdapters {
   return {
     clipboardHost: { readText: () => '', writeText: () => undefined },
     dialogHost: { openProjectDirectory: async () => root },
-    environmentHost: { get: (key) => key === 'DEEPSEEK_API_KEY' ? 'sk-env-secret' : undefined },
+    environmentHost: { get: (key) => env[key] },
     fileHost: {
       readFile: (filePath) => fs.promises.readFile(filePath),
       writeFile: (filePath, data) => fs.promises.writeFile(filePath, data),
@@ -65,6 +65,33 @@ describe('local runtime desktop infrastructure composition', () => {
     expect(runtime.projectRepository.listProjects()).toEqual([project]);
     runtime.runtimeLogger.info('runtime.started', { apiKey: 'sk-runtime-secret' });
     expect(fs.readFileSync(runtime.megumiHomePaths.runtimeLogPath, 'utf8')).not.toContain('sk-runtime-secret');
+
+    await runtime.stop();
+  });
+
+  it('resolves runtime provider credentials from customized environment keys', async () => {
+    const root = await tempRoot();
+    const runtime = createLocalDesktopRuntime({
+      hosts: fakeHosts(root, { CUSTOM_DEEPSEEK_KEY: 'sk-custom-runtime-env' }),
+      workspaceRoot: root,
+      now: () => '2026-06-19T00:00:00.000Z',
+    });
+
+    runtime.providerSettingsStore.updateProviderSettings('deepseek', {
+      apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY',
+    });
+
+    expect(runtime.providerSettingsStore.listProviderStatuses().find((provider) => provider.providerId === 'deepseek')).toMatchObject({
+      providerId: 'deepseek',
+      hasApiKey: true,
+      credentialSource: 'environment',
+      envOverrideActive: true,
+      apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY',
+    });
+    await expect(runtime.providerSettingsStore.resolveCredential('deepseek')).resolves.toEqual({
+      type: 'api_key',
+      value: 'sk-custom-runtime-env',
+    });
 
     await runtime.stop();
   });

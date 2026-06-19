@@ -27,6 +27,7 @@ export interface CreateSessionInput {
   idSeed: string;
   title: string;
   workspaceId?: string;
+  workspacePath?: string;
   metadata?: JsonObject;
 }
 
@@ -95,6 +96,7 @@ export function createSessionStateManager(dependencies: SessionStateManagerDepen
         title: input.title,
         status: 'active',
         workspaceId: input.workspaceId,
+        workspacePath: input.workspacePath,
         createdAt: timestamp,
         updatedAt: timestamp,
         metadata: input.metadata,

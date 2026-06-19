@@ -142,19 +142,44 @@ describe('desktop AgentRuntimeEvent projection', () => {
     expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('workspace.changed'))).toBeUndefined();
   });
 
-  it('maps every AgentRuntimeEvent into renderer runtime event without changing owner facts', () => {
+  it('maps AgentRuntimeEvents into renderer runtime events consumed by the migrated UI', () => {
     expect(mapAgentRuntimeEventToRendererRuntimeEvent(createAgentRuntimeEvent('approval.requested', {
       payload: { approvalRequestId: 'approval-1' },
-    }))).toEqual({
-      type: 'approval.requested',
-      occurredAt: '2026-06-19T00:00:00.000Z',
+    }), { sequence: 7 })).toEqual(expect.objectContaining({
+      eventId: 'runtime-event:run-1:7',
+      eventType: 'approval.requested',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 7,
+      createdAt: '2026-06-19T00:00:00.000Z',
       payload: {
-        runId: 'run-1',
-        sessionId: 'session-1',
         workspaceId: 'workspace-1',
         approvalRequestId: 'approval-1',
       },
-    });
+    }));
+
+    expect(mapAgentRuntimeEventToRendererRuntimeEvent(createAgentRuntimeEvent('context.ready', {
+      payload: { included: 3, dropped: 1 },
+    }), { sequence: 8 })).toEqual(expect.objectContaining({
+      eventId: 'runtime-event:run-1:8',
+      eventType: 'context.effective.updated',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 8,
+      payload: expect.objectContaining({
+        workspaceId: 'workspace-1',
+        sourceCount: 3,
+        droppedCount: 1,
+      }),
+    }));
+
+    expect(mapAgentRuntimeEventToRendererRuntimeEvent(createAgentRuntimeEvent('run.status.changed', {
+      payload: { status: 'completed' },
+    }), { sequence: 9 })).toEqual(expect.objectContaining({
+      eventType: 'run.completed',
+      sequence: 9,
+      payload: expect.objectContaining({ to: 'completed' }),
+    }));
   });
 
   it('forwards mapped chat stream events to the renderer channel with eventType protocol payloads', () => {
@@ -188,16 +213,16 @@ describe('desktop AgentRuntimeEvent projection', () => {
     }));
     unsubscribe();
 
-    expect(window.webContents.send).toHaveBeenCalledTimes(2);
+    expect(window.webContents.send).toHaveBeenCalledTimes(4);
     expect(window.webContents.send).toHaveBeenCalledWith('megumi:chat-stream:event', expect.objectContaining({
       eventType: 'assistant.text.delta',
       delta: 'pong',
-      seq: 1,
+      seq: 2,
     }));
     expect(window.webContents.send).toHaveBeenCalledWith('megumi:chat-stream:event', expect.objectContaining({
       eventType: 'assistant.text.delta',
       delta: 'pong again',
-      seq: 2,
+      seq: 3,
     }));
     expect(window.webContents.send.mock.calls[0][1]).not.toHaveProperty('type');
     expect(window.webContents.send.mock.calls[1][1]).not.toHaveProperty('type');
@@ -214,17 +239,29 @@ describe('desktop AgentRuntimeEvent projection', () => {
     agentRuntime.emit(createAgentRuntimeEvent('approval.requested', {
       payload: { approvalRequestId: 'approval-1' },
     }));
+    agentRuntime.emit(createAgentRuntimeEvent('context.ready', {
+      payload: { included: 2 },
+    }));
     unsubscribe();
 
-    expect(window.webContents.send).toHaveBeenCalledWith('megumi:runtime:event', {
-      type: 'approval.requested',
-      occurredAt: '2026-06-19T00:00:00.000Z',
-      payload: {
-        runId: 'run-1',
-        sessionId: 'session-1',
+    expect(window.webContents.send).toHaveBeenCalledWith('megumi:runtime:event', expect.objectContaining({
+      eventType: 'approval.requested',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 1,
+      createdAt: '2026-06-19T00:00:00.000Z',
+      payload: expect.objectContaining({
         workspaceId: 'workspace-1',
         approvalRequestId: 'approval-1',
-      },
-    });
+      }),
+    }));
+    expect(window.webContents.send).toHaveBeenCalledWith('megumi:runtime:event', expect.objectContaining({
+      eventType: 'context.effective.updated',
+      sequence: 2,
+      payload: expect.objectContaining({
+        workspaceId: 'workspace-1',
+        sourceCount: 2,
+      }),
+    }));
   });
 });

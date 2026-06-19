@@ -97,12 +97,15 @@ describe('session message vertical slice', () => {
       runId: 'run-1',
       sessionId: 'session-1',
       streamId: 'chat-stream:run-1',
-      seq: 1,
+      seq: 2,
       delta: 'pong',
     }));
     expect(send).toHaveBeenCalledWith('megumi:runtime:event', expect.objectContaining({
-      type: 'run.completed',
-      payload: expect.objectContaining({ runId: 'run-1' }),
+      eventType: 'run.completed',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 2,
+      payload: expect.objectContaining({ workspaceId: 'workspace-1' }),
     }));
   });
 });

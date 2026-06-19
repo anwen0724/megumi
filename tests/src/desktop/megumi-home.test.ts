@@ -48,6 +48,60 @@ describe('megumi home infrastructure', () => {
       lastMigration: 'megumi-home-v1',
     });
     expect(fs.readFileSync(paths.readmePath, 'utf8')).toContain('# Megumi Home');
-    expect(fs.readFileSync(paths.settingsSchemaPath, 'utf8')).toContain('Megumi settings');
+    const settingsSchema = JSON.parse(fs.readFileSync(paths.settingsSchemaPath, 'utf8'));
+    expect(settingsSchema).toMatchObject({
+      title: 'Megumi settings',
+      additionalProperties: false,
+      properties: {
+        theme: { enum: ['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue'] },
+        memory: {
+          properties: {
+            enabled: { type: 'boolean' },
+          },
+        },
+        providers: {
+          properties: {
+            deepseek: {
+              properties: {
+                apiKey: { type: ['string', 'null'], minLength: 1 },
+                apiKeyEnv: { type: ['string', 'null'], minLength: 1 },
+              },
+            },
+          },
+        },
+        permissions: {
+          properties: {
+            allow: { type: 'array' },
+            ask: { type: 'array' },
+            deny: { type: 'array' },
+          },
+        },
+      },
+    });
+  });
+
+  it('refreshes the placeholder settings schema created by earlier src builds', async () => {
+    const root = await tempRoot();
+    const paths = buildMegumiHomePaths(root);
+    fs.mkdirSync(paths.homePath, { recursive: true });
+    fs.writeFileSync(paths.settingsSchemaPath, `${JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      title: 'Megumi settings',
+      type: 'object',
+      additionalProperties: true,
+    }, null, 2)}\n`, 'utf8');
+
+    initializeMegumiHome({
+      env: { MEGUMI_HOME: root },
+      homeDirectory: os.homedir(),
+      now: () => new Date('2026-06-19T00:00:00.000Z'),
+    });
+
+    const settingsSchema = JSON.parse(fs.readFileSync(paths.settingsSchemaPath, 'utf8'));
+    expect(settingsSchema.additionalProperties).toBe(false);
+    expect(settingsSchema.properties.providers.properties.deepseek.properties.defaultModel).toEqual({
+      type: 'string',
+      minLength: 1,
+    });
   });
 });

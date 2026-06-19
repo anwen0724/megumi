@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AppSettingsRawSchema,
+  createAppSettingsJsonSchema,
   DEFAULT_APP_SETTINGS,
   mergeRawAppSettings,
   resolveAppSettings,
@@ -114,6 +115,43 @@ describe('app settings contracts', () => {
     expect(merged).toEqual({
       providers: {
         deepseek: {},
+      },
+    });
+  });
+
+  it('generates editor JSON Schema from the raw settings contract', () => {
+    const jsonSchema = createAppSettingsJsonSchema();
+
+    expect(jsonSchema).toMatchObject({
+      title: 'Megumi settings',
+      type: 'object',
+      additionalProperties: false,
+    });
+    expect(Object.keys(jsonSchema.properties ?? {})).toEqual(AppSettingsRawSchema.keyof().options);
+    expect(jsonSchema.properties?.theme).toEqual({
+      enum: ['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue'],
+    });
+    expect(jsonSchema.properties?.providers).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        deepseek: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            apiKey: { type: ['string', 'null'], minLength: 1 },
+            apiKeyEnv: { type: ['string', 'null'], minLength: 1 },
+          },
+        },
+      },
+    });
+    expect(jsonSchema.properties?.permissions).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        allow: { type: 'array' },
+        ask: { type: 'array' },
+        deny: { type: 'array' },
       },
     });
   });

@@ -125,11 +125,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   const settingsStore = createAppSettingsStore({ settingsPath: megumiHomePaths.settingsPath });
   const providerSettingsStore = createProviderSettingsStore({
     settings: settingsStore,
-    env: {
-      DEEPSEEK_API_KEY: hosts.environmentHost.get('DEEPSEEK_API_KEY'),
-      OPENAI_API_KEY: hosts.environmentHost.get('OPENAI_API_KEY'),
-      ANTHROPIC_API_KEY: hosts.environmentHost.get('ANTHROPIC_API_KEY'),
-    },
+    env: hosts.environmentHost,
   });
   const runtimeLogger = createRuntimeJsonlLogger({ filePath: megumiHomePaths.runtimeLogPath, now });
   const sessionManager = createSessionStateManager({ repository: sessionRepository, now, createId });
@@ -222,6 +218,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
         parsedInput,
         sessionId: session.id,
         workspaceId: request.workspaceId,
+        model: modelFromRequest(request, providerSettingsStore, settingsStore),
         options: {
           maxTurns: numberOption(request.metadata?.maxTurns, 4),
           maxToolCalls: numberOption(request.metadata?.maxToolCalls, 8),
@@ -442,6 +439,8 @@ function ensureSession(input: {
     title: titleFromInput(input.request.rawInput.text),
     status: 'active',
     workspaceId: input.request.workspaceId,
+    workspacePath: stringMetadata(input.request.rawInput.metadata, 'workspacePath')
+      ?? stringMetadata(input.request.metadata, 'workspacePath'),
     createdAt: input.now(),
     updatedAt: input.now(),
     metadata: { createdBy: 'desktop-runtime' },
@@ -593,6 +592,27 @@ function permissionModeOption(value: unknown): 'default' | 'plan' | 'accept_edit
   return value === 'plan' || value === 'accept_edits' || value === 'auto' ? value : 'default';
 }
 
+function modelFromRequest(
+  request: AgentRuntimeStartRequest,
+  providerSettingsStore: ProviderSettingsStore,
+  settingsStore: AppSettingsStore,
+): Model {
+  const providerId = isProviderId(request.providerId)
+    ? request.providerId
+    : settingsStore.getResolvedSettings().chat.defaultProvider;
+  const settings = providerSettingsStore.getProviderSettings(providerId);
+  return {
+    providerId,
+    modelId: typeof request.modelId === 'string' && request.modelId.trim()
+      ? request.modelId.trim()
+      : settings.defaultModel,
+  };
+}
+
+function isProviderId(value: unknown): value is 'deepseek' | 'openai' | 'anthropic' {
+  return value === 'deepseek' || value === 'openai' || value === 'anthropic';
+}
+
 function resumeDecisionKind(request: AgentRuntimeResumeRequest): 'allow_once' | 'allow_for_session' | 'deny' {
   if (request.decision === 'deny') return 'deny';
   if (
@@ -611,6 +631,12 @@ function isInputSourceKind(value: unknown): value is RawInput['source']['kind'] 
 
 function jsonObjectOrUndefined(value: unknown): JsonObject | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : undefined;
+}
+
+function stringMetadata(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 }
 
 function createProviderRegistry(providerSettingsStore: ProviderSettingsStore): ProviderRegistry {

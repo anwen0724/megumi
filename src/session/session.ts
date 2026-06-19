@@ -12,6 +12,7 @@ export const SessionSchema = z
     title: z.string().min(1),
     status: SessionStatusSchema,
     workspaceId: z.string().min(1).optional(),
+    workspacePath: z.string().min(1).optional(),
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
     metadata: JsonObjectSchema.optional(),
@@ -23,6 +24,7 @@ export interface Session {
   title: string;
   status: SessionStatus;
   workspaceId?: string;
+  workspacePath?: string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
   metadata?: JsonObject;

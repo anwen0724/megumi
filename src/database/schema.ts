@@ -347,4 +347,11 @@ export const DATABASE_MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_workspace_restore_requests_change_set ON workspace_restore_requests(change_set_id);
     `,
   },
+  {
+    version: 6,
+    name: 'add-session-workspace-path',
+    up: `
+      ALTER TABLE sessions ADD COLUMN workspace_path TEXT;
+    `,
+  },
 ];

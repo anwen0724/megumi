@@ -1,5 +1,5 @@
 // Defines Agent Run and turn contracts without owning provider, tool implementation, or SQLite internals.
-import type { AssistantMessage } from '../ai';
+import type { AssistantMessage, Model } from '../ai';
 import type { ContextMessageFact, ContextToolResultMessageFact } from '../context';
 import type { ParsedInput } from '../input';
 import type { UserDecision } from '../permission';
@@ -61,5 +61,6 @@ export interface StartAgentRunInput {
   parsedInput: ParsedInput;
   sessionId: string;
   workspaceId?: string;
+  model?: Model;
   options: AgentRunOptions;
 }

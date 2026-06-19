@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createAppSettingsJsonSchema } from '@megumi/shared/settings';
 
 export const MEGUMI_HOME_VERSION = 1;
 export const MEGUMI_HOME_MIGRATION_ID = 'megumi-home-v1';
@@ -64,7 +65,7 @@ export function initializeMegumiHome(options: InitializeMegumiHomeOptions = {}):
   for (const directory of [paths.homePath, paths.sqlitePath, paths.logsPath, paths.cachePath, paths.tmpPath]) {
     fs.mkdirSync(directory, { recursive: true });
   }
-  writeJsonIfMissing(paths.settingsSchemaPath, createMegumiSettingsSchema());
+  writeManagedSettingsSchema(paths.settingsSchemaPath, createAppSettingsJsonSchema());
   writeJsonIfMissing(paths.versionPath, {
     version: MEGUMI_HOME_VERSION,
     createdAt: now().toISOString(),
@@ -79,18 +80,33 @@ function writeJsonIfMissing(filePath: string, data: unknown): void {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
 }
 
+function writeManagedSettingsSchema(filePath: string, data: Record<string, unknown>): void {
+  if (settingsSchemaIsCurrent(filePath)) return;
+  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}
+
+function settingsSchemaIsCurrent(filePath: string): boolean {
+  if (!fs.existsSync(filePath)) return false;
+  try {
+    const current = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, unknown>;
+    return current.title === 'Megumi settings'
+      && current.additionalProperties === false
+      && isRecord(current.properties)
+      && isRecord(current.properties.providers)
+      && isRecord(current.properties.memory)
+      && isRecord(current.properties.permissions);
+  } catch {
+    return false;
+  }
+}
+
 function writeTextIfMissing(filePath: string, data: string): void {
   if (fs.existsSync(filePath)) return;
   fs.writeFileSync(filePath, data, 'utf8');
 }
 
-function createMegumiSettingsSchema(): Record<string, unknown> {
-  return {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    title: 'Megumi settings',
-    type: 'object',
-    additionalProperties: true,
-  };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function createMegumiHomeReadme(): string {

@@ -5,8 +5,11 @@ import { createLocalDesktopRuntime } from './composition/create-local-runtime';
 import { registerChatStreamEventForwarder } from './ipc/chat-stream-event-forwarder';
 import { registerDesktopIpcHandlers } from './ipc/register-handlers';
 import { registerRuntimeEventForwarder } from './ipc/runtime-event-forwarder';
+import { loadDesktopEnvFile } from './infrastructure/env-file';
 import { createMainWindow } from './window/create-window';
 import { registerDesktopLifecycle } from './window/lifecycle';
+
+loadDesktopEnvFile();
 
 const runtime = createLocalDesktopRuntime();
 const appApi = createDesktopAppApi({ agentRuntime: runtime.agentRuntime });

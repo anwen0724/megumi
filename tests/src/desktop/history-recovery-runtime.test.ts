@@ -6,6 +6,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDesktopAppApi, createLocalDesktopRuntime } from '../../../src/desktop';
 import { handleRunOperation } from '../../../src/desktop/ipc/run.handler';
+import { IPC_CHANNELS } from '../../../src/shared/renderer-contracts/ipc';
 import type { AgentAiClient } from '../../../src/agent';
 import { AssistantMessageEventStream } from '../../../src/ai';
 import type { DesktopHostAdapters } from '../../../src/desktop/composition/create-host-adapters';
@@ -48,6 +49,25 @@ function fakeAi(): AgentAiClient {
   };
 }
 
+function rendererRequest<TPayload>(channel: string, payload: TPayload) {
+  return {
+    requestId: `request:${channel}`,
+    meta: {
+      channel,
+      source: 'renderer',
+      createdAt: '2026-06-20T00:00:00.000Z',
+    },
+    context: {
+      requestId: `request:${channel}`,
+      traceId: `trace:${channel}`,
+      operationName: channel,
+      source: 'renderer',
+      createdAt: '2026-06-20T00:00:00.000Z',
+    },
+    payload,
+  };
+}
+
 describe('durable runtime event history', () => {
   it('records runtime events during app execution and serves run.events.list from database', async () => {
     const root = await tempRoot();
@@ -72,28 +92,47 @@ describe('durable runtime event history', () => {
       capabilities: { streaming: true },
     });
 
-    const result = await handleRunOperation('run.events.list', { runId: response.runId }, {
+    const runsResult = await handleRunOperation('run.listBySession', rendererRequest(IPC_CHANNELS.run.listBySession, {
+      sessionId: 'session-1',
+    }), {
       appApi,
       hosts: fakeHosts(root),
       runtime,
       getMainWindow: () => undefined,
-    }) as { events: Array<{ type: string; runId: string; sessionId?: string; workspaceId?: string; sequence: number }> };
+    }) as { runs: Array<{ runId: string; sessionId: string; status: string }> };
+
+    const result = await handleRunOperation('run.events.list', rendererRequest(IPC_CHANNELS.run.events.list, {
+      runId: response.runId,
+    }), {
+      appApi,
+      hosts: fakeHosts(root),
+      runtime,
+      getMainWindow: () => undefined,
+    }) as { events: Array<{ eventType: string; runId: string; sessionId?: string; sequence: number; createdAt: string; payload: Record<string, unknown> }> };
     const storedEvents = runtime.runtimeEventRepository.listEventsByRun(response.runId);
 
+    expect(runsResult).toEqual({
+      runs: [expect.objectContaining({
+        runId: response.runId,
+        sessionId: 'session-1',
+        status: 'completed',
+      })],
+    });
     expect(result).toEqual({
       events: expect.arrayContaining([
         expect.objectContaining({
-          type: 'run.started',
+          eventType: 'run.started',
           runId: response.runId,
           sessionId: 'session-1',
-          workspaceId: 'workspace-local',
           sequence: 1,
+          createdAt: expect.any(String),
+          payload: expect.objectContaining({ workspaceId: 'workspace-local' }),
         }),
         expect.objectContaining({
-          type: 'run.status.changed',
+          eventType: 'run.completed',
           runId: response.runId,
           sessionId: 'session-1',
-          workspaceId: 'workspace-local',
+          payload: expect.objectContaining({ workspaceId: 'workspace-local' }),
         }),
       ]),
     });

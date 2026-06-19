@@ -115,6 +115,32 @@ describe('settings and provider infrastructure', () => {
     expect(JSON.stringify(getResponse)).not.toContain('sk-ipc-secret');
   });
 
+  it('resolves customized provider API key environment names through the environment reader', async () => {
+    const settingsPath = await tempSettingsPath();
+    const settings = createAppSettingsStore({ settingsPath });
+    const providers = createProviderSettingsStore({
+      settings,
+      env: {
+        get: (key: string) => key === 'CUSTOM_DEEPSEEK_KEY' ? 'sk-custom-env-secret' : undefined,
+      } as never,
+    });
+
+    providers.updateProviderSettings('deepseek', { apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY' });
+
+    expect(providers.listProviderStatuses().find((provider) => provider.providerId === 'deepseek')).toMatchObject({
+      providerId: 'deepseek',
+      hasApiKey: true,
+      credentialSource: 'environment',
+      envOverrideActive: true,
+      apiKeyEnv: 'CUSTOM_DEEPSEEK_KEY',
+      apiKeyEnvCustomized: true,
+    });
+    await expect(providers.resolveCredential('deepseek')).resolves.toEqual({
+      type: 'api_key',
+      value: 'sk-custom-env-secret',
+    });
+  });
+
   it('applies settings updates from renderer runtime request envelopes', async () => {
     const settingsPath = await tempSettingsPath();
     const settings = createAppSettingsStore({ settingsPath });

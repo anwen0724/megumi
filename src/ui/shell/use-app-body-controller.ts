@@ -64,6 +64,7 @@ export function useAppBodyController() {
   const handleSelectSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeSessionId) {
       setSettingsOpen(false);
+      await hydrateSessionTimeline(sessionId);
       return;
     }
 

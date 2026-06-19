@@ -35,7 +35,7 @@ export interface ProviderSettingsStore extends CredentialResolver {
 
 export interface CreateProviderSettingsStoreOptions {
   settings: AppSettingsStore;
-  env?: Record<string, string | undefined>;
+  env?: Record<string, string | undefined> | { get(name: string): string | undefined };
 }
 
 const DEFAULT_PROVIDER_ENV: Record<ProviderId, string> = {
@@ -54,7 +54,7 @@ export function createProviderSettingsStore(options: CreateProviderSettingsStore
     const defaultEnv = DEFAULT_PROVIDER_ENV[providerId];
     const envKey = settings.apiKeyEnv ?? defaultEnv;
     const settingsActive = Boolean(settings.apiKey?.trim());
-    const envActive = Boolean(envKey && env[envKey]?.trim());
+    const envActive = Boolean(envKey && readEnv(env, envKey)?.trim());
     return {
       providerId,
       displayName: settings.displayName,
@@ -97,10 +97,17 @@ export function createProviderSettingsStore(options: CreateProviderSettingsStore
         return { type: 'api_key', value: settings.apiKey.trim() } satisfies ProviderCredential;
       }
       const envKey = settings.apiKeyEnv ?? DEFAULT_PROVIDER_ENV[providerId];
-      const envValue = envKey ? env[envKey]?.trim() : undefined;
+      const envValue = envKey ? readEnv(env, envKey)?.trim() : undefined;
       return envValue ? { type: 'api_key', value: envValue } satisfies ProviderCredential : undefined;
     },
   };
+}
+
+function readEnv(env: NonNullable<CreateProviderSettingsStoreOptions['env']>, key: string): string | undefined {
+  const maybeReader = env as { get?: unknown };
+  return typeof maybeReader.get === 'function'
+    ? maybeReader.get(key)
+    : (env as Record<string, string | undefined>)[key];
 }
 
 function isProviderId(value: string): value is ProviderId {

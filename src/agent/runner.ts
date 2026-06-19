@@ -152,6 +152,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         parsedInput: input.parsedInput,
         sessionId: input.sessionId,
         workspaceId: input.workspaceId,
+        model: input.model ?? options.model,
         runOptions: input.options,
         currentRunMessages: [],
         toolResultMessages: [],
@@ -256,6 +257,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         parsedInput: input.parsedInput,
         sessionId: input.sessionId,
         workspaceId: input.workspaceId,
+        model: options.model,
         runOptions: input.options,
         currentRunMessages,
         toolResultMessages,
@@ -270,6 +272,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
     parsedInput: ParsedInput;
     sessionId: string;
     workspaceId?: string;
+    model: Model;
     runOptions: StartAgentRunInput['options'];
     currentRunMessages: ContextMessageFact[];
     toolResultMessages: ContextToolResultMessageFact[];
@@ -316,7 +319,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         },
       });
 
-      const stream = options.ai.stream(options.model, snapshot.modelContextInput, options.aiOptions, snapshot.toolSet);
+      const stream = options.ai.stream(input.model, snapshot.modelContextInput, options.aiOptions, snapshot.toolSet);
       for await (const event of stream) {
         emit({ type: 'ai.message.event', runId: input.run.id, turnIndex, occurredAt: options.now(), event });
       }
@@ -360,7 +363,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
           runId: input.run.id,
           turnIndex,
           occurredAt: options.now(),
-          payload: { toolCallId: call.id, toolName: call.name },
+          payload: { toolCallId: call.id, toolName: call.name, input: call.input },
         });
       }
 
@@ -683,7 +686,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
       runId,
       turnIndex,
       occurredAt: options.now(),
-      payload: { toolCallId: call.id, toolName: call.name },
+      payload: { toolCallId: call.id, toolName: call.name, input: call.input },
     });
   }
 
@@ -693,7 +696,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
       runId,
       turnIndex,
       occurredAt: options.now(),
-      payload: { toolCallId: call.id, toolName: call.name, status: result.status },
+      payload: { toolCallId: call.id, toolName: call.name, input: call.input, status: result.status },
     });
   }
 }

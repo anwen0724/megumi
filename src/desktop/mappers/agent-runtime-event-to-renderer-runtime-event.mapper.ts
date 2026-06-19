@@ -1,16 +1,128 @@
-// Projects Agent Runtime events into the renderer runtime event DTO.
+// Projects Agent Runtime events into the legacy-compatible renderer runtime protocol.
 import type { AgentRuntimeEvent } from '../../app';
 import type { RendererRuntimeEventDto } from '../dto/renderer-api';
 
-export function mapAgentRuntimeEventToRendererRuntimeEvent(event: AgentRuntimeEvent): RendererRuntimeEventDto {
-  return {
-    type: event.type,
-    occurredAt: event.occurredAt,
-    payload: {
-      ...(event.payload ?? {}),
-      ...(event.runId ? { runId: event.runId } : {}),
-      ...(event.sessionId ? { sessionId: event.sessionId } : {}),
-      ...(event.workspaceId ? { workspaceId: event.workspaceId } : {}),
-    },
-  };
+export interface RendererRuntimeProjectionOptions {
+  sequence?: number;
+}
+
+export function mapAgentRuntimeEventToRendererRuntimeEvent(
+  event: AgentRuntimeEvent,
+  options: RendererRuntimeProjectionOptions = {},
+): RendererRuntimeEventDto {
+  const payload = rendererPayloadOf(event);
+  const sequence = readNumber(event.payload?.sequence) ?? readNumber(event.payload?.seq) ?? options.sequence ?? 1;
+  const runId = event.runId ?? readString(event.payload?.runId) ?? 'default-run';
+  const eventType = rendererEventTypeOf(event, payload);
+  const sessionId = event.sessionId ?? readString(event.payload?.sessionId);
+  const stepId = stepIdOf(event, payload);
+
+  return stripUndefinedFields({
+    eventId: readString(event.payload?.eventId) ?? `runtime-event:${runId}:${sequence}`,
+    eventType,
+    runId,
+    sessionId,
+    stepId,
+    sequence,
+    createdAt: event.occurredAt,
+    source: sourceOf(eventType),
+    payload,
+  });
+}
+
+function rendererPayloadOf(event: AgentRuntimeEvent): Record<string, unknown> {
+  const payload = { ...(event.payload ?? {}) };
+  delete payload.eventId;
+  delete payload.runId;
+  delete payload.sessionId;
+  delete payload.seq;
+  delete payload.sequence;
+
+  if (event.workspaceId && !payload.workspaceId) {
+    payload.workspaceId = event.workspaceId;
+  }
+  if (event.type === 'context.ready') {
+    const included = readNumber(payload.included);
+    const dropped = readNumber(payload.dropped);
+    if (included !== undefined && payload.sourceCount === undefined) payload.sourceCount = included;
+    if (dropped !== undefined && payload.droppedCount === undefined) payload.droppedCount = dropped;
+  }
+  if (event.type === 'run.status.changed') {
+    const status = readString(payload.status) ?? readString(payload.to);
+    if (status && payload.to === undefined) payload.to = normalizeRunStatus(status);
+  }
+  return payload;
+}
+
+function rendererEventTypeOf(event: AgentRuntimeEvent, payload: Record<string, unknown>): string {
+  if (event.type === 'context.ready') return 'context.effective.updated';
+  if (event.type === 'ai.message.completed') return 'assistant.output.completed';
+  if (event.type === 'tool.call.created') return 'tool.execution.requested';
+  if (event.type === 'tool.execution.completed') return toolExecutionCompletedEventType(payload);
+  if (event.type === 'run.status.changed') {
+    const status = normalizeRunStatus(readString(payload.status) ?? readString(payload.to));
+    if (status === 'completed') return 'run.completed';
+    if (status === 'failed') return 'run.failed';
+    if (status === 'cancelled') return 'run.cancelled';
+  }
+  if (event.type === 'turn.started') return 'step.started';
+  if (event.type === 'ai.message.event') return aiMessageRuntimeEventType(payload);
+  return event.type;
+}
+
+function toolExecutionCompletedEventType(payload: Record<string, unknown>): string {
+  const status = readString(payload.status);
+  if (status === 'failed' || status === 'error' || payload.isError === true || payload.error !== undefined) {
+    return 'tool.execution.failed';
+  }
+  if (status === 'rejected' || status === 'denied' || status === 'user_rejected' || status === 'policy_denied') {
+    return 'tool.execution.denied';
+  }
+  return 'tool.execution.completed';
+}
+
+function aiMessageRuntimeEventType(payload: Record<string, unknown>): string {
+  const streamEvent = readRecord(payload.event);
+  if (streamEvent?.type === 'content_block_delta') return 'assistant.output.delta';
+  if (streamEvent?.type === 'content_block_stop') return 'assistant.output.completed';
+  return 'assistant.output.event';
+}
+
+function stepIdOf(event: AgentRuntimeEvent, payload: Record<string, unknown>): string | undefined {
+  const explicit = readString(payload.stepId);
+  if (explicit) return explicit;
+  if (event.type !== 'turn.started') return undefined;
+  const turnIndex = readNumber(payload.turnIndex);
+  return turnIndex === undefined ? `turn:${event.runId ?? 'default-run'}` : `turn:${turnIndex}`;
+}
+
+function sourceOf(eventType: string): string {
+  if (eventType.startsWith('tool.')) return 'tool';
+  if (eventType.startsWith('approval.')) return 'approval';
+  if (eventType.startsWith('context.')) return 'core';
+  if (eventType.startsWith('assistant.') || eventType.startsWith('model.')) return 'provider';
+  return 'core';
+}
+
+function normalizeRunStatus(status: string | undefined): string | undefined {
+  if (status === 'canceled') return 'cancelled';
+  return status;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function stripUndefinedFields(event: RendererRuntimeEventDto): RendererRuntimeEventDto {
+  return Object.fromEntries(
+    Object.entries(event).filter(([, value]) => value !== undefined),
+  ) as RendererRuntimeEventDto;
 }

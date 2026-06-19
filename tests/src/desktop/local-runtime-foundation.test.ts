@@ -185,4 +185,86 @@ describe('local desktop runtime foundation', () => {
     });
     await runtime.stop();
   });
+
+  it('persists renderer workspace path on sessions created by startRun', async () => {
+    const root = await createTempRoot();
+    const runtime = createLocalDesktopRuntime({
+      hosts: createFakeHosts(root),
+      databasePath: ':memory:',
+      workspaceRoot: root,
+      ai: createFakeAi(),
+      now: () => '2026-06-19T00:00:00.000Z',
+      createId,
+    });
+
+    await runtime.agentRuntime.startRun({
+      rawInput: {
+        id: 'raw-workspace-path-1',
+        text: 'hello',
+        source: { kind: 'desktop' },
+        metadata: { workspacePath: 'C:/Users/anwen/Desktop/test' },
+        createdAt: '2026-06-19T00:00:00.000Z',
+      },
+      sessionId: 'session-workspace-path-1',
+      workspaceId: 'workspace-test',
+      client: {
+        clientKind: 'test',
+        requestId: 'request-workspace-path-1',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        capabilities: { streaming: true },
+      },
+    });
+
+    expect(runtime.sessionRepository.getSession('session-workspace-path-1')).toMatchObject({
+      id: 'session-workspace-path-1',
+      workspaceId: 'workspace-test',
+      workspacePath: 'C:/Users/anwen/Desktop/test',
+    });
+    await runtime.stop();
+  });
+
+  it('uses the requested provider and model for the Agent Run model call', async () => {
+    const root = await createTempRoot();
+    const seenModels: Array<{ providerId: string; modelId: string }> = [];
+    const runtime = createLocalDesktopRuntime({
+      hosts: createFakeHosts(root),
+      databasePath: ':memory:',
+      workspaceRoot: root,
+      ai: {
+        stream(model) {
+          seenModels.push(model);
+          return AssistantMessageEventStream.from([
+            { type: 'message_start', messageId: 'assistant-1', role: 'assistant' },
+            { type: 'content_block_start', index: 0, block: { type: 'text', text: '' } },
+            { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'pong' } },
+            { type: 'content_block_end', index: 0, block: { type: 'text', text: 'pong' } },
+            { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'pong' }], stopReason: 'stop' } },
+          ]);
+        },
+      },
+      now: () => '2026-06-19T00:00:00.000Z',
+      createId,
+    });
+
+    await runtime.agentRuntime.startRun({
+      rawInput: {
+        id: 'raw-model-1',
+        text: 'hello',
+        source: { kind: 'desktop' },
+        createdAt: '2026-06-19T00:00:00.000Z',
+      },
+      sessionId: 'session-model-1',
+      providerId: 'openai',
+      modelId: 'gpt-5.4-mini',
+      client: {
+        clientKind: 'test',
+        requestId: 'request-model-1',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        capabilities: { streaming: true },
+      },
+    });
+
+    expect(seenModels).toEqual([{ providerId: 'openai', modelId: 'gpt-5.4-mini' }]);
+    await runtime.stop();
+  });
 });
