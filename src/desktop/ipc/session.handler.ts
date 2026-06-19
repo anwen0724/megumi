@@ -12,9 +12,9 @@ export async function handleSessionOperation(operation: string, payload: unknown
   if (operation === 'session.message.send') {
     const response = await context.appApi.startRun(
       mapRendererMessageSendToAppStartRun(payload),
-      createDesktopClientContext(),
+      createDesktopClientContext(payload),
     );
-    return mapAppResponseToRenderer(response);
+    return mapAppResponseToRenderer(response, payload);
   }
   if (operation === 'session.message.cancel') {
     const response = await context.appApi.cancelRun(
