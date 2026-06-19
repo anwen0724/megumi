@@ -4,7 +4,6 @@ export type { AppApi } from './api';
 export { createAppApiAdapter } from './app-api-adapter';
 export type { AppClientCapabilities, AppClientContext, AppClientKind } from './client-context';
 export { AppApiError } from './errors';
-export type { AppEvent, AppEventSource, AppEventSubscriber } from './events';
 export type {
   AgentRuntimeCancelRequest,
   AgentRuntimeResumeRequest,

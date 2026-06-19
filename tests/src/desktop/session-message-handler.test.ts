@@ -39,7 +39,6 @@ function createContext() {
     resumeRun: vi.fn(),
     cancelRun: vi.fn(),
     retryRun: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
   };
   const context: DesktopIpcContext = {
     appApi,

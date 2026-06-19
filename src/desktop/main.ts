@@ -22,8 +22,8 @@ async function bootstrap(): Promise<void> {
   mainWindow = createMainWindow();
   cleanupHandlers = [
     registerDesktopIpcHandlers({ appApi, hosts: runtime.hosts, runtime, getMainWindow }),
-    registerChatStreamEventForwarder({ appApi, getMainWindow }),
-    registerRuntimeEventForwarder({ appApi, getMainWindow }),
+    registerChatStreamEventForwarder({ agentRuntime: runtime.agentRuntime, getMainWindow }),
+    registerRuntimeEventForwarder({ agentRuntime: runtime.agentRuntime, getMainWindow }),
   ];
 }
 

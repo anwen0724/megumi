@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppApi, AppEvent } from '../../../src/app';
+import type { AgentRuntimeEvent, AgentRuntimePort, AppApi } from '../../../src/app';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
 import { handleSessionOperation } from '../../../src/desktop/ipc/session.handler';
 import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/chat-stream-event-forwarder';
@@ -26,7 +26,7 @@ function createRequest(): SessionMessageSendRequestDto {
 
 describe('session message vertical slice', () => {
   it('keeps immediate ack separate from assistant stream events', async () => {
-    const subscribers: Array<(event: AppEvent) => void> = [];
+    const subscribers: Array<(event: AgentRuntimeEvent) => void> = [];
     const send = vi.fn();
     const appApi: AppApi = {
       startRun: vi.fn(async () => ({
@@ -35,6 +35,12 @@ describe('session message vertical slice', () => {
         workspaceId: 'workspace-1',
         status: 'running' as const,
       })),
+      resumeRun: vi.fn(),
+      cancelRun: vi.fn(),
+      retryRun: vi.fn(),
+    };
+    const agentRuntime: AgentRuntimePort = {
+      startRun: vi.fn(),
       resumeRun: vi.fn(),
       cancelRun: vi.fn(),
       retryRun: vi.fn(),
@@ -49,8 +55,8 @@ describe('session message vertical slice', () => {
     getMainWindow: () => ({ webContents: { send } }) as never,
   };
 
-    registerChatStreamEventForwarder(context);
-    registerRuntimeEventForwarder(context);
+    registerChatStreamEventForwarder({ agentRuntime, getMainWindow: context.getMainWindow });
+    registerRuntimeEventForwarder({ agentRuntime, getMainWindow: context.getMainWindow });
 
     const ack = await handleSessionOperation('session.message.send', createRequest(), context);
 
@@ -65,12 +71,11 @@ describe('session message vertical slice', () => {
 
     subscribers.forEach((subscriber) => subscriber({
       type: 'ai.message.event',
-      source: 'agent',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
       occurredAt: '2026-06-19T10:00:01.000Z',
       payload: {
-        runId: 'run-1',
-        sessionId: 'session-1',
-        workspaceId: 'workspace-1',
         event: {
           type: 'content_block_delta',
           index: 0,
@@ -80,13 +85,11 @@ describe('session message vertical slice', () => {
     }));
     subscribers.forEach((subscriber) => subscriber({
       type: 'run.completed',
-      source: 'agent',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
       occurredAt: '2026-06-19T10:00:02.000Z',
-      payload: {
-        runId: 'run-1',
-        sessionId: 'session-1',
-        workspaceId: 'workspace-1',
-      },
+      payload: {},
     }));
 
     expect(send).toHaveBeenCalledWith('megumi:chat-stream:event', expect.objectContaining({

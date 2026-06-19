@@ -1,23 +1,27 @@
-// Maps App events into renderer chat stream events.
-import type { AppEvent } from '../../app';
+// Projects Agent Runtime events into the renderer chat stream protocol.
+import type { AgentRuntimeEvent } from '../../app';
 import type { ChatStreamEvent } from '../../shared/renderer-contracts/chat-stream';
 
 export interface ChatStreamProjectionOptions {
   seq?: number;
 }
 
-export function mapAppEventToChatStreamEvent(event: AppEvent, options: ChatStreamProjectionOptions = {}): ChatStreamEvent | undefined {
+export function mapAgentRuntimeEventToChatStreamEvent(
+  event: AgentRuntimeEvent,
+  options: ChatStreamProjectionOptions = {},
+): ChatStreamEvent | undefined {
   const base = createBaseEvent(event, options);
+  const payload = payloadOf(event);
 
   if (event.type === 'turn.started') {
     return {
       ...base,
       eventType: 'turn.started',
-      userMessageId: readString(event.payload.userMessageId)
-        ?? readString(event.payload.messageId)
-        ?? readString(event.payload.clientMessageId)
+      userMessageId: readString(payload.userMessageId)
+        ?? readString(payload.messageId)
+        ?? readString(payload.clientMessageId)
         ?? `user-message:${base.runId}`,
-      clientMessageId: readString(event.payload.clientMessageId),
+      clientMessageId: readString(payload.clientMessageId),
     };
   }
 
@@ -29,8 +33,8 @@ export function mapAppEventToChatStreamEvent(event: AppEvent, options: ChatStrea
     return {
       ...base,
       eventType: 'assistant.text.completed',
-      textId: textIdFor(base.runId, event.payload),
-      phase: readAssistantPhase(event.payload.phase),
+      textId: textIdFor(base.runId, payload),
+      phase: readAssistantPhase(payload.phase),
     };
   }
 
@@ -38,62 +42,65 @@ export function mapAppEventToChatStreamEvent(event: AppEvent, options: ChatStrea
     return {
       ...base,
       eventType: 'tool.started',
-      ...toolFields(event.payload),
+      ...toolFields(payload),
     };
   }
 
   if (event.type === 'tool.execution.completed') {
     return {
       ...base,
-      eventType: isFailedToolExecution(event.payload) ? 'tool.failed' : 'tool.completed',
-      ...toolFields(event.payload),
-      errorCode: readString(event.payload.errorCode),
-      errorMessage: readErrorMessage(event.payload),
+      eventType: isFailedToolExecution(payload) ? 'tool.failed' : 'tool.completed',
+      ...toolFields(payload),
+      errorCode: readString(payload.errorCode),
+      errorMessage: readErrorMessage(payload),
     };
   }
 
   if (event.type === 'run.status.changed') {
-    const status = readString(event.payload.status) ?? readString(event.payload.to);
+    const status = readString(payload.status) ?? readString(payload.to);
     if (status === 'completed') return { ...base, eventType: 'turn.completed' };
-    if (status === 'failed') return { ...base, eventType: 'turn.failed', errorMessage: readErrorMessage(event.payload) };
-    if (status === 'cancelled' || status === 'canceled') return { ...base, eventType: 'turn.cancelled', reason: readString(event.payload.reason) };
+    if (status === 'failed') return { ...base, eventType: 'turn.failed', errorMessage: readErrorMessage(payload) };
+    if (status === 'cancelled' || status === 'canceled') return { ...base, eventType: 'turn.cancelled', reason: readString(payload.reason) };
   }
 
   if (event.type === 'run.completed') return { ...base, eventType: 'turn.completed' };
-  if (event.type === 'run.failed') return { ...base, eventType: 'turn.failed', errorMessage: readErrorMessage(event.payload) };
+  if (event.type === 'run.failed') return { ...base, eventType: 'turn.failed', errorMessage: readErrorMessage(payload) };
   if (event.type === 'run.cancelled' || event.type === 'run.canceled') {
-    return { ...base, eventType: 'turn.cancelled', reason: readString(event.payload.reason) };
+    return { ...base, eventType: 'turn.cancelled', reason: readString(payload.reason) };
   }
 
   return undefined;
 }
 
-function createBaseEvent(event: AppEvent, options: ChatStreamProjectionOptions): Omit<ChatStreamEvent, 'eventType'> {
-  const runId = readString(event.payload.runId) ?? 'default-run';
-  const sessionId = readString(event.payload.sessionId) ?? 'default-session';
-  const projectId = readString(event.payload.projectId)
-    ?? readString(event.payload.workspaceId)
+function createBaseEvent(event: AgentRuntimeEvent, options: ChatStreamProjectionOptions): Omit<ChatStreamEvent, 'eventType'> {
+  const payload = payloadOf(event);
+  const runId = event.runId ?? readString(payload.runId) ?? 'default-run';
+  const sessionId = event.sessionId ?? readString(payload.sessionId) ?? 'default-session';
+  const projectId = readString(payload.projectId)
+    ?? event.workspaceId
+    ?? readString(payload.workspaceId)
     ?? 'default-project';
-  const streamId = readString(event.payload.streamId) ?? `chat-stream:${runId}`;
-  const seq = readNumber(event.payload.seq) ?? readNumber(event.payload.sequence) ?? options.seq ?? 1;
+  const streamId = readString(payload.streamId) ?? `chat-stream:${runId}`;
+  const seq = readNumber(payload.seq) ?? readNumber(payload.sequence) ?? options.seq ?? 1;
 
   return {
-    eventId: readString(event.payload.eventId) ?? `chat-stream-event:${streamId}:${seq}`,
+    eventId: readString(payload.eventId) ?? `chat-stream-event:${streamId}:${seq}`,
     projectId,
     sessionId,
     runId,
     streamId,
-    streamKind: readString(event.payload.streamKind) ?? 'main',
+    streamKind: readString(payload.streamKind) ?? 'main',
     seq,
     createdAt: event.occurredAt,
   };
 }
 
 function mapAiMessageEvent(
-  event: AppEvent,
+  event: AgentRuntimeEvent,
   base: Omit<ChatStreamEvent, 'eventType'>,
 ): ChatStreamEvent | undefined {
-  const streamEvent = readRecord(event.payload.event);
+  const payload = payloadOf(event);
+  const streamEvent = readRecord(payload.event);
   if (!streamEvent) return undefined;
 
   if (streamEvent.type === 'content_block_delta') {
@@ -102,8 +109,8 @@ function mapAiMessageEvent(
       return {
         ...base,
         eventType: 'assistant.text.delta',
-        textId: textIdFor(base.runId, event.payload, streamEvent),
-        phase: readAssistantPhase(event.payload.phase),
+        textId: textIdFor(base.runId, payload, streamEvent),
+        phase: readAssistantPhase(payload.phase),
         delta: delta.text,
       };
     }
@@ -113,12 +120,16 @@ function mapAiMessageEvent(
     return {
       ...base,
       eventType: 'assistant.text.completed',
-      textId: textIdFor(base.runId, event.payload, streamEvent),
-      phase: readAssistantPhase(event.payload.phase),
+      textId: textIdFor(base.runId, payload, streamEvent),
+      phase: readAssistantPhase(payload.phase),
     };
   }
 
   return undefined;
+}
+
+function payloadOf(event: AgentRuntimeEvent): Record<string, unknown> {
+  return event.payload ?? {};
 }
 
 function toolFields(payload: Record<string, unknown>): {

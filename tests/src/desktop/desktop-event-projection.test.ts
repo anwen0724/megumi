@@ -1,27 +1,31 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { AppApi, AppEvent } from '../../../src/app';
+import type { AgentRuntimeEvent, AgentRuntimePort } from '../../../src/app';
 import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/chat-stream-event-forwarder';
 import { registerRuntimeEventForwarder } from '../../../src/desktop/ipc/runtime-event-forwarder';
-import { mapAppEventToChatStreamEvent } from '../../../src/desktop/mappers/app-event-to-chat-stream-event.mapper';
-import { mapAppEventToRuntimeEvent } from '../../../src/desktop/mappers/app-event-to-runtime-event.mapper';
+import { mapAgentRuntimeEventToChatStreamEvent } from '../../../src/desktop/mappers/agent-runtime-event-to-chat-stream-event.mapper';
+import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../../src/desktop/mappers/agent-runtime-event-to-renderer-runtime-event.mapper';
 
-function createAppEvent(type: string, payload: Record<string, unknown> = {}): AppEvent {
+function createAgentRuntimeEvent(type: string, input: {
+  runId?: string;
+  sessionId?: string;
+  workspaceId?: string;
+  payload?: Record<string, unknown>;
+} = {}): AgentRuntimeEvent {
   return {
     type,
     occurredAt: '2026-06-19T00:00:00.000Z',
-    source: 'agent',
+    runId: input.runId ?? 'run-1',
+    sessionId: input.sessionId ?? 'session-1',
+    ...('workspaceId' in input ? { workspaceId: input.workspaceId } : { workspaceId: 'workspace-1' }),
     payload: {
-      runId: 'run-1',
-      sessionId: 'session-1',
-      workspaceId: 'workspace-1',
-      ...payload,
+      ...(input.payload ?? {}),
     },
   };
 }
 
-function createFakeAppApi(): AppApi & { emit(event: AppEvent): void } {
-  const subscribers = new Set<(event: AppEvent) => void>();
+function createFakeAgentRuntime(): AgentRuntimePort & { emit(event: AgentRuntimeEvent): void } {
+  const subscribers = new Set<(event: AgentRuntimeEvent) => void>();
   return {
     async startRun() {
       return { runId: 'run-1', status: 'running' };
@@ -53,14 +57,16 @@ function createFakeWindow() {
   };
 }
 
-describe('desktop AppEvent projection', () => {
+describe('desktop AgentRuntimeEvent projection', () => {
   it('maps ai.message.event text deltas into renderer assistant.text.delta events', () => {
-    expect(mapAppEventToChatStreamEvent(createAppEvent('ai.message.event', {
-      seq: 7,
-      event: {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'text_delta', text: 'hello' },
+    expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('ai.message.event', {
+      payload: {
+        seq: 7,
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'hello' },
+        },
       },
     }))).toEqual(expect.objectContaining({
       eventType: 'assistant.text.delta',
@@ -77,18 +83,20 @@ describe('desktop AppEvent projection', () => {
     }));
   });
 
-  it('falls back to a renderer project id when AppEvent has no project id', () => {
-    expect(mapAppEventToChatStreamEvent(createAppEvent('turn.started', {
+  it('falls back to a renderer project id when AgentRuntimeEvent has no project id', () => {
+    expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('turn.started', {
       workspaceId: undefined,
-      seq: 1,
+      payload: { seq: 1 },
     }))).toEqual(expect.objectContaining({
       eventType: 'turn.started',
       projectId: 'default-project',
     }));
   });
 
-  it('maps run and tool AppEvents into renderer chat stream protocol events', () => {
-    expect(mapAppEventToChatStreamEvent(createAppEvent('ai.message.completed', { seq: 3 }))).toEqual(expect.objectContaining({
+  it('maps run and tool AgentRuntimeEvents into renderer chat stream protocol events', () => {
+    expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('ai.message.completed', {
+      payload: { seq: 3 },
+    }))).toEqual(expect.objectContaining({
       eventType: 'assistant.text.completed',
       projectId: 'workspace-1',
       sessionId: 'session-1',
@@ -100,12 +108,14 @@ describe('desktop AppEvent projection', () => {
       phase: 'answer',
     }));
 
-    expect(mapAppEventToChatStreamEvent(createAppEvent('tool.execution.completed', {
-      seq: 4,
-      toolCallId: 'tool-1',
-      toolExecutionId: 'tool-execution-1',
-      toolName: 'read_file',
-      status: 'succeeded',
+    expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('tool.execution.completed', {
+      payload: {
+        seq: 4,
+        toolCallId: 'tool-1',
+        toolExecutionId: 'tool-execution-1',
+        toolName: 'read_file',
+        status: 'succeeded',
+      },
     }))).toEqual(expect.objectContaining({
       eventType: 'tool.completed',
       toolCallId: 'tool-1',
@@ -114,10 +124,12 @@ describe('desktop AppEvent projection', () => {
       seq: 4,
     }));
 
-    expect(mapAppEventToChatStreamEvent(createAppEvent('run.status.changed', {
-      seq: 5,
-      status: 'failed',
-      error: { message: 'boom' },
+    expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('run.status.changed', {
+      payload: {
+        seq: 5,
+        status: 'failed',
+        error: { message: 'boom' },
+      },
     }))).toEqual(expect.objectContaining({
       eventType: 'turn.failed',
       errorMessage: 'boom',
@@ -126,12 +138,14 @@ describe('desktop AppEvent projection', () => {
   });
 
   it('does not force app-wide events into chat stream projection', () => {
-    expect(mapAppEventToChatStreamEvent(createAppEvent('approval.requested'))).toBeUndefined();
-    expect(mapAppEventToChatStreamEvent(createAppEvent('workspace.changed'))).toBeUndefined();
+    expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('approval.requested'))).toBeUndefined();
+    expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('workspace.changed'))).toBeUndefined();
   });
 
-  it('maps every AppEvent into renderer runtime event without changing owner facts', () => {
-    expect(mapAppEventToRuntimeEvent(createAppEvent('approval.requested', { approvalRequestId: 'approval-1' }))).toEqual({
+  it('maps every AgentRuntimeEvent into renderer runtime event without changing owner facts', () => {
+    expect(mapAgentRuntimeEventToRendererRuntimeEvent(createAgentRuntimeEvent('approval.requested', {
+      payload: { approvalRequestId: 'approval-1' },
+    }))).toEqual({
       type: 'approval.requested',
       occurredAt: '2026-06-19T00:00:00.000Z',
       payload: {
@@ -144,26 +158,32 @@ describe('desktop AppEvent projection', () => {
   });
 
   it('forwards mapped chat stream events to the renderer channel with eventType protocol payloads', () => {
-    const appApi = createFakeAppApi();
+    const agentRuntime = createFakeAgentRuntime();
     const window = createFakeWindow();
 
     const unsubscribe = registerChatStreamEventForwarder({
-      appApi,
+      agentRuntime,
       getMainWindow: () => window as never,
     });
-    appApi.emit(createAppEvent('ai.message.event', {
-      event: {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'text_delta', text: 'pong' },
+    agentRuntime.emit(createAgentRuntimeEvent('ai.message.event', {
+      payload: {
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'pong' },
+        },
       },
     }));
-    appApi.emit(createAppEvent('approval.requested', { approvalRequestId: 'approval-1' }));
-    appApi.emit(createAppEvent('ai.message.event', {
-      event: {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'text_delta', text: 'pong again' },
+    agentRuntime.emit(createAgentRuntimeEvent('approval.requested', {
+      payload: { approvalRequestId: 'approval-1' },
+    }));
+    agentRuntime.emit(createAgentRuntimeEvent('ai.message.event', {
+      payload: {
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: 'pong again' },
+        },
       },
     }));
     unsubscribe();
@@ -184,14 +204,16 @@ describe('desktop AppEvent projection', () => {
   });
 
   it('forwards runtime events to the renderer runtime channel', () => {
-    const appApi = createFakeAppApi();
+    const agentRuntime = createFakeAgentRuntime();
     const window = createFakeWindow();
 
     const unsubscribe = registerRuntimeEventForwarder({
-      appApi,
+      agentRuntime,
       getMainWindow: () => window as never,
     });
-    appApi.emit(createAppEvent('approval.requested', { approvalRequestId: 'approval-1' }));
+    agentRuntime.emit(createAgentRuntimeEvent('approval.requested', {
+      payload: { approvalRequestId: 'approval-1' },
+    }));
     unsubscribe();
 
     expect(window.webContents.send).toHaveBeenCalledWith('megumi:runtime:event', {

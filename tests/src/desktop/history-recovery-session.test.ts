@@ -32,7 +32,7 @@ function createContext(): DesktopIpcContext {
     status: 'completed',
   });
   return {
-    appApi: { startRun: vi.fn(), resumeRun: vi.fn(), cancelRun: vi.fn(), retryRun: vi.fn(), subscribe: vi.fn() } as never,
+    appApi: { startRun: vi.fn(), resumeRun: vi.fn(), cancelRun: vi.fn(), retryRun: vi.fn() } as never,
     hosts: {} as never,
     runtime: {
       sessionRepository,

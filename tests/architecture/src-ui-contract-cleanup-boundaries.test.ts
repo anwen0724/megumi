@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(__dirname, '../..');
 const uiRoot = path.join(repoRoot, 'src/ui');
+const appRoot = path.join(repoRoot, 'src/app');
 
 function listSourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
@@ -88,5 +89,24 @@ describe('src/ui renderer contract cleanup boundary', () => {
     expect(chatStreamSource).not.toContain('AgentRuntimeEvent');
     expect(chatStreamSource).not.toContain('RendererChatStreamEventDto');
     expect(chatStreamSource).toContain('eventType');
+  });
+
+  it('keeps app out of the live desktop event forwarding path', () => {
+    const appSource = listSourceFiles(appRoot)
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    const appApiSource = readFileSync(path.join(appRoot, 'api.ts'), 'utf8');
+    const appAdapterSource = readFileSync(path.join(appRoot, 'app-api-adapter.ts'), 'utf8');
+    const chatForwarderSource = readFileSync(path.join(repoRoot, 'src/desktop/ipc/chat-stream-event-forwarder.ts'), 'utf8');
+    const runtimeForwarderSource = readFileSync(path.join(repoRoot, 'src/desktop/ipc/runtime-event-forwarder.ts'), 'utf8');
+
+    expect(appSource).not.toMatch(/\bAppEvent\b/);
+    expect(appSource).not.toContain('mapAgentRuntimeEventToAppEvent');
+    expect(appApiSource).not.toContain('subscribe(');
+    expect(appAdapterSource).not.toContain('subscribe(');
+    expect(chatForwarderSource).not.toContain('AppApi');
+    expect(runtimeForwarderSource).not.toContain('AppApi');
+    expect(chatForwarderSource).toContain('AgentRuntimePort');
+    expect(runtimeForwarderSource).toContain('AgentRuntimePort');
   });
 });

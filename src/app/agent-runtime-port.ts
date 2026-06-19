@@ -21,5 +21,5 @@ export interface AgentRuntimePort {
   resumeRun(request: AgentRuntimeResumeRequest): Promise<AppRunResponse>;
   cancelRun(request: AgentRuntimeCancelRequest): Promise<AppRunControlResponse>;
   retryRun(request: AgentRuntimeRetryRequest): Promise<AppRunControlResponse>;
-  subscribe(callback: (event: AgentRuntimeEvent) => void): () => void;
+  subscribe(listener: (event: AgentRuntimeEvent) => void): () => void;
 }

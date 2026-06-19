@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createAppApiAdapter, type AgentRuntimeEvent, type AgentRuntimePort, type AppClientContext } from '../../../src/app';
+import { createAppApiAdapter, type AgentRuntimePort, type AppClientContext } from '../../../src/app';
 
 function createClientContext(): AppClientContext {
   return {
@@ -16,10 +16,7 @@ function createClientContext(): AppClientContext {
   };
 }
 
-function createFakeRuntime(): AgentRuntimePort & { emit(event: AgentRuntimeEvent): void; unsubscribeCount(): number } {
-  const subscribers = new Set<(event: AgentRuntimeEvent) => void>();
-  let unsubscribeCalls = 0;
-
+function createFakeRuntime(): AgentRuntimePort {
   return {
     async startRun(request) {
       return {
@@ -53,19 +50,7 @@ function createFakeRuntime(): AgentRuntimePort & { emit(event: AgentRuntimeEvent
         status: 'queued',
       };
     },
-    subscribe(callback) {
-      subscribers.add(callback);
-      return () => {
-        unsubscribeCalls += 1;
-        subscribers.delete(callback);
-      };
-    },
-    emit(event) {
-      for (const subscriber of subscribers) subscriber(event);
-    },
-    unsubscribeCount() {
-      return unsubscribeCalls;
-    },
+    subscribe: vi.fn(() => () => undefined),
   };
 }
 
@@ -98,41 +83,11 @@ describe('AppApi adapter', () => {
     });
   });
 
-  it('maps AgentRuntimeEvent into AppEvent and unsubscribes from runtime when the last subscriber leaves', () => {
+  it('does not expose or create an event subscription surface', () => {
     const runtime = createFakeRuntime();
     const appApi = createAppApiAdapter({ agentRuntime: runtime });
-    const received: unknown[] = [];
 
-    const unsubscribe = appApi.subscribe((event) => received.push(event));
-    runtime.emit({
-      type: 'ai.message.completed',
-      runId: 'run-1',
-      sessionId: 'session-1',
-      workspaceId: 'workspace-1',
-      occurredAt: '2026-06-19T00:00:01.000Z',
-      payload: { contentBlocks: 1 },
-    });
-    unsubscribe();
-    runtime.emit({
-      type: 'run.completed',
-      runId: 'run-1',
-      occurredAt: '2026-06-19T00:00:02.000Z',
-      payload: {},
-    });
-
-    expect(received).toEqual([
-      {
-        type: 'ai.message.completed',
-        occurredAt: '2026-06-19T00:00:01.000Z',
-        source: 'agent',
-        payload: {
-          runId: 'run-1',
-          sessionId: 'session-1',
-          workspaceId: 'workspace-1',
-          contentBlocks: 1,
-        },
-      },
-    ]);
-    expect(runtime.unsubscribeCount()).toBe(1);
+    expect('subscribe' in appApi).toBe(false);
+    expect(runtime.subscribe).not.toHaveBeenCalled();
   });
 });

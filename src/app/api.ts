@@ -1,6 +1,5 @@
 // Defines the cross-entry App API consumed by desktop, future web, CLI, and tests.
 import type { AppClientContext } from './client-context';
-import type { AppEvent } from './events';
 import type {
   AppCancelRunRequest,
   AppResumeRunRequest,
@@ -14,5 +13,4 @@ export interface AppApi {
   resumeRun(request: AppResumeRunRequest, context: AppClientContext): Promise<AppRunResponse>;
   cancelRun(request: AppCancelRunRequest, context: AppClientContext): Promise<AppRunControlResponse>;
   retryRun(request: AppRetryRunRequest, context: AppClientContext): Promise<AppRunControlResponse>;
-  subscribe(callback: (event: AppEvent) => void): () => void;
 }
