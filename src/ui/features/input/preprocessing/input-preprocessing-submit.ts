@@ -1,6 +1,6 @@
 // Builds preliminary renderer input preprocessing payloads before Desktop Main performs trusted validation.
-import type { PermissionModeSelectionSource } from '@megumi/shared/permission';
-import type { InputPreprocessingResult } from '@megumi/shared/input';
+import type { PermissionModeSelectionSource } from '@megumi/renderer-contracts/permission';
+import type { InputPreprocessingResult } from '@megumi/renderer-contracts/input';
 import {
   dispatchCommandText,
   listCommandSuggestions,

@@ -1,4 +1,4 @@
-﻿import type { ArtifactKind, ArtifactStatus } from '@megumi/shared/artifact';
+import type { ArtifactKind, ArtifactStatus } from '@megumi/renderer-contracts/artifact';
 
 export interface ArtifactCardData {
   artifactId: string;

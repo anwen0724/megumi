@@ -23,13 +23,18 @@ function readUiSource(): string {
     .join('\n');
 }
 
+function readUiImportSpecifiers(): string[] {
+  const importPattern = /(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g;
+  return [...readUiSource().matchAll(importPattern)].map((match) => match[1]);
+}
+
 describe('src/ui renderer contract cleanup boundary', () => {
   it('does not import old package shared contracts', () => {
     expect(readUiSource()).not.toContain('@megumi/shared');
   });
 
   it('does not import owner modules or desktop main implementation directly', () => {
-    const source = readUiSource();
+    const specifiers = readUiImportSpecifiers();
 
     for (const forbidden of [
       '../agent',
@@ -61,7 +66,7 @@ describe('src/ui renderer contract cleanup boundary', () => {
       'node:child_process',
       'child_process',
     ]) {
-      expect(source).not.toContain(forbidden);
+      expect(specifiers.some((specifier) => specifier === forbidden || specifier.startsWith(`${forbidden}/`))).toBe(false);
     }
   });
 

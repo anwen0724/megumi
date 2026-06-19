@@ -1,5 +1,5 @@
-﻿import type { PermissionMode } from '@megumi/shared/permission';
-import type { ProviderId } from '@megumi/shared/provider';
+import type { PermissionMode } from '@megumi/renderer-contracts/permission';
+import type { ProviderId } from '@megumi/renderer-contracts/provider';
 
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel =

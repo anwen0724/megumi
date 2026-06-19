@@ -1,6 +1,6 @@
-﻿import type { ReactNode } from 'react';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline';
+import type { ReactNode } from 'react';
+import type { RecoverableRunSummary } from '@megumi/renderer-contracts/recovery';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/renderer-contracts/timeline';
 import { RecoverableActionStack } from '../components/RecoverableActionStack';
 import { TimelineMessage } from '../components/TimelineMessage';
 import { WorkspaceChangeFooter } from '../components/WorkspaceChangeFooter';

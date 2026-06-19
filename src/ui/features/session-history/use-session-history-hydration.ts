@@ -1,7 +1,7 @@
-﻿import { useCallback } from 'react';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { Run } from '@megumi/shared/session';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { useCallback } from 'react';
+import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
+import type { Run } from '@megumi/renderer-contracts/session';
+import type { RuntimeEvent } from '@megumi/renderer-contracts/runtime';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore } from '../../entities/chat-ui/store';
 import { useProjectStore } from '../../entities/project/store';

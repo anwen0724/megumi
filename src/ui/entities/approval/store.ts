@@ -1,5 +1,5 @@
-﻿import { create } from 'zustand';
-import type { ApprovalRequest, ApprovalStatus } from '@megumi/shared/tool';
+import { create } from 'zustand';
+import type { ApprovalRequest, ApprovalStatus } from '@megumi/renderer-contracts/tool';
 
 export interface ApprovalState {
   approvalRequestsById: Record<string, ApprovalRequest>;

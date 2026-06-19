@@ -1,6 +1,6 @@
-﻿import type { Run, Session } from '@megumi/shared/session';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { AnswerTextBlock, TimelineMessage } from '@megumi/shared/timeline';
+import type { Run, Session } from '@megumi/renderer-contracts/session';
+import type { RuntimeEvent } from '@megumi/renderer-contracts/runtime';
+import type { AnswerTextBlock, TimelineMessage } from '@megumi/renderer-contracts/timeline';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
 
 export interface TimelineHistoryMessage {

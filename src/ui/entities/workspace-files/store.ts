@@ -1,9 +1,9 @@
-﻿import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { create } from 'zustand';
+import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
 import type {
   WorkspaceDirectoryEntry,
   WorkspaceFilesListPayload,
-} from '@megumi/shared/workspace';
+} from '@megumi/renderer-contracts/workspace';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,

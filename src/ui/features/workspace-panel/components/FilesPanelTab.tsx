@@ -1,6 +1,6 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { ChevronRight, FileText, Folder } from 'lucide-react';
-import type { WorkspaceDirectoryEntry } from '@megumi/shared/workspace';
+import type { WorkspaceDirectoryEntry } from '@megumi/renderer-contracts/workspace';
 import { useProjectStore } from '../../../entities/project/store';
 import { useWorkspaceFilesStore } from '../../../entities/workspace-files';
 import { cx } from '../../../shared/ui';

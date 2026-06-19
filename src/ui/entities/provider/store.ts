@@ -1,13 +1,13 @@
-﻿import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { RuntimeIpcResult } from '@megumi/shared/ipc';
+import { create } from 'zustand';
+import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
+import type { RuntimeIpcResult } from '@megumi/renderer-contracts/ipc';
 import type {
   ProviderApiKeyPayload,
   ProviderDeleteApiKeyPayload,
   ProviderListData,
   ProviderUpdatePayload,
-} from '@megumi/shared/ipc';
-import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider';
+} from '@megumi/renderer-contracts/ipc';
+import type { ProviderId, ProviderPublicStatus } from '@megumi/renderer-contracts/provider';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,

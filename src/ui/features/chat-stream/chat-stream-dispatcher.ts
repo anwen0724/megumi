@@ -1,4 +1,4 @@
-﻿import { ChatStreamEventSchema } from '@megumi/shared/chat-stream';
+import { ChatStreamEventSchema } from '@megumi/renderer-contracts/chat-stream';
 import { useChatStreamStore } from './chat-stream-store';
 
 export function dispatchChatStreamEvent(payload: unknown): void {

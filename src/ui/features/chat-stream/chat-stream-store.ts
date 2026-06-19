@@ -1,6 +1,6 @@
-﻿import { create } from 'zustand';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { TimelineMessage, TimelineUserMessage } from '@megumi/shared/timeline';
+import { create } from 'zustand';
+import type { ChatStreamEvent } from '@megumi/renderer-contracts/chat-stream';
+import type { TimelineMessage, TimelineUserMessage } from '@megumi/renderer-contracts/timeline';
 import { createChatStreamBuffer, type ChatStreamBuffer } from './chat-stream-buffer';
 import { reduceChatStreamEvent } from './chat-stream-projection';
 

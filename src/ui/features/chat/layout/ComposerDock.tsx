@@ -1,7 +1,7 @@
-﻿import { useLayoutEffect, useRef } from 'react';
-import type { ApprovalRequest } from '@megumi/shared/tool';
-import type { ProviderId } from '@megumi/shared/provider';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery';
+import { useLayoutEffect, useRef } from 'react';
+import type { ApprovalRequest } from '@megumi/renderer-contracts/tool';
+import type { ProviderId } from '@megumi/renderer-contracts/provider';
+import type { RecoverableRunSummary } from '@megumi/renderer-contracts/recovery';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';

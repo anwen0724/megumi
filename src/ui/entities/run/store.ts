@@ -1,6 +1,6 @@
-﻿import { create } from 'zustand';
-import type { RunStepKind, RunStepStatus, RunStatus } from '@megumi/shared/session';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { create } from 'zustand';
+import type { RunStepKind, RunStepStatus, RunStatus } from '@megumi/renderer-contracts/session';
+import type { RuntimeEvent } from '@megumi/renderer-contracts/runtime';
 
 export type RendererRunStatus = RunStatus;
 

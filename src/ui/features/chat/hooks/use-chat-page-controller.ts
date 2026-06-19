@@ -1,8 +1,8 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApprovalResolvePayload, WorkspaceRestoreData } from '@megumi/shared/ipc';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ApprovalResolvePayload, WorkspaceRestoreData } from '@megumi/renderer-contracts/ipc';
+import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
+import type { RecoverableRunSummary } from '@megumi/renderer-contracts/recovery';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/renderer-contracts/timeline';
 import { type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';

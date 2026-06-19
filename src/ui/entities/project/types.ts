@@ -1,4 +1,4 @@
-﻿import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project';
+import type { ProjectRecord, ProjectStatus } from '@megumi/renderer-contracts/project';
 
 export interface Project {
   id: string;

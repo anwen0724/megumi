@@ -1,9 +1,9 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import type {
   RunContext,
   RunContextSource,
-} from '@megumi/shared/run';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+} from '@megumi/renderer-contracts/run';
+import type { RuntimeEvent } from '@megumi/renderer-contracts/runtime';
 
 interface RunContextState {
   baselineByRun: Record<string, RunContext>;

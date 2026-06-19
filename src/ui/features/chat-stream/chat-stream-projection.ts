@@ -1,2 +1,2 @@
-﻿export { reduceChatStreamEvent } from '@megumi/shared/timeline';
+export { reduceChatStreamEvent } from '@megumi/renderer-contracts/timeline';
 

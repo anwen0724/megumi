@@ -1,5 +1,5 @@
-﻿import { createStore } from 'zustand/vanilla';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery';
+import { createStore } from 'zustand/vanilla';
+import type { RecoverableRunSummary } from '@megumi/renderer-contracts/recovery';
 import type {
   RecoverableRunListData,
   RunCancelData,
@@ -8,7 +8,7 @@ import type {
   RunResumePayload,
   RunRetryData,
   RunRetryPayload,
-} from '@megumi/shared/ipc';
+} from '@megumi/renderer-contracts/ipc';
 
 export interface RecoveryApi {
   listRecoverableRuns(): Promise<RecoverableRunListData>;

@@ -1,9 +1,9 @@
-﻿import { FileText, RotateCcw } from 'lucide-react';
+import { FileText, RotateCcw } from 'lucide-react';
 import type {
   WorkspaceChangeFooterChangeSet,
   WorkspaceChangeFooterFact,
   WorkspaceChangeFooterFile,
-} from '@megumi/shared/workspace';
+} from '@megumi/renderer-contracts/workspace';
 import { Button } from '../../../shared/ui';
 
 interface WorkspaceChangeFooterProps {

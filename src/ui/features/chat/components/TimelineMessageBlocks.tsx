@@ -1,9 +1,9 @@
-﻿import type {
+import type {
   AnswerTextBlock,
   BranchSeparatorBlock,
   TimelineMessage as CanonicalTimelineMessage,
   UserTimelineBlock,
-} from '@megumi/shared/timeline';
+} from '@megumi/renderer-contracts/timeline';
 import { TimelineMarkdown } from './TimelineMarkdown';
 import { ProcessDisclosureBlockView } from './ProcessDisclosureBlockView';
 

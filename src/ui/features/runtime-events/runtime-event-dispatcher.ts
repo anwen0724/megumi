@@ -1,12 +1,12 @@
-﻿import type {
+import type {
   RunCancelledPayload,
   RunFailedPayload,
   RuntimeEvent,
   ToolExecutionApprovalRequestedPayload,
   ToolResultCreatedPayload,
-} from '@megumi/shared/runtime';
-import type { RuntimeError } from '@megumi/shared/runtime';
-import type { ApprovalRequest, ApprovalStatus, ToolExecution, ToolPolicyDecision } from '@megumi/shared/tool';
+} from '@megumi/renderer-contracts/runtime';
+import type { RuntimeError } from '@megumi/renderer-contracts/runtime';
+import type { ApprovalRequest, ApprovalStatus, ToolExecution, ToolPolicyDecision } from '@megumi/renderer-contracts/tool';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore, type AgentRunStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';

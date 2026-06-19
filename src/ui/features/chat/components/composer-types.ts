@@ -1,7 +1,7 @@
 // Defines the public Composer payload shape consumed by chat timeline orchestration.
-import type { InputPreprocessingResult } from '@megumi/shared/input';
-import type { PermissionModeSelectionSource } from '@megumi/shared/permission';
-import type { ProviderId } from '@megumi/shared/provider';
+import type { InputPreprocessingResult } from '@megumi/renderer-contracts/input';
+import type { PermissionModeSelectionSource } from '@megumi/renderer-contracts/permission';
+import type { ProviderId } from '@megumi/renderer-contracts/provider';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 
 export type ComposerStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';

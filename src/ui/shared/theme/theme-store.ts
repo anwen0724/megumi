@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
 import { createRendererRuntimeIpcRequest } from '../ipc';
 import type { ThemeName } from './theme-tokens';
 

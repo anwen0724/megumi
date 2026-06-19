@@ -1,5 +1,5 @@
-﻿import { create } from 'zustand';
-import type { AgentType } from '@megumi/shared/session';
+import { create } from 'zustand';
+import type { AgentType } from '@megumi/renderer-contracts/session';
 import { createLocalSession, type LocalRendererSession } from './session-factory';
 
 interface CreateLocalSessionInput {

@@ -1,5 +1,5 @@
-﻿import { create } from 'zustand';
-import type { ToolExecution } from '@megumi/shared/tool';
+import { create } from 'zustand';
+import type { ToolExecution } from '@megumi/renderer-contracts/tool';
 
 export interface ToolCallState {
   toolCallsById: Record<string, ToolExecution>;

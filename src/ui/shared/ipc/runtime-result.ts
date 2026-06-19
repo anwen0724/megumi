@@ -1,5 +1,5 @@
-﻿import type { BusinessIpcChannel, RuntimeIpcFailure, RuntimeIpcResult } from '@megumi/shared/ipc';
-import type { RuntimeIpcError } from '@megumi/shared/ipc';
+import type { BusinessIpcChannel, RuntimeIpcFailure, RuntimeIpcResult } from '@megumi/renderer-contracts/ipc';
+import type { RuntimeIpcError } from '@megumi/renderer-contracts/ipc';
 
 export function getRuntimeIpcFailure<TChannel extends BusinessIpcChannel>(
   result: RuntimeIpcResult<object, TChannel>,

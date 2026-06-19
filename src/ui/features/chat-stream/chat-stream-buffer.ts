@@ -1,4 +1,4 @@
-﻿import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { ChatStreamEvent } from '@megumi/renderer-contracts/chat-stream';
 
 export type ChatStreamBufferResult =
   | { status: 'accepted' }

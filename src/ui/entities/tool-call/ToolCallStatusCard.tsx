@@ -1,5 +1,5 @@
-﻿import { AlertCircle, CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react';
-import type { ToolExecution, ToolExecutionStatus } from '@megumi/shared/tool';
+import { AlertCircle, CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import type { ToolExecution, ToolExecutionStatus } from '@megumi/renderer-contracts/tool';
 import { Badge, Panel, cx } from '../../shared/ui';
 
 interface ToolCallStatusCardProps {

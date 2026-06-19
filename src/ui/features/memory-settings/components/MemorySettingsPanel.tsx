@@ -1,7 +1,7 @@
 // Renders the global long-term memory runtime toggle in Settings.
 // This component does not display, edit, or preview individual memory records.
 import { useEffect, useState } from 'react';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';
 

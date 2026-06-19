@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronRight, CircleDot, CircleSlash, Clock3, XCircle } from 'lucide-react';
 import type {
   ApprovalActivityItem,
@@ -12,7 +12,7 @@ import type {
   RetryActivityItem,
   ThinkingItem,
   ToolActivityItem,
-} from '@megumi/shared/timeline';
+} from '@megumi/renderer-contracts/timeline';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
 
