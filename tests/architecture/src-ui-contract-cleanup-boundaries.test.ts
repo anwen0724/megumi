@@ -78,4 +78,15 @@ describe('src/ui renderer contract cleanup boundary', () => {
     expect(source).toContain('runtime');
     expect(source).toContain('session.message.send');
   });
+
+  it('keeps chat stream UI on renderer eventType protocol instead of app/runtime events', () => {
+    const chatStreamSource = listSourceFiles(path.join(uiRoot, 'features/chat-stream'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(chatStreamSource).not.toContain('AppEvent');
+    expect(chatStreamSource).not.toContain('AgentRuntimeEvent');
+    expect(chatStreamSource).not.toContain('RendererChatStreamEventDto');
+    expect(chatStreamSource).toContain('eventType');
+  });
 });

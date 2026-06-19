@@ -2,28 +2,22 @@
 import type { JsonObject } from '../json';
 import type { RuntimeError } from './runtime';
 
-export type AgentType = 'default' | 'analyst' | 'architect' | 'developer' | 'reviewer' | 'free' | 'planner' | 'coder';
+export type AgentType = 'analyst' | 'architect' | 'developer' | 'reviewer' | 'free';
 
-export const AGENT_TYPES: AgentType[] = ['default', 'analyst', 'architect', 'developer', 'reviewer', 'free', 'planner', 'coder'];
+export const AGENT_TYPES: AgentType[] = ['analyst', 'architect', 'developer', 'reviewer', 'free'];
 export const AGENT_LABELS: Record<AgentType, string> = {
-  default: 'Default',
   analyst: 'Analyst',
   architect: 'Architect',
   developer: 'Developer',
   reviewer: 'Reviewer',
   free: 'Free',
-  planner: 'Planner',
-  coder: 'Coder',
 };
 export const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
-  default: 'General coding agent',
   analyst: 'Research, requirements, and problem framing',
   architect: 'Architecture, design, and tradeoff analysis',
   developer: 'Implementation and debugging',
   reviewer: 'Review, verification, and risk checks',
   free: 'General-purpose agent session',
-  planner: 'Planning focused agent',
-  coder: 'Implementation focused agent',
 };
 
 export type RunStatus = 'queued' | 'running' | 'waiting_for_approval' | 'paused' | 'cancelling' | 'cancelled' | 'failed' | 'completed';

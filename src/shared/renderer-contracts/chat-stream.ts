@@ -28,9 +28,7 @@ export type ChatStreamEventType =
   | 'process.compaction.recorded'
   | 'process.retry.recorded'
   | 'process.recovery.recorded'
-  | 'workspace.change.footer.updated'
-  | 'assistant.delta'
-  | 'assistant.completed';
+  | 'workspace.change.footer.updated';
 
 export type AssistantTextPhase = 'prelude' | 'answer';
 export type ChatStreamKind = 'main' | (string & {});
@@ -78,25 +76,9 @@ export type ChatStreamEvent =
       [key: string]: unknown;
     });
 
-export interface RendererChatStreamEventDto {
-  type: string;
-  occurredAt: string;
-  sessionId?: string;
-  runId?: string;
-  payload: Record<string, unknown>;
-}
+export type RendererChatStreamEventDto = ChatStreamEvent;
 
-export const ChatStreamEventSchema = z.union([
-  z.object({
-    id: z.string(),
-    type: z.string(),
-    sessionId: z.string(),
-    runId: z.string().optional(),
-    messageId: z.string().optional(),
-    createdAt: z.string(),
-    payload: z.record(z.unknown()).default({}),
-  }),
-  z.object({
+const ChatStreamEventBaseSchema = z.object({
     eventId: z.string(),
     eventType: z.string(),
     projectId: z.string(),
@@ -106,5 +88,46 @@ export const ChatStreamEventSchema = z.union([
     streamKind: z.string(),
     seq: z.number().int(),
     createdAt: z.string(),
-  }).passthrough(),
-]) satisfies z.ZodType<unknown>;
+  });
+
+export const ChatStreamEventSchema = ChatStreamEventBaseSchema.passthrough()
+  .superRefine((value, context) => {
+    if (!isChatStreamEventType(value.eventType)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Unsupported chat stream event type: ${value.eventType}`,
+        path: ['eventType'],
+      });
+    }
+  }) satisfies z.ZodType<unknown>;
+
+function isChatStreamEventType(value: string): value is ChatStreamEventType {
+  return [
+    'turn.started',
+    'turn.completed',
+    'turn.failed',
+    'turn.cancelled',
+    'user.message.committed',
+    'assistant.text.started',
+    'assistant.text.delta',
+    'assistant.text.reclassified',
+    'assistant.text.completed',
+    'assistant.text.failed',
+    'assistant.text.cancelled_partial',
+    'assistant.thinking.started',
+    'assistant.thinking.delta',
+    'assistant.thinking.completed',
+    'tool.started',
+    'tool.completed',
+    'tool.failed',
+    'tool.denied',
+    'approval.requested',
+    'approval.resolved',
+    'branch.separator.created',
+    'branch.separator.removed',
+    'process.compaction.recorded',
+    'process.retry.recorded',
+    'process.recovery.recorded',
+    'workspace.change.footer.updated',
+  ].includes(value);
+}

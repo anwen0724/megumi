@@ -180,39 +180,6 @@ export type TimelineMessage = TimelineUserMessage | TimelineAssistantMessage | T
 export type TimelineBlock = UserTimelineBlock | AssistantTimelineBlock | BranchSeparatorBlock;
 
 export function reduceChatStreamEvent(messages: TimelineMessage[], event: ChatStreamEvent): TimelineMessage[] {
-  if (event.eventType === 'assistant.delta') {
-    const text = typeof event.payload === 'object' && event.payload && 'text' in event.payload
-      ? String(event.payload.text ?? '')
-      : '';
-    const messageId = `assistant:${event.runId}`;
-    const existing = messages.find((message): message is TimelineAssistantMessage =>
-      message.role === 'assistant' && message.messageId === messageId
-    );
-
-    if (!existing) {
-      return [...messages, {
-        messageId,
-        role: 'assistant',
-        runId: event.runId,
-        projectId: event.projectId,
-        sessionId: event.sessionId,
-        createdAt: event.createdAt,
-        updatedAt: event.createdAt,
-        blocks: [{
-          blockId: `answer:${event.runId}`,
-          kind: 'answer_text',
-          runId: event.runId,
-          textId: `${event.runId}:answer`,
-          status: 'streaming',
-          text,
-          format: 'markdown',
-          createdAt: event.createdAt,
-          updatedAt: event.createdAt,
-        }],
-      }];
-    }
-  }
-
   return reduceLegacyChatStreamEvent(messages, event);
 }
 

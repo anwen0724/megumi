@@ -54,32 +54,75 @@ function createFakeWindow() {
 }
 
 describe('desktop AppEvent projection', () => {
-  it('maps run, ai, and tool AppEvents into renderer chat stream events', () => {
-    expect(mapAppEventToChatStreamEvent(createAppEvent('ai.message.completed', { contentBlocks: 1 }))).toEqual({
-      type: 'ai.message.completed',
-      occurredAt: '2026-06-19T00:00:00.000Z',
+  it('maps ai.message.event text deltas into renderer assistant.text.delta events', () => {
+    expect(mapAppEventToChatStreamEvent(createAppEvent('ai.message.event', {
+      seq: 7,
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'hello' },
+      },
+    }))).toEqual(expect.objectContaining({
+      eventType: 'assistant.text.delta',
+      projectId: 'workspace-1',
       sessionId: 'session-1',
       runId: 'run-1',
-      payload: {
-        runId: 'run-1',
-        sessionId: 'session-1',
-        workspaceId: 'workspace-1',
-        contentBlocks: 1,
-      },
-    });
+      streamId: 'chat-stream:run-1',
+      streamKind: 'main',
+      seq: 7,
+      createdAt: '2026-06-19T00:00:00.000Z',
+      textId: 'assistant-text:run-1:answer:0',
+      phase: 'answer',
+      delta: 'hello',
+    }));
+  });
 
-    expect(mapAppEventToChatStreamEvent(createAppEvent('tool.execution.completed', { toolCallId: 'tool-1' }))).toEqual({
-      type: 'tool.execution.completed',
-      occurredAt: '2026-06-19T00:00:00.000Z',
+  it('falls back to a renderer project id when AppEvent has no project id', () => {
+    expect(mapAppEventToChatStreamEvent(createAppEvent('turn.started', {
+      workspaceId: undefined,
+      seq: 1,
+    }))).toEqual(expect.objectContaining({
+      eventType: 'turn.started',
+      projectId: 'default-project',
+    }));
+  });
+
+  it('maps run and tool AppEvents into renderer chat stream protocol events', () => {
+    expect(mapAppEventToChatStreamEvent(createAppEvent('ai.message.completed', { seq: 3 }))).toEqual(expect.objectContaining({
+      eventType: 'assistant.text.completed',
+      projectId: 'workspace-1',
       sessionId: 'session-1',
       runId: 'run-1',
-      payload: {
-        runId: 'run-1',
-        sessionId: 'session-1',
-        workspaceId: 'workspace-1',
-        toolCallId: 'tool-1',
-      },
-    });
+      streamId: 'chat-stream:run-1',
+      streamKind: 'main',
+      seq: 3,
+      textId: 'assistant-text:run-1:answer:0',
+      phase: 'answer',
+    }));
+
+    expect(mapAppEventToChatStreamEvent(createAppEvent('tool.execution.completed', {
+      seq: 4,
+      toolCallId: 'tool-1',
+      toolExecutionId: 'tool-execution-1',
+      toolName: 'read_file',
+      status: 'succeeded',
+    }))).toEqual(expect.objectContaining({
+      eventType: 'tool.completed',
+      toolCallId: 'tool-1',
+      toolExecutionId: 'tool-execution-1',
+      toolName: 'read_file',
+      seq: 4,
+    }));
+
+    expect(mapAppEventToChatStreamEvent(createAppEvent('run.status.changed', {
+      seq: 5,
+      status: 'failed',
+      error: { message: 'boom' },
+    }))).toEqual(expect.objectContaining({
+      eventType: 'turn.failed',
+      errorMessage: 'boom',
+      seq: 5,
+    }));
   });
 
   it('does not force app-wide events into chat stream projection', () => {
@@ -100,7 +143,7 @@ describe('desktop AppEvent projection', () => {
     });
   });
 
-  it('forwards mapped chat stream events to the renderer channel', () => {
+  it('forwards mapped chat stream events to the renderer channel with eventType protocol payloads', () => {
     const appApi = createFakeAppApi();
     const window = createFakeWindow();
 
@@ -108,23 +151,36 @@ describe('desktop AppEvent projection', () => {
       appApi,
       getMainWindow: () => window as never,
     });
-    appApi.emit(createAppEvent('ai.message.completed', { contentBlocks: 1 }));
+    appApi.emit(createAppEvent('ai.message.event', {
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'pong' },
+      },
+    }));
     appApi.emit(createAppEvent('approval.requested', { approvalRequestId: 'approval-1' }));
+    appApi.emit(createAppEvent('ai.message.event', {
+      event: {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'pong again' },
+      },
+    }));
     unsubscribe();
 
-    expect(window.webContents.send).toHaveBeenCalledTimes(1);
-    expect(window.webContents.send).toHaveBeenCalledWith('megumi:chat-stream:event', {
-      type: 'ai.message.completed',
-      occurredAt: '2026-06-19T00:00:00.000Z',
-      sessionId: 'session-1',
-      runId: 'run-1',
-      payload: {
-        runId: 'run-1',
-        sessionId: 'session-1',
-        workspaceId: 'workspace-1',
-        contentBlocks: 1,
-      },
-    });
+    expect(window.webContents.send).toHaveBeenCalledTimes(2);
+    expect(window.webContents.send).toHaveBeenCalledWith('megumi:chat-stream:event', expect.objectContaining({
+      eventType: 'assistant.text.delta',
+      delta: 'pong',
+      seq: 1,
+    }));
+    expect(window.webContents.send).toHaveBeenCalledWith('megumi:chat-stream:event', expect.objectContaining({
+      eventType: 'assistant.text.delta',
+      delta: 'pong again',
+      seq: 2,
+    }));
+    expect(window.webContents.send.mock.calls[0][1]).not.toHaveProperty('type');
+    expect(window.webContents.send.mock.calls[1][1]).not.toHaveProperty('type');
   });
 
   it('forwards runtime events to the renderer runtime channel', () => {

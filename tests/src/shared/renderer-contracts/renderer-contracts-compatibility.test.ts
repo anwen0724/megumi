@@ -25,18 +25,30 @@ describe('renderer contracts', () => {
     }).success).toBe(true);
 
     expect(ChatStreamEventSchema.safeParse({
-      id: 'chat-event-1',
-      type: 'assistant.delta',
+      eventId: 'chat-event-1',
+      eventType: 'assistant.text.delta',
+      projectId: 'project-1',
       sessionId: 'session-1',
       runId: 'run-1',
+      streamId: 'chat-stream:run-1',
+      streamKind: 'main',
+      seq: 1,
       createdAt: '2026-06-20T00:00:00.000Z',
-      payload: { text: 'hello' },
+      textId: 'assistant-text:run-1:answer:0',
+      phase: 'answer',
+      delta: 'hello',
     }).success).toBe(true);
+
+    expect(ChatStreamEventSchema.safeParse({
+      type: 'ai.message.event',
+      occurredAt: '2026-06-20T00:00:00.000Z',
+      payload: { text: 'hello' },
+    }).success).toBe(false);
   });
 
   it('exports renderer-only constants and reducers without importing packages/shared', () => {
-    expect(AGENT_TYPES).toContain('default');
-    expect(AGENT_LABELS.default).toBeTruthy();
+    expect(AGENT_TYPES).toEqual(['analyst', 'architect', 'developer', 'reviewer', 'free']);
+    expect(AGENT_LABELS.analyst).toBeTruthy();
     expect(isPermissionMode('default')).toBe(true);
     expect(typeof reduceChatStreamEvent).toBe('function');
   });

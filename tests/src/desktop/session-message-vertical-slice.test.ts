@@ -90,12 +90,12 @@ describe('session message vertical slice', () => {
     }));
 
     expect(send).toHaveBeenCalledWith('megumi:chat-stream:event', expect.objectContaining({
-      type: 'ai.message.event',
+      eventType: 'assistant.text.delta',
       runId: 'run-1',
       sessionId: 'session-1',
-      payload: expect.objectContaining({
-        event: expect.objectContaining({ type: 'content_block_delta' }),
-      }),
+      streamId: 'chat-stream:run-1',
+      seq: 1,
+      delta: 'pong',
     }));
     expect(send).toHaveBeenCalledWith('megumi:runtime:event', expect.objectContaining({
       type: 'run.completed',
