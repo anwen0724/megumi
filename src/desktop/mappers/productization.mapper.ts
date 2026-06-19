@@ -9,6 +9,7 @@ import type {
   RendererWorkspaceChangeSetDto,
   RendererWorkspaceRestoreResultDto,
 } from '../../shared';
+import type { JsonObject, JsonValue } from '../../shared';
 import type { ToolAuditRecord, ToolDefinition, ToolExecution } from '../../tools';
 import type { WorkspaceChangedFile, WorkspaceChangeSet, WorkspaceRestoreResult } from '../../workspace';
 
@@ -49,7 +50,7 @@ export function mapToolExecutionDetail(
       id: record.id,
       status: record.status,
       createdAt: record.createdAt,
-      ...(record.error ? { error: record.error } : {}),
+      ...(record.error ? { error: record.error as unknown as JsonObject } : {}),
     })),
   };
 }
@@ -99,7 +100,7 @@ export function mapApprovalRequest(request: ApprovalRequest): RendererPermission
     status: request.status,
     createdAt: request.createdAt,
     ...(request.resolvedAt ? { resolvedAt: request.resolvedAt } : {}),
-    policyDecision: request.policyDecision,
+    policyDecision: request.policyDecision as unknown as JsonValue,
   };
 }
 

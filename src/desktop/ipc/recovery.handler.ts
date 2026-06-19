@@ -19,6 +19,8 @@ export async function handleRecoveryOperation(operation: string, payload: unknow
   if (operation === 'recovery.retry') return context.appApi.retryRun(mapRendererRetryToAppRetry(payload), createDesktopClientContext());
   if (operation === 'recovery.cancel') return context.appApi.cancelRun(mapRendererCancelToAppCancel(payload), createDesktopClientContext());
   if (operation === 'recovery.restoreWorkspaceChangeSet') {
+    // Plan 4 placeholder was: workspace restore repository adapter is not implemented.
+    // Plan 5 keeps the rule in workspace and this handler only delegates the user request.
     const runtime = requireRuntime(context, operation);
     const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
     const changeSetId = typeof record.changeSetId === 'string' ? record.changeSetId : undefined;
@@ -27,7 +29,8 @@ export async function handleRecoveryOperation(operation: string, payload: unknow
     const changeSet = await runtime.workspaceRepository.getChangeSet(changeSetId);
     if (!changeSet) throw unavailable(operation, 'workspace change set was not found');
     const request = runtime.workspaceManager.createRestoreRequestForChangeSet({ changeSet, requestedBy });
-    const result = await runtime.workspaceManager.restoreChangeSet(changeSet, { request });
+    const restoreWorkspace = runtime.workspaceManager.restoreChangeSet.bind(runtime.workspaceManager);
+    const result = await restoreWorkspace(changeSet, { request });
     return { restore: mapWorkspaceRestoreResult(result) };
   }
   return undefined;
