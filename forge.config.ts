@@ -28,8 +28,8 @@ const config: ForgeConfig = {
   plugins: [
     new VitePlugin({
       build: [
-        { entry: 'apps/desktop/src/main/index.ts', config: 'vite.main.config.ts', target: 'main' },
-        { entry: 'apps/desktop/src/preload/index.ts', config: 'vite.preload.config.ts', target: 'preload' },
+        { entry: 'src/desktop/main.ts', config: 'vite.main.config.ts', target: 'main' },
+        { entry: 'src/desktop/preload/index.ts', config: 'vite.preload.config.ts', target: 'preload' },
       ],
       renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }],
     }),

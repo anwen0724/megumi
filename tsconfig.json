@@ -13,6 +13,8 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
+      "@megumi/renderer-contracts": ["src/shared/renderer-contracts/index.ts"],
+      "@megumi/renderer-contracts/*": ["src/shared/renderer-contracts/*"],
       "@megumi/desktop/*": ["apps/desktop/src/*"],
       "@megumi/core": ["packages/core/index.ts"],
       "@megumi/core/*": ["packages/core/*"],
@@ -32,6 +34,6 @@
       "@megumi/shared/*": ["packages/shared/*"]
     }
   },
-  "include": ["apps/**/*", "packages/**/*", "tests/**/*"],
+  "include": ["apps/**/*", "packages/**/*", "src/**/*", "tests/**/*"],
   "exclude": ["node_modules"]
 }
