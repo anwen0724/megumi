@@ -17,6 +17,7 @@ import type {
 } from '../../app';
 import {
   ProviderRegistry,
+  createOpenAICompatibleAdapter,
   stream as streamAssistantMessage,
   type AiRequestOptions,
   type AssistantMessageEventStream,
@@ -24,7 +25,7 @@ import {
 } from '../../ai';
 import { type AgentAiClient, type AgentRunEvent, createAgentRunner } from '../../agent';
 import { BUILT_IN_INPUT_COMMAND_REGISTRY } from '../../command';
-import { openSqliteDatabase, runDatabaseMigrations, SqliteSessionStateRepository, type SqliteDatabase } from '../../database';
+import { openSqliteDatabase, runDatabaseMigrations, SqliteProjectRepository, SqliteSessionStateRepository, type SqliteDatabase } from '../../database';
 import { parseRawInput, type ParsedInput, type RawInput } from '../../input';
 import { evaluatePermissionPolicy, createInMemoryPermissionRepository, type PermissionRepository } from '../../permission';
 import type { JsonObject, JsonValue } from '../../shared';
@@ -40,6 +41,10 @@ import {
   type WorkspacePath,
 } from '../../workspace';
 import { DesktopIpcError, unavailable } from '../ipc/ipc-errors';
+import { createAppSettingsStore, type AppSettingsStore } from '../infrastructure/app-settings-store';
+import { initializeMegumiHome, type MegumiHomePaths } from '../infrastructure/megumi-home';
+import { createProviderSettingsStore, type ProviderSettingsStore } from '../infrastructure/provider-settings-store';
+import { createRuntimeJsonlLogger, type RuntimeLogger } from '../infrastructure/runtime-logger';
 import { createRuntimeEventBus, type RuntimeEventBus } from './create-runtime-event-bus';
 import { createHostAdapters, type DesktopHostAdapters } from './create-host-adapters';
 
@@ -48,6 +53,11 @@ export interface LocalDesktopRuntime {
   eventBus: RuntimeEventBus;
   hosts: DesktopHostAdapters;
   database: SqliteDatabase;
+  megumiHomePaths: MegumiHomePaths;
+  settingsStore: AppSettingsStore;
+  providerSettingsStore: ProviderSettingsStore;
+  projectRepository: SqliteProjectRepository;
+  runtimeLogger: RuntimeLogger;
   sessionRepository: SessionStateRepository;
   sessionManager: ReturnType<typeof createSessionStateManager>;
   permissionRepository: PermissionRepository;
@@ -76,13 +86,29 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   const hosts = options.hosts ?? createHostAdapters();
   const now = options.now ?? (() => new Date().toISOString());
   const createId = options.createId ?? createStableId;
-  const databasePath = options.databasePath ?? path.join(hosts.megumiHomeHost.getMegumiHome(), 'megumi-src.sqlite');
+  const megumiHomePaths = initializeMegumiHome({
+    env: process.env,
+    homeDirectory: path.dirname(hosts.megumiHomeHost.getMegumiHome()),
+    now: () => new Date(now()),
+  });
+  const databasePath = options.databasePath ?? megumiHomePaths.databasePath;
   if (databasePath !== ':memory:') {
     fs.mkdirSync(path.dirname(databasePath), { recursive: true });
   }
   const database = openSqliteDatabase(databasePath);
   runDatabaseMigrations(database, { now });
   const sessionRepository = new SqliteSessionStateRepository(database);
+  const projectRepository = new SqliteProjectRepository(database);
+  const settingsStore = createAppSettingsStore({ settingsPath: megumiHomePaths.settingsPath });
+  const providerSettingsStore = createProviderSettingsStore({
+    settings: settingsStore,
+    env: {
+      DEEPSEEK_API_KEY: hosts.environmentHost.get('DEEPSEEK_API_KEY'),
+      OPENAI_API_KEY: hosts.environmentHost.get('OPENAI_API_KEY'),
+      ANTHROPIC_API_KEY: hosts.environmentHost.get('ANTHROPIC_API_KEY'),
+    },
+  });
+  const runtimeLogger = createRuntimeJsonlLogger({ filePath: megumiHomePaths.runtimeLogPath, now });
   const sessionManager = createSessionStateManager({ repository: sessionRepository, now, createId });
   const permissionRepository = createInMemoryPermissionRepository();
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
@@ -128,7 +154,10 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     toolExecutor: toolExecutionService,
     ai,
     model: options.model ?? defaultModel,
-    aiOptions: options.aiOptions ?? { registry: new ProviderRegistry([]) },
+    aiOptions: options.aiOptions ?? {
+      registry: createProviderRegistry(providerSettingsStore),
+      credentialResolver: providerSettingsStore,
+    },
     systemInstruction: options.systemInstruction ?? 'You are Megumi.',
     now,
     createId,
@@ -206,6 +235,11 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     eventBus,
     hosts,
     database,
+    megumiHomePaths,
+    settingsStore,
+    providerSettingsStore,
+    projectRepository,
+    runtimeLogger,
     sessionRepository,
     sessionManager,
     permissionRepository,
@@ -414,4 +448,21 @@ function isInputSourceKind(value: unknown): value is RawInput['source']['kind'] 
 
 function jsonObjectOrUndefined(value: unknown): JsonObject | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : undefined;
+}
+
+function createProviderRegistry(providerSettingsStore: ProviderSettingsStore): ProviderRegistry {
+  const deepseek = providerSettingsStore.getProviderSettings('deepseek');
+  const openai = providerSettingsStore.getProviderSettings('openai');
+  return new ProviderRegistry([
+    createOpenAICompatibleAdapter({
+      providerId: 'deepseek',
+      baseUrl: deepseek.baseUrl ?? 'https://api.deepseek.com',
+      fetch,
+    }),
+    createOpenAICompatibleAdapter({
+      providerId: 'openai',
+      baseUrl: openai.baseUrl ?? 'https://api.openai.com/v1',
+      fetch,
+    }),
+  ]);
 }
