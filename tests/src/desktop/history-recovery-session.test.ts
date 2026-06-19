@@ -10,6 +10,7 @@ function createId(prefix: string, value: string): string {
 
 function createContext(): DesktopIpcContext {
   const sessionRepository = createInMemorySessionRepository();
+  const publishedEvents: unknown[] = [];
   const sessionManager = createSessionStateManager({
     repository: sessionRepository,
     now: () => '2026-06-20T00:00:00.000Z',
@@ -33,9 +34,17 @@ function createContext(): DesktopIpcContext {
   return {
     appApi: { startRun: vi.fn(), resumeRun: vi.fn(), cancelRun: vi.fn(), retryRun: vi.fn(), subscribe: vi.fn() } as never,
     hosts: {} as never,
-    runtime: { sessionRepository, sessionManager } as never,
+    runtime: {
+      sessionRepository,
+      sessionManager,
+      eventBus: {
+        publish: (event: unknown) => publishedEvents.push(event),
+        subscribe: vi.fn(),
+      },
+    } as never,
     getMainWindow: () => undefined,
-  };
+    publishedEvents,
+  } as DesktopIpcContext & { publishedEvents: unknown[] };
 }
 
 describe('history and recovery session IPC', () => {
@@ -58,7 +67,9 @@ describe('history and recovery session IPC', () => {
   });
 
   it('creates and cancels branch draft through session owner facts', async () => {
-    const context = createContext();
+    const context = createContext() as DesktopIpcContext & { publishedEvents: unknown[] };
+    const originalLeaf = context.runtime?.sessionRepository.getActiveLeaf('session-1');
+    expect(originalLeaf?.id).toBe('session-source-entry-source-run-1');
 
     const created = await handleSessionOperation('session.branchDraft.create', {
       sessionId: 'session-1',
@@ -72,11 +83,50 @@ describe('history and recovery session IPC', () => {
       seedText: 'hello',
       intent: 'rerun',
     });
+    expect(context.runtime?.sessionRepository.getActiveLeaf('session-1')?.id)
+      .toBe('session-source-entry-source-user-1');
 
     await expect(handleSessionOperation('session.branchDraft.cancel', {
       sessionId: 'session-1',
       branchMarkerId: created.branchDraft.branchMarkerId,
       createdAt: '2026-06-20T00:02:00.000Z',
     }, context)).resolves.toEqual({ cancelled: true });
+    expect(context.runtime?.sessionRepository.getActiveLeaf('session-1')?.id).toBe(originalLeaf?.id);
+    expect(context.publishedEvents).toContainEqual(expect.objectContaining({
+      type: 'session.branch_draft.cancelled',
+      sessionId: 'session-1',
+      occurredAt: expect.any(String),
+      payload: {
+        branchMarkerId: created.branchDraft.branchMarkerId,
+        restoredLeafSourceEntryId: originalLeaf?.id,
+        reason: 'branch_cancelled',
+      },
+    }));
+  });
+
+  it('does not cancel a branch draft after new sources were appended', async () => {
+    const context = createContext();
+
+    const created = await handleSessionOperation('session.branchDraft.create', {
+      sessionId: 'session-1',
+      messageId: 'session-message-user-1',
+      intent: 'branch',
+      createdAt: '2026-06-20T00:01:00.000Z',
+    }, context) as { branchDraft: { branchMarkerId: string } };
+    context.runtime?.sessionManager.appendMessage({
+      idSeed: 'after-branch',
+      sourceEntryIdSeed: 'source-after-branch',
+      sessionId: 'session-1',
+      role: 'user',
+      content: { text: 'new branch input' },
+    });
+
+    await expect(handleSessionOperation('session.branchDraft.cancel', {
+      sessionId: 'session-1',
+      branchMarkerId: created.branchDraft.branchMarkerId,
+      createdAt: '2026-06-20T00:02:00.000Z',
+    }, context)).resolves.toEqual({ cancelled: false, reason: 'branch_has_new_sources' });
+    expect(context.runtime?.sessionRepository.getActiveLeaf('session-1')?.id)
+      .toBe('session-source-entry-source-after-branch');
   });
 });

@@ -54,12 +54,17 @@ export async function handleSessionOperation(operation: string, payload: unknown
     if (!sourceEntry) throw unavailable(operation, `message is not on the active path: ${messageId}`);
     const sourceMessage = runtime.sessionRepository.getMessage(messageId);
     if (!sourceMessage) throw unavailable(operation, `message was not found: ${messageId}`);
+    const previousActiveLeaf = runtime.sessionRepository.getActiveLeaf(sessionId);
     const { marker } = runtime.sessionManager.createBranch({
       idSeed: `${sessionId}-${messageId}-${intent}`,
       sessionId,
       fromSourceEntryId: sourceEntry.id,
       label: intent === 'rerun' ? 'Rerun from message' : 'Branch from message',
-      metadata: { intent, sourceMessageId: messageId },
+      metadata: {
+        intent,
+        sourceMessageId: messageId,
+        ...(previousActiveLeaf ? { previousActiveLeafSourceEntryId: previousActiveLeaf.id } : {}),
+      },
     });
     return { branchDraft: mapBranchDraft({ marker, sourceMessage, intent }) };
   }
@@ -76,6 +81,28 @@ export async function handleSessionOperation(operation: string, payload: unknown
     if (!activeLeaf || activeLeaf.id !== marker.sourceEntryId) {
       return { cancelled: false, reason: 'branch_has_new_sources' };
     }
+    const previousActiveLeafSourceEntryId = typeof marker.metadata?.previousActiveLeafSourceEntryId === 'string'
+      ? marker.metadata.previousActiveLeafSourceEntryId
+      : undefined;
+    if (!previousActiveLeafSourceEntryId) {
+      return { cancelled: false, reason: 'previous_active_leaf_not_found' };
+    }
+    const previousActiveLeaf = runtime.sessionRepository.getSourceEntry(previousActiveLeafSourceEntryId);
+    if (!previousActiveLeaf) {
+      return { cancelled: false, reason: 'previous_active_leaf_not_found' };
+    }
+    runtime.sessionRepository.setActiveLeaf(sessionId, previousActiveLeaf.id);
+    const occurredAt = typeof record.createdAt === 'string' ? record.createdAt : new Date().toISOString();
+    runtime.eventBus.publish({
+      type: 'session.branch_draft.cancelled',
+      sessionId,
+      occurredAt,
+      payload: {
+        branchMarkerId,
+        restoredLeafSourceEntryId: previousActiveLeaf.id,
+        reason: 'branch_cancelled',
+      },
+    });
     return { cancelled: true };
   }
   return undefined;

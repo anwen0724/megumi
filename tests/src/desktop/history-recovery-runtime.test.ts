@@ -77,14 +77,40 @@ describe('durable runtime event history', () => {
       hosts: fakeHosts(root),
       runtime,
       getMainWindow: () => undefined,
-    });
+    }) as { events: Array<{ type: string; runId: string; sessionId?: string; workspaceId?: string; sequence: number }> };
+    const storedEvents = runtime.runtimeEventRepository.listEventsByRun(response.runId);
 
     expect(result).toEqual({
       events: expect.arrayContaining([
-        expect.objectContaining({ type: 'run.started', runId: response.runId, sequence: 1 }),
-        expect.objectContaining({ type: 'run.status.changed', runId: response.runId }),
+        expect.objectContaining({
+          type: 'run.started',
+          runId: response.runId,
+          sessionId: 'session-1',
+          workspaceId: 'workspace-local',
+          sequence: 1,
+        }),
+        expect.objectContaining({
+          type: 'run.status.changed',
+          runId: response.runId,
+          sessionId: 'session-1',
+          workspaceId: 'workspace-local',
+        }),
       ]),
     });
+    expect(storedEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'run.started',
+        runId: response.runId,
+        sessionId: 'session-1',
+        workspaceId: 'workspace-local',
+      }),
+      expect.objectContaining({
+        type: 'run.status.changed',
+        runId: response.runId,
+        sessionId: 'session-1',
+        workspaceId: 'workspace-local',
+      }),
+    ]));
     await runtime.stop();
   });
 });

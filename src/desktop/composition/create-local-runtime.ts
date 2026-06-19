@@ -158,8 +158,25 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   };
 
   function publishRuntimeEvent(event: AgentRuntimeEvent): void {
-    runtimeEventRepository.saveEvent(event);
-    eventBus.publish(event);
+    const enriched = enrichRuntimeEvent(event);
+    runtimeEventRepository.saveEvent(enriched);
+    eventBus.publish(enriched);
+  }
+
+  function enrichRuntimeEvent(event: AgentRuntimeEvent): AgentRuntimeEvent {
+    const payloadSessionId = typeof event.payload?.sessionId === 'string' ? event.payload.sessionId : undefined;
+    const payloadWorkspaceId = typeof event.payload?.workspaceId === 'string' ? event.payload.workspaceId : undefined;
+    const run = event.runId ? sessionRepository.getRunRecord(event.runId) : undefined;
+    const sessionId = event.sessionId ?? payloadSessionId ?? run?.sessionId;
+    const session = sessionId ? sessionRepository.getSession(sessionId) : undefined;
+    const metadataWorkspaceId = typeof run?.metadata?.workspaceId === 'string' ? run.metadata.workspaceId : undefined;
+    const workspaceId = event.workspaceId ?? payloadWorkspaceId ?? metadataWorkspaceId ?? session?.workspaceId;
+
+    return {
+      ...event,
+      ...(sessionId ? { sessionId } : {}),
+      ...(workspaceId ? { workspaceId } : {}),
+    };
   }
 
   const runner = createAgentRunner({
