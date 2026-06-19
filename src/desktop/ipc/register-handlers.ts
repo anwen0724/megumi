@@ -8,6 +8,7 @@ import { handleRecoveryOperation } from './recovery.handler';
 import { handleRunOperation } from './run.handler';
 import { handleSessionOperation } from './session.handler';
 import { handleSettingsOperation } from './settings.handler';
+import { handleToolOperation } from './tool.handler';
 import { handleWindowOperation } from './window.handler';
 import { handleWorkspaceFilesOperation } from './workspace-files.handler';
 import type { DesktopIpcContext } from './ipc-context';
@@ -26,6 +27,7 @@ export function registerDesktopIpcHandlers(context: DesktopIpcContext): () => vo
         (await handleProviderOperation(operation, payload, context)) ??
         (await handleSettingsOperation(operation, payload, context)) ??
         (await handleRunOperation(operation, payload, context)) ??
+        (await handleToolOperation(operation, payload, context)) ??
         (await handleWorkspaceFilesOperation(operation, payload, context)) ??
         (await handleWindowOperation(operation, payload, context)) ??
         unavailableResult(operation);

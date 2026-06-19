@@ -57,10 +57,16 @@ export function createMegumiRendererApi(): MegumiRendererApi {
         list: (payload) => invokeRendererOperation('workspace.files.list', payload),
         open: (payload) => invokeRendererOperation('workspace.files.open', payload),
       },
+      changes: {
+        list: (payload) => invokeRendererOperation('workspace.changes.list', payload),
+      },
     },
     runContext: { get: (payload) => invokeRendererOperation('runContext.get', payload) },
     plan: { list: (payload) => invokeRendererOperation('plan.list', payload) },
-    tool: { list: (payload) => invokeRendererOperation('tool.list', payload) },
+    tool: {
+      list: (payload) => invokeRendererOperation('tool.list', payload),
+      execution: { get: (payload) => invokeRendererOperation('tool.execution.get', payload) },
+    },
     artifacts: { list: (payload) => invokeRendererOperation('artifacts.list', payload) },
     memory: { getSettings: (payload) => invokeRendererOperation('memory.getSettings', payload) },
   };

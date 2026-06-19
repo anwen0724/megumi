@@ -29,13 +29,16 @@ import {
   openSqliteDatabase,
   runDatabaseMigrations,
   SqliteProjectRepository,
+  SqlitePermissionRepository,
   SqliteRecoveryRepository,
   SqliteRuntimeEventRepository,
   SqliteSessionStateRepository,
+  SqliteToolExecutionRepository,
+  SqliteWorkspaceRepository,
   type SqliteDatabase,
 } from '../../database';
 import { parseRawInput, type ParsedInput, type RawInput } from '../../input';
-import { evaluatePermissionPolicy, createInMemoryPermissionRepository, type PermissionRepository } from '../../permission';
+import { evaluatePermissionPolicy, type PermissionRepository } from '../../permission';
 import type { JsonObject, JsonValue } from '../../shared';
 import { createSessionStateManager, type Session, type SessionStateRepository } from '../../session';
 import { createBuiltInToolRegistry, createToolExecutionService, projectToolSetFromRegistry, type ToolProcessHost } from '../../tools';
@@ -71,6 +74,11 @@ export interface LocalDesktopRuntime {
   sessionRepository: SessionStateRepository;
   sessionManager: ReturnType<typeof createSessionStateManager>;
   permissionRepository: PermissionRepository;
+  permissionEvaluator: { evaluate: typeof evaluatePermissionPolicy };
+  toolRegistry: ReturnType<typeof createBuiltInToolRegistry>;
+  toolExecutionService: ReturnType<typeof createToolExecutionService>;
+  toolExecutionRepository: SqliteToolExecutionRepository;
+  workspaceRepository: SqliteWorkspaceRepository;
   workspaceManager: WorkspaceManager;
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -111,6 +119,9 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   const projectRepository = new SqliteProjectRepository(database);
   const runtimeEventRepository = new SqliteRuntimeEventRepository(database);
   const recoveryRepository = new SqliteRecoveryRepository(database, sessionRepository);
+  const permissionRepository = new SqlitePermissionRepository(database);
+  const toolExecutionRepository = new SqliteToolExecutionRepository(database);
+  const workspaceRepository = new SqliteWorkspaceRepository(database);
   const settingsStore = createAppSettingsStore({ settingsPath: megumiHomePaths.settingsPath });
   const providerSettingsStore = createProviderSettingsStore({
     settings: settingsStore,
@@ -122,7 +133,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   });
   const runtimeLogger = createRuntimeJsonlLogger({ filePath: megumiHomePaths.runtimeLogPath, now });
   const sessionManager = createSessionStateManager({ repository: sessionRepository, now, createId });
-  const permissionRepository = createInMemoryPermissionRepository();
+  const permissionEvaluator = { evaluate: evaluatePermissionPolicy };
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
   const workspace = createWorkspace({
     id: 'workspace-local',
@@ -134,6 +145,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   const workspaceManager = createWorkspaceManager({
     workspace,
     fileHost: createWorkspaceFileHost(workspaceRoot),
+    repository: workspaceRepository,
     now,
     createId,
     rootAuthorization: createWorkspaceRootAuthorization({
@@ -148,6 +160,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     registry: toolRegistry,
     workspace: workspaceManager,
     processHost: createToolProcessHost(hosts),
+    executionRepository: toolExecutionRepository,
     now,
     createId,
   });
@@ -183,7 +196,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     sessionManager,
     sessionRepository,
     permissionRepository,
-    permissionEvaluator: { evaluate: evaluatePermissionPolicy },
+    permissionEvaluator,
     toolRegistry,
     toolSet: projectToolSetFromRegistry(toolRegistry).tools,
     toolExecutor: toolExecutionService,
@@ -376,6 +389,11 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     sessionRepository,
     sessionManager,
     permissionRepository,
+    permissionEvaluator,
+    toolRegistry,
+    toolExecutionService,
+    toolExecutionRepository,
+    workspaceRepository,
     workspaceManager,
     async start() {},
     async stop() {

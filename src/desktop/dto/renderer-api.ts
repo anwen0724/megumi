@@ -101,6 +101,9 @@ export interface MegumiRendererApi {
       list(payload: unknown): Promise<UntypedRendererIpcResult>;
       open(payload: unknown): Promise<UntypedRendererIpcResult>;
     };
+    changes: {
+      list(payload: unknown): Promise<UntypedRendererIpcResult>;
+    };
   };
   runContext: {
     get(payload?: unknown): Promise<UntypedRendererIpcResult>;
@@ -110,6 +113,7 @@ export interface MegumiRendererApi {
   };
   tool: {
     list(payload?: unknown): Promise<UntypedRendererIpcResult>;
+    execution: { get(payload: unknown): Promise<UntypedRendererIpcResult> };
   };
   artifacts: {
     list(payload?: unknown): Promise<UntypedRendererIpcResult>;
