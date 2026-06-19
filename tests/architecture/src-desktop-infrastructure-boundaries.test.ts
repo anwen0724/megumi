@@ -20,6 +20,16 @@ describe('src desktop infrastructure boundaries', () => {
     expect(providerHandler).not.toContain('decrypt(');
   });
 
+  it('keeps renderer settings IPC responses behind an explicit safe projection', () => {
+    const settingsStore = read('src/desktop/infrastructure/app-settings-store.ts');
+    const settingsHandler = read('src/desktop/ipc/settings.handler.ts');
+
+    expect(settingsStore).toContain('toRendererSafeSettings');
+    expect(settingsHandler).toContain('toRendererSafeSettings');
+    expect(settingsHandler).not.toContain('return { settings: runtime.settingsStore.getResolvedSettings() }');
+    expect(settingsHandler).not.toContain('return { settings: runtime.settingsStore.updateSettings(');
+  });
+
   it('keeps desktop infrastructure outside Agent Loop rules', () => {
     const files = [
       'src/desktop/infrastructure/megumi-home.ts',

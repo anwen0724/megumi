@@ -44,6 +44,12 @@ export interface AppSettingsResolved {
   permissions: Record<string, unknown>;
 }
 
+export type RendererSafeProviderSettings = Omit<ProviderSettingsResolved, 'apiKey'>;
+
+export interface RendererSafeAppSettings extends Omit<AppSettingsResolved, 'providers'> {
+  providers: Record<ProviderId, RendererSafeProviderSettings>;
+}
+
 export interface AppSettingsStore {
   getRawSettings(): AppSettingsRaw;
   getResolvedSettings(): AppSettingsResolved;
@@ -118,6 +124,21 @@ export function resolveAppSettings(raw: AppSettingsRaw = {}): AppSettingsResolve
   };
 }
 
+export function toRendererSafeSettings(settings: AppSettingsResolved): RendererSafeAppSettings {
+  return {
+    theme: settings.theme,
+    memory: { ...settings.memory },
+    compaction: { ...settings.compaction },
+    chat: { ...settings.chat },
+    permissions: { ...settings.permissions },
+    providers: {
+      deepseek: toRendererSafeProviderSettings(settings.providers.deepseek),
+      openai: toRendererSafeProviderSettings(settings.providers.openai),
+      anthropic: toRendererSafeProviderSettings(settings.providers.anthropic),
+    },
+  };
+}
+
 export function mergeRawAppSettings(current: AppSettingsRaw, patch: AppSettingsRaw): AppSettingsRaw {
   return {
     ...current,
@@ -146,6 +167,11 @@ function resolveProvider(providerId: ProviderId, raw?: ProviderSettingsRaw): Pro
   if (raw?.apiKey === null) delete sanitized.apiKey;
   if (raw?.apiKeyEnv === null) delete sanitized.apiKeyEnv;
   return { ...base, ...sanitized } as ProviderSettingsResolved;
+}
+
+function toRendererSafeProviderSettings(settings: ProviderSettingsResolved): RendererSafeProviderSettings {
+  const { apiKey: _apiKey, ...safeSettings } = settings;
+  return safeSettings;
 }
 
 function mergeProviders(

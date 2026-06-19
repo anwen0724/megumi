@@ -5,6 +5,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createAppSettingsStore } from '../../../src/desktop/infrastructure/app-settings-store';
 import { createProviderSettingsStore } from '../../../src/desktop/infrastructure/provider-settings-store';
+import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
+import { handleSettingsOperation } from '../../../src/desktop/ipc/settings.handler';
 
 const roots: string[] = [];
 
@@ -69,5 +71,46 @@ describe('settings and provider infrastructure', () => {
       type: 'api_key',
       value: 'sk-settings-secret',
     });
+  });
+
+  it('keeps settings IPC responses renderer-safe while preserving credential resolution', async () => {
+    const settingsPath = await tempSettingsPath();
+    const settings = createAppSettingsStore({ settingsPath });
+    const providers = createProviderSettingsStore({ settings });
+    const context = {
+      runtime: { settingsStore: settings },
+    } as DesktopIpcContext;
+
+    const updateResponse = await handleSettingsOperation('settings.update', {
+      providers: {
+        deepseek: {
+          apiKey: 'sk-ipc-secret',
+          apiKeyEnv: 'DEEPSEEK_API_KEY',
+          baseUrl: 'https://api.deepseek.com',
+        },
+      },
+    }, context) as { settings: { providers: { deepseek: Record<string, unknown> } } };
+
+    await expect(providers.resolveCredential('deepseek')).resolves.toEqual({
+      type: 'api_key',
+      value: 'sk-ipc-secret',
+    });
+    expect(updateResponse.settings.providers.deepseek).not.toHaveProperty('apiKey');
+    expect(updateResponse.settings.providers.deepseek).toMatchObject({
+      apiKeyEnv: 'DEEPSEEK_API_KEY',
+      baseUrl: 'https://api.deepseek.com',
+    });
+    expect(JSON.stringify(updateResponse)).not.toContain('sk-ipc-secret');
+
+    const getResponse = await handleSettingsOperation('settings.get', undefined, context) as {
+      settings: { providers: { deepseek: Record<string, unknown> } };
+    };
+
+    expect(getResponse.settings.providers.deepseek).not.toHaveProperty('apiKey');
+    expect(getResponse.settings.providers.deepseek).toMatchObject({
+      apiKeyEnv: 'DEEPSEEK_API_KEY',
+      baseUrl: 'https://api.deepseek.com',
+    });
+    expect(JSON.stringify(getResponse)).not.toContain('sk-ipc-secret');
   });
 });
