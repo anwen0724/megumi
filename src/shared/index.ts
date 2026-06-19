@@ -5,3 +5,4 @@ export * from './errors';
 export * from './result';
 export * from './events';
 export * from './renderer-contracts/session-message';
+export * from './renderer-contracts/history';

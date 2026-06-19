@@ -103,4 +103,71 @@ export const DATABASE_MIGRATIONS: Migration[] = [
         ON desktop_projects(last_opened_at);
     `,
   },
+  {
+    version: 3,
+    name: 'create-runtime-events',
+    up: `
+      CREATE TABLE IF NOT EXISTS runtime_events (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        session_id TEXT,
+        workspace_id TEXT,
+        type TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK (sequence > 0),
+        occurred_at TEXT NOT NULL,
+        payload_json TEXT,
+        event_json TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_runtime_events_run_sequence
+        ON runtime_events(run_id, sequence);
+    `,
+  },
+  {
+    version: 4,
+    name: 'create-recovery-requests',
+    up: `
+      CREATE TABLE IF NOT EXISTS recovery_cancel_requests (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        session_id TEXT,
+        workspace_id TEXT,
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        metadata_json TEXT,
+        request_json TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS recovery_retry_requests (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        session_id TEXT,
+        workspace_id TEXT,
+        retry_kind TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        metadata_json TEXT,
+        request_json TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS recovery_resume_requests (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        session_id TEXT,
+        workspace_id TEXT,
+        approval_request_id TEXT,
+        decision TEXT,
+        created_at TEXT NOT NULL,
+        metadata_json TEXT,
+        request_json TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recovery_cancel_requests_run
+        ON recovery_cancel_requests(run_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_recovery_retry_requests_run
+        ON recovery_retry_requests(run_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_recovery_resume_requests_run
+        ON recovery_resume_requests(run_id, created_at);
+    `,
+  },
 ];

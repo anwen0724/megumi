@@ -7,3 +7,5 @@ export * from './transaction';
 export * from './json';
 export * from './repositories/session-state-repository';
 export * from './repositories/project-repository';
+export * from './repositories/recovery-repository';
+export * from './repositories/runtime-event-repository';
