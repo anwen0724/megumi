@@ -23,8 +23,8 @@ export function registerDesktopIpcHandlers(context: DesktopIpcContext): () => vo
         (await handleApprovalOperation(operation, payload, context)) ??
         (await handleRecoveryOperation(operation, payload, context)) ??
         (await handleProjectOperation(operation, payload, context)) ??
-        (await handleProviderOperation(operation, payload)) ??
-        (await handleSettingsOperation(operation, payload)) ??
+        (await handleProviderOperation(operation, payload, context)) ??
+        (await handleSettingsOperation(operation, payload, context)) ??
         (await handleRunOperation(operation, payload, context)) ??
         (await handleWorkspaceFilesOperation(operation, payload, context)) ??
         (await handleWindowOperation(operation, payload, context)) ??
