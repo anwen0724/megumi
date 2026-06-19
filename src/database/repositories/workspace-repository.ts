@@ -224,6 +224,48 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
     return row ? mapJson<WorkspaceRestoreResult>(row, 'workspace_restore_results') : undefined;
   }
 
+  async updateChangedFileRestoreState(input: {
+    changedFileId: string;
+    restoreState: WorkspaceChangedFile['restoreState'];
+  }): Promise<void> {
+    const row = this.database
+      .prepare('SELECT id, changed_file_json AS value_json FROM workspace_changed_files WHERE id = ?')
+      .get(input.changedFileId) as JsonRow | undefined;
+    if (!row) return;
+    const changedFile = mapJson<WorkspaceChangedFile>(row, 'workspace_changed_files');
+    const updated = { ...changedFile, restoreState: input.restoreState };
+    this.database.prepare(`
+      UPDATE workspace_changed_files
+      SET restore_state = @restoreState, changed_file_json = @changedFileJson
+      WHERE id = @id
+    `).run({
+      id: input.changedFileId,
+      restoreState: input.restoreState,
+      changedFileJson: JSON.stringify(updated),
+    });
+  }
+
+  async listRestoreResults(input: { changeSetId?: string; workspaceId?: string }): Promise<WorkspaceRestoreResult[]> {
+    const clauses: string[] = [];
+    const params: Record<string, string> = {};
+    if (input.workspaceId) {
+      clauses.push('r.workspace_id = @workspaceId');
+      params.workspaceId = input.workspaceId;
+    }
+    if (input.changeSetId) {
+      clauses.push('req.change_set_id = @changeSetId');
+      params.changeSetId = input.changeSetId;
+    }
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    return (this.database.prepare(`
+      SELECT r.id, r.result_json AS value_json
+      FROM workspace_restore_results r
+      JOIN workspace_restore_requests req ON req.id = r.request_id
+      ${where}
+      ORDER BY r.completed_at ASC
+    `).all(params) as JsonRow[]).map((row) => mapJson<WorkspaceRestoreResult>(row, 'workspace_restore_results'));
+  }
+
   private saveChangedFileSync(changedFile: WorkspaceChangedFile, changeSet?: WorkspaceChangeSet): void {
     this.database.prepare(`
       INSERT INTO workspace_changed_files (

@@ -18,6 +18,7 @@ import type {
   WorkspaceWriteInput,
 } from './types';
 import { normalizeWorkspacePath } from './types';
+import type { WorkspaceRepository } from './repository';
 
 export interface WorkspaceManagerOptions {
   workspace: Workspace;
@@ -25,6 +26,7 @@ export interface WorkspaceManagerOptions {
   now: () => string;
   createId: (prefix: string, value: string) => string;
   rootAuthorization?: WorkspaceRootAuthorization;
+  repository?: WorkspaceRepository;
   sessionId?: string;
   runId?: string;
   toolCallId?: string;
@@ -38,6 +40,7 @@ export interface WorkspaceManager {
   statFile(path: string): Promise<WorkspaceFileMetadata>;
   glob(pattern: string): Promise<WorkspacePath[]>;
   searchText(input: { pattern: string; query: string }): Promise<Array<{ path: WorkspacePath; line: number; text: string }>>;
+  beginChangeSet(input: { sessionId?: string; runId?: string; toolCallId?: string; toolExecutionId?: string }): WorkspaceChangeSet;
   writeFile(input: WorkspaceWriteInput): Promise<WorkspaceChangedFile>;
   editFile(input: WorkspaceEditInput): Promise<WorkspaceChangedFile>;
   deleteFile(path: string): Promise<WorkspaceChangedFile>;
@@ -46,24 +49,23 @@ export interface WorkspaceManager {
   discardCheckpoint(checkpoint: WorkspaceCheckpoint, reason: string): WorkspaceCheckpoint;
   createRestoreRequest(input: { checkpoint: WorkspaceCheckpoint; requestedBy: 'user' | 'system' }): WorkspaceRestoreRequest;
   restoreCheckpoint(checkpoint: WorkspaceCheckpoint, options?: { request?: WorkspaceRestoreRequest }): Promise<WorkspaceRestoreResult>;
-  finalizeActiveChangeSet(): WorkspaceChangeSet;
+  createRestoreRequestForChangeSet(input: { changeSet: WorkspaceChangeSet; requestedBy: 'user' | 'system' }): WorkspaceRestoreRequest;
+  restoreChangeSet(changeSet: WorkspaceChangeSet, options?: { request?: WorkspaceRestoreRequest }): Promise<WorkspaceRestoreResult>;
+  finalizeActiveChangeSet(): Promise<WorkspaceChangeSet>;
   getWorkspaceChangeSummary(): WorkspaceChangeSummary;
   getActiveChangeSet(): WorkspaceChangeSet;
 }
 
 export function createWorkspaceManager(options: WorkspaceManagerOptions): WorkspaceManager {
-  const activeChangeSet: WorkspaceChangeSet = {
-    id: options.createId('workspace-change-set', String(options.workspace.id)),
-    workspaceId: options.workspace.id,
-    ...(options.sessionId ? { sessionId: options.sessionId } : {}),
-    ...(options.runId ? { runId: options.runId } : {}),
-    ...(options.toolCallId ? { toolCallId: options.toolCallId } : {}),
-    ...(options.toolExecutionId ? { toolExecutionId: options.toolExecutionId } : {}),
-    status: 'open',
-    changes: [],
-    createdAt: options.now(),
-    updatedAt: options.now(),
-  };
+  let activeChangeSet: WorkspaceChangeSet = createOpenChangeSet({
+    workspace: options.workspace,
+    now: options.now,
+    createId: options.createId,
+    sessionId: options.sessionId,
+    runId: options.runId,
+    toolCallId: options.toolCallId,
+    toolExecutionId: options.toolExecutionId,
+  });
 
   const assertAuthorized = (): void => {
     if (options.rootAuthorization && !options.rootAuthorization.authorized) {
@@ -80,6 +82,21 @@ export function createWorkspaceManager(options: WorkspaceManagerOptions): Worksp
     status: 'pending',
     createdAt: options.now(),
   });
+
+  const createCheckpointForChangeSet = (changeSet: WorkspaceChangeSet): WorkspaceCheckpoint => {
+    const timestamp = options.now();
+    return {
+      id: options.createId('workspace-checkpoint', String(changeSet.id)),
+      workspaceId: changeSet.workspaceId,
+      ...(changeSet.runId ? { runId: changeSet.runId } : {}),
+      changeSetId: changeSet.id,
+      label: `Before ${changeSet.toolCallId ?? 'workspace change set'}`,
+      status: 'created',
+      snapshots: changeSet.changes.map((change) => change.before),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  };
 
   const capture = async (path: WorkspacePath): Promise<WorkspaceFileSnapshot> => {
     const capturedAt = options.now();
@@ -150,6 +167,19 @@ export function createWorkspaceManager(options: WorkspaceManagerOptions): Worksp
         return [];
       }
       return options.fileHost.searchText({ pattern: normalizeWorkspacePath(input.pattern), query: input.query });
+    },
+
+    beginChangeSet(input) {
+      activeChangeSet = createOpenChangeSet({
+        workspace: options.workspace,
+        now: options.now,
+        createId: options.createId,
+        sessionId: input.sessionId,
+        runId: input.runId,
+        toolCallId: input.toolCallId,
+        toolExecutionId: input.toolExecutionId,
+      });
+      return cloneChangeSet(activeChangeSet);
     },
 
     async writeFile(input) {
@@ -282,11 +312,93 @@ export function createWorkspaceManager(options: WorkspaceManagerOptions): Worksp
       };
     },
 
-    finalizeActiveChangeSet() {
+    createRestoreRequestForChangeSet(input) {
+      const checkpoint = createCheckpointForChangeSet(input.changeSet);
+      const request = createRestoreRequest({ checkpoint, requestedBy: input.requestedBy });
+      void options.repository?.saveCheckpoint(checkpoint);
+      void options.repository?.saveRestoreRequest(request);
+      return request;
+    },
+
+    async restoreChangeSet(changeSet, restoreOptions = {}) {
+      assertAuthorized();
+      const checkpoint = createCheckpointForChangeSet(changeSet);
+      const request = restoreOptions.request ?? createRestoreRequest({ checkpoint, requestedBy: 'system' });
+      await options.repository?.saveCheckpoint(checkpoint);
+      await options.repository?.saveRestoreRequest(request);
+      const resultId = options.createId('workspace-restore-result', String(changeSet.id));
+      const fileResults: WorkspaceRestoreFileResult[] = [];
+
+      for (const [index, change] of changeSet.changes.entries()) {
+        const beforeRestore = await capture(change.path);
+        const changedSinceMutation = change.after.exists
+          && beforeRestore.exists
+          && change.after.content !== beforeRestore.content;
+
+        if (changedSinceMutation) {
+          change.restoreState = 'conflicted';
+          await options.repository?.updateChangedFileRestoreState({
+            changedFileId: String(change.id),
+            restoreState: 'conflicted',
+          });
+          fileResults.push({
+            id: options.createId('workspace-restore-file-result', `${String(changeSet.id)}-${index}`),
+            restoreResultId: resultId,
+            path: change.path,
+            status: 'conflict',
+            conflictReason: 'file_changed_since_change_set',
+            beforeRestore,
+            afterRestore: beforeRestore,
+          });
+          continue;
+        }
+
+        if (change.before.exists) {
+          await options.fileHost.writeTextFile(change.path, change.before.content ?? '');
+        } else {
+          await options.fileHost.deleteFile(change.path);
+        }
+        const afterRestore = await capture(change.path);
+        change.restoreState = 'restored';
+        await options.repository?.updateChangedFileRestoreState({
+          changedFileId: String(change.id),
+          restoreState: 'restored',
+        });
+        fileResults.push({
+          id: options.createId('workspace-restore-file-result', `${String(changeSet.id)}-${index}`),
+          restoreResultId: resultId,
+          path: change.path,
+          status: change.before.exists ? 'restored' : 'removed',
+          beforeRestore,
+          afterRestore,
+        });
+      }
+
+      const failedCount = fileResults.filter((result) => result.status === 'conflict' || result.status === 'failed').length;
+      const result: WorkspaceRestoreResult = {
+        id: resultId,
+        requestId: request.id,
+        checkpointId: checkpoint.id,
+        workspaceId: changeSet.workspaceId,
+        status: failedCount > 0 ? 'conflicted' : 'completed',
+        restoredCount: fileResults.length - failedCount,
+        failedCount,
+        fileResults,
+        restoredFiles: changeSet.changes.map((change) => change.before),
+        createdAt: request.createdAt,
+        completedAt: options.now(),
+      };
+      await options.repository?.saveRestoreResult(result);
+      return result;
+    },
+
+    async finalizeActiveChangeSet() {
       activeChangeSet.status = 'finalized';
       activeChangeSet.finalizedAt = options.now();
       activeChangeSet.updatedAt = activeChangeSet.finalizedAt;
-      return cloneChangeSet(activeChangeSet);
+      const finalized = cloneChangeSet(activeChangeSet);
+      await options.repository?.saveChangeSet(finalized);
+      return finalized;
     },
 
     getWorkspaceChangeSummary() {
@@ -303,6 +415,36 @@ export function createWorkspaceManager(options: WorkspaceManagerOptions): Worksp
     getActiveChangeSet() {
       return cloneChangeSet(activeChangeSet);
     },
+  };
+}
+
+function createOpenChangeSet(input: {
+  workspace: Workspace;
+  now: () => string;
+  createId: (prefix: string, value: string) => string;
+  sessionId?: string;
+  runId?: string;
+  toolCallId?: string;
+  toolExecutionId?: string;
+}): WorkspaceChangeSet {
+  const seed = [
+    String(input.workspace.id),
+    input.runId,
+    input.toolCallId,
+    input.toolExecutionId,
+    input.now(),
+  ].filter(Boolean).join('-');
+  return {
+    id: input.createId('workspace-change-set', seed),
+    workspaceId: input.workspace.id,
+    ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+    ...(input.runId ? { runId: input.runId } : {}),
+    ...(input.toolCallId ? { toolCallId: input.toolCallId } : {}),
+    ...(input.toolExecutionId ? { toolExecutionId: input.toolExecutionId } : {}),
+    status: 'open',
+    changes: [],
+    createdAt: input.now(),
+    updatedAt: input.now(),
   };
 }
 

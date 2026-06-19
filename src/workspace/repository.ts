@@ -22,6 +22,8 @@ export interface WorkspaceRepository {
   getRestoreRequest(id: string): Promise<WorkspaceRestoreRequest | undefined>;
   saveRestoreResult(result: WorkspaceRestoreResult): Promise<void>;
   getRestoreResult(id: string): Promise<WorkspaceRestoreResult | undefined>;
+  updateChangedFileRestoreState(input: { changedFileId: string; restoreState: WorkspaceChangedFile['restoreState'] }): Promise<void>;
+  listRestoreResults(input: { changeSetId?: string; workspaceId?: string }): Promise<WorkspaceRestoreResult[]>;
 }
 
 export function createInMemoryWorkspaceRepository(): WorkspaceRepository {
@@ -87,6 +89,28 @@ export function createInMemoryWorkspaceRepository(): WorkspaceRepository {
     },
     async getRestoreResult(id) {
       return restoreResults.get(id);
+    },
+    async updateChangedFileRestoreState(input) {
+      for (const [changeSetId, files] of changedFiles.entries()) {
+        changedFiles.set(changeSetId, files.map((file) =>
+          String(file.id) === input.changedFileId ? { ...file, restoreState: input.restoreState } : file,
+        ));
+      }
+      for (const [changeSetId, changeSet] of changeSets.entries()) {
+        changeSets.set(changeSetId, {
+          ...changeSet,
+          changes: changeSet.changes.map((file) =>
+            String(file.id) === input.changedFileId ? { ...file, restoreState: input.restoreState } : file,
+          ),
+        });
+      }
+    },
+    async listRestoreResults(input) {
+      return [...restoreResults.values()].filter((result) => {
+        const request = restoreRequests.get(String(result.requestId));
+        return (input.workspaceId === undefined || String(result.workspaceId) === input.workspaceId)
+          && (input.changeSetId === undefined || String(request?.changeSetId) === input.changeSetId);
+      });
     },
   };
 }
