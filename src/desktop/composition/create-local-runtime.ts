@@ -25,7 +25,15 @@ import {
 } from '../../ai';
 import { type AgentAiClient, type AgentRunEvent, createAgentRunner } from '../../agent';
 import { BUILT_IN_INPUT_COMMAND_REGISTRY } from '../../command';
-import { openSqliteDatabase, runDatabaseMigrations, SqliteProjectRepository, SqliteSessionStateRepository, type SqliteDatabase } from '../../database';
+import {
+  openSqliteDatabase,
+  runDatabaseMigrations,
+  SqliteProjectRepository,
+  SqliteRecoveryRepository,
+  SqliteRuntimeEventRepository,
+  SqliteSessionStateRepository,
+  type SqliteDatabase,
+} from '../../database';
 import { parseRawInput, type ParsedInput, type RawInput } from '../../input';
 import { evaluatePermissionPolicy, createInMemoryPermissionRepository, type PermissionRepository } from '../../permission';
 import type { JsonObject, JsonValue } from '../../shared';
@@ -57,6 +65,8 @@ export interface LocalDesktopRuntime {
   settingsStore: AppSettingsStore;
   providerSettingsStore: ProviderSettingsStore;
   projectRepository: SqliteProjectRepository;
+  runtimeEventRepository: SqliteRuntimeEventRepository;
+  recoveryRepository: SqliteRecoveryRepository;
   runtimeLogger: RuntimeLogger;
   sessionRepository: SessionStateRepository;
   sessionManager: ReturnType<typeof createSessionStateManager>;
@@ -99,6 +109,8 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   runDatabaseMigrations(database, { now });
   const sessionRepository = new SqliteSessionStateRepository(database);
   const projectRepository = new SqliteProjectRepository(database);
+  const runtimeEventRepository = new SqliteRuntimeEventRepository(database);
+  const recoveryRepository = new SqliteRecoveryRepository(database, sessionRepository);
   const settingsStore = createAppSettingsStore({ settingsPath: megumiHomePaths.settingsPath });
   const providerSettingsStore = createProviderSettingsStore({
     settings: settingsStore,
@@ -144,6 +156,12 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
       return streamAssistantMessage(model, context, aiOptions, toolSet);
     },
   };
+
+  function publishRuntimeEvent(event: AgentRuntimeEvent): void {
+    runtimeEventRepository.saveEvent(event);
+    eventBus.publish(event);
+  }
+
   const runner = createAgentRunner({
     sessionManager,
     sessionRepository,
@@ -161,7 +179,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     systemInstruction: options.systemInstruction ?? 'You are Megumi.',
     now,
     createId,
-    emit: (event) => eventBus.publish(mapAgentRunEventToRuntimeEvent(event)),
+    emit: (event) => publishRuntimeEvent(mapAgentRunEventToRuntimeEvent(event)),
   });
 
   const parseByRunId = new Map<string, ParsedInput>();
@@ -219,11 +237,107 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
       });
       return mapAgentResultToAppResponse(result);
     },
-    async cancelRun(_request: AgentRuntimeCancelRequest): Promise<AppRunControlResponse> {
-      throw unavailable('run.cancel', 'src/agent does not expose a cancelRun control port yet');
+    async cancelRun(request: AgentRuntimeCancelRequest): Promise<AppRunControlResponse> {
+      if (!request.runId) throw unavailable('run.cancel', 'runId is required');
+      const run = sessionRepository.getRunRecord(request.runId);
+      if (!run) throw unavailable('run.cancel', `run record was not found: ${request.runId}`);
+      recoveryRepository.saveCancelRequest({
+        cancelRequestId: createId('cancel-request', `${request.runId}-${now()}`),
+        runId: request.runId,
+        sessionId: request.sessionId ?? run.sessionId,
+        workspaceId: request.workspaceId,
+        reason: request.reason ?? 'user_requested',
+        createdAt: now(),
+        metadata: jsonObjectOrUndefined(request.metadata),
+      });
+      publishRuntimeEvent({
+        type: 'run.cancel.requested',
+        runId: request.runId,
+        sessionId: request.sessionId ?? run.sessionId,
+        workspaceId: request.workspaceId,
+        occurredAt: now(),
+        payload: { reason: request.reason ?? 'user_requested' },
+      });
+      const cancelled = sessionManager.updateRunStatus({
+        runId: request.runId,
+        status: 'cancelled',
+        endedAt: now(),
+        metadata: { ...(run.metadata ?? {}), cancelledBy: 'desktop' },
+      });
+      publishRuntimeEvent({
+        type: 'run.cancelled',
+        runId: request.runId,
+        sessionId: cancelled.sessionId,
+        workspaceId: request.workspaceId,
+        occurredAt: now(),
+        payload: { reason: request.reason ?? 'user_requested' },
+      });
+      return {
+        runId: cancelled.id,
+        sessionId: cancelled.sessionId,
+        workspaceId: request.workspaceId,
+        status: 'cancelled',
+      };
     },
-    async retryRun(_request: AgentRuntimeRetryRequest): Promise<AppRunControlResponse> {
-      throw unavailable('run.retry', 'src/agent/session retry adapter is not implemented in this plan');
+    async retryRun(request: AgentRuntimeRetryRequest): Promise<AppRunControlResponse> {
+      if (!request.runId) throw unavailable('run.retry', 'runId is required');
+      const run = sessionRepository.getRunRecord(request.runId);
+      if (!run) throw unavailable('run.retry', `run record was not found: ${request.runId}`);
+      const sessionId = request.sessionId ?? run.sessionId;
+      const retryKind = request.metadata?.retryKind === 'manual_retry' ? 'manual_retry' : 'manual_rerun';
+      recoveryRepository.saveRetryRequest({
+        retryRequestId: createId('retry-request', `${request.runId}-${now()}`),
+        runId: request.runId,
+        sessionId,
+        workspaceId: request.workspaceId,
+        retryKind,
+        reason: request.reason ?? run.status,
+        createdAt: now(),
+        metadata: jsonObjectOrUndefined(request.metadata),
+      });
+      sessionManager.recordRerun({
+        idSeed: `rerun-${request.runId}-${now()}`,
+        sourceEntryIdSeed: `source-rerun-${request.runId}-${now()}`,
+        sessionId,
+        targetRunId: request.runId,
+        attemptNumber: sessionRepository.listRetryAttempts(sessionId).length + 1,
+        metadata: { retryKind, sourceRunId: request.runId },
+      });
+      publishRuntimeEvent({
+        type: 'run.retry.requested',
+        runId: request.runId,
+        sessionId,
+        workspaceId: request.workspaceId,
+        occurredAt: now(),
+        payload: { retryKind, reason: request.reason ?? run.status },
+      });
+      const parsedInput = {
+        id: createId('parsed-input', `retry-${request.runId}-${now()}`),
+        rawInputId: createId('raw-input', `retry-${request.runId}-${now()}`),
+        source: { kind: 'desktop' as const },
+        rawKind: 'text' as const,
+        kind: 'user_input' as const,
+        text: run.inputSummary,
+        attachments: [],
+        references: [],
+        facts: [],
+        createdAt: now(),
+        ...(request.workspaceId ? { target: { kind: 'workspace' as const, workspaceId: request.workspaceId } } : {}),
+      };
+      const result = await runner.startRun({
+        parsedInput,
+        sessionId,
+        workspaceId: request.workspaceId,
+        options: {
+          maxTurns: numberOption(request.metadata?.maxTurns, 4),
+          maxToolCalls: numberOption(request.metadata?.maxToolCalls, 8),
+          permissionMode: permissionModeOption(request.metadata?.permissionMode),
+        },
+      });
+      if (result.kind === 'not_agent_run') {
+        return { runId: request.runId, sessionId, workspaceId: request.workspaceId, status: 'completed' };
+      }
+      return mapAgentResultToAppResponse(result.result);
     },
     subscribe(callback: (event: AgentRuntimeEvent) => void) {
       return eventBus.subscribe(callback);
@@ -239,6 +353,8 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     settingsStore,
     providerSettingsStore,
     projectRepository,
+    runtimeEventRepository,
+    recoveryRepository,
     runtimeLogger,
     sessionRepository,
     sessionManager,
