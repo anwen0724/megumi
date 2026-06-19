@@ -1,0 +1,76 @@
+// Guards the migrated renderer so it remains UI-only and src-owned.
+import { describe, expect, it } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+
+const repoRoot = path.resolve(__dirname, '../..');
+const uiRoot = path.join(repoRoot, 'src/ui');
+
+function listSourceFiles(directory: string): string[] {
+  return readdirSync(directory).flatMap((entry) => {
+    const absolute = path.join(directory, entry);
+    const stat = statSync(absolute);
+    if (stat.isDirectory()) {
+      return listSourceFiles(absolute);
+    }
+    return /\.(ts|tsx)$/.test(entry) ? [absolute] : [];
+  });
+}
+
+function readUiSource(): string {
+  return listSourceFiles(uiRoot)
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+}
+
+describe('src/ui renderer contract cleanup boundary', () => {
+  it('does not import old package shared contracts', () => {
+    expect(readUiSource()).not.toContain('@megumi/shared');
+  });
+
+  it('does not import owner modules or desktop main implementation directly', () => {
+    const source = readUiSource();
+
+    for (const forbidden of [
+      '../agent',
+      '../ai',
+      '../app',
+      '../command',
+      '../context',
+      '../database',
+      '../desktop',
+      '../input',
+      '../permission',
+      '../session',
+      '../tools',
+      '../workspace',
+      'src/agent',
+      'src/ai',
+      'src/app',
+      'src/command',
+      'src/context',
+      'src/database',
+      'src/desktop',
+      'src/input',
+      'src/permission',
+      'src/session',
+      'src/tools',
+      'src/workspace',
+      'electron',
+      'node:fs',
+      'node:child_process',
+      'child_process',
+    ]) {
+      expect(source).not.toContain(forbidden);
+    }
+  });
+
+  it('keeps window.megumi as the renderer integration point', () => {
+    const source = readUiSource();
+
+    expect(source).toContain('window.megumi');
+    expect(source).toContain('chatStream');
+    expect(source).toContain('runtime');
+    expect(source).toContain('session.message.send');
+  });
+});
