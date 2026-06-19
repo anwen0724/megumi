@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
@@ -10,7 +9,7 @@ import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
-import { getProviderIdForModel } from '../components/composer-options';
+import { createSessionMessageSendRequestDto } from './session-message-send-request';
 
 // Coordinates chat timeline submission, optimistic user messages, and runtime
 // event routing for the active session. It forwards typed context hints only.
@@ -85,53 +84,6 @@ function renameEmptyManualSessionFromPrompt(payload: ComposerSubmitPayload, exis
 
 function activeCanonicalMessageCount(projectId: string, sessionId: string): number {
   return useChatStreamStore.getState().sessions[`${projectId}:${sessionId}`]?.messages.length ?? 0;
-}
-
-function createSessionMessageSendPayload(
-  payload: ComposerSubmitPayload,
-  finalClientMessageId: string,
-  messageCreatedAt: string,
-  branchDraft: BranchDraftState | null,
-): SessionMessageSendPayload {
-  const sessionState = useSessionStore.getState();
-  const projectState = useProjectStore.getState();
-  const providerId = getProviderIdForModel(payload.model);
-  const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
-  const projectId = activeSession?.projectId
-    ?? sessionState.newSessionDraftTargetProjectId
-    ?? projectState.currentProjectId;
-  const activeProject = projectState.projects.find((project) => project.id === projectId);
-
-  const sendPayload: SessionMessageSendPayload = {
-    sessionId: sessionState.activeSessionId ?? undefined,
-    providerId,
-    modelId: payload.model,
-    message: {
-      id: finalClientMessageId,
-      content: payload.message,
-      createdAt: messageCreatedAt,
-    },
-    context: {
-      workspaceId: projectId ?? undefined,
-      workspaceLabel: activeProject?.name ?? undefined,
-      workspacePath: activeProject?.repoPath ?? undefined,
-      sessionTitle: activeSession?.title ?? undefined,
-      permissionMode: payload.permissionMode,
-      ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
-      // Preprocessing is renderer-provided context metadata; Desktop Main is responsible for validating it before constructing model input.
-      ...(payload.preprocessing ? { preprocessing: payload.preprocessing } : {}),
-    },
-    createdAt: messageCreatedAt,
-  };
-
-  if (branchDraft) {
-    sendPayload.branchDraft = {
-      branchMarkerId: branchDraft.branchMarkerId,
-      intent: branchDraft.intent,
-    };
-  }
-
-  return sendPayload;
 }
 
 function shouldProcessRuntimeEvent(
@@ -294,18 +246,23 @@ export function useSessionTimeline() {
       createdAt,
     });
     const requestId = `ipc-session-message-${createId('request')}`;
-    const request = createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.session.message.send,
-      createSessionMessageSendPayload(
-        payload,
-        clientMessageId,
-        createdAt,
-        branchDraftForSend,
-      ),
-      { requestId },
-    );
+    const traceId = createId('trace');
+    const activeProject = projectState.projects.find((project) => project.id === projectId);
+    const request = createSessionMessageSendRequestDto({
+      payload,
+      clientMessageId,
+      requestId,
+      traceId,
+      createdAt,
+      sessionId: sessionState.activeSessionId ?? undefined,
+      workspaceId: projectId,
+      workspaceLabel: activeProject?.name ?? undefined,
+      workspacePath: activeProject?.repoPath ?? undefined,
+      sessionTitle: activeSession?.title ?? undefined,
+      branchDraft: branchDraftForSend,
+    });
     activeRequestIdRef.current = request.requestId;
-    activeTraceIdRef.current = request.context?.traceId ?? null;
+    activeTraceIdRef.current = request.traceId;
     processedSequencesRef.current.clear();
 
     const state = useChatUiStore.getState();
