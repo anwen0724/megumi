@@ -142,10 +142,10 @@ function resolveProviders(raw: NonNullable<AppSettingsRaw['providers']>): Record
 
 function resolveProvider(providerId: ProviderId, raw?: ProviderSettingsRaw): ProviderSettingsResolved {
   const base = DEFAULT_APP_SETTINGS.providers[providerId];
-  const merged = { ...base, ...defined(raw ?? {}) };
-  if (raw?.apiKey === null) delete merged.apiKey;
-  if (raw?.apiKeyEnv === null) delete merged.apiKeyEnv;
-  return merged;
+  const sanitized = { ...defined(raw ?? {}) };
+  if (raw?.apiKey === null) delete sanitized.apiKey;
+  if (raw?.apiKeyEnv === null) delete sanitized.apiKeyEnv;
+  return { ...base, ...sanitized } as ProviderSettingsResolved;
 }
 
 function mergeProviders(
@@ -181,6 +181,6 @@ function writeRawSettings(settingsPath: string, raw: AppSettingsRaw): void {
   fs.renameSync(temporaryPath, settingsPath);
 }
 
-function defined<T extends Record<string, unknown>>(value: T): Partial<T> {
+function defined<T extends object>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as Partial<T>;
 }
