@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
-import { createRendererRuntimeIpcRequest } from '../ipc';
+import { getMegumiRendererApi } from '../megumi-api';
 import type { ThemeName } from './theme-tokens';
 
 interface ThemeState {
@@ -14,24 +13,22 @@ export const useThemeStore = create<ThemeState>((set) => ({
   theme: 'midnight-blue',
   setTheme: (theme) => set({ theme }),
   async hydrateFromSettings() {
-    if (!window.megumi?.settings?.get) {
+    const megumi = getMegumiRendererApi();
+    if (!megumi?.settings?.get) {
       return;
     }
-    const result = await window.megumi.settings.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-    );
+    const result = await megumi.settings.get();
     if (result.ok) {
       set({ theme: result.data.settings.theme });
     }
   },
   async persistTheme(theme) {
     set({ theme });
-    if (!window.megumi?.settings?.update) {
+    const megumi = getMegumiRendererApi();
+    if (!megumi?.settings?.update) {
       return;
     }
-    const result = await window.megumi.settings.update(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { theme }),
-    );
+    const result = await megumi.settings.update({ theme });
     if (result.ok) {
       set({ theme: result.data.settings.theme });
     }

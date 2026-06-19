@@ -1,8 +1,8 @@
 // Renders the global long-term memory runtime toggle in Settings.
 // This component does not display, edit, or preview individual memory records.
 import { useEffect, useState } from 'react';
-import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
-import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
+import { getRuntimeIpcErrorMessage } from '../../../shared/ipc';
+import { getMegumiRendererApi } from '../../../shared/megumi-api';
 import { Button, cx } from '../../../shared/ui';
 
 type MemorySettingsStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
@@ -16,9 +16,15 @@ export function MemorySettingsPanel() {
     let cancelled = false;
     setStatus('loading');
     setError(null);
-    void window.megumi.settings.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-    ).then((result) => {
+    const megumi = getMegumiRendererApi();
+    if (!megumi?.settings?.get) {
+      setStatus('error');
+      setError('Megumi settings bridge is not available.');
+      return () => {
+        cancelled = true;
+      };
+    }
+    void megumi.settings.get().then((result) => {
       if (cancelled) return;
       if (!result.ok) {
         setStatus('error');
@@ -44,14 +50,22 @@ export function MemorySettingsPanel() {
     const previous = enabled;
     setEnabled(autoCaptureEnabled);
 
-    let result: Awaited<ReturnType<typeof window.megumi.settings.update>>;
+    const megumi = getMegumiRendererApi();
+    if (!megumi?.settings?.update) {
+      setEnabled(previous);
+      setStatus('error');
+      setError('Megumi settings bridge is not available.');
+      return;
+    }
+
+    let result: Awaited<ReturnType<typeof megumi.settings.update>>;
     try {
-      result = await window.megumi.settings.update(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
+      result = await megumi.settings.update(
+        {
           memory: {
             enabled: autoCaptureEnabled,
           },
-        }),
+        },
       );
     } catch (reason) {
       setEnabled(previous);

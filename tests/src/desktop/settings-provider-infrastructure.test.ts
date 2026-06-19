@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createAppSettingsStore } from '../../../src/desktop/infrastructure/app-settings-store';
 import { createProviderSettingsStore } from '../../../src/desktop/infrastructure/provider-settings-store';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
+import { handleProviderOperation } from '../../../src/desktop/ipc/provider.handler';
 import { handleSettingsOperation } from '../../../src/desktop/ipc/settings.handler';
 
 const roots: string[] = [];
@@ -112,5 +113,87 @@ describe('settings and provider infrastructure', () => {
       baseUrl: 'https://api.deepseek.com',
     });
     expect(JSON.stringify(getResponse)).not.toContain('sk-ipc-secret');
+  });
+
+  it('applies settings updates from renderer runtime request envelopes', async () => {
+    const settingsPath = await tempSettingsPath();
+    const settings = createAppSettingsStore({ settingsPath });
+    const context = {
+      runtime: { settingsStore: settings },
+    } as DesktopIpcContext;
+
+    const response = await handleSettingsOperation('settings.update', {
+      requestId: 'ipc-settings-update',
+      payload: {
+        theme: 'sage-mist',
+        memory: { enabled: true },
+      },
+      meta: {
+        channel: 'settings:update',
+        createdAt: '2026-06-20T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }, context) as { settings: { theme: string; memory: { enabled: boolean } } };
+
+    expect(response.settings.theme).toBe('sage-mist');
+    expect(response.settings.memory.enabled).toBe(true);
+    expect(settings.getRawSettings()).toEqual({
+      theme: 'sage-mist',
+      memory: { enabled: true },
+    });
+  });
+
+  it('applies provider updates from renderer runtime request envelopes', async () => {
+    const settingsPath = await tempSettingsPath();
+    const settings = createAppSettingsStore({ settingsPath });
+    const providers = createProviderSettingsStore({ settings });
+    const context = {
+      runtime: {
+        providerSettingsStore: providers,
+      },
+    } as DesktopIpcContext;
+
+    await handleProviderOperation('provider.update', {
+      requestId: 'ipc-provider-update',
+      payload: {
+        providerId: 'deepseek',
+        enabled: false,
+        baseUrl: 'https://example.test/v1',
+        defaultModelId: 'deepseek-test',
+        apiKeyEnv: 'DEEPSEEK_TEST_KEY',
+      },
+      meta: {
+        channel: 'provider:update',
+        createdAt: '2026-06-20T00:00:00.000Z',
+        source: 'renderer',
+      },
+    }, context);
+
+    await handleProviderOperation('provider.setApiKey', {
+      requestId: 'ipc-provider-key',
+      payload: {
+        providerId: 'deepseek',
+        apiKey: 'sk-renderer-secret',
+      },
+      meta: {
+        channel: 'provider:set-api-key',
+        createdAt: '2026-06-20T00:00:01.000Z',
+        source: 'renderer',
+      },
+    }, context);
+
+    const status = providers.listProviderStatuses().find((provider) => provider.providerId === 'deepseek');
+    expect(status).toMatchObject({
+      providerId: 'deepseek',
+      enabled: false,
+      baseUrl: 'https://example.test/v1',
+      defaultModelId: 'deepseek-test',
+      apiKeyEnv: 'DEEPSEEK_TEST_KEY',
+      credentialSource: 'settings',
+    });
+    await expect(providers.resolveCredential('deepseek')).resolves.toEqual({
+      type: 'api_key',
+      value: 'sk-renderer-secret',
+    });
   });
 });

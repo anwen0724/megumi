@@ -2,13 +2,14 @@
 import type { ProviderId } from '../infrastructure/app-settings-store';
 import type { DesktopIpcContext } from './ipc-context';
 import { unavailable } from './ipc-errors';
+import { unwrapRendererRuntimePayload } from './runtime-request-payload';
 
 export async function handleProviderOperation(operation: string, payload: unknown, context?: DesktopIpcContext): Promise<unknown> {
   const runtime = operation.startsWith('provider.') ? requireRuntime(context, operation) : undefined;
   if (operation === 'provider.list') return { providers: requireRuntime(context, operation).providerSettingsStore.listProviderStatuses() };
   if (operation === 'provider.update') {
     const runtime = requireRuntime(context, operation);
-    const record = asRecord(payload);
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
     const providerId = readProviderId(record);
     return { provider: runtime.providerSettingsStore.updateProviderSettings(providerId, {
       enabled: typeof record.enabled === 'boolean' ? record.enabled : undefined,
@@ -20,7 +21,7 @@ export async function handleProviderOperation(operation: string, payload: unknow
   }
   if (operation === 'provider.setApiKey') {
     const runtime = requireRuntime(context, operation);
-    const record = asRecord(payload);
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
     const providerId = readProviderId(record);
     const apiKey = typeof record.apiKey === 'string' ? record.apiKey : '';
     if (!apiKey.trim()) throw unavailable(operation, 'apiKey is required');
@@ -28,7 +29,7 @@ export async function handleProviderOperation(operation: string, payload: unknow
   }
   if (operation === 'provider.deleteApiKey') {
     const runtime = requireRuntime(context, operation);
-    const record = asRecord(payload);
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
     return { provider: runtime.providerSettingsStore.deleteProviderApiKey(readProviderId(record)) };
   }
   return undefined;

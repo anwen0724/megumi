@@ -1,6 +1,4 @@
 import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
-import type { RuntimeIpcResult } from '@megumi/renderer-contracts/ipc';
 import type {
   ProviderApiKeyPayload,
   ProviderDeleteApiKeyPayload,
@@ -8,10 +6,8 @@ import type {
   ProviderUpdatePayload,
 } from '@megumi/renderer-contracts/ipc';
 import type { ProviderId, ProviderPublicStatus } from '@megumi/renderer-contracts/provider';
-import {
-  createRendererRuntimeIpcRequest,
-  getRuntimeIpcErrorMessage,
-} from '../../shared/ipc';
+import { getRuntimeIpcErrorMessage } from '../../shared/ipc';
+import { requireMegumiRendererApi } from '../../shared/megumi-api';
 
 export type ProviderStoreStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
@@ -50,9 +46,7 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
   loadProviders: async () => {
     set({ status: 'loading', error: null });
 
-    const result = await window.megumi.provider.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.provider.list, {}),
-    );
+    const result = await requireMegumiRendererApi().provider.list();
 
     if (!result.ok) {
       set({
@@ -71,11 +65,8 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
   updateProvider: async (input) => {
     set({ status: 'saving', error: null });
 
-    const result = await window.megumi.provider.update(
-      createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.provider.update,
-        input satisfies ProviderUpdatePayload,
-      ),
+    const result = await requireMegumiRendererApi().provider.update(
+      input satisfies ProviderUpdatePayload,
     );
 
     if (!result.ok) {
@@ -91,11 +82,8 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
   setApiKey: async (input) => {
     set({ status: 'saving', error: null });
 
-    const result = await window.megumi.provider.setApiKey(
-      createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.provider.setApiKey,
-        input satisfies ProviderApiKeyPayload,
-      ),
+    const result = await requireMegumiRendererApi().provider.setApiKey(
+      input satisfies ProviderApiKeyPayload,
     );
 
     if (!result.ok) {
@@ -111,11 +99,8 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
   deleteApiKey: async (input) => {
     set({ status: 'saving', error: null });
 
-    const result = await window.megumi.provider.deleteApiKey(
-      createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.provider.deleteApiKey,
-        input satisfies ProviderDeleteApiKeyPayload,
-      ),
+    const result = await requireMegumiRendererApi().provider.deleteApiKey(
+      input satisfies ProviderDeleteApiKeyPayload,
     );
 
     if (!result.ok) {

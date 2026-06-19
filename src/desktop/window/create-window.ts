@@ -7,11 +7,13 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    minWidth: 960,
-    minHeight: 640,
+    width: 1400,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 680,
     title: 'Megumi',
+    frame: false,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
