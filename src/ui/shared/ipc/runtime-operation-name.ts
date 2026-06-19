@@ -1,0 +1,96 @@
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import type { BusinessIpcChannel } from '@megumi/shared/ipc';
+
+export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChannel): string {
+  switch (channel) {
+    case IPC_CHANNELS.provider.list:
+      return 'provider.list';
+    case IPC_CHANNELS.provider.update:
+      return 'provider.update';
+    case IPC_CHANNELS.provider.setApiKey:
+      return 'provider.set-api-key';
+    case IPC_CHANNELS.provider.deleteApiKey:
+      return 'provider.delete-api-key';
+    case IPC_CHANNELS.session.create:
+      return 'session.create';
+    case IPC_CHANNELS.session.list:
+      return 'session.list';
+    case IPC_CHANNELS.session.message.list:
+      return 'session.message.list';
+    case IPC_CHANNELS.session.message.send:
+      return 'session.message.send';
+    case IPC_CHANNELS.session.message.cancel:
+      return 'session.message.cancel';
+    case IPC_CHANNELS.run.listBySession:
+      return 'run.list-by-session';
+    case IPC_CHANNELS.run.events.list:
+      return 'run.events.list';
+    case IPC_CHANNELS.runContext.baselineGet:
+      return 'run-context.baseline.get';
+    case IPC_CHANNELS.runContext.sourcesList:
+      return 'run-context.sources.list';
+    case IPC_CHANNELS.plan.byRunGet:
+      return 'plan.by-run.get';
+    case IPC_CHANNELS.plan.statusUpdate:
+      return 'plan.status.update';
+    case IPC_CHANNELS.tool.definitionsList:
+      return 'tool.definitions.list';
+    case IPC_CHANNELS.tool.executionGet:
+      return 'tool.execution.get';
+    case IPC_CHANNELS.approval.resolve:
+      return 'approval.resolve';
+    case IPC_CHANNELS.recovery.recoverableRunsList:
+      return 'recovery.recoverable-runs.list';
+    case IPC_CHANNELS.recovery.resume:
+      return 'recovery.resume';
+    case IPC_CHANNELS.recovery.cancel:
+      return 'recovery.cancel';
+    case IPC_CHANNELS.recovery.retry:
+      return 'recovery.retry';
+    case IPC_CHANNELS.artifacts.listByRun:
+      return 'artifacts.list-by-run';
+    case IPC_CHANNELS.artifacts.listBySession:
+      return 'artifacts.list-by-session';
+    case IPC_CHANNELS.artifacts.get:
+      return 'artifacts.get';
+    case IPC_CHANNELS.artifacts.versionGet:
+      return 'artifacts.version.get';
+    case IPC_CHANNELS.artifacts.versionCreate:
+      return 'artifacts.version.create';
+    case IPC_CHANNELS.artifacts.statusUpdate:
+      return 'artifacts.status.update';
+    case IPC_CHANNELS.artifacts.reference:
+      return 'artifacts.reference';
+    case IPC_CHANNELS.memory.candidateAccept:
+      return 'memory.candidate.accept';
+    case IPC_CHANNELS.memory.candidateReject:
+      return 'memory.candidate.reject';
+    case IPC_CHANNELS.memory.candidateArchive:
+      return 'memory.candidate.archive';
+    case IPC_CHANNELS.memory.candidateEditAndAccept:
+      return 'memory.candidate.edit-and-accept';
+    case IPC_CHANNELS.memory.memoryList:
+      return 'memory.memory.list';
+    case IPC_CHANNELS.memory.memoryGet:
+      return 'memory.memory.get';
+    case IPC_CHANNELS.memory.memoryUpdate:
+      return 'memory.memory.update';
+    case IPC_CHANNELS.memory.memoryArchive:
+      return 'memory.memory.archive';
+    case IPC_CHANNELS.memory.memoryDelete:
+      return 'memory.memory.delete';
+    case IPC_CHANNELS.memory.memoryDisable:
+      return 'memory.memory.disable';
+    case IPC_CHANNELS.memory.memoryEnable:
+      return 'memory.memory.enable';
+    case IPC_CHANNELS.memory.sourceRefsList:
+      return 'memory.source-refs.list';
+    case IPC_CHANNELS.memory.accessLogsList:
+      return 'memory.access-logs.list';
+    case IPC_CHANNELS.workspace.files.list:
+      return 'workspace.files.list';
+    default:
+      return (channel as string).replaceAll(':', '.');
+  }
+}
+
