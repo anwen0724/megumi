@@ -1,5 +1,9 @@
 // Defines the renderer-facing window.megumi contract exposed by preload.
 import type {
+  RendererChatStreamEventDto,
+  RendererRuntimeEventDto,
+} from '../../shared/renderer-contracts';
+import type {
   SessionMessageSendAckDto,
   SessionMessageSendRequestDto,
 } from '../../shared/renderer-contracts/session-message';
@@ -24,20 +28,6 @@ export interface RendererIpcFailure {
 }
 
 export type RendererIpcResult<TResult = unknown> = RendererIpcSuccess<TResult> | RendererIpcFailure;
-
-export interface RendererRuntimeEventDto {
-  type: string;
-  occurredAt: string;
-  payload: Record<string, unknown>;
-}
-
-export interface RendererChatStreamEventDto {
-  type: string;
-  occurredAt: string;
-  sessionId?: string;
-  runId?: string;
-  payload: Record<string, unknown>;
-}
 
 export type RendererUnsubscribe = () => void;
 type UntypedRendererIpcResult = RendererIpcResult<any>;
