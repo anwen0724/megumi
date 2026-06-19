@@ -11,12 +11,16 @@ function read(relativePath: string): string {
 
 describe('runtime lifecycle docs source guards', () => {
   it('keeps current architecture docs on ToolCall and ToolExecution language', () => {
-    const architecture = read('.local-docs/architecture/agent-runtime-architecture.md');
+    const architecture = [
+      read('.local-docs/architecture/agent-platform-module-architecture.md'),
+      read('.local-docs/specs/20-project-architecture-rebuild/02-agent-run-main-chain.md'),
+    ].join('\n');
 
-    expect(architecture).toContain('tool-call-centered');
-    expect(architecture).toContain('ToolCall');
-    expect(architecture).toContain('ToolExecution');
-    expect(architecture).toContain('UserTurn');
+    expect(architecture).toContain('Tool Call');
+    expect(architecture).toContain('Tool Execution');
+    expect(architecture).toContain('Permission Policy');
+    expect(architecture).toContain('tool.call.created');
+    expect(architecture).toContain('tool.execution.started');
     expect(architecture).not.toContain('ToolUse 是工具主链路源头');
     expect(architecture).not.toContain('tool-use-centered');
     expect(architecture).not.toContain('ToolUse -> PermissionPolicy -> ApprovalRequest? -> ToolCall');
