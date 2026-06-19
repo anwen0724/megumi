@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import {
+  openSqliteDatabase,
+  runDatabaseMigrations,
+  SqliteToolExecutionRepository,
+} from '../../../src/database';
 import { evaluatePermissionPolicy } from '../../../src/permission';
 import {
   createBuiltInToolRegistry,
@@ -130,6 +135,64 @@ describe('ToolExecutionService productization', () => {
     const auditRecords = await executionRepository.listAuditRecords({ toolCallId: 'tool-call-1' });
     expect(auditRecords.map((record) => record.status)).toEqual(['awaiting_approval', 'success']);
     expect(new Set(auditRecords.map((record) => record.id)).size).toBe(2);
+  });
+
+  it('keeps audit ids unique when approval resumes through a new service instance', async () => {
+    const database = openSqliteDatabase(':memory:');
+    runDatabaseMigrations(database, { now: () => '2026-06-20T00:00:00.000Z' });
+    const executionRepository = new SqliteToolExecutionRepository(database);
+    const files = { 'src/a.ts': 'before' };
+    const workspace = createWorkspace({ id: 'workspace-local', projectRoot: 'C:/repo', createdAt: '2026-06-20T00:00:00.000Z', updatedAt: '2026-06-20T00:00:00.000Z' });
+    const workspaceManager = createWorkspaceManager({
+      workspace,
+      fileHost: memoryHost(files),
+      now: () => '2026-06-20T00:00:00.000Z',
+      createId: (prefix, value) => `${prefix}-${value}`,
+    });
+    const createService = () => createToolExecutionService({
+      registry: createBuiltInToolRegistry(),
+      workspace: workspaceManager,
+      executionRepository,
+      now: () => '2026-06-20T00:00:00.000Z',
+      createId: (prefix, value) => `${prefix}-${value}`,
+    });
+    const ask = evaluatePermissionPolicy({
+      decisionId: 'decision-1',
+      mode: 'default',
+      operation: 'write',
+      actionName: 'write_file',
+      target: 'src/a.ts',
+      createdAt: '2026-06-20T00:00:00.000Z',
+    });
+    const allow = evaluatePermissionPolicy({
+      decisionId: 'decision-2',
+      mode: 'accept_edits',
+      operation: 'write',
+      actionName: 'write_file',
+      target: 'src/a.ts',
+      createdAt: '2026-06-20T00:00:01.000Z',
+    });
+
+    try {
+      await createService().execute(
+        { id: 'tool-call-1', name: 'write_file', input: { path: 'src/a.ts', content: 'after' } },
+        { permissionDecision: ask, runId: 'run-1', sessionId: 'session-1', workspaceId: 'workspace-local', turnIndex: 0, approvalRequestId: 'approval-1' },
+      );
+      await expect(createService().execute(
+        { id: 'tool-call-1', name: 'write_file', input: { path: 'src/a.ts', content: 'after' } },
+        { permissionDecision: allow, runId: 'run-1', sessionId: 'session-1', workspaceId: 'workspace-local', turnIndex: 0 },
+      )).resolves.toEqual(expect.objectContaining({ status: 'success' }));
+
+      const auditRecords = await executionRepository.listAuditRecords({ toolCallId: 'tool-call-1' });
+      expect(auditRecords).toEqual(expect.arrayContaining([
+        expect.objectContaining({ status: 'awaiting_approval' }),
+        expect.objectContaining({ status: 'success' }),
+      ]));
+      expect(auditRecords).toHaveLength(2);
+      expect(new Set(auditRecords.map((record) => record.id)).size).toBe(2);
+    } finally {
+      database.close();
+    }
   });
 
   it('maps error tool results to failed executions', async () => {

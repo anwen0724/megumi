@@ -1,4 +1,5 @@
 // Executes one permission-decided Tool Call through registered tools and host ports.
+import { randomUUID } from 'node:crypto';
 import type { PolicyDecision } from '../permission';
 import type { WorkspaceManager } from '../workspace';
 import { preflightToolCall, type ToolPreflightFailureStatus } from './preflight';
@@ -14,6 +15,18 @@ export interface ToolExecutionServiceOptions {
   executionRepository?: ToolExecutionRepository;
   now: () => string;
   createId: (prefix: string, value: string) => string;
+  createAuditId?: (input: ToolAuditIdInput) => string;
+}
+
+export interface ToolAuditIdInput {
+  toolCallId: string;
+  toolName: string;
+  status: ToolResult['status'];
+  runId?: string;
+  sessionId?: string;
+  workspaceId?: string;
+  createdAt: string;
+  sequence: number;
 }
 
 export interface ToolExecutionRequestContext {
@@ -33,6 +46,7 @@ export interface ToolExecutionService {
 
 export function createToolExecutionService(options: ToolExecutionServiceOptions): ToolExecutionService {
   const repository = options.executionRepository ?? createInMemoryToolExecutionRepository();
+  const createAuditId = options.createAuditId ?? defaultCreateAuditId;
   let auditSequence = 0;
   const executionContext: ToolExecutionContext = {
     workspace: options.workspace,
@@ -45,15 +59,26 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
     context: ToolExecutionRequestContext,
     decision?: PolicyDecision,
   ): Promise<ToolResult> => {
+    const createdAt = options.now();
+    const sequence = auditSequence += 1;
     await repository.saveAuditRecord({
-      id: options.createId('tool-audit', `${call.id}-${auditSequence += 1}`),
+      id: createAuditId({
+        toolCallId: call.id,
+        toolName: call.name,
+        status: result.status,
+        ...(context.runId ? { runId: context.runId } : {}),
+        ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+        ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
+        createdAt,
+        sequence,
+      }),
       toolCallId: call.id,
       toolName: call.name,
       status: result.status,
       ...(context.runId ? { runId: context.runId } : {}),
       ...(context.sessionId ? { sessionId: context.sessionId } : {}),
       ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
-      createdAt: options.now(),
+      createdAt,
       ...(decision ? { decision } : {}),
       ...(result.status === 'error' ? { error: result.error } : {}),
     });
@@ -165,6 +190,10 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
       return repository.listExecutions();
     },
   };
+}
+
+function defaultCreateAuditId(): string {
+  return `tool-audit-${randomUUID()}`;
 }
 
 async function finalizeFailedWorkspaceChangeSet(workspace: WorkspaceManager, tracksWorkspaceChanges: boolean) {
