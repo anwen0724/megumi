@@ -54,8 +54,13 @@ export interface ToolExecution {
   toolCallId: string;
   toolName: string;
   status: ToolExecutionStatus;
+  runId?: string;
+  sessionId?: string;
+  workspaceId?: string;
+  turnIndex?: number;
   startedAt?: string;
   endedAt?: string;
+  workspaceChangeSetId?: string;
 }
 
 export interface ToolError {
@@ -100,6 +105,9 @@ export interface ToolAuditRecord {
   toolCallId: string;
   toolName: string;
   status: ToolResult['status'];
+  runId?: string;
+  sessionId?: string;
+  workspaceId?: string;
   decision?: PolicyDecision;
   createdAt: string;
   error?: ToolError;

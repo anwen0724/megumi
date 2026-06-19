@@ -3,8 +3,10 @@ import type { AiRequestOptions, AssistantMessage, AssistantMessageEventStream, M
 import { buildModelContextInput, type ContextMessageFact, type ContextToolResultMessageFact } from '../context';
 import type { ParsedInput } from '../input';
 import {
+  createApprovalRecord,
   createApprovalRequest,
   createPermissionRecord,
+  createPermissionSnapshot,
   type PermissionEvaluator,
   type PermissionRepository,
   type PolicyDecision,
@@ -59,7 +61,14 @@ export interface AgentSessionManager {
 }
 
 export interface AgentToolExecutor {
-  execute(call: ToolCall, context: { permissionDecision?: PolicyDecision; approvalRequestId?: string }): Promise<ToolResult>;
+  execute(call: ToolCall, context: {
+    permissionDecision?: PolicyDecision;
+    approvalRequestId?: string;
+    runId?: string;
+    sessionId?: string;
+    workspaceId?: string;
+    turnIndex?: number;
+  }): Promise<ToolResult>;
 }
 
 export interface AgentAiClient {
@@ -120,6 +129,15 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         metadata: { parsedInputId: String(input.parsedInput.id) },
       });
       const run = toAgentRun(recorded.run, input.parsedInput, input.workspaceId);
+      await options.permissionRepository.savePermissionSnapshot(createPermissionSnapshot({
+        id: createId('permission-snapshot', run.id),
+        runId: run.id,
+        sessionId: input.sessionId,
+        mode: input.options.permissionMode,
+        modeSource: 'runtime_default',
+        settingsSummary: { ruleCount: 0, sources: [] },
+        createdAt: startedAt,
+      }));
       emit({
         type: 'run.started',
         runId: run.id,
@@ -160,6 +178,11 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
 
       const resolved = resolveApprovalRequest({ approval, userDecision: input.userDecision });
       await options.permissionRepository.saveApprovalRequest(resolved);
+      await options.permissionRepository.saveApprovalRecord(createApprovalRecord({
+        id: createId('approval-record', input.approvalRequestId),
+        approval: resolved,
+        userDecision: input.userDecision,
+      }));
 
       const run = toAgentRun(runRecord, input.parsedInput, input.workspaceId);
       if (input.userDecision.kind === 'cancel') {
@@ -202,11 +225,20 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
             userDecision: input.userDecision,
             operation: allowDecision.operation,
             target: allowDecision.target ?? allowDecision.command ?? allowDecision.operation,
+            sessionId: input.sessionId,
+            runId: input.runId,
+            sourceApprovalRequestId: approval.id,
             createdAt: input.userDecision.decidedAt,
           }));
         }
         emitToolExecutionStarted(run.id, waiting.turnIndex, waiting.toolCall);
-        const result = await options.toolExecutor.execute(waiting.toolCall, { permissionDecision: allowDecision });
+        const result = await options.toolExecutor.execute(waiting.toolCall, {
+          permissionDecision: allowDecision,
+          runId: input.runId,
+          sessionId: input.sessionId,
+          workspaceId: input.workspaceId,
+          turnIndex: waiting.turnIndex,
+        });
         emitToolExecutionCompleted(run.id, waiting.turnIndex, waiting.toolCall, result);
         appendToolResult(run, waiting.turnIndex, toolResultMessages, result);
       }
@@ -379,6 +411,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         ...preflight.permissionInput,
         mode: input.permissionMode,
       });
+      await options.permissionRepository.savePolicyDecision(decision.id, decision);
 
       if (decision.kind === 'deny') {
         appendToolResult(input.run, input.turnIndex, input.toolResultMessages, {
@@ -394,12 +427,21 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
       if (decision.kind === 'ask') {
         const approval = createApprovalRequest({
           id: createId('approval', call.id),
+          runId: input.run.id,
+          sessionId: input.run.sessionId,
           toolCallId: call.id,
           decision,
           createdAt: options.now(),
         });
         await options.permissionRepository.saveApprovalRequest(approval);
-        await options.toolExecutor.execute(call, { permissionDecision: decision, approvalRequestId: approval.id });
+        await options.toolExecutor.execute(call, {
+          permissionDecision: decision,
+          approvalRequestId: approval.id,
+          runId: input.run.id,
+          sessionId: input.run.sessionId,
+          workspaceId: input.run.workspaceId,
+          turnIndex: input.turnIndex,
+        });
         const waiting: AgentApprovalWaitState = {
           approvalRequestId: approval.id,
           runId: input.run.id,
@@ -454,7 +496,13 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
           if (!item) {
             return undefined;
           }
-          const result = await options.toolExecutor.execute(item.call, { permissionDecision: item.decision });
+          const result = await options.toolExecutor.execute(item.call, {
+            permissionDecision: item.decision,
+            runId: input.run.id,
+            sessionId: input.run.sessionId,
+            workspaceId: input.run.workspaceId,
+            turnIndex: input.turnIndex,
+          });
           return { item, result };
         }));
         for (const outcome of results) {
@@ -471,7 +519,13 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         continue;
       }
       emitToolExecutionStarted(input.run.id, input.turnIndex, item.call);
-      const result = await options.toolExecutor.execute(item.call, { permissionDecision: item.decision });
+      const result = await options.toolExecutor.execute(item.call, {
+        permissionDecision: item.decision,
+        runId: input.run.id,
+        sessionId: input.run.sessionId,
+        workspaceId: input.run.workspaceId,
+        turnIndex: input.turnIndex,
+      });
       emitToolExecutionCompleted(input.run.id, input.turnIndex, item.call, result);
       appendToolResult(input.run, input.turnIndex, input.toolResultMessages, result);
     }

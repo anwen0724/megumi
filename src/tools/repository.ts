@@ -4,9 +4,10 @@ import type { ToolAuditRecord, ToolExecution } from './types';
 export interface ToolExecutionRepository {
   createExecution(execution: ToolExecution): Promise<void>;
   updateExecution(execution: ToolExecution): Promise<void>;
-  listExecutions(): Promise<ToolExecution[]>;
+  getExecution(id: string): Promise<ToolExecution | undefined>;
+  listExecutions(input?: { runId?: string; toolCallId?: string }): Promise<ToolExecution[]>;
   saveAuditRecord(record: ToolAuditRecord): Promise<void>;
-  listAuditRecords(): Promise<ToolAuditRecord[]>;
+  listAuditRecords(input?: { runId?: string; toolCallId?: string }): Promise<ToolAuditRecord[]>;
 }
 
 export function createInMemoryToolExecutionRepository(): ToolExecutionRepository {
@@ -20,14 +21,23 @@ export function createInMemoryToolExecutionRepository(): ToolExecutionRepository
     async updateExecution(execution) {
       executions.set(execution.id, execution);
     },
-    async listExecutions() {
-      return [...executions.values()];
+    async getExecution(id) {
+      return executions.get(id);
+    },
+    async listExecutions(input = {}) {
+      return [...executions.values()].filter((execution) =>
+        (input.runId === undefined || execution.runId === input.runId)
+        && (input.toolCallId === undefined || execution.toolCallId === input.toolCallId),
+      );
     },
     async saveAuditRecord(record) {
       auditRecords.push(record);
     },
-    async listAuditRecords() {
-      return [...auditRecords];
+    async listAuditRecords(input = {}) {
+      return auditRecords.filter((record) =>
+        (input.runId === undefined || record.runId === input.runId)
+        && (input.toolCallId === undefined || record.toolCallId === input.toolCallId),
+      );
     },
   };
 }

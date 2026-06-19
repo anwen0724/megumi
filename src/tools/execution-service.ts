@@ -19,6 +19,10 @@ export interface ToolExecutionServiceOptions {
 export interface ToolExecutionRequestContext {
   permissionDecision?: PolicyDecision;
   approvalRequestId?: string;
+  runId?: string;
+  sessionId?: string;
+  workspaceId?: string;
+  turnIndex?: number;
 }
 
 export interface ToolExecutionService {
@@ -34,12 +38,20 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
     ...(options.processHost ? { processHost: options.processHost } : {}),
   };
 
-  const audit = async (call: ToolCall, result: ToolResult, decision?: PolicyDecision): Promise<ToolResult> => {
+  const audit = async (
+    call: ToolCall,
+    result: ToolResult,
+    context: ToolExecutionRequestContext,
+    decision?: PolicyDecision,
+  ): Promise<ToolResult> => {
     await repository.saveAuditRecord({
       id: options.createId('tool-audit', call.id),
       toolCallId: call.id,
       toolName: call.name,
       status: result.status,
+      ...(context.runId ? { runId: context.runId } : {}),
+      ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+      ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
       createdAt: options.now(),
       ...(decision ? { decision } : {}),
       ...(result.status === 'error' ? { error: result.error } : {}),
@@ -51,19 +63,19 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
     async execute(call, context) {
       const preflight = preflightToolCall(call, options.registry);
       if (preflight.status !== 'ready') {
-        const execution = createExecution(call, 'failed', options);
+        const execution = createExecution(call, 'failed', options, context);
         await repository.createExecution(execution);
         return audit(call, {
           status: 'error',
           toolCallId: call.id,
           toolName: call.name,
           error: toolErrorFromPreflight(preflight.status, preflight.message),
-        }, context.permissionDecision);
+        }, context, context.permissionDecision);
       }
 
       const decision = context.permissionDecision;
       if (!decision) {
-        const execution = createExecution(call, 'failed', options);
+        const execution = createExecution(call, 'failed', options, context);
         await repository.createExecution(execution);
         return audit(call, {
           status: 'error',
@@ -74,11 +86,11 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
             message: `Permission decision is required before executing ${call.name}.`,
             retryable: true,
           },
-        });
+        }, context);
       }
 
       if (decision.kind === 'deny') {
-        const execution = createExecution(call, 'rejected', options);
+        const execution = createExecution(call, 'rejected', options, context);
         await repository.createExecution(execution);
         return audit(call, {
           status: 'rejected',
@@ -86,11 +98,11 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
           toolName: call.name,
           decision,
           text: decision.reason,
-        }, decision);
+        }, context, decision);
       }
 
       if (decision.kind === 'ask') {
-        const execution = createExecution(call, 'awaiting_approval', options);
+        const execution = createExecution(call, 'awaiting_approval', options, context);
         await repository.createExecution(execution);
         return audit(call, {
           status: 'awaiting_approval',
@@ -99,19 +111,34 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
           decision,
           ...(context.approvalRequestId ? { approvalRequestId: context.approvalRequestId } : {}),
           text: decision.reason,
-        }, decision);
+        }, context, decision);
       }
 
-      const execution = createExecution(call, 'running', options);
+      const execution = createExecution(call, 'running', options, context);
       await repository.createExecution(execution);
       try {
         const executor = options.registry.getExecutor(call.name);
         if (!executor) {
           throw new Error(`Missing executor for tool: ${call.name}`);
         }
+        const tracksWorkspaceChanges = preflight.executionConstraint.mutation === 'mutation';
+        if (tracksWorkspaceChanges) {
+          options.workspace.beginChangeSet({
+            sessionId: context.sessionId,
+            runId: context.runId,
+            toolCallId: call.id,
+            toolExecutionId: execution.id,
+          });
+        }
         const result = await executor.execute({ ...call, input: preflight.executionInput }, executionContext);
-        await repository.updateExecution({ ...execution, status: 'succeeded', endedAt: options.now() });
-        return audit(call, result, decision);
+        const workspaceChangeSet = tracksWorkspaceChanges ? await options.workspace.finalizeActiveChangeSet() : undefined;
+        await repository.updateExecution({
+          ...execution,
+          status: 'succeeded',
+          endedAt: options.now(),
+          ...(workspaceChangeSet ? { workspaceChangeSetId: String(workspaceChangeSet.id) } : {}),
+        });
+        return audit(call, result, context, decision);
       } catch (error) {
         await repository.updateExecution({ ...execution, status: 'failed', endedAt: options.now() });
         return audit(call, {
@@ -119,7 +146,7 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
           toolCallId: call.id,
           toolName: call.name,
           error: toolErrorFromUnknown(error),
-        }, decision);
+        }, context, decision);
       }
     },
 
@@ -133,12 +160,21 @@ export function createToolExecutionService(options: ToolExecutionServiceOptions)
   };
 }
 
-function createExecution(call: ToolCall, status: ToolExecution['status'], options: ToolExecutionServiceOptions): ToolExecution {
+function createExecution(
+  call: ToolCall,
+  status: ToolExecution['status'],
+  options: ToolExecutionServiceOptions,
+  context: ToolExecutionRequestContext,
+): ToolExecution {
   const execution: ToolExecution = {
     id: options.createId('tool-execution', call.id),
     toolCallId: call.id,
     toolName: call.name,
     status,
+    ...(context.runId ? { runId: context.runId } : {}),
+    ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+    ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
+    ...(context.turnIndex !== undefined ? { turnIndex: context.turnIndex } : {}),
     startedAt: options.now(),
   };
   return status === 'running' ? execution : { ...execution, endedAt: options.now() };
