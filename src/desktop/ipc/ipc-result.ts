@@ -2,7 +2,7 @@
 import type { RendererIpcResult } from '../dto/renderer-api';
 
 export function ok<T>(value: T): RendererIpcResult<T> {
-  return { ok: true, value };
+  return { ok: true, data: value };
 }
 
 export function fail(error: unknown): RendererIpcResult<never> {

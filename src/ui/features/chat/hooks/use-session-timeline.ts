@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { MegumiRendererApi } from '../../../../desktop/dto/renderer-api';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
@@ -84,6 +85,10 @@ function renameEmptyManualSessionFromPrompt(payload: ComposerSubmitPayload, exis
 
 function activeCanonicalMessageCount(projectId: string, sessionId: string): number {
   return useChatStreamStore.getState().sessions[`${projectId}:${sessionId}`]?.messages.length ?? 0;
+}
+
+function getMegumiRendererApi(): MegumiRendererApi {
+  return Object.getOwnPropertyDescriptor(window, 'megumi')?.value;
 }
 
 function shouldProcessRuntimeEvent(
@@ -269,7 +274,7 @@ export function useSessionTimeline() {
     state.setAgentStatus('sending', runSessionId);
     state.setLastError(null, runSessionId);
 
-    const result = await window.megumi.session.message.send(request as never);
+    const result = await getMegumiRendererApi().session.message.send(request);
 
     if (!result.ok) {
       failSessionMessageSend(result.error.message, runSessionId);

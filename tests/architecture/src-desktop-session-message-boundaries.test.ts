@@ -15,9 +15,16 @@ describe('src desktop session message boundaries', () => {
 
     expect(hook).toContain('createSessionMessageSendRequestDto');
     expect(hook).not.toContain('SessionMessageSendPayload');
+    expect(hook).not.toContain('as never');
     expect(adapter).toContain('SessionMessageSendRequestDto');
     expect(adapter).not.toContain('createRendererRuntimeIpcRequest');
     expect(adapter).not.toContain('window.megumi');
+  });
+
+  it('keeps UI session message tests on real types instead of cast escapes', () => {
+    const test = read('tests/src/ui/session-message-send-request.test.ts');
+
+    expect(test).not.toContain('as never');
   });
 
   it('does not preserve old renderer runtime envelope compatibility for message send', () => {

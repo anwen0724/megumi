@@ -1,7 +1,7 @@
-import type { MegumiAPI } from '../../../preload/types';
+import type { MegumiRendererApi } from '../../../desktop/dto/renderer-api';
 
 declare global {
   interface Window {
-    megumi: MegumiAPI;
+    megumi: MegumiRendererApi;
   }
 }

@@ -1,16 +1,23 @@
+import type { ComposerSubmitPayload } from '../../../src/ui/features/chat/components/Composer';
 import { describe, expect, it } from 'vitest';
 import { createSessionMessageSendRequestDto } from '../../../src/ui/features/chat/hooks/session-message-send-request';
 
 describe('createSessionMessageSendRequestDto', () => {
   it('builds the new renderer DTO without the old runtime envelope', () => {
-    const request = createSessionMessageSendRequestDto({
-      payload: {
-        message: 'hello from ui',
-        model: 'deepseek-chat' as never,
-        permissionMode: 'auto',
-        permissionSource: 'composer' as never,
-        preprocessing: { mentions: ['file-a'] } as never,
+    const payload: ComposerSubmitPayload = {
+      message: 'hello from ui',
+      model: 'deepseek-v4-flash',
+      permissionMode: 'auto',
+      permissionSource: 'user',
+      preprocessing: {
+        originalText: 'hello from ui',
+        effectiveUserText: 'hello from ui',
+        entries: [],
+        diagnostics: [],
       },
+    };
+    const request = createSessionMessageSendRequestDto({
+      payload,
       clientMessageId: 'message-user-1',
       requestId: 'ipc-session-message-request-1',
       traceId: 'trace-1',
@@ -38,7 +45,7 @@ describe('createSessionMessageSendRequestDto', () => {
       source: 'renderer',
       sessionId: 'session-1',
       providerId: 'deepseek',
-      modelId: 'deepseek-chat',
+      modelId: 'deepseek-v4-flash',
       message: {
         id: 'message-user-1',
         text: 'hello from ui',
@@ -51,8 +58,13 @@ describe('createSessionMessageSendRequestDto', () => {
       },
       sessionTitle: 'New session',
       permissionMode: 'auto',
-      permissionSource: 'composer',
-      preprocessing: { mentions: ['file-a'] },
+      permissionSource: 'user',
+      preprocessing: {
+        originalText: 'hello from ui',
+        effectiveUserText: 'hello from ui',
+        entries: [],
+        diagnostics: [],
+      },
       branchDraft: {
         branchMarkerId: 'branch-marker-1',
         intent: 'rerun',

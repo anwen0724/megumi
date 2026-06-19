@@ -1,4 +1,9 @@
 // Defines the renderer-facing window.megumi contract exposed by preload.
+import type {
+  SessionMessageSendAckDto,
+  SessionMessageSendRequestDto,
+} from '../../shared/renderer-contracts/session-message';
+
 export interface RendererIpcRequest<TPayload = unknown> {
   operation: string;
   payload?: TPayload;
@@ -6,7 +11,7 @@ export interface RendererIpcRequest<TPayload = unknown> {
 
 export interface RendererIpcSuccess<TResult = unknown> {
   ok: true;
-  value: TResult;
+  data: TResult;
 }
 
 export interface RendererIpcFailure {
@@ -35,6 +40,7 @@ export interface RendererChatStreamEventDto {
 }
 
 export type RendererUnsubscribe = () => void;
+type UntypedRendererIpcResult = RendererIpcResult<any>;
 
 export interface MegumiRendererApi {
   windowControls: {
@@ -43,36 +49,36 @@ export interface MegumiRendererApi {
     close(): Promise<RendererIpcResult<void>>;
   };
   project: {
-    list(): Promise<RendererIpcResult<unknown>>;
-    useExisting(payload: unknown): Promise<RendererIpcResult<unknown>>;
-    open(payload?: unknown): Promise<RendererIpcResult<unknown>>;
-    remove(payload: unknown): Promise<RendererIpcResult<unknown>>;
+    list(): Promise<UntypedRendererIpcResult>;
+    useExisting(payload: unknown): Promise<UntypedRendererIpcResult>;
+    open(payload?: unknown): Promise<UntypedRendererIpcResult>;
+    remove(payload: unknown): Promise<UntypedRendererIpcResult>;
   };
   provider: {
-    list(): Promise<RendererIpcResult<unknown>>;
-    update(payload: unknown): Promise<RendererIpcResult<unknown>>;
-    setApiKey(payload: unknown): Promise<RendererIpcResult<unknown>>;
-    deleteApiKey(payload: unknown): Promise<RendererIpcResult<unknown>>;
+    list(): Promise<UntypedRendererIpcResult>;
+    update(payload: unknown): Promise<UntypedRendererIpcResult>;
+    setApiKey(payload: unknown): Promise<UntypedRendererIpcResult>;
+    deleteApiKey(payload: unknown): Promise<UntypedRendererIpcResult>;
   };
   settings: {
-    get(): Promise<RendererIpcResult<unknown>>;
-    update(payload: unknown): Promise<RendererIpcResult<unknown>>;
+    get(payload?: unknown): Promise<UntypedRendererIpcResult>;
+    update(payload: unknown): Promise<UntypedRendererIpcResult>;
   };
   session: {
-    list(payload?: unknown): Promise<RendererIpcResult<unknown>>;
-    timeline: { list(payload: unknown): Promise<RendererIpcResult<unknown>> };
+    list(payload?: unknown): Promise<UntypedRendererIpcResult>;
+    timeline: { list(payload: unknown): Promise<UntypedRendererIpcResult> };
     message: {
-      send(payload: unknown): Promise<RendererIpcResult<unknown>>;
-      cancel(payload: unknown): Promise<RendererIpcResult<unknown>>;
+      send(payload: SessionMessageSendRequestDto): Promise<RendererIpcResult<SessionMessageSendAckDto>>;
+      cancel(payload: unknown): Promise<UntypedRendererIpcResult>;
     };
     branchDraft: {
-      create(payload: unknown): Promise<RendererIpcResult<unknown>>;
-      cancel(payload: unknown): Promise<RendererIpcResult<unknown>>;
+      create(payload: unknown): Promise<UntypedRendererIpcResult>;
+      cancel(payload: unknown): Promise<UntypedRendererIpcResult>;
     };
   };
   run: {
-    listBySession(payload: unknown): Promise<RendererIpcResult<unknown>>;
-    events: { list(payload: unknown): Promise<RendererIpcResult<unknown>> };
+    listBySession(payload: unknown): Promise<UntypedRendererIpcResult>;
+    events: { list(payload: unknown): Promise<UntypedRendererIpcResult> };
   };
   runtime: {
     onEvent(callback: (event: RendererRuntimeEventDto) => void): RendererUnsubscribe;
@@ -81,34 +87,34 @@ export interface MegumiRendererApi {
     onEvent(callback: (event: RendererChatStreamEventDto) => void): RendererUnsubscribe;
   };
   approval: {
-    resolve(payload: unknown): Promise<RendererIpcResult<unknown>>;
+    resolve(payload: unknown): Promise<UntypedRendererIpcResult>;
   };
   recovery: {
-    listRecoverableRuns(payload?: unknown): Promise<RendererIpcResult<unknown>>;
-    resume(payload: unknown): Promise<RendererIpcResult<unknown>>;
-    retry(payload: unknown): Promise<RendererIpcResult<unknown>>;
-    cancel(payload: unknown): Promise<RendererIpcResult<unknown>>;
-    restoreWorkspaceChangeSet(payload: unknown): Promise<RendererIpcResult<unknown>>;
+    listRecoverableRuns(payload?: unknown): Promise<UntypedRendererIpcResult>;
+    resume(payload: unknown): Promise<UntypedRendererIpcResult>;
+    retry(payload: unknown): Promise<UntypedRendererIpcResult>;
+    cancel(payload: unknown): Promise<UntypedRendererIpcResult>;
+    restoreWorkspaceChangeSet(payload: unknown): Promise<UntypedRendererIpcResult>;
   };
   workspace: {
     files: {
-      list(payload: unknown): Promise<RendererIpcResult<unknown>>;
-      open(payload: unknown): Promise<RendererIpcResult<unknown>>;
+      list(payload: unknown): Promise<UntypedRendererIpcResult>;
+      open(payload: unknown): Promise<UntypedRendererIpcResult>;
     };
   };
   runContext: {
-    get(payload?: unknown): Promise<RendererIpcResult<unknown>>;
+    get(payload?: unknown): Promise<UntypedRendererIpcResult>;
   };
   plan: {
-    list(payload?: unknown): Promise<RendererIpcResult<unknown>>;
+    list(payload?: unknown): Promise<UntypedRendererIpcResult>;
   };
   tool: {
-    list(payload?: unknown): Promise<RendererIpcResult<unknown>>;
+    list(payload?: unknown): Promise<UntypedRendererIpcResult>;
   };
   artifacts: {
-    list(payload?: unknown): Promise<RendererIpcResult<unknown>>;
+    list(payload?: unknown): Promise<UntypedRendererIpcResult>;
   };
   memory: {
-    getSettings(payload?: unknown): Promise<RendererIpcResult<unknown>>;
+    getSettings(payload?: unknown): Promise<UntypedRendererIpcResult>;
   };
 }
