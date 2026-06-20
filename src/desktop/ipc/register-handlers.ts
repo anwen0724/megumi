@@ -12,6 +12,7 @@ import { handleToolOperation } from './tool.handler';
 import { handleWindowOperation } from './window.handler';
 import { handleWorkspaceFilesOperation } from './workspace-files.handler';
 import type { DesktopIpcContext } from './ipc-context';
+import { DesktopIpcError, unavailable } from './ipc-errors';
 import { fail, ok } from './ipc-result';
 
 export function registerDesktopIpcHandlers(context: DesktopIpcContext): () => void {
@@ -30,7 +31,7 @@ export function registerDesktopIpcHandlers(context: DesktopIpcContext): () => vo
         (await handleToolOperation(operation, payload, context)) ??
         (await handleWorkspaceFilesOperation(operation, payload, context)) ??
         (await handleWindowOperation(operation, payload, context)) ??
-        unavailableResult(operation);
+        unsupportedOperation(operation);
       return ok(result);
     } catch (error) {
       return fail(error);
@@ -39,9 +40,13 @@ export function registerDesktopIpcHandlers(context: DesktopIpcContext): () => vo
   return () => ipcMain.removeHandler('megumi:invoke');
 }
 
-function unavailableResult(operation: string): unknown {
+function unsupportedOperation(operation: string): never {
   if (operation.startsWith('artifacts.') || operation.startsWith('memory.')) {
-    return { unavailable: true, operation };
+    throw unavailable(operation, 'backend is intentionally unavailable in this phase');
   }
-  return { unsupported: true, operation };
+  throw new DesktopIpcError(
+    'desktop_operation_unsupported',
+    `Unsupported desktop renderer operation: ${operation}`,
+    { operation },
+  );
 }

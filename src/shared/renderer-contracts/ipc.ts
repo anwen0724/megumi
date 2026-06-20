@@ -173,6 +173,47 @@ export type RuntimeIpcResult<
   TChannel extends BusinessIpcChannel = BusinessIpcChannel,
 > = RuntimeIpcSuccess<TResult, TChannel> | RuntimeIpcFailure<TChannel>;
 
+export type EmptyRendererPayload = Record<string, never>;
+export type RendererOperationRequest<
+  TPayload,
+  TChannel extends BusinessIpcChannel,
+> = TPayload | RuntimeIpcRequest<TPayload, TChannel>;
+
+export type ProjectListPayload = EmptyRendererPayload;
+export interface ProjectListData {
+  projects: import('./project').ProjectRecord[];
+}
+export interface ProjectUseExistingPayload {
+  path?: string;
+  name?: string;
+}
+export type ProjectUseExistingData =
+  | { cancelled: true }
+  | { cancelled: false; project: import('./project').ProjectRecord };
+export interface ProjectOpenPayload {
+  projectId: string;
+}
+export interface ProjectOpenData {
+  project: import('./project').ProjectRecord;
+}
+export interface ProjectRemovePayload {
+  projectId: string;
+}
+export interface ProjectRemoveData {
+  projectId: string;
+  removed: boolean;
+}
+
+export type RendererThemeName = 'megumi-warm' | 'neutral-light' | 'graphite-dark' | 'sage-mist' | 'midnight-blue';
+export type SettingsGetPayload = EmptyRendererPayload;
+export interface SettingsData {
+  settings: Omit<import('./settings').AppSettings, 'theme' | 'memory'> & {
+    theme: RendererThemeName;
+    memory: import('./memory').MemorySettings & { enabled: boolean };
+  };
+}
+export type SettingsUpdatePayload = Partial<import('./settings').AppSettings>;
+
 export interface ApprovalResolvePayload {
   requestId?: string;
   approvalRequestId: string;
@@ -232,6 +273,61 @@ export interface ProviderApiKeyPayload {
 export interface ProviderDeleteApiKeyPayload {
   providerId: import('./provider').ProviderId;
 }
+export interface ProviderMutationData {
+  provider: import('./provider').ProviderPublicStatus;
+}
+
+export type SessionListPayload = EmptyRendererPayload;
+export interface SessionListData {
+  sessions: import('./history').RendererSessionSummaryDto[];
+}
+export interface SessionTimelineListPayload {
+  projectId?: string;
+  sessionId: string;
+}
+export type SessionTimelineListData = import('./history').RendererTimelineHydrationDto;
+export interface SessionMessageCancelPayload {
+  targetRequestId?: string;
+  runId?: string;
+  targetRunId?: string;
+  sessionId?: string;
+  workspaceId?: string;
+  reason?: string;
+  metadata?: JsonObject;
+}
+export type SessionMessageCancelData = import('./session-message').SessionMessageSendAckDto & {
+  cancelled?: boolean;
+};
+export interface BranchDraftCreatePayload {
+  sessionId: string;
+  messageId: string;
+  intent: 'branch' | 'rerun';
+  createdAt?: string;
+}
+export interface BranchDraftCreateData {
+  branchDraft: import('./history').RendererBranchDraftDto;
+}
+export interface BranchDraftCancelPayload {
+  sessionId: string;
+  branchMarkerId: string;
+  createdAt?: string;
+}
+export type BranchDraftCancelData =
+  | { cancelled: true }
+  | { cancelled: false; reason: string };
+
+export interface RunListBySessionPayload {
+  sessionId: string;
+}
+export interface RunListBySessionData {
+  runs: import('./history').RendererRunSummaryDto[];
+}
+export interface RunEventsListPayload {
+  runId: string;
+}
+export interface RunEventsListData {
+  events: import('./history').RendererRuntimeEventHistoryDto[];
+}
 
 export interface RecoverableRunListData {
   runs: import('./recovery').RecoverableRunSummary[];
@@ -284,6 +380,29 @@ export interface RunRetryData {
   retried: boolean;
   retryRequestId?: string;
 }
+
+export interface WorkspaceChangesListPayload {
+  runId?: string;
+  sessionId?: string;
+  workspaceId?: string;
+}
+export interface WorkspaceChangesListData {
+  changeSets: import('./productization').RendererWorkspaceChangeSetDto[];
+}
+
+export type ToolListPayload = EmptyRendererPayload;
+export interface ToolListData {
+  tools: import('./productization').RendererToolDefinitionDto[];
+}
+export interface ToolExecutionGetPayload {
+  executionId?: string;
+  toolCallId?: string;
+}
+export type ToolExecutionGetData = import('./productization').RendererToolExecutionDetailDto;
+
+export type RunContextGetPayload = EmptyRendererPayload;
+export type PlanListPayload = EmptyRendererPayload;
+export type DeferredBackendUnavailableData = never;
 
 export const RuntimeIpcRequestSchema = z.object({
   requestId: z.string(),

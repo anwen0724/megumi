@@ -1,12 +1,15 @@
 // Handles workspace file bridge operations that are desktop host actions.
+import path from 'node:path';
 import type { DesktopIpcContext } from './ipc-context';
 import { unavailable } from './ipc-errors';
 import { mapWorkspaceChangeSet } from '../mappers/productization.mapper';
+import { unwrapRendererRuntimePayload } from './runtime-request-payload';
+import type { WorkspaceDirectoryEntry, WorkspaceFilesListData, WorkspaceFileOpenData } from '../../shared/renderer-contracts/workspace';
 
 export async function handleWorkspaceFilesOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'workspace.changes.list') {
     if (!context.runtime) throw unavailable(operation, 'desktop runtime services are not attached to IPC context');
-    const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
     const runId = typeof record.runId === 'string' ? record.runId : undefined;
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
     const workspaceId = typeof record.workspaceId === 'string' ? record.workspaceId : undefined;
@@ -15,14 +18,62 @@ export async function handleWorkspaceFilesOperation(operation: string, payload: 
   }
   if (operation === 'workspace.files.list') {
     if (!context.runtime) throw unavailable(operation, 'desktop runtime services are not attached to IPC context');
-    const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
-    const path = typeof record.path === 'string' ? record.path : '';
-    return context.runtime.workspaceManager.listDirectory(path);
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
+    const workspaceRoot = typeof record.workspaceRoot === 'string' ? record.workspaceRoot : '';
+    const directoryPath = typeof record.directoryPath === 'string'
+      ? record.directoryPath
+      : typeof record.path === 'string'
+        ? record.path
+        : '';
+    const entries = await context.runtime.workspaceManager.listDirectory(directoryPath);
+    return {
+      workspaceRoot,
+      directoryPath,
+      entries: entries.map(mapWorkspaceDirectoryEntry),
+    } satisfies WorkspaceFilesListData;
   }
   if (operation === 'workspace.files.open') {
-    const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
-    if (typeof record.path === 'string') await context.hosts.shellHost.openPath(record.path);
-    return { opened: typeof record.path === 'string' };
+    const record = asRecord(unwrapRendererRuntimePayload(payload));
+    const workspaceRoot = typeof record.workspaceRoot === 'string' ? record.workspaceRoot : '';
+    const filePath = typeof record.filePath === 'string'
+      ? record.filePath
+      : typeof record.path === 'string'
+        ? record.path
+        : undefined;
+    if (!filePath) throw unavailable(operation, 'filePath is required');
+    await context.hosts.shellHost.openPath(resolveOpenPath(workspaceRoot, filePath));
+    return {
+      workspaceRoot,
+      filePath,
+      opened: true,
+    } satisfies WorkspaceFileOpenData;
   }
   return undefined;
+}
+
+function mapWorkspaceDirectoryEntry(entry: { name: string; path: unknown; kind: WorkspaceDirectoryEntry['kind'] }): WorkspaceDirectoryEntry {
+  const relativePath = String(entry.path ?? '');
+  return {
+    name: entry.name,
+    relativePath,
+    path: relativePath,
+    kind: entry.kind,
+    depth: workspacePathDepth(relativePath),
+  };
+}
+
+function workspacePathDepth(value: string): number {
+  const normalized = value.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '');
+  return normalized ? normalized.split('/').filter(Boolean).length : 0;
+}
+
+function resolveOpenPath(workspaceRoot: string, filePath: string): string {
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+  return workspaceRoot ? path.resolve(workspaceRoot, filePath) : filePath;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
