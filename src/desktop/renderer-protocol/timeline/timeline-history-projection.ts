@@ -1,4 +1,4 @@
-﻿// Commits renderer timeline history from chat stream events without owning live UI delivery.
+// Projects renderer chat stream events into durable timeline commit intents without touching storage.
 import type { ChatStreamEvent } from '../../../shared/renderer-contracts/chat-stream';
 import {
   reduceChatStreamEvent,
@@ -6,30 +6,27 @@ import {
   type TimelineMessage,
 } from '../../../shared/renderer-contracts/timeline';
 
-export interface TimelineHistoryCommitRepository {
-  commitRunTimeline(input: {
-    projectId: string;
-    sessionId: string;
-    runId: string;
-    committedAt: string;
-    messages: TimelineMessage[];
-    sessionPreview?: string;
-  }): TimelineMessage[];
-  recordCommitDiagnostic(input: {
-    diagnosticId: string;
-    projectId: string;
-    sessionId: string;
-    runId: string;
-    code: 'timeline_commit_failed';
-    message: string;
-    createdAt: string;
-  }): void;
+export interface TimelineHistoryCommitPayload {
+  projectId: string;
+  sessionId: string;
+  runId: string;
+  committedAt: string;
+  messages: TimelineMessage[];
+  sessionPreview?: string;
 }
 
-export interface TimelineHistoryCommitProjectorOptions {
-  repository: TimelineHistoryCommitRepository;
-  createDiagnosticId: () => string;
+export interface TimelineHistoryDiagnosticIntent {
+  projectId: string;
+  sessionId: string;
+  runId: string;
+  code: 'timeline_commit_failed';
+  message: string;
+  createdAt: string;
 }
+
+export type TimelineHistoryProjectionResult =
+  | { kind: 'commit'; payload: TimelineHistoryCommitPayload }
+  | { kind: 'diagnostic'; diagnostic: TimelineHistoryDiagnosticIntent };
 
 interface StreamState {
   projectId: string;
@@ -43,23 +40,20 @@ interface StreamState {
 export class TimelineHistoryCommitProjector {
   private readonly states = new Map<string, StreamState>();
 
-  constructor(private readonly options: TimelineHistoryCommitProjectorOptions) {}
-
-  publish(event: ChatStreamEvent): void {
+  publish(event: ChatStreamEvent): TimelineHistoryProjectionResult | undefined {
     const key = streamKey(event);
     const existing = this.states.get(key);
 
     if (event.streamKind !== 'main') {
-      return;
+      return undefined;
     }
 
     if (event.eventType === 'branch.separator.created') {
-      this.commitBranchSeparator(event);
-      return;
+      return this.projectBranchSeparator(event);
     }
 
     if (!existing && isTerminalEvent(event)) {
-      return;
+      return undefined;
     }
 
     const state = existing ?? {
@@ -74,65 +68,57 @@ export class TimelineHistoryCommitProjector {
     state.messages = reduceChatStreamEvent(state.messages, event);
 
     if (!isTerminalEvent(event) || state.terminal) {
-      return;
+      return undefined;
     }
 
     state.terminal = true;
-    this.commitTerminal(state, event);
     this.states.delete(key);
+    return projectTerminal(state, event);
   }
 
-  private commitTerminal(
-    state: StreamState,
-    terminalEvent: ChatStreamEvent,
-  ): void {
-    try {
-      this.options.repository.commitRunTimeline({
-        projectId: state.projectId,
-        sessionId: state.sessionId,
-        runId: state.runId,
-        committedAt: terminalEvent.createdAt,
-        messages: state.messages,
-        sessionPreview: previewFromMessages(state.messages),
-      });
-    } catch {
-      this.recordDiagnostic(state, terminalEvent.createdAt);
-    }
-  }
-
-  private commitBranchSeparator(event: ChatStreamEvent): void {
-    const state: StreamState = {
-      projectId: event.projectId,
-      sessionId: event.sessionId,
-      runId: event.runId,
-      streamId: event.streamId,
-      messages: reduceChatStreamEvent([], event),
-      terminal: true,
-    };
-    try {
-      this.options.repository.commitRunTimeline({
-        projectId: state.projectId,
-        sessionId: state.sessionId,
-        runId: state.runId,
-        committedAt: event.createdAt,
-        messages: state.messages,
-      });
-    } catch {
-      this.recordDiagnostic(state, event.createdAt);
-    }
-  }
-
-  private recordDiagnostic(state: StreamState, createdAt: string): void {
-    this.options.repository.recordCommitDiagnostic({
-      diagnosticId: this.options.createDiagnosticId(),
-      projectId: state.projectId,
-      sessionId: state.sessionId,
-      runId: state.runId,
+  createDiagnosticIntent(
+    payload: TimelineHistoryCommitPayload,
+    createdAt: string = payload.committedAt,
+  ): TimelineHistoryDiagnosticIntent {
+    return {
+      projectId: payload.projectId,
+      sessionId: payload.sessionId,
+      runId: payload.runId,
       code: 'timeline_commit_failed',
       message: 'Timeline commit failed.',
       createdAt,
-    });
+    };
   }
+
+  private projectBranchSeparator(event: ChatStreamEvent): TimelineHistoryProjectionResult {
+    return {
+      kind: 'commit',
+      payload: {
+        projectId: event.projectId,
+        sessionId: event.sessionId,
+        runId: event.runId,
+        committedAt: event.createdAt,
+        messages: reduceChatStreamEvent([], event),
+      },
+    };
+  }
+}
+
+function projectTerminal(
+  state: StreamState,
+  terminalEvent: ChatStreamEvent,
+): TimelineHistoryProjectionResult {
+  return {
+    kind: 'commit',
+    payload: {
+      projectId: state.projectId,
+      sessionId: state.sessionId,
+      runId: state.runId,
+      committedAt: terminalEvent.createdAt,
+      messages: state.messages,
+      sessionPreview: previewFromMessages(state.messages),
+    },
+  };
 }
 
 function streamKey(event: ChatStreamEvent): string {

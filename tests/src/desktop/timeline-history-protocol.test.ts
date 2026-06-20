@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentRuntimeEvent } from '../../../src/app';
 import { mapTimelineHydration } from '../../../src/desktop/renderer-protocol/timeline/history';
 import { TimelineHistoryCommitProjector } from '../../../src/desktop/renderer-protocol/timeline/timeline-history-projection';
+import { createTimelineHistoryCommitService } from '../../../src/desktop/services/timeline-history-commit-service';
+import type { SqliteTimelineMessageRepository } from '../../../src/database';
 import type { SessionRunRecord } from '../../../src/session';
 import type { ChatStreamEvent } from '../../../src/shared/renderer-contracts/chat-stream';
 import type { TimelineMessage } from '../../../src/shared/renderer-contracts/timeline';
@@ -39,45 +41,41 @@ function runtimeEvent(sequence: number, type: string, payload: Record<string, un
 }
 
 describe('timeline history protocol', () => {
-  it('commits terminal chat-stream events as canonical renderer timeline messages', () => {
-    const commitRunTimeline = vi.fn((input: { messages: TimelineMessage[] }) => input.messages);
-    const projector = new TimelineHistoryCommitProjector({
-      repository: {
-        commitRunTimeline,
-        recordCommitDiagnostic: vi.fn(),
-      },
-      createDiagnosticId: () => 'diagnostic-1',
-    });
+  it('projects terminal chat-stream events into canonical renderer timeline commit payloads', () => {
+    const projector = new TimelineHistoryCommitProjector();
 
-    projector.publish(chatEvent(1, { eventType: 'turn.started' }));
-    projector.publish(chatEvent(2, {
+    expect(projector.publish(chatEvent(1, { eventType: 'turn.started' }))).toBeUndefined();
+    expect(projector.publish(chatEvent(2, {
       eventType: 'user.message.committed',
       messageId: 'message-user-1',
       clientMessageId: 'client-message-1',
       text: 'hello',
-    }));
-    projector.publish(chatEvent(3, {
+    }))).toBeUndefined();
+    expect(projector.publish(chatEvent(3, {
       eventType: 'assistant.text.delta',
       textId: 'answer-1',
       phase: 'answer',
       delta: 'world',
-    }));
-    projector.publish(chatEvent(4, {
+    }))).toBeUndefined();
+    expect(projector.publish(chatEvent(4, {
       eventType: 'tool.started',
       toolCallId: 'tool-call-1',
       toolName: 'read_file',
       inputSummary: 'src/a.ts',
-    }));
-    projector.publish(chatEvent(5, {
+    }))).toBeUndefined();
+    expect(projector.publish(chatEvent(5, {
       eventType: 'tool.completed',
       toolCallId: 'tool-call-1',
       toolName: 'read_file',
       resultSummary: 'ok',
-    }));
-    projector.publish(chatEvent(6, { eventType: 'turn.completed', createdAt: '2026-06-20T00:00:06.000Z' }));
+    }))).toBeUndefined();
+    const result = projector.publish(chatEvent(6, { eventType: 'turn.completed', createdAt: '2026-06-20T00:00:06.000Z' }));
 
-    expect(commitRunTimeline).toHaveBeenCalledTimes(1);
-    const [commit] = commitRunTimeline.mock.calls[0] as unknown as [{ messages: TimelineMessage[]; sessionPreview?: string }];
+    expect(result?.kind).toBe('commit');
+    if (result?.kind !== 'commit') {
+      throw new Error('Expected timeline commit projection result.');
+    }
+    const commit = result.payload;
     const assistant = commit.messages.find((message) => message.role === 'assistant');
     const answer = assistant?.blocks.find((block) => block.kind === 'answer_text');
     const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
@@ -87,6 +85,36 @@ describe('timeline history protocol', () => {
     expect(process).toEqual(expect.objectContaining({
       status: 'completed',
       items: [expect.objectContaining({ kind: 'tool_activity', status: 'succeeded', toolName: 'read_file' })],
+    }));
+  });
+
+  it('records diagnostics from the desktop service when timeline persistence fails', () => {
+    const repository = {
+      commitRunTimeline: vi.fn(() => {
+        throw new Error('disk full');
+      }),
+      recordCommitDiagnostic: vi.fn(),
+    } as unknown as SqliteTimelineMessageRepository;
+    const service = createTimelineHistoryCommitService({
+      repository,
+      createDiagnosticId: () => 'diagnostic-1',
+    });
+
+    service.handle(runtimeEvent(1, 'turn.started', { userMessageText: 'hello' }));
+    service.handle(runtimeEvent(2, 'ai.message.event', {
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'world' } },
+    }));
+    service.handle(runtimeEvent(3, 'run.completed', { status: 'completed' }));
+
+    expect(repository.commitRunTimeline).toHaveBeenCalledTimes(1);
+    expect(repository.recordCommitDiagnostic).toHaveBeenCalledWith(expect.objectContaining({
+      diagnosticId: 'diagnostic-1',
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      code: 'timeline_commit_failed',
+      message: 'Timeline commit failed.',
+      createdAt: '2026-06-20T00:00:03.000Z',
     }));
   });
 

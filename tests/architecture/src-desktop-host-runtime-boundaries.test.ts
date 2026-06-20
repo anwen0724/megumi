@@ -150,6 +150,15 @@ describe('src desktop host runtime boundaries', () => {
     ])).toEqual([]);
   });
 
+  it('keeps renderer protocol projections free of database persistence calls', () => {
+    expect(findMatches(walkFiles('src/desktop/renderer-protocol'), [
+      /commitRunTimeline/,
+      /recordCommitDiagnostic/,
+      /openSqliteDatabase/,
+      /runDatabaseMigrations/,
+    ])).toEqual([]);
+  });
+
   it('keeps the final Electron/Vite/Forge entrypoints on src after Plan 6', () => {
     expect(read('forge.config.ts')).toContain('src/desktop/main.ts');
     expect(read('forge.config.ts')).toContain('src/desktop/preload/index.ts');
