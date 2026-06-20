@@ -251,6 +251,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
           },
         });
         if (result.kind === 'not_agent_run') {
+          clearActiveRun({ runId, requestId: request.client.requestId });
           return {
             runId: result.parsedInputId,
             sessionId: session.id,
@@ -260,10 +261,14 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
           };
         }
         parseByRunId.set(result.result.run.id, parsedInput);
-        return mapAgentResultToAppResponse(result.result);
-      } finally {
-        activeRunsByRequestId.delete(request.client.requestId);
-        activeRunsByRunId.delete(runId);
+        const response = mapAgentResultToAppResponse(result.result);
+        if (response.status !== 'running' && response.status !== 'waiting_for_approval') {
+          clearActiveRun({ runId: response.runId, requestId: request.client.requestId });
+        }
+        return response;
+      } catch (error) {
+        clearActiveRun({ runId, requestId: request.client.requestId });
+        throw error;
       }
     },
     async resumeRun(request) {
@@ -291,7 +296,11 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
           permissionMode: permissionModeOption(request.metadata?.permissionMode),
         },
       });
-      return mapAgentResultToAppResponse(result);
+      const response = mapAgentResultToAppResponse(result);
+      if (response.status !== 'running' && response.status !== 'waiting_for_approval') {
+        clearActiveRun({ runId: response.runId });
+      }
+      return response;
     },
     async cancelRun(request: AgentRuntimeCancelRequest): Promise<AppRunControlResponse> {
       const targetRequestId = typeof request.metadata?.targetRequestId === 'string' ? request.metadata.targetRequestId : undefined;
@@ -334,6 +343,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
         occurredAt: now(),
         payload: { reason: request.reason ?? 'user_requested' },
       });
+      clearActiveRun({ runId: activeRunId, requestId: targetRequestId ?? activeByRun?.requestId });
       return {
         runId: cancelled.id,
         sessionId: cancelled.sessionId,
@@ -405,6 +415,13 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
       return eventBus.subscribe(callback);
     },
   };
+
+  function clearActiveRun(input: { runId?: string; requestId?: string }): void {
+    const requestId = input.requestId ?? (input.runId ? activeRunsByRunId.get(input.runId)?.requestId : undefined);
+    const runId = input.runId ?? (requestId ? activeRunsByRequestId.get(requestId)?.runId : undefined);
+    if (requestId) activeRunsByRequestId.delete(requestId);
+    if (runId) activeRunsByRunId.delete(runId);
+  }
 
   return {
     agentRuntime,
