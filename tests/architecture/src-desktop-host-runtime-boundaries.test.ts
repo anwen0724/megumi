@@ -57,6 +57,57 @@ describe('src desktop host runtime boundaries', () => {
     }
   });
 
+  it('keeps desktop directories aligned with host architecture names', () => {
+    const requiredDirectories = [
+      'src/desktop/preload',
+      'src/desktop/ipc/handlers',
+      'src/desktop/ipc/events',
+      'src/desktop/renderer-protocol/chat-stream',
+      'src/desktop/renderer-protocol/runtime',
+      'src/desktop/renderer-protocol/request',
+      'src/desktop/renderer-protocol/response',
+      'src/desktop/renderer-protocol/timeline',
+      'src/desktop/renderer-protocol/productization',
+      'src/desktop/services',
+      'src/desktop/composition',
+      'src/desktop/infrastructure',
+      'src/desktop/hosts',
+      'src/desktop/window',
+    ];
+
+    for (const directory of requiredDirectories) {
+      expect(fs.existsSync(path.join(root, directory))).toBe(true);
+    }
+  });
+
+  it('keeps local runtime composition as orchestration instead of host and runtime service bodies', () => {
+    const compositionRoot = read('src/desktop/composition/create-local-runtime.ts');
+    const forbiddenFragments = [
+      'function createWorkspaceFileHost',
+      'function createToolProcessHost',
+      'function createProviderRegistry',
+      'function ensureSession',
+      'function parseRuntimeInput',
+      'const agentRuntime: AgentRuntimePort',
+    ];
+
+    for (const fragment of forbiddenFragments) {
+      expect(compositionRoot).not.toContain(fragment);
+    }
+
+    const responsibilityFiles = [
+      'src/desktop/composition/create-workspace-file-host.ts',
+      'src/desktop/composition/create-tool-process-host.ts',
+      'src/desktop/composition/create-provider-registry.ts',
+      'src/desktop/services/agent-runtime-service.ts',
+      'src/desktop/services/timeline-history-commit-service.ts',
+    ];
+
+    for (const file of responsibilityFiles) {
+      expect(fs.existsSync(path.join(root, file))).toBe(true);
+    }
+  });
+
   it('keeps app as a thin adapter without desktop, Electron, UI, or owner module implementation imports', () => {
     expect(findMatches(walkFiles('src/app'), [
       /from ['"]electron['"]/,
