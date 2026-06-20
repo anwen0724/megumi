@@ -45,6 +45,39 @@ function findMatches(files: string[], patterns: RegExp[]): string[] {
 }
 
 describe('src desktop host runtime boundaries', () => {
+  it('keeps desktop directories aligned with host architecture names', () => {
+    const forbiddenDirectories = [
+      'src/desktop/dto',
+      'src/desktop/mappers',
+      'src/desktop/services/timeline-history-commit-projector.ts',
+    ];
+
+    for (const directory of forbiddenDirectories) {
+      expect(fs.existsSync(path.join(root, directory))).toBe(false);
+    }
+
+    const requiredDirectories = [
+      'src/desktop/preload',
+      'src/desktop/ipc/handlers',
+      'src/desktop/ipc/events',
+      'src/desktop/renderer-protocol/chat-stream',
+      'src/desktop/renderer-protocol/runtime',
+      'src/desktop/renderer-protocol/request',
+      'src/desktop/renderer-protocol/response',
+      'src/desktop/renderer-protocol/timeline',
+      'src/desktop/renderer-protocol/productization',
+      'src/desktop/services',
+      'src/desktop/composition',
+      'src/desktop/infrastructure',
+      'src/desktop/hosts',
+      'src/desktop/window',
+    ];
+
+    for (const directory of requiredDirectories) {
+      expect(fs.existsSync(path.join(root, directory))).toBe(true);
+    }
+  });
+
   it('keeps app as a thin adapter without desktop, Electron, UI, or owner module implementation imports', () => {
     expect(findMatches(walkFiles('src/app'), [
       /from ['"]electron['"]/,

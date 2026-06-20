@@ -5,7 +5,6 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(__dirname, '../..');
 const uiRoot = path.join(repoRoot, 'src/ui');
-const desktopRendererApi = path.join(repoRoot, 'src/desktop/dto/renderer-api.ts');
 
 function listSourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
@@ -20,6 +19,15 @@ function listSourceFiles(directory: string): string[] {
 
 function readSource(file: string): string {
   return readFileSync(file, 'utf8');
+}
+
+function statExists(filePath: string): boolean {
+  try {
+    statSync(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readUiSource(): string {
@@ -72,11 +80,11 @@ describe('src renderer protocol boundaries', () => {
     }
   });
 
-  it('keeps desktop renderer-api as a compatibility re-export only', () => {
-    const source = readSource(desktopRendererApi);
+  it('keeps renderer API types owned only by shared renderer contracts', () => {
+    expect(statExists(path.join(repoRoot, 'src/desktop/dto/renderer-api.ts'))).toBe(false);
 
-    expect(source).toContain('renderer-contracts/renderer-api');
-    expect(source).not.toMatch(/interface\s+MegumiRendererApi/);
-    expect(source).not.toMatch(/type\s+UntypedRendererIpcResult/);
+    const sharedRendererApi = readSource(path.join(repoRoot, 'src/shared/renderer-contracts/renderer-api.ts'));
+    expect(sharedRendererApi).toMatch(/export interface MegumiRendererApi/);
+    expect(sharedRendererApi).toMatch(/export type RendererIpcResult/);
   });
 });
