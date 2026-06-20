@@ -109,10 +109,10 @@ describe('ModelContextInput current-run continuation order', () => {
       'runtime_constraint',
       'runtime_constraint',
       'runtime_constraint',
+      'runtime_constraint',
       'session',
       'session',
       'memory',
-      'workspace_change',
       'tool_continuation',
       'tool_continuation',
       'current_turn',
@@ -122,11 +122,11 @@ describe('ModelContextInput current-run continuation order', () => {
     expect(snapshot.modelContextInput.systemPrompt).toContain('Permission mode is plan.');
     expect(snapshot.modelContextInput.systemPrompt).toContain('Memory context: User prefers concise Chinese answers.');
     expect(snapshot.modelContextInput.systemPrompt).toContain('Workspace change summary: No workspace changes yet.');
+    expect(snapshot.modelContextInput.systemPrompt).toContain('[user] Do you know what Earth is?');
+    expect(snapshot.modelContextInput.systemPrompt).toContain('[assistant] Earth is a planet.');
     expect(snapshot.modelContextInput.messages.map((message) => (
       message.role === 'toolResult' ? `tool:${message.toolCallId}` : `${message.role}:${'content' in message && typeof message.content === 'string' ? message.content : ''}`
     ))).toEqual([
-      'user:Do you know what Earth is?',
-      'assistant:',
       'user:Write a self introduction document.',
       'assistant:',
       'tool:call-1',

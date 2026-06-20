@@ -1,4 +1,5 @@
-// Defines model-context construction facts without owning Agent Run, provider access, or persistence.
+// Defines context adapter facts while preserving old context-management ModelInputContext output.
+import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { Message, ModelContextInput, ToolResultMessage, ToolSet } from '../ai';
 import type { ParsedInput } from '../input';
 import type { JsonObject } from '../shared';
@@ -51,22 +52,8 @@ export interface ContextBudgetOptions {
 
 export interface ContextTraceEntry {
   id: string;
-  kind:
-    | 'current_turn'
-    | 'parsed_input'
-    | 'instruction'
-    | 'runtime_constraint'
-    | 'command_guidance'
-    | 'skill_guidance'
-    | 'prompt_template_guidance'
-    | 'session_history'
-    | 'session_runtime_fact'
-    | 'current_run_message'
-    | 'tool_result'
-    | 'tool_continuation'
-    | 'memory'
-    | 'workspace_change';
-  source: 'input' | 'command' | 'session' | 'agent' | 'memory' | 'workspace' | 'runtime' | 'permission' | 'tools';
+  kind: string;
+  source: string;
   action: 'included' | 'dropped' | 'truncated' | 'deduplicated';
   reason: string;
 }
@@ -78,37 +65,25 @@ export interface ContextTrace {
   dropped: ContextTraceEntry[];
 }
 
+export interface BuildModelContextInputInput {
+  base: RunContextBase;
+  delta: TurnContextDelta;
+  budget?: ContextBudgetOptions;
+}
+
 export interface TurnSnapshot {
   runId: string;
   turnIndex: number;
-  parts: ContextPart[];
+  parts: ModelInputContextPart[];
+  modelInputContext: ModelInputContext;
   modelContextInput: ModelContextInput;
   toolSet: ToolSet;
   trace: ContextTrace;
 }
 
+export type ContextPart = ModelInputContextPart;
+export type ContextPartKind = ModelInputContextPart['kind'];
+
 export function toAiToolResultMessage(fact: ContextToolResultMessageFact): ToolResultMessage {
   return { role: 'toolResult', toolCallId: fact.toolCallId, content: fact.content };
-}
-
-export type ContextPartKind =
-  | 'instruction'
-  | 'runtime_constraint'
-  | 'session'
-  | 'memory'
-  | 'workspace_change'
-  | 'tool_continuation'
-  | 'current_turn';
-
-export interface ContextPart {
-  id: string;
-  kind: ContextPartKind;
-  text?: string;
-  message?: Message;
-  toolResult?: ContextToolResultMessageFact;
-  source: ContextTraceEntry['source'];
-  traceKind: ContextTraceEntry['kind'];
-  required?: boolean;
-  priority?: number;
-  metadata?: JsonObject;
 }
