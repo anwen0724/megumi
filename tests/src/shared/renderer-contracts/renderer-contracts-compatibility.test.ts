@@ -19,11 +19,22 @@ describe('renderer contracts', () => {
 
   it('exports runtime and chat stream schemas used by renderer dispatchers', () => {
     expect(RuntimeEventSchema.safeParse({
+      eventId: 'event-1',
+      eventType: 'run.started',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      requestId: 'request-1',
+      sequence: 1,
+      createdAt: '2026-06-20T00:00:00.000Z',
+      payload: {},
+    }).success).toBe(true);
+    expect(RuntimeEventSchema.safeParse({
       id: 'event-1',
       type: 'run.started',
       createdAt: '2026-06-20T00:00:00.000Z',
       payload: {},
-    }).success).toBe(true);
+    }).success).toBe(false);
 
     expect(ChatStreamEventSchema.safeParse({
       eventId: 'chat-event-1',

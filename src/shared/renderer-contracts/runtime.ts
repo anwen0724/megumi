@@ -42,6 +42,7 @@ export interface RuntimeEvent<TPayload = unknown> {
   eventId: string;
   schemaVersion?: number;
   eventType: string;
+  projectId?: string;
   runId?: string;
   sessionId?: string;
   stepId?: string;
@@ -83,27 +84,106 @@ export interface ToolResultCreatedPayload {
   sourceIdentity?: JsonObject;
 }
 
-export const RuntimeEventSchema = z.union([
-  z.object({
-    id: z.string(),
-    type: z.string(),
-    createdAt: z.string(),
-    sessionId: z.string().optional(),
-    runId: z.string().optional(),
-    workspaceId: z.string().optional(),
-    payload: z.record(z.unknown()).default({}),
+const RuntimePayloadSchema = z.record(z.string(), z.unknown()).default({});
+
+const ApprovalStatusSchema = z.enum(['pending', 'approved', 'denied', 'expired', 'cancelled']);
+const ApprovalScopeSchema = z.enum(['once', 'run', 'project', 'local']);
+const JsonObjectSchema = z.record(z.string(), z.unknown());
+
+const ApprovalRequestSchema = z.object({
+  approvalRequestId: z.string(),
+  toolCallId: z.string(),
+  toolExecutionId: z.string().optional(),
+  permissionDecisionId: z.string().optional(),
+  runId: z.string(),
+  stepId: z.string().optional(),
+  toolName: z.string(),
+  modelVisibleName: z.string().optional(),
+  title: z.string(),
+  summary: z.string(),
+  preview: z.object({
+    action: z.string(),
+    targets: z.array(z.object({
+      kind: z.string(),
+      label: z.string(),
+      sensitivity: z.string().optional(),
+    })).optional(),
+    warnings: z.array(z.string()).optional(),
   }),
-  z.object({
-    eventId: z.string(),
-    eventType: z.string(),
-    runId: z.string().optional(),
-    sessionId: z.string().optional(),
-    stepId: z.string().optional(),
-    sequence: z.number().int(),
-    createdAt: z.string(),
-    payload: z.record(z.unknown()).default({}),
-  }).passthrough(),
+  requestedScope: ApprovalScopeSchema,
+  status: ApprovalStatusSchema,
+  createdAt: z.string(),
+  expiresAt: z.string().optional(),
+  resolvedAt: z.string().optional(),
+  metadata: JsonObjectSchema.optional(),
+});
+
+const RuntimeEventBaseSchema = z.object({
+  eventId: z.string(),
+  projectId: z.string().optional(),
+  sessionId: z.string().optional(),
+  runId: z.string().optional(),
+  requestId: z.string().optional(),
+  stepId: z.string().optional(),
+  actionId: z.string().optional(),
+  observationId: z.string().optional(),
+  messageId: z.string().optional(),
+  schemaVersion: z.number().int().optional(),
+  sequence: z.number().int(),
+  createdAt: z.string(),
+  source: z.string().optional(),
+  visibility: z.string().optional(),
+  persist: z.string().optional(),
+  payload: RuntimePayloadSchema,
+});
+
+const RuntimeApprovalRequestedEventSchema = RuntimeEventBaseSchema.extend({
+  eventType: z.literal('approval.requested'),
+  payload: z.object({
+    approvalRequest: ApprovalRequestSchema,
+  }),
+});
+
+function terminalRunEventSchema<TEventType extends 'run.completed' | 'run.failed' | 'run.cancelled'>(
+  eventType: TEventType,
+) {
+  return RuntimeEventBaseSchema.extend({
+    eventType: z.literal(eventType),
+    projectId: z.string(),
+    sessionId: z.string(),
+    runId: z.string(),
+    requestId: z.string(),
+  });
+}
+
+const RuntimeSpecialEventSchema = z.discriminatedUnion('eventType', [
+  RuntimeApprovalRequestedEventSchema,
+  terminalRunEventSchema('run.completed'),
+  terminalRunEventSchema('run.failed'),
+  terminalRunEventSchema('run.cancelled'),
 ]);
+
+const RuntimeGenericEventSchema = RuntimeEventBaseSchema.extend({
+  eventType: z.string(),
+}).superRefine((value, context) => {
+  if (
+    value.eventType === 'approval.requested'
+    || value.eventType === 'run.completed'
+    || value.eventType === 'run.failed'
+    || value.eventType === 'run.cancelled'
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Runtime event type ${value.eventType} must satisfy its specialized renderer contract`,
+      path: ['eventType'],
+    });
+  }
+});
+
+export const RuntimeEventSchema = z.union([
+  RuntimeSpecialEventSchema,
+  RuntimeGenericEventSchema,
+]) satisfies z.ZodType<unknown>;
 
 export const RUNTIME_EVENT_TYPES = {
   runStarted: 'run.started',
@@ -126,6 +206,7 @@ export function createRuntimeEvent<TPayload extends JsonObject>(input: Omit<Runt
     createdAt: input.createdAt ?? new Date().toISOString(),
     sequence: input.sequence ?? 1,
     eventType: input.eventType,
+    projectId: input.projectId,
     runId: input.runId,
     sessionId: input.sessionId,
     stepId: input.stepId,
