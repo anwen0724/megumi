@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -71,7 +71,7 @@ describe('src desktop host runtime boundaries', () => {
 
   it('keeps desktop event mappers and forwarders as projection code, not Agent Loop owners', () => {
     expect(findMatches([
-      ...walkFiles('src/desktop/mappers'),
+      ...walkFiles('src/desktop/renderer-protocol'),
       'src/desktop/ipc/chat-stream-event-forwarder.ts',
       'src/desktop/ipc/runtime-event-forwarder.ts',
     ], [

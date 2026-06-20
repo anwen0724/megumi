@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+﻿import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -14,7 +14,7 @@ describe('src tools permission workspace productization boundaries', () => {
       'src/desktop/ipc/tool.handler.ts',
       'src/desktop/ipc/workspace-files.handler.ts',
       'src/desktop/ipc/recovery.handler.ts',
-      'src/desktop/mappers/productization.mapper.ts',
+      'src/desktop/renderer-protocol/productization.mapper.ts',
     ].map(read).join('\n');
 
     expect(files).not.toContain('evaluatePermissionPolicy(');

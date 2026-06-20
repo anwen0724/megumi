@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+﻿import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -27,7 +27,7 @@ describe('src history recovery boundaries', () => {
       'src/desktop/ipc/session.handler.ts',
       'src/desktop/ipc/run.handler.ts',
       'src/desktop/ipc/recovery.handler.ts',
-      'src/desktop/mappers/history.mapper.ts',
+      'src/desktop/renderer-protocol/history.mapper.ts',
     ].map(read).join('\n');
 
     expect(files).not.toContain('buildModelContextInput');

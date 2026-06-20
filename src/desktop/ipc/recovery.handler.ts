@@ -1,4 +1,4 @@
-// Handles recovery controls by delegating retry/cancel/resume to AppApi.
+﻿// Handles recovery controls by delegating retry/cancel/resume to AppApi.
 import type { DesktopIpcContext } from './ipc-context';
 import { unavailable } from './ipc-errors';
 import {
@@ -6,9 +6,9 @@ import {
   mapRendererApprovalToAppResume,
   mapRendererCancelToAppCancel,
   mapRendererRetryToAppRetry,
-} from '../mappers/app-request.mapper';
-import { mapRecoverableRun } from '../mappers/history.mapper';
-import { mapWorkspaceRestoreResult } from '../mappers/productization.mapper';
+} from '../renderer-protocol/app-request.mapper';
+import { mapRecoverableRun } from '../renderer-protocol/history.mapper';
+import { mapWorkspaceRestoreResult } from '../renderer-protocol/productization.mapper';
 
 export async function handleRecoveryOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'recovery.listRecoverableRuns') {

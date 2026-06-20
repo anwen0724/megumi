@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -10,7 +10,7 @@ import type { DesktopHostAdapters } from '../../../src/desktop/composition/creat
 import { handleRecoveryOperation } from '../../../src/desktop/ipc/recovery.handler';
 import { handleToolOperation } from '../../../src/desktop/ipc/tool.handler';
 import { handleWorkspaceFilesOperation } from '../../../src/desktop/ipc/workspace-files.handler';
-import { mapRendererApprovalToAppResume } from '../../../src/desktop/mappers/app-request.mapper';
+import { mapRendererApprovalToAppResume } from '../../../src/desktop/renderer-protocol/app-request.mapper';
 
 const roots: string[] = [];
 afterEach(async () => {

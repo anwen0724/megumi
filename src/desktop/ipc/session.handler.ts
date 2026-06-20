@@ -1,19 +1,19 @@
-// Handles session and message bridge operations by delegating Agent work to AppApi.
+﻿// Handles session and message bridge operations by delegating Agent work to AppApi.
 import type { DesktopIpcContext } from './ipc-context';
 import { unavailable } from './ipc-errors';
 import {
   createDesktopClientContext,
   mapRendererCancelToAppCancel,
   mapRendererMessageSendToAppStartRun,
-} from '../mappers/app-request.mapper';
-import { mapAppResponseToRenderer } from '../mappers/app-response.mapper';
+} from '../renderer-protocol/app-request.mapper';
+import { mapAppResponseToRenderer } from '../renderer-protocol/app-response.mapper';
 import {
   mapBranchDraft,
   mapRunToRendererSummary,
   mapSessionToRendererSummary,
   mapSourceEntry,
   mapTimelineHydration,
-} from '../mappers/history.mapper';
+} from '../renderer-protocol/history.mapper';
 import { unwrapRendererRuntimePayload } from './runtime-request-payload';
 
 export async function handleSessionOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {

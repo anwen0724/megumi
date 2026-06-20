@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { SessionMessageSendRequestDto } from '../../../src/shared/renderer-contracts/session-message';
 import {
   createDesktopClientContext,
   mapRendererMessageSendToAppStartRun,
-} from '../../../src/desktop/mappers/app-request.mapper';
-import { mapAppResponseToRenderer } from '../../../src/desktop/mappers/app-response.mapper';
+} from '../../../src/desktop/renderer-protocol/app-request.mapper';
+import { mapAppResponseToRenderer } from '../../../src/desktop/renderer-protocol/app-response.mapper';
 
 function createRequest(): SessionMessageSendRequestDto {
   return {

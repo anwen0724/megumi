@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -28,7 +28,7 @@ describe('src desktop session message boundaries', () => {
   });
 
   it('does not preserve old renderer runtime envelope compatibility for message send', () => {
-    const mapper = read('src/desktop/mappers/app-request.mapper.ts');
+    const mapper = read('src/desktop/renderer-protocol/app-request.mapper.ts');
 
     expect(mapper).toContain('isSessionMessageSendRequestDto');
     expect(mapper).toContain('session.message.send expects SessionMessageSendRequestDto');
@@ -39,7 +39,7 @@ describe('src desktop session message boundaries', () => {
 
   it('keeps desktop outside Agent Loop owner responsibilities', () => {
     const handler = read('src/desktop/ipc/session.handler.ts');
-    const mapper = read('src/desktop/mappers/app-request.mapper.ts');
+    const mapper = read('src/desktop/renderer-protocol/app-request.mapper.ts');
     const combined = `${handler}\n${mapper}`;
 
     expect(handler).toContain("operation === 'session.message.send'");

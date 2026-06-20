@@ -1,11 +1,11 @@
-// Locks desktop projection from Agent runtime facts into renderer protocol DTOs.
+﻿// Locks desktop projection from Agent runtime facts into renderer protocol DTOs.
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentRuntimeEvent, AgentRuntimePort } from '../../../src/app';
 import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/chat-stream-event-forwarder';
 import { registerRuntimeEventForwarder } from '../../../src/desktop/ipc/runtime-event-forwarder';
-import { createAgentRuntimeChatStreamAdapter } from '../../../src/desktop/mappers/agent-runtime-chat-stream-adapter';
-import { mapAgentRuntimeEventToChatStreamEvent } from '../../../src/desktop/mappers/agent-runtime-event-to-chat-stream-event.mapper';
-import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../../src/desktop/mappers/agent-runtime-event-to-renderer-runtime-event.mapper';
+import { createAgentRuntimeChatStreamAdapter } from '../../../src/desktop/renderer-protocol/agent-runtime-chat-stream-adapter';
+import { mapAgentRuntimeEventToChatStreamEvent } from '../../../src/desktop/renderer-protocol/agent-runtime-event-to-chat-stream-event.mapper';
+import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../../src/desktop/renderer-protocol/agent-runtime-event-to-renderer-runtime-event.mapper';
 import { ChatStreamEventSchema } from '../../../src/shared/renderer-contracts/chat-stream';
 import { RuntimeEventSchema } from '../../../src/shared/renderer-contracts/runtime';
 

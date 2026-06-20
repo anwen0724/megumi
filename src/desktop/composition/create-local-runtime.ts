@@ -1,4 +1,4 @@
-// Composes the local desktop runtime by wiring src owner modules behind AppApi's AgentRuntimePort.
+﻿// Composes the local desktop runtime by wiring src owner modules behind AppApi's AgentRuntimePort.
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -57,8 +57,8 @@ import { createAppSettingsStore, type AppSettingsStore } from '../infrastructure
 import { initializeMegumiHome, type MegumiHomePaths } from '../infrastructure/megumi-home';
 import { createProviderSettingsStore, type ProviderSettingsStore } from '../infrastructure/provider-settings-store';
 import { createRuntimeJsonlLogger, type RuntimeLogger } from '../infrastructure/runtime-logger';
-import { createAgentRuntimeChatStreamAdapter } from '../mappers/agent-runtime-chat-stream-adapter';
-import { TimelineHistoryCommitProjector } from '../services/timeline-history-commit-projector';
+import { createAgentRuntimeChatStreamAdapter } from '../renderer-protocol/agent-runtime-chat-stream-adapter';
+import { TimelineHistoryCommitProjector } from '../renderer-protocol/timeline-history-commit-projector';
 import { createRuntimeEventBus, type RuntimeEventBus } from './create-runtime-event-bus';
 import { createHostAdapters, type DesktopHostAdapters } from './create-host-adapters';
 

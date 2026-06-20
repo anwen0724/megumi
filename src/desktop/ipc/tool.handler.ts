@@ -1,5 +1,5 @@
-// Handles renderer tool queries by projecting tools-owned facts without executing tools.
-import { mapToolDefinition, mapToolExecutionDetail } from '../mappers/productization.mapper';
+﻿// Handles renderer tool queries by projecting tools-owned facts without executing tools.
+import { mapToolDefinition, mapToolExecutionDetail } from '../renderer-protocol/productization.mapper';
 import type { DesktopIpcContext } from './ipc-context';
 import { unavailable } from './ipc-errors';
 
