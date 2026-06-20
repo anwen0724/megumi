@@ -1,6 +1,6 @@
 // Exposes typed renderer subscriptions for main-process runtime events.
 import { ipcRenderer } from 'electron';
-import type { RendererChatStreamEventDto, RendererRuntimeEventDto, RendererUnsubscribe } from '../dto/renderer-api';
+import type { RendererChatStreamEventDto, RendererRuntimeEventDto, RendererUnsubscribe } from '../../shared/renderer-contracts/renderer-api';
 
 export function onRuntimeEvent(callback: (event: RendererRuntimeEventDto) => void): RendererUnsubscribe {
   const listener = (_event: Electron.IpcRendererEvent, payload: RendererRuntimeEventDto) => callback(payload);

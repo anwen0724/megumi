@@ -1,5 +1,5 @@
 // Normalizes IPC handler responses for the renderer bridge.
-import type { RendererIpcResult } from '../dto/renderer-api';
+import type { RendererIpcResult } from '../../shared/renderer-contracts/renderer-api';
 
 export function ok<T>(value: T): RendererIpcResult<T> {
   return { ok: true, data: value };

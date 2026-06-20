@@ -1,5 +1,5 @@
 // Builds the window.megumi API expected by the migrated renderer.
-import type { MegumiRendererApi } from '../dto/renderer-api';
+import type { MegumiRendererApi } from '../../shared/renderer-contracts/renderer-api';
 import { onChatStreamEvent, onRuntimeEvent } from './event-subscription';
 import { invokeRendererOperation } from './invoke';
 

@@ -1,6 +1,6 @@
 // Projects Agent Runtime events into the renderer runtime protocol.
 import type { AgentRuntimeEvent } from '../../app';
-import type { RendererRuntimeEventDto } from '../dto/renderer-api';
+import type { RendererRuntimeEventDto } from '../../shared/renderer-contracts/renderer-api';
 import { mapRendererApprovalRequest } from './productization.mapper';
 
 export interface RendererRuntimeProjectionOptions {

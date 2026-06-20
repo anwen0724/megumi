@@ -1,6 +1,6 @@
 // Registers the single preload invoke channel and dispatches by window.megumi operation name.
 import { ipcMain } from 'electron';
-import type { RendererIpcRequest } from '../dto/renderer-api';
+import type { RendererIpcRequest } from '../../shared/renderer-contracts/renderer-api';
 import { handleApprovalOperation } from './approval.handler';
 import { handleProjectOperation } from './project.handler';
 import { handleProviderOperation } from './provider.handler';
