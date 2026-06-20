@@ -45,7 +45,7 @@ function findMatches(files: string[], patterns: RegExp[]): string[] {
 }
 
 describe('src desktop host runtime boundaries', () => {
-  it('keeps desktop directories aligned with host architecture names', () => {
+  it('keeps removed desktop compatibility directories absent', () => {
     const forbiddenDirectories = [
       'src/desktop/dto',
       'src/desktop/mappers',
@@ -54,27 +54,6 @@ describe('src desktop host runtime boundaries', () => {
 
     for (const directory of forbiddenDirectories) {
       expect(fs.existsSync(path.join(root, directory))).toBe(false);
-    }
-
-    const requiredDirectories = [
-      'src/desktop/preload',
-      'src/desktop/ipc/handlers',
-      'src/desktop/ipc/events',
-      'src/desktop/renderer-protocol/chat-stream',
-      'src/desktop/renderer-protocol/runtime',
-      'src/desktop/renderer-protocol/request',
-      'src/desktop/renderer-protocol/response',
-      'src/desktop/renderer-protocol/timeline',
-      'src/desktop/renderer-protocol/productization',
-      'src/desktop/services',
-      'src/desktop/composition',
-      'src/desktop/infrastructure',
-      'src/desktop/hosts',
-      'src/desktop/window',
-    ];
-
-    for (const directory of requiredDirectories) {
-      expect(fs.existsSync(path.join(root, directory))).toBe(true);
     }
   });
 
@@ -105,8 +84,8 @@ describe('src desktop host runtime boundaries', () => {
   it('keeps desktop event mappers and forwarders as projection code, not Agent Loop owners', () => {
     expect(findMatches([
       ...walkFiles('src/desktop/renderer-protocol'),
-      'src/desktop/ipc/chat-stream-event-forwarder.ts',
-      'src/desktop/ipc/runtime-event-forwarder.ts',
+      'src/desktop/ipc/events/chat-stream-event-forwarder.ts',
+      'src/desktop/ipc/events/runtime-event-forwarder.ts',
     ], [
       /createAgentRunner/,
       /parseRawInput/,

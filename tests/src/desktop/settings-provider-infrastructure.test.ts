@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createAppSettingsStore } from '../../../src/desktop/infrastructure/app-settings-store';
 import { createProviderSettingsStore } from '../../../src/desktop/infrastructure/provider-settings-store';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
-import { handleProviderOperation } from '../../../src/desktop/ipc/provider.handler';
-import { handleSettingsOperation } from '../../../src/desktop/ipc/settings.handler';
+import { handleProviderOperation } from '../../../src/desktop/ipc/handlers/provider.handler';
+import { handleSettingsOperation } from '../../../src/desktop/ipc/handlers/settings.handler';
 
 const roots: string[] = [];
 

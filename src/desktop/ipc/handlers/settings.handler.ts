@@ -1,8 +1,8 @@
-// Handles renderer settings bridge operations through desktop settings infrastructure.
+﻿// Handles renderer settings bridge operations through desktop settings infrastructure.
 import { toRendererSafeSettings } from '../infrastructure/app-settings-store';
-import type { DesktopIpcContext } from './ipc-context';
-import { unavailable } from './ipc-errors';
-import { unwrapRendererRuntimePayload } from './runtime-request-payload';
+import type { DesktopIpcContext } from '../ipc-context';
+import { unavailable } from '../ipc-errors';
+import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
 
 export async function handleSettingsOperation(operation: string, payload: unknown, context?: DesktopIpcContext): Promise<unknown> {
   if (operation === 'settings.get') {

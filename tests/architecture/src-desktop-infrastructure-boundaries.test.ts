@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ function read(relativePath: string): string {
 describe('src desktop infrastructure boundaries', () => {
   it('keeps provider credentials in desktop infrastructure and out of renderer response secrets', () => {
     const providerStore = read('src/desktop/infrastructure/provider-settings-store.ts');
-    const providerHandler = read('src/desktop/ipc/provider.handler.ts');
+    const providerHandler = read('src/desktop/ipc/handlers/provider.handler.ts');
 
     expect(providerStore).toContain('resolveCredential');
     expect(providerStore).toContain('credentialSource');
@@ -22,7 +22,7 @@ describe('src desktop infrastructure boundaries', () => {
 
   it('keeps renderer settings IPC responses behind an explicit safe projection', () => {
     const settingsStore = read('src/desktop/infrastructure/app-settings-store.ts');
-    const settingsHandler = read('src/desktop/ipc/settings.handler.ts');
+    const settingsHandler = read('src/desktop/ipc/handlers/settings.handler.ts');
 
     expect(settingsStore).toContain('toRendererSafeSettings');
     expect(settingsHandler).toContain('toRendererSafeSettings');
@@ -36,9 +36,9 @@ describe('src desktop infrastructure boundaries', () => {
       'src/desktop/infrastructure/app-settings-store.ts',
       'src/desktop/infrastructure/provider-settings-store.ts',
       'src/desktop/infrastructure/runtime-logger.ts',
-      'src/desktop/ipc/settings.handler.ts',
-      'src/desktop/ipc/provider.handler.ts',
-      'src/desktop/ipc/project.handler.ts',
+      'src/desktop/ipc/handlers/settings.handler.ts',
+      'src/desktop/ipc/handlers/provider.handler.ts',
+      'src/desktop/ipc/handlers/project.handler.ts',
     ].map(read).join('\n');
 
     expect(files).not.toContain('parseRawInput');

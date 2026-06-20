@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
-import { handleSessionOperation } from '../../../src/desktop/ipc/session.handler';
+import { handleSessionOperation } from '../../../src/desktop/ipc/handlers/session.handler';
 import { IPC_CHANNELS } from '../../../src/shared/renderer-contracts/ipc';
 import { createSessionStateManager } from '../../../src/session';
 import { createInMemorySessionRepository } from './support/in-memory-session-repository';

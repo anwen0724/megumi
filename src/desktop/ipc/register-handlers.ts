@@ -1,16 +1,16 @@
 // Registers the single preload invoke channel and dispatches by window.megumi operation name.
 import { ipcMain } from 'electron';
 import type { RendererIpcRequest } from '../../shared/renderer-contracts/renderer-api';
-import { handleApprovalOperation } from './approval.handler';
-import { handleProjectOperation } from './project.handler';
-import { handleProviderOperation } from './provider.handler';
-import { handleRecoveryOperation } from './recovery.handler';
-import { handleRunOperation } from './run.handler';
-import { handleSessionOperation } from './session.handler';
-import { handleSettingsOperation } from './settings.handler';
-import { handleToolOperation } from './tool.handler';
-import { handleWindowOperation } from './window.handler';
-import { handleWorkspaceFilesOperation } from './workspace-files.handler';
+import { handleApprovalOperation } from './handlers/approval.handler';
+import { handleProjectOperation } from './handlers/project.handler';
+import { handleProviderOperation } from './handlers/provider.handler';
+import { handleRecoveryOperation } from './handlers/recovery.handler';
+import { handleRunOperation } from './handlers/run.handler';
+import { handleSessionOperation } from './handlers/session.handler';
+import { handleSettingsOperation } from './handlers/settings.handler';
+import { handleToolOperation } from './handlers/tool.handler';
+import { handleWindowOperation } from './handlers/window.handler';
+import { handleWorkspaceFilesOperation } from './handlers/workspace-files.handler';
 import type { DesktopIpcContext } from './ipc-context';
 import { DesktopIpcError, unavailable } from './ipc-errors';
 import { fail, ok } from './ipc-result';

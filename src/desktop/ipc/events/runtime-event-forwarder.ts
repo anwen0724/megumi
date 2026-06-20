@@ -1,8 +1,8 @@
 ﻿// Forwards AgentRuntimeEvent values to renderer runtime subscribers.
 import type { BrowserWindow } from 'electron';
-import type { AgentRuntimeEvent, AgentRuntimePort } from '../../app';
-import { RuntimeEventSchema } from '../../shared/renderer-contracts/runtime';
-import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../renderer-protocol/agent-runtime-event-to-renderer-runtime-event.mapper';
+import type { AgentRuntimeEvent, AgentRuntimePort } from '../../../app';
+import { RuntimeEventSchema } from '../../../shared/renderer-contracts/runtime';
+import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../renderer-protocol/agent-runtime-event-to-renderer-runtime-event.mapper';
 
 export function registerRuntimeEventForwarder(options: {
   agentRuntime: AgentRuntimePort;

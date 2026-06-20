@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDesktopAppApi, createLocalDesktopRuntime } from '../../../src/desktop';
-import { handleRecoveryOperation } from '../../../src/desktop/ipc/recovery.handler';
+import { handleRecoveryOperation } from '../../../src/desktop/ipc/handlers/recovery.handler';
 import type { DesktopHostAdapters } from '../../../src/desktop/composition/create-host-adapters';
 
 const roots: string[] = [];

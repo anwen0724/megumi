@@ -1,8 +1,8 @@
-// Verifies renderer protocol IPC failures and workspace file DTO mapping at the desktop boundary.
+﻿// Verifies renderer protocol IPC failures and workspace file DTO mapping at the desktop boundary.
 import { describe, expect, it, vi } from 'vitest';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
 import { registerDesktopIpcHandlers } from '../../../src/desktop/ipc/register-handlers';
-import { handleWorkspaceFilesOperation } from '../../../src/desktop/ipc/workspace-files.handler';
+import { handleWorkspaceFilesOperation } from '../../../src/desktop/ipc/handlers/workspace-files.handler';
 import { IPC_CHANNELS } from '../../../src/shared/renderer-contracts/ipc';
 import { createRendererRuntimeIpcRequest } from '../../../src/ui/shared/ipc/runtime-request';
 

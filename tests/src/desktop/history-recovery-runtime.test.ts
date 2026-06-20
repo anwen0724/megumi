@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDesktopAppApi, createLocalDesktopRuntime } from '../../../src/desktop';
-import { handleRunOperation } from '../../../src/desktop/ipc/run.handler';
+import { handleRunOperation } from '../../../src/desktop/ipc/handlers/run.handler';
 import { IPC_CHANNELS } from '../../../src/shared/renderer-contracts/ipc';
 import type { AgentAiClient } from '../../../src/agent';
 import { AssistantMessageEventStream } from '../../../src/ai';

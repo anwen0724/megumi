@@ -1,8 +1,8 @@
 ﻿// Forwards AgentRuntimeEvent values to renderer chat stream subscribers.
 import type { BrowserWindow } from 'electron';
-import type { AgentRuntimePort } from '../../app';
-import { ChatStreamEventSchema } from '../../shared/renderer-contracts/chat-stream';
-import { createAgentRuntimeChatStreamAdapter } from '../renderer-protocol/agent-runtime-chat-stream-adapter';
+import type { AgentRuntimePort } from '../../../app';
+import { ChatStreamEventSchema } from '../../../shared/renderer-contracts/chat-stream';
+import { createAgentRuntimeChatStreamAdapter } from '../../renderer-protocol/agent-runtime-chat-stream-adapter';
 
 export function registerChatStreamEventForwarder(options: {
   agentRuntime: AgentRuntimePort;

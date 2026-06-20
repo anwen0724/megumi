@@ -1,8 +1,8 @@
-// Handles project bridge operations by adapting renderer requests to desktop project infrastructure.
+﻿// Handles project bridge operations by adapting renderer requests to desktop project infrastructure.
 import path from 'node:path';
-import type { DesktopIpcContext } from './ipc-context';
-import { unavailable } from './ipc-errors';
-import { unwrapRendererRuntimePayload } from './runtime-request-payload';
+import type { DesktopIpcContext } from '../ipc-context';
+import { unavailable } from '../ipc-errors';
+import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
 
 interface DesktopProjectRecord {
   id?: string;

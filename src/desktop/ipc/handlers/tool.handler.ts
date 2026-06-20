@@ -1,7 +1,7 @@
 ﻿// Handles renderer tool queries by projecting tools-owned facts without executing tools.
-import { mapToolDefinition, mapToolExecutionDetail } from '../renderer-protocol/productization.mapper';
-import type { DesktopIpcContext } from './ipc-context';
-import { unavailable } from './ipc-errors';
+import { mapToolDefinition, mapToolExecutionDetail } from '../../renderer-protocol/productization.mapper';
+import type { DesktopIpcContext } from '../ipc-context';
+import { unavailable } from '../ipc-errors';
 
 export async function handleToolOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'tool.list') {

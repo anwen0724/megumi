@@ -11,9 +11,9 @@ function read(relativePath: string): string {
 describe('src tools permission workspace productization boundaries', () => {
   it('keeps desktop handlers as adapters and projections, not owner rule implementations', () => {
     const files = [
-      'src/desktop/ipc/tool.handler.ts',
-      'src/desktop/ipc/workspace-files.handler.ts',
-      'src/desktop/ipc/recovery.handler.ts',
+      'src/desktop/ipc/handlers/tool.handler.ts',
+      'src/desktop/ipc/handlers/workspace-files.handler.ts',
+      'src/desktop/ipc/handlers/recovery.handler.ts',
       'src/desktop/renderer-protocol/productization.mapper.ts',
     ].map(read).join('\n');
 

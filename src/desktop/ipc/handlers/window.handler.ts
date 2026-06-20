@@ -1,5 +1,5 @@
-// Handles Electron window commands requested by the renderer.
-import type { DesktopIpcContext } from './ipc-context';
+﻿// Handles Electron window commands requested by the renderer.
+import type { DesktopIpcContext } from '../ipc-context';
 
 export async function handleWindowOperation(operation: string, _payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   const window = context.getMainWindow();

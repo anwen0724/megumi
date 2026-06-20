@@ -1,8 +1,8 @@
-// Handles provider settings without returning plaintext credentials.
+﻿// Handles provider settings without returning plaintext credentials.
 import type { ProviderId } from '../infrastructure/app-settings-store';
-import type { DesktopIpcContext } from './ipc-context';
-import { unavailable } from './ipc-errors';
-import { unwrapRendererRuntimePayload } from './runtime-request-payload';
+import type { DesktopIpcContext } from '../ipc-context';
+import { unavailable } from '../ipc-errors';
+import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
 
 export async function handleProviderOperation(operation: string, payload: unknown, context?: DesktopIpcContext): Promise<unknown> {
   const runtime = operation.startsWith('provider.') ? requireRuntime(context, operation) : undefined;

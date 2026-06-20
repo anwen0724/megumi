@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AssistantMessageEventStream, createTextBlock, createToolCallBlock, type AssistantMessage } from '../../../src/ai';
 import { createLocalDesktopRuntime } from '../../../src/desktop';
 import type { DesktopHostAdapters } from '../../../src/desktop/composition/create-host-adapters';
-import { handleRecoveryOperation } from '../../../src/desktop/ipc/recovery.handler';
-import { handleToolOperation } from '../../../src/desktop/ipc/tool.handler';
-import { handleWorkspaceFilesOperation } from '../../../src/desktop/ipc/workspace-files.handler';
+import { handleRecoveryOperation } from '../../../src/desktop/ipc/handlers/recovery.handler';
+import { handleToolOperation } from '../../../src/desktop/ipc/handlers/tool.handler';
+import { handleWorkspaceFilesOperation } from '../../../src/desktop/ipc/handlers/workspace-files.handler';
 import { mapRendererApprovalToAppResume } from '../../../src/desktop/renderer-protocol/app-request.mapper';
 
 const roots: string[] = [];

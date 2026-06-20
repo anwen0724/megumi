@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
-import { handleProjectOperation } from '../../../src/desktop/ipc/project.handler';
+import { handleProjectOperation } from '../../../src/desktop/ipc/handlers/project.handler';
 
 function createContext(): DesktopIpcContext {
   const project = {

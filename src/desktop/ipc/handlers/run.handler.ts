@@ -1,9 +1,9 @@
 ﻿// Handles run query bridge operations for renderer hydration.
-import type { DesktopIpcContext } from './ipc-context';
-import { unavailable } from './ipc-errors';
-import { mapRuntimeEventHistory, mapRunToRendererSummary } from '../renderer-protocol/history.mapper';
-import { unwrapRendererRuntimePayload } from './runtime-request-payload';
-import type { RendererRuntimeEventHistoryDto } from '../../shared';
+import type { DesktopIpcContext } from '../ipc-context';
+import { unavailable } from '../ipc-errors';
+import { mapRuntimeEventHistory, mapRunToRendererSummary } from '../../renderer-protocol/history.mapper';
+import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
+import type { RendererRuntimeEventHistoryDto } from '../../../shared';
 
 export async function handleRunOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'run.listBySession') {

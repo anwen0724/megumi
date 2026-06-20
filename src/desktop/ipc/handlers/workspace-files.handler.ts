@@ -1,9 +1,9 @@
 ﻿// Handles workspace file bridge operations that are desktop host actions.
 import path from 'node:path';
-import type { DesktopIpcContext } from './ipc-context';
-import { unavailable } from './ipc-errors';
-import { mapWorkspaceChangeSet } from '../renderer-protocol/productization.mapper';
-import { unwrapRendererRuntimePayload } from './runtime-request-payload';
+import type { DesktopIpcContext } from '../ipc-context';
+import { unavailable } from '../ipc-errors';
+import { mapWorkspaceChangeSet } from '../../renderer-protocol/productization.mapper';
+import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
 import type { WorkspaceDirectoryEntry, WorkspaceFilesListData, WorkspaceFileOpenData } from '../../shared/renderer-contracts/workspace';
 
 export async function handleWorkspaceFilesOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {

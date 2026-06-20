@@ -38,7 +38,7 @@ describe('src desktop session message boundaries', () => {
   });
 
   it('keeps desktop outside Agent Loop owner responsibilities', () => {
-    const handler = read('src/desktop/ipc/session.handler.ts');
+    const handler = read('src/desktop/ipc/handlers/session.handler.ts');
     const mapper = read('src/desktop/renderer-protocol/app-request.mapper.ts');
     const combined = `${handler}\n${mapper}`;
 

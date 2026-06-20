@@ -2,9 +2,9 @@
 import type { BrowserWindow } from 'electron';
 import { createDesktopAppApi } from './composition/create-app-api';
 import { createLocalDesktopRuntime } from './composition/create-local-runtime';
-import { registerChatStreamEventForwarder } from './ipc/chat-stream-event-forwarder';
+import { registerChatStreamEventForwarder } from './ipc/events/chat-stream-event-forwarder';
 import { registerDesktopIpcHandlers } from './ipc/register-handlers';
-import { registerRuntimeEventForwarder } from './ipc/runtime-event-forwarder';
+import { registerRuntimeEventForwarder } from './ipc/events/runtime-event-forwarder';
 import { loadDesktopEnvFile } from './infrastructure/env-file';
 import { createMainWindow } from './window/create-window';
 import { registerDesktopLifecycle } from './window/lifecycle';

@@ -10,9 +10,9 @@ function read(relativePath: string): string {
 
 describe('src history recovery boundaries', () => {
   it('does not leave Plan 4 history operations as unavailable', () => {
-    const sessionHandler = read('src/desktop/ipc/session.handler.ts');
-    const runHandler = read('src/desktop/ipc/run.handler.ts');
-    const recoveryHandler = read('src/desktop/ipc/recovery.handler.ts');
+    const sessionHandler = read('src/desktop/ipc/handlers/session.handler.ts');
+    const runHandler = read('src/desktop/ipc/handlers/run.handler.ts');
+    const recoveryHandler = read('src/desktop/ipc/handlers/recovery.handler.ts');
 
     expect(sessionHandler).not.toContain("operation === 'session.branchDraft.create') throw unavailable");
     expect(sessionHandler).not.toContain("operation === 'session.branchDraft.cancel') throw unavailable");
@@ -24,9 +24,9 @@ describe('src history recovery boundaries', () => {
 
   it('keeps desktop history adapters outside Agent Loop internals', () => {
     const files = [
-      'src/desktop/ipc/session.handler.ts',
-      'src/desktop/ipc/run.handler.ts',
-      'src/desktop/ipc/recovery.handler.ts',
+      'src/desktop/ipc/handlers/session.handler.ts',
+      'src/desktop/ipc/handlers/run.handler.ts',
+      'src/desktop/ipc/handlers/recovery.handler.ts',
       'src/desktop/renderer-protocol/history.mapper.ts',
     ].map(read).join('\n');
 
@@ -44,7 +44,7 @@ describe('src history recovery boundaries', () => {
     expect(read('vite.preload.config.ts')).toContain("path.resolve(__dirname, 'src/desktop')");
     expect(read('vite.renderer.config.ts')).toContain("root: 'src/ui'");
 
-    const recoveryHandler = read('src/desktop/ipc/recovery.handler.ts');
+    const recoveryHandler = read('src/desktop/ipc/handlers/recovery.handler.ts');
     expect(recoveryHandler).not.toContain('restoreChangeSet(');
     expect(recoveryHandler).not.toContain('WorkspaceChangeRepository');
   });

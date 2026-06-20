@@ -1,6 +1,6 @@
 ﻿import { beforeEach, describe, expect, it } from 'vitest';
 import type { AgentRuntimeEvent, AgentRuntimePort } from '../../../src/app';
-import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/chat-stream-event-forwarder';
+import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/events/chat-stream-event-forwarder';
 import { mapAgentRuntimeEventToChatStreamEvent } from '../../../src/desktop/renderer-protocol/agent-runtime-event-to-chat-stream-event.mapper';
 import { dispatchChatStreamEvent } from '../../../src/ui/features/chat-stream/chat-stream-dispatcher';
 import { chatStreamSessionKey, useChatStreamStore } from '../../../src/ui/features/chat-stream/chat-stream-store';

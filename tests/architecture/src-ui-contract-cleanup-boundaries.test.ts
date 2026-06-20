@@ -97,8 +97,8 @@ describe('src/ui renderer contract cleanup boundary', () => {
       .join('\n');
     const appApiSource = readFileSync(path.join(appRoot, 'app-api.ts'), 'utf8');
     const appAdapterSource = readFileSync(path.join(appRoot, 'create-app-api.ts'), 'utf8');
-    const chatForwarderSource = readFileSync(path.join(repoRoot, 'src/desktop/ipc/chat-stream-event-forwarder.ts'), 'utf8');
-    const runtimeForwarderSource = readFileSync(path.join(repoRoot, 'src/desktop/ipc/runtime-event-forwarder.ts'), 'utf8');
+    const chatForwarderSource = readFileSync(path.join(repoRoot, 'src/desktop/ipc/events/chat-stream-event-forwarder.ts'), 'utf8');
+    const runtimeForwarderSource = readFileSync(path.join(repoRoot, 'src/desktop/ipc/events/runtime-event-forwarder.ts'), 'utf8');
 
     expect(appSource).not.toMatch(/\bAppEvent\b/);
     expect(appSource).not.toContain('mapAgentRuntimeEventToAppEvent');

@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import type { AgentRuntimeEvent, AgentRuntimePort, AppApi } from '../../../src/app';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
-import { handleSessionOperation } from '../../../src/desktop/ipc/session.handler';
-import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/chat-stream-event-forwarder';
-import { registerRuntimeEventForwarder } from '../../../src/desktop/ipc/runtime-event-forwarder';
+import { handleSessionOperation } from '../../../src/desktop/ipc/handlers/session.handler';
+import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/events/chat-stream-event-forwarder';
+import { registerRuntimeEventForwarder } from '../../../src/desktop/ipc/events/runtime-event-forwarder';
 import type { SessionMessageSendRequestDto } from '../../../src/shared/renderer-contracts/session-message';
 
 function createRequest(): SessionMessageSendRequestDto {

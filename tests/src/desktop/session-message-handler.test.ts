@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import type { AppApi, AppCancelRunRequest, AppStartRunRequest } from '../../../src/app';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
-import { handleSessionOperation } from '../../../src/desktop/ipc/session.handler';
+import { handleSessionOperation } from '../../../src/desktop/ipc/handlers/session.handler';
 import { createRendererRuntimeIpcRequest } from '../../../src/ui/shared/ipc/runtime-request';
 import { IPC_CHANNELS } from '../../../src/shared/renderer-contracts/ipc';
 import type { SessionMessageSendRequestDto } from '../../../src/shared/renderer-contracts/session-message';
