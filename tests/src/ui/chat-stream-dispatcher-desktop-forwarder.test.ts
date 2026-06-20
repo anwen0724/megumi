@@ -114,6 +114,53 @@ describe('src/ui chat stream dispatcher desktop projection compatibility', () =>
     }));
   });
 
+  it('reconciles the optimistic user message when the committed user event arrives after turn start', () => {
+    useChatStreamStore.getState().addPendingUserMessage('workspace-1', 'session-1', {
+      clientMessageId: 'client-message-1',
+      text: '你爱我吗？',
+      createdAt: '2026-06-19T00:00:00.000Z',
+    });
+
+    dispatchChatStreamEvent({
+      eventId: 'event-1',
+      eventType: 'turn.started',
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'chat-stream:run-1',
+      streamKind: 'main',
+      seq: 1,
+      createdAt: '2026-06-19T00:00:01.000Z',
+      userMessageId: 'message-user-1',
+      clientMessageId: 'client-message-1',
+    });
+    dispatchChatStreamEvent({
+      eventId: 'event-2',
+      eventType: 'user.message.committed',
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'chat-stream:run-1',
+      streamKind: 'main',
+      seq: 2,
+      createdAt: '2026-06-19T00:00:02.000Z',
+      messageId: 'message-user-1',
+      clientMessageId: 'client-message-1',
+      text: '你爱我吗？',
+    });
+    useChatStreamStore.getState().flushStream('workspace-1', 'session-1', 'chat-stream:run-1');
+
+    const session = useChatStreamStore.getState().sessions[chatStreamSessionKey('workspace-1', 'session-1')];
+
+    expect(session.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(session.messages.filter((message) => message.role === 'user')).toEqual([
+      expect.objectContaining({
+        messageId: 'message-user-1',
+        clientMessageId: 'client-message-1',
+      }),
+    ]);
+  });
+
   it('projects live disclosure like the legacy runtime adapter', () => {
     const runtime = createFakeAgentRuntime();
     const sent: unknown[] = [];

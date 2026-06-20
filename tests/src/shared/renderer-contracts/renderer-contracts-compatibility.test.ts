@@ -8,6 +8,7 @@ import {
   isPermissionMode,
   reduceChatStreamEvent,
 } from '../../../../src/shared/renderer-contracts';
+import type { ChatStreamEvent, TimelineMessage } from '../../../../src/shared/renderer-contracts';
 
 describe('renderer contracts', () => {
   it('exports renderer IPC channels used by the migrated UI', () => {
@@ -51,5 +52,51 @@ describe('renderer contracts', () => {
     expect(AGENT_LABELS.analyst).toBeTruthy();
     expect(isPermissionMode('default')).toBe(true);
     expect(typeof reduceChatStreamEvent).toBe('function');
+  });
+
+  it('reconciles an optimistic user message by client message id like the legacy reducer', () => {
+    const optimistic: TimelineMessage = {
+      messageId: 'client-message-1',
+      role: 'user',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      clientMessageId: 'client-message-1',
+      createdAt: '2026-06-20T00:00:00.000Z',
+      blocks: [{
+        blockId: 'user-text:client-message-1',
+        kind: 'user_text',
+        text: 'Optimistic text',
+        format: 'plain',
+      }],
+    };
+    const committed: ChatStreamEvent = {
+      eventId: 'event-1',
+      eventType: 'user.message.committed',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'chat-stream:run-1',
+      streamKind: 'main',
+      seq: 2,
+      createdAt: '2026-06-20T00:00:01.000Z',
+      clientMessageId: 'client-message-1',
+      messageId: 'message-user-1',
+      text: 'Committed text',
+    };
+
+    const messages = reduceChatStreamEvent([optimistic], committed);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      messageId: 'message-user-1',
+      role: 'user',
+      runId: 'run-1',
+      clientMessageId: 'client-message-1',
+      blocks: [{
+        blockId: 'user-text:message-user-1',
+        kind: 'user_text',
+        text: 'Committed text',
+      }],
+    });
   });
 });

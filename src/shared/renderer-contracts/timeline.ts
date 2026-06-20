@@ -354,9 +354,10 @@ function reduceLegacyChatStreamEvent(messages: TimelineMessage[], event: ChatStr
 
   if (event.eventType === 'user.message.committed') {
     const messageId = String(event.messageId);
+    const clientMessageId = String(event.clientMessageId ?? '');
     const text = String(event.text ?? '');
     const existing = nextMessages.find((message): message is TimelineUserMessage =>
-      message.role === 'user' && message.messageId === messageId
+      message.role === 'user' && (message.messageId === messageId || message.messageId === clientMessageId)
     );
     const block: UserTextBlock = {
       blockId: `user-text:${messageId}`,
@@ -367,22 +368,41 @@ function reduceLegacyChatStreamEvent(messages: TimelineMessage[], event: ChatStr
       updatedAt: event.createdAt,
     };
     if (existing) {
-      existing.blocks = [block];
+      existing.messageId = messageId;
+      existing.runId = event.runId;
+      existing.turnOrder = 0;
+      existing.clientMessageId = clientMessageId;
+      existing.projectId = event.projectId;
+      existing.sessionId = event.sessionId;
+      const blockIndex = existing.blocks.findIndex((candidate) => candidate.kind === 'user_text');
+      if (blockIndex === -1) {
+        existing.blocks.push(block);
+      } else {
+        existing.blocks[blockIndex] = {
+          ...existing.blocks[blockIndex],
+          ...block,
+        };
+      }
       existing.updatedAt = event.createdAt;
+      moveUserBeforeAssistant(nextMessages, existing, event.runId);
       return nextMessages;
     }
-    nextMessages.push({
+    const userMessage: TimelineUserMessage = {
       messageId,
       role: 'user',
       projectId: event.projectId,
       sessionId: event.sessionId,
       runId: event.runId,
-      clientMessageId: String(event.clientMessageId ?? ''),
+      clientMessageId,
       turnOrder: 0,
       createdAt: event.createdAt,
       updatedAt: event.createdAt,
       blocks: [block],
-    });
+    };
+    const assistantIndex = nextMessages.findIndex(
+      (message) => message.role === 'assistant' && message.messageId === `assistant:${event.runId}`,
+    );
+    nextMessages.splice(assistantIndex === -1 ? nextMessages.length : assistantIndex, 0, userMessage);
     return nextMessages;
   }
 
@@ -532,6 +552,24 @@ function reduceLegacyChatStreamEvent(messages: TimelineMessage[], event: ChatStr
   process.updatedAt = event.createdAt;
   assistant.updatedAt = event.createdAt;
   return nextMessages;
+}
+
+function moveUserBeforeAssistant(
+  messages: TimelineMessage[],
+  userMessage: TimelineUserMessage,
+  runId: string,
+): void {
+  const userIndex = messages.findIndex((message) => message === userMessage);
+  const assistantIndex = messages.findIndex(
+    (message) => message.role === 'assistant' && message.messageId === `assistant:${runId}`,
+  );
+
+  if (userIndex === -1 || assistantIndex === -1 || userIndex < assistantIndex) {
+    return;
+  }
+
+  messages.splice(userIndex, 1);
+  messages.splice(assistantIndex, 0, userMessage);
 }
 
 function upsertProcessFactItem(
