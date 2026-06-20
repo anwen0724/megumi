@@ -1,5 +1,5 @@
 ﻿// Projects owner-module facts into renderer-safe productization DTOs without owning rules.
-import type { ApprovalRequest as PermissionApprovalRequest, PolicyDecision } from '../../permission';
+import type { ApprovalRequest as PermissionApprovalRequest, PolicyDecision } from '../../../permission';
 import type {
   RendererPermissionApprovalDto,
   RendererToolDefinitionDto,
@@ -11,8 +11,8 @@ import type {
 } from '../../../shared';
 import type { ApprovalRequest as RendererApprovalRequest, ApprovalScope, ApprovalStatus } from '../../../shared/renderer-contracts/tool';
 import type { JsonObject, JsonValue } from '../../../shared';
-import type { ToolAuditRecord, ToolDefinition, ToolExecution } from '../../tools';
-import type { WorkspaceChangedFile, WorkspaceChangeSet, WorkspaceRestoreResult } from '../../workspace';
+import type { ToolAuditRecord, ToolDefinition, ToolExecution } from '../../../tools';
+import type { WorkspaceChangedFile, WorkspaceChangeSet, WorkspaceRestoreResult } from '../../../workspace';
 
 export function mapToolDefinition(definition: ToolDefinition): RendererToolDefinitionDto {
   return {

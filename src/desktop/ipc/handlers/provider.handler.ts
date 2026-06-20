@@ -1,5 +1,5 @@
 ﻿// Handles provider settings without returning plaintext credentials.
-import type { ProviderId } from '../infrastructure/app-settings-store';
+import type { ProviderId } from '../../infrastructure/app-settings-store';
 import type { DesktopIpcContext } from '../ipc-context';
 import { unavailable } from '../ipc-errors';
 import { unwrapRendererRuntimePayload } from '../runtime-request-payload';

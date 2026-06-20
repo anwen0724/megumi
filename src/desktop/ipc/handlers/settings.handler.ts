@@ -1,5 +1,5 @@
 ﻿// Handles renderer settings bridge operations through desktop settings infrastructure.
-import { toRendererSafeSettings } from '../infrastructure/app-settings-store';
+import { toRendererSafeSettings } from '../../infrastructure/app-settings-store';
 import type { DesktopIpcContext } from '../ipc-context';
 import { unavailable } from '../ipc-errors';
 import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
