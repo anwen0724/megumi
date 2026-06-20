@@ -13,6 +13,30 @@ function createId(prefix: string, value: string): string {
 }
 
 describe('SqliteRecoveryRepository', () => {
+  it('does not expose active running runs as interrupted recoverable actions', () => {
+    const database = openSqliteDatabase(':memory:');
+    runDatabaseMigrations(database, { now: () => '2026-06-20T00:00:00.000Z' });
+    const sessionRepository = new SqliteSessionStateRepository(database);
+    const sessions = createSessionStateManager({
+      repository: sessionRepository,
+      now: () => '2026-06-20T00:00:00.000Z',
+      createId,
+    });
+    const recovery = new SqliteRecoveryRepository(database, sessionRepository);
+
+    sessions.createSession({ idSeed: 'running', title: 'Running run', workspaceId: 'workspace-1' });
+    sessions.recordRun({
+      idSeed: 'running',
+      sourceEntryIdSeed: 'run-running',
+      sessionId: 'session-running',
+      inputSummary: 'still answering',
+      status: 'running',
+    });
+
+    expect(recovery.listRecoverableRuns()).toEqual([]);
+    database.close();
+  });
+
   it('stores cancel and retry requests and lists recoverable runs from session run facts', () => {
     const database = openSqliteDatabase(':memory:');
     runDatabaseMigrations(database, { now: () => '2026-06-20T00:00:00.000Z' });

@@ -33,7 +33,7 @@ function fakeHosts(root: string): DesktopHostAdapters {
 }
 
 describe('history recovery controls', () => {
-  it('lists recoverable runs and persists cancel requests through AppApi control', async () => {
+  it('lists terminal recoverable runs without exposing active running runs', async () => {
     const root = await tempRoot();
     const runtime = createLocalDesktopRuntime({
       hosts: fakeHosts(root),
@@ -44,31 +44,38 @@ describe('history recovery controls', () => {
     });
     const appApi = createDesktopAppApi({ agentRuntime: runtime.agentRuntime });
     const session = runtime.sessionManager.createSession({ idSeed: '1', title: 'Recover me', workspaceId: 'workspace-1' });
-    const { run } = runtime.sessionManager.recordRun({
+    const { run: runningRun } = runtime.sessionManager.recordRun({
       idSeed: '1',
       sourceEntryIdSeed: 'run-1',
       sessionId: session.id,
       inputSummary: 'recover input',
       status: 'running',
     });
+    const { run: failedRun } = runtime.sessionManager.recordRun({
+      idSeed: '2',
+      sourceEntryIdSeed: 'run-2',
+      sessionId: session.id,
+      inputSummary: 'failed input',
+      status: 'failed',
+    });
 
     const context = { appApi, hosts: fakeHosts(root), runtime, getMainWindow: () => undefined };
 
     await expect(handleRecoveryOperation('recovery.listRecoverableRuns', {}, context)).resolves.toEqual({
-      runs: [expect.objectContaining({ runId: run.id, status: 'running', reason: 'interrupted' })],
+      runs: [expect.objectContaining({ runId: failedRun.id, status: 'failed', reason: 'failed' })],
     });
     await expect(handleRecoveryOperation('recovery.cancel', {
-      runId: run.id,
+      runId: runningRun.id,
       sessionId: session.id,
       workspaceId: 'workspace-1',
       reason: 'user_requested',
     }, context)).resolves.toEqual(expect.objectContaining({
-      runId: run.id,
+      runId: runningRun.id,
       sessionId: session.id,
       status: 'cancelled',
     }));
-    expect(runtime.recoveryRepository.listCancelRequestsByRun(run.id)).toHaveLength(1);
-    expect(runtime.sessionRepository.getRunRecord(run.id)?.status).toBe('cancelled');
+    expect(runtime.recoveryRepository.listCancelRequestsByRun(runningRun.id)).toHaveLength(1);
+    expect(runtime.sessionRepository.getRunRecord(runningRun.id)?.status).toBe('cancelled');
     await runtime.stop();
   });
 

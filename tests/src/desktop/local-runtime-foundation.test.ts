@@ -441,14 +441,14 @@ describe('local desktop runtime foundation', () => {
 
   it('keeps failed runs visible in history without replaying empty assistant errors to the next model request', async () => {
     const root = await createTempRoot();
-    const capturedMessages: unknown[][] = [];
+    const capturedContexts: Array<{ systemPrompt?: string; messages: unknown[] }> = [];
     const runtime = createLocalDesktopRuntime({
       hosts: createFakeHosts(root),
       databasePath: ':memory:',
       workspaceRoot: root,
       ai: {
         stream(_model, context) {
-          capturedMessages.push(context.messages);
+          capturedContexts.push(context);
           return AssistantMessageEventStream.from([
             { type: 'message_start', messageId: 'assistant-1', role: 'assistant' },
             { type: 'content_block_start', index: 0, block: { type: 'text', text: '' } },
@@ -526,13 +526,12 @@ describe('local desktop runtime foundation', () => {
 
     expect(response.status).toBe('completed');
     expect(runtime.sessionRepository.getRunRecord(failed.run.id)).toMatchObject({ status: 'failed' });
-    expect(capturedMessages.at(-1)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        role: 'user',
-        content: expect.stringContaining('Previous run failed before a final answer.'),
-      }),
-    ]));
-    expect(capturedMessages.at(-1)).not.toEqual(expect.arrayContaining([
+    expect(capturedContexts.at(-1)?.systemPrompt).toContain('Previous run failed before a final answer.');
+    expect(capturedContexts.at(-1)?.messages.at(-1)).toMatchObject({
+      role: 'user',
+      content: 'try again',
+    });
+    expect(capturedContexts.at(-1)?.messages).not.toEqual(expect.arrayContaining([
       expect.objectContaining({
         role: 'assistant',
         content: [],

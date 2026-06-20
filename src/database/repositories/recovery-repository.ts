@@ -164,7 +164,12 @@ export class SqliteRecoveryRepository {
 }
 
 function isRecoverableStatus(status: string): status is RecoveryRunStatus {
-  return status === 'waiting_for_approval' || status === 'failed' || status === 'cancelled' || status === 'running' || status === 'queued';
+  // Match the old recovery repository semantics: active running-like runs are
+  // not recoverable during normal execution. They only become recoverable after
+  // a persisted interrupted marker exists; src has not introduced that marker
+  // table yet, so exposing running/queued here would show Retry/Mark cancelled
+  // on healthy in-flight responses.
+  return status === 'waiting_for_approval' || status === 'failed' || status === 'cancelled';
 }
 
 function recoverableReason(status: RecoveryRunStatus): RecoveryRunReason {
