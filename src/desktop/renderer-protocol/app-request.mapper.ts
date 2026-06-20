@@ -1,7 +1,7 @@
 // Converts renderer DTOs into App API requests without parsing Agent input.
 import type {
   AppCancelRunRequest,
-  AppClientContext,
+  AppEntryContext,
   AppResumeRunRequest,
   AppRetryRunRequest,
   AppStartRunRequest,
@@ -26,7 +26,7 @@ function assertSessionMessageSendRequestDto(value: unknown): SessionMessageSendR
   return value;
 }
 
-export function createDesktopClientContext(payload?: unknown): AppClientContext {
+export function createDesktopClientContext(payload?: unknown): AppEntryContext {
   if (isSessionMessageSendRequestDto(payload)) {
     return {
       clientKind: 'desktop',

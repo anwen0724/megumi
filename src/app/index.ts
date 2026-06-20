@@ -1,9 +1,9 @@
 // Public entrypoint for the cross-entry App API adapter.
-export type { AgentRuntimeEvent, AgentRuntimePort } from './agent-runtime-port';
-export type { AppApi } from './api';
-export { createAppApiAdapter } from './app-api-adapter';
-export type { AppClientCapabilities, AppClientContext, AppClientKind } from './client-context';
+export type { AppApi } from './app-api';
+export { createAppApi } from './create-app-api';
+export type { AppEntryCapabilities, AppEntryContext, AppEntryKind } from './entry-context';
 export { AppApiError } from './errors';
+export type { AgentRuntimeEvent, AgentRuntimePort } from './runtime-port';
 export type {
   AgentRuntimeCancelRequest,
   AgentRuntimeResumeRequest,

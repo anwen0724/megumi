@@ -87,7 +87,7 @@ describe('session message desktop mapper', () => {
     });
   });
 
-  it('creates AppClientContext from the new renderer DTO', () => {
+  it('creates AppEntryContext from the new renderer DTO', () => {
     expect(createDesktopClientContext(createRequest())).toEqual({
       clientKind: 'desktop',
       requestId: 'ipc-session-message-request-1',
