@@ -19,7 +19,7 @@ export async function handleWorkspaceFilesOperation(operation: string, payload: 
   if (operation === 'workspace.files.list') {
     if (!context.runtime) throw unavailable(operation, 'desktop runtime services are not attached to IPC context');
     const record = asRecord(unwrapRendererRuntimePayload(payload));
-    const workspaceRoot = typeof record.workspaceRoot === 'string' ? record.workspaceRoot : '';
+    const workspaceRoot = workspaceRootFor(context, operation);
     const directoryPath = typeof record.directoryPath === 'string'
       ? record.directoryPath
       : typeof record.path === 'string'
@@ -33,15 +33,16 @@ export async function handleWorkspaceFilesOperation(operation: string, payload: 
     } satisfies WorkspaceFilesListData;
   }
   if (operation === 'workspace.files.open') {
+    if (!context.runtime) throw unavailable(operation, 'desktop runtime services are not attached to IPC context');
     const record = asRecord(unwrapRendererRuntimePayload(payload));
-    const workspaceRoot = typeof record.workspaceRoot === 'string' ? record.workspaceRoot : '';
+    const workspaceRoot = workspaceRootFor(context, operation);
     const filePath = typeof record.filePath === 'string'
       ? record.filePath
       : typeof record.path === 'string'
         ? record.path
         : undefined;
     if (!filePath) throw unavailable(operation, 'filePath is required');
-    await context.hosts.shellHost.openPath(resolveOpenPath(workspaceRoot, filePath));
+    await context.hosts.shellHost.openPath(resolveOpenPath(operation, workspaceRoot, filePath));
     return {
       workspaceRoot,
       filePath,
@@ -67,11 +68,28 @@ function workspacePathDepth(value: string): number {
   return normalized ? normalized.split('/').filter(Boolean).length : 0;
 }
 
-function resolveOpenPath(workspaceRoot: string, filePath: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath;
+function workspaceRootFor(context: DesktopIpcContext, operation: string): string {
+  const workspaceRoot = context.runtime?.workspaceManager.workspace.projectRoot;
+  if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+    throw unavailable(operation, 'desktop workspace root is not available');
   }
-  return workspaceRoot ? path.resolve(workspaceRoot, filePath) : filePath;
+  return workspaceRoot;
+}
+
+function resolveOpenPath(operation: string, workspaceRoot: string, filePath: string): string {
+  const root = path.resolve(workspaceRoot);
+  const target = path.isAbsolute(filePath)
+    ? path.resolve(filePath)
+    : path.resolve(root, filePath);
+  if (!isInsideOrEqual(root, target)) {
+    throw unavailable(operation, 'filePath must stay within the current workspace root');
+  }
+  return target;
+}
+
+function isInsideOrEqual(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

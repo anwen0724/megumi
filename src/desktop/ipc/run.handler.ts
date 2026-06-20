@@ -3,6 +3,7 @@ import type { DesktopIpcContext } from './ipc-context';
 import { unavailable } from './ipc-errors';
 import { mapRuntimeEventHistory, mapRunToRendererSummary } from '../mappers/history.mapper';
 import { unwrapRendererRuntimePayload } from './runtime-request-payload';
+import type { RendererRuntimeEventHistoryDto } from '../../shared';
 
 export async function handleRunOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'run.listBySession') {
@@ -17,7 +18,12 @@ export async function handleRunOperation(operation: string, payload: unknown, co
     const record = asRecord(unwrapRendererRuntimePayload(payload));
     const runId = typeof record.runId === 'string' ? record.runId : undefined;
     if (!runId) throw unavailable(operation, 'runId is required');
-    return { events: context.runtime.runtimeEventRepository.listEventsByRun(runId).map(mapRuntimeEventHistory) };
+    return {
+      events: context.runtime.runtimeEventRepository
+        .listEventsByRun(runId)
+        .map(mapRuntimeEventHistory)
+        .filter((event): event is RendererRuntimeEventHistoryDto => Boolean(event)),
+    };
   }
   return undefined;
 }

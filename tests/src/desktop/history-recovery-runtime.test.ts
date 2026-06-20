@@ -152,4 +152,47 @@ describe('durable runtime event history', () => {
     ]));
     await runtime.stop();
   });
+
+  it('filters runtime history events that cannot be projected to renderer DTOs', async () => {
+    const root = await tempRoot();
+    const runtime = createLocalDesktopRuntime({
+      hosts: fakeHosts(root),
+      databasePath: ':memory:',
+      workspaceRoot: root,
+      ai: fakeAi(),
+      now: () => '2026-06-20T00:00:00.000Z',
+      createId: (prefix, value) => `${prefix}-${value}`,
+    });
+    runtime.runtimeEventRepository.saveEvent({
+      type: 'approval.requested',
+      runId: 'run-approval-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-local',
+      occurredAt: '2026-06-20T00:00:00.000Z',
+      payload: { approvalRequestId: 'approval-1', toolCallId: 'tool-call-1' },
+    });
+    runtime.runtimeEventRepository.saveEvent({
+      type: 'context.ready',
+      runId: 'run-approval-1',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-local',
+      occurredAt: '2026-06-20T00:00:01.000Z',
+      payload: { included: 1 },
+    });
+
+    const result = await handleRunOperation('run.events.list', rendererRequest(IPC_CHANNELS.run.events.list, {
+      runId: 'run-approval-1',
+    }), {
+      appApi: createDesktopAppApi({ agentRuntime: runtime.agentRuntime }),
+      hosts: fakeHosts(root),
+      runtime,
+      getMainWindow: () => undefined,
+    }) as { events: Array<{ eventType: string }> };
+
+    expect(result.events).toEqual([
+      expect.objectContaining({ eventType: 'context.effective.updated' }),
+    ]);
+    expect(result.events).not.toContain(undefined);
+    await runtime.stop();
+  });
 });

@@ -229,7 +229,7 @@ export function mapBranchDraft(input: {
   };
 }
 
-export function mapRuntimeEventHistory(event: RuntimeEventRecord): RendererRuntimeEventHistoryDto {
+export function mapRuntimeEventHistory(event: RuntimeEventRecord): RendererRuntimeEventHistoryDto | undefined {
   return mapAgentRuntimeEventToRendererRuntimeEvent({
     type: event.type,
     occurredAt: event.occurredAt,

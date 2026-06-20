@@ -73,6 +73,7 @@ describe('renderer protocol desktop IPC failures', () => {
 describe('workspace files renderer protocol', () => {
   it('unwraps workspace.files.list runtime requests and returns renderer directory entries', async () => {
     const workspaceManager = {
+      workspace: { projectRoot: 'C:/real-repo' },
       listDirectory: vi.fn(async () => [
         { name: 'src', path: 'src', kind: 'directory' },
         { name: 'a.ts', path: 'src/a.ts', kind: 'file' },
@@ -86,7 +87,7 @@ describe('workspace files renderer protocol', () => {
     const result = await handleWorkspaceFilesOperation(
       'workspace.files.list',
       createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.files.list, {
-        workspaceRoot: 'C:/repo',
+        workspaceRoot: 'C:/forged-repo',
         directoryPath: 'src',
       }),
       context,
@@ -94,7 +95,7 @@ describe('workspace files renderer protocol', () => {
 
     expect(workspaceManager.listDirectory).toHaveBeenCalledWith('src');
     expect(result).toEqual({
-      workspaceRoot: 'C:/repo',
+      workspaceRoot: 'C:/real-repo',
       directoryPath: 'src',
       entries: [
         { name: 'src', relativePath: 'src', path: 'src', kind: 'directory', depth: 1 },
@@ -103,35 +104,74 @@ describe('workspace files renderer protocol', () => {
     });
   });
 
-  it('unwraps workspace.files.open runtime requests and fails when filePath is missing', async () => {
+  it('opens relative workspace file paths under the desktop-owned workspace root', async () => {
     const shellHost = { openPath: vi.fn(async () => undefined) };
     const context = createIpcContext({
       hosts: { shellHost } as never,
+      runtime: {
+        workspaceManager: {
+          workspace: { projectRoot: 'C:/real-repo' },
+        },
+      } as never,
     });
 
     await expect(handleWorkspaceFilesOperation(
       'workspace.files.open',
       createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.files.open, {
-        workspaceRoot: 'C:/repo',
+        workspaceRoot: 'C:/forged-repo',
         filePath: 'src/a.ts',
       }),
       context,
     )).resolves.toEqual({
-      workspaceRoot: 'C:/repo',
+      workspaceRoot: 'C:/real-repo',
       filePath: 'src/a.ts',
       opened: true,
     });
-    expect(shellHost.openPath).toHaveBeenCalledWith('C:\\repo\\src\\a.ts');
+    expect(shellHost.openPath).toHaveBeenCalledWith('C:\\real-repo\\src\\a.ts');
+  });
 
+  it('rejects missing or escaping workspace file open paths without opening them', async () => {
+    const shellHost = { openPath: vi.fn(async () => undefined) };
+    const context = createIpcContext({
+      hosts: { shellHost } as never,
+      runtime: {
+        workspaceManager: {
+          workspace: { projectRoot: 'C:/real-repo' },
+        },
+      } as never,
+    });
     await expect(handleWorkspaceFilesOperation(
       'workspace.files.open',
       createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.files.open, {
-        workspaceRoot: 'C:/repo',
+        workspaceRoot: 'C:/real-repo',
       }),
       context,
     )).rejects.toMatchObject({
       code: 'desktop_capability_unavailable',
       details: expect.objectContaining({ operation: 'workspace.files.open' }),
     });
+    await expect(handleWorkspaceFilesOperation(
+      'workspace.files.open',
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.files.open, {
+        workspaceRoot: 'C:/real-repo',
+        filePath: '../outside.ts',
+      }),
+      context,
+    )).rejects.toMatchObject({
+      code: 'desktop_capability_unavailable',
+      details: expect.objectContaining({ operation: 'workspace.files.open' }),
+    });
+    await expect(handleWorkspaceFilesOperation(
+      'workspace.files.open',
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.files.open, {
+        workspaceRoot: 'C:/forged-repo',
+        filePath: 'C:/outside/secret.ts',
+      }),
+      context,
+    )).rejects.toMatchObject({
+      code: 'desktop_capability_unavailable',
+      details: expect.objectContaining({ operation: 'workspace.files.open' }),
+    });
+    expect(shellHost.openPath).not.toHaveBeenCalled();
   });
 });

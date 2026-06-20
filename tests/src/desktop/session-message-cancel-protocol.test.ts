@@ -173,8 +173,14 @@ describe('session message cancel protocol', () => {
       metadata: { targetRequestId: 'request-approval-1' },
       client: { clientKind: 'test', requestId: 'cancel-approval-1', createdAt: '2026-06-20T00:00:01.000Z', capabilities: { streaming: true } },
     });
+    const approval = await runtime.permissionRepository.getApprovalRequest('approval-tool-call-1');
 
     expect(cancel).toMatchObject({ status: 'cancelled', sessionId: 'session-request-approval-1' });
+    expect(approval).toEqual(expect.objectContaining({
+      id: 'approval-tool-call-1',
+      status: 'cancelled',
+      userDecision: { kind: 'cancel', decidedAt: '2026-06-20T00:00:00.000Z' },
+    }));
     expect(events).toContainEqual(expect.objectContaining({
       type: 'run.cancelled',
       payload: expect.objectContaining({ requestId: 'request-approval-1' }),

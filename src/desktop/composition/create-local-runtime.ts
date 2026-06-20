@@ -23,7 +23,7 @@ import {
   type AssistantMessageEventStream,
   type Model,
 } from '../../ai';
-import { type AgentAiClient, type AgentRunEvent, createAgentRunner } from '../../agent';
+import { type AgentAiClient, type AgentRunEvent, createAgentRunner, parseApprovalWaitStateFromRunMetadata } from '../../agent';
 import { BUILT_IN_INPUT_COMMAND_REGISTRY } from '../../command';
 import {
   openSqliteDatabase,
@@ -311,14 +311,24 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
       const run = sessionRepository.getRunRecord(activeRunId);
       if (!run) throw unavailable('run.cancel', `run record was not found: ${activeRunId}`);
       const active = activeByRun ?? activeByRequest;
+      const cancelledAt = now();
       active?.controller.abort();
+      if (run.status === 'waiting_for_approval') {
+        const waiting = parseApprovalWaitStateFromRunMetadata(run.metadata);
+        if (waiting) {
+          await permissionRepository.resolveApprovalRequest(waiting.approvalRequestId, {
+            kind: 'cancel',
+            decidedAt: cancelledAt,
+          });
+        }
+      }
       recoveryRepository.saveCancelRequest({
-        cancelRequestId: createId('cancel-request', `${activeRunId}-${now()}`),
+        cancelRequestId: createId('cancel-request', `${activeRunId}-${cancelledAt}`),
         runId: activeRunId,
         sessionId: request.sessionId ?? run.sessionId,
         workspaceId: request.workspaceId ?? active?.workspaceId,
         reason: request.reason ?? 'user_requested',
-        createdAt: now(),
+        createdAt: cancelledAt,
         metadata: jsonObjectOrUndefined({ ...(request.metadata ?? {}), ...(targetRequestId ? { targetRequestId } : {}) }),
       });
       publishRuntimeEvent({
@@ -326,13 +336,13 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
         runId: activeRunId,
         sessionId: request.sessionId ?? run.sessionId,
         workspaceId: request.workspaceId ?? active?.workspaceId,
-        occurredAt: now(),
+        occurredAt: cancelledAt,
         payload: { reason: request.reason ?? 'user_requested', ...(targetRequestId ? { targetRequestId } : {}) },
       });
       const cancelled = sessionManager.updateRunStatus({
         runId: activeRunId,
         status: 'cancelled',
-        endedAt: now(),
+        endedAt: cancelledAt,
         metadata: { ...(run.metadata ?? {}), cancelledBy: 'desktop' },
       });
       publishRuntimeEvent({
@@ -340,7 +350,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
         runId: activeRunId,
         sessionId: cancelled.sessionId,
         workspaceId: request.workspaceId ?? active?.workspaceId,
-        occurredAt: now(),
+        occurredAt: cancelledAt,
         payload: { reason: request.reason ?? 'user_requested' },
       });
       clearActiveRun({ runId: activeRunId, requestId: targetRequestId ?? activeByRun?.requestId });

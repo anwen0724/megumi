@@ -10,7 +10,7 @@ export interface RendererRuntimeProjectionOptions {
 export function mapAgentRuntimeEventToRendererRuntimeEvent(
   event: AgentRuntimeEvent,
   options: RendererRuntimeProjectionOptions = {},
-): RendererRuntimeEventDto {
+): RendererRuntimeEventDto | undefined {
   const payload = rendererPayloadOf(event);
   const sequence = readNumber(event.payload?.sequence) ?? readNumber(event.payload?.seq) ?? options.sequence ?? 1;
   const runId = event.runId ?? readString(event.payload?.runId) ?? 'default-run';
@@ -22,12 +22,12 @@ export function mapAgentRuntimeEventToRendererRuntimeEvent(
 
   if (eventType === 'approval.requested') {
     const approvalRequest = readRecord(event.payload?.approvalRequest);
-    if (!approvalRequest) return undefined as unknown as RendererRuntimeEventDto;
+    if (!approvalRequest) return undefined;
     const rendererApproval = mapRendererApprovalRequest(approvalRequest as never, {
       runId,
       createdAt: event.occurredAt,
     });
-    if (!rendererApproval) return undefined as unknown as RendererRuntimeEventDto;
+    if (!rendererApproval) return undefined;
     return stripUndefinedFields({
       eventId: readString(event.payload?.eventId) ?? `runtime-event:${runId}:${sequence}`,
       eventType,
@@ -44,7 +44,7 @@ export function mapAgentRuntimeEventToRendererRuntimeEvent(
   }
 
   if (isTerminalRunEvent(eventType) && (!projectId || !sessionId || !requestId)) {
-    return undefined as unknown as RendererRuntimeEventDto;
+    return undefined;
   }
 
   return stripUndefinedFields({
