@@ -1,5 +1,5 @@
 // Builds the renderer DTO for session.message.send without changing chat UI state.
-import type { SessionMessageSendRequestDto } from '../../../../shared/renderer-contracts/session-message';
+import type { SessionMessageSendRequestDto } from '@megumi/renderer-contracts/session-message';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
 import type { BranchDraftState } from './use-session-timeline';

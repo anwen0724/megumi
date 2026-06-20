@@ -1,5 +1,5 @@
 // Provides src/ui with the active preload contract through shared renderer protocol ownership.
-import type { MegumiRendererApi } from '../../shared/renderer-contracts';
+import type { MegumiRendererApi } from '@megumi/renderer-contracts';
 
 export function getMegumiRendererApi(): MegumiRendererApi | undefined {
   return window.megumi as unknown as MegumiRendererApi | undefined;
