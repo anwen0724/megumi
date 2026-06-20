@@ -1,6 +1,7 @@
-// Projects Agent Runtime events into the legacy-compatible renderer runtime protocol.
+// Projects Agent Runtime events into the renderer runtime protocol.
 import type { AgentRuntimeEvent } from '../../app';
 import type { RendererRuntimeEventDto } from '../dto/renderer-api';
+import { mapRendererApprovalRequest } from './productization.mapper';
 
 export interface RendererRuntimeProjectionOptions {
   sequence?: number;
@@ -17,10 +18,39 @@ export function mapAgentRuntimeEventToRendererRuntimeEvent(
   const sessionId = event.sessionId ?? readString(event.payload?.sessionId);
   const requestId = readString(event.payload?.requestId);
   const stepId = stepIdOf(event, payload);
+  const projectId = event.workspaceId ?? readString(event.payload?.projectId) ?? readString(event.payload?.workspaceId);
+
+  if (eventType === 'approval.requested') {
+    const approvalRequest = readRecord(event.payload?.approvalRequest);
+    if (!approvalRequest) return undefined as unknown as RendererRuntimeEventDto;
+    const rendererApproval = mapRendererApprovalRequest(approvalRequest as never, {
+      runId,
+      createdAt: event.occurredAt,
+    });
+    if (!rendererApproval) return undefined as unknown as RendererRuntimeEventDto;
+    return stripUndefinedFields({
+      eventId: readString(event.payload?.eventId) ?? `runtime-event:${runId}:${sequence}`,
+      eventType,
+      projectId,
+      runId,
+      sessionId,
+      requestId,
+      stepId,
+      sequence,
+      createdAt: event.occurredAt,
+      source: sourceOf(eventType),
+      payload: { approvalRequest: rendererApproval },
+    });
+  }
+
+  if (isTerminalRunEvent(eventType) && (!projectId || !sessionId || !requestId)) {
+    return undefined as unknown as RendererRuntimeEventDto;
+  }
 
   return stripUndefinedFields({
     eventId: readString(event.payload?.eventId) ?? `runtime-event:${runId}:${sequence}`,
     eventType,
+    projectId,
     runId,
     sessionId,
     requestId,
@@ -70,6 +100,10 @@ function rendererEventTypeOf(event: AgentRuntimeEvent, payload: Record<string, u
   if (event.type === 'turn.started') return 'step.started';
   if (event.type === 'ai.message.event') return aiMessageRuntimeEventType(payload);
   return event.type;
+}
+
+function isTerminalRunEvent(eventType: string): boolean {
+  return eventType === 'run.completed' || eventType === 'run.failed' || eventType === 'run.cancelled';
 }
 
 function toolExecutionCompletedEventType(payload: Record<string, unknown>): string {

@@ -1,6 +1,7 @@
 // Projects Agent Runtime events into the renderer chat stream protocol.
 import type { AgentRuntimeEvent } from '../../app';
 import type { ChatStreamEvent } from '../../shared/renderer-contracts/chat-stream';
+import { mapRendererApprovalRequest } from './productization.mapper';
 
 export interface ChatStreamProjectionOptions {
   seq?: number;
@@ -55,6 +56,29 @@ export function mapAgentRuntimeEventToChatStreamEvent(
       ...toolFields(payload),
       errorCode: readString(payload.errorCode),
       errorMessage: readErrorMessage(payload),
+    };
+  }
+
+  if (event.type === 'approval.requested') {
+    const approvalRequest = readRecord(payload.approvalRequest);
+    if (!approvalRequest) return undefined;
+    const rendererApproval = mapRendererApprovalRequest(approvalRequest as never, {
+      runId: base.runId,
+      createdAt: base.createdAt,
+    });
+    if (!rendererApproval) return undefined;
+    return {
+      ...base,
+      eventType: 'approval.requested',
+      approvalId: rendererApproval.approvalRequestId,
+      approvalRequest: rendererApproval,
+      toolCallId: rendererApproval.toolCallId,
+      toolExecutionId: rendererApproval.toolExecutionId,
+      scope: rendererApproval.requestedScope,
+      status: rendererApproval.status === 'denied' ? 'rejected' : rendererApproval.status,
+      title: rendererApproval.title,
+      description: rendererApproval.summary,
+      subjectSummary: rendererApproval.preview.targets?.[0]?.label,
     };
   }
 

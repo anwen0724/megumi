@@ -30,11 +30,12 @@ describe('src/ui runtime disclosure desktop projection compatibility', () => {
       mapAgentRuntimeEventToRendererRuntimeEvent(agentRuntimeEvent('ai.message.completed'), { sequence: 3 }),
       mapAgentRuntimeEventToRendererRuntimeEvent(agentRuntimeEvent('run.status.changed', {
         status: 'completed',
+        requestId: 'request-1',
       }), { sequence: 4 }),
     ];
 
     for (const event of events) {
-      dispatchRuntimeEvent(event);
+      if (event) dispatchRuntimeEvent(event);
     }
 
     const state = useRunStore.getState();

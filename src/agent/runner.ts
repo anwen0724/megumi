@@ -489,6 +489,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
           sessionId: input.run.sessionId,
           toolCallId: call.id,
           decision,
+          requestedScope: 'once',
           createdAt: options.now(),
         });
         await options.permissionRepository.saveApprovalRequest(approval);
@@ -520,7 +521,11 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
           runId: input.run.id,
           turnIndex: input.turnIndex,
           occurredAt: options.now(),
-          payload: { approvalRequestId: approval.id, toolCallId: call.id },
+          payload: {
+            approvalRequestId: approval.id,
+            toolCallId: call.id,
+            approvalRequest: approval as unknown as JsonObject,
+          },
         });
         emitStatus(input.run.id, 'waiting_for_approval');
         return { kind: 'waiting', run: waitingRun, waiting };

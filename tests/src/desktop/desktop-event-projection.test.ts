@@ -59,6 +59,28 @@ function createFakeWindow() {
   };
 }
 
+const approvalRequest = {
+  id: 'approval-1',
+  runId: 'run-1',
+  sessionId: 'session-1',
+  toolCallId: 'tool-call-1',
+  status: 'pending',
+  decisionKind: 'ask',
+  requestedScope: 'once',
+  createdAt: '2026-06-19T00:00:00.000Z',
+  policyDecision: {
+    id: 'permission-decision-1',
+    kind: 'ask',
+    reason: 'write_requires_approval',
+    mode: 'default',
+    operation: 'write',
+    actionName: 'write_file',
+    target: 'src/a.ts',
+    risk: { level: 'sensitive', reasons: ['write_file'] },
+    createdAt: '2026-06-19T00:00:00.000Z',
+  },
+};
+
 describe('desktop AgentRuntimeEvent projection', () => {
   it('maps ai.message.event text deltas into renderer assistant.text.delta events', () => {
     expect(mapAgentRuntimeEventToChatStreamEvent(createAgentRuntimeEvent('ai.message.event', {
@@ -146,17 +168,21 @@ describe('desktop AgentRuntimeEvent projection', () => {
 
   it('maps AgentRuntimeEvents into renderer runtime events consumed by the migrated UI', () => {
     expect(mapAgentRuntimeEventToRendererRuntimeEvent(createAgentRuntimeEvent('approval.requested', {
-      payload: { approvalRequestId: 'approval-1' },
+      payload: { approvalRequestId: 'approval-1', toolCallId: 'tool-call-1', approvalRequest },
     }), { sequence: 7 })).toEqual(expect.objectContaining({
       eventId: 'runtime-event:run-1:7',
       eventType: 'approval.requested',
+      projectId: 'workspace-1',
       runId: 'run-1',
       sessionId: 'session-1',
       sequence: 7,
       createdAt: '2026-06-19T00:00:00.000Z',
       payload: {
-        workspaceId: 'workspace-1',
-        approvalRequestId: 'approval-1',
+        approvalRequest: expect.objectContaining({
+          approvalRequestId: 'approval-1',
+          toolCallId: 'tool-call-1',
+          toolName: 'write_file',
+        }),
       },
     }));
 
@@ -274,7 +300,10 @@ describe('desktop AgentRuntimeEvent projection', () => {
       getMainWindow: () => window as never,
     });
     agentRuntime.emit(createAgentRuntimeEvent('approval.requested', {
-      payload: { approvalRequestId: 'approval-1' },
+      payload: { approvalRequestId: 'approval-1', toolCallId: 'tool-call-1' },
+    }));
+    agentRuntime.emit(createAgentRuntimeEvent('approval.requested', {
+      payload: { approvalRequestId: 'approval-1', toolCallId: 'tool-call-1', approvalRequest },
     }));
     agentRuntime.emit(createAgentRuntimeEvent('context.ready', {
       payload: { included: 2 },
@@ -288,8 +317,11 @@ describe('desktop AgentRuntimeEvent projection', () => {
       sequence: 1,
       createdAt: '2026-06-19T00:00:00.000Z',
       payload: expect.objectContaining({
-        workspaceId: 'workspace-1',
-        approvalRequestId: 'approval-1',
+        approvalRequest: expect.objectContaining({
+          approvalRequestId: 'approval-1',
+          toolCallId: 'tool-call-1',
+          toolName: 'write_file',
+        }),
       }),
     }));
     expect(window.webContents.send).toHaveBeenCalledWith('megumi:runtime:event', expect.objectContaining({
