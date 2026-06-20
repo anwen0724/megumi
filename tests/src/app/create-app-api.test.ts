@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createAppApiAdapter, type AgentRuntimePort, type AppClientContext } from '../../../src/app';
+import { createAppApi, type AgentRuntimePort, type AppEntryContext } from '../../../src/app';
 
-function createClientContext(): AppClientContext {
+function createEntryContext(): AppEntryContext {
   return {
     clientKind: 'test',
     requestId: 'request-1',
@@ -55,11 +55,11 @@ function createFakeRuntime(): AgentRuntimePort {
 }
 
 describe('AppApi adapter', () => {
-  it('delegates run requests to the injected AgentRuntimePort with client context', async () => {
+  it('delegates run requests to the injected AgentRuntimePort with entry context', async () => {
     const runtime = createFakeRuntime();
     const startRun = vi.spyOn(runtime, 'startRun');
-    const appApi = createAppApiAdapter({ agentRuntime: runtime });
-    const context = createClientContext();
+    const appApi = createAppApi({ agentRuntime: runtime });
+    const context = createEntryContext();
 
     const response = await appApi.startRun({
       rawInput: { text: 'hello' },
@@ -85,7 +85,7 @@ describe('AppApi adapter', () => {
 
   it('does not expose or create an event subscription surface', () => {
     const runtime = createFakeRuntime();
-    const appApi = createAppApiAdapter({ agentRuntime: runtime });
+    const appApi = createAppApi({ agentRuntime: runtime });
 
     expect('subscribe' in appApi).toBe(false);
     expect(runtime.subscribe).not.toHaveBeenCalled();

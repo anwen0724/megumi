@@ -1,5 +1,5 @@
 // Defines entrypoint-neutral requests accepted by the App API adapter.
-import type { AppClientContext } from './client-context';
+import type { AppEntryContext } from './entry-context';
 
 export interface AppRawInput {
   id?: string;
@@ -48,17 +48,17 @@ export interface AppRetryRunRequest {
 }
 
 export interface AgentRuntimeStartRequest extends AppStartRunRequest {
-  client: AppClientContext;
+  client: AppEntryContext;
 }
 
 export interface AgentRuntimeResumeRequest extends AppResumeRunRequest {
-  client: AppClientContext;
+  client: AppEntryContext;
 }
 
 export interface AgentRuntimeCancelRequest extends AppCancelRunRequest {
-  client: AppClientContext;
+  client: AppEntryContext;
 }
 
 export interface AgentRuntimeRetryRequest extends AppRetryRunRequest {
-  client: AppClientContext;
+  client: AppEntryContext;
 }
