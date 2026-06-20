@@ -62,5 +62,6 @@ export interface StartAgentRunInput {
   sessionId: string;
   workspaceId?: string;
   model?: Model;
+  signal?: AbortSignal;
   options: AgentRunOptions;
 }

@@ -112,6 +112,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
       const runSeed = `run-${String(input.parsedInput.id)}`;
       const runId = createId('session-run', runSeed);
       const startedAt = options.now();
+      const requestId = requestIdFromParsedInput(input.parsedInput);
 
       options.sessionManager.appendMessage({
         idSeed: `user-${String(input.parsedInput.id)}`,
@@ -119,7 +120,11 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         sessionId: input.sessionId,
         role: 'user',
         content: serializeParsedInputForSession(input.parsedInput, runId),
-        metadata: { agentRunId: runId, parsedInputId: String(input.parsedInput.id) },
+        metadata: {
+          agentRunId: runId,
+          parsedInputId: String(input.parsedInput.id),
+          ...(requestId ? { requestId } : {}),
+        },
       });
 
       const recorded = options.sessionManager.recordRun({
@@ -128,7 +133,10 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         sessionId: input.sessionId,
         inputSummary: summarizeInput(input.parsedInput),
         status: 'running',
-        metadata: { parsedInputId: String(input.parsedInput.id) },
+        metadata: {
+          parsedInputId: String(input.parsedInput.id),
+          ...(requestId ? { requestId } : {}),
+        },
       });
       const run = toAgentRun(recorded.run, input.parsedInput, input.workspaceId);
       await options.permissionRepository.savePermissionSnapshot(createPermissionSnapshot({
@@ -144,7 +152,11 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         type: 'run.started',
         runId: run.id,
         occurredAt: startedAt,
-        payload: { sessionId: input.sessionId, parsedInputId: String(input.parsedInput.id) },
+        payload: {
+          sessionId: input.sessionId,
+          parsedInputId: String(input.parsedInput.id),
+          ...(requestId ? { requestId } : {}),
+        },
       });
 
       const result = await runLoop({
@@ -158,6 +170,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         toolResultMessages: [],
         startTurnIndex: 0,
         initialToolCallCount: 0,
+        signal: input.signal,
       });
       return { kind: 'agent_run', result };
     },
@@ -278,18 +291,31 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
     toolResultMessages: ContextToolResultMessageFact[];
     startTurnIndex: number;
     initialToolCallCount: number;
+    signal?: AbortSignal;
   }): Promise<AgentRunResult> {
     const currentRunMessages = [...input.currentRunMessages];
     const toolResultMessages = [...input.toolResultMessages];
     let toolCallCount = input.initialToolCallCount;
 
     for (let turnIndex = input.startTurnIndex; turnIndex < input.runOptions.maxTurns; turnIndex += 1) {
+      if (input.signal?.aborted) {
+        const cancelled = updateRunStatus(input.run, 'cancelled');
+        return { run: cancelled, status: 'cancelled' };
+      }
+      const requestId = requestIdFromParsedInput(input.parsedInput);
       emit({
         type: 'turn.started',
         runId: input.run.id,
         turnIndex,
         occurredAt: options.now(),
-        payload: {},
+        payload: {
+          userMessageId: createId('session-message', `user-${String(input.parsedInput.id)}`),
+          ...(requestId ? { requestId } : {}),
+          ...(typeof input.parsedInput.metadata?.clientMessageId === 'string'
+            ? { clientMessageId: input.parsedInput.metadata.clientMessageId }
+            : {}),
+          userMessageText: input.parsedInput.text,
+        },
       });
 
       const snapshot = buildModelContextInput({
@@ -319,7 +345,8 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         },
       });
 
-      const stream = options.ai.stream(input.model, snapshot.modelContextInput, options.aiOptions, snapshot.toolSet);
+      const aiOptions = input.signal ? { ...options.aiOptions, signal: input.signal } : options.aiOptions;
+      const stream = options.ai.stream(input.model, snapshot.modelContextInput, aiOptions, snapshot.toolSet);
       for await (const event of stream) {
         emit({ type: 'ai.message.event', runId: input.run.id, turnIndex, occurredAt: options.now(), event });
       }
@@ -331,6 +358,18 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
         occurredAt: options.now(),
         payload: { contentBlocks: assistantMessage.content.length },
       });
+
+      if (input.signal?.aborted || assistantMessage.stopReason === 'cancelled') {
+        const cancelled = updateRunStatus(input.run, 'cancelled');
+        return { run: cancelled, status: 'cancelled' };
+      }
+
+      if (assistantMessage.error || assistantMessage.stopReason === 'error') {
+        const error = assistantErrorToMegumiError(assistantMessage);
+        const failed = updateRunStatus(input.run, 'failed', error);
+        return { run: failed, status: 'failed', error };
+      }
+
       options.sessionManager.appendMessage({
         idSeed: `assistant-${input.run.id}-${turnIndex}`,
         sourceEntryIdSeed: `source-assistant-${input.run.id}-${turnIndex}`,
@@ -566,7 +605,7 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
       status: observation.status,
       content: observation.content,
       error: observation.error,
-      metadata: observation.metadata,
+      metadata: { ...(observation.metadata ?? {}), turnIndex },
       redaction: observation.redaction,
       truncation: observation.truncation,
       createdAt: options.now(),
@@ -590,37 +629,95 @@ export function createAgentRunner(options: CreateAgentRunnerOptions) {
   }
 
   function buildSessionHistory(sessionId: string, runId: string): ContextMessageFact[] {
-    return options.sessionRepository.getActivePath(sessionId)
-      .filter((entry) => entry.kind === 'message' && entry.ref.type === 'message')
-      .map((entry) => options.sessionRepository.getMessage(entry.ref.type === 'message' ? entry.ref.messageId : ''))
-      .filter((message): message is SessionMessage => Boolean(message))
-      .filter((message) => message.metadata?.agentRunId !== runId)
-      .map((message) => ({
-        id: message.id,
-        source: 'session',
-        message: sessionMessageToContextMessage(message),
-        metadata: message.metadata,
-      }));
+    return options.sessionRepository.getActivePath(sessionId).flatMap((entry): ContextMessageFact[] => {
+      if (entry.kind === 'message' && entry.ref.type === 'message') {
+        const message = options.sessionRepository.getMessage(entry.ref.messageId);
+        if (!message || message.metadata?.agentRunId === runId) {
+          return [];
+        }
+        const contextMessage = sessionMessageToContextMessage(message);
+        return contextMessage
+          ? [{
+              id: message.id,
+              source: 'session',
+              message: contextMessage,
+              metadata: message.metadata,
+            }]
+          : [];
+      }
+
+      if (entry.kind === 'run' && entry.ref.type === 'run') {
+        const run = options.sessionRepository.getRunRecord(entry.ref.runId);
+        if (!run || run.id === runId || (run.status !== 'failed' && run.status !== 'cancelled')) {
+          return [];
+        }
+        return [{
+          id: `runtime-fact-${run.id}`,
+          source: 'session',
+          message: {
+            role: 'user',
+            content: runtimeFactTextForRun(run),
+          },
+          metadata: { agentRunId: run.id, status: run.status },
+        }];
+      }
+
+      return [];
+    });
   }
 
-  function sessionMessageToContextMessage(message: SessionMessage): ContextMessageFact['message'] {
+  function sessionMessageToContextMessage(message: SessionMessage): ContextMessageFact['message'] | undefined {
     if (message.role === 'assistant' && isJsonObject(message.content) && Array.isArray(message.content.content)) {
+      if (message.content.error || message.content.stopReason === 'error') {
+        return undefined;
+      }
+      const content = message.content.content
+        .map(assistantContentBlockFromJson)
+        .filter((block): block is AssistantMessage['content'][number] => Boolean(block));
+      if (content.length === 0) {
+        return undefined;
+      }
       return {
         role: 'assistant',
-        content: message.content.content as unknown as AssistantMessage['content'],
+        content,
       };
     }
-    if (message.role === 'tool_result' && isJsonObject(message.content) && typeof message.content.toolCallId === 'string') {
+    if (message.role === 'assistant' && typeof message.content === 'string' && message.content.trim().length > 0) {
       return {
-        role: 'toolResult',
-        toolCallId: message.content.toolCallId,
-        content: typeof message.content.content === 'string' ? message.content.content : JSON.stringify(message.content),
+        role: 'assistant',
+        content: [{ type: 'text', text: message.content.trim() }],
       };
+    }
+    if (message.role !== 'user') {
+      return undefined;
     }
     return {
       role: 'user',
       content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
     };
+  }
+
+  function runtimeFactTextForRun(run: SessionRunRecord): string {
+    const suffix = run.error && typeof run.error.message === 'string'
+      ? ` Error: ${run.error.message}`
+      : '';
+    if (run.status === 'cancelled') {
+      return `Previous run was cancelled before a final answer.${suffix}`;
+    }
+    return `Previous run failed before a final answer.${suffix}`;
+  }
+
+  function assistantContentBlockFromJson(value: unknown): AssistantMessage['content'][number] | undefined {
+    if (!isJsonObject(value)) {
+      return undefined;
+    }
+    if (value.type === 'text' && typeof value.text === 'string' && value.text.trim().length > 0) {
+      return { type: 'text', text: value.text };
+    }
+    if (value.type === 'thinking' && typeof value.thinking === 'string' && value.thinking.trim().length > 0) {
+      return { type: 'thinking', thinking: value.thinking };
+    }
+    return undefined;
   }
 
   function updateRunStatus(run: AgentRun, status: AgentRunStatus, error?: MegumiError): AgentRun {
@@ -745,6 +842,12 @@ function serializeParsedInputForSession(parsedInput: ParsedInput, runId: string)
   };
 }
 
+function requestIdFromParsedInput(parsedInput: ParsedInput): string | undefined {
+  const fromMetadata = typeof parsedInput.metadata?.requestId === 'string' ? parsedInput.metadata.requestId : undefined;
+  const fromSource = typeof parsedInput.source.metadata?.requestId === 'string' ? parsedInput.source.metadata.requestId : undefined;
+  return fromMetadata ?? fromSource;
+}
+
 function summarizeInput(parsedInput: ParsedInput): string {
   const trimmed = parsedInput.text.trim();
   return trimmed.length > 0 ? trimmed : parsedInput.kind;
@@ -792,4 +895,24 @@ function errorToJson(error: MegumiError): JsonObject {
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function assistantErrorToMegumiError(message: AssistantMessage): MegumiError {
+  const error = message.error;
+  if (error && typeof error === 'object') {
+    return createMegumiError({
+      code: typeof error.code === 'string' ? error.code : 'AI_MESSAGE_ERROR',
+      message: typeof error.message === 'string' ? error.message : 'Assistant message stream failed.',
+      source: error.source === 'ai' ? 'ai' : 'agent',
+      retryable: typeof error.retryable === 'boolean' ? error.retryable : false,
+      details: isJsonObject(error.details) ? error.details : undefined,
+    });
+  }
+
+  return createMegumiError({
+    code: 'AI_MESSAGE_ERROR',
+    message: 'Assistant message stream failed.',
+    source: 'ai',
+    retryable: false,
+  });
 }

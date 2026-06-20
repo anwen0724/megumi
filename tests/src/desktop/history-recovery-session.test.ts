@@ -28,7 +28,11 @@ function rendererRequest<TPayload>(channel: string, payload: TPayload) {
   };
 }
 
-function createContext(options: { includeAssistant?: boolean; includeRuntimeEvents?: boolean } = {}): DesktopIpcContext {
+function createContext(options: {
+  includeAssistant?: boolean;
+  includeRuntimeEvents?: boolean;
+  includeCommittedTimeline?: boolean;
+} = {}): DesktopIpcContext {
   const sessionRepository = createInMemorySessionRepository();
   const publishedEvents: unknown[] = [];
   const sessionManager = createSessionStateManager({
@@ -184,6 +188,54 @@ function createContext(options: { includeAssistant?: boolean; includeRuntimeEven
             ]
           : [],
       },
+      timelineMessageRepository: {
+        listCommittedMessagesBySession: () => options.includeCommittedTimeline
+          ? {
+              messages: [
+                {
+                  messageId: 'session-message-user-1',
+                  role: 'user',
+                  projectId: 'workspace-1',
+                  sessionId: 'session-1',
+                  runId: 'session-run-run-1',
+                  turnOrder: 0,
+                  createdAt: '2026-06-20T00:00:00.000Z',
+                  updatedAt: '2026-06-20T00:00:00.000Z',
+                  blocks: [{ blockId: 'user-text:session-message-user-1', kind: 'user_text', text: 'hello', format: 'plain' }],
+                },
+                {
+                  messageId: 'assistant:session-run-run-1',
+                  role: 'assistant',
+                  projectId: 'workspace-1',
+                  sessionId: 'session-1',
+                  runId: 'session-run-run-1',
+                  turnOrder: 1,
+                  createdAt: '2026-06-20T00:00:01.000Z',
+                  updatedAt: '2026-06-20T00:00:02.000Z',
+                  blocks: [
+                    {
+                      blockId: 'process:session-run-run-1',
+                      kind: 'process_disclosure',
+                      runId: 'session-run-run-1',
+                      status: 'completed',
+                      items: [{ itemId: 'thinking:1', kind: 'thinking', thinkingId: '1', status: 'completed', text: 'committed', format: 'plain' }],
+                    },
+                    {
+                      blockId: 'answer:session-run-run-1',
+                      kind: 'answer_text',
+                      runId: 'session-run-run-1',
+                      textId: 'answer-1',
+                      status: 'completed',
+                      text: 'committed answer',
+                      format: 'markdown',
+                    },
+                  ],
+                },
+              ],
+              diagnostics: [],
+            }
+          : { messages: [], diagnostics: [] },
+      },
       eventBus: {
         publish: (event: unknown) => publishedEvents.push(event),
         subscribe: vi.fn(),
@@ -270,6 +322,82 @@ describe('history and recovery session IPC', () => {
         }),
       ],
     }));
+  });
+
+  it('prefers committed canonical timeline history over fallback runtime reconstruction', async () => {
+    const context = createContext({ includeAssistant: true, includeRuntimeEvents: true, includeCommittedTimeline: true });
+
+    const timeline = await handleSessionOperation('session.timeline.list', rendererRequest(IPC_CHANNELS.session.timeline.list, {
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+    }), context) as { messages: Array<{ role: string; blocks: Array<{ kind: string; text?: string; items?: Array<{ text?: string }> }> }>; diagnostics: unknown[] };
+    const assistant = timeline.messages.find((message) => message.role === 'assistant');
+    const answer = assistant?.blocks.find((block) => block.kind === 'answer_text');
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+
+    expect(timeline.diagnostics).toEqual([]);
+    expect(timeline.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(answer).toEqual(expect.objectContaining({ text: 'committed answer' }));
+    expect(process?.items).toEqual([expect.objectContaining({ text: 'committed' })]);
+  });
+
+  it('hydrates one assistant timeline from a multi-step run without letting a final empty error assistant overwrite it', async () => {
+    const context = createContext({ includeRuntimeEvents: true });
+    context.runtime?.sessionManager.appendMessage({
+      idSeed: 'assistant-turn-0',
+      sourceEntryIdSeed: 'source-assistant-turn-0',
+      sessionId: 'session-1',
+      role: 'assistant',
+      content: {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'Need inspect files.' },
+          { type: 'text', text: '好的，让我先看看项目目录。' },
+          { type: 'toolCall', id: 'call-list', name: 'list_directory', argumentsText: '{"path":"."}' },
+        ],
+        stopReason: 'tool_calls',
+      },
+      metadata: { agentRunId: 'session-run-run-1', turnIndex: 0 },
+    });
+    context.runtime?.sessionManager.appendMessage({
+      idSeed: 'tool-result-turn-0',
+      sourceEntryIdSeed: 'source-tool-result-turn-0',
+      sessionId: 'session-1',
+      role: 'tool_result',
+      content: {
+        role: 'toolResult',
+        toolCallId: 'call-list',
+        content: 'README.md',
+      },
+      metadata: { agentRunId: 'session-run-run-1', turnIndex: 0, toolCallId: 'call-list' },
+    });
+    context.runtime?.sessionManager.appendMessage({
+      idSeed: 'assistant-turn-1',
+      sourceEntryIdSeed: 'source-assistant-turn-1',
+      sessionId: 'session-1',
+      role: 'assistant',
+      content: {
+        role: 'assistant',
+        content: [],
+        stopReason: 'error',
+        error: { code: 'provider_http_error', message: 'Provider rejected the request.' },
+      },
+      metadata: { agentRunId: 'session-run-run-1', turnIndex: 1 },
+    });
+
+    const timeline = await handleSessionOperation('session.timeline.list', rendererRequest(IPC_CHANNELS.session.timeline.list, {
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+    }), context) as { messages: Array<{ role: string; blocks: Array<{ kind: string; text?: string; items?: Array<{ kind: string; text?: string }> }> }> };
+    const assistantMessages = timeline.messages.filter((message) => message.role === 'assistant');
+    const process = assistantMessages[0]?.blocks.find((block) => block.kind === 'process_disclosure');
+
+    expect(assistantMessages).toHaveLength(1);
+    expect(process?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'thinking', text: 'Need inspect files.' }),
+      expect.objectContaining({ kind: 'assistant_text', text: '好的，让我先看看项目目录。' }),
+      expect.objectContaining({ kind: 'tool_activity' }),
+    ]));
   });
 
   it('creates and cancels branch draft through session owner facts', async () => {

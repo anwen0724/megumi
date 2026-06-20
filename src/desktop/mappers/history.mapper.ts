@@ -42,10 +42,81 @@ export function mapTimelineHydration(input: {
   const messages = input.messages.flatMap((message) => mapMessage(message, input.projectId, runIdByMessageId));
   return {
     sessionId: input.sessionId,
-    messages: mergeRuntimeEventProjection(messages, input.runtimeEvents ?? []),
+    messages: dedupeAssistantMessagesByRun(mergeRuntimeEventProjection(messages, input.runtimeEvents ?? [])),
     runs: input.runs.map(mapRunToRendererSummary),
     activePath: input.activePath.map(mapSourceEntry),
     diagnostics: [],
+  };
+}
+
+type RendererAssistantTimelineMessage = Extract<RendererTimelineMessageDto, { role: 'assistant' }>;
+
+function dedupeAssistantMessagesByRun(messages: RendererTimelineMessageDto[]): RendererTimelineMessageDto[] {
+  const result: RendererTimelineMessageDto[] = [];
+  const assistantIndexByRunId = new Map<string, number>();
+
+  for (const message of [...messages].sort(compareTimelineMessages)) {
+    if (message.role !== 'assistant') {
+      result.push(message);
+      continue;
+    }
+
+    const existingIndex = assistantIndexByRunId.get(message.runId);
+    if (existingIndex === undefined) {
+      assistantIndexByRunId.set(message.runId, result.length);
+      result.push(message);
+      continue;
+    }
+
+    result[existingIndex] = mergeAssistantTimelineMessages(
+      result[existingIndex] as RendererAssistantTimelineMessage,
+      message,
+    );
+  }
+
+  return result.sort(compareTimelineMessages);
+}
+
+function mergeAssistantTimelineMessages(
+  current: RendererAssistantTimelineMessage,
+  incoming: RendererAssistantTimelineMessage,
+): RendererAssistantTimelineMessage {
+  const blocks = [...current.blocks];
+  const incomingProcess = incoming.blocks.find(
+    (block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure',
+  );
+  const currentProcessIndex = blocks.findIndex((block) => block.kind === 'process_disclosure');
+  if (incomingProcess) {
+    if (currentProcessIndex === -1) {
+      blocks.unshift(incomingProcess);
+    } else {
+      const currentProcess = blocks[currentProcessIndex] as ProcessDisclosureBlock;
+      if (incomingProcess.items.length > currentProcess.items.length || currentProcess.items.length === 0) {
+        blocks[currentProcessIndex] = incomingProcess;
+      }
+    }
+  }
+
+  const incomingAnswer = incoming.blocks.find(
+    (block): block is AnswerTextBlock => block.kind === 'answer_text' && block.text.length > 0,
+  );
+  const currentAnswerIndex = blocks.findIndex((block) => block.kind === 'answer_text');
+  if (incomingAnswer) {
+    if (currentAnswerIndex === -1) {
+      blocks.push(incomingAnswer);
+    } else {
+      const currentAnswer = blocks[currentAnswerIndex] as AnswerTextBlock;
+      if (incomingAnswer.text.length >= currentAnswer.text.length) {
+        blocks[currentAnswerIndex] = incomingAnswer;
+      }
+    }
+  }
+
+  return {
+    ...current,
+    updatedAt: maxIsoDate(current.updatedAt ?? current.createdAt, incoming.updatedAt ?? incoming.createdAt),
+    blocks,
+    ...(incoming.workspaceChangeFooter ? { workspaceChangeFooter: incoming.workspaceChangeFooter } : {}),
   };
 }
 
@@ -136,6 +207,10 @@ function compareTimelineMessages(left: RendererTimelineMessageDto, right: Render
   if (leftTurn !== rightTurn) return leftTurn - rightTurn;
 
   return String(left.messageId).localeCompare(String(right.messageId));
+}
+
+function maxIsoDate(left: string, right: string): string {
+  return right.localeCompare(left) > 0 ? right : left;
 }
 
 export function mapBranchDraft(input: {
@@ -294,7 +369,7 @@ export function mapRunToRendererSummary(run: SessionRunRecord): RendererRunSumma
   };
 }
 
-function mapSourceEntry(entry: SessionSourceEntry): RendererSourceEntryDto {
+export function mapSourceEntry(entry: SessionSourceEntry): RendererSourceEntryDto {
   return {
     sourceEntryId: entry.id,
     ...(entry.parentId ? { parentId: entry.parentId } : {}),

@@ -354,4 +354,52 @@ export const DATABASE_MIGRATIONS: Migration[] = [
       ALTER TABLE sessions ADD COLUMN workspace_path TEXT;
     `,
   },
+  {
+    version: 7,
+    name: 'create-timeline-history-commits',
+    up: `
+      CREATE TABLE IF NOT EXISTS timeline_messages (
+        message_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        run_id TEXT,
+        role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'separator')),
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        sort_time TEXT NOT NULL,
+        turn_order INTEGER NOT NULL,
+        blocks_json TEXT NOT NULL,
+        message_json TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS timeline_run_commits (
+        run_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (status IN ('committed', 'failed')),
+        committed_at TEXT,
+        updated_at TEXT NOT NULL,
+        error_json TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS timeline_commit_diagnostics (
+        diagnostic_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        run_id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        metadata_json TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_timeline_messages_session_order
+        ON timeline_messages(project_id, session_id, sort_time, run_id, turn_order, message_id);
+      CREATE INDEX IF NOT EXISTS idx_timeline_run_commits_session
+        ON timeline_run_commits(project_id, session_id, updated_at);
+      CREATE INDEX IF NOT EXISTS idx_timeline_commit_diagnostics_run
+        ON timeline_commit_diagnostics(run_id, created_at);
+    `,
+  },
 ];

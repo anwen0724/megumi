@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentRuntimeEvent, AgentRuntimePort } from '../../../src/app';
 import { registerChatStreamEventForwarder } from '../../../src/desktop/ipc/chat-stream-event-forwarder';
 import { registerRuntimeEventForwarder } from '../../../src/desktop/ipc/runtime-event-forwarder';
+import { createAgentRuntimeChatStreamAdapter } from '../../../src/desktop/mappers/agent-runtime-chat-stream-adapter';
 import { mapAgentRuntimeEventToChatStreamEvent } from '../../../src/desktop/mappers/agent-runtime-event-to-chat-stream-event.mapper';
 import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../../src/desktop/mappers/agent-runtime-event-to-renderer-runtime-event.mapper';
+import type { RendererChatStreamEventDto } from '../../../src/shared/renderer-contracts';
 
 function createAgentRuntimeEvent(type: string, input: {
   runId?: string;
@@ -174,12 +176,47 @@ describe('desktop AgentRuntimeEvent projection', () => {
     }));
 
     expect(mapAgentRuntimeEventToRendererRuntimeEvent(createAgentRuntimeEvent('run.status.changed', {
-      payload: { status: 'completed' },
+      payload: { status: 'completed', requestId: 'ipc-session-message-send-1' },
     }), { sequence: 9 })).toEqual(expect.objectContaining({
       eventType: 'run.completed',
+      requestId: 'ipc-session-message-send-1',
       sequence: 9,
-      payload: expect.objectContaining({ to: 'completed' }),
+      payload: expect.objectContaining({
+        requestId: 'ipc-session-message-send-1',
+        to: 'completed',
+      }),
     }));
+  });
+
+  it('commits the renderer user message once for a multi-turn Agent Run', () => {
+    const events: RendererChatStreamEventDto[] = [];
+    const adapter = createAgentRuntimeChatStreamAdapter({ publish: (event) => events.push(event) });
+
+    adapter.handle(createAgentRuntimeEvent('turn.started', {
+      payload: {
+        turnIndex: 0,
+        userMessageId: 'message-user-1',
+        clientMessageId: 'client-message-1',
+        userMessageText: 'hello',
+      },
+    }));
+    adapter.handle(createAgentRuntimeEvent('turn.started', {
+      payload: {
+        turnIndex: 1,
+        userMessageId: 'message-user-1',
+        clientMessageId: 'client-message-1',
+        userMessageText: 'hello',
+      },
+    }));
+
+    expect(events.filter((event) => event.eventType === 'turn.started')).toHaveLength(2);
+    expect(events.filter((event) => event.eventType === 'user.message.committed')).toEqual([
+      expect.objectContaining({
+        messageId: 'message-user-1',
+        clientMessageId: 'client-message-1',
+        text: 'hello',
+      }),
+    ]);
   });
 
   it('forwards mapped chat stream events to the renderer channel with eventType protocol payloads', () => {

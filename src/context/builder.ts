@@ -4,6 +4,7 @@ import type { ParsedInputFact } from '../input';
 import type {
   ContextBudgetOptions,
   ContextMessageFact,
+  ContextToolResultMessageFact,
   ContextTrace,
   ContextTraceEntry,
   RunContextBase,
@@ -72,30 +73,31 @@ export function buildModelContextInput(input: BuildModelContextInputInput): Turn
     });
   }
 
-  for (const fact of input.delta.currentRunMessages) {
-    includeMessage({
-      id: fact.id,
-      message: fact.message,
-      entry: {
-        id: fact.id,
-        kind: 'current_run_message',
-        source: 'agent',
-        action: 'included',
-        reason: 'Current run continuation is passed directly by the Agent loop.',
-      },
-      messages,
-      trace,
-      seen,
-      budget: input.budget,
-    });
-  }
+  for (const fact of orderedCurrentRunContinuation(input.delta)) {
+    if (fact.kind === 'message') {
+      includeMessage({
+        id: fact.value.id,
+        message: fact.value.message,
+        entry: {
+          id: fact.value.id,
+          kind: 'current_run_message',
+          source: 'agent',
+          action: 'included',
+          reason: 'Current run continuation is passed directly by the Agent loop.',
+        },
+        messages,
+        trace,
+        seen,
+        budget: input.budget,
+      });
+      continue;
+    }
 
-  for (const fact of input.delta.toolResultMessages) {
     includeMessage({
-      id: fact.id,
-      message: toAiToolResultMessage(fact),
+      id: fact.value.id,
+      message: toAiToolResultMessage(fact.value),
       entry: {
-        id: fact.id,
+        id: fact.value.id,
         kind: 'tool_result',
         source: 'agent',
         action: 'included',
@@ -154,6 +156,39 @@ export function buildModelContextInput(input: BuildModelContextInputInput): Turn
     toolSet: input.base.toolSet,
     trace,
   };
+}
+
+type ContinuationFact =
+  | { kind: 'message'; value: ContextMessageFact; turnIndex: number; order: number; originalIndex: number }
+  | { kind: 'tool_result'; value: ContextToolResultMessageFact; turnIndex: number; order: number; originalIndex: number };
+
+function orderedCurrentRunContinuation(delta: TurnContextDelta): ContinuationFact[] {
+  const assistantFacts = delta.currentRunMessages.map((fact, index): ContinuationFact => ({
+    kind: 'message',
+    value: fact,
+    turnIndex: readTurnIndex(fact.metadata, index),
+    order: 0,
+    originalIndex: index,
+  }));
+  const toolFacts = delta.toolResultMessages.map((fact, index): ContinuationFact => ({
+    kind: 'tool_result',
+    value: fact,
+    turnIndex: readTurnIndex(fact.metadata, index),
+    order: 1,
+    originalIndex: index,
+  }));
+
+  return [...assistantFacts, ...toolFacts].sort((left, right) => {
+    if (left.turnIndex !== right.turnIndex) return left.turnIndex - right.turnIndex;
+    if (left.order !== right.order) return left.order - right.order;
+    return left.originalIndex - right.originalIndex;
+  });
+}
+
+function readTurnIndex(metadata: unknown, fallback: number): number {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return fallback;
+  const turnIndex = (metadata as Record<string, unknown>).turnIndex;
+  return typeof turnIndex === 'number' && Number.isFinite(turnIndex) ? turnIndex : fallback;
 }
 
 function includeGuidanceFact(input: {

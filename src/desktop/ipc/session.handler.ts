@@ -7,7 +7,13 @@ import {
   mapRendererMessageSendToAppStartRun,
 } from '../mappers/app-request.mapper';
 import { mapAppResponseToRenderer } from '../mappers/app-response.mapper';
-import { mapBranchDraft, mapSessionToRendererSummary, mapTimelineHydration } from '../mappers/history.mapper';
+import {
+  mapBranchDraft,
+  mapRunToRendererSummary,
+  mapSessionToRendererSummary,
+  mapSourceEntry,
+  mapTimelineHydration,
+} from '../mappers/history.mapper';
 import { unwrapRendererRuntimePayload } from './runtime-request-payload';
 
 export async function handleSessionOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
@@ -19,8 +25,9 @@ export async function handleSessionOperation(operation: string, payload: unknown
     return mapAppResponseToRenderer(response, payload);
   }
   if (operation === 'session.message.cancel') {
+    const cancelPayload = unwrapRendererRuntimePayload(payload);
     const response = await context.appApi.cancelRun(
-      mapRendererCancelToAppCancel(payload),
+      mapRendererCancelToAppCancel(cancelPayload),
       createDesktopClientContext(),
     );
     return mapAppResponseToRenderer(response);
@@ -38,6 +45,16 @@ export async function handleSessionOperation(operation: string, payload: unknown
     const projectId = typeof record.projectId === 'string'
       ? record.projectId
       : session?.workspaceId ?? 'local';
+    const committed = runtime.timelineMessageRepository.listCommittedMessagesBySession({ projectId, sessionId });
+    if (committed.messages.length > 0 || committed.diagnostics.length > 0) {
+      return {
+        sessionId,
+        messages: committed.messages,
+        runs: runtime.sessionRepository.listRunRecords(sessionId).map(mapRunToRendererSummary),
+        activePath: runtime.sessionRepository.getActivePath(sessionId).map(mapSourceEntry),
+        diagnostics: committed.diagnostics,
+      };
+    }
     const runs = runtime.sessionRepository.listRunRecords(sessionId);
     return mapTimelineHydration({
       projectId,

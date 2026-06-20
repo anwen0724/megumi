@@ -15,6 +15,7 @@ export function mapAgentRuntimeEventToRendererRuntimeEvent(
   const runId = event.runId ?? readString(event.payload?.runId) ?? 'default-run';
   const eventType = rendererEventTypeOf(event, payload);
   const sessionId = event.sessionId ?? readString(event.payload?.sessionId);
+  const requestId = readString(event.payload?.requestId);
   const stepId = stepIdOf(event, payload);
 
   return stripUndefinedFields({
@@ -22,6 +23,7 @@ export function mapAgentRuntimeEventToRendererRuntimeEvent(
     eventType,
     runId,
     sessionId,
+    requestId,
     stepId,
     sequence,
     createdAt: event.occurredAt,

@@ -45,6 +45,7 @@ interface PendingToolTerminal {
 interface StreamState {
   seq: number;
   terminal: boolean;
+  userMessageCommitted: boolean;
   stepText: Map<string, ModelStepState>;
   thinkingByStep: Map<string, ThinkingState>;
   toolsByCallId: Map<string, ToolState>;
@@ -66,6 +67,10 @@ export function createAgentRuntimeChatStreamAdapter(sink: AgentRuntimeChatStream
       switch (event.type) {
         case 'turn.started':
           publish(state, sink, event, { eventType: 'turn.started', ...userMessageFields(event) });
+          if (!state.userMessageCommitted) {
+            publishUserMessageCommitted(state, sink, event);
+            state.userMessageCommitted = true;
+          }
           return;
         case 'context.ready':
           return;
@@ -115,6 +120,7 @@ export function createAgentRuntimeChatStreamAdapter(sink: AgentRuntimeChatStream
     const next: StreamState = {
       seq: 0,
       terminal: false,
+      userMessageCommitted: false,
       stepText: new Map(),
       thinkingByStep: new Map(),
       toolsByCallId: new Map(),
@@ -125,6 +131,23 @@ export function createAgentRuntimeChatStreamAdapter(sink: AgentRuntimeChatStream
     streams.set(key, next);
     return next;
   }
+}
+
+function publishUserMessageCommitted(
+  state: StreamState,
+  sink: AgentRuntimeChatStreamSink,
+  event: AgentRuntimeEvent,
+): void {
+  const fields = userMessageFields(event);
+  const payload = payloadOf(event);
+  const text = readString(payload.userMessageText);
+  if (!text) return;
+  publish(state, sink, event, {
+    eventType: 'user.message.committed',
+    messageId: readString(fields.userMessageId) ?? `user-message:${event.runId ?? 'run'}`,
+    clientMessageId: readString(fields.clientMessageId),
+    text,
+  });
 }
 
 function handleAssistantStreamEvent(

@@ -33,6 +33,7 @@ import {
   SqliteRecoveryRepository,
   SqliteRuntimeEventRepository,
   SqliteSessionStateRepository,
+  SqliteTimelineMessageRepository,
   SqliteToolExecutionRepository,
   SqliteWorkspaceRepository,
   type SqliteDatabase,
@@ -56,6 +57,8 @@ import { createAppSettingsStore, type AppSettingsStore } from '../infrastructure
 import { initializeMegumiHome, type MegumiHomePaths } from '../infrastructure/megumi-home';
 import { createProviderSettingsStore, type ProviderSettingsStore } from '../infrastructure/provider-settings-store';
 import { createRuntimeJsonlLogger, type RuntimeLogger } from '../infrastructure/runtime-logger';
+import { createAgentRuntimeChatStreamAdapter } from '../mappers/agent-runtime-chat-stream-adapter';
+import { TimelineHistoryCommitProjector } from '../services/timeline-history-commit-projector';
 import { createRuntimeEventBus, type RuntimeEventBus } from './create-runtime-event-bus';
 import { createHostAdapters, type DesktopHostAdapters } from './create-host-adapters';
 
@@ -69,6 +72,7 @@ export interface LocalDesktopRuntime {
   providerSettingsStore: ProviderSettingsStore;
   projectRepository: SqliteProjectRepository;
   runtimeEventRepository: SqliteRuntimeEventRepository;
+  timelineMessageRepository: SqliteTimelineMessageRepository;
   recoveryRepository: SqliteRecoveryRepository;
   runtimeLogger: RuntimeLogger;
   sessionRepository: SessionStateRepository;
@@ -118,6 +122,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   const sessionRepository = new SqliteSessionStateRepository(database);
   const projectRepository = new SqliteProjectRepository(database);
   const runtimeEventRepository = new SqliteRuntimeEventRepository(database);
+  const timelineMessageRepository = new SqliteTimelineMessageRepository(database);
   const recoveryRepository = new SqliteRecoveryRepository(database, sessionRepository);
   const permissionRepository = new SqlitePermissionRepository(database);
   const toolExecutionRepository = new SqliteToolExecutionRepository(database);
@@ -165,10 +170,16 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
       return streamAssistantMessage(model, context, aiOptions, toolSet);
     },
   };
+  const timelineCommitProjector = new TimelineHistoryCommitProjector({
+    repository: timelineMessageRepository,
+    createDiagnosticId: () => createId('timeline-diagnostic', now()),
+  });
+  const timelineCommitAdapter = createAgentRuntimeChatStreamAdapter(timelineCommitProjector);
 
   function publishRuntimeEvent(event: AgentRuntimeEvent): void {
     const enriched = enrichRuntimeEvent(event);
     runtimeEventRepository.saveEvent(enriched);
+    timelineCommitAdapter.handle(enriched);
     eventBus.publish(enriched);
   }
 
@@ -180,11 +191,16 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     const session = sessionId ? sessionRepository.getSession(sessionId) : undefined;
     const metadataWorkspaceId = typeof run?.metadata?.workspaceId === 'string' ? run.metadata.workspaceId : undefined;
     const workspaceId = event.workspaceId ?? payloadWorkspaceId ?? metadataWorkspaceId ?? session?.workspaceId;
+    const activeRequestId = event.runId ? activeRunsByRunId.get(event.runId)?.requestId : undefined;
+    const metadataRequestId = typeof run?.metadata?.requestId === 'string' ? run.metadata.requestId : undefined;
+    const payloadRequestId = typeof event.payload?.requestId === 'string' ? event.payload.requestId : undefined;
+    const requestId = payloadRequestId ?? activeRequestId ?? metadataRequestId;
 
     return {
       ...event,
       ...(sessionId ? { sessionId } : {}),
       ...(workspaceId ? { workspaceId } : {}),
+      ...(requestId ? { payload: { ...(event.payload ?? {}), requestId } } : {}),
     };
   }
 
@@ -209,33 +225,46 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
   });
 
   const parseByRunId = new Map<string, ParsedInput>();
+  const activeRunsByRequestId = new Map<string, { runId: string; sessionId: string; workspaceId?: string; controller: AbortController }>();
+  const activeRunsByRunId = new Map<string, { requestId: string; sessionId: string; workspaceId?: string; controller: AbortController }>();
 
   const agentRuntime: AgentRuntimePort = {
     async startRun(request) {
       const session = ensureSession({ request, sessionRepository, sessionManager, now });
       const parsedInput = parseRuntimeInput(request, now, createId);
-      const result = await runner.startRun({
-        parsedInput,
-        sessionId: session.id,
-        workspaceId: request.workspaceId,
-        model: modelFromRequest(request, providerSettingsStore, settingsStore),
-        options: {
-          maxTurns: numberOption(request.metadata?.maxTurns, 4),
-          maxToolCalls: numberOption(request.metadata?.maxToolCalls, 8),
-          permissionMode: permissionModeOption(request.permissionMode),
-        },
-      });
-      if (result.kind === 'not_agent_run') {
-        return {
-          runId: result.parsedInputId,
+      const runId = createId('session-run', `run-${String(parsedInput.id)}`);
+      const controller = new AbortController();
+      const active = { runId, sessionId: session.id, workspaceId: request.workspaceId, controller };
+      activeRunsByRequestId.set(request.client.requestId, active);
+      activeRunsByRunId.set(runId, { requestId: request.client.requestId, sessionId: session.id, workspaceId: request.workspaceId, controller });
+      try {
+        const result = await runner.startRun({
+          parsedInput,
           sessionId: session.id,
           workspaceId: request.workspaceId,
-          status: 'completed',
-          metadata: { reason: result.reason },
-        };
+          model: modelFromRequest(request, providerSettingsStore, settingsStore),
+          signal: controller.signal,
+          options: {
+            maxTurns: numberOption(request.metadata?.maxTurns, 4),
+            maxToolCalls: numberOption(request.metadata?.maxToolCalls, 8),
+            permissionMode: permissionModeOption(request.permissionMode),
+          },
+        });
+        if (result.kind === 'not_agent_run') {
+          return {
+            runId: result.parsedInputId,
+            sessionId: session.id,
+            workspaceId: request.workspaceId,
+            status: 'completed',
+            metadata: { reason: result.reason },
+          };
+        }
+        parseByRunId.set(result.result.run.id, parsedInput);
+        return mapAgentResultToAppResponse(result.result);
+      } finally {
+        activeRunsByRequestId.delete(request.client.requestId);
+        activeRunsByRunId.delete(runId);
       }
-      parseByRunId.set(result.result.run.id, parsedInput);
-      return mapAgentResultToAppResponse(result.result);
     },
     async resumeRun(request) {
       if (!request.approvalRequestId) {
@@ -265,44 +294,50 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
       return mapAgentResultToAppResponse(result);
     },
     async cancelRun(request: AgentRuntimeCancelRequest): Promise<AppRunControlResponse> {
-      if (!request.runId) throw unavailable('run.cancel', 'runId is required');
-      const run = sessionRepository.getRunRecord(request.runId);
-      if (!run) throw unavailable('run.cancel', `run record was not found: ${request.runId}`);
+      const targetRequestId = typeof request.metadata?.targetRequestId === 'string' ? request.metadata.targetRequestId : undefined;
+      const activeByRun = request.runId ? activeRunsByRunId.get(request.runId) : undefined;
+      const activeByRequest = targetRequestId ? activeRunsByRequestId.get(targetRequestId) : undefined;
+      const activeRunId = request.runId || activeByRequest?.runId;
+      if (!activeRunId) throw unavailable('run.cancel', 'runId or targetRequestId is required');
+      const run = sessionRepository.getRunRecord(activeRunId);
+      if (!run) throw unavailable('run.cancel', `run record was not found: ${activeRunId}`);
+      const active = activeByRun ?? activeByRequest;
+      active?.controller.abort();
       recoveryRepository.saveCancelRequest({
-        cancelRequestId: createId('cancel-request', `${request.runId}-${now()}`),
-        runId: request.runId,
+        cancelRequestId: createId('cancel-request', `${activeRunId}-${now()}`),
+        runId: activeRunId,
         sessionId: request.sessionId ?? run.sessionId,
-        workspaceId: request.workspaceId,
+        workspaceId: request.workspaceId ?? active?.workspaceId,
         reason: request.reason ?? 'user_requested',
         createdAt: now(),
-        metadata: jsonObjectOrUndefined(request.metadata),
+        metadata: jsonObjectOrUndefined({ ...(request.metadata ?? {}), ...(targetRequestId ? { targetRequestId } : {}) }),
       });
       publishRuntimeEvent({
         type: 'run.cancel.requested',
-        runId: request.runId,
+        runId: activeRunId,
         sessionId: request.sessionId ?? run.sessionId,
-        workspaceId: request.workspaceId,
+        workspaceId: request.workspaceId ?? active?.workspaceId,
         occurredAt: now(),
-        payload: { reason: request.reason ?? 'user_requested' },
+        payload: { reason: request.reason ?? 'user_requested', ...(targetRequestId ? { targetRequestId } : {}) },
       });
       const cancelled = sessionManager.updateRunStatus({
-        runId: request.runId,
+        runId: activeRunId,
         status: 'cancelled',
         endedAt: now(),
         metadata: { ...(run.metadata ?? {}), cancelledBy: 'desktop' },
       });
       publishRuntimeEvent({
         type: 'run.cancelled',
-        runId: request.runId,
+        runId: activeRunId,
         sessionId: cancelled.sessionId,
-        workspaceId: request.workspaceId,
+        workspaceId: request.workspaceId ?? active?.workspaceId,
         occurredAt: now(),
         payload: { reason: request.reason ?? 'user_requested' },
       });
       return {
         runId: cancelled.id,
         sessionId: cancelled.sessionId,
-        workspaceId: request.workspaceId,
+        workspaceId: request.workspaceId ?? active?.workspaceId,
         status: 'cancelled',
       };
     },
@@ -381,6 +416,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     providerSettingsStore,
     projectRepository,
     runtimeEventRepository,
+    timelineMessageRepository,
     recoveryRepository,
     runtimeLogger,
     sessionRepository,
@@ -394,6 +430,7 @@ export function createLocalDesktopRuntime(options: CreateLocalDesktopRuntimeOpti
     workspaceManager,
     async start() {},
     async stop() {
+      timelineCommitAdapter.dispose();
       database.close();
     },
   };

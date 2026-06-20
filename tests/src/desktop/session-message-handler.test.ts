@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppApi, AppStartRunRequest } from '../../../src/app';
+import type { AppApi, AppCancelRunRequest, AppStartRunRequest } from '../../../src/app';
 import type { DesktopIpcContext } from '../../../src/desktop/ipc/ipc-context';
 import { handleSessionOperation } from '../../../src/desktop/ipc/session.handler';
+import { createRendererRuntimeIpcRequest } from '../../../src/ui/shared/ipc/runtime-request';
+import { IPC_CHANNELS } from '../../../src/shared/renderer-contracts/ipc';
 import type { SessionMessageSendRequestDto } from '../../../src/shared/renderer-contracts/session-message';
 
 function createRequest(): SessionMessageSendRequestDto {
@@ -34,10 +36,15 @@ function createContext() {
     status: 'running' as const,
     result: { assistantText: 'must not be returned by immediate ack' },
   }));
+  const cancelRun = vi.fn(async () => ({
+    runId: 'run-1',
+    sessionId: 'session-1',
+    status: 'cancelled' as const,
+  }));
   const appApi: AppApi = {
     startRun,
     resumeRun: vi.fn(),
-    cancelRun: vi.fn(),
+    cancelRun,
     retryRun: vi.fn(),
   };
   const context: DesktopIpcContext = {
@@ -45,7 +52,7 @@ function createContext() {
     hosts: {} as never,
     getMainWindow: () => undefined,
   };
-  return { context, startRun };
+  return { context, startRun, cancelRun };
 }
 
 describe('handleSessionOperation session.message.send', () => {
@@ -82,5 +89,30 @@ describe('handleSessionOperation session.message.send', () => {
       },
     }, context)).rejects.toThrow('session.message.send expects SessionMessageSendRequestDto');
     expect(startRun).not.toHaveBeenCalled();
+  });
+
+  it('unwraps the legacy cancel envelope so targetRequestId reaches AppApi.cancelRun', async () => {
+    const { context, cancelRun } = createContext();
+    const result = await handleSessionOperation(
+      'session.message.cancel',
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.cancel, {
+        targetRequestId: 'ipc-session-message-request-1',
+      }, {
+        traceId: 'trace-1',
+      }),
+      context,
+    );
+
+    expect(cancelRun).toHaveBeenCalledTimes(1);
+    const [request] = cancelRun.mock.calls[0] as unknown as [AppCancelRunRequest];
+    expect(request.metadata).toMatchObject({
+      targetRequestId: 'ipc-session-message-request-1',
+    });
+    expect(request.reason).toBe('ipc-session-message-request-1');
+    expect(result).toMatchObject({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      status: 'cancelled',
+    });
   });
 });
