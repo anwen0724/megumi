@@ -89,7 +89,7 @@ describe('session message vertical slice', () => {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
       occurredAt: '2026-06-19T10:00:02.000Z',
-      payload: {},
+      payload: { requestId: 'ipc-session-message-request-1' },
     }));
 
     expect(send).toHaveBeenCalledWith('megumi:chat-stream:event', expect.objectContaining({
@@ -105,7 +105,10 @@ describe('session message vertical slice', () => {
       runId: 'run-1',
       sessionId: 'session-1',
       sequence: 2,
-      payload: expect.objectContaining({ workspaceId: 'workspace-1' }),
+      payload: expect.objectContaining({
+        requestId: 'ipc-session-message-request-1',
+        workspaceId: 'workspace-1',
+      }),
     }));
   });
 });
