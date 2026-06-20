@@ -14,7 +14,7 @@ describe('src tools permission workspace productization boundaries', () => {
       'src/desktop/ipc/handlers/tool.handler.ts',
       'src/desktop/ipc/handlers/workspace-files.handler.ts',
       'src/desktop/ipc/handlers/recovery.handler.ts',
-      'src/desktop/renderer-protocol/productization.mapper.ts',
+      'src/desktop/renderer-protocol/productization/productization.ts',
     ].map(read).join('\n');
 
     expect(files).not.toContain('evaluatePermissionPolicy(');

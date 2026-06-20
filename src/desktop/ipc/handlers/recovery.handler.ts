@@ -6,9 +6,9 @@ import {
   mapRendererApprovalToAppResume,
   mapRendererCancelToAppCancel,
   mapRendererRetryToAppRetry,
-} from '../../renderer-protocol/app-request.mapper';
-import { mapRecoverableRun } from '../../renderer-protocol/history.mapper';
-import { mapWorkspaceRestoreResult } from '../../renderer-protocol/productization.mapper';
+} from '../../renderer-protocol/request/app-request';
+import { mapRecoverableRun } from '../../renderer-protocol/timeline/history';
+import { mapWorkspaceRestoreResult } from '../../renderer-protocol/productization/productization';
 
 export async function handleRecoveryOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {
   if (operation === 'recovery.listRecoverableRuns') {

@@ -10,7 +10,7 @@ import type { DesktopHostAdapters } from '../../../src/desktop/composition/creat
 import { handleRecoveryOperation } from '../../../src/desktop/ipc/handlers/recovery.handler';
 import { handleToolOperation } from '../../../src/desktop/ipc/handlers/tool.handler';
 import { handleWorkspaceFilesOperation } from '../../../src/desktop/ipc/handlers/workspace-files.handler';
-import { mapRendererApprovalToAppResume } from '../../../src/desktop/renderer-protocol/app-request.mapper';
+import { mapRendererApprovalToAppResume } from '../../../src/desktop/renderer-protocol/request/app-request';
 
 const roots: string[] = [];
 afterEach(async () => {

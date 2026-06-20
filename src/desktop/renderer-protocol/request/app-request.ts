@@ -1,15 +1,15 @@
-// Converts renderer DTOs into App API requests without parsing Agent input.
+﻿// Converts renderer DTOs into App API requests without parsing Agent input.
 import type {
   AppCancelRunRequest,
   AppEntryContext,
   AppResumeRunRequest,
   AppRetryRunRequest,
   AppStartRunRequest,
-} from '../../app';
+} from '../../../app';
 import {
   isSessionMessageSendRequestDto,
   type SessionMessageSendRequestDto,
-} from '../../shared/renderer-contracts/session-message';
+} from '../../../shared/renderer-contracts/session-message';
 
 function getRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};

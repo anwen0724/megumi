@@ -27,7 +27,7 @@ describe('src history recovery boundaries', () => {
       'src/desktop/ipc/handlers/session.handler.ts',
       'src/desktop/ipc/handlers/run.handler.ts',
       'src/desktop/ipc/handlers/recovery.handler.ts',
-      'src/desktop/renderer-protocol/history.mapper.ts',
+      'src/desktop/renderer-protocol/timeline/history.ts',
     ].map(read).join('\n');
 
     expect(files).not.toContain('buildModelContextInput');

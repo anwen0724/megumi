@@ -5,15 +5,15 @@ import {
   createDesktopClientContext,
   mapRendererCancelToAppCancel,
   mapRendererMessageSendToAppStartRun,
-} from '../../renderer-protocol/app-request.mapper';
-import { mapAppResponseToRenderer } from '../../renderer-protocol/app-response.mapper';
+} from '../../renderer-protocol/request/app-request';
+import { mapAppResponseToRenderer } from '../../renderer-protocol/response/app-response';
 import {
   mapBranchDraft,
   mapRunToRendererSummary,
   mapSessionToRendererSummary,
   mapSourceEntry,
   mapTimelineHydration,
-} from '../../renderer-protocol/history.mapper';
+} from '../../renderer-protocol/timeline/history';
 import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
 
 export async function handleSessionOperation(operation: string, payload: unknown, context: DesktopIpcContext): Promise<unknown> {

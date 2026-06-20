@@ -3,8 +3,8 @@ import type { SessionMessageSendRequestDto } from '../../../src/shared/renderer-
 import {
   createDesktopClientContext,
   mapRendererMessageSendToAppStartRun,
-} from '../../../src/desktop/renderer-protocol/app-request.mapper';
-import { mapAppResponseToRenderer } from '../../../src/desktop/renderer-protocol/app-response.mapper';
+} from '../../../src/desktop/renderer-protocol/request/app-request';
+import { mapAppResponseToRenderer } from '../../../src/desktop/renderer-protocol/response/app-response';
 
 function createRequest(): SessionMessageSendRequestDto {
   return {

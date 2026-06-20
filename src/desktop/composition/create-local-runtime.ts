@@ -57,8 +57,8 @@ import { createAppSettingsStore, type AppSettingsStore } from '../infrastructure
 import { initializeMegumiHome, type MegumiHomePaths } from '../infrastructure/megumi-home';
 import { createProviderSettingsStore, type ProviderSettingsStore } from '../infrastructure/provider-settings-store';
 import { createRuntimeJsonlLogger, type RuntimeLogger } from '../infrastructure/runtime-logger';
-import { createAgentRuntimeChatStreamAdapter } from '../renderer-protocol/agent-runtime-chat-stream-adapter';
-import { TimelineHistoryCommitProjector } from '../renderer-protocol/timeline-history-commit-projector';
+import { createAgentRuntimeChatStreamAdapter } from '../renderer-protocol/chat-stream/agent-runtime-chat-stream-adapter';
+import { TimelineHistoryCommitProjector } from '../renderer-protocol/timeline/timeline-history-projection';
 import { createRuntimeEventBus, type RuntimeEventBus } from './create-runtime-event-bus';
 import { createHostAdapters, type DesktopHostAdapters } from './create-host-adapters';
 

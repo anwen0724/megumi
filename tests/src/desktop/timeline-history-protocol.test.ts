@@ -1,8 +1,8 @@
 ﻿// Locks timeline history replay to the same renderer chat-stream protocol used live.
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentRuntimeEvent } from '../../../src/app';
-import { mapTimelineHydration } from '../../../src/desktop/renderer-protocol/history.mapper';
-import { TimelineHistoryCommitProjector } from '../../../src/desktop/renderer-protocol/timeline-history-commit-projector';
+import { mapTimelineHydration } from '../../../src/desktop/renderer-protocol/timeline/history';
+import { TimelineHistoryCommitProjector } from '../../../src/desktop/renderer-protocol/timeline/timeline-history-projection';
 import type { SessionRunRecord } from '../../../src/session';
 import type { ChatStreamEvent } from '../../../src/shared/renderer-contracts/chat-stream';
 import type { TimelineMessage } from '../../../src/shared/renderer-contracts/timeline';

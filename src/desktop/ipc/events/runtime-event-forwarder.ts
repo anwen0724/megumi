@@ -2,7 +2,7 @@
 import type { BrowserWindow } from 'electron';
 import type { AgentRuntimeEvent, AgentRuntimePort } from '../../../app';
 import { RuntimeEventSchema } from '../../../shared/renderer-contracts/runtime';
-import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../renderer-protocol/agent-runtime-event-to-renderer-runtime-event.mapper';
+import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../renderer-protocol/runtime/agent-runtime-event-to-renderer-runtime-event';
 
 export function registerRuntimeEventForwarder(options: {
   agentRuntime: AgentRuntimePort;

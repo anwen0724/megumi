@@ -1,7 +1,7 @@
-// Projects Agent Runtime events into the renderer chat stream protocol.
-import type { AgentRuntimeEvent } from '../../app';
-import type { ChatStreamEvent } from '../../shared/renderer-contracts/chat-stream';
-import { mapRendererApprovalRequest } from './productization.mapper';
+﻿// Projects Agent Runtime events into the renderer chat stream protocol.
+import type { AgentRuntimeEvent } from '../../../app';
+import type { ChatStreamEvent } from '../../../shared/renderer-contracts/chat-stream';
+import { mapRendererApprovalRequest } from '../productization/productization';
 
 export interface ChatStreamProjectionOptions {
   seq?: number;

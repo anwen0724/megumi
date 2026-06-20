@@ -1,9 +1,9 @@
-// Converts App responses into renderer result payloads.
-import type { AppRunResponse } from '../../app';
+﻿// Converts App responses into renderer result payloads.
+import type { AppRunResponse } from '../../../app';
 import {
   isSessionMessageSendRequestDto,
   type SessionMessageSendAckDto,
-} from '../../shared/renderer-contracts/session-message';
+} from '../../../shared/renderer-contracts/session-message';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

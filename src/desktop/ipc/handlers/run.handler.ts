@@ -1,7 +1,7 @@
 ﻿// Handles run query bridge operations for renderer hydration.
 import type { DesktopIpcContext } from '../ipc-context';
 import { unavailable } from '../ipc-errors';
-import { mapRuntimeEventHistory, mapRunToRendererSummary } from '../../renderer-protocol/history.mapper';
+import { mapRuntimeEventHistory, mapRunToRendererSummary } from '../../renderer-protocol/timeline/history';
 import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
 import type { RendererRuntimeEventHistoryDto } from '../../../shared';
 

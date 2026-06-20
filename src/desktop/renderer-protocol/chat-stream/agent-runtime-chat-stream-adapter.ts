@@ -1,6 +1,6 @@
-// Stateful projection from Agent runtime events to the renderer chat stream protocol.
-import type { AgentRuntimeEvent } from '../../app';
-import type { ChatStreamEvent, AssistantTextPhase } from '../../shared/renderer-contracts/chat-stream';
+﻿// Stateful projection from Agent runtime events to the renderer chat stream protocol.
+import type { AgentRuntimeEvent } from '../../../app';
+import type { ChatStreamEvent, AssistantTextPhase } from '../../../shared/renderer-contracts/chat-stream';
 
 export interface AgentRuntimeChatStreamSink {
   publish(event: ChatStreamEvent): void;

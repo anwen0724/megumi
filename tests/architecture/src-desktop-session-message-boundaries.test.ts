@@ -28,7 +28,7 @@ describe('src desktop session message boundaries', () => {
   });
 
   it('does not preserve old renderer runtime envelope compatibility for message send', () => {
-    const mapper = read('src/desktop/renderer-protocol/app-request.mapper.ts');
+    const mapper = read('src/desktop/renderer-protocol/request/app-request.ts');
 
     expect(mapper).toContain('isSessionMessageSendRequestDto');
     expect(mapper).toContain('session.message.send expects SessionMessageSendRequestDto');
@@ -39,7 +39,7 @@ describe('src desktop session message boundaries', () => {
 
   it('keeps desktop outside Agent Loop owner responsibilities', () => {
     const handler = read('src/desktop/ipc/handlers/session.handler.ts');
-    const mapper = read('src/desktop/renderer-protocol/app-request.mapper.ts');
+    const mapper = read('src/desktop/renderer-protocol/request/app-request.ts');
     const combined = `${handler}\n${mapper}`;
 
     expect(handler).toContain("operation === 'session.message.send'");

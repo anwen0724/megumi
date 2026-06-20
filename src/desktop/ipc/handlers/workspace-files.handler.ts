@@ -2,7 +2,7 @@
 import path from 'node:path';
 import type { DesktopIpcContext } from '../ipc-context';
 import { unavailable } from '../ipc-errors';
-import { mapWorkspaceChangeSet } from '../../renderer-protocol/productization.mapper';
+import { mapWorkspaceChangeSet } from '../../renderer-protocol/productization/productization';
 import { unwrapRendererRuntimePayload } from '../runtime-request-payload';
 import type { WorkspaceDirectoryEntry, WorkspaceFilesListData, WorkspaceFileOpenData } from '../../shared/renderer-contracts/workspace';
 

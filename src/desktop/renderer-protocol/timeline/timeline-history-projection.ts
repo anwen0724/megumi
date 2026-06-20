@@ -1,10 +1,10 @@
-// Commits renderer timeline history from chat stream events without owning live UI delivery.
-import type { ChatStreamEvent } from '../../shared/renderer-contracts/chat-stream';
+﻿// Commits renderer timeline history from chat stream events without owning live UI delivery.
+import type { ChatStreamEvent } from '../../../shared/renderer-contracts/chat-stream';
 import {
   reduceChatStreamEvent,
   type AnswerTextBlock,
   type TimelineMessage,
-} from '../../shared/renderer-contracts/timeline';
+} from '../../../shared/renderer-contracts/timeline';
 
 export interface TimelineHistoryCommitRepository {
   commitRunTimeline(input: {

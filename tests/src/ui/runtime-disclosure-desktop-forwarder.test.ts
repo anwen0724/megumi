@@ -1,6 +1,6 @@
 ﻿import { beforeEach, describe, expect, it } from 'vitest';
 import type { AgentRuntimeEvent } from '../../../src/app';
-import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../../src/desktop/renderer-protocol/agent-runtime-event-to-renderer-runtime-event.mapper';
+import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../../../src/desktop/renderer-protocol/runtime/agent-runtime-event-to-renderer-runtime-event';
 import { useRunStore } from '../../../src/ui/entities/run/store';
 import { createProcessingDisclosureModel } from '../../../src/ui/features/chat/processing-disclosure';
 import { dispatchRuntimeEvent } from '../../../src/ui/features/runtime-events/runtime-event-dispatcher';

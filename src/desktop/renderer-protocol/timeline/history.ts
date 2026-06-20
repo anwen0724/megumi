@@ -1,4 +1,4 @@
-// Projects session and runtime owner facts into renderer history DTOs.
+﻿// Projects session and runtime owner facts into renderer history DTOs.
 import type {
   RendererBranchDraftDto,
   RendererRecoverableRunDto,
@@ -8,14 +8,14 @@ import type {
   RendererSourceEntryDto,
   RendererTimelineHydrationDto,
   RendererTimelineMessageDto,
-} from '../../shared';
-import type { BranchMarker, Session, SessionMessage, SessionRunRecord, SessionSourceEntry } from '../../session';
-import type { RecoverableRunRecord, RuntimeEventRecord } from '../../database';
-import type { JsonObject, JsonValue } from '../../shared';
-import type { AnswerTextBlock, ProcessDisclosureBlock, TimelineMessage } from '../../shared/renderer-contracts/timeline';
-import { reduceChatStreamEvent } from '../../shared/renderer-contracts/timeline';
-import { mapAgentRuntimeEventToRendererRuntimeEvent } from './agent-runtime-event-to-renderer-runtime-event.mapper';
-import { createAgentRuntimeChatStreamAdapter } from './agent-runtime-chat-stream-adapter';
+} from '../../../shared';
+import type { BranchMarker, Session, SessionMessage, SessionRunRecord, SessionSourceEntry } from '../../../session';
+import type { RecoverableRunRecord, RuntimeEventRecord } from '../../../database';
+import type { JsonObject, JsonValue } from '../../../shared';
+import type { AnswerTextBlock, ProcessDisclosureBlock, TimelineMessage } from '../../../shared/renderer-contracts/timeline';
+import { reduceChatStreamEvent } from '../../../shared/renderer-contracts/timeline';
+import { mapAgentRuntimeEventToRendererRuntimeEvent } from '../runtime/agent-runtime-event-to-renderer-runtime-event';
+import { createAgentRuntimeChatStreamAdapter } from '../chat-stream/agent-runtime-chat-stream-adapter';
 
 export function mapSessionToRendererSummary(session: Session): RendererSessionSummaryDto {
   return {
