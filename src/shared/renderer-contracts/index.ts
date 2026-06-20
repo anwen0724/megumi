@@ -10,6 +10,7 @@ export * from './productization';
 export * from './project';
 export * from './provider';
 export * from './recovery';
+export * from './renderer-api';
 export * from './run';
 export * from './runtime';
 export * from './session';

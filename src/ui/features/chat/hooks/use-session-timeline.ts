@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/renderer-contracts/ipc';
 import type { RuntimeEvent } from '@megumi/renderer-contracts/runtime';
-import type { MegumiRendererApi } from '../../../../desktop/dto/renderer-api';
+import type { MegumiRendererApi } from '@megumi/renderer-contracts';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';

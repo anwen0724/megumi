@@ -1,5 +1,5 @@
-// Provides src/ui with the active src/desktop preload contract despite legacy renderer globals.
-import type { MegumiRendererApi } from '../../desktop/dto/renderer-api';
+// Provides src/ui with the active preload contract through shared renderer protocol ownership.
+import type { MegumiRendererApi } from '../../shared/renderer-contracts';
 
 export function getMegumiRendererApi(): MegumiRendererApi | undefined {
   return window.megumi as unknown as MegumiRendererApi | undefined;
