@@ -1,7 +1,7 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerMemoryHandlers } from '@megumi/desktop/main/ipc/handlers/memory.handler';
-import { runtimeOperationNameFromChannel } from '@megumi/desktop/main/ipc/runtime-operation-name';
+import { ipcOperationNameFromChannel } from '@megumi/desktop/main/ipc/ipc-operation-name';
 
 describe('registerMemoryHandlers', () => {
   it('passes candidate edit fields through edit-and-accept handler', async () => {
@@ -94,7 +94,7 @@ describe('registerMemoryHandlers', () => {
 
 describe('memory runtime operation names', () => {
   it('uses lowercase dotted/kebab operation names', () => {
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.memory.recallPreview)).toBe(
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.memory.recallPreview)).toBe(
       'memory.recall-preview',
     );
   });

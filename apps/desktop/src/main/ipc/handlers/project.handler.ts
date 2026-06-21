@@ -22,7 +22,7 @@ import type { ProjectService } from '../../services/project/project.service';
 import { ProjectPathValidationError } from '../../services/project/project.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type ProjectHandlersService = Pick<
   ProjectService,
@@ -42,7 +42,7 @@ export function registerProjectHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.project.list,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.project.list,
       requestSchema: ProjectListRequestSchema as z.ZodType<
         RuntimeIpcRequest<ProjectListPayload, typeof IPC_CHANNELS.project.list>
@@ -57,7 +57,7 @@ export function registerProjectHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.project.useExisting,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.project.useExisting,
       requestSchema: ProjectUseExistingRequestSchema as z.ZodType<
         RuntimeIpcRequest<ProjectUseExistingPayload, typeof IPC_CHANNELS.project.useExisting>
@@ -70,7 +70,7 @@ export function registerProjectHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.project.open,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.project.open,
       requestSchema: ProjectOpenRequestSchema as z.ZodType<
         RuntimeIpcRequest<ProjectOpenPayload, typeof IPC_CHANNELS.project.open>
@@ -87,7 +87,7 @@ export function registerProjectHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.project.remove,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.project.remove,
       requestSchema: ProjectRemoveRequestSchema as z.ZodType<
         RuntimeIpcRequest<ProjectRemovePayload, typeof IPC_CHANNELS.project.remove>

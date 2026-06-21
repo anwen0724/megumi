@@ -29,7 +29,7 @@ import {
 import type { ArtifactService } from '../../services/artifact/artifact.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type ArtifactHandlersService = Pick<
   ArtifactService,
@@ -47,7 +47,7 @@ export function registerArtifactHandlers(
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
 
-  ipcMain.handle(IPC_CHANNELS.artifacts.listByRun, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.artifacts.listByRun, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.listByRun,
     requestSchema: ArtifactListByRunRequestSchema,
     logger: options.logger,
@@ -57,7 +57,7 @@ export function registerArtifactHandlers(
     mapError: mapArtifactIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.artifacts.listBySession, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.artifacts.listBySession, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.listBySession,
     requestSchema: ArtifactListBySessionRequestSchema,
     logger: options.logger,
@@ -67,7 +67,7 @@ export function registerArtifactHandlers(
     mapError: mapArtifactIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.artifacts.get, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.artifacts.get, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.get,
     requestSchema: ArtifactGetRequestSchema,
     logger: options.logger,
@@ -76,7 +76,7 @@ export function registerArtifactHandlers(
     mapError: mapArtifactIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.artifacts.versionGet, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.artifacts.versionGet, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.versionGet,
     requestSchema: ArtifactVersionGetRequestSchema,
     logger: options.logger,
@@ -86,7 +86,7 @@ export function registerArtifactHandlers(
     mapError: mapArtifactIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.artifacts.versionCreate, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.artifacts.versionCreate, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.versionCreate,
     requestSchema: ArtifactVersionCreateRequestSchema,
     logger: options.logger,
@@ -101,7 +101,7 @@ export function registerArtifactHandlers(
     mapError: mapArtifactIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.artifacts.statusUpdate, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.artifacts.statusUpdate, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.statusUpdate,
     requestSchema: ArtifactStatusUpdateRequestSchema,
     logger: options.logger,
@@ -111,7 +111,7 @@ export function registerArtifactHandlers(
     mapError: mapArtifactIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.artifacts.reference, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.artifacts.reference, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.reference,
     requestSchema: ArtifactReferenceRequestSchema,
     logger: options.logger,

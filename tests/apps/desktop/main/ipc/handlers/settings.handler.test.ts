@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
 import { registerSettingsHandlers } from '@megumi/desktop/main/ipc/handlers/settings.handler';
-import { runtimeOperationNameFromChannel } from '@megumi/desktop/main/ipc/runtime-operation-name';
+import { ipcOperationNameFromChannel } from '@megumi/desktop/main/ipc/ipc-operation-name';
 
 function createRequest(channel: string, payload: Record<string, unknown>, requestId = 'request:settings') {
   return {
@@ -84,7 +84,7 @@ describe('registerSettingsHandlers', () => {
   });
 
   it('exposes operation names for settings IPC', () => {
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.settings.get)).toBe('settings.get');
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.settings.update)).toBe('settings.update');
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.settings.get)).toBe('settings.get');
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.settings.update)).toBe('settings.update');
   });
 });

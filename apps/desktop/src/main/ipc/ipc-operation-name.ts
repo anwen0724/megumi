@@ -1,7 +1,8 @@
-﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+// Maps business IPC channels to operation names used in request context and logs.
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { BusinessIpcChannel } from '@megumi/shared/ipc';
 
-export function runtimeOperationNameFromChannel(channel: BusinessIpcChannel): string {
+export function ipcOperationNameFromChannel(channel: BusinessIpcChannel): string {
   switch (channel) {
     case IPC_CHANNELS.provider.list:
       return 'provider.list';

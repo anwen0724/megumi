@@ -1,4 +1,5 @@
-﻿import type { IpcMainInvokeEvent } from 'electron';
+// Creates request/response IPC handlers with schema validation, context, logging, and safe errors.
+import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type {
@@ -26,7 +27,7 @@ import {
   noopRuntimeLogger,
   type RuntimeLogger,
 } from '../services/runtime/runtime-logger.service';
-import { runtimeOperationNameFromChannel } from './runtime-operation-name';
+import { ipcOperationNameFromChannel } from './ipc-operation-name';
 
 export interface RuntimeIpcHandlerOptions<
   TPayload,
@@ -48,7 +49,7 @@ export interface RuntimeIpcHandlerOptions<
   debugIdFactory?: () => string;
 }
 
-export function createRuntimeIpcHandler<
+export function createIpcRequestHandler<
   TPayload,
   TData extends object,
   TChannel extends BusinessIpcChannel,
@@ -181,7 +182,7 @@ function createHandlerContext(input: {
   return RuntimeContextSchema.parse({
     requestId: input.requestId,
     traceId: input.traceIdFactory(),
-    operationName: runtimeOperationNameFromChannel(input.channel),
+    operationName: ipcOperationNameFromChannel(input.channel),
     source: 'main',
     createdAt: input.now().toISOString(),
   });

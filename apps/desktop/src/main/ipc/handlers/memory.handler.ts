@@ -17,7 +17,7 @@ import {
   MemorySourceRefsListRequestSchema,
   MemoryUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import type { MemoryService } from '../../services/memory/memory.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import type { DesktopIpcMain } from '../../host/electron-ipc-main-host';
@@ -49,7 +49,7 @@ export interface RegisterMemoryHandlersOptions {
 export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): void {
   const { ipcMain, memoryService, logger } = options;
 
-  ipcMain.handle(IPC_CHANNELS.memory.candidateList, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.candidateList, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.candidateList,
     requestSchema: MemoryCandidateListRequestSchema,
     logger,
@@ -57,7 +57,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.candidateAccept, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.candidateAccept, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.candidateAccept,
     requestSchema: MemoryCandidateAcceptRequestSchema,
     logger,
@@ -65,7 +65,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.candidateReject, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.candidateReject, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.candidateReject,
     requestSchema: MemoryCandidateRejectRequestSchema,
     logger,
@@ -73,7 +73,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.candidateArchive, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.candidateArchive, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.candidateArchive,
     requestSchema: MemoryCandidateArchiveRequestSchema,
     logger,
@@ -81,7 +81,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.candidateEditAndAccept, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.candidateEditAndAccept, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.candidateEditAndAccept,
     requestSchema: MemoryCandidateEditAndAcceptRequestSchema,
     logger,
@@ -89,7 +89,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.memoryList, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.memoryList, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.memoryList,
     requestSchema: MemoryListRequestSchema,
     logger,
@@ -97,7 +97,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.memoryGet, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.memoryGet, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.memoryGet,
     requestSchema: MemoryGetRequestSchema,
     logger,
@@ -105,7 +105,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.memoryUpdate, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.memoryUpdate, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.memoryUpdate,
     requestSchema: MemoryUpdateRequestSchema,
     logger,
@@ -113,7 +113,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.memoryArchive, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.memoryArchive, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.memoryArchive,
     requestSchema: MemoryArchiveRequestSchema,
     logger,
@@ -121,7 +121,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.memoryDelete, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.memoryDelete, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.memoryDelete,
     requestSchema: MemoryDeleteRequestSchema,
     logger,
@@ -129,7 +129,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.memoryDisable, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.memoryDisable, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.memoryDisable,
     requestSchema: MemoryDisableRequestSchema,
     logger,
@@ -137,7 +137,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.memoryEnable, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.memoryEnable, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.memoryEnable,
     requestSchema: MemoryEnableRequestSchema,
     logger,
@@ -145,7 +145,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.sourceRefsList, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.sourceRefsList, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.sourceRefsList,
     requestSchema: MemorySourceRefsListRequestSchema,
     logger,
@@ -153,7 +153,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.accessLogsList, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.accessLogsList, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.accessLogsList,
     requestSchema: MemoryAccessLogsListRequestSchema,
     logger,
@@ -161,7 +161,7 @@ export function registerMemoryHandlers(options: RegisterMemoryHandlersOptions): 
     mapError: mapMemoryIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.memory.recallPreview, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.memory.recallPreview, createIpcRequestHandler({
     channel: IPC_CHANNELS.memory.recallPreview,
     requestSchema: MemoryRecallPreviewRequestSchema,
     logger,

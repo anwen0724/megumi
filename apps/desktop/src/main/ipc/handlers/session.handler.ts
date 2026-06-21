@@ -31,7 +31,7 @@ import {
 import type { SessionRunService } from '../../services/session/session-run.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type SessionHandlersService = Pick<
@@ -59,7 +59,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.create,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.create,
       requestSchema: SessionCreateRequestSchema,
       logger: options.logger,
@@ -74,7 +74,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.list,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.list,
       requestSchema: SessionListRequestSchema,
       logger: options.logger,
@@ -87,7 +87,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.message.list,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.message.list,
       requestSchema: SessionMessageListRequestSchema,
       logger: options.logger,
@@ -102,7 +102,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.timeline.list,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.timeline.list,
       requestSchema: SessionTimelineListRequestSchema,
       logger: options.logger,
@@ -115,7 +115,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.message.send,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.message.send,
       requestSchema: SessionMessageSendRequestSchema,
       logger: options.logger,
@@ -138,7 +138,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.message.cancel,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.message.cancel,
       requestSchema: SessionMessageCancelRequestSchema,
       logger: options.logger,
@@ -153,7 +153,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.branchDraft.create,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.branchDraft.create,
       requestSchema: SessionBranchDraftCreateRequestSchema,
       logger: options.logger,
@@ -176,7 +176,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.session.branchDraft.cancel,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.session.branchDraft.cancel,
       requestSchema: SessionBranchDraftCancelRequestSchema,
       logger: options.logger,

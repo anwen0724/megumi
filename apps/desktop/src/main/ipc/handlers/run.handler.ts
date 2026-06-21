@@ -11,7 +11,7 @@ import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megu
 import type { SessionRunService } from '../../services/session/session-run.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type RunHandlersService = Pick<SessionRunService, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
 
@@ -28,7 +28,7 @@ export function registerRunHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.run.listBySession,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.run.listBySession,
       requestSchema: RunListBySessionRequestSchema,
       logger: options.logger,
@@ -43,7 +43,7 @@ export function registerRunHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.run.events.list,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.run.events.list,
       requestSchema: RunEventsListRequestSchema,
       logger: options.logger,

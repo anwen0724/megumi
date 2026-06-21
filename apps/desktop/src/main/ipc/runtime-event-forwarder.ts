@@ -1,4 +1,5 @@
-﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+// Forwards validated RuntimeEvent records from Main to Renderer IPC subscribers.
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { redactRuntimeValue } from '@megumi/security/redaction';

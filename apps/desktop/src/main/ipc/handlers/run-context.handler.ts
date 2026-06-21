@@ -14,7 +14,7 @@ import {
 import type { RunContextService } from '../../services/runtime/run-context.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type RunContextHandlersService = Pick<
   RunContextService,
@@ -34,7 +34,7 @@ export function registerRunContextHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.runContext.baselineGet,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.runContext.baselineGet,
       requestSchema: RunContextBaselineGetRequestSchema,
       logger: options.logger,
@@ -52,7 +52,7 @@ export function registerRunContextHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.runContext.sourcesList,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.runContext.sourcesList,
       requestSchema: RunContextSourcesListRequestSchema,
       logger: options.logger,

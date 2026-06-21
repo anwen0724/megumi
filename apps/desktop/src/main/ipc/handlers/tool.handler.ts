@@ -17,7 +17,7 @@ import {
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import type { ToolService } from '../../services/tool/tool.service';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type ToolHandlersService = Pick<
@@ -38,7 +38,7 @@ export function registerToolHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.tool.definitionsList,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.tool.definitionsList,
       requestSchema: ToolDefinitionsListRequestSchema,
       logger: options.logger,
@@ -53,7 +53,7 @@ export function registerToolHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.tool.executionGet,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.tool.executionGet,
       requestSchema: ToolExecutionGetRequestSchema,
       logger: options.logger,
@@ -68,7 +68,7 @@ export function registerToolHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.approval.resolve,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.approval.resolve,
       requestSchema: ApprovalResolveRequestSchema,
       logger: options.logger,

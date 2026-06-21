@@ -7,7 +7,7 @@ import {
   SettingsUpdateRequestSchema,
 } from '@megumi/shared/ipc';
 import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import type { DesktopIpcMain } from '../../host/electron-ipc-main-host';
 
@@ -25,7 +25,7 @@ export interface RegisterSettingsHandlersOptions {
 export function registerSettingsHandlers(options: RegisterSettingsHandlersOptions): void {
   const { ipcMain, settingsService, logger } = options;
 
-  ipcMain.handle(IPC_CHANNELS.settings.get, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.settings.get, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.get,
     requestSchema: SettingsGetRequestSchema,
     logger,
@@ -33,7 +33,7 @@ export function registerSettingsHandlers(options: RegisterSettingsHandlersOption
     mapError: mapSettingsIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.settings.update, createRuntimeIpcHandler({
+  ipcMain.handle(IPC_CHANNELS.settings.update, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.update,
     requestSchema: SettingsUpdateRequestSchema,
     logger,

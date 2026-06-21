@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { RuntimeException } from '@megumi/core/agent-runtime';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRuntimeIpcRequestSchema } from '@megumi/shared/ipc';
-import { createRuntimeIpcHandler } from '@megumi/desktop/main/ipc/create-runtime-ipc-handler';
-import { runtimeOperationNameFromChannel } from '@megumi/desktop/main/ipc/runtime-operation-name';
+import { createIpcRequestHandler } from '@megumi/desktop/main/ipc/create-ipc-request-handler';
+import { ipcOperationNameFromChannel } from '@megumi/desktop/main/ipc/ipc-operation-name';
 
-describe('createRuntimeIpcHandler', () => {
+describe('createIpcRequestHandler', () => {
   const payloadSchema = z.object({ providerId: z.literal('deepseek') }).strict();
   const requestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.provider.list, payloadSchema);
 
@@ -46,20 +46,20 @@ describe('createRuntimeIpcHandler', () => {
   }
 
   it('maps project channels to stable runtime operation names', () => {
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.list)).toBe('project.list');
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.useExisting)).toBe('project.use-existing');
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.open)).toBe('project.open');
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.project.remove)).toBe('project.remove');
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.project.list)).toBe('project.list');
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.project.useExisting)).toBe('project.use-existing');
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.project.open)).toBe('project.open');
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.project.remove)).toBe('project.remove');
   });
 
   it('maps workspace files list channel to a stable runtime operation name', () => {
-    expect(runtimeOperationNameFromChannel(IPC_CHANNELS.workspace.files.list)).toBe(
+    expect(ipcOperationNameFromChannel(IPC_CHANNELS.workspace.files.list)).toBe(
       'workspace.files.list',
     );
   });
 
   it('returns a runtime ipc success envelope and preserves existing handler shape', async () => {
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: async (request) => ({
@@ -87,7 +87,7 @@ describe('createRuntimeIpcHandler', () => {
       debugId: context.debugId,
       operationName: context.operationName,
     }));
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: action,
@@ -134,7 +134,7 @@ describe('createRuntimeIpcHandler', () => {
       .fn()
       .mockReturnValueOnce(new Date('2026-05-12T00:00:10.000Z'))
       .mockReturnValueOnce(new Date('2026-05-12T00:00:10.025Z'));
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: async () => ({
@@ -167,7 +167,7 @@ describe('createRuntimeIpcHandler', () => {
       operationName: context.operationName,
       source: context.source,
     }));
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: action,
@@ -203,7 +203,7 @@ describe('createRuntimeIpcHandler', () => {
   it('returns ipc_invalid_request with debug id and logs sanitized validation details', async () => {
     const logger = createLogger();
     const action = vi.fn();
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: action,
@@ -262,7 +262,7 @@ describe('createRuntimeIpcHandler', () => {
 
   it('maps thrown RuntimeException without leaking cause or stack', async () => {
     const logger = createLogger();
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: async () => {
@@ -328,7 +328,7 @@ describe('createRuntimeIpcHandler', () => {
 
   it('normalizes unknown handler errors and redacts logger details', async () => {
     const logger = createLogger();
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: async () => {
@@ -379,7 +379,7 @@ describe('createRuntimeIpcHandler', () => {
       retryable: true,
       source: 'main' as const,
     }));
-    const handler = createRuntimeIpcHandler({
+    const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema,
       handle: async () => {

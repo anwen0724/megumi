@@ -1,4 +1,5 @@
-﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+// Forwards validated chat stream events from Main to Renderer IPC subscribers.
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { ChatStreamEventSchema } from '@megumi/shared/chat-stream';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { redactRuntimeValue } from '@megumi/security/redaction';

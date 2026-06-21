@@ -16,7 +16,7 @@ import {
 import type { WorkspaceFilesService } from '../../services/workspace/workspace-files.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type WorkspaceFilesHandlersService = Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
 type WorkspaceFilesListRequest = RuntimeIpcRequest<
@@ -41,7 +41,7 @@ export function registerWorkspaceFilesHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.workspace.files.list,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.workspace.files.list,
       requestSchema: WorkspaceFilesListRequestSchema as z.ZodType<WorkspaceFilesListRequest>,
       logger: options.logger,
@@ -52,7 +52,7 @@ export function registerWorkspaceFilesHandlers(
   );
   ipcMain.handle(
     IPC_CHANNELS.workspace.files.open,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.workspace.files.open,
       requestSchema: WorkspaceFileOpenRequestSchema as z.ZodType<WorkspaceFileOpenRequest>,
       logger: options.logger,

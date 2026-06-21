@@ -13,7 +13,7 @@ import type { ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/
 import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export interface ProviderHandlersService {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;
@@ -36,7 +36,7 @@ export function registerProviderHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.provider.list,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.list,
       requestSchema: ProviderListRequestSchema,
       logger: options.logger,
@@ -49,7 +49,7 @@ export function registerProviderHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.provider.update,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.update,
       requestSchema: ProviderUpdateRequestSchema,
       logger: options.logger,
@@ -64,7 +64,7 @@ export function registerProviderHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.provider.setApiKey,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.setApiKey,
       requestSchema: ProviderApiKeyRequestSchema,
       logger: options.logger,
@@ -78,7 +78,7 @@ export function registerProviderHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.provider.deleteApiKey,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.provider.deleteApiKey,
       requestSchema: ProviderDeleteApiKeyRequestSchema,
       logger: options.logger,

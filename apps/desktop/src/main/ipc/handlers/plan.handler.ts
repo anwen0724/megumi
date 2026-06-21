@@ -15,7 +15,7 @@ import {
 import type { PermissionSnapshotService } from '../../services/security/permission-snapshot.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type PlanHandlersService = Pick<
   PermissionSnapshotService,
@@ -35,7 +35,7 @@ export function registerPlanHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.plan.byRunGet,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.plan.byRunGet,
       requestSchema: PlanByRunGetRequestSchema,
       logger: options.logger,
@@ -50,7 +50,7 @@ export function registerPlanHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.plan.statusUpdate,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.plan.statusUpdate,
       requestSchema: PlanStatusUpdateRequestSchema,
       logger: options.logger,

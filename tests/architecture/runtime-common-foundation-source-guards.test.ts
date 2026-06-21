@@ -110,7 +110,7 @@ describe('Runtime Common Foundation source guards', () => {
     const windowHandlerSource = readProjectFile('apps/desktop/src/main/ipc/handlers/window.handler.ts');
 
     expect(windowHandlerSource).toContain('IPC_CHANNELS.window');
-    expect(windowHandlerSource).not.toContain('createRuntimeIpcHandler');
+    expect(windowHandlerSource).not.toContain('createIpcRequestHandler');
     expect(windowHandlerSource).not.toContain('RuntimeIpcRequest');
     expect(windowHandlerSource).not.toContain('RuntimeIpcResult');
   });
@@ -145,7 +145,7 @@ describe('Runtime Common Foundation source guards', () => {
 
   it('keeps renderer-facing runtime boundary code from exposing raw stack or raw cause', () => {
     const boundaryFiles = [
-      'apps/desktop/src/main/ipc/create-runtime-ipc-handler.ts',
+      'apps/desktop/src/main/ipc/create-ipc-request-handler.ts',
       'apps/desktop/src/main/ipc/runtime-event-forwarder.ts',
       'apps/desktop/src/main/app/runtime-process-errors.ts',
       'apps/desktop/src/preload/api.ts',
@@ -160,12 +160,12 @@ describe('Runtime Common Foundation source guards', () => {
     expect(rawStackOrCauseHits).toEqual([]);
   });
 
-  it('keeps business IPC handlers on createRuntimeIpcHandler', () => {
+  it('keeps business IPC handlers on createIpcRequestHandler', () => {
     const handlerFiles = listSourceFiles('apps/desktop/src/main/ipc/handlers')
       .filter((file) => !file.endsWith('window.handler.ts'));
     const handlersWithoutAdapter = handlerFiles.filter((file) => {
       const text = readProjectFile(file);
-      return text.includes('ipcMain.handle(') && !text.includes('createRuntimeIpcHandler');
+      return text.includes('ipcMain.handle(') && !text.includes('createIpcRequestHandler');
     });
 
     expect(handlersWithoutAdapter).toEqual([]);

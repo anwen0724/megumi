@@ -22,7 +22,7 @@ import {
 import type { RecoveryService } from '../../services/runtime/recovery.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
+import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export interface RegisterRecoveryHandlersOptions {
   logger?: RuntimeLogger;
@@ -37,7 +37,7 @@ export function registerRecoveryHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.recovery.recoverableRunsList,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.recovery.recoverableRunsList,
       requestSchema: RecoverableRunListRequestSchema,
       logger: options.logger,
@@ -48,7 +48,7 @@ export function registerRecoveryHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.recovery.resume,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.recovery.resume,
       requestSchema: RunResumeRequestSchema,
       logger: options.logger,
@@ -61,7 +61,7 @@ export function registerRecoveryHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.recovery.cancel,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.recovery.cancel,
       requestSchema: RunCancelRequestSchema,
       logger: options.logger,
@@ -74,7 +74,7 @@ export function registerRecoveryHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.recovery.retry,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.recovery.retry,
       requestSchema: RunRetryRequestSchema,
       logger: options.logger,
@@ -87,7 +87,7 @@ export function registerRecoveryHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.recovery.workspaceRestore,
-    createRuntimeIpcHandler({
+    createIpcRequestHandler({
       channel: IPC_CHANNELS.recovery.workspaceRestore,
       requestSchema: WorkspaceRestoreRequestSchema,
       logger: options.logger,
