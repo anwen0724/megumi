@@ -1,4 +1,5 @@
-﻿import fs from 'fs-extra';
+// Provides workspace directory listing and file open requests behind sandbox checks.
+import fs from 'fs-extra';
 import path from 'node:path';
 import {
   PathSandboxViolationError,
@@ -128,9 +129,7 @@ export function createWorkspaceFilesService(
     if (options.openPath) {
       return options.openPath(absolutePath);
     }
-
-    const { shell } = await import('electron');
-    return shell.openPath(absolutePath);
+    throw new Error(`Workspace file openPath adapter is not configured: ${absolutePath}`);
   }
 }
 

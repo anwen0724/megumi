@@ -62,12 +62,14 @@ describe('Desktop Main composition modules', () => {
   it('keeps project and workspace file composition on desktop host adapters', () => {
     const source = readComposition('compose-project-workspace.ts');
 
-    expect(source).toContain('dialog.showOpenDialog');
+    expect(source).toContain('dialogHost.chooseDirectory');
+    expect(source).toContain('shellHost.openPath');
     expect(source).toContain('createProjectService');
     expect(source).toContain('createWorkspaceFilesService');
     expect(source).toContain('createWorkspaceRootAuthorizer');
     expect(source).toContain('sessionSource: input.sessionRunService');
     expect(source).toContain('projectSource: input.projectService');
+    expect(source).not.toContain("from 'electron'");
   });
 
   it('keeps session runtime composition wired to run context, permission snapshots, projections, and memory ports', () => {
@@ -81,6 +83,8 @@ describe('Desktop Main composition modules', () => {
     expect(source).toContain('createWorkspaceChangeFooterProjectorService');
     expect(source).toContain('memoryRecallService: options.memoryRuntime.recallService');
     expect(source).toContain('memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService');
+    expect(source).toContain('windowHost.getAllWindows');
+    expect(source).not.toContain("from 'electron'");
   });
 
   it('keeps recovery composition responsible for workspace restore and footer publishing glue', () => {

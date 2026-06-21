@@ -1,5 +1,4 @@
-﻿import type { IpcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import {
   MemoryAccessLogsListRequestSchema,
@@ -21,6 +20,7 @@ import {
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import type { MemoryService } from '../../services/memory/memory.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import type { DesktopIpcMain } from '../../host/electron-ipc-main-host';
 
 export type MemoryHandlersService = Pick<
   MemoryService,
@@ -41,7 +41,7 @@ export type MemoryHandlersService = Pick<
 >;
 
 export interface RegisterMemoryHandlersOptions {
-  ipcMain: Pick<IpcMain, 'handle'>;
+  ipcMain: DesktopIpcMain;
   memoryService: MemoryHandlersService;
   logger?: RuntimeLogger;
 }

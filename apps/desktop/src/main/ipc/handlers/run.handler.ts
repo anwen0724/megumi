@@ -1,5 +1,4 @@
-﻿import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
@@ -11,18 +10,22 @@ import type {
 import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megumi/shared/ipc';
 import type { SessionRunService } from '../../services/session/session-run.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type RunHandlersService = Pick<SessionRunService, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
 
 export interface RegisterRunHandlersOptions {
   logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
 }
 
 export function registerRunHandlers(
   service: RunHandlersService,
   options: RegisterRunHandlersOptions = {},
 ): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+
   ipcMain.handle(
     IPC_CHANNELS.run.listBySession,
     createRuntimeIpcHandler({

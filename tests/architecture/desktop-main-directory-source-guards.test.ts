@@ -107,4 +107,39 @@ describe('Desktop Main directory boundaries', () => {
     expect(source).not.toContain('composeDesktopMain');
     expect(source).not.toContain('composeSessionRuntime');
   });
+
+  it('keeps Electron and OS capability adapters in app or host instead of services and composition', () => {
+    const checkedRoots = [
+      join(root, 'apps', 'desktop', 'src', 'main', 'composition'),
+      join(root, 'apps', 'desktop', 'src', 'main', 'services'),
+      join(root, 'apps', 'desktop', 'src', 'main', 'projections'),
+    ];
+    const violations = checkedRoots.flatMap((directory) =>
+      walk(directory)
+        .filter((file) => /from ['"]electron['"]/.test(readFileSync(file, 'utf8')))
+        .map(relativeProjectPath),
+    );
+
+    expect(violations).toEqual([]);
+    expect(read('apps/desktop/src/main/host/electron-dialog-host.ts')).toContain('dialog.showOpenDialog');
+    expect(read('apps/desktop/src/main/host/electron-shell-host.ts')).toContain('shell.openPath');
+    expect(read('apps/desktop/src/main/host/electron-window-host.ts')).toContain('BrowserWindow.getAllWindows');
+  });
+
+  it('keeps IPC handlers from constructing services or importing Electron directly', () => {
+    const files = walk(join(root, 'apps', 'desktop', 'src', 'main', 'ipc', 'handlers'));
+    const violations = files.flatMap((file) => {
+      const source = readFileSync(file, 'utf8');
+      return [
+        /from ['"]electron['"]/.test(source) ? 'imports electron' : '',
+        /initializeElectronMegumiHomeSync/.test(source) ? 'creates Megumi Home paths' : '',
+        /createAppSettingsService/.test(source) ? 'creates app settings' : '',
+        /new ProviderSettingsService/.test(source) ? 'creates provider settings service' : '',
+      ]
+        .filter(Boolean)
+        .map((reason) => `${relativeProjectPath(file)} ${reason}`);
+    });
+
+    expect(violations).toEqual([]);
+  });
 });

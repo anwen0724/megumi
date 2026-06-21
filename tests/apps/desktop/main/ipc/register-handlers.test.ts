@@ -55,7 +55,7 @@ describe('registerAllHandlers', () => {
     registerAllHandlers();
 
     expect(registerWindowHandlers).toHaveBeenCalledTimes(1);
-    expect(registerProviderHandlers).toHaveBeenCalledTimes(1);
+    expect(registerProviderHandlers).not.toHaveBeenCalled();
     expect(registerSettingsHandlers).not.toHaveBeenCalled();
     expect(registerSessionHandlers).not.toHaveBeenCalled();
     expect(registerRunHandlers).not.toHaveBeenCalled();
@@ -88,12 +88,28 @@ describe('registerAllHandlers', () => {
       listRunsBySession: vi.fn(),
       listRuntimeEventsByRun: vi.fn(),
     };
+    const providerService = {
+      getProviderSettings: vi.fn(),
+      listProviderStatuses: vi.fn(),
+      updateProviderSettings: vi.fn(),
+      setProviderApiKey: vi.fn(),
+      deleteProviderApiKey: vi.fn(),
+    };
 
-    registerAllHandlers({ logger, sessionRunService });
+    registerAllHandlers({ logger, providerService, sessionRunService });
 
-    expect(registerProviderHandlers).toHaveBeenCalledWith(undefined, { logger });
-    expect(registerSessionHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
-    expect(registerRunHandlers).toHaveBeenCalledWith(sessionRunService, { logger });
+    expect(registerProviderHandlers).toHaveBeenCalledWith(providerService, {
+      logger,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
+    expect(registerSessionHandlers).toHaveBeenCalledWith(sessionRunService, {
+      logger,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
+    expect(registerRunHandlers).toHaveBeenCalledWith(sessionRunService, {
+      logger,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
   });
 
   it('registers run context handlers when a context service is provided', async () => {
@@ -105,7 +121,10 @@ describe('registerAllHandlers', () => {
 
     registerAllHandlers({ runContextService });
 
-    expect(registerRunContextHandlers).toHaveBeenCalledWith(runContextService, { logger: undefined });
+    expect(registerRunContextHandlers).toHaveBeenCalledWith(runContextService, {
+      logger: undefined,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
   });
 
   it('registers settings handlers when a settings service is provided', async () => {
@@ -133,7 +152,10 @@ describe('registerAllHandlers', () => {
 
     registerAllHandlers({ planService });
 
-    expect(registerPlanHandlers).toHaveBeenCalledWith(planService, { logger: undefined });
+    expect(registerPlanHandlers).toHaveBeenCalledWith(planService, {
+      logger: undefined,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
   });
 
   it('registers tool handlers when a tool service is provided', async () => {
@@ -146,7 +168,10 @@ describe('registerAllHandlers', () => {
 
     registerAllHandlers({ toolService });
 
-    expect(registerToolHandlers).toHaveBeenCalledWith(toolService, { logger: undefined });
+    expect(registerToolHandlers).toHaveBeenCalledWith(toolService, {
+      logger: undefined,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
   });
 
   it('registers recovery handlers when a recovery service is provided', async () => {
@@ -161,7 +186,10 @@ describe('registerAllHandlers', () => {
 
     registerAllHandlers({ recoveryService });
 
-    expect(registerRecoveryHandlers).toHaveBeenCalledWith(recoveryService, { logger: undefined });
+    expect(registerRecoveryHandlers).toHaveBeenCalledWith(recoveryService, {
+      logger: undefined,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
   });
 
   it('registers artifact handlers when an artifact service is provided', async () => {
@@ -178,7 +206,10 @@ describe('registerAllHandlers', () => {
 
     registerAllHandlers({ artifactService });
 
-    expect(registerArtifactHandlers).toHaveBeenCalledWith(artifactService, { logger: undefined });
+    expect(registerArtifactHandlers).toHaveBeenCalledWith(artifactService, {
+      logger: undefined,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+    });
   });
 
   it('registers memory handlers when a memory service is provided', async () => {
@@ -225,6 +256,7 @@ describe('registerAllHandlers', () => {
 
     expect(registerProjectHandlers).toHaveBeenCalledWith(projectService, {
       logger: undefined,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
     });
   });
 
@@ -239,7 +271,10 @@ describe('registerAllHandlers', () => {
 
     expect(registerWorkspaceFilesHandlers).toHaveBeenCalledWith(
       workspaceFilesService,
-      { logger: undefined },
+      {
+        logger: undefined,
+        ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
+      },
     );
   });
 });

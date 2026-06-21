@@ -1,5 +1,4 @@
-﻿import { ipcMain } from 'electron';
-import { PathSandboxViolationError } from '@megumi/security/sandbox-policy';
+﻿import { PathSandboxViolationError } from '@megumi/security/sandbox-policy';
 import type { z } from 'zod';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
@@ -16,6 +15,7 @@ import {
 } from '@megumi/shared/ipc';
 import type { WorkspaceFilesService } from '../../services/workspace/workspace-files.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type WorkspaceFilesHandlersService = Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
@@ -30,12 +30,15 @@ type WorkspaceFileOpenRequest = RuntimeIpcRequest<
 
 export interface RegisterWorkspaceFilesHandlersOptions {
   logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
 }
 
 export function registerWorkspaceFilesHandlers(
   service: WorkspaceFilesHandlersService,
   options: RegisterWorkspaceFilesHandlersOptions = {},
 ): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+
   ipcMain.handle(
     IPC_CHANNELS.workspace.files.list,
     createRuntimeIpcHandler({

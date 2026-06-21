@@ -1,5 +1,4 @@
 // Composes the Desktop Main session run service and its immediate runtime collaborators.
-import { BrowserWindow } from 'electron';
 import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
@@ -21,6 +20,7 @@ import { AgentInstructionSourceService } from '../services/session/agent-instruc
 import { createWorkspaceChangeFooterProjectorService } from '../projections/workspace/workspace-change-footer-projector.service';
 import type { MegumiHomePaths } from '../services/project/megumi-home.service';
 import type { AppSettingsService } from '../services/settings/app-settings.service';
+import { electronWindowHost, type DesktopWindowHost } from '../host/electron-window-host';
 
 export interface ComposeSessionRuntimeOptions {
   megumiHomePaths: MegumiHomePaths;
@@ -37,9 +37,11 @@ export interface ComposeSessionRuntimeOptions {
   modelStepProviderService: ModelStepProviderService;
   toolRuntimeFactory: SessionRunToolRuntimeFactory;
   memoryRuntime: ReturnType<typeof import('./compose-memory-runtime').composeMemoryRuntime>['memoryRuntime'];
+  windowHost?: DesktopWindowHost;
 }
 
 export function composeSessionRuntime(options: ComposeSessionRuntimeOptions) {
+  const windowHost = options.windowHost ?? electronWindowHost;
   const runContextService = createDefaultRunContextService(options.megumiHomePaths);
   const planArtifactCompatibility = new PlanArtifactCompatibilityService({
     repository: options.artifactRepository,
@@ -56,7 +58,7 @@ export function composeSessionRuntime(options: ComposeSessionRuntimeOptions) {
     repository: options.timelineMessageRepository,
     downstream: {
       publish(event) {
-        for (const window of BrowserWindow.getAllWindows()) {
+        for (const window of windowHost.getAllWindows()) {
           forwardChatStreamEvent(window.webContents, event, { logger: options.runtimeLogger });
         }
       },

@@ -17,6 +17,7 @@ registerAppLifecycle({
   runMigrations: () => desktopMain.megumiHomePaths,
   registerAllHandlers: () => registerAllHandlers({
     logger: desktopMain.runtimeLogger,
+    providerService: desktopMain.providerService,
     sessionRunService: desktopMain.sessionRunService,
     runContextService: desktopMain.runContextService,
     planService: desktopMain.sessionRunService,

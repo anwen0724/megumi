@@ -1,6 +1,5 @@
 // Adapts renderer provider settings IPC to the Main-owned settings.json provider service.
 // The handler accepts API key writes but never returns plaintext API keys to Renderer.
-import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import {
@@ -10,11 +9,11 @@ import {
   ProviderUpdateRequestSchema,
 } from '@megumi/shared/ipc';
 import type { ProviderId, ProviderPublicStatus, ProviderSettings } from '@megumi/shared/provider';
-import { initializeElectronMegumiHomeSync } from '@megumi/desktop/main/services/project/megumi-home.service';
-import { ProviderSettingsService, type ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/provider/provider-settings.service';
-import { createAppSettingsService, AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import type { ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/provider/provider-settings.service';
+import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export interface ProviderHandlersService {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;
@@ -26,14 +25,15 @@ export interface ProviderHandlersService {
 
 export interface RegisterProviderHandlersOptions {
   logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
 }
 
-let defaultProviderService: ProviderHandlersService | null = null;
-
 export function registerProviderHandlers(
-  service = getDefaultProviderService(),
+  service: ProviderHandlersService,
   options: RegisterProviderHandlersOptions = {},
 ): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+
   ipcMain.handle(
     IPC_CHANNELS.provider.list,
     createRuntimeIpcHandler({
@@ -112,17 +112,4 @@ function mapProviderIpcError(error: unknown): RuntimeIpcError {
     retryable: true,
     source: 'main',
   };
-}
-
-export function getDefaultProviderService(): ProviderHandlersService {
-  if (!defaultProviderService) {
-    const homePaths = initializeElectronMegumiHomeSync();
-    defaultProviderService = new ProviderSettingsService({
-      settings: createAppSettingsService({
-        settingsPath: homePaths.settingsPath,
-      }),
-    });
-  }
-
-  return defaultProviderService;
 }

@@ -1,5 +1,4 @@
-﻿import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type { JsonObject } from '@megumi/shared/primitives';
@@ -29,6 +28,7 @@ import {
 } from '@megumi/shared/ipc';
 import type { ArtifactService } from '../../services/artifact/artifact.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export type ArtifactHandlersService = Pick<
@@ -38,12 +38,15 @@ export type ArtifactHandlersService = Pick<
 
 export interface RegisterArtifactHandlersOptions {
   logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
 }
 
 export function registerArtifactHandlers(
   service: ArtifactHandlersService,
   options: RegisterArtifactHandlersOptions = {},
 ): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+
   ipcMain.handle(IPC_CHANNELS.artifacts.listByRun, createRuntimeIpcHandler({
     channel: IPC_CHANNELS.artifacts.listByRun,
     requestSchema: ArtifactListByRunRequestSchema,

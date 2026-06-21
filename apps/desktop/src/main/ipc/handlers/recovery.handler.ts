@@ -1,5 +1,4 @@
-﻿import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
@@ -22,16 +21,20 @@ import {
 } from '@megumi/shared/ipc';
 import type { RecoveryService } from '../../services/runtime/recovery.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 
 export interface RegisterRecoveryHandlersOptions {
   logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
 }
 
 export function registerRecoveryHandlers(
   service: RecoveryService,
   options: RegisterRecoveryHandlersOptions = {},
 ): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+
   ipcMain.handle(
     IPC_CHANNELS.recovery.recoverableRunsList,
     createRuntimeIpcHandler({

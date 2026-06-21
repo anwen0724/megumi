@@ -1,5 +1,4 @@
-﻿import { ipcMain } from 'electron';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
@@ -16,6 +15,7 @@ import {
   ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import type { ToolService } from '../../services/tool/tool.service';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
@@ -27,12 +27,15 @@ export type ToolHandlersService = Pick<
 
 export interface RegisterToolHandlersOptions {
   logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
 }
 
 export function registerToolHandlers(
   service: ToolHandlersService,
   options: RegisterToolHandlersOptions = {},
 ): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+
   ipcMain.handle(
     IPC_CHANNELS.tool.definitionsList,
     createRuntimeIpcHandler({

@@ -505,6 +505,7 @@ describe('main runtime logger composition', () => {
     const sessionRunService = mocks.SessionRunService.mock.results[0]?.value;
     const runContextService = mocks.createDefaultRunContextService.mock.results[0]?.value;
     const settingsService = mocks.createAppSettingsService.mock.results[0]?.value;
+    const providerService = mocks.ProviderSettingsService.mock.results[0]?.value;
     const toolService = mocks.ToolService.mock.results[0]?.value;
     const recoveryService = mocks.createRecoveryService.mock.results[0]?.value;
     const artifactService = mocks.ArtifactService.mock.results[0]?.value;
@@ -647,6 +648,7 @@ describe('main runtime logger composition', () => {
     }));
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith({
       isWorkspaceRootAllowed: expect.any(Function),
+      openPath: expect.any(Function),
     });
     const [[workspaceFilesOptions]] = mocks.createWorkspaceFilesService.mock.calls as unknown as Array<[{
       isWorkspaceRootAllowed(root: string): boolean;
@@ -655,6 +657,7 @@ describe('main runtime logger composition', () => {
     expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
+      providerService,
       settingsService,
       sessionRunService,
       runContextService,

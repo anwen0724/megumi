@@ -1,6 +1,5 @@
 // Adapts renderer settings IPC calls to the Main-owned app settings service.
 // This handler never reads or writes renderer-local storage.
-import type { IpcMain } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import {
@@ -10,6 +9,7 @@ import {
 import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
 import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
+import type { DesktopIpcMain } from '../../host/electron-ipc-main-host';
 
 export interface SettingsHandlersService {
   getResolvedSettings(): AppSettingsResolved;
@@ -17,7 +17,7 @@ export interface SettingsHandlersService {
 }
 
 export interface RegisterSettingsHandlersOptions {
-  ipcMain: Pick<IpcMain, 'handle'>;
+  ipcMain: DesktopIpcMain;
   settingsService: SettingsHandlersService;
   logger?: RuntimeLogger;
 }

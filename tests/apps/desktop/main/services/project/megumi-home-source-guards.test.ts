@@ -55,8 +55,9 @@ describe('Megumi Home source guards', () => {
     const providerHandler = readProjectFile('apps/desktop/src/main/ipc/handlers/provider.handler.ts');
     const mainComposition = readProjectFile('apps/desktop/src/main/composition/compose-provider-runtime.ts');
 
-    expect(providerHandler).toContain('createAppSettingsService');
-    expect(providerHandler).toContain('settingsPath: homePaths.settingsPath');
+    expect(providerHandler).not.toContain('createAppSettingsService');
+    expect(providerHandler).not.toContain('initializeElectronMegumiHomeSync');
+    expect(providerHandler).not.toContain('new ProviderSettingsService');
     expect(mainComposition).toContain('new ProviderSettingsService');
     expect(mainComposition).toContain('new ProviderRuntimeService');
     expect(mainComposition).not.toContain('createElectronSecretStoreService');

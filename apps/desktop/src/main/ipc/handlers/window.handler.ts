@@ -1,33 +1,28 @@
-﻿import { BrowserWindow, ipcMain } from 'electron';
-import type { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import {
+  electronWindowControlHost,
+  type DesktopWindowControlHost,
+} from '../../host/electron-window-control-host';
 
-function getSenderWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
-  return BrowserWindow.fromWebContents(event.sender);
+export interface RegisterWindowHandlersOptions {
+  ipcMain?: DesktopIpcMain;
+  windowControls?: DesktopWindowControlHost;
 }
 
-export function registerWindowHandlers(): void {
+export function registerWindowHandlers(options: RegisterWindowHandlersOptions = {}): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+  const windowControls = options.windowControls ?? electronWindowControlHost;
+
   ipcMain.handle(IPC_CHANNELS.window.minimize, (event) => {
-    getSenderWindow(event)?.minimize();
+    windowControls.minimize(event);
   });
 
   ipcMain.handle(IPC_CHANNELS.window.toggleMaximize, (event) => {
-    const window = getSenderWindow(event);
-
-    if (!window) {
-      return;
-    }
-
-    if (window.isMaximized()) {
-      window.unmaximize();
-      return;
-    }
-
-    window.maximize();
+    windowControls.toggleMaximize(event);
   });
 
   ipcMain.handle(IPC_CHANNELS.window.close, (event) => {
-    getSenderWindow(event)?.close();
+    windowControls.close(event);
   });
 }
-

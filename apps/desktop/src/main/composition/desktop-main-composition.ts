@@ -91,6 +91,7 @@ export function composeDesktopMain() {
     megumiHomePaths,
     runtimeLogger,
     appSettingsService,
+    providerService: providerRuntime.providerSettingsService,
     sessionRunService: sessionRuntime.sessionRunService,
     runContextService: sessionRuntime.runContextService,
     toolService,

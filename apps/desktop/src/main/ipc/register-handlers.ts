@@ -1,6 +1,6 @@
-﻿import { ipcMain } from 'electron';
+// Registers Desktop Main IPC channels with services assembled by composition.
 import { registerWindowHandlers } from './handlers/window.handler';
-import { registerProviderHandlers } from './handlers/provider.handler';
+import { registerProviderHandlers, type ProviderHandlersService } from './handlers/provider.handler';
 import {
   registerSettingsHandlers,
   type SettingsHandlersService,
@@ -38,9 +38,12 @@ import {
 } from './handlers/workspace-files.handler';
 import type { RecoveryService } from '../services/runtime/recovery.service';
 import type { RuntimeLogger } from '../services/runtime/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../host/electron-ipc-main-host';
 
 export interface RegisterAllHandlersOptions {
   logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
+  providerService?: ProviderHandlersService;
   settingsService?: SettingsHandlersService;
   sessionRunService?: SessionHandlersService & RunHandlersService;
   runContextService?: RunContextHandlersService;
@@ -54,8 +57,13 @@ export interface RegisterAllHandlersOptions {
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
-  registerWindowHandlers();
-  registerProviderHandlers(undefined, { logger: options.logger });
+  const ipcMain = options.ipcMain ?? electronIpcMain;
+
+  registerWindowHandlers({ ipcMain });
+
+  if (options.providerService) {
+    registerProviderHandlers(options.providerService, { logger: options.logger, ipcMain });
+  }
 
   if (options.settingsService) {
     registerSettingsHandlers({
@@ -66,28 +74,28 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
   }
 
   if (options.sessionRunService) {
-    registerSessionHandlers(options.sessionRunService, { logger: options.logger });
-    registerRunHandlers(options.sessionRunService, { logger: options.logger });
+    registerSessionHandlers(options.sessionRunService, { logger: options.logger, ipcMain });
+    registerRunHandlers(options.sessionRunService, { logger: options.logger, ipcMain });
   }
 
   if (options.runContextService) {
-    registerRunContextHandlers(options.runContextService, { logger: options.logger });
+    registerRunContextHandlers(options.runContextService, { logger: options.logger, ipcMain });
   }
 
   if (options.planService) {
-    registerPlanHandlers(options.planService, { logger: options.logger });
+    registerPlanHandlers(options.planService, { logger: options.logger, ipcMain });
   }
 
   if (options.toolService) {
-    registerToolHandlers(options.toolService, { logger: options.logger });
+    registerToolHandlers(options.toolService, { logger: options.logger, ipcMain });
   }
 
   if (options.recoveryService) {
-    registerRecoveryHandlers(options.recoveryService, { logger: options.logger });
+    registerRecoveryHandlers(options.recoveryService, { logger: options.logger, ipcMain });
   }
 
   if (options.artifactService) {
-    registerArtifactHandlers(options.artifactService, { logger: options.logger });
+    registerArtifactHandlers(options.artifactService, { logger: options.logger, ipcMain });
   }
 
   if (options.memoryService) {
@@ -99,11 +107,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
   }
 
   if (options.projectService) {
-    registerProjectHandlers(options.projectService, { logger: options.logger });
+    registerProjectHandlers(options.projectService, { logger: options.logger, ipcMain });
   }
 
   if (options.workspaceFilesService) {
-    registerWorkspaceFilesHandlers(options.workspaceFilesService, { logger: options.logger });
+    registerWorkspaceFilesHandlers(options.workspaceFilesService, { logger: options.logger, ipcMain });
   }
 }
-
