@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,7 @@ function read(path: string): string {
 
 describe('main chat stream adapter source guards', () => {
   it('keeps ChatStreamEvent adapter in main and out of renderer', () => {
-    const adapter = read('apps/desktop/src/main/services/runtime/chat-stream-event-adapter.service.ts');
+    const adapter = read('apps/desktop/src/main/projections/chat-stream/chat-stream-event-adapter.service.ts');
 
     expect(adapter).toContain('ChatStreamEventSink');
     expect(adapter).toContain('RuntimeEvent');
@@ -31,7 +31,7 @@ describe('main chat stream adapter source guards', () => {
 
   it('does not introduce assistant answer event naming in runtime adapter path', () => {
     for (const file of [
-      'apps/desktop/src/main/services/runtime/chat-stream-event-adapter.service.ts',
+      'apps/desktop/src/main/projections/chat-stream/chat-stream-event-adapter.service.ts',
       'apps/desktop/src/main/services/session/session-run.service.ts',
       'packages/ai/providers/openai-compatible.ts',
     ]) {

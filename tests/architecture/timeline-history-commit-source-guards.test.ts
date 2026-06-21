@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -42,7 +42,7 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('does not let main import renderer chat-stream projection code', () => {
-    const source = read('apps/desktop/src/main/services/session/timeline-history-commit-projector.service.ts');
+    const source = read('apps/desktop/src/main/projections/timeline/timeline-history-commit-projector.service.ts');
 
     expect(source).toContain('@megumi/shared/timeline');
     expect(source).not.toContain('features/chat-stream');
@@ -81,7 +81,7 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('keeps persistence failure out of timeline answer/process blocks', () => {
-    const source = read('apps/desktop/src/main/services/session/timeline-history-commit-projector.service.ts');
+    const source = read('apps/desktop/src/main/projections/timeline/timeline-history-commit-projector.service.ts');
 
     expect(source).toContain('recordCommitDiagnostic');
     expect(source).not.toContain('AnswerTextBlock');

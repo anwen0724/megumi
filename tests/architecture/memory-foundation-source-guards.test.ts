@@ -65,12 +65,15 @@ describe('memory foundation boundaries', () => {
   });
 
   it('wires memory markdown lifecycle sync through Desktop Main composition', () => {
-    const index = read(join(root, 'apps', 'desktop', 'src', 'main', 'index.ts'));
+    const index = [
+      read(join(root, 'apps', 'desktop', 'src', 'main', 'composition', 'compose-memory-runtime.ts')),
+      read(join(root, 'apps', 'desktop', 'src', 'main', 'composition', 'compose-session-runtime.ts')),
+    ].join('\n');
     const sessionRun = read(join(root, 'apps', 'desktop', 'src', 'main', 'services', 'session', 'session-run.service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
     expect(index).toContain('appSettingsService.getResolvedSettings().memory.enabled');
-    expect(index).toContain('memoryMarkdownSyncService: memoryRuntime.markdownSyncService');
+    expect(index).toContain('memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService');
     expect(sessionRun).toContain('syncProjectMirrorOnProjectOpened');
   });
 

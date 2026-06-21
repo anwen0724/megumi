@@ -27,6 +27,11 @@ const restoreBoundaryTerms = [
 
 const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/index.ts',
+  'apps/desktop/src/main/composition/desktop-main-composition.ts',
+  'apps/desktop/src/main/composition/compose-database.ts',
+  'apps/desktop/src/main/composition/compose-recovery-runtime.ts',
+  'apps/desktop/src/main/composition/compose-session-runtime.ts',
+  'apps/desktop/src/main/composition/compose-tool-runtime.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/main/ipc/register-handlers.ts',
   'apps/desktop/src/main/services/runtime/recovery.service.ts',

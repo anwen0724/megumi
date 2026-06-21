@@ -12,7 +12,7 @@ function read(relativePath: string): string {
 describe('runtime lifecycle docs source guards', () => {
   it('keeps current architecture docs on ToolCall and ToolExecution language', () => {
     const architecture = [
-      read('.local-docs/architecture/agent-platform-host-architecture.md'),
+      read('.local-docs/architecture/refs/agent-platform-host-architecture.md'),
       read('.local-docs/specs/20-project-architecture-rebuild/02-agent-run-main-chain.md'),
     ].join('\n');
 

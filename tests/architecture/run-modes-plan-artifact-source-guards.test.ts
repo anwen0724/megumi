@@ -91,7 +91,7 @@ describe('run modes and plan artifact source guards', () => {
 
   it('does not keep old 04-stage guard assumptions after 05 tool foundation is active', () => {
     const currentArchitecture = [
-      readProjectFile(join(ROOT, '.local-docs/architecture/agent-platform-host-architecture.md')),
+      readProjectFile(join(ROOT, '.local-docs/architecture/refs/agent-platform-host-architecture.md')),
       readProjectFile(join(ROOT, '.local-docs/specs/20-project-architecture-rebuild/02-agent-run-main-chain.md')),
     ].join('\n');
 

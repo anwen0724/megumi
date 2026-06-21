@@ -114,7 +114,7 @@ import {
   createChatStreamEventAdapter,
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
-} from '../runtime/chat-stream-event-adapter.service';
+} from '../../projections/chat-stream/chat-stream-event-adapter.service';
 import {
   AgentInstructionSourceService,
   type LoadInstructionSourcesInput,
@@ -138,7 +138,7 @@ import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
   type WorkspaceChangeFooterProjectorService,
-} from '../workspace/workspace-change-footer-projector.service';
+} from '../../projections/workspace/workspace-change-footer-projector.service';
 import {
   ToolRegistrySnapshotService,
   type RunToolRegistrySnapshotBuildInput,

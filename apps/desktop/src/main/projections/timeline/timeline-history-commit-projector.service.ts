@@ -1,7 +1,7 @@
 ﻿import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { reduceChatStreamEvent } from '@megumi/shared/timeline';
 import type { TimelineMessage } from '@megumi/shared/timeline';
-import type { ChatStreamEventSink } from '../runtime/chat-stream-event-adapter.service';
+import type { ChatStreamEventSink } from '../chat-stream/chat-stream-event-adapter.service';
 
 export interface TimelineCommitDiagnostic {
   diagnosticId: string;

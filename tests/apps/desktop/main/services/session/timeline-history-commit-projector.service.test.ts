@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   TimelineHistoryCommitProjectorService,
   type TimelineHistoryCommitRepository,
-} from '@megumi/desktop/main/services/session/timeline-history-commit-projector.service';
+} from '@megumi/desktop/main/projections/timeline/timeline-history-commit-projector.service';
 import { ChatStreamEventSchema, type ChatStreamEvent } from '@megumi/shared';
 import type {
   AnswerTextBlock,

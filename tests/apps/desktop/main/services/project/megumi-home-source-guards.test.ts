@@ -19,7 +19,10 @@ function term(...parts: string[]): string {
 
 describe('Megumi Home source guards', () => {
   it('keeps database creation on Megumi Home sqlite path in main composition', () => {
-    const source = readProjectFile('apps/desktop/src/main/index.ts');
+    const source = [
+      readProjectFile('apps/desktop/src/main/composition/desktop-main-composition.ts'),
+      readProjectFile('apps/desktop/src/main/composition/compose-database.ts'),
+    ].join('\n');
     const singleQuotedUserData = term("app.getPath('", 'userData', "')");
     const doubleQuotedUserData = term('app.getPath("', 'userData', '")');
 
@@ -50,7 +53,7 @@ describe('Megumi Home source guards', () => {
 
   it('uses Megumi Home settings when constructing provider runtime services', () => {
     const providerHandler = readProjectFile('apps/desktop/src/main/ipc/handlers/provider.handler.ts');
-    const mainComposition = readProjectFile('apps/desktop/src/main/index.ts');
+    const mainComposition = readProjectFile('apps/desktop/src/main/composition/compose-provider-runtime.ts');
 
     expect(providerHandler).toContain('createAppSettingsService');
     expect(providerHandler).toContain('settingsPath: homePaths.settingsPath');

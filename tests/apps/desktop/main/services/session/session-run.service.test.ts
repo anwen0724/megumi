@@ -20,7 +20,7 @@ import {
   type SessionRunServiceOptions,
   type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/desktop/main/services/session/session-run.service';
-import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/services/session/timeline-history-commit-projector.service';
+import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/projections/timeline/timeline-history-commit-projector.service';
 import type {
   BuildModelStepInputInput,
   BuildModelStepInputResult,

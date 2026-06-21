@@ -479,7 +479,12 @@ describe('main runtime logger composition', () => {
   });
 
   it('uses permission snapshot naming for service composition', () => {
-    const source = readFileSync(join(process.cwd(), 'apps/desktop/src/main/index.ts'), 'utf8');
+    const source = [
+      'apps/desktop/src/main/composition/compose-database.ts',
+      'apps/desktop/src/main/composition/compose-session-runtime.ts',
+    ]
+      .map((filePath) => readFileSync(join(process.cwd(), filePath), 'utf8'))
+      .join('\n');
 
     expect(source).toContain('PermissionSnapshotRepository');
     expect(source).toContain('PermissionSnapshotService');

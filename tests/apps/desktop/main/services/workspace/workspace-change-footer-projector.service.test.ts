@@ -1,6 +1,6 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkspaceChangeFooterProjectorService } from '@megumi/desktop/main/services/workspace/workspace-change-footer-projector.service';
+import { createWorkspaceChangeFooterProjectorService } from '@megumi/desktop/main/projections/workspace/workspace-change-footer-projector.service';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
