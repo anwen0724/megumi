@@ -100,6 +100,39 @@ describe('package dependency boundaries', () => {
     ).toEqual([]);
   });
 
+  it('keeps packages/command independent from input, agent, coding-agent, desktop, tools, db, and Electron', () => {
+    expect(
+      findForbiddenReferences('packages/command', [
+        /@megumi\/input(\/|['"]|$)/,
+        /@megumi\/agent(\/|['"]|$)/,
+        /@megumi\/coding-agent(\/|['"]|$)/,
+        /@megumi\/tools(\/|['"]|$)/,
+        /@megumi\/db(\/|['"]|$)/,
+        /from ['"]electron['"]/,
+        /apps\/desktop/,
+        /child_process/,
+        /\bexecFile\b/,
+        /\bspawn\b/,
+      ]),
+    ).toEqual([]);
+  });
+
+  it('keeps packages/input as input facts plus optional command handoff only', () => {
+    expect(
+      findForbiddenReferences('packages/input', [
+        /@megumi\/agent(\/|['"]|$)/,
+        /@megumi\/coding-agent(\/|['"]|$)/,
+        /@megumi\/tools(\/|['"]|$)/,
+        /@megumi\/db(\/|['"]|$)/,
+        /from ['"]electron['"]/,
+        /apps\/desktop/,
+        /\bToolCall\b/,
+        /\bPermissionDecision\b/,
+        /\bSessionRepository\b/,
+      ]),
+    ).toEqual([]);
+  });
+
   it('keeps packages/context-management independent from Host, provider, persistence, and memory packages', () => {
     expect(
       findForbiddenReferences('packages/context-management', [
