@@ -1,4 +1,5 @@
-﻿import type { ContextBudgetPolicy, ContextBudgetWarning } from '@megumi/shared/context';
+// Applies Coding Agent model-input budgeting and records per-part inclusion decisions.
+import type { ContextBudgetPolicy, ContextBudgetWarning } from '@megumi/shared/context';
 import type {
   CurrentTurnPart,
   InstructionPart,

@@ -1,4 +1,5 @@
-﻿import type {
+// Selects active-path session history, summaries, and runtime facts for model input.
+import type {
   ModelInputContextSourceKind,
   ModelInputContextSourceRef,
 } from '@megumi/shared/model';

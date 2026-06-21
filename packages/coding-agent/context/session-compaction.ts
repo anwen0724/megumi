@@ -1,4 +1,5 @@
-﻿import type { ContextBudgetPolicy } from '@megumi/shared/context';
+// Prepares session history compaction prompts and budget decisions for Coding Agent context.
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelInputContext } from '@megumi/shared/model';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {

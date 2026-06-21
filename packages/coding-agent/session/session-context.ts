@@ -1,4 +1,5 @@
-﻿import type {
+// Converts SessionContextInput facts into model context part drafts.
+import type {
   ModelInputContextExcludedSource,
 } from '@megumi/shared/model';
 import type {

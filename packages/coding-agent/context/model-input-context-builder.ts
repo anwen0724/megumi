@@ -1,4 +1,5 @@
-﻿import type { ContextBudgetPolicy } from '@megumi/shared/context';
+// Builds validated ModelInputContext objects from already selected product context parts.
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { JsonObject } from '@megumi/shared/primitives';
 import {
   ModelInputContextSchema,

@@ -1,4 +1,5 @@
-﻿import {
+// Orchestrates Coding Agent session compaction through provider and persistence ports.
+import {
   buildSessionCompactionSummaryInputContext,
   extractSessionCompactionFileMetadata,
   prepareSessionCompactionInput,
