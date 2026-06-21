@@ -1,4 +1,4 @@
-// Composes Desktop Main sources into a provider-neutral ModelInputContext for one ModelStep.
+// Composes Coding Agent product sources into a provider-neutral ModelInputContext for one ModelStep.
 // This service does not call providers, execute tools, or perform memory recall scoring.
 import {
   buildModelStepInputContextFromBuildRequest,
