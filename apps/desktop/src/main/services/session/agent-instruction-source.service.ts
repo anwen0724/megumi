@@ -1,5 +1,5 @@
 // Loads model-visible agent instruction files for Desktop Main context builds.
-// The service performs filesystem discovery only; context priority and budget stay in context-management.
+// The service performs filesystem discovery only; context priority and budget stay in @megumi/coding-agent/context.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { TextDecoder } from 'node:util';

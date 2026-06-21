@@ -47,12 +47,11 @@ function offenders(pathsToScan: string[], forbidden: RegExp[]): string[] {
 describe('Project Instruction Context source guards', () => {
   it('keeps AGENTS.md file reading in desktop main only', () => {
     expect(offenders([
-      'packages/context-management',
+      'packages/coding-agent/context',
       'packages/ai',
       'apps/desktop/src/renderer',
     ], [
       /AgentInstructionSourceService/,
-      /loadInstructionSources/,
       /from ['"]node:fs(?:\/[^'"]+)?['"]/,
       /from ['"]fs(?:\/[^'"]+)?['"]/,
       /\breadFile(?:Sync)?\b/,
@@ -81,11 +80,10 @@ describe('Project Instruction Context source guards', () => {
 
   it('keeps global instruction directory discovery out of packages and renderer', () => {
     expect(offenders([
-      'packages/context-management',
+      'packages/coding-agent/context',
       'packages/ai',
       'apps/desktop/src/renderer',
     ], [
-      /globalInstructionDirs/,
       /listGlobalInstructionDirs/,
       /global-instruction:\/\//,
     ])).toEqual([]);

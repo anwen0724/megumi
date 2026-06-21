@@ -16,6 +16,8 @@
       "@megumi/desktop/*": ["apps/desktop/src/*"],
       "@megumi/agent": ["packages/agent/index.ts"],
       "@megumi/agent/*": ["packages/agent/*"],
+      "@megumi/coding-agent": ["packages/coding-agent/index.ts"],
+      "@megumi/coding-agent/*": ["packages/coding-agent/*"],
       "@megumi/core": ["packages/core/index.ts"],
       "@megumi/core/*": ["packages/core/*"],
       "@megumi/context-management": ["packages/context-management/index.ts"],

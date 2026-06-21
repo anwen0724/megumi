@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = process.cwd();
 
 describe('workspace change managed write source guards', () => {
-  it('keeps workspace change persistence out of renderer, provider, and context-management', () => {
+  it('keeps workspace change persistence out of renderer, provider, and coding-agent context', () => {
     const forbidden = [
       'WorkspaceChangeRepository',
       'WorkspaceChangeTrackerService',
@@ -19,7 +19,7 @@ describe('workspace change managed write source guards', () => {
     ];
     const roots = [
       'apps/desktop/src/renderer',
-      'packages/context-management',
+      'packages/coding-agent/context',
       'packages/ai',
     ];
 

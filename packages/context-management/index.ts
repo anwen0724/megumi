@@ -1,5 +1,2 @@
-export * from './context-budget';
-export * from './model-input-context-builder';
-export * from './model-step-input-context';
-export * from './session-context';
-export * from './session-compaction';
+// Deprecated compatibility exports for callers not yet moved to @megumi/coding-agent/context.
+export * from '@megumi/coding-agent/context';

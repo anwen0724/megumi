@@ -143,9 +143,9 @@ describe('09 session run integration final source guards', () => {
 
   it('keeps formal context build source free of old preflight naming', () => {
     const scannedFiles = [
-      'packages/context-management/session-compaction.ts',
+      'packages/coding-agent/context/session-compaction.ts',
       'apps/desktop/src/main/services/session/session-run.service.ts',
-      'apps/desktop/src/main/services/session/session-compaction-orchestrator.service.ts',
+      'packages/coding-agent/context/session-compaction-orchestrator.ts',
     ];
     const offenders = scannedFiles.filter((path) => /\bpreflight\b/i.test(source(path)));
 

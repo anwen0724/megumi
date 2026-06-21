@@ -3,7 +3,7 @@ import {
   applyContextBudget,
   estimateModelInputContextTokens,
   type ModelInputContextPartDraft,
-} from '@megumi/context-management';
+} from '@megumi/coding-agent/context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 
 const builtAt = '2026-05-30T00:00:00.000Z';

@@ -8,7 +8,7 @@ const repoRoot = process.cwd();
 const productionRoots = [
   'apps/desktop/src',
   'packages/ai',
-  'packages/context-management',
+  'packages/coding-agent/context',
   'packages/core',
   'packages/db',
   'packages/shared',
@@ -51,7 +51,7 @@ const restoreBoundaryAllowlist = new Set([
 const forbiddenRestoreRoots = [
   'apps/desktop/src/renderer',
   'packages/ai',
-  'packages/context-management',
+  'packages/coding-agent/context',
 ];
 
 const rawContentTerms = [
@@ -90,7 +90,7 @@ describe('workspace restore source guards', () => {
     expect(matches).toEqual([]);
   });
 
-  it('keeps renderer provider and context-management away from restore persistence and safety logic', () => {
+  it('keeps renderer provider and coding-agent context away from restore persistence and safety logic', () => {
     const matches = forbiddenRestoreRoots
       .flatMap((root) => sourceFiles(path.join(repoRoot, root)))
       .flatMap((file) => forbiddenMatches(file, restoreBoundaryTerms));
@@ -98,7 +98,7 @@ describe('workspace restore source guards', () => {
     expect(matches).toEqual([]);
   });
 
-  it('keeps renderer provider and context-management from owning workspace change storage or restore safety decisions', () => {
+  it('keeps renderer provider and coding-agent context from owning workspace change storage or restore safety decisions', () => {
     const forbiddenTerms = [
       'WorkspaceChangeRepository',
       'WorkspaceRestoreService',

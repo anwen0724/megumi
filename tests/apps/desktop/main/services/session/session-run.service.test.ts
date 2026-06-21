@@ -24,8 +24,8 @@ import { TimelineHistoryCommitProjectorService } from '@megumi/desktop/main/proj
 import type {
   BuildModelStepInputInput,
   BuildModelStepInputResult,
-} from '@megumi/desktop/main/services/session/model-step-input-build.service';
-import type { SessionCompactionOrchestrationResult } from '@megumi/desktop/main/services/session/session-compaction-orchestrator.service';
+  SessionCompactionOrchestrationResult,
+} from '@megumi/coding-agent/context';
 import { PermissionSnapshotService } from '@megumi/desktop/main/services/security/permission-snapshot.service';
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelInputContext, ModelStepRuntimeRequest, SessionInstructionSourceSnapshot } from '@megumi/shared/model';

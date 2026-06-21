@@ -141,7 +141,7 @@ describe('memory foundation boundaries', () => {
     const files = [
       ...productionFilesUnder('packages', 'shared'),
       ...productionFilesUnder('packages', 'memory'),
-      ...productionFilesUnder('packages', 'context-management'),
+      ...productionFilesUnder('packages', 'coding-agent'),
       ...productionFilesUnder('packages', 'core'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'renderer', 'entities', 'memory'),

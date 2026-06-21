@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ModelStepInputBuildService } from '@megumi/desktop/main/services/session/model-step-input-build.service';
+import { ModelStepInputBuildService } from '@megumi/coding-agent/context';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,

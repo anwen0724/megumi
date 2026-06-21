@@ -37,10 +37,10 @@ const oldModelInputPathNames = [
 ];
 
 describe('context budget and model input chain boundaries', () => {
-  it('keeps context-management builder APIs centered on ContextBudgetPolicy', () => {
+  it('keeps coding-agent context builder APIs centered on ContextBudgetPolicy', () => {
     const source = [
-      read('packages/context-management/model-input-context-builder.ts'),
-      read('packages/context-management/model-step-input-context.ts'),
+      read('packages/coding-agent/context/model-input-context-builder.ts'),
+      read('packages/coding-agent/context/model-step-input-context.ts'),
     ].join('\n');
 
     expect(source).toContain('budgetPolicy?: ContextBudgetPolicy');
@@ -50,8 +50,8 @@ describe('context budget and model input chain boundaries', () => {
     expect(source).not.toMatch(/\bkeepRecentTokens\?:/);
   });
 
-  it('keeps context-management independent from RunContext budget result inputs', () => {
-    const source = read('packages/context-management/model-step-input-context.ts');
+  it('keeps coding-agent context independent from RunContext budget result inputs', () => {
+    const source = read('packages/coding-agent/context/model-step-input-context.ts');
 
     expect(source).not.toContain('@megumi/shared/run');
     expect(source).not.toContain('runContext?:');
@@ -62,10 +62,10 @@ describe('context budget and model input chain boundaries', () => {
 
   it('keeps final budget decisions inside the context budget executor', () => {
     const sourceBuilders = [
-      read('packages/context-management/model-step-input-context.ts'),
-      read('packages/context-management/session-context.ts'),
+      read('packages/coding-agent/context/model-step-input-context.ts'),
+      read('packages/coding-agent/session/session-context.ts'),
     ].join('\n');
-    const budgetExecutor = read('packages/context-management/context-budget.ts');
+    const budgetExecutor = read('packages/coding-agent/context/context-budget.ts');
 
     expect(sourceBuilders).not.toContain('budgetStatus:');
     expect(sourceBuilders).not.toContain('outside_recent_session_window');
@@ -101,9 +101,9 @@ describe('context budget and model input chain boundaries', () => {
     ].join('\n');
 
     expect(source).not.toContain('apply' + 'ContextBudget');
-    expect(source).not.toContain('@megumi/context-management/' + 'context-budget');
-    expect(source).not.toMatch(/from ['"]@megumi\/context-management\/context-budget['"]/);
-    expect(source).not.toMatch(/from ['"]@megumi\/context-management\/context-budget\.js['"]/);
+    expect(source).not.toContain('@megumi/coding-agent/context/' + 'context-budget');
+    expect(source).not.toMatch(/from ['"]@megumi\/coding-agent\/context\/context-budget['"]/);
+    expect(source).not.toMatch(/from ['"]@megumi\/coding-agent\/context\/context-budget\.js['"]/);
   });
 
   it('keeps shared contracts free of budget algorithms and draft internals', () => {

@@ -6,9 +6,9 @@ import {
   prepareSessionCompactionInput,
   serializeSessionCompactionInput,
   shouldRunSessionCompaction,
-} from '@megumi/context-management/session-compaction';
-import { estimateModelInputContextTokens } from '@megumi/context-management/context-budget';
-import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
+} from '@megumi/coding-agent/context/session-compaction';
+import { estimateModelInputContextTokens } from '@megumi/coding-agent/context/context-budget';
+import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/context/model-step-input-context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
   SessionContextInput,
@@ -319,13 +319,13 @@ describe('extractSessionCompactionFileMetadata', () => {
       '## Goal',
       'Continue 09.',
       '<read-files>',
-      'packages/context-management/session-compaction.ts',
+      'packages/coding-agent/context/session-compaction.ts',
       '</read-files>',
       '<modified-files>',
       'apps/desktop/src/main/services/session-run.service.ts',
       '</modified-files>',
     ].join('\n'))).toEqual({
-      readFiles: ['packages/context-management/session-compaction.ts'],
+      readFiles: ['packages/coding-agent/context/session-compaction.ts'],
       modifiedFiles: ['apps/desktop/src/main/services/session-run.service.ts'],
     });
   });

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveModelStepEffectiveCwd } from '@megumi/desktop/main/services/session/model-step-effective-cwd';
+import { resolveModelStepEffectiveCwd } from '@megumi/coding-agent/context';
 
 describe('resolveModelStepEffectiveCwd', () => {
   it('defaults to the project root when no requested cwd is provided', () => {

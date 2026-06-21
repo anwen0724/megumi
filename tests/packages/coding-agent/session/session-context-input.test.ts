@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
-import { SessionContextInputService } from '@megumi/desktop/main/services/session/session-context-input.service';
+import { SessionContextInputService } from '@megumi/coding-agent/session';
 import type { ModelInputContextSourceKind, ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { SessionMessage } from '@megumi/shared/session';

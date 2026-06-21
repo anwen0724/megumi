@@ -100,6 +100,21 @@ describe('package dependency boundaries', () => {
     ).toEqual([]);
   });
 
+  it('keeps packages/coding-agent independent from desktop, db, core, and Electron', () => {
+    expect(
+      findForbiddenReferences('packages/coding-agent', [
+        /@megumi\/desktop(\/|['"]|$)/,
+        /@megumi\/db(\/|['"]|$)/,
+        /@megumi\/core(\/|['"]|$)/,
+        /from ['"]electron['"]/,
+        /apps\/desktop/,
+        /better-sqlite3/,
+        /\bBrowserWindow\b/,
+        /\bipcMain\b/,
+      ]),
+    ).toEqual([]);
+  });
+
   it('keeps packages/command independent from input, agent, coding-agent, desktop, tools, db, and Electron', () => {
     expect(
       findForbiddenReferences('packages/command', [
@@ -133,20 +148,23 @@ describe('package dependency boundaries', () => {
     ).toEqual([]);
   });
 
-  it('keeps packages/context-management independent from Host, provider, persistence, and memory packages', () => {
-    expect(
-      findForbiddenReferences('packages/context-management', [
-        /@megumi\/ai(\/|['"]|$)/,
-        /@megumi\/db(\/|['"]|$)/,
-        /@megumi\/memory(\/|['"]|$)/,
-        /@megumi\/tools(\/|['"]|$)/,
-        /@megumi\/security(\/|['"]|$)/,
+  it('keeps packages/context-management as deprecated compatibility re-exports only', () => {
+    const files = walkSourceFiles(path.join(root, 'packages/context-management'));
+    const violations = files.flatMap((file) => {
+      const source = fs.readFileSync(file, 'utf8');
+      const invalid = [
+        /\bexport function\b/,
+        /\bexport class\b/,
+        /\bexport interface\b/,
         /from ['"]electron['"]/,
-        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
-        /from ['"]fs(?:\/[^'"]+)?['"]/,
+        /@megumi\/db(\/|['"]|$)/,
         /apps\/desktop/,
-      ]),
-    ).toEqual([]);
+      ].filter((pattern) => pattern.test(source));
+
+      return invalid.map((pattern) => `${relativePath(file)} matches ${pattern}`);
+    });
+
+    expect(violations).toEqual([]);
   });
 
   it('keeps packages/db independent from runtime providers, core, Electron, and app code', () => {

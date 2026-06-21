@@ -5,11 +5,11 @@ import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { SessionCompactionEntry } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session';
-import { buildModelStepInputContextFromSources } from '@megumi/context-management/model-step-input-context';
+import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/context/model-step-input-context';
 import {
   SessionCompactionOrchestrator,
   type SessionCompactionOrchestratorRepository,
-} from '@megumi/desktop/main/services/session/session-compaction-orchestrator.service';
+} from '@megumi/coding-agent/context';
 
 const builtAt = '2026-05-31T12:00:00.000Z';
 const budgetPolicy: ContextBudgetPolicy = {
@@ -208,7 +208,7 @@ function completedSummaryText(): string {
     '## Goal',
     'Continue the 09 work.',
     '<read-files>',
-    'packages/context-management/session-compaction.ts',
+    'packages/coding-agent/context/session-compaction.ts',
     '</read-files>',
     '<modified-files>',
     'apps/desktop/src/main/services/session/session-run.service.ts',
@@ -282,7 +282,7 @@ describe('SessionCompactionOrchestrator', () => {
         metadata: {
           previousCompactionId: 'summary-1',
           summarizedSourceCount: 3,
-          readFiles: ['packages/context-management/session-compaction.ts'],
+          readFiles: ['packages/coding-agent/context/session-compaction.ts'],
           modifiedFiles: ['apps/desktop/src/main/services/session/session-run.service.ts'],
         },
       }),

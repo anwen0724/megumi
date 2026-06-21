@@ -19,7 +19,21 @@ import {
   type ToolApprovalResumePort,
   type ToolCallHandlerPort,
 } from '@megumi/agent';
-import type { ModelInputMemoryRecallSource } from '@megumi/context-management/model-step-input-context';
+import {
+  ModelStepInputBuildService,
+  SessionCompactionOrchestrator,
+  type BuildModelStepInputFailure,
+  type BuildModelStepInputInput,
+  type BuildModelStepInputResult,
+  type CompactIfNeededInput,
+  type LoadInstructionSourcesInput,
+  type ModelInputMemoryRecallSource,
+  type SessionCompactionOrchestrationResult,
+} from '@megumi/coding-agent/context';
+import {
+  SessionContextInputService,
+  type BuildSessionContextInputFromRepositoryInput,
+} from '@megumi/coding-agent/session';
 import {
   createRunCompletedEvent,
   createRunFailedEvent,
@@ -115,25 +129,7 @@ import {
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
 } from '../../projections/chat-stream/chat-stream-event-adapter.service';
-import {
-  AgentInstructionSourceService,
-  type LoadInstructionSourcesInput,
-} from './agent-instruction-source.service';
-import {
-  SessionContextInputService,
-  type BuildSessionContextInputFromRepositoryInput,
-} from './session-context-input.service';
-import {
-  ModelStepInputBuildService,
-  type BuildModelStepInputFailure,
-  type BuildModelStepInputInput,
-  type BuildModelStepInputResult,
-} from './model-step-input-build.service';
-import {
-  SessionCompactionOrchestrator,
-  type CompactIfNeededInput,
-  type SessionCompactionOrchestrationResult,
-} from './session-compaction-orchestrator.service';
+import { AgentInstructionSourceService } from './agent-instruction-source.service';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,

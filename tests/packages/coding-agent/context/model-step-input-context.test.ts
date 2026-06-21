@@ -5,7 +5,7 @@ import {
   buildModelStepInputContextFromBuildRequest,
   buildModelStepInputContextFromSources,
   createModelStepInputContextId,
-} from '@megumi/context-management';
+} from '@megumi/coding-agent/context';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionMessage } from '@megumi/shared/session';
 import type {
@@ -688,7 +688,7 @@ describe('buildModelStepInputContextFromSources', () => {
       reason: 'outside_keep_recent_tokens',
     }));
 
-    const source = fs.readFileSync(path.join(process.cwd(), 'packages/context-management/model-step-input-context.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'packages/coding-agent/context/model-step-input-context.ts'), 'utf8');
     expect(source).not.toContain('RunContext');
     expect(source).not.toContain('runContext?:');
   });

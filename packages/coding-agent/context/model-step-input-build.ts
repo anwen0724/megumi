@@ -4,7 +4,7 @@ import {
   buildModelStepInputContextFromBuildRequest,
   createModelStepInputContextId,
   type ModelInputMemoryRecallSource,
-} from '@megumi/context-management/model-step-input-context';
+} from './model-step-input-context';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type {
@@ -17,8 +17,14 @@ import type {
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
-import type { LoadInstructionSourcesInput } from './agent-instruction-source.service';
-import { resolveModelStepEffectiveCwd, type ModelStepEffectiveCwd } from './model-step-effective-cwd';
+import { resolveModelStepEffectiveCwd, type ModelStepEffectiveCwd } from './effective-cwd';
+
+export interface LoadInstructionSourcesInput {
+  projectRoot?: string;
+  effectiveCwd?: string;
+  globalInstructionDirs?: string[];
+  loadedAt: string;
+}
 
 export interface ModelStepInputBuildInstructionSourceService {
   loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;

@@ -3,7 +3,7 @@
   extractSessionCompactionFileMetadata,
   prepareSessionCompactionInput,
   shouldRunSessionCompaction,
-} from '@megumi/context-management/session-compaction';
+} from './session-compaction';
 import type { ModelStepCompletionResult } from '@megumi/agent';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelId } from '@megumi/shared/model';

@@ -63,8 +63,8 @@ describe('runtime lifecycle cleanup final source guards', () => {
     expect(repository).not.toContain('listToolUsesByRun');
   });
 
-  it('keeps RunContext out of context-management and final budget fields out of RunContext', () => {
-    const contextManagement = read('packages/context-management/model-step-input-context.ts');
+  it('keeps RunContext out of coding-agent context and final budget fields out of RunContext', () => {
+    const contextManagement = read('packages/coding-agent/context/model-step-input-context.ts');
     const runContext = read('packages/shared/run/context-contracts.ts');
 
     expect(contextManagement).not.toContain('@megumi/shared/run');
