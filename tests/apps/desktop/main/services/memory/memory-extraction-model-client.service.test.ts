@@ -1,21 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { materializeModelStepOpenAICompatibleRequest } from '@megumi/ai/prompt/message-mapper';
-import type { AiModelStepCompletionResult } from '@megumi/ai/types';
+import type { ModelStepCompletionResult } from '@megumi/ai/compat/model-step-types';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { MemoryExtractionModelClientService } from '@megumi/desktop/main/services/memory/memory-extraction-model-client.service';
 
 class FakeModelStepProvider {
   requests: ModelStepRuntimeRequest[] = [];
 
-  constructor(private readonly result: AiModelStepCompletionResult) {}
+  constructor(private readonly result: ModelStepCompletionResult) {}
 
-  async completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult> {
+  async completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult> {
     this.requests.push(request);
     return this.result;
   }
 }
 
-function providerFailure(): AiModelStepCompletionResult {
+function providerFailure(): ModelStepCompletionResult {
   return {
     ok: false,
     error: {
@@ -58,14 +57,6 @@ describe('MemoryExtractionModelClientService', () => {
     const request = provider.requests[0];
     expect(request).toBeDefined();
 
-    let materialized: ReturnType<typeof materializeModelStepOpenAICompatibleRequest> | undefined;
-    expect(() => {
-      materialized = materializeModelStepOpenAICompatibleRequest(request!);
-    }).not.toThrow();
-    expect(materialized?.body.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ role: 'user' }),
-    ]));
-
     expect(request).toMatchObject({
       requestId: 'memory-extraction-request-1',
       sessionId: 'session-1',
@@ -80,6 +71,9 @@ describe('MemoryExtractionModelClientService', () => {
         stepId: 'memory-extraction:run-1',
       },
     });
+    expect(request?.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'current_turn', role: 'user' }),
+    ]));
     expect(request?.inputContext.parts).toEqual([
       expect.objectContaining({
         kind: 'instruction',

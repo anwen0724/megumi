@@ -10,7 +10,7 @@ import {
   runTurn,
 } from '@megumi/core/agent-runtime';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/agent-runtime';
-import type { AiModelStepCompletionResult } from '@megumi/ai/types';
+import type { ModelStepCompletionResult } from '@megumi/ai/compat/model-step-types';
 import {
   runModelToolLoop,
   type PendingToolApprovalContinuation,
@@ -174,7 +174,7 @@ export interface SessionRunContextService {
 
 export interface SessionRunModelStepProvider {
   streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
-  completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult>;
+  completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult>;
   cancelModelStep(requestId: string): boolean;
 }
 

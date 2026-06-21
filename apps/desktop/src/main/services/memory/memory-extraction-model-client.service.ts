@@ -1,13 +1,13 @@
 // Adapts memory extraction prompts to hidden model-step requests.
 // The provider sees a normal ModelStepRuntimeRequest; memory persistence stays in host services.
 import type { MemoryExtractionPrompt } from '@megumi/memory';
-import type { AiModelStepCompletionResult } from '@megumi/ai/types';
+import type { ModelStepCompletionResult } from '@megumi/ai/compat/model-step-types';
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId } from '@megumi/shared/provider';
 
 export interface MemoryExtractionModelStepProvider {
-  completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult>;
+  completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult>;
 }
 
 export interface ExtractMemoryCandidatesInput {

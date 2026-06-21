@@ -1,17 +1,10 @@
-import { AI_PROVIDER_DEFAULTS } from '../models';
-import type { Clock, FetchLike } from '../types';
-import { createOpenAICompatibleAdapter } from './openai-compatible';
+// DeepSeek preset for the OpenAI-compatible provider adapter.
+import { createOpenAICompatibleAdapter, type FetchLike } from './openai-compatible';
 
-export interface DeepSeekAdapterOptions {
-  fetch: FetchLike;
-  clock?: Clock;
-}
-
-export function createDeepSeekAdapter(options: DeepSeekAdapterOptions) {
+export function createDeepSeekProviderAdapter(options: { fetch: FetchLike }) {
   return createOpenAICompatibleAdapter({
     providerId: 'deepseek',
-    defaultBaseUrl: AI_PROVIDER_DEFAULTS.deepseek.baseUrl ?? 'https://api.deepseek.com',
+    baseUrl: 'https://api.deepseek.com',
     fetch: options.fetch,
-    clock: options.clock,
   });
 }

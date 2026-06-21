@@ -1,149 +1,128 @@
-﻿import type { ChatTokenUsagePayload } from '@megumi/shared/runtime';
+// Defines assistant message stream events around content block lifecycles.
+import { z } from 'zod';
+import {
+  AssistantContentBlockSchema,
+  AssistantMessageSchema,
+  type AssistantContentBlock,
+  type AssistantMessage,
+} from './message';
+import { type ModelContextInput } from './context';
+import { AssistantMessageEventStream } from './event-stream';
+import { createProviderError } from './errors';
+import { type Model } from './model';
+import { type AiRequestOptions } from './request';
+import { type ToolSet } from './tool-set';
 
-export interface OpenAICompatibleStreamChunk {
-  choices?: Array<{
-    delta?: {
-      content?: string | null;
-      reasoning_content?: string | null;
-      tool_calls?: Array<{
-        index?: number;
-        id?: string;
-        type?: string;
-        function?: {
-          name?: string;
-          arguments?: string;
-        };
-      }>;
-    };
-    finish_reason?: string | null;
-  }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
-}
+export const TextDeltaSchema = z.object({ type: z.literal('text_delta'), text: z.string() }).strict();
+export const ThinkingDeltaSchema = z.object({ type: z.literal('thinking_delta'), thinking: z.string() }).strict();
+export const ToolCallDeltaSchema = z
+  .object({
+    type: z.literal('tool_call_delta'),
+    id: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
+    argumentsTextDelta: z.string().optional(),
+  })
+  .strict();
 
-export type OpenAICompatibleStreamResult =
-  | {
-      type: 'delta';
-      delta: string;
-    }
-  | {
-      type: 'reasoning_delta';
-      delta: string;
-    }
-  | {
-      type: 'tool_call_delta';
-      index: number;
-      id?: string;
-      toolType?: string;
-      name?: string;
-      argumentsDelta?: string;
-    }
-  | {
-      type: 'finish';
-      finishReason: string;
-    }
-  | {
-      type: 'usage';
-      usage: ChatTokenUsagePayload;
-    };
+export const AssistantContentBlockDeltaSchema = z.discriminatedUnion('type', [
+  TextDeltaSchema,
+  ThinkingDeltaSchema,
+  ToolCallDeltaSchema,
+]);
+export type AssistantContentBlockDelta = z.infer<typeof AssistantContentBlockDeltaSchema>;
 
-export async function* parseOpenAICompatibleSseStream(
-  body: ReadableStream<Uint8Array> | null,
-): AsyncIterable<OpenAICompatibleStreamResult> {
-  if (!body) {
-    throw new Error('Provider response did not include a stream body.');
-  }
+export const ToolCallStartContentBlockSchema = z
+  .object({
+    type: z.literal('toolCall'),
+    id: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
+    argumentsText: z.string().optional(),
+  })
+  .strict();
 
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+export const AssistantContentBlockStartSchema = z.discriminatedUnion('type', [
+  AssistantContentBlockSchema.options[0],
+  AssistantContentBlockSchema.options[1],
+  ToolCallStartContentBlockSchema,
+]);
 
-  while (true) {
-    const { done, value } = await reader.read();
+export type AssistantContentBlockStart = z.infer<typeof AssistantContentBlockStartSchema>;
 
-    if (done) {
-      break;
-    }
+export const AssistantStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('message_start'), messageId: z.string().min(1), role: z.literal('assistant') }).strict(),
+  z.object({ type: z.literal('content_block_start'), index: z.number().int().nonnegative(), block: AssistantContentBlockStartSchema }).strict(),
+  z.object({ type: z.literal('content_block_delta'), index: z.number().int().nonnegative(), delta: AssistantContentBlockDeltaSchema }).strict(),
+  z.object({ type: z.literal('content_block_end'), index: z.number().int().nonnegative(), block: AssistantContentBlockSchema }).strict(),
+  z.object({ type: z.literal('message_end'), message: AssistantMessageSchema }).strict(),
+  z.object({
+    type: z.literal('error'),
+    reason: z.enum(['error', 'aborted']),
+    message: AssistantMessageSchema,
+  }).strict(),
+]);
 
-    buffer += decoder.decode(value, { stream: true });
+export type AssistantStreamEvent =
+  | { type: 'message_start'; messageId: string; role: 'assistant' }
+  | { type: 'content_block_start'; index: number; block: AssistantContentBlockStart }
+  | { type: 'content_block_delta'; index: number; delta: AssistantContentBlockDelta }
+  | { type: 'content_block_end'; index: number; block: AssistantContentBlock }
+  | { type: 'message_end'; message: AssistantMessage }
+  | { type: 'error'; reason: 'error' | 'aborted'; message: AssistantMessage };
 
-    const parts = buffer.split('\n\n');
-    buffer = parts.pop() ?? '';
-
-    for (const part of parts) {
-      yield* parseSsePart(part);
-    }
-  }
-
-  buffer += decoder.decode();
-
-  if (buffer.trim()) {
-    yield* parseSsePart(buffer);
-  }
-}
-
-function* parseSsePart(part: string): Iterable<OpenAICompatibleStreamResult> {
-  const dataLines = part
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice('data:'.length).trim());
-
-  for (const data of dataLines) {
-    if (!data || data === '[DONE]') {
-      continue;
-    }
-
-    const chunk = JSON.parse(data) as OpenAICompatibleStreamChunk;
-    const choice = chunk.choices?.[0];
-    const delta = choice?.delta?.content;
-    const reasoningDelta = choice?.delta?.reasoning_content;
-
-    if (typeof reasoningDelta === 'string') {
-      yield {
-        type: 'reasoning_delta',
-        delta: reasoningDelta,
-      };
-    }
-
-    if (typeof delta === 'string') {
-      yield {
-        type: 'delta',
-        delta,
-      };
-    }
-
-    for (const toolCall of choice?.delta?.tool_calls ?? []) {
-      yield {
-        type: 'tool_call_delta',
-        index: toolCall.index ?? 0,
-        ...(toolCall.id ? { id: toolCall.id } : {}),
-        ...(toolCall.type ? { toolType: toolCall.type } : {}),
-        ...(toolCall.function?.name ? { name: toolCall.function.name } : {}),
-        ...(toolCall.function?.arguments !== undefined ? { argumentsDelta: toolCall.function.arguments } : {}),
-      };
-    }
-
-    if (choice?.finish_reason) {
-      yield {
-        type: 'finish',
-        finishReason: choice.finish_reason,
-      };
-    }
-
-    if (chunk.usage) {
-      yield {
-        type: 'usage',
-        usage: {
-          inputTokens: chunk.usage.prompt_tokens,
-          outputTokens: chunk.usage.completion_tokens,
-          totalTokens: chunk.usage.total_tokens,
+export function stream(
+  model: Model,
+  context: ModelContextInput,
+  options: AiRequestOptions,
+  toolSet?: ToolSet,
+): AssistantMessageEventStream {
+  if (!options.registry) {
+    const error = createProviderError({
+      providerId: model.providerId,
+      modelId: model.modelId,
+      code: 'registry_error',
+      message: 'AI provider registry is required.',
+      retryable: false,
+    });
+    return AssistantMessageEventStream.from([
+      {
+        type: 'error',
+        reason: 'error',
+        message: {
+          role: 'assistant',
+          content: [],
+          stopReason: 'error',
+          error,
         },
-      };
-    }
+      },
+    ]);
+  }
+
+  try {
+    const adapter = options.registry.get(model.providerId);
+    return adapter.stream({ model, context, toolSet, options });
+  } catch (error) {
+    const providerError = createProviderError({
+      providerId: model.providerId,
+      modelId: model.modelId,
+      code: 'registry_error',
+      message: 'AI provider registry lookup failed.',
+      retryable: false,
+      details: {
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      },
+    });
+    return AssistantMessageEventStream.from([
+      {
+        type: 'error',
+        reason: 'error',
+        message: {
+          role: 'assistant',
+          content: [],
+          stopReason: 'error',
+          error: providerError,
+        },
+      },
+    ]);
   }
 }
-

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModelInputContext } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { AiModelStepCompletionResult, ProviderRuntimeConfig } from '@megumi/ai/types';
+import type { ModelStepCompletionResult, ProviderRuntimeConfig } from '@megumi/ai/compat/model-step-types';
 import {
   ModelStepProviderService,
   type ModelStepProviderRegistryPort,
@@ -165,7 +165,7 @@ describe('ModelStepProviderService', () => {
   });
 
   it('resolves runtime config and completes model steps through the selected adapter', async () => {
-    const completion: AiModelStepCompletionResult = {
+    const completion: ModelStepCompletionResult = {
       ok: true,
       text: '{ "candidates": [] }',
       finishReason: 'stop',

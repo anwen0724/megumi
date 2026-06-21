@@ -1,315 +1,52 @@
-﻿import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { RuntimeErrorCode } from '@megumi/shared/runtime';
-import type { ChatTokenUsagePayload, RuntimeEvent } from '@megumi/shared/runtime';
-import {
-  createModelStepProviderStateRecordedEvent,
-  createModelStepStartedEvent,
-  createModelThinkingCompletedEvent,
-  createModelThinkingDeltaEvent,
-  createModelThinkingStartedEvent,
-  createModelToolCallDetectedEvent,
-  createRuntimeEvent,
-  createRunCancelledEvent,
-  createRunFailedEvent,
-  createToolCallCreatedEvent,
-} from '@megumi/shared/runtime';
-import {
-  materializeModelStepOpenAICompatibleRequest,
-  OpenAICompatibleRequestMaterializationError,
-  type OpenAICompatibleProviderRequestTrace,
-} from '../prompt/message-mapper';
-import { parseOpenAICompatibleSseStream } from '../stream';
-import {
-  type AiModelStepCompletionResult,
-  type AiModelStepCompletionToolCall,
-  type AiModelStepAdapterRequest,
-  type AiProviderAdapter,
-  type OpenAICompatibleToolCall,
-  type OpenAICompatibleAdapterOptions,
-  systemClock,
-} from '../types';
+// Implements OpenAI-compatible model access as an AssistantMessageEventStream.
+import { type JsonObject } from '@megumi/shared/primitives/json';
+import { AssistantMessageEventStream } from '../event-stream';
+import { createProviderError, type ProviderErrorCode } from '../errors';
+import { type AssistantContentBlock, type AssistantMessage } from '../message';
+import { createProviderAdapter, type ProviderAdapter } from '../provider';
+import { type ProviderAdapterRequest, type ProviderCredential } from '../request';
+import { type AssistantStreamEvent } from '../stream';
+import { type TokenUsage } from '../usage';
 
-export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOptions): AiProviderAdapter {
-  const clock = options.clock ?? systemClock;
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-  return {
-    providerId: options.providerId,
-    async completeModelStep(input: AiModelStepAdapterRequest): Promise<AiModelStepCompletionResult> {
-      const requestShape = hasToolResultContinuation(input.request) ? 'tool_continuation' : 'initial';
-      let diagnostics: JsonObject = createProviderRequestDiagnosticsBase(requestShape, 'chat_completions_complete');
-      let failureStage: ProviderFailureStage = 'materialization';
+export interface OpenAICompatibleAdapterOptions {
+  providerId: string;
+  baseUrl: string;
+  fetch: FetchLike;
+}
 
-      try {
-        const materializedRequest = materializeModelStepOpenAICompatibleRequest(input.request);
-        const { stream: _stream, stream_options: _streamOptions, ...streamingBody } = materializedRequest.body;
-        const requestBody = {
-          ...streamingBody,
-          stream: false,
+interface ToolCallAccumulator {
+  id?: string;
+  name?: string;
+  argumentsText: string;
+}
+
+interface OpenAICompatibleStreamChunk {
+  choices?: Array<{
+    delta?: {
+      content?: string | null;
+      reasoning_content?: string | null;
+      tool_calls?: Array<{
+        index?: number;
+        id?: string;
+        function?: {
+          name?: string;
+          arguments?: string;
         };
-        diagnostics = createProviderRequestDiagnostics(requestBody, requestShape, materializedRequest.trace, 'chat_completions_complete');
-        failureStage = 'fetch_throw';
-
-        const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${input.config.apiKey}`,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: input.signal,
-        });
-
-        if (!response.ok) {
-          return {
-            ok: false,
-            error: providerRuntimeError(input, mapHttpStatus(response.status), {
-              ...diagnostics,
-              failureStage: 'http_error',
-              httpStatus: response.status,
-              httpStatusText: response.statusText,
-              ...(await providerErrorBodyPreview(response)),
-            }),
-          };
-        }
-
-        failureStage = 'response_parse_error';
-        const completion = await parseOpenAICompatibleCompletionResponse(response);
-        const providerStates = completion.reasoningContent
-          ? [{
-              modelStepId: modelStepIdFor(input),
-              providerId: input.config.providerId,
-              modelId: String(input.request.modelId || input.config.defaultModelId),
-              blocks: [{
-                type: 'reasoning_content' as const,
-                text: completion.reasoningContent,
-              }],
-            }]
-          : undefined;
-
-        return {
-          ok: true,
-          text: completion.content,
-          ...(completion.toolCalls.length > 0 ? { toolCalls: completion.toolCalls.map(mapCompletionToolCall) } : {}),
-          ...(providerStates ? { providerStates } : {}),
-          ...(completion.finishReason ? { finishReason: completion.finishReason } : {}),
-          ...(completion.usage ? { usage: completion.usage } : {}),
-        };
-      } catch (error) {
-        if (error instanceof OpenAICompatibleRequestMaterializationError) {
-          return {
-            ok: false,
-            error: providerRuntimeError(input, 'runtime_protocol_violation', {
-              ...diagnostics,
-              failureStage: 'materialization',
-              materializationCode: error.code,
-              ...error.details,
-            }, {
-              message: 'Provider request materialization failed.',
-              retryable: false,
-            }),
-          };
-        }
-
-        if (isAbortError(error) || input.signal?.aborted) {
-          return {
-            ok: false,
-            error: providerRuntimeError(input, 'runtime_cancelled', {
-              ...diagnostics,
-              failureStage,
-            }, {
-              message: 'Provider request was cancelled.',
-              retryable: false,
-            }),
-          };
-        }
-
-        return {
-          ok: false,
-          error: providerRuntimeError(input, 'provider_network_error', {
-            ...diagnostics,
-            failureStage,
-            ...errorDiagnostics(error),
-          }),
-        };
-      }
-    },
-    async *streamModelStep(input: AiModelStepAdapterRequest): AsyncIterable<RuntimeEvent> {
-      const requestShape = hasToolResultContinuation(input.request) ? 'tool_continuation' : 'initial';
-      let diagnostics: JsonObject = createProviderRequestDiagnosticsBase(requestShape, 'chat_completions_stream');
-      let failureStage: ProviderFailureStage = 'materialization';
-
-      try {
-        const materializedRequest = materializeModelStepOpenAICompatibleRequest(input.request);
-        const requestBody = materializedRequest.body;
-        diagnostics = createProviderRequestDiagnostics(requestBody, requestShape, materializedRequest.trace, 'chat_completions_stream');
-        failureStage = 'fetch_throw';
-
-        const response = await options.fetch(buildChatCompletionsUrl(input.config.baseUrl ?? options.defaultBaseUrl), {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${input.config.apiKey}`,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: input.signal,
-        });
-
-        if (!response.ok) {
-          yield failedModelStepEvent(input, mapHttpStatus(response.status), clock.now(), {
-            ...diagnostics,
-            failureStage: 'http_error',
-            httpStatus: response.status,
-            httpStatusText: response.statusText,
-            ...(await providerErrorBodyPreview(response)),
-          });
-          return;
-        }
-
-        let usage: ChatTokenUsagePayload | undefined;
-        let content = '';
-        let reasoningContent = '';
-        let reasoningStarted = false;
-        let finishReason: string | undefined;
-        const toolCalls = new Map<number, OpenAICompatibleToolCallAccumulator>();
-        const detectedToolCallIds = new Set<string>();
-
-        yield createModelStepStarted(input, clock.now());
-        failureStage = 'stream_parse_error';
-
-        for await (const item of parseOpenAICompatibleSseStream(response.body)) {
-          if (item.type === 'delta') {
-            content += item.delta;
-            yield createModelOutputDelta(input, item.delta, clock.now());
-          } else if (item.type === 'reasoning_delta') {
-            reasoningContent += item.delta;
-            if (!reasoningStarted) {
-              reasoningStarted = true;
-              yield createModelThinkingStarted(input, clock.now());
-            }
-            yield createModelThinkingDelta(input, item.delta, clock.now());
-          } else if (item.type === 'tool_call_delta') {
-            const toolCall = appendToolCallDelta(toolCalls, item);
-            if (isDetectableToolCall(toolCall) && !detectedToolCallIds.has(toolCall.id)) {
-              detectedToolCallIds.add(toolCall.id);
-              yield createModelToolCallDetected(input, toolCall, clock.now());
-            }
-          } else if (item.type === 'finish') {
-            finishReason = item.finishReason;
-          } else if (item.type === 'usage') {
-            usage = item.usage;
-          }
-        }
-
-        if (reasoningStarted) {
-          yield createModelThinkingCompleted(input, clock.now());
-        }
-
-        if (reasoningContent.length > 0) {
-          yield createModelStepProviderStateRecorded(input, reasoningContent, clock.now());
-        }
-
-        for (const toolCall of [...toolCalls.entries()].sort(([left], [right]) => left - right).map(([, value]) => value)) {
-          if (isCompleteToolCall(toolCall)) {
-            yield createModelStepToolCallCreated(input, toolCall, clock.now());
-          }
-        }
-
-        yield createModelStepCompleted(input, {
-          content,
-          finishReason,
-          usage,
-        }, clock.now());
-      } catch (error) {
-        if (error instanceof OpenAICompatibleRequestMaterializationError) {
-          yield failedModelStepEvent(input, 'runtime_protocol_violation', clock.now(), {
-            ...diagnostics,
-            failureStage: 'materialization',
-            materializationCode: error.code,
-            ...error.details,
-          }, {
-            message: 'Provider request materialization failed.',
-            retryable: false,
-          });
-          return;
-        }
-
-        if (isAbortError(error) || input.signal?.aborted) {
-          yield createRunCancelledEvent({
-            eventId: input.eventIdFactory(),
-            request: requestRef(input),
-            runId: input.runId,
-            sequence: input.nextSequence(),
-            reason: 'Provider request was cancelled.',
-            createdAt: clock.now(),
-          });
-          return;
-        }
-
-        yield failedModelStepEvent(input, 'provider_network_error', clock.now(), {
-          ...diagnostics,
-          failureStage,
-          ...errorDiagnostics(error),
-        });
-      }
-    },
-  };
-}
-
-function buildChatCompletionsUrl(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
-}
-
-function mapHttpStatus(status: number): RuntimeErrorCode {
-  if (status === 401 || status === 403) {
-    return 'provider_auth_failed';
-  }
-
-  if (status === 429) {
-    return 'provider_rate_limited';
-  }
-
-  if (status >= 400 && status < 500) {
-    return 'provider_invalid_request';
-  }
-
-  return 'provider_network_error';
-}
-
-type ProviderFailureStage = 'materialization' | 'http_error' | 'fetch_throw' | 'stream_parse_error' | 'response_parse_error';
-type ProviderRequestShape = 'initial' | 'tool_continuation';
-
-interface OpenAICompatibleRequestDiagnosticsBody {
-  messages: Array<{ role: string; tool_calls?: unknown[] }>;
-  tools?: unknown[];
-}
-
-function createProviderRequestDiagnosticsBase(requestShape: ProviderRequestShape, operation: string): JsonObject {
-  return {
-    boundary: 'provider',
-    operation,
-    requestShape,
-  };
-}
-
-function createProviderRequestDiagnostics(
-  body: OpenAICompatibleRequestDiagnosticsBody,
-  requestShape: ProviderRequestShape,
-  trace: OpenAICompatibleProviderRequestTrace,
-  operation: string,
-): JsonObject {
-  return {
-    ...createProviderRequestDiagnosticsBase(requestShape, operation),
-    contextId: trace.contextId,
-    buildReason: trace.buildReason,
-    selectedSourceCount: trace.selectedSourceIds.length,
-    excludedSourceCount: trace.excludedSourceIds.length,
-    truncatedPartCount: trace.truncatedPartIds.length,
-    budgetWarningCount: trace.budgetWarningReasons.length,
-    messageRoles: body.messages.map((message) => message.role),
-    toolDefinitionCount: body.tools?.length ?? 0,
-    toolCallCount: body.messages.reduce((count, message) => count + (message.tool_calls?.length ?? 0), 0),
-    toolResultCount: body.messages.filter((message) => message.role === 'tool').length,
+      }>;
+    };
+    finish_reason?: string | null;
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+    };
+    prompt_cache_hit_tokens?: number;
+    prompt_cache_miss_tokens?: number;
   };
 }
 
@@ -318,27 +55,467 @@ interface OpenAICompatibleCompletionResponse {
     message?: {
       content?: string | null;
       reasoning_content?: string | null;
-      tool_calls?: OpenAICompatibleToolCall[];
+      tool_calls?: Array<{
+        id: string;
+        function: {
+          name: string;
+          arguments: string;
+        };
+      }>;
     };
     finish_reason?: string | null;
   }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
+  usage?: NonNullable<OpenAICompatibleStreamChunk['usage']>;
+}
+
+export function createOpenAICompatibleAdapter(options: OpenAICompatibleAdapterOptions): ProviderAdapter {
+  return createProviderAdapter({
+    providerId: options.providerId,
+    stream: (request) => AssistantMessageEventStream.from(streamOpenAICompatible(options, request)),
+  });
+}
+
+async function* streamOpenAICompatible(
+  options: OpenAICompatibleAdapterOptions,
+  request: ProviderAdapterRequest,
+): AsyncIterable<AssistantStreamEvent> {
+  let credential: ProviderCredential | undefined;
+  try {
+    credential = await resolveCredential(request);
+  } catch (error) {
+    yield createProviderErrorEvent({
+      code: 'credential_error',
+      message: 'Provider credential resolution failed.',
+      retryable: false,
+      providerId: options.providerId,
+      modelId: request.model.modelId,
+      details: {
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: redactSecret(error instanceof Error ? error.message : String(error)),
+      },
+    });
+    return;
+  }
+
+  let response: Response;
+  try {
+    response = await postChatCompletion(options, request, credential);
+  } catch (error) {
+    yield createProviderErrorEvent({
+      code: 'unknown_provider_error',
+      message: 'Provider request failed.',
+      retryable: true,
+      providerId: options.providerId,
+      modelId: request.model.modelId,
+      details: {
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: redactSecret(error instanceof Error ? error.message : String(error)),
+      },
+    });
+    return;
+  }
+
+  if (!response.ok) {
+    yield await createHttpErrorEvent(options.providerId, request, response);
+    return;
+  }
+
+  yield { type: 'message_start', messageId: 'assistant-0', role: 'assistant' };
+
+  if (isJsonResponse(response)) {
+    yield* streamOpenAICompatibleCompletion(options, request, response);
+    return;
+  }
+
+  let text = '';
+  let thinking = '';
+  let stopReason: string | undefined;
+  let usage: TokenUsage | undefined;
+  let textStarted = false;
+  let thinkingStarted = false;
+  const toolCalls = new Map<number, ToolCallAccumulator>();
+  const closedBlocks: AssistantContentBlock[] = [];
+
+  try {
+    for await (const chunk of parseSse(response.body)) {
+      const choice = chunk.choices?.[0];
+
+      if (chunk.usage) {
+        usage = usageFromProvider(options.providerId, request.model.modelId, chunk.usage);
+      }
+      if (choice?.finish_reason) {
+        stopReason = choice.finish_reason;
+      }
+
+      const reasoningDelta = choice?.delta?.reasoning_content;
+      if (typeof reasoningDelta === 'string' && reasoningDelta.length > 0) {
+        if (!thinkingStarted) {
+          thinkingStarted = true;
+          yield { type: 'content_block_start', index: closedBlocks.length, block: { type: 'thinking', thinking: '' } };
+        }
+        thinking += reasoningDelta;
+        yield { type: 'content_block_delta', index: closedBlocks.length, delta: { type: 'thinking_delta', thinking: reasoningDelta } };
+      }
+
+      const textDelta = choice?.delta?.content;
+      if (typeof textDelta === 'string' && textDelta.length > 0) {
+        if (thinkingStarted) {
+          const block = { type: 'thinking' as const, thinking };
+          closedBlocks.push(block);
+          yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+          thinkingStarted = false;
+        }
+        if (!textStarted) {
+          textStarted = true;
+          yield { type: 'content_block_start', index: closedBlocks.length, block: { type: 'text', text: '' } };
+        }
+        text += textDelta;
+        yield { type: 'content_block_delta', index: closedBlocks.length, delta: { type: 'text_delta', text: textDelta } };
+      }
+
+      for (const toolDelta of choice?.delta?.tool_calls ?? []) {
+        if (thinkingStarted) {
+          const block = { type: 'thinking' as const, thinking };
+          closedBlocks.push(block);
+          yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+          thinkingStarted = false;
+        }
+        if (textStarted) {
+          const block = { type: 'text' as const, text };
+          closedBlocks.push(block);
+          yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+          textStarted = false;
+        }
+
+        const index = toolDelta.index ?? 0;
+        const existing = toolCalls.get(index);
+        const next: ToolCallAccumulator = {
+          id: toolDelta.id ?? existing?.id,
+          name: toolDelta.function?.name ?? existing?.name,
+          argumentsText: `${existing?.argumentsText ?? ''}${toolDelta.function?.arguments ?? ''}`,
+        };
+        toolCalls.set(index, next);
+
+        if (!existing) {
+          const block = {
+            type: 'toolCall' as const,
+            ...(next.id ? { id: next.id } : {}),
+            ...(next.name ? { name: next.name } : {}),
+            argumentsText: '',
+          };
+          yield {
+            type: 'content_block_start',
+            index: closedBlocks.length + index,
+            block,
+          };
+        }
+
+        yield {
+          type: 'content_block_delta',
+          index: closedBlocks.length + index,
+          delta: {
+            type: 'tool_call_delta',
+            ...(toolDelta.id ? { id: toolDelta.id } : {}),
+            ...(toolDelta.function?.name ? { name: toolDelta.function.name } : {}),
+            ...(toolDelta.function?.arguments !== undefined ? { argumentsTextDelta: toolDelta.function.arguments } : {}),
+          },
+        };
+      }
+    }
+  } catch (error) {
+    yield createProviderErrorEvent({
+      code: 'stream_parse_error',
+      message: 'Provider stream could not be parsed.',
+      retryable: true,
+      providerId: options.providerId,
+      modelId: request.model.modelId,
+      details: {
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: redactSecret(error instanceof Error ? error.message : String(error)),
+      },
+    });
+    return;
+  }
+
+  if (thinkingStarted) {
+    const block = { type: 'thinking' as const, thinking };
+    closedBlocks.push(block);
+    yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+  }
+  if (textStarted) {
+    const block = { type: 'text' as const, text };
+    closedBlocks.push(block);
+    yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+  }
+
+  for (const [offset, toolCall] of Array.from(toolCalls.entries()).sort(([left], [right]) => left - right)) {
+    if (!toolCall.id || !toolCall.name) {
+      yield createProviderErrorEvent({
+        code: 'stream_parse_error',
+        message: 'Provider stream could not be parsed.',
+        retryable: true,
+        providerId: options.providerId,
+        modelId: request.model.modelId,
+        details: {
+          errorName: 'InvalidToolCall',
+          errorMessage: 'Provider tool call ended without id or name.',
+        },
+      });
+      return;
+    }
+
+    const block = {
+      type: 'toolCall' as const,
+      id: toolCall.id,
+      name: toolCall.name,
+      argumentsText: toolCall.argumentsText,
+    };
+    closedBlocks.push(block);
+    yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+  }
+
+  const message: AssistantMessage = {
+    role: 'assistant',
+    content: closedBlocks,
+    ...(stopReason ? { stopReason } : {}),
+    ...(usage ? { usage } : {}),
+  };
+
+  yield { type: 'message_end', message };
+}
+
+async function* streamOpenAICompatibleCompletion(
+  options: OpenAICompatibleAdapterOptions,
+  request: ProviderAdapterRequest,
+  response: Response,
+): AsyncIterable<AssistantStreamEvent> {
+  const completion = await parseOpenAICompatibleCompletionResponse(response);
+  const closedBlocks: AssistantContentBlock[] = [];
+
+  if (completion.reasoningContent) {
+    const block = { type: 'thinking' as const, thinking: completion.reasoningContent };
+    yield { type: 'content_block_start', index: closedBlocks.length, block: { type: 'thinking', thinking: '' } };
+    yield {
+      type: 'content_block_delta',
+      index: closedBlocks.length,
+      delta: { type: 'thinking_delta', thinking: completion.reasoningContent },
+    };
+    closedBlocks.push(block);
+    yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+  }
+
+  if (completion.content.length > 0) {
+    const block = { type: 'text' as const, text: completion.content };
+    yield { type: 'content_block_start', index: closedBlocks.length, block: { type: 'text', text: '' } };
+    yield {
+      type: 'content_block_delta',
+      index: closedBlocks.length,
+      delta: { type: 'text_delta', text: completion.content },
+    };
+    closedBlocks.push(block);
+    yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+  }
+
+  for (const toolCall of completion.toolCalls) {
+    const block = {
+      type: 'toolCall' as const,
+      id: toolCall.id,
+      name: toolCall.function.name,
+      argumentsText: toolCall.function.arguments,
+    };
+    yield { type: 'content_block_start', index: closedBlocks.length, block: { ...block, argumentsText: '' } };
+    yield {
+      type: 'content_block_delta',
+      index: closedBlocks.length,
+      delta: {
+        type: 'tool_call_delta',
+        id: toolCall.id,
+        name: toolCall.function.name,
+        argumentsTextDelta: toolCall.function.arguments,
+      },
+    };
+    closedBlocks.push(block);
+    yield { type: 'content_block_end', index: closedBlocks.length - 1, block };
+  }
+
+  yield {
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: closedBlocks,
+      ...(completion.finishReason ? { stopReason: completion.finishReason } : {}),
+      ...(completion.usage ? { usage: usageFromProvider(options.providerId, request.model.modelId, completion.usage) } : {}),
+    },
+  };
+}
+
+async function postChatCompletion(
+  options: OpenAICompatibleAdapterOptions,
+  request: ProviderAdapterRequest,
+  credential: ProviderCredential | undefined,
+): Promise<Response> {
+  const headers = credentialHeaders(credential);
+
+  return options.fetch(`${options.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers,
+    signal: request.options.signal,
+    body: JSON.stringify(buildOpenAICompatibleRequestBody(request)),
+  });
+}
+
+function credentialHeaders(credential: ProviderCredential | undefined): Record<string, string> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+
+  if (!credential) {
+    return headers;
+  }
+  if (credential.type === 'api_key' || credential.type === 'bearer_token') {
+    headers.authorization = `Bearer ${credential.value}`;
+    return headers;
+  }
+
+  for (const [name, value] of Object.entries(credential.headers)) {
+    headers[name.toLowerCase()] = value;
+  }
+  return headers;
+}
+
+function buildOpenAICompatibleRequestBody(request: ProviderAdapterRequest) {
+  const messages = [];
+
+  if (request.context.systemPrompt) {
+    messages.push({ role: 'system', content: request.context.systemPrompt });
+  }
+
+  for (const message of request.context.messages) {
+    if (message.role === 'user') {
+      messages.push({ role: 'user', content: message.content });
+      continue;
+    }
+    if (message.role === 'toolResult') {
+      messages.push({ role: 'tool', tool_call_id: message.toolCallId, content: message.content });
+      continue;
+    }
+    const textContent = message.content.filter((block) => block.type === 'text').map((block) => block.text).join('');
+    const reasoningContent = message.content.filter((block) => block.type === 'thinking').map((block) => block.thinking).join('');
+    const toolCalls = message.content.filter((block) => block.type === 'toolCall').map((block) => ({
+      id: block.id,
+      type: 'function' as const,
+      function: {
+        name: block.name,
+        arguments: block.argumentsText,
+      },
+    }));
+    const providerMessage = {
+      role: 'assistant' as const,
+      ...(textContent ? { content: textContent } : {}),
+      ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
+      ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+    };
+    messages.push(providerMessage);
+  }
+
+  const tools = request.toolSet?.map((tool) => ({
+    type: 'function' as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema,
+    },
+  }));
+
+  return {
+    model: request.model.modelId,
+    messages,
+    stream: true,
+    stream_options: { include_usage: true },
+    ...(tools && tools.length > 0 ? { tools, tool_choice: 'auto' as const } : {}),
+    // Only provider fields implemented by this adapter are materialized here.
+    ...(request.options.temperature !== undefined ? { temperature: request.options.temperature } : {}),
+    ...(request.options.maxOutputTokens !== undefined ? { max_tokens: request.options.maxOutputTokens } : {}),
+    ...(request.options.metadata ? { metadata: request.options.metadata } : {}),
+  };
+}
+
+async function resolveCredential(request: ProviderAdapterRequest): Promise<ProviderCredential | undefined> {
+  return request.options.credential
+    ?? await request.options.credentialResolver?.resolveCredential(request.model.providerId);
+}
+
+async function* parseSse(body: ReadableStream<Uint8Array> | null): AsyncIterable<OpenAICompatibleStreamChunk> {
+  if (!body) {
+    throw new Error('Provider response did not include a stream body.');
+  }
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop() ?? '';
+    for (const part of parts) {
+      yield* parseSsePart(part);
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    yield* parseSsePart(buffer);
+  }
+}
+
+function* parseSsePart(part: string): Iterable<OpenAICompatibleStreamChunk> {
+  const dataLines = part
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice('data:'.length).trim());
+
+  for (const data of dataLines) {
+    if (!data || data === '[DONE]') {
+      continue;
+    }
+    yield JSON.parse(data) as OpenAICompatibleStreamChunk;
+  }
+}
+
+function usageFromProvider(
+  providerId: string,
+  modelId: string,
+  usage: NonNullable<OpenAICompatibleStreamChunk['usage']>,
+): TokenUsage {
+  const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? usage.prompt_cache_hit_tokens;
+  const cacheWrite = usage.prompt_cache_miss_tokens;
+
+  return {
+    providerId,
+    modelId,
+    ...(usage.prompt_tokens !== undefined ? { inputTokens: usage.prompt_tokens } : {}),
+    ...(usage.completion_tokens !== undefined ? { outputTokens: usage.completion_tokens } : {}),
+    ...(usage.total_tokens !== undefined ? { totalTokens: usage.total_tokens } : {}),
+    ...(cacheRead !== undefined ? { cacheRead } : {}),
+    ...(cacheWrite !== undefined ? { cacheWrite } : {}),
   };
 }
 
 async function parseOpenAICompatibleCompletionResponse(response: Response): Promise<{
   content: string;
   reasoningContent?: string;
-  toolCalls: OpenAICompatibleToolCall[];
+  toolCalls: NonNullable<NonNullable<NonNullable<OpenAICompatibleCompletionResponse['choices']>[number]['message']>['tool_calls']>;
   finishReason?: string;
-  usage?: ChatTokenUsagePayload;
+  usage?: NonNullable<OpenAICompatibleStreamChunk['usage']>;
 }> {
   const body = await response.json() as OpenAICompatibleCompletionResponse;
   const choice = body.choices?.[0];
   const message = choice?.message;
+
   return {
     content: typeof message?.content === 'string' ? message.content : '',
     ...(typeof message?.reasoning_content === 'string' && message.reasoning_content.length > 0
@@ -346,429 +523,85 @@ async function parseOpenAICompatibleCompletionResponse(response: Response): Prom
       : {}),
     toolCalls: message?.tool_calls ?? [],
     ...(choice?.finish_reason ? { finishReason: choice.finish_reason } : {}),
-    ...(body.usage ? {
-      usage: {
-        inputTokens: body.usage.prompt_tokens,
-        outputTokens: body.usage.completion_tokens,
-        totalTokens: body.usage.total_tokens,
-      },
-    } : {}),
+    ...(body.usage ? { usage: body.usage } : {}),
   };
 }
 
-function mapCompletionToolCall(toolCall: OpenAICompatibleToolCall): AiModelStepCompletionToolCall {
-  return {
-    providerToolCallId: toolCall.id,
-    toolName: toolCall.function.name,
-    argumentsText: toolCall.function.arguments,
-  };
+function isJsonResponse(response: Response): boolean {
+  return response.headers.get('content-type')?.toLowerCase().includes('application/json') ?? false;
 }
 
-async function providerErrorBodyPreview(response: Response): Promise<JsonObject> {
-  try {
-    const body = await response.text();
-    const preview = safeDiagnosticTextPreview(body);
-    return preview ? { providerErrorBodyPreview: preview } : {};
-  } catch (error) {
-    return {
-      providerErrorBodyReadError: safeDiagnosticTextPreview(errorMessageForDiagnostic(error)),
-    };
-  }
-}
-
-function errorDiagnostics(error: unknown): JsonObject {
-  return {
-    errorName: errorNameForDiagnostic(error),
-    errorMessage: safeDiagnosticTextPreview(errorMessageForDiagnostic(error)),
-  };
-}
-
-function errorNameForDiagnostic(error: unknown): string {
-  return error instanceof Error ? error.name : typeof error;
-}
-
-function errorMessageForDiagnostic(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function safeDiagnosticTextPreview(value: string): string {
-  const maxLength = 2000;
-  return redactDiagnosticText(value).slice(0, maxLength);
-}
-
-function redactDiagnosticText(value: string): string {
-  return value
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b/g, 'Bearer [redacted]')
-    .replace(/\bsk-[A-Za-z0-9._-]{8,}\b/g, '[redacted]')
-    .replace(/\b(apiKey|api_key|token|secret|password)=([^&\s]+)/gi, '$1=[redacted]')
-    .replace(/\b(token|secret|password):\s*([^,\s]+)/gi, '$1: [redacted]')
-    .replace(/("(?:apiKey|api_key|token|secret|password|authorization|cookie)"\s*:\s*")([^"]*)(")/gi, '$1[redacted]$3');
-}
-
-interface OpenAICompatibleToolCallDelta {
-  index: number;
-  id?: string;
-  toolType?: string;
-  name?: string;
-  argumentsDelta?: string;
-}
-
-interface OpenAICompatibleToolCallAccumulator {
-  id?: string;
-  toolType?: string;
-  name?: string;
-  argumentsText: string;
-}
-
-function appendToolCallDelta(
-  toolCalls: Map<number, OpenAICompatibleToolCallAccumulator>,
-  delta: OpenAICompatibleToolCallDelta,
-): OpenAICompatibleToolCallAccumulator {
-  const current = toolCalls.get(delta.index) ?? { argumentsText: '' };
-  const next = {
-    id: delta.id ?? current.id,
-    toolType: delta.toolType ?? current.toolType,
-    name: delta.name ?? current.name,
-    argumentsText: current.argumentsText + (delta.argumentsDelta ?? ''),
-  };
-
-  toolCalls.set(delta.index, next);
-  return next;
-}
-
-function isDetectableToolCall(
-  toolCall: OpenAICompatibleToolCallAccumulator,
-): toolCall is OpenAICompatibleToolCallAccumulator & { id: string; name: string } {
-  return Boolean(toolCall.id && toolCall.name);
-}
-
-function isCompleteToolCall(
-  toolCall: OpenAICompatibleToolCallAccumulator,
-): toolCall is OpenAICompatibleToolCallAccumulator & { id: string; name: string } {
-  return Boolean(toolCall.id && toolCall.name);
-}
-
-function createModelStepStarted(
-  input: AiModelStepAdapterRequest,
-  createdAt: string,
-): RuntimeEvent {
-  return createModelStepStartedEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.step.started',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'required',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-      providerId: input.config.providerId,
-      modelId: String(input.request.modelId || input.config.defaultModelId),
-    },
-  });
-}
-
-function createModelOutputDelta(
-  input: AiModelStepAdapterRequest,
-  delta: string,
-  createdAt: string,
-): RuntimeEvent {
-  return createRuntimeEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.output.delta',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'user',
-    persist: 'transient',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-      delta,
-    },
-  });
-}
-
-function createModelThinkingStarted(
-  input: AiModelStepAdapterRequest,
-  createdAt: string,
-): RuntimeEvent {
-  return createModelThinkingStartedEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.thinking.started',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'transient',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-    },
-  });
-}
-
-function createModelThinkingDelta(
-  input: AiModelStepAdapterRequest,
-  delta: string,
-  createdAt: string,
-): RuntimeEvent {
-  return createModelThinkingDeltaEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.thinking.delta',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'transient',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-      delta,
-    },
-  });
-}
-
-function createModelThinkingCompleted(
-  input: AiModelStepAdapterRequest,
-  createdAt: string,
-): RuntimeEvent {
-  return createModelThinkingCompletedEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.thinking.completed',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'transient',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-    },
-  });
-}
-
-function createModelStepToolCallCreated(
-  input: AiModelStepAdapterRequest,
-  toolCall: OpenAICompatibleToolCallAccumulator & { id: string; name: string },
-  createdAt: string,
-): RuntimeEvent {
-  return createToolCallCreatedEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'tool.call.created',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'required',
-    payload: {
-      toolCallId: toolCall.id,
-      modelStepId: modelStepIdFor(input),
-      providerToolCallId: toolCall.id,
-      toolName: toolCall.name,
-      input: parseToolArguments(toolCall.argumentsText),
-    },
-  });
-}
-
-function createModelToolCallDetected(
-  input: AiModelStepAdapterRequest,
-  toolCall: OpenAICompatibleToolCallAccumulator & { id: string; name: string },
-  createdAt: string,
-): RuntimeEvent {
-  return createModelToolCallDetectedEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.tool_call.detected',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'required',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-      toolCallId: toolCall.id,
-      providerToolCallId: toolCall.id,
-      toolName: toolCall.name,
-    },
-  });
-}
-
-function createModelStepProviderStateRecorded(
-  input: AiModelStepAdapterRequest,
-  reasoningContent: string,
-  createdAt: string,
-): RuntimeEvent {
-  return createModelStepProviderStateRecordedEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.step.provider_state.recorded',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'required',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-      providerId: input.config.providerId,
-      modelId: String(input.request.modelId || input.config.defaultModelId),
-      blocks: [
-        {
-          type: 'reasoning_content',
-          text: reasoningContent,
-        },
-      ],
-    },
-  });
-}
-
-function createModelStepCompleted(
-  input: AiModelStepAdapterRequest,
-  payload: { content: string; finishReason?: string; usage?: ChatTokenUsagePayload },
-  createdAt: string,
-): RuntimeEvent {
-  return createRuntimeEvent({
-    eventId: input.eventIdFactory(),
-    eventType: 'model.step.completed',
-    runId: input.runId,
-    sessionId: input.request.sessionId,
-    stepId: input.stepId,
-    requestId: input.request.requestId,
-    runtimeContext: input.request.runtimeContext,
-    sequence: input.nextSequence(),
-    createdAt,
-    source: 'provider',
-    visibility: 'system',
-    persist: 'required',
-    payload: {
-      modelStepId: modelStepIdFor(input),
-      ...(payload.finishReason ? { finishReason: payload.finishReason } : {}),
-    },
-  });
-}
-
-function modelStepIdFor(input: AiModelStepAdapterRequest): string {
-  return String(input.request.modelStepId ?? input.stepId);
-}
-
-function parseToolArguments(argumentsText: string): JsonValue {
-  if (!argumentsText.trim()) {
-    return {};
-  }
-
-  try {
-    const value = JSON.parse(argumentsText);
-    return isRecord(value) ? value as JsonValue : {};
-  } catch {
-    return {};
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function requestRef(input: AiModelStepAdapterRequest) {
-  return {
-    requestId: input.request.requestId,
-    sessionId: input.request.sessionId,
-    providerId: input.request.providerId,
-    modelId: input.request.modelId,
-    runtimeContext: input.request.runtimeContext,
-  };
-}
-
-function hasToolResultContinuation(request: ModelStepRuntimeRequest): boolean {
-  return request.inputContext.parts.some((part) => part.kind === 'tool_continuation' && part.toolResultId);
-}
-
-function failedModelStepEvent(
-  input: AiModelStepAdapterRequest,
-  code: RuntimeErrorCode,
-  createdAt: string,
-  diagnostics: JsonObject = {},
-  options: { message?: string; retryable?: boolean } = {},
-): RuntimeEvent {
-  return createRunFailedEvent({
-    eventId: input.eventIdFactory(),
-    request: requestRef(input),
-    runId: input.runId,
-    sequence: input.nextSequence(),
-    createdAt,
-    error: providerRuntimeError(input, code, diagnostics, options),
-  });
-}
-
-function providerRuntimeError(
-  input: AiModelStepAdapterRequest,
-  code: RuntimeErrorCode,
-  diagnostics: JsonObject = {},
-  options: { message?: string; retryable?: boolean } = {},
-) {
-  return {
+async function createHttpErrorEvent(
+  providerId: string,
+  request: ProviderAdapterRequest,
+  response: Response,
+): Promise<AssistantStreamEvent> {
+  const preview = redactSecret((await response.text()).slice(0, 500));
+  const { code, message, retryable } = classifyHttpError(response, preview);
+  return createProviderErrorEvent({
     code,
-    message: options.message ?? errorMessageForCode(code),
-    severity: 'error' as const,
-    retryable: options.retryable ?? (code === 'provider_rate_limited' || code === 'provider_network_error'),
-    source: 'provider' as const,
+    message,
+    retryable,
+    providerId,
+    modelId: request.model.modelId,
     details: {
-      providerId: input.config.providerId,
-      modelId: String(input.request.modelId || input.config.defaultModelId),
-      ...diagnostics,
+      httpStatus: response.status,
+      httpStatusText: response.statusText,
+      providerErrorBodyPreview: preview,
+    },
+  });
+}
+
+function classifyHttpError(
+  response: Response,
+  bodyPreview: string,
+): { code: ProviderErrorCode; message: string; retryable: boolean } {
+  if (response.status === 429) {
+    return { code: 'rate_limited', message: 'Provider rate limit exceeded.', retryable: true };
+  }
+  if (isTokenLimitError(response, bodyPreview)) {
+    return { code: 'token_limited', message: 'Provider token limit exceeded.', retryable: false };
+  }
+  if (response.status === 401 || response.status === 403) {
+    return { code: 'provider_http_error', message: 'Provider authentication failed.', retryable: false };
+  }
+  return { code: 'provider_http_error', message: 'Provider request failed.', retryable: response.status >= 500 };
+}
+
+function isTokenLimitError(response: Response, bodyPreview: string): boolean {
+  return response.status === 400
+    && /context[_ ]length|maximum context|max[_ ]tokens|token limit/i.test(bodyPreview);
+}
+
+function createProviderErrorEvent(input: {
+  code: ProviderErrorCode;
+  message: string;
+  retryable: boolean;
+  providerId: string;
+  modelId: string;
+  details?: JsonObject;
+}): AssistantStreamEvent {
+  const error = createProviderError({
+    providerId: input.providerId,
+    modelId: input.modelId,
+    code: input.code,
+    message: input.message,
+    retryable: input.retryable,
+    details: input.details,
+  });
+
+  return {
+    type: 'error',
+    reason: 'error',
+    message: {
+      role: 'assistant',
+      content: [],
+      stopReason: 'error',
+      error,
     },
   };
 }
 
-function errorMessageForCode(code: RuntimeErrorCode): string {
-  switch (code) {
-    case 'provider_auth_failed':
-      return 'Provider rejected the API key.';
-    case 'provider_rate_limited':
-      return 'Provider rate limit was reached.';
-    case 'provider_invalid_request':
-      return 'Provider rejected the request.';
-    case 'provider_network_error':
-      return 'Provider network request failed.';
-    default:
-      return 'Provider request failed.';
-  }
+function redactSecret(text: string): string {
+  return text.replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]');
 }
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
-}
-

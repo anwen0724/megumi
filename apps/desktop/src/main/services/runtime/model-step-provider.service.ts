@@ -6,11 +6,11 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createRunFailedEvent } from '@megumi/shared/runtime';
 import { normalizeRuntimeError } from '@megumi/core/agent-runtime';
 import type {
-  AiModelStepCompletionResult,
-  AiProviderAdapter,
+  ModelStepCompletionResult,
+  ModelStepProviderAdapter,
   ProviderRuntimeConfig,
-} from '@megumi/ai/types';
-import { createAiProviderRegistry } from '@megumi/ai/registry';
+} from '@megumi/ai/compat/model-step-types';
+import { createModelStepProviderRegistry } from '@megumi/ai/compat/model-step-provider-registry';
 import { ProviderRuntimeResolutionError } from '../provider/provider-runtime.service';
 
 export interface ModelStepRuntimeResolverPort {
@@ -22,7 +22,7 @@ export interface ModelStepRuntimeResolverPort {
 }
 
 export interface ModelStepProviderRegistryPort {
-  getAdapter(providerId: ProviderId): AiProviderAdapter;
+  getAdapter(providerId: ProviderId): ModelStepProviderAdapter;
 }
 
 export interface ModelStepProviderServiceOptions {
@@ -83,7 +83,7 @@ export class ModelStepProviderService {
     }
   }
 
-  async completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult> {
+  async completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult> {
     const controller = new AbortController();
     let sequence = 0;
     const nextSequence = () => {
@@ -187,7 +187,7 @@ export function createModelStepProviderService(
 ): ModelStepProviderService {
   return new ModelStepProviderService({
     resolver,
-    registry: createAiProviderRegistry(),
+    registry: createModelStepProviderRegistry(),
   });
 }
 

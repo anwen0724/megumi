@@ -4,7 +4,7 @@
   prepareSessionCompactionInput,
   shouldRunSessionCompaction,
 } from '@megumi/context-management/session-compaction';
-import type { AiModelStepCompletionResult } from '@megumi/ai/types';
+import type { ModelStepCompletionResult } from '@megumi/ai/compat/model-step-types';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelId } from '@megumi/shared/model';
 import type {
@@ -53,7 +53,7 @@ export interface SessionCompactionActivePathRepository {
 }
 
 export interface SessionCompactionOrchestratorModelStepProvider {
-  completeModelStep(request: ModelStepRuntimeRequest): Promise<AiModelStepCompletionResult>;
+  completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult>;
 }
 
 export interface SessionCompactionOrchestratorClock {

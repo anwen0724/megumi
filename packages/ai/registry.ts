@@ -1,43 +1,43 @@
-﻿import type { ProviderId } from '@megumi/shared/provider';
-import { createAnthropicAdapter } from './providers/anthropic';
-import { createDeepSeekAdapter } from './providers/deepseek';
-import { createOpenAIAdapter } from './providers/openai';
-import type { AiProviderAdapter, Clock, FetchLike } from './types';
+// Registry for pure AI provider adapters.
+import { AiRegistryError } from './errors';
+import { type ProviderAdapter } from './provider';
+import { createAnthropicProviderAdapter } from './providers/anthropic';
+import { createDeepSeekProviderAdapter } from './providers/deepseek';
+import { createOpenAIProviderAdapter } from './providers/openai';
+import { type FetchLike } from './providers/openai-compatible';
 
-export interface AiProviderRegistryOptions {
+export interface ProviderRegistryOptions {
   fetch?: FetchLike;
-  clock?: Clock;
 }
 
-export class AiProviderRegistry {
-  private readonly adapters: Map<ProviderId, AiProviderAdapter>;
+export class ProviderRegistry {
+  private readonly adapters: Map<string, ProviderAdapter>;
 
-  constructor(adapters: AiProviderAdapter[]) {
+  constructor(adapters: ProviderAdapter[]) {
     this.adapters = new Map(adapters.map((adapter) => [adapter.providerId, adapter]));
   }
 
-  listProviderIds(): ProviderId[] {
-    return (['deepseek', 'openai', 'anthropic'] as const).filter((providerId) => this.adapters.has(providerId));
+  listProviderIds(): string[] {
+    return Array.from(this.adapters.keys()).sort();
   }
 
-  getAdapter(providerId: ProviderId): AiProviderAdapter {
+  get(providerId: string): ProviderAdapter {
     const adapter = this.adapters.get(providerId);
 
     if (!adapter) {
-      throw new Error(`AI provider adapter is not registered: ${providerId}`);
+      throw new AiRegistryError(`AI provider adapter is not registered: ${providerId}`);
     }
 
     return adapter;
   }
 }
 
-export function createAiProviderRegistry(options: AiProviderRegistryOptions = {}): AiProviderRegistry {
+export function createProviderRegistry(options: ProviderRegistryOptions = {}): ProviderRegistry {
   const fetchImpl = options.fetch ?? fetch;
 
-  return new AiProviderRegistry([
-    createDeepSeekAdapter({ fetch: fetchImpl, clock: options.clock }),
-    createOpenAIAdapter({ fetch: fetchImpl, clock: options.clock }),
-    createAnthropicAdapter({ clock: options.clock }),
+  return new ProviderRegistry([
+    createDeepSeekProviderAdapter({ fetch: fetchImpl }),
+    createOpenAIProviderAdapter({ fetch: fetchImpl }),
+    createAnthropicProviderAdapter(),
   ]);
 }
-
