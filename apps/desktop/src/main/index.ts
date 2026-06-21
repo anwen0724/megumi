@@ -1,5 +1,5 @@
 import { loadEnvFile } from './config/env';
-import { registerAllHandlers } from './ipc/register-handlers';
+import { registerAllHandlers } from './ipc/register-ipc-handlers';
 import { createMainWindow } from './app/create-window';
 import { registerAppLifecycle } from './app/lifecycle';
 import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-errors';

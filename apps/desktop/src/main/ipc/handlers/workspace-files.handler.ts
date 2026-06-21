@@ -16,7 +16,7 @@ import {
 import type { WorkspaceFilesService } from '../../services/workspace/workspace-files.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
 
 export type WorkspaceFilesHandlersService = Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
 type WorkspaceFilesListRequest = RuntimeIpcRequest<

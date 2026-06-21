@@ -33,7 +33,7 @@ const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/composition/compose-session-runtime.ts',
   'apps/desktop/src/main/composition/compose-tool-runtime.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
-  'apps/desktop/src/main/ipc/register-handlers.ts',
+  'apps/desktop/src/main/ipc/register-ipc-handlers.ts',
   'apps/desktop/src/main/services/runtime/recovery.service.ts',
   'apps/desktop/src/main/services/session/session-run.service.ts',
   'apps/desktop/src/main/services/workspace/workspace-change-tracker.service.ts',

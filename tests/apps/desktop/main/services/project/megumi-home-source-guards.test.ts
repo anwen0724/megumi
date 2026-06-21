@@ -79,7 +79,7 @@ describe('Megumi Home source guards', () => {
   });
 
   it('does not register legacy AI IPC handlers', () => {
-    const source = readProjectFile('apps/desktop/src/main/ipc/register-handlers.ts');
+    const source = readProjectFile('apps/desktop/src/main/ipc/register-ipc-handlers.ts');
     const legacyRegistrations = [
       'register' + 'AIHandlers',
     ];

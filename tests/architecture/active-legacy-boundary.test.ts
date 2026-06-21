@@ -76,7 +76,7 @@ const allowedCurrentLifecycleTerms = new Map<string, RegExp[]>([
   ['apps/desktop/src/main/ipc/handlers/project.handler.ts', [
     new RegExp(term('\\bregister', 'Project', 'Handlers\\b')),
   ]],
-  ['apps/desktop/src/main/ipc/register-handlers.ts', [
+  ['apps/desktop/src/main/ipc/register-ipc-handlers.ts', [
     new RegExp(term('\\bregister', 'Artifact', 'Handlers\\b')),
     new RegExp(term('\\bregister', 'Project', 'Handlers\\b')),
   ]],
@@ -86,7 +86,7 @@ const allowedCurrentLifecycleTerms = new Map<string, RegExp[]>([
   ['tests/apps/desktop/main/ipc/handlers/project.handler.test.ts', [
     new RegExp(term('\\bregister', 'Project', 'Handlers\\b')),
   ]],
-  ['tests/apps/desktop/main/ipc/register-handlers.test.ts', [
+  ['tests/apps/desktop/main/ipc/register-ipc-handlers.test.ts', [
     new RegExp(term('\\bregister', 'Artifact', 'Handlers\\b')),
     new RegExp(term('\\bregister', 'Project', 'Handlers\\b')),
   ]],

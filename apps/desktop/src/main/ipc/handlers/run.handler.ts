@@ -11,7 +11,7 @@ import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megu
 import type { SessionRunService } from '../../services/session/session-run.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
 
 export type RunHandlersService = Pick<SessionRunService, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
 

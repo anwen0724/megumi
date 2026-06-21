@@ -303,7 +303,7 @@ vi.mock('@megumi/desktop/main/services/project/megumi-home.service', () => ({
   initializeElectronMegumiHomeSync: mocks.initializeElectronMegumiHomeSync,
 }));
 
-vi.mock('@megumi/desktop/main/ipc/register-handlers', () => ({
+vi.mock('@megumi/desktop/main/ipc/register-ipc-handlers', () => ({
   registerAllHandlers: mocks.registerAllHandlers,
 }));
 

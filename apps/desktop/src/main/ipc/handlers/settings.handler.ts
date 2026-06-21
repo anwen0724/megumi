@@ -7,7 +7,7 @@ import {
   SettingsUpdateRequestSchema,
 } from '@megumi/shared/ipc';
 import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import type { DesktopIpcMain } from '../../host/electron-ipc-main-host';
 

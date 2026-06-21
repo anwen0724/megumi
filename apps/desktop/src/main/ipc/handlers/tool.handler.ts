@@ -17,7 +17,7 @@ import {
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import type { ToolService } from '../../services/tool/tool.service';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type ToolHandlersService = Pick<

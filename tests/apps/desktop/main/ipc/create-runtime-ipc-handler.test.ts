@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { RuntimeException } from '@megumi/core/agent-runtime';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRuntimeIpcRequestSchema } from '@megumi/shared/ipc';
-import { createRuntimeIpcHandler } from '@megumi/desktop/main/ipc/runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '@megumi/desktop/main/ipc/create-runtime-ipc-handler';
 import { runtimeOperationNameFromChannel } from '@megumi/desktop/main/ipc/runtime-operation-name';
 
 describe('createRuntimeIpcHandler', () => {

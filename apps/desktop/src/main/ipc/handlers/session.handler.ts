@@ -31,7 +31,7 @@ import {
 import type { SessionRunService } from '../../services/session/session-run.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
 export type SessionHandlersService = Pick<

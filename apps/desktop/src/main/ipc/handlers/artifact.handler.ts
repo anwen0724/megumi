@@ -29,7 +29,7 @@ import {
 import type { ArtifactService } from '../../services/artifact/artifact.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
 
 export type ArtifactHandlersService = Pick<
   ArtifactService,

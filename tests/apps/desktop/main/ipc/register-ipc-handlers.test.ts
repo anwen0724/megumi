@@ -50,7 +50,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers only existing runtime handlers when no session run service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
 
     registerAllHandlers();
 
@@ -69,7 +69,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('passes the runtime logger to business IPC handlers', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const logger = {
       info: vi.fn(),
       warn: vi.fn(),
@@ -113,7 +113,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers run context handlers when a context service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const runContextService = {
       getBaselineContext: vi.fn(),
       listWorkspaceSourcesByRun: vi.fn(),
@@ -128,7 +128,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers settings handlers when a settings service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const settingsService = {
       getResolvedSettings: vi.fn(),
       updateSettings: vi.fn(),
@@ -144,7 +144,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers plan handlers when a plan service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const planService = {
       getPlanByRun: vi.fn(),
       updatePlanStatus: vi.fn(),
@@ -159,7 +159,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers tool handlers when a tool service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const toolService = {
       listDefinitions: vi.fn(),
       getToolExecution: vi.fn(),
@@ -175,7 +175,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers recovery handlers when a recovery service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const recoveryService = {
       listRecoverableRuns: vi.fn(),
       resumeRun: vi.fn(),
@@ -193,7 +193,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers artifact handlers when an artifact service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const artifactService = {
       listByRun: vi.fn(),
       listBySession: vi.fn(),
@@ -213,7 +213,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers memory handlers when a memory service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const memoryService = {
       getSettings: vi.fn(),
       updateSettings: vi.fn(),
@@ -243,7 +243,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers project handlers when a project service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const projectService = {
       listProjects: vi.fn(),
       useExistingProject: vi.fn(),
@@ -261,7 +261,7 @@ describe('registerAllHandlers', () => {
   });
 
   it('registers workspace files handlers when a workspace files service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-handlers');
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const workspaceFilesService = {
       listDirectory: vi.fn(),
       openFile: vi.fn(),

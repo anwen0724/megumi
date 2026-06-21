@@ -145,7 +145,7 @@ describe('Runtime Common Foundation source guards', () => {
 
   it('keeps renderer-facing runtime boundary code from exposing raw stack or raw cause', () => {
     const boundaryFiles = [
-      'apps/desktop/src/main/ipc/runtime-ipc-handler.ts',
+      'apps/desktop/src/main/ipc/create-runtime-ipc-handler.ts',
       'apps/desktop/src/main/ipc/runtime-event-forwarder.ts',
       'apps/desktop/src/main/app/runtime-process-errors.ts',
       'apps/desktop/src/preload/api.ts',

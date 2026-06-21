@@ -15,7 +15,7 @@ import {
 import type { PermissionSnapshotService } from '../../services/security/permission-snapshot.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import { createRuntimeIpcHandler } from '../runtime-ipc-handler';
+import { createRuntimeIpcHandler } from '../create-runtime-ipc-handler';
 
 export type PlanHandlersService = Pick<
   PermissionSnapshotService,
