@@ -1,4 +1,4 @@
-// Coordinates durable tool execution records for agent-loop tool calls.
+﻿// Coordinates durable tool execution records for agent-loop tool calls.
 import { evaluatePermissionPolicy } from '@megumi/security/tool-policy';
 import {
   createObservationFromRawToolResult,
@@ -18,7 +18,7 @@ import type {
   ToolApprovalResumePort,
   ToolCallHandlerOutcome,
   ToolCallHandlerPort,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { PermissionMode } from '@megumi/shared/permission';

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   assertFailedRunHasTerminalReason,
@@ -7,7 +7,7 @@ import {
   canTransitionRunStatus,
   isActiveRunStatus,
   isTerminalRunStatus,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 import type { Run } from '@megumi/shared/session';
 
 function run(overrides: Partial<Run> = {}): Run {

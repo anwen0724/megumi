@@ -4,7 +4,7 @@
   prepareSessionCompactionInput,
   shouldRunSessionCompaction,
 } from '@megumi/context-management/session-compaction';
-import type { ModelStepCompletionResult } from '@megumi/ai/compat/model-step-types';
+import type { ModelStepCompletionResult } from '@megumi/agent';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelId } from '@megumi/shared/model';
 import type {

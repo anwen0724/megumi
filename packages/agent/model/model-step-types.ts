@@ -1,8 +1,8 @@
-// Temporary runtime-shaped AI compatibility types for current desktop model-step callers.
+// Runtime-shaped model-step adapter types owned by the Agent Runtime package.
 import type { ModelId, ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId, ProviderKind } from '@megumi/shared/provider';
 import type { ChatTokenUsagePayload, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
-import type { FetchLike } from '../providers/openai-compatible';
+import type { FetchLike } from '@megumi/ai/providers/openai-compatible';
 
 export type { FetchLike };
 

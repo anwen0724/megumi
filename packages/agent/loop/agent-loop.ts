@@ -11,9 +11,9 @@ import {
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
-import type { AiModelStepPort } from '../ports/ai-port';
-import { runModelStep } from './model-step';
-import { createTerminalRuntimeError } from './state-policy';
+import type { ModelStepPort } from '../ports/model-step-port';
+import { runModelStep } from '../model/model-step';
+import { createTerminalRuntimeError } from '../state/state-policy';
 
 export interface PendingToolApproval {
   approvalRequest: ApprovalRequest;
@@ -88,7 +88,7 @@ export interface ToolContinuationInputContextBuilderInput {
 
 export interface RunModelToolLoopInput {
   request: ModelStepRuntimeRequest;
-  aiPort: AiModelStepPort;
+  modelStepPort: ModelStepPort;
   toolCallHandler: ToolCallHandlerPort;
   ids: ModelToolLoopIds;
   signal?: AbortSignal;
@@ -122,7 +122,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
 
     for await (const event of runModelStep({
       request,
-      aiPort: input.aiPort,
+      modelStepPort: input.modelStepPort,
       signal: input.signal,
       eventIdFactory: input.ids.nextEventId,
     })) {

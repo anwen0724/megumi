@@ -424,12 +424,13 @@ function buildOpenAICompatibleRequestBody(request: ProviderAdapterRequest) {
       parameters: tool.inputSchema,
     },
   }));
+  const stream = request.options.responseMode !== 'complete';
 
   return {
     model: request.model.modelId,
     messages,
-    stream: true,
-    stream_options: { include_usage: true },
+    stream,
+    ...(stream ? { stream_options: { include_usage: true } } : {}),
     ...(tools && tools.length > 0 ? { tools, tool_choice: 'auto' as const } : {}),
     // Only provider fields implemented by this adapter are materialized here.
     ...(request.options.temperature !== undefined ? { temperature: request.options.temperature } : {}),

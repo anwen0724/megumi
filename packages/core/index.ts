@@ -1,2 +1,2 @@
-export * from './ports/ai-port';
-export * from './agent-runtime';
+// @megumi/core no longer owns Agent Runtime. Runtime callers should import @megumi/agent.
+export {};

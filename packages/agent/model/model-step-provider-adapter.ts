@@ -1,8 +1,7 @@
 // Wraps a pure ProviderAdapter with the current runtime-shaped model-step adapter interface.
 import { JsonObjectSchema } from '@megumi/shared/primitives/json';
 import type { RuntimeErrorCode } from '@megumi/shared/runtime';
-import type { AssistantContentBlock } from '../message';
-import type { ProviderAdapter } from '../provider';
+import type { AssistantContentBlock, ProviderAdapter } from '@megumi/ai';
 import { mapModelStepToAiInput } from './model-step-request-mapper';
 import { adaptAssistantStreamToRuntimeEvents } from './model-step-event-adapter';
 import type {
@@ -56,6 +55,7 @@ export function createModelStepProviderAdapter(input: {
         options: {
           signal: request.signal,
           credential: { type: 'api_key', value: request.config.apiKey },
+          responseMode: 'complete',
         },
       }).result();
 

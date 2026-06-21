@@ -62,6 +62,7 @@ describe('package dependency boundaries', () => {
   it('keeps packages/ai independent from packages/core and app code', () => {
     expect(
       findForbiddenReferences('packages/ai', [
+        /@megumi\/agent(\/|['"]|$)/,
         /@megumi\/core(\/|['"]|$)/,
         /@megumi\/db(\/|['"]|$)/,
         /@megumi\/tools(\/|['"]|$)/,
@@ -86,10 +87,12 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/\bmodelVisibleName\b/);
   });
 
-  it('keeps packages/core independent from concrete providers, db, Electron, and app code', () => {
+  it('keeps packages/agent independent from desktop, coding-agent, db, and Electron', () => {
     expect(
-      findForbiddenReferences('packages/core', [
-        /@megumi\/ai(\/|['"]|$)/,
+      findForbiddenReferences('packages/agent', [
+        /@megumi\/coding-agent(\/|['"]|$)/,
+        /@megumi\/input(\/|['"]|$)/,
+        /@megumi\/command(\/|['"]|$)/,
         /@megumi\/db(\/|['"]|$)/,
         /from ['"]electron['"]/,
         /apps\/desktop/,

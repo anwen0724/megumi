@@ -4,13 +4,13 @@ import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError, RuntimeErrorCode } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createRunFailedEvent } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '@megumi/core/agent-runtime';
-import type {
-  ModelStepCompletionResult,
-  ModelStepProviderAdapter,
-  ProviderRuntimeConfig,
-} from '@megumi/ai/compat/model-step-types';
-import { createModelStepProviderRegistry } from '@megumi/ai/compat/model-step-provider-registry';
+import {
+  createModelStepProviderRegistry,
+  normalizeRuntimeError,
+  type ModelStepCompletionResult,
+  type ModelStepProviderAdapter,
+  type ProviderRuntimeConfig,
+} from '@megumi/agent';
 import { ProviderRuntimeResolutionError } from '../provider/provider-runtime.service';
 
 export interface ModelStepRuntimeResolverPort {

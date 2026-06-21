@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -14,7 +14,7 @@ const productionRoots = [
 
 const concreteToolBoundaryTargets = [
   join(process.cwd(), 'packages/tools'),
-  join(process.cwd(), 'packages/core/agent-runtime'),
+  join(process.cwd(), 'packages/agent'),
   join(process.cwd(), 'apps/desktop/src/main/services/tool/tool.service.ts'),
   join(process.cwd(), 'apps/desktop/src/main/ipc/handlers/tool.handler.ts'),
   join(process.cwd(), 'apps/desktop/src/preload/api.ts'),

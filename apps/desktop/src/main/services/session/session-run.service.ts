@@ -1,4 +1,4 @@
-// Orchestrates Desktop Main session runs by bridging IPC payloads, persistence,
+﻿// Orchestrates Desktop Main session runs by bridging IPC payloads, persistence,
 // permission snapshots, context construction, and model-step execution.
 import path from 'node:path';
 import {
@@ -8,9 +8,9 @@ import {
   createTerminalRuntimeError,
   isTerminalRunStatus,
   runTurn,
-} from '@megumi/core/agent-runtime';
-import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/core/agent-runtime';
-import type { ModelStepCompletionResult } from '@megumi/ai/compat/model-step-types';
+} from '@megumi/agent';
+import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/agent';
+import type { ModelStepCompletionResult } from '@megumi/agent';
 import {
   runModelToolLoop,
   type PendingToolApprovalContinuation,
@@ -18,7 +18,7 @@ import {
   type ToolApprovalResumeOutcome,
   type ToolApprovalResumePort,
   type ToolCallHandlerPort,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 import type { ModelInputMemoryRecallSource } from '@megumi/context-management/model-step-input-context';
 import {
   createRunCompletedEvent,
@@ -28,7 +28,7 @@ import {
   createStepCompletedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 import { createDatabase } from '@megumi/db/connection';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
@@ -2122,7 +2122,7 @@ export class SessionRunService {
     const modelEvents = toolRuntime
       ? runModelToolLoop({
           request: input.request,
-          aiPort: {
+          modelStepPort: {
             streamModelStep: ({ request }) => streamProviderModelStep(request),
           },
           toolCallHandler: toolRuntime,

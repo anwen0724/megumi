@@ -1,8 +1,8 @@
 ﻿import type { RunAction, RunObservation, RunStep } from '@megumi/shared/session';
 import type { JsonObject } from '@megumi/shared/primitives';
-import type { AiModelStepPort } from '../ports/ai-port';
+import type { ModelStepPort } from '../ports/model-step-port';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import { normalizeRuntimeError } from './errors';
+import { normalizeRuntimeError } from '../errors';
 import {
   createRunCancelledEvent,
   createRunFailedEvent,
@@ -56,7 +56,7 @@ export function createModelMessageObservation(input: {
 
 export interface RunModelStepInput {
   request: ModelStepRuntimeRequest;
-  aiPort: AiModelStepPort;
+  modelStepPort: ModelStepPort;
   signal?: AbortSignal;
   eventIdFactory?: () => string;
 }
@@ -88,7 +88,7 @@ export async function* runModelStep(input: RunModelStepInput): AsyncIterable<Run
   }
 
   try {
-    for await (const event of input.aiPort.streamModelStep({
+    for await (const event of input.modelStepPort.streamModelStep({
       request: input.request,
       runId: input.request.runId,
       stepId: input.request.stepId,

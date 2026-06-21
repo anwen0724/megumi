@@ -4,11 +4,11 @@ import { buildModelStepInputContextFromSources } from '@megumi/context-managemen
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
-import { runModelToolLoop } from '@megumi/core/agent-runtime';
+import { runModelToolLoop } from '@megumi/agent';
 import type {
   PendingToolApproval,
   PendingToolApprovalContinuation,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   const output: T[] = [];
@@ -224,7 +224,7 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
 
@@ -340,7 +340,7 @@ describe('run model tool loop', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
       }),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
 
@@ -408,7 +408,7 @@ describe('run model tool loop', () => {
     let callbackCallCount = 0;
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep({ request }) {
           requests.push(request);
           if (requests.length === 1) {
@@ -490,7 +490,7 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
           yield toolCallCreatedEvent({
@@ -585,7 +585,7 @@ describe('run model tool loop', () => {
         stepId: 'step:11111111-2222-4333-8444-555555555555',
         modelStepId: 'model-step:11111111-2222-4333-8444-555555555555',
       }),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
@@ -636,7 +636,7 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
           yield toolCallCreatedEvent({
@@ -720,7 +720,7 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep() {
           yield malformedToolCallEvent;
         },
@@ -748,7 +748,7 @@ describe('run model tool loop', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           requests.push(input.request);
           if (requests.length === 1) {
@@ -805,7 +805,7 @@ describe('run model tool loop', () => {
   it('fails with terminal reason when tool results are empty after tool calls', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
@@ -849,7 +849,7 @@ describe('run model tool loop', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(request) {
           requests.push(request.request);
           if (requests.length === 1) {
@@ -896,7 +896,7 @@ describe('run model tool loop', () => {
   it('preserves tool result ordering for multiple tool calls in the conservative 19.01 path', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
@@ -958,7 +958,7 @@ describe('run model tool loop', () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
       maxModelSteps: 1,
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),

@@ -1,7 +1,6 @@
 // Runtime-shaped registry used by current desktop callers until packages/agent owns model-step events.
 import type { ProviderId } from '@megumi/shared/provider';
-import { createProviderRegistry } from '../registry';
-import type { ProviderRegistryOptions } from '../registry';
+import { createProviderRegistry, type ProviderRegistryOptions } from '@megumi/ai';
 import { createModelStepProviderAdapter } from './model-step-provider-adapter';
 import type { Clock, ModelStepProviderAdapter } from './model-step-types';
 

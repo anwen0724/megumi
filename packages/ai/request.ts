@@ -19,6 +19,7 @@ export interface AiRequestOptions {
   signal?: AbortSignal;
   temperature?: number;
   maxOutputTokens?: number;
+  responseMode?: 'stream' | 'complete';
   transport?: 'sse' | 'websocket' | 'auto';
   cacheRetention?: 'none' | 'short' | 'long';
   maxRetries?: number;

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -52,18 +52,7 @@ describe('pure AI package boundary', () => {
     expect(violations).toEqual([]);
   });
 
-  it('confines legacy runtime compatibility to packages/ai/compat', () => {
-    const compatFiles = [
-      'model-step-types.ts',
-      'model-step-request-mapper.ts',
-      'model-step-event-adapter.ts',
-      'model-step-provider-adapter.ts',
-      'model-step-provider-registry.ts',
-    ];
-
-    for (const file of compatFiles) {
-      const source = readFileSync(join(process.cwd(), 'packages/ai/compat', file), 'utf8');
-      expect(source.length).toBeGreaterThan(0);
-    }
+  it('keeps runtime compatibility outside packages/ai', () => {
+    expect(existsSync(join(process.cwd(), 'packages/ai', 'compat'))).toBe(false);
   });
 });

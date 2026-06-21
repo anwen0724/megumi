@@ -3,7 +3,7 @@ import {
   createContextPatchObservation,
   createContextUpdateInputPreview,
   isContextPatchObservation,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 import type { ContextPatch } from '@megumi/shared/run';
 
 const patch: ContextPatch = {

@@ -7,13 +7,13 @@
 import type { PermissionModeState } from '@megumi/shared/permission';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from './errors';
+import { normalizeRuntimeError } from '../errors';
 import {
   createContextUpdateInputPreview,
   toContextPatchAppliedPayload,
   toContextPatchRejectedPayload,
-} from './context-observation-mapper';
-import { toArtifactReferencedPayload } from './artifact-observation-mapper';
+} from '../observations/context-observation-mapper';
+import { toArtifactReferencedPayload } from '../observations/artifact-observation-mapper';
 import {
   createActionRequestedEvent,
   createArtifactReferencedEvent,
@@ -33,23 +33,23 @@ import {
   createStepCreatedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
-} from './runtime-event-factory';
+} from '../events/runtime-event-factory';
 import {
   createCancelObservation,
   createCheckpointObservation,
   toCheckpointCreatedPayload,
-} from './recovery-observation-mapper';
+} from '../recovery/recovery-observation-mapper';
 import {
   createDefaultRunIds,
   defaultRunClock,
   type RunIdFactory,
   type RunTurnInput,
   type RunTurnResult,
-} from './types';
+} from '../types';
 import {
   createPermissionModeRuntimeInstruction,
   resolvePermissionModeState,
-} from './permission-instruction';
+} from '../permissions/permission-instruction';
 
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   const clock = input.clock ?? defaultRunClock;

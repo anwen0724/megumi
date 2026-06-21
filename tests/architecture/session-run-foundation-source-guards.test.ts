@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -67,7 +67,7 @@ describe('session run foundation source guards', () => {
   });
 
   it('keeps agent runtime implementation under the agent-runtime path', () => {
-    const agentRuntimeFiles = filesUnder('packages/core/agent-runtime');
+    const agentRuntimeFiles = filesUnder('packages/agent');
 
     expect(agentRuntimeFiles.length).toBeGreaterThan(0);
     expect(existsSync(join(ROOT, 'packages/core/run-runtime'))).toBe(false);
@@ -98,7 +98,7 @@ describe('session run foundation source guards', () => {
     const runtimeErrorContractFiles = [
       join(ROOT, 'packages/shared/runtime/errors.ts'),
       join(ROOT, 'packages/shared/ipc/errors.ts'),
-      join(ROOT, 'packages/core/agent-runtime/errors.ts'),
+      join(ROOT, 'packages/agent/errors.ts'),
     ];
 
     const offenders = runtimeErrorContractFiles

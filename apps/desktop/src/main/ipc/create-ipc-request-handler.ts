@@ -1,4 +1,4 @@
-// Creates request/response IPC handlers with schema validation, context, logging, and safe errors.
+﻿// Creates request/response IPC handlers with schema validation, context, logging, and safe errors.
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 import type { JsonObject } from '@megumi/shared/primitives';
@@ -16,7 +16,7 @@ import {
   createRuntimeDebugId,
   createRuntimeTraceId,
 } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '@megumi/core/agent-runtime';
+import { normalizeRuntimeError } from '@megumi/agent';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import {
   redactRuntimeDetails,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -6,7 +6,7 @@ const root = process.cwd();
 
 const recoveryProductionFiles = [
   'packages/shared/recovery/contracts.ts',
-  'packages/core/agent-runtime/recovery-observation-mapper.ts',
+  'packages/agent/recovery/recovery-observation-mapper.ts',
   'apps/desktop/src/main/services/runtime/recovery.service.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/renderer/entities/recovery/store.ts',
@@ -45,14 +45,14 @@ describe('recovery foundation source guards', () => {
     const runtimeContractFiles = [
       'packages/shared/runtime/errors.ts',
       'packages/shared/ipc/errors.ts',
-      'packages/core/agent-runtime/errors.ts',
+      'packages/agent/errors.ts',
     ];
 
     expect(offenders(/\brecoverable\b/, runtimeContractFiles)).toEqual([]);
   });
 
   it('keeps core recovery platform independent', () => {
-    const coreRecovery = read('packages/core/agent-runtime/recovery-observation-mapper.ts');
+    const coreRecovery = read('packages/agent/recovery/recovery-observation-mapper.ts');
 
     expect(coreRecovery).not.toMatch(/from ['"]electron['"]/);
     expect(coreRecovery).not.toMatch(/from ['"]node:fs['"]/);

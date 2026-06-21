@@ -29,7 +29,7 @@ function sourceUnder(relativeDirectory: string): string {
 
 describe('provider tool call model loop source guards', () => {
   it('keeps provider loop centered on ToolCall, ToolResult, and ToolExecution events', () => {
-    const toolLoop = read('packages/core/agent-runtime/agent-loop.ts');
+    const toolLoop = read('packages/agent/loop/agent-loop.ts');
 
     expect(toolLoop).toContain('ToolCallHandlerPort');
     expect(toolLoop).toContain('ToolExecution');
@@ -40,7 +40,7 @@ describe('provider tool call model loop source guards', () => {
 
   it('does not reintroduce RunAction.call_tool as the model tool path', () => {
     const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
-    const toolLoop = read('packages/core/agent-runtime/agent-loop.ts');
+    const toolLoop = read('packages/agent/loop/agent-loop.ts');
 
     expect(sessionRun).not.toContain("actionKind: 'call_tool'");
     expect(toolLoop).not.toContain('RunAction');
@@ -48,7 +48,7 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('does not implement real built-in tools or permission policy in Plan 2 code paths', () => {
-    const toolLoop = read('packages/core/agent-runtime/agent-loop.ts');
+    const toolLoop = read('packages/agent/loop/agent-loop.ts');
     const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
 
     expect(toolLoop).not.toContain('readFileSync');
@@ -64,8 +64,9 @@ describe('provider tool call model loop source guards', () => {
       'packages/ai/prompt/message-mapper.ts',
       'packages/ai/providers/openai-compatible.ts',
       'packages/ai/providers/anthropic.ts',
-      'packages/core/ports/ai-port.ts',
-      'packages/core/agent-runtime/agent-loop.ts',
+      'packages/agent/ports/model-step-port.ts',
+      'packages/agent/loop/agent-loop.ts',
+      'packages/agent/model/model-step-request-mapper.ts',
       'apps/desktop/src/main/services/runtime/model-step-provider.service.ts',
       'apps/desktop/src/main/services/session/session-run.service.ts',
     ];
@@ -95,16 +96,16 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('requires provider request materialization to use full model step runtime requests', () => {
-    const source = read('packages/ai/prompt/message-mapper.ts');
+    const source = read('packages/agent/model/model-step-request-mapper.ts');
 
     expect(source).not.toMatch(/\bPartial<ModelStepRuntimeRequest>\b/);
     expect(source).not.toMatch(/\bModelStepPromptRequest\b/);
   });
 
   it('keeps provider request materialization out of Host source selection', () => {
-    const source = read('packages/ai/prompt/message-mapper.ts');
+    const source = read('packages/agent/model/model-step-request-mapper.ts');
 
-    expect(source).toContain('materializeModelStepOpenAICompatibleRequest');
+    expect(source).toContain('mapModelStepToAiInput');
     expect(source).not.toContain('@megumi/context-management');
     expect(source).not.toContain('@megumi/db');
     expect(source).not.toContain('@megumi/memory');
@@ -121,6 +122,8 @@ describe('provider tool call model loop source guards', () => {
   it('keeps provider package free of context source collection dependencies', () => {
     const source = sourceUnder('packages/ai');
 
+    expect(source).not.toContain('ModelStepRuntimeRequest');
+    expect(source).not.toContain('RuntimeEvent');
     expect(source).not.toContain('@megumi/context-management');
     expect(source).not.toContain('AgentInstructionSourceService');
     expect(source).not.toContain('ModelStepInputBuildService');
@@ -148,8 +151,8 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('WorkflowCommand');
   });
 
-  it('keeps the core tool loop free of active path persistence concerns', () => {
-    const source = read('packages/core/agent-runtime/agent-loop.ts');
+  it('keeps the agent tool loop free of active path persistence concerns', () => {
+    const source = read('packages/agent/loop/agent-loop.ts');
 
     expect(source).not.toContain('Session' + 'ActivePathRepository');
     expect(source).not.toContain('session_' + 'source_entries');

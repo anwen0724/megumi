@@ -116,13 +116,16 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/input-command'))).toBe(false);
   });
 
-  it('keeps core runtime under agent-runtime and off old runtime helper paths', () => {
-    expect(existsSync(join(repoRoot, 'packages/core/agent-runtime/agent-loop.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/core/agent-runtime/run-lifecycle.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/core/agent-runtime/errors.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/core/run-runtime'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'packages/core/runtime-exception.ts'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'packages/core/runtime-assert.ts'))).toBe(false);
+  it('keeps generic Agent Runtime under packages/agent', () => {
+    expect(existsSync(join(repoRoot, 'packages/agent/loop/agent-loop.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/agent/model/model-step.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/agent/model/model-step-event-adapter.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/agent/model/model-step-provider-adapter.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/agent/events/runtime-event-factory.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/agent/state/state-policy.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/core', 'agent-runtime'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/core/ports/ai-port.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/ai', 'compat'))).toBe(false);
 
     expect(offenders(productionFiles(), [
       /@megumi\/core\/run-runtime/,

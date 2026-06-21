@@ -1,4 +1,4 @@
-// Resolves provider runtime configuration from Main-owned settings and process env only.
+﻿// Resolves provider runtime configuration from Main-owned settings and process env only.
 // SQLite and other host persistence details are kept outside provider request execution.
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeContext } from '@megumi/shared/runtime';
@@ -7,7 +7,7 @@ import type {
   ProviderSettings,
 } from '@megumi/shared/provider';
 import { DEFAULT_PROVIDER_SETTINGS } from '@megumi/shared/provider';
-import type { ProviderRuntimeConfig } from '@megumi/ai/compat/model-step-types';
+import type { ProviderRuntimeConfig } from '@megumi/agent';
 
 export interface ProviderRuntimeSettingsPort {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;

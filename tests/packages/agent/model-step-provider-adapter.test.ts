@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildModelInputContext } from '@megumi/context-management';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
-import { createModelStepProviderAdapter } from '@megumi/ai/compat/model-step-provider-adapter';
-import type { FetchLike, ProviderRuntimeConfig } from '@megumi/ai/compat/model-step-types';
+import { createModelStepProviderAdapter } from '@megumi/agent';
+import type { FetchLike, ProviderRuntimeConfig } from '@megumi/agent';
 import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
 
 const config: ProviderRuntimeConfig = {
@@ -258,5 +258,214 @@ describe('model-step compatibility adapter', () => {
         }],
       }],
     });
+  });
+
+  it('preserves system-like model input context parts outside user messages', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"Ok"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createModelStepProviderAdapter({
+      providerId: 'openai',
+      provider: createOpenAICompatibleAdapter({
+        providerId: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        fetch,
+      }),
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    await collect(adapter.streamModelStep({
+      request: runtimeRequest({
+        inputContext: buildModelInputContext({
+          contextId: 'model-input-context:system-role',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          stepId: 'step-1',
+          buildReason: 'initial_model_step',
+          builtAt: '2026-05-17T00:00:00.000Z',
+          parts: [
+            {
+              partId: 'part:instruction:1',
+              kind: 'instruction',
+              instructionKind: 'system',
+              text: 'You are Megumi.',
+              sourceRefs: [{ sourceId: 'system:1', sourceKind: 'system_instruction' }],
+              priority: 100,
+            },
+            {
+              partId: 'part:memory:1',
+              kind: 'memory',
+              memoryKind: 'memory_recall',
+              text: 'User prefers concise answers.',
+              sourceRefs: [{ sourceId: 'memory:1', sourceKind: 'memory_recall' }],
+              priority: 60,
+            },
+            {
+              partId: 'part:runtime:1',
+              kind: 'runtime_constraint',
+              constraintKind: 'permission_mode',
+              text: 'Permission mode is plan.',
+              sourceRefs: [{ sourceId: 'permission:1', sourceKind: 'permission_mode' }],
+              priority: 80,
+            },
+            {
+              partId: 'part:current-turn:1',
+              kind: 'current_turn',
+              role: 'user',
+              text: 'Read package.json.',
+              sourceRefs: [{ sourceId: 'message:1', sourceKind: 'current_user_message' }],
+              priority: 90,
+            },
+          ],
+        }),
+      }),
+      runId: 'run-1',
+      stepId: 'step-1',
+      config,
+      nextSequence: () => 1,
+      eventIdFactory: () => 'event-1',
+    }));
+
+    const [, init] = fetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body)).messages).toEqual([
+      {
+        role: 'system',
+        content: [
+          'You are Megumi.',
+          'User prefers concise answers.',
+          'Permission mode is plan.',
+        ].join('\n\n'),
+      },
+      {
+        role: 'user',
+        content: 'Read package.json.',
+      },
+    ]);
+  });
+
+  it('replays provider state as assistant thinking content for tool continuation', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"Done"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createModelStepProviderAdapter({
+      providerId: 'openai',
+      provider: createOpenAICompatibleAdapter({
+        providerId: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        fetch,
+      }),
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    await collect(adapter.streamModelStep({
+      request: runtimeRequest({
+        inputContext: buildModelInputContext({
+          contextId: 'model-input-context:provider-state',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          stepId: 'step-2',
+          buildReason: 'tool_continuation',
+          builtAt: '2026-05-17T00:00:00.000Z',
+          parts: [
+            {
+              partId: 'part:tool-call:1',
+              kind: 'tool_continuation',
+              text: 'Tool use call-read requested read_file.',
+              sourceRefs: [{ sourceId: 'tool-call:1', sourceKind: 'tool_call' }],
+              priority: 80,
+              toolCallId: 'call-read',
+              providerToolCallId: 'provider-call-read',
+              modelStepId: 'model-step-1',
+              toolName: 'read_file',
+              toolInput: { path: 'package.json' },
+            },
+            {
+              partId: 'part:tool-result:1',
+              kind: 'tool_continuation',
+              text: 'read_file returned package metadata.',
+              sourceRefs: [{ sourceId: 'tool-result:1', sourceKind: 'tool_result' }],
+              priority: 80,
+              toolCallId: 'call-read',
+              toolResultId: 'tool-result-1',
+              toolResultContent: 'read_file returned package metadata.',
+              metadata: { observationId: 'observation:1' },
+            },
+            {
+              partId: 'part:provider-state:1',
+              kind: 'tool_continuation',
+              text: 'I need to inspect package metadata.',
+              sourceRefs: [{ sourceId: 'provider-state:1', sourceKind: 'provider_state' }],
+              priority: 70,
+              modelStepId: 'model-step-1',
+              providerStateText: 'I need to inspect package metadata.',
+            },
+          ],
+        }),
+      }),
+      runId: 'run-1',
+      stepId: 'step-2',
+      config,
+      nextSequence: () => 1,
+      eventIdFactory: () => 'event-1',
+    }));
+
+    const [, init] = fetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body)).messages).toEqual([
+      {
+        role: 'assistant',
+        reasoning_content: 'I need to inspect package metadata.',
+        tool_calls: [{
+          id: 'provider-call-read',
+          type: 'function',
+          function: {
+            name: 'read_file',
+            arguments: '{"path":"package.json"}',
+          },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'provider-call-read',
+        content: 'read_file returned package metadata.',
+      },
+    ]);
+  });
+
+  it('uses non-streaming provider requests for completeModelStep', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{
+        message: { content: '{ "candidates": [] }' },
+        finish_reason: 'stop',
+      }],
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    const adapter = createModelStepProviderAdapter({
+      providerId: 'openai',
+      provider: createOpenAICompatibleAdapter({
+        providerId: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        fetch,
+      }),
+      clock: { now: () => '2026-05-17T00:00:01.000Z' },
+    });
+
+    await adapter.completeModelStep({
+      request: runtimeRequest(),
+      runId: 'run-1',
+      stepId: 'step-1',
+      config,
+      nextSequence: () => 1,
+      eventIdFactory: () => 'event-1',
+    });
+
+    const [, init] = fetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      stream: false,
+    });
+    expect(JSON.parse(String(init?.body))).not.toHaveProperty('stream_options');
   });
 });

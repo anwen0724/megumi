@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -98,7 +98,7 @@ describe('run context workspace grounding source guards', () => {
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
     ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)))
-      .filter((file) => projectPath(file) !== 'packages/core/agent-runtime/agent-loop.ts');
+      .filter((file) => projectPath(file) !== 'packages/agent/loop/agent-loop.ts');
 
     const forbiddenPatterns = [
       /tool registry/i,

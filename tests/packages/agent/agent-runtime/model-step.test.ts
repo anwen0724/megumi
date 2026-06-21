@@ -8,7 +8,7 @@ import {
   isModelMessageAction,
   isModelStep,
   runModelStep,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 
 describe('run model step foundation', () => {
   it('describes model step input without provider execution', () => {
@@ -79,7 +79,7 @@ describe('run model step foundation', () => {
         }),
         createdAt: '2026-05-17T00:00:00.000Z',
       },
-      aiPort: {
+      modelStepPort: {
         async *streamModelStep(input) {
           expect(input.request.runId).toBe('run-1');
           expect(input.request.stepId).toBe('step-1');

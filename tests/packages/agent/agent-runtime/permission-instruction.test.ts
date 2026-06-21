@@ -2,7 +2,7 @@
 import {
   createPermissionModeRuntimeInstruction,
   resolvePermissionModeState,
-} from '@megumi/core/agent-runtime';
+} from '@megumi/agent';
 
 describe('core permission mode helpers', () => {
   it('resolves permission mode state from explicit permission mode', () => {

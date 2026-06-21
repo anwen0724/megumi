@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModelInputContext } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ModelStepCompletionResult, ProviderRuntimeConfig } from '@megumi/ai/compat/model-step-types';
+import type { ModelStepCompletionResult, ProviderRuntimeConfig } from '@megumi/agent';
 import {
   ModelStepProviderService,
   type ModelStepProviderRegistryPort,
