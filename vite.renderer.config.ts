@@ -6,7 +6,6 @@ import path from 'path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@megumi/renderer-contracts': path.resolve(__dirname, 'src/shared/renderer-contracts'),
       '@megumi/desktop': path.resolve(__dirname, 'apps/desktop/src'),
       '@megumi/core': path.resolve(__dirname, 'packages/core'),
       '@megumi/context-management': path.resolve(__dirname, 'packages/context-management'),
