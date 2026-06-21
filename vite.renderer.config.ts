@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@megumi/renderer-contracts': path.resolve(__dirname, 'src/shared/renderer-contracts'),
-      '@megumi/desktop': path.resolve(__dirname, 'src/desktop'),
+      '@megumi/desktop': path.resolve(__dirname, 'apps/desktop/src'),
       '@megumi/core': path.resolve(__dirname, 'packages/core'),
       '@megumi/context-management': path.resolve(__dirname, 'packages/context-management'),
       '@megumi/ai': path.resolve(__dirname, 'packages/ai'),
@@ -18,6 +18,6 @@ export default defineConfig({
       '@megumi/shared': path.resolve(__dirname, 'packages/shared'),
     },
   },
-  root: 'src/ui',
-  build: { outDir: '../../.vite/renderer/main_window' },
+  root: 'apps/desktop/src/renderer',
+  build: { outDir: '../../../../.vite/renderer/main_window' },
 });
