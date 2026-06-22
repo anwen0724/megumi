@@ -2,11 +2,11 @@
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { ChatStreamEventSchema } from '@megumi/shared/chat-stream';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import { redactRuntimeValue } from '../services/security/redaction';
+import { redactRuntimeValue } from '@megumi/coding-agent/adapters/local/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/runtime/runtime-logger.service';
+} from '../services/agent-run/runtime-logger.service';
 
 export interface ChatStreamEventSender {
   send(channel: string, event: ChatStreamEvent): void;
@@ -61,5 +61,4 @@ function eventDiagnostics(event: unknown): Record<string, unknown> {
     seq: value.seq,
   }) as Record<string, unknown>;
 }
-
 

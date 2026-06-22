@@ -20,14 +20,14 @@ function term(...parts: string[]): string {
 describe('Megumi Home source guards', () => {
   it('keeps database creation on Megumi Home sqlite path in main composition', () => {
     const source = [
-      readProjectFile('apps/desktop/src/main/composition/desktop-main-composition.ts'),
-      readProjectFile('apps/desktop/src/main/persistence/compose-desktop-persistence.ts'),
+      readProjectFile('apps/desktop/src/main/shell-composition/desktop-main-composition.ts'),
+      readProjectFile('packages/coding-agent/composition/compose-coding-agent-persistence.ts'),
     ].join('\n');
     const singleQuotedUserData = term("app.getPath('", 'userData', "')");
     const doubleQuotedUserData = term('app.getPath("', 'userData', '")');
 
     expect(source).toContain('initializeElectronMegumiHomeSync');
-    expect(source).toContain("path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3')");
+    expect(source).toContain("path.join(input.sqlitePath, 'megumi.sqlite3')");
     expect(source).not.toContain(`createDatabase(path.join(${singleQuotedUserData}, 'megumi.sqlite3'))`);
     expect(source).not.toContain(`createDatabase(path.join(${doubleQuotedUserData}, "megumi.sqlite3"))`);
   });
@@ -41,7 +41,7 @@ describe('Megumi Home source guards', () => {
   });
 
   it('keeps provider credentials in Megumi Home settings.json instead of secret-store files', () => {
-    const homeSource = readProjectFile('apps/desktop/src/main/services/project/megumi-home.service.ts');
+    const homeSource = readProjectFile('apps/desktop/src/main/services/workspace/megumi-home.service.ts');
     const providerSettingsSource = readProjectFile('packages/coding-agent/settings/provider-settings.ts');
 
     expect(projectFileExists('apps/desktop/src/main/services/security/secret-store.service.ts')).toBe(false);
@@ -53,14 +53,15 @@ describe('Megumi Home source guards', () => {
 
   it('uses Megumi Home settings when constructing provider runtime services', () => {
     const providerHandler = readProjectFile('apps/desktop/src/main/ipc/handlers/provider.handler.ts');
-    const mainComposition = readProjectFile('apps/desktop/src/main/composition/compose-provider-runtime.ts');
+    const desktopComposition = readProjectFile('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
+    const productComposition = readProjectFile('packages/coding-agent/composition/compose-coding-agent-runtime.ts');
 
     expect(providerHandler).not.toContain('createAppSettingsService');
     expect(providerHandler).not.toContain('initializeElectronMegumiHomeSync');
     expect(providerHandler).not.toContain('new ProviderSettingsService');
-    expect(mainComposition).toContain('new ProviderSettingsService');
-    expect(mainComposition).toContain('new ProviderRuntimeService');
-    expect(mainComposition).not.toContain('createElectronSecretStoreService');
+    expect(desktopComposition).toContain('appSettingsProvider: appSettingsService');
+    expect(productComposition).toContain('new ProviderSettingsService');
+    expect(productComposition).not.toContain('createElectronSecretStoreService');
   });
 
   it('does not expose plaintext API keys through main-to-renderer send calls', () => {

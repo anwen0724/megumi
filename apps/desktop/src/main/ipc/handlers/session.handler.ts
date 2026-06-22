@@ -28,9 +28,9 @@ import {
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { SessionRunService } from '../../services/session/session-run.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { SessionRunService } from '@megumi/coding-agent/run';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
@@ -216,5 +216,4 @@ async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {
     yield item;
   }
 }
-
 

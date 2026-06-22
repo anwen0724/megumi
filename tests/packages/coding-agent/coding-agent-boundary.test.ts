@@ -45,6 +45,10 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/run-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/model-step-stream.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/event-utils.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/adapters/local/tools/tool-execution-router.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/ports/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-registry-snapshot.ts'))).toBe(true);
@@ -68,21 +72,19 @@ describe('coding-agent package boundary', () => {
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
     const codingAgentRun = sourceUnder('packages/coding-agent/run');
-    const desktopSessionRun = readFileSync(
-      join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'),
-      'utf8',
-    );
+    const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(codingAgentRun).toContain('class CodingAgentRunOrchestrator');
     expect(codingAgentRun).toContain('runModelToolLoop');
     expect(codingAgentRun).toContain('buildContinuationInputContext');
     expect(codingAgentRun).toContain('createCodingAgentRunInputFacts');
-    expect(desktopSessionRun).toContain('new CodingAgentRunOrchestrator');
-    expect(desktopSessionRun).not.toContain("contextKind: 'compaction-probe'");
-    expect(desktopSessionRun).not.toContain("contextKind: 'initial'");
+    expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);
+    expect(desktopServices).not.toContain('new CodingAgentRunOrchestrator');
+    expect(desktopServices).not.toContain("contextKind: 'compaction-probe'");
+    expect(desktopServices).not.toContain("contextKind: 'initial'");
   });
 
-  it('keeps product core free of desktop, Electron, and concrete SQLite dependencies', () => {
+  it('keeps product core free of desktop and Electron UI shell dependencies', () => {
     const source = sourceUnder('packages/coding-agent');
 
     expect(source).not.toContain('@megumi/desktop');
@@ -90,8 +92,9 @@ describe('coding-agent package boundary', () => {
     expect(source).not.toContain("from 'electron'");
     expect(source).not.toContain('BrowserWindow');
     expect(source).not.toContain('ipcMain');
+    expect(source).not.toContain('preload');
+    expect(source).not.toContain('renderer');
     expect(source).not.toContain('@megumi/db');
-    expect(source).not.toContain('better-sqlite3');
     expect(source).not.toContain('@megumi/core');
   });
 

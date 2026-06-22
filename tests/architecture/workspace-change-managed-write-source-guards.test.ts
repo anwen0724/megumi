@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -38,7 +38,7 @@ describe('workspace change managed write source guards', () => {
     const roots = [
       'apps/desktop/src/main',
       'packages/shared',
-      'apps/desktop/src/main/persistence',
+      'packages/coding-agent/persistence',
     ];
     const files = roots.flatMap((root) => productionFiles(path.join(repoRoot, root)));
     const matches = files.flatMap((file) => scanRunCommandWorkspaceWindows(file));
@@ -48,10 +48,10 @@ describe('workspace change managed write source guards', () => {
 
   it('keeps run_command executor path away from workspace restore record writes', () => {
     const files = [
-      'apps/desktop/src/main/services/tool/tool-executors/run-command.executor.ts',
-      'apps/desktop/src/main/services/tool/built-in-tool-source-executor.service.ts',
-      'apps/desktop/src/main/services/tool/tool-execution-router.service.ts',
-      'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
+      'packages/coding-agent/adapters/local/tools/tool-executors/run-command.executor.ts',
+      'packages/coding-agent/adapters/local/tools/built-in-tool-source-executor.ts',
+      'packages/coding-agent/adapters/local/tools/tool-execution-router.ts',
+      'packages/coding-agent/adapters/local/tools/tool-call-handler.service.ts',
     ];
     const forbidden = [
       'saveRestoreRequest',

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -59,6 +59,7 @@ describe('artifact system source guards', () => {
       ...filesUnder('packages/coding-agent'),
     ]
       .filter((file) => projectPath(file).includes('artifact') || projectPath(file).includes('plan-artifact'))
+      .filter((file) => projectPath(file) !== 'packages/coding-agent/artifacts/artifact-content-store.ts')
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|path|node:path|child_process|node:child_process)/.test(source);
@@ -97,7 +98,7 @@ describe('artifact system source guards', () => {
       ...filesUnder('packages/shared'),
       ...filesUnder('packages/agent'),
       ...filesUnder('packages/coding-agent'),
-      ...filesUnder('apps/desktop/src/main/persistence'),
+      ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/preload'),
       ...filesUnder('apps/desktop/src/renderer'),

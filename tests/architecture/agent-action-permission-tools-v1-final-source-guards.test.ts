@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -137,6 +137,13 @@ describe('agent action permission tools v1 final source guards', () => {
       ...collectTsFiles('packages/command'),
       ...collectTsFiles('packages/coding-agent'),
     ]
+      .filter((file) => {
+        const relativePath = projectPath(file);
+        return !relativePath.startsWith('packages/coding-agent/adapters/local/')
+          && !relativePath.startsWith('packages/coding-agent/persistence/')
+          && !relativePath.startsWith('packages/coding-agent/composition/')
+          && relativePath !== 'packages/coding-agent/artifacts/artifact-content-store.ts';
+      })
       .filter((file) => {
         const source = readFileSync(file, 'utf8');
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|node:fs|fs|node:child_process|child_process)/.test(source)

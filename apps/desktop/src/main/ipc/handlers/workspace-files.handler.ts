@@ -1,4 +1,4 @@
-﻿import { PathSandboxViolationError } from '../../services/security/sandbox-policy';
+﻿import { PathSandboxViolationError } from '@megumi/coding-agent/adapters/local/security/sandbox-policy';
 import type { z } from 'zod';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
@@ -14,8 +14,8 @@ import {
   WorkspaceFilesListRequestSchema,
 } from '@megumi/shared/ipc';
 import type { WorkspaceFilesService } from '../../services/workspace/workspace-files.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type WorkspaceFilesHandlersService = Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
@@ -82,5 +82,4 @@ function mapWorkspaceFilesIpcError(error: unknown): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

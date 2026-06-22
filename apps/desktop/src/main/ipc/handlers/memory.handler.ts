@@ -19,8 +19,8 @@ import {
 } from '@megumi/shared/ipc';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import type { MemoryService } from '@megumi/coding-agent/memory';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import type { DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 
 export type MemoryHandlersService = Pick<
   MemoryService,
@@ -213,5 +213,4 @@ function mapMemoryIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

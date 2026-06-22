@@ -1,8 +1,8 @@
 // @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
-import { ToolRepository } from '@megumi/desktop/main/persistence/repos/tool.repo';
+import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
+import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 
 let db: Database.Database | null = null;

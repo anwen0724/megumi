@@ -14,9 +14,9 @@ import {
   ToolExecutionGetRequestSchema,
   ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
-import type { ToolService } from '../../services/tool/tool.service';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
+import type { ToolService } from '@megumi/coding-agent/tools';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
@@ -102,5 +102,4 @@ function mapToolIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

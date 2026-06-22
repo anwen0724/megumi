@@ -27,8 +27,8 @@ import {
   ArtifactVersionGetRequestSchema,
 } from '@megumi/shared/ipc';
 import type { ArtifactService } from '@megumi/coding-agent/artifacts';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type ArtifactHandlersService = Pick<
@@ -152,5 +152,4 @@ function mapArtifactIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { MemoryDiagnosticWriter } from '@megumi/desktop/main/services/memory/memory-diagnostic-writer.service';
-import { MemoryMarkdownSyncService } from '@megumi/desktop/main/services/memory/memory-markdown-sync.service';
-import type { MemoryRuntimeFileSystem } from '@megumi/desktop/main/services/memory/memory-runtime-file-system';
-import { resolveProjectMemoryMirrorTarget } from '@megumi/desktop/main/services/memory/memory-runtime-paths';
+import { MemoryDiagnosticWriter } from '@megumi/coding-agent/adapters/local/memory/memory-diagnostic-writer.service';
+import { MemoryMarkdownSyncService } from '@megumi/coding-agent/adapters/local/memory/memory-markdown-sync.service';
+import type { MemoryRuntimeFileSystem } from '@megumi/coding-agent/adapters/local/memory/memory-runtime-file-system';
+import { resolveProjectMemoryMirrorTarget } from '@megumi/coding-agent/adapters/local/memory/memory-runtime-paths';
 import type {
   MemoryAuditLog,
   MemoryMarkdownMirror,

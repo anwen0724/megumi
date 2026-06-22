@@ -1,7 +1,7 @@
 ﻿// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import { PathSandboxViolationError } from '@megumi/desktop/main/services/security/sandbox-policy';
+import { PathSandboxViolationError } from '@megumi/coding-agent/adapters/local/security/sandbox-policy';
 import { registerWorkspaceFilesHandlers } from '@megumi/desktop/main/ipc/handlers/workspace-files.handler';
 
 vi.mock('electron', () => ({

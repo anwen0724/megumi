@@ -1,9 +1,9 @@
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import {
   electronWindowControlHost,
   type DesktopWindowControlHost,
-} from '../../host/electron-window-control-host';
+} from '../../shell/electron-window-control-host';
 
 export interface RegisterWindowHandlersOptions {
   ipcMain?: DesktopIpcMain;

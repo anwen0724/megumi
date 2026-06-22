@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createChatStreamEventAdapter,
   type ChatStreamEventSink,
-} from '@megumi/desktop/main/projections/chat-stream/chat-stream-event-adapter.service';
+} from '@megumi/coding-agent/run/chat-stream-event-adapter';
 import { ChatStreamEventSchema, type ChatStreamEvent } from '@megumi/shared';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 

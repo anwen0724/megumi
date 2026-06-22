@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -122,11 +122,11 @@ describe('Command system source guards', () => {
   });
 
   it('keeps required input preprocessing boundary comments in production code', () => {
-    expect(source('apps/desktop/src/main/services/runtime/runtime-input.service.ts'))
+    expect(source('packages/coding-agent/run/runtime-input.ts'))
       .toContain('before session runs trust it');
     expect(source('packages/coding-agent/context/model-step-input-context.ts'))
       .toContain('never parses raw slash commands');
-    expect(source('apps/desktop/src/main/services/session/session-run.service.ts'))
+    expect(source('packages/coding-agent/run/session-run-service.ts'))
       .toContain('runtime normalization is the trust boundary');
     expect(source('packages/shared/ipc/schemas.ts'))
       .toContain('runtime services own trusted normalization');
@@ -149,8 +149,8 @@ describe('Command system source guards', () => {
 
   it('keeps main runtime free of raw slash command parsing', () => {
     expect(offenders([
-      'apps/desktop/src/main/services/session/session-run.service.ts',
-      'apps/desktop/src/main/services/runtime/model-step-provider.service.ts',
+      'packages/coding-agent/run/session-run-service.ts',
+      'apps/desktop/src/main/services/provider/model-step-provider.service.ts',
       'packages/coding-agent/settings/provider-runtime.ts',
     ], [
       /parseSlashCommand/,
@@ -160,7 +160,7 @@ describe('Command system source guards', () => {
     ])).toEqual([]);
     // session-run.service.ts may import BUILT_IN_INPUT_COMMAND_REGISTRY
     // for the ParsedInput bridge that feeds command facts into CodingAgentRunOrchestrator.
-    const sessionRun = readFileSync(join(repoRoot, 'apps/desktop/src/main/services/session/session-run.service.ts'), 'utf8');
+    const sessionRun = readFileSync(join(repoRoot, 'packages/coding-agent/run/session-run-service.ts'), 'utf8');
     expect(sessionRun).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
     expect(sessionRun).not.toContain('parseSlashCommand');
     expect(sessionRun).not.toContain('dispatchCommandText');

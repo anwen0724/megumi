@@ -8,7 +8,7 @@ import {
   ModelStepProviderService,
   type ModelStepProviderRegistryPort,
   type ModelStepRuntimeResolverPort,
-} from '@megumi/desktop/main/services/runtime/model-step-provider.service';
+} from '@megumi/desktop/main/services/provider/model-step-provider.service';
 import { ProviderRuntimeResolutionError } from '@megumi/coding-agent/settings';
 
 const runtimeContext = {

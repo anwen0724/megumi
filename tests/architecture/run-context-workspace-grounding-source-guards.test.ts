@@ -66,7 +66,7 @@ describe('run context workspace grounding source guards', () => {
   });
 
   it('keeps persistence context repository from doing relevance decisions or workspace reads', () => {
-    const offenders = filesUnder('apps/desktop/src/main/persistence')
+    const offenders = filesUnder('packages/coding-agent/persistence')
       .filter((file) => projectPath(file).includes('run-context'))
       .filter((file) => {
         const source = readProjectFile(file);
@@ -94,7 +94,7 @@ describe('run context workspace grounding source guards', () => {
     const contextFiles = [
       ...filesUnder('packages/shared'),
       ...filesUnder('packages/agent'),
-      ...filesUnder('apps/desktop/src/main/persistence'),
+      ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
     ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)))

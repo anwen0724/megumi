@@ -18,10 +18,10 @@ import {
   ProjectRemoveRequestSchema,
   ProjectUseExistingRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ProjectService } from '../../services/project/project.service';
-import { ProjectPathValidationError } from '../../services/project/project.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { ProjectService } from '../../services/workspace/project.service';
+import { ProjectPathValidationError } from '../../services/workspace/project.service';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type ProjectHandlersService = Pick<
@@ -123,5 +123,4 @@ function mapProjectIpcError(error: unknown): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

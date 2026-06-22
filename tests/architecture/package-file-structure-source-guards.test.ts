@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -124,7 +124,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/agent/events/runtime-event-factory.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/agent/state/state-policy.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/run-orchestrator.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/persistence/connection.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/context-management'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/tools'))).toBe(false);
@@ -144,9 +144,9 @@ describe('package and file structure source guards', () => {
       .filter((entry) => entry.endsWith('.service.ts'));
 
     expect(flatServiceFiles).toEqual([]);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/runtime/model-step-provider.service.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/tool/tool-executors/read-file.executor.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/session-run-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/provider/model-step-provider.service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/adapters/local/tools/tool-executors/read-file.executor.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);
   });

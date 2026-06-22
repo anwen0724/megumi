@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -52,8 +52,8 @@ describe('runtime lifecycle cleanup final source guards', () => {
   });
 
   it('keeps canonical tool schema names on tool_calls and tool_executions', () => {
-    const migrations = read('apps/desktop/src/main/persistence/schema/migrations.ts');
-    const repository = read('apps/desktop/src/main/persistence/repos/tool.repo.ts');
+    const migrations = read('packages/coding-agent/persistence/schema/migrations.ts');
+    const repository = read('packages/coding-agent/persistence/repos/tool.repo.ts');
 
     expect(migrations).toContain('CREATE TABLE IF NOT EXISTS tool_calls');
     expect(migrations).toContain('CREATE TABLE IF NOT EXISTS tool_executions');

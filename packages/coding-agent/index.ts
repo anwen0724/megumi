@@ -10,4 +10,7 @@ export * from './permissions';
 export * from './settings';
 export * from './instructions';
 export * from './resources';
+export * from './persistence';
+export * from './product-runtime';
+export * from './composition';
 export * from './ports';

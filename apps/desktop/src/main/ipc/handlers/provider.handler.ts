@@ -11,8 +11,8 @@ import {
 import type { ProviderId, ProviderPublicStatus, ProviderSettings } from '@megumi/shared/provider';
 import type { ProviderSettingsUpdateInput } from '@megumi/coding-agent/settings';
 import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export interface ProviderHandlersService {

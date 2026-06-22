@@ -1,7 +1,7 @@
 ﻿import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { ArtifactContentStore } from '@megumi/desktop/main/services/artifact/artifact-content-store.service';
+import { ArtifactContentStore } from '@megumi/coding-agent/artifacts/artifact-content-store';
 
 const root = path.join(process.cwd(), '.tmp', 'artifact-content-store-test');
 

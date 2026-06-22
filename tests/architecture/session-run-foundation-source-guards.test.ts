@@ -112,7 +112,7 @@ describe('session run foundation source guards', () => {
     const lifecycleFiles = [
       ...filesUnder('packages/shared'),
       ...filesUnder('packages/agent'),
-      ...filesUnder('apps/desktop/src/main/persistence'),
+      ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
     ].filter((file) => /session-run|agent-runtime|agent\.handler/.test(projectPath(file)));

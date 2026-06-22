@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -108,19 +108,20 @@ describe('package dependency boundaries', () => {
         /@megumi\/core(\/|['"]|$)/,
         /from ['"]electron['"]/,
         /apps\/desktop/,
-        /better-sqlite3/,
         /\bBrowserWindow\b/,
         /\bipcMain\b/,
-        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
-        /from ['"]fs(?:\/[^'"]+)?['"]/,
-        /from ['"]fs-extra['"]/,
-        /from ['"]node:child_process['"]/,
-        /from ['"]child_process['"]/,
-        /\bspawn\b/,
-        /\bexecFile\b/,
-        /\bprocess\.env\b/,
+        /\bpreload\b/,
+        /\brenderer\b/,
       ]),
     ).toEqual([]);
+  });
+
+  it('keeps product persistence under coding-agent instead of desktop', () => {
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/migrations.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });
 
   it('keeps packages/coding-agent tools and permissions independent from legacy tools/security packages', () => {
@@ -241,7 +242,7 @@ describe('package dependency boundaries', () => {
     const legacyFactoryName = `createProjectTool${'Executor'}`;
     const legacyModulePath = `project-tool-${'executor.service'}`;
 
-    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/services/tool', legacyWrapperFileName))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/adapters/local/tools', legacyWrapperFileName))).toBe(false);
 
     const source = [
       ...walkSourceFiles(path.join(root, 'apps')),
@@ -257,7 +258,7 @@ describe('package dependency boundaries', () => {
   });
 
   it('does not add non-goal source executors to the desktop tool services', () => {
-    const source = walkSourceFiles(path.join(root, 'apps/desktop/src/main/services/tool'))
+    const source = walkSourceFiles(path.join(root, 'packages/coding-agent/adapters/local/tools'))
       .map((file) => fs.readFileSync(file, 'utf8'))
       .join('\n');
 
@@ -273,11 +274,11 @@ describe('package dependency boundaries', () => {
 
   it('keeps 19.02 tool handling sequential without batch orchestration', () => {
     const handler = fs.readFileSync(
-      path.join(root, 'apps/desktop/src/main/services/tool/tool-call-handler.service.ts'),
+      path.join(root, 'packages/coding-agent/adapters/local/tools/tool-call-handler.service.ts'),
       'utf8',
     );
     const router = fs.readFileSync(
-      path.join(root, 'apps/desktop/src/main/services/tool/tool-execution-router.service.ts'),
+      path.join(root, 'packages/coding-agent/adapters/local/tools/tool-execution-router.ts'),
       'utf8',
     );
 
@@ -290,7 +291,7 @@ describe('package dependency boundaries', () => {
 
   it('keeps structured output out of 19.02 tool registry runtime', () => {
     const source = [
-      ...walkSourceFiles(path.join(root, 'apps/desktop/src/main/services/tool')),
+      ...walkSourceFiles(path.join(root, 'packages/coding-agent/adapters/local/tools')),
 
       ...walkSourceFiles(path.join(root, 'packages/coding-agent/tools')),
     ]
@@ -303,15 +304,6 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/\bjson_schema\b/);
   });
 
-  it('keeps concrete SQLite persistence under desktop main instead of packages', () => {
-    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/connection.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/schema/migrations.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/repos/session-run.repo.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/compose-desktop-persistence.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/db/connection.ts'))).toBe(false);
-    expect(fs.existsSync(path.join(root, 'packages/db/schema/migrations.ts'))).toBe(false);
-    expect(fs.existsSync(path.join(root, 'packages/db/repos/session-run.repo.ts'))).toBe(false);
-  });
 
   it('keeps production code from importing the old @megumi/db alias', () => {
     const checkedRoots = [

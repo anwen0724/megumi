@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
-import { readFile, writeFile, editFile, listFiles, runCommand } from '@megumi/desktop/main/services/tool/file.service';
+import { readFile, writeFile, editFile, listFiles, runCommand } from '@megumi/coding-agent/adapters/local/tools/file.service';
 import { EventEmitter } from 'events';
 
 // Mock child_process.spawn for runCommand tests
@@ -208,4 +208,3 @@ describe('file.service', () => {
     });
   });
 });
-

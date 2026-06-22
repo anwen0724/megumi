@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -39,7 +39,7 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('does not reintroduce RunAction.call_tool as the model tool path', () => {
-    const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
+    const sessionRun = read('packages/coding-agent/run/session-run-service.ts');
     const toolLoop = read('packages/agent/loop/agent-loop.ts');
 
     expect(sessionRun).not.toContain("actionKind: 'call_tool'");
@@ -49,7 +49,7 @@ describe('provider tool call model loop source guards', () => {
 
   it('does not implement real built-in tools or permission policy in Plan 2 code paths', () => {
     const toolLoop = read('packages/agent/loop/agent-loop.ts');
-    const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
+    const sessionRun = read('packages/coding-agent/run/session-run-service.ts');
 
     expect(toolLoop).not.toContain('readFileSync');
     expect(toolLoop).not.toContain('writeFileSync');
@@ -67,8 +67,8 @@ describe('provider tool call model loop source guards', () => {
       'packages/agent/ports/model-step-port.ts',
       'packages/agent/loop/agent-loop.ts',
       'packages/agent/model/model-step-request-mapper.ts',
-      'apps/desktop/src/main/services/runtime/model-step-provider.service.ts',
-      'apps/desktop/src/main/services/session/session-run.service.ts',
+      'apps/desktop/src/main/services/provider/model-step-provider.service.ts',
+      'packages/coding-agent/run/session-run-service.ts',
     ];
 
     for (const file of files) {

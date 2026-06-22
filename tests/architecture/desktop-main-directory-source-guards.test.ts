@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -54,14 +54,12 @@ describe('Desktop Main directory boundaries', () => {
   });
 
   it('keeps desktop-main-composition as a compose-module coordinator', () => {
-    const source = read('apps/desktop/src/main/composition/desktop-main-composition.ts');
+    const source = read('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
-    expect(source).toContain('composeDesktopPersistence');
-    expect(source).toContain('composeProviderRuntime');
-    expect(source).toContain('composeMemoryRuntime');
-    expect(source).toContain('composeToolRuntimeFactory');
-    expect(source).toContain('composeSessionRuntime');
-    expect(source).toContain('composeRecoveryRuntime');
+    expect(source).toContain('composeCodingAgentRuntime');
+    expect(source).toContain('providerService: codingAgentRuntime.providerSettingsService');
+    expect(source).toContain('runContextService: codingAgentRuntime.runContextService');
+    expect(source).toContain('toolService: codingAgentRuntime.toolService');
     for (const forbidden of [
       'createDatabase(',
       'new SessionRunService',
@@ -110,7 +108,7 @@ describe('Desktop Main directory boundaries', () => {
 
   it('keeps Electron and OS capability adapters in app or host instead of services and composition', () => {
     const checkedRoots = [
-      join(root, 'apps', 'desktop', 'src', 'main', 'composition'),
+      join(root, 'apps', 'desktop', 'src', 'main', 'shell-composition'),
       join(root, 'apps', 'desktop', 'src', 'main', 'services'),
       join(root, 'apps', 'desktop', 'src', 'main', 'projections'),
     ];
@@ -121,13 +119,13 @@ describe('Desktop Main directory boundaries', () => {
     );
 
     expect(violations).toEqual([]);
-    expect(read('apps/desktop/src/main/host/electron-dialog-host.ts')).toContain('dialog.showOpenDialog');
-    expect(read('apps/desktop/src/main/host/electron-shell-host.ts')).toContain('shell.openPath');
-    expect(read('apps/desktop/src/main/host/electron-window-host.ts')).toContain('BrowserWindow.getAllWindows');
+    expect(read('apps/desktop/src/main/shell/electron-dialog-host.ts')).toContain('dialog.showOpenDialog');
+    expect(read('apps/desktop/src/main/shell/electron-shell-host.ts')).toContain('shell.openPath');
+    expect(read('apps/desktop/src/main/shell/electron-window-host.ts')).toContain('BrowserWindow.getAllWindows');
   });
 
   it('keeps desktop persistence as a local SQLite adapter without Electron or service imports', () => {
-    const source = sourceUnder('apps/desktop/src/main/persistence');
+    const source = sourceUnder('packages/coding-agent/persistence');
 
     expect(source).toContain('better-sqlite3');
     expect(source).toContain('migrateDatabase');
@@ -161,8 +159,8 @@ describe('Desktop Main directory boundaries', () => {
   it('keeps services from opening SQLite connections directly', () => {
     const source = sourceUnder('apps/desktop/src/main/services');
 
-    expect(source).not.toContain("from '@megumi/desktop/main/persistence/connection'");
-    expect(source).not.toContain("from '@megumi/desktop/main/persistence/schema/migrations'");
+    expect(source).not.toContain("from '@megumi/coding-agent/persistence/connection'");
+    expect(source).not.toContain("from '@megumi/coding-agent/persistence/schema/migrations'");
     expect(source).not.toContain('createDatabase(');
     expect(source).not.toContain('migrateDatabase(');
   });

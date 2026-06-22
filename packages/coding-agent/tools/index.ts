@@ -9,3 +9,5 @@ export * from './sources';
 export * from './tool-registry-snapshot';
 export * from './tool-execution-host-port';
 export * from './tool-orchestrator';
+export * from './tool-service-port';
+export * from './tool-service';

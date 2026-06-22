@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -39,8 +39,8 @@ describe('agent action permission tools v1 source guards', () => {
   });
 
   it('keeps permission decision persistence markers in schema and repository code', () => {
-    const migrations = readProjectFile('apps/desktop/src/main/persistence/schema/migrations.ts');
-    const repository = readProjectFile('apps/desktop/src/main/persistence/repos/tool.repo.ts');
+    const migrations = readProjectFile('packages/coding-agent/persistence/schema/migrations.ts');
+    const repository = readProjectFile('packages/coding-agent/persistence/repos/tool.repo.ts');
     const persistenceSources = `${migrations}\n${repository}`;
 
     expect(migrations).toContain('CREATE TABLE IF NOT EXISTS permission_decisions');

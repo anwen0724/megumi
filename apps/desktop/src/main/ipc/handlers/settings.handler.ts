@@ -8,8 +8,8 @@ import {
 } from '@megumi/shared/ipc';
 import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import type { DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 
 export interface SettingsHandlersService {
   getResolvedSettings(): AppSettingsResolved;

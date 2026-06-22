@@ -8,9 +8,9 @@ import type {
   RunListBySessionPayload,
 } from '@megumi/shared/ipc';
 import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megumi/shared/ipc';
-import type { SessionRunService } from '../../services/session/session-run.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { SessionRunService } from '@megumi/coding-agent/run';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type RunHandlersService = Pick<SessionRunService, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
@@ -66,5 +66,4 @@ function mapRunIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

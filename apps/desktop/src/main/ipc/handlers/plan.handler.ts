@@ -12,9 +12,9 @@ import {
   PlanByRunGetRequestSchema,
   PlanStatusUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { PermissionSnapshotService } from '../../services/security/permission-snapshot.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type PlanHandlersService = Pick<
@@ -77,6 +77,5 @@ function mapPlanIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
 
 

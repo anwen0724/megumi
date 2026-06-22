@@ -19,9 +19,9 @@ import {
   WorkspaceRestorePayloadSchema,
   WorkspaceRestoreRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RecoveryService } from '../../services/runtime/recovery.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { RecoveryService } from '@megumi/coding-agent/run';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export interface RegisterRecoveryHandlersOptions {
@@ -107,5 +107,4 @@ function mapRecoveryIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

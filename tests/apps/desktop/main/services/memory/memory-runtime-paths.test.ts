@@ -5,7 +5,7 @@ import {
   resolveMemoryDiagnosticsPath,
   resolveProjectMemoryMirrorTarget,
   resolveUserMemoryMirrorTarget,
-} from '@megumi/desktop/main/services/memory/memory-runtime-paths';
+} from '@megumi/coding-agent/adapters/local/memory/memory-runtime-paths';
 
 describe('memory runtime paths', () => {
   const homePath = path.resolve('C:/tmp/megumi-home');

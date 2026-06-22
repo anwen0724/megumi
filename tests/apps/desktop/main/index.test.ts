@@ -6,6 +6,46 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
   const logsPath = `${homePath}/logs`;
+  const codingAgentRuntime = {
+    sessionRunService: {
+      createSession: vi.fn(),
+      listSessions: vi.fn(),
+      sendSessionMessage: vi.fn(),
+      cancelSessionMessage: vi.fn(),
+      listRuntimeEventsByRun: vi.fn(),
+      startRun: vi.fn(),
+      getPlanByRun: vi.fn(),
+      updatePlanStatus: vi.fn(),
+    },
+    runContextService: {
+      getBaselineContext: vi.fn(),
+      listWorkspaceSourcesByRun: vi.fn(),
+    },
+    providerSettingsService: {
+      listProviderStatuses: vi.fn(),
+      updateProviderSettings: vi.fn(),
+      setProviderApiKey: vi.fn(),
+      deleteProviderApiKey: vi.fn(),
+    },
+    toolService: {
+      listDefinitions: vi.fn(),
+      getToolExecution: vi.fn(),
+      resolveApproval: vi.fn(),
+    },
+    recoveryService: {
+      listRecoverableRuns: vi.fn(),
+      resumeRun: vi.fn(),
+      cancelRun: vi.fn(),
+      retryRun: vi.fn(),
+    },
+    artifactService: {
+      listArtifacts: vi.fn(),
+    },
+    memoryService: {
+      listMemories: vi.fn(),
+    },
+    dispose: vi.fn(),
+  };
   return {
     homePath,
     logsPath,
@@ -146,7 +186,9 @@ const mocks = vi.hoisted(() => {
     })),
     createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
     migrateDatabase: vi.fn(),
-    composeDesktopPersistence: vi.fn(() => {
+    codingAgentRuntime,
+    composeCodingAgentRuntime: vi.fn(() => codingAgentRuntime),
+    composeCodingAgentPersistence: vi.fn(() => {
       const db = { databaseId: 'desktop-persistence-database' };
       return {
         database: db,
@@ -362,7 +404,7 @@ vi.mock('@megumi/desktop/main/config/env', () => ({
   loadEnvFile: mocks.loadEnvFile,
 }));
 
-vi.mock('@megumi/desktop/main/services/project/megumi-home.service', () => ({
+vi.mock('@megumi/desktop/main/services/workspace/megumi-home.service', () => ({
   initializeElectronMegumiHomeSync: mocks.initializeElectronMegumiHomeSync,
 }));
 
@@ -403,7 +445,7 @@ vi.mock('@megumi/desktop/main/services/settings/app-settings.service', () => ({
   createAppSettingsService: mocks.createAppSettingsService,
 }));
 
-vi.mock('@megumi/desktop/main/services/tool/tool.service', () => ({
+vi.mock('@megumi/coding-agent/adapters/local/tools/tool.service', () => ({
   ToolService: mocks.ToolService,
   createDefaultToolService: mocks.createDefaultToolService,
 }));
@@ -414,14 +456,21 @@ vi.mock('@megumi/desktop/main/services/runtime/recovery.service', () => ({
 
 vi.mock('@megumi/coding-agent/workspace', () => ({
   WorkspaceRestoreService: mocks.WorkspaceRestoreService,
+  createWorkspaceChangeFooterProjectorService: vi.fn(() => ({ projectRunFooter: vi.fn() })),
+  isWorkspaceChangeFooterProjectorPort: vi.fn(() => false),
 }));
 
 vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () => ({
   createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
 
-vi.mock('@megumi/desktop/main/persistence', () => ({
-  composeDesktopPersistence: mocks.composeDesktopPersistence,
+vi.mock('@megumi/coding-agent/persistence', () => ({
+  composeCodingAgentPersistence: mocks.composeCodingAgentPersistence,
+}));
+
+vi.mock('@megumi/coding-agent/composition', () => ({
+  composeCodingAgentRuntime: mocks.composeCodingAgentRuntime,
+  composeCodingAgentPersistence: mocks.composeCodingAgentPersistence,
 }));
 
 vi.mock('@megumi/desktop/main/services/security/permission-snapshot.service', () => ({
@@ -444,7 +493,7 @@ vi.mock('@megumi/coding-agent/memory', () => ({
   MemoryExtractionModelClientService: mocks.MemoryExtractionModelClientService,
 }));
 
-vi.mock('@megumi/desktop/main/services/project/project.service', () => ({
+vi.mock('@megumi/desktop/main/services/workspace/project.service', () => ({
   createProjectService: mocks.createProjectService,
 }));
 
@@ -477,7 +526,7 @@ describe('main runtime logger composition', () => {
     mocks.createAppSettingsService.mockClear();
     mocks.ToolService.mockClear();
     mocks.createDefaultToolService.mockClear();
-    mocks.composeDesktopPersistence.mockClear();
+    mocks.composeCodingAgentPersistence.mockClear();
     mocks.RecoveryRepository.mockClear();
     mocks.WorkspaceChangeRepository.mockClear();
     mocks.WorkspaceRestoreService.mockClear();
@@ -503,8 +552,8 @@ describe('main runtime logger composition', () => {
 
   it('uses permission snapshot naming for service composition', () => {
     const source = [
-      'apps/desktop/src/main/persistence/compose-desktop-persistence.ts',
-      'apps/desktop/src/main/composition/compose-session-runtime.ts',
+      'packages/coding-agent/composition/compose-coding-agent-persistence.ts',
+      'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts',
     ]
       .map((filePath) => readFileSync(join(process.cwd(), filePath), 'utf8'))
       .join('\n');
@@ -525,14 +574,7 @@ describe('main runtime logger composition', () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
-    const sessionRunService = mocks.SessionRunService.mock.results[0]?.value;
-    const runContextService = mocks.createDefaultRunContextService.mock.results[0]?.value;
     const settingsService = mocks.createAppSettingsService.mock.results[0]?.value;
-    const providerService = mocks.ProviderSettingsService.mock.results[0]?.value;
-    const toolService = mocks.ToolService.mock.results[0]?.value;
-    const recoveryService = mocks.createRecoveryService.mock.results[0]?.value;
-    const artifactService = mocks.ArtifactService.mock.results[0]?.value;
-    const memoryService = mocks.createMemoryService.mock.results[0]?.value;
     const workspaceFilesService = mocks.createWorkspaceFilesService.mock.results[0]?.value;
     const projectService = mocks.createProjectService.mock.results[0]?.value;
     expect(processLogger).toEqual(expect.objectContaining({
@@ -544,121 +586,29 @@ describe('main runtime logger composition', () => {
     const lifecycleOptions = mocks.registerAppLifecycle.mock.calls[0]?.[0];
     lifecycleOptions.registerAllHandlers();
 
-    expect(mocks.createDefaultRunContextService).toHaveBeenCalledWith(
-      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
-      { repository: expect.any(Object) },
-    );
     expect(mocks.createAppSettingsService).toHaveBeenCalledWith({
       settingsPath: `${mocks.homePath}/settings.json`,
     });
-    expect(mocks.composeDesktopPersistence).toHaveBeenCalledWith(
-      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
+    expect(mocks.composeCodingAgentPersistence).toHaveBeenCalledWith(
+      { sqlitePath: `${mocks.homePath}/sqlite` },
     );
-    expect(mocks.ArtifactContentStore).toHaveBeenCalledWith({
-      artifactRoot: join(mocks.homePath, 'artifacts'),
-    });
-    const planArtifactCompatibility = mocks.PlanArtifactCompatibilityService.mock.results[0]?.value;
-    expect(mocks.PlanArtifactCompatibilityService).toHaveBeenCalledWith({
-      repository: expect.any(Object),
-    });
-    const permissionSnapshotService = mocks.PermissionSnapshotService.mock.results[0]?.value;
-    expect(mocks.PermissionSnapshotService).toHaveBeenCalledWith(expect.objectContaining({
-      repository: expect.any(Object),
-      planArtifactCompatibility,
-    }));
-    expect(mocks.ProviderSettingsService).toHaveBeenCalledWith(expect.objectContaining({
-      settings: settingsService,
-      env: process.env,
-    }));
-    expect(mocks.ProviderRuntimeService).toHaveBeenCalledWith(expect.objectContaining({
-      settings: mocks.ProviderSettingsService.mock.results[0]?.value,
-      env: process.env,
-    }));
-    const modelStepProviderService = mocks.createModelStepProviderService.mock.results[0]?.value;
-    expect(mocks.createModelStepProviderService).toHaveBeenCalledWith(
-      mocks.ProviderRuntimeService.mock.results[0]?.value,
-    );
-    const activePathRepository = mocks.SessionActivePathRepository.mock.results[0]?.value;
-    expect(mocks.SessionRunService).toHaveBeenCalledWith(expect.objectContaining({
-      repository: expect.any(Object),
-      activePathRepository,
-      permissionSnapshotService,
-      contextService: runContextService,
-      modelStepProvider: modelStepProviderService,
-      chatStreamEventSink: expect.objectContaining({
-        publish: expect.any(Function),
-      }),
+    expect(mocks.composeCodingAgentRuntime).toHaveBeenCalledWith(expect.objectContaining({
+      homePaths: {
+        homePath: mocks.homePath,
+        sqlitePath: `${mocks.homePath}/sqlite`,
+        settingsPath: `${mocks.homePath}/settings.json`,
+      },
+      runtimeLogger: processLogger,
+      appSettingsProvider: settingsService,
       memorySettingsProvider: expect.objectContaining({
         isMemoryEnabled: expect.any(Function),
       }),
+      permissionSettingsProvider: expect.any(Object),
     }));
-    const sessionRunOptions = mocks.SessionRunService.mock.calls[0]?.[0] as {
+    const runtimeOptions = (mocks.composeCodingAgentRuntime.mock.calls as unknown as Array<[{
       memorySettingsProvider: { isMemoryEnabled(): boolean };
-    };
-    expect(sessionRunOptions.memorySettingsProvider.isMemoryEnabled()).toBe(false);
-    expect(mocks.ToolService).toHaveBeenCalledWith(expect.objectContaining({
-      repository: expect.any(Object),
-      registry: expect.any(Object),
-      resumeApproval: expect.any(Function),
-    }));
-    expect(mocks.ArtifactService).toHaveBeenCalledWith({
-      repository: expect.any(Object),
-      contentStore: expect.any(Object),
-    });
-    expect(mocks.createMemoryService).toHaveBeenCalledWith(expect.objectContaining({
-      repository: expect.any(Object),
-      now: expect.any(Function),
-      createId: expect.any(Function),
-      emitRuntimeEvent: expect.any(Function),
-    }));
-    expect(mocks.createRecoveryService).toHaveBeenCalledWith(expect.objectContaining({
-      repository: expect.any(Object),
-      clock: expect.any(Function),
-      ids: expect.objectContaining({
-        resumeRequestId: expect.any(Function),
-        cancelRequestId: expect.any(Function),
-        retryRequestId: expect.any(Function),
-        eventId: expect.any(Function),
-        interruptedMarkerId: expect.any(Function),
-      }),
-      workspaceChanges: expect.objectContaining({
-        listChangeSummariesByRun: expect.any(Function),
-      }),
-      workspaceRestore: expect.objectContaining({
-        restoreChangeSet: expect.any(Function),
-      }),
-      appendRuntimeEvent: expect.any(Function),
-      nextRuntimeSequence: expect.any(Function),
-    }));
-    expect(mocks.createRecoveryService.mock.calls[0]?.[0]).not.toHaveProperty('listRecoverableRuns');
-    const recoveryOptions = mocks.createRecoveryService.mock.calls[0]?.[0] as {
-      workspaceRestore: {
-        restoreChangeSet(input: { changeSetId: string; requestedBy: 'user' }): Promise<unknown>;
-      };
-    };
-    await recoveryOptions.workspaceRestore.restoreChangeSet({
-      changeSetId: 'workspace-change-set-1',
-      requestedBy: 'user',
-    });
-    expect(mocks.WorkspaceChangeRepository.mock.instances[0]?.getChangeSet).toHaveBeenCalledWith(
-      'workspace-change-set-1',
-    );
-    expect(mocks.SessionRunRepository.mock.instances[0]?.getRun).toHaveBeenCalledWith('run_123');
-    expect(mocks.SessionRunRepository.mock.instances[0]?.getSession).toHaveBeenCalledWith('session_123');
-    expect(mocks.WorkspaceRestoreService).toHaveBeenCalledWith(expect.objectContaining({
-      projectRoot: 'C:/work/project',
-      repository: mocks.WorkspaceChangeRepository.mock.instances[0],
-      fileSystem: expect.objectContaining({
-        readFile: expect.any(Function),
-        writeFile: expect.any(Function),
-        remove: expect.any(Function),
-      }),
-      ids: expect.objectContaining({
-        restoreRequestId: expect.any(Function),
-        restoreResultId: expect.any(Function),
-        restoreFileResultId: expect.any(Function),
-      }),
-    }));
+    }]>)[0]?.[0];
+    expect(runtimeOptions.memorySettingsProvider.isMemoryEnabled()).toBe(false);
     expect(mocks.createProjectService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
       chooseDirectory: expect.any(Function),
@@ -666,26 +616,27 @@ describe('main runtime logger composition', () => {
         stat: expect.any(Function),
       }),
     }));
-    expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith({
+    expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith(expect.objectContaining({
+      fileSystem: expect.any(Object),
       isWorkspaceRootAllowed: expect.any(Function),
       openPath: expect.any(Function),
-    });
+    }));
     const [[workspaceFilesOptions]] = mocks.createWorkspaceFilesService.mock.calls as unknown as Array<[{
       isWorkspaceRootAllowed(root: string): boolean;
     }]>;
-    expect(workspaceFilesOptions.isWorkspaceRootAllowed(process.cwd())).toBe(true);
+    expect(workspaceFilesOptions.isWorkspaceRootAllowed(process.cwd())).toBe(false);
     expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      providerService,
+      providerService: mocks.codingAgentRuntime.providerSettingsService,
       settingsService,
-      sessionRunService,
-      runContextService,
-      planService: sessionRunService,
-      toolService,
-      recoveryService,
-      artifactService,
-      memoryService,
+      sessionRunService: mocks.codingAgentRuntime.sessionRunService,
+      runContextService: mocks.codingAgentRuntime.runContextService,
+      planService: mocks.codingAgentRuntime.sessionRunService,
+      toolService: mocks.codingAgentRuntime.toolService,
+      recoveryService: mocks.codingAgentRuntime.recoveryService,
+      artifactService: mocks.codingAgentRuntime.artifactService,
+      memoryService: mocks.codingAgentRuntime.memoryService,
       projectService,
       workspaceFilesService,
     });
@@ -700,5 +651,3 @@ describe('main runtime logger composition', () => {
     expect(logText).not.toContain('Bearer sk-runtime-secret');
   });
 });
-
-

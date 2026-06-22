@@ -11,9 +11,9 @@ import {
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RunContextService } from '../../services/runtime/run-context.service';
-import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
-import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
+import type { RunContextService } from '@megumi/coding-agent/resources';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type RunContextHandlersService = Pick<
@@ -82,5 +82,4 @@ function mapRunContextIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
 

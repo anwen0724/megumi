@@ -7,7 +7,7 @@ const root = process.cwd();
 const recoveryProductionFiles = [
   'packages/shared/recovery/contracts.ts',
   'packages/agent/recovery/recovery-observation-mapper.ts',
-  'apps/desktop/src/main/services/runtime/recovery.service.ts',
+  'packages/coding-agent/run/recovery-service.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/renderer/entities/recovery/store.ts',
 ];

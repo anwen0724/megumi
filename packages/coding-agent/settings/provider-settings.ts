@@ -1,6 +1,6 @@
-// Projects Main-owned settings.json provider configuration into renderer-safe provider status.
-// API keys may be written to settings.json, but this service never returns plaintext keys to Renderer.
-// The env port is required — the desktop composition supplies the host process environment.
+﻿// Projects product settings provider configuration into public provider status.
+// API keys may be written to settings.json, but this service never returns plaintext keys to callers.
+// The env port is required so the product composition can resolve host process overrides.
 import {
   DEFAULT_PROVIDER_SETTINGS,
   PROVIDER_IDS,

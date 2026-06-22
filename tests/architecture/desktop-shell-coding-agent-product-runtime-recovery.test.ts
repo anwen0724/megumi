@@ -1,0 +1,110 @@
+﻿// @vitest-environment node
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { extname, join, relative, sep } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = process.cwd();
+const sourceExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
+
+function walkSourceFiles(directory: string): string[] {
+  if (!existsSync(directory)) {
+    return [];
+  }
+
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return walkSourceFiles(fullPath);
+    }
+    return sourceExtensions.has(extname(entry.name)) ? [fullPath] : [];
+  });
+}
+
+function relativePath(filePath: string): string {
+  return relative(root, filePath).replaceAll(sep, '/');
+}
+
+function sourceUnder(relativeDirectory: string): string {
+  return walkSourceFiles(join(root, relativeDirectory))
+    .map((file) => `\n// ${relativePath(file)}\n${readFileSync(file, 'utf8')}`)
+    .join('\n');
+}
+
+function topLevelDirectories(relativeDirectory: string): string[] {
+  const absolute = join(root, relativeDirectory);
+  if (!existsSync(absolute)) {
+    return [];
+  }
+  return readdirSync(absolute, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+describe('desktop shell and coding-agent product runtime recovery', () => {
+  it('places product runtime, composition, persistence, and local adapters under packages/coding-agent', () => {
+    expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/schema/migrations.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/tool.repo.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/adapters/local/tools/tool-execution-router.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/adapters/local/tools/tool-executors/run-command.executor.ts'))).toBe(true);
+  });
+
+  it('removes desktop-owned product persistence and local coding tool execution', () => {
+    expect(existsSync(join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
+    expect(existsSync(join(root, 'apps/desktop/src/main/services/tool/tool-executors'))).toBe(false);
+    expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);
+    expect(existsSync(join(root, 'apps/desktop/src/main/composition'))).toBe(false);
+  });
+
+  it('keeps desktop main services as UI shell facades only', () => {
+    expect(topLevelDirectories('apps/desktop/src/main/services')).toEqual([
+      'agent-run',
+      'provider',
+      'security',
+      'session',
+      'settings',
+      'workspace',
+    ]);
+
+    const desktopServices = sourceUnder('apps/desktop/src/main/services');
+    expect(desktopServices).not.toContain('class SessionRunService');
+    expect(desktopServices).not.toContain('createToolOrchestratorService');
+    expect(desktopServices).not.toContain('new SessionRunRepository');
+    expect(desktopServices).not.toContain('migrateDatabase');
+    expect(desktopServices).not.toContain('createDatabase(');
+    expect(desktopServices).not.toContain('createBuiltInToolSourceExecutor');
+    expect(desktopServices).not.toContain('createToolExecutionRouter');
+  });
+
+  it('keeps coding-agent independent from desktop and Electron UI shell', () => {
+    const source = sourceUnder('packages/coding-agent');
+    const forbidden = [
+      '@megumi/desktop',
+      'apps/desktop',
+      "from 'electron'",
+      'BrowserWindow',
+      'ipcMain',
+      'preload',
+      'renderer',
+    ];
+
+    expect(forbidden.filter((pattern) => source.includes(pattern))).toEqual([]);
+  });
+
+  it('keeps desktop from importing model access directly', () => {
+    const source = sourceUnder('apps/desktop/src/main');
+    expect(source).not.toContain("from '@megumi/ai");
+    expect(source).not.toContain('from "@megumi/ai');
+  });
+
+  it('keeps package-level tests proving Coding Agent can run without desktop imports', () => {
+    expect(existsSync(join(root, 'tests/packages/coding-agent/product-runtime/product-runtime.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/run/session-run-service.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(true);
+  });
+});

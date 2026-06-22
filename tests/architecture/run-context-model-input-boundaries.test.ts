@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -42,7 +42,7 @@ describe('run context and model input boundaries', () => {
 
   it('keeps main as the RunContext to ModelStep input build adapter', () => {
     const contextManagement = read('packages/coding-agent/context/model-step-input-context.ts');
-    const sessionRun = read('apps/desktop/src/main/services/session/session-run.service.ts');
+    const sessionRun = read('packages/coding-agent/run/session-run-service.ts');
 
     expect(contextManagement).toContain('runtimeConstraints?: ModelStepRuntimeConstraintInput[]');
     expect(contextManagement).toMatch(/\bpermissionSnapshot\?:/);

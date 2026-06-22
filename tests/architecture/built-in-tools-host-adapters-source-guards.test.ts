@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -92,9 +92,9 @@ describe('built-in tools and host adapters source guards', () => {
     const combined = [
       ...listSourceFiles('packages/coding-agent/tools/built-ins'),
       'packages/coding-agent/tools/tool-orchestrator.ts',
-      'apps/desktop/src/main/services/tool/built-in-tool-source-executor.service.ts',
-      'apps/desktop/src/main/services/tool/tool-execution-router.service.ts',
-      ...listSourceFiles('apps/desktop/src/main/services/tool/tool-executors'),
+      'packages/coding-agent/adapters/local/tools/built-in-tool-source-executor.ts',
+      'packages/coding-agent/adapters/local/tools/tool-execution-router.ts',
+      ...listSourceFiles('packages/coding-agent/adapters/local/tools/tool-executors'),
     ].map(read).join('\n');
 
     expect(combined).not.toContain('bypassPermissions');

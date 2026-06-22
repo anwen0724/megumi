@@ -1,7 +1,7 @@
 // @vitest-environment node
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveSafePath } from '@megumi/desktop/main/services/security/sandbox-policy';
+import { resolveSafePath } from '@megumi/coding-agent/adapters/local/security/sandbox-policy';
 
 describe('resolveSafePath', () => {
   it('resolves a relative path inside the workspace root', () => {

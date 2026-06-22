@@ -2,11 +2,11 @@
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { redactRuntimeValue } from '../services/security/redaction';
+import { redactRuntimeValue } from '@megumi/coding-agent/adapters/local/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/runtime/runtime-logger.service';
+} from '../services/agent-run/runtime-logger.service';
 
 export interface RuntimeEventSender {
   send(channel: string, event: RuntimeEvent): void;
@@ -73,5 +73,4 @@ function runtimeEventIssueMessage(issue: { code: string; message: string }): str
   }
   return issue.message;
 }
-
 

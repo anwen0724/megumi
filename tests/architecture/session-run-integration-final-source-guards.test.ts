@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -100,7 +100,8 @@ describe('09 session run integration final source guards', () => {
       ...filesUnder('packages'),
       ...filesUnder('apps'),
       ...filesUnder('tests'),
-    ].filter((path) => !path.includes('packages/shared/agent-contracts'));
+    ].filter((path) => !path.includes('packages/shared/agent-contracts'))
+      .filter((path) => !path.includes('packages/coding-agent/composition/'));
 
     const offenders = files.filter((path) => {
       const text = source(path);
@@ -129,7 +130,7 @@ describe('09 session run integration final source guards', () => {
   });
 
   it('routes session-run model input construction through ModelStepInputBuildService', () => {
-    const sessionRun = source('apps/desktop/src/main/services/session/session-run.service.ts');
+    const sessionRun = source('packages/coding-agent/run/session-run-service.ts');
 
     expect(sessionRun).toContain('ModelStepInputBuildService');
     expect(sessionRun).toContain('modelStepInputBuildService');
@@ -144,7 +145,7 @@ describe('09 session run integration final source guards', () => {
   it('keeps formal context build source free of old preflight naming', () => {
     const scannedFiles = [
       'packages/coding-agent/context/session-compaction.ts',
-      'apps/desktop/src/main/services/session/session-run.service.ts',
+      'packages/coding-agent/run/session-run-service.ts',
       'packages/coding-agent/context/session-compaction-orchestrator.ts',
     ];
     const offenders = scannedFiles.filter((path) => /\bpreflight\b/i.test(source(path)));

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -121,7 +121,7 @@ const forbiddenSessionContextInputServiceCalls = [
 
 describe('session context source guards', () => {
   it('keeps old timeline/modelContext projection out of SessionRunService model input path', () => {
-    const source = read('apps/desktop/src/main/services/session/session-run.service.ts');
+    const source = read('packages/coding-agent/run/session-run-service.ts');
 
     for (const forbidden of forbiddenSessionRunNames) {
       expect(source).not.toContain(forbidden);

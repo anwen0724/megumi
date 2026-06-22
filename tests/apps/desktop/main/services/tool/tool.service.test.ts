@@ -1,6 +1,6 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ToolService } from '@megumi/desktop/main/services/tool/tool.service';
+import { ToolService } from '@megumi/coding-agent/tools';
 import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -239,5 +239,4 @@ function createApprovalRequest() {
     createdAt: '2026-05-20T00:00:02.000Z',
   } as const;
 }
-
 

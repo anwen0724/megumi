@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -59,20 +59,20 @@ describe('memory foundation boundaries', () => {
 
   it('keeps SessionRunService orchestration behind the recall port instead of recall scoring', () => {
     const files = [
-      join(root, 'apps', 'desktop', 'src', 'main', 'services', 'session', 'session-run.service.ts'),
+      join(root, 'packages', 'coding-agent', 'run', 'session-run-service.ts'),
     ];
     expect(offenders(files, /@megumi\/memory|MemoryRepository|@megumi\/db\/repos\/memory|memory-runtime-capture\.service|memory-recall-runtime\.service|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
   });
 
   it('wires memory markdown lifecycle sync through Desktop Main composition', () => {
     const index = [
-      read(join(root, 'apps', 'desktop', 'src', 'main', 'composition', 'compose-memory-runtime.ts')),
-      read(join(root, 'apps', 'desktop', 'src', 'main', 'composition', 'compose-session-runtime.ts')),
+      read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-memory.ts')),
+      read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-session-runtime.ts')),
     ].join('\n');
-    const sessionRun = read(join(root, 'apps', 'desktop', 'src', 'main', 'services', 'session', 'session-run.service.ts'));
+    const sessionRun = read(join(root, 'packages', 'coding-agent', 'run', 'session-run-service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
-    expect(index).toContain('appSettingsService.getResolvedSettings().memory.enabled');
+    expect(index).toContain('options.memorySettingsProvider.isMemoryEnabled()');
     expect(index).toContain('memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService');
     expect(sessionRun).toContain('syncProjectMirrorOnProjectOpened');
   });

@@ -1,12 +1,12 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createDatabase } from '@megumi/desktop/main/persistence/connection';
-import { ProjectRepository } from '@megumi/desktop/main/persistence/repos/project.repo';
-import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { createDatabase } from '@megumi/coding-agent/persistence/connection';
+import { ProjectRepository } from '@megumi/coding-agent/persistence/repos/project.repo';
+import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import {
   ProjectPathValidationError,
   createProjectService,
-} from '@megumi/desktop/main/services/project/project.service';
+} from '@megumi/desktop/main/services/workspace/project.service';
 
 function createRepo() {
   const database = createDatabase(':memory:');
@@ -161,4 +161,3 @@ describe('ProjectService', () => {
     expect(repo.getProject(project.projectId)).toBeUndefined();
   });
 });
-

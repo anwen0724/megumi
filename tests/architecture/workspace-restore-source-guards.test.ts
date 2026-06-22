@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -10,7 +10,7 @@ const productionRoots = [
   'packages/ai',
   'packages/coding-agent/context',
   'packages/agent',
-  'apps/desktop/src/main/persistence',
+  'packages/coding-agent/persistence',
   'packages/shared',
 ];
 
@@ -27,18 +27,18 @@ const restoreBoundaryTerms = [
 
 const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/index.ts',
-  'apps/desktop/src/main/composition/desktop-main-composition.ts',
-  'apps/desktop/src/main/composition/compose-database.ts',
-  'apps/desktop/src/main/persistence/compose-desktop-persistence.ts',
-  'apps/desktop/src/main/persistence/repos/workspace-change.repo.ts',
-  'apps/desktop/src/main/persistence/schema/migrations.ts',
-  'apps/desktop/src/main/composition/compose-recovery-runtime.ts',
-  'apps/desktop/src/main/composition/compose-session-runtime.ts',
-  'apps/desktop/src/main/composition/compose-tool-runtime.ts',
+  'apps/desktop/src/main/shell-composition/desktop-main-composition.ts',
+  'packages/coding-agent/composition/compose-database.ts',
+  'packages/coding-agent/persistence/compose-desktop-persistence.ts',
+  'packages/coding-agent/persistence/repos/workspace-change.repo.ts',
+  'packages/coding-agent/persistence/schema/migrations.ts',
+  'packages/coding-agent/composition/compose-recovery-runtime.ts',
+  'packages/coding-agent/composition/compose-session-runtime.ts',
+  'packages/coding-agent/composition/compose-tool-runtime.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/main/ipc/register-ipc-handlers.ts',
-  'apps/desktop/src/main/services/runtime/recovery.service.ts',
-  'apps/desktop/src/main/services/session/session-run.service.ts',
+  'packages/coding-agent/run/recovery-service.ts',
+  'packages/coding-agent/run/session-run-service.ts',
   'packages/coding-agent/workspace/workspace-change-tracker.ts',
   'packages/coding-agent/workspace/workspace-restore.ts',
   'packages/shared/ipc/schemas.ts',
@@ -74,12 +74,12 @@ const runtimeAndIpcSchemaFiles = [
   'packages/shared/ipc/schemas.ts',
 ];
 
-const runCommandExecutorPath = 'apps/desktop/src/main/services/tool/tool-executors/run-command.executor.ts';
+const runCommandExecutorPath = 'packages/coding-agent/adapters/local/tools/tool-executors/run-command.executor.ts';
 const runCommandPathFiles = [
   runCommandExecutorPath,
-  'apps/desktop/src/main/services/tool/built-in-tool-source-executor.service.ts',
-  'apps/desktop/src/main/services/tool/tool-execution-router.service.ts',
-  'apps/desktop/src/main/services/tool/tool-call-handler.service.ts',
+  'packages/coding-agent/adapters/local/tools/built-in-tool-source-executor.ts',
+  'packages/coding-agent/adapters/local/tools/tool-execution-router.ts',
+  'packages/coding-agent/adapters/local/tools/tool-call-handler.service.ts',
 ];
 
 describe('workspace restore source guards', () => {

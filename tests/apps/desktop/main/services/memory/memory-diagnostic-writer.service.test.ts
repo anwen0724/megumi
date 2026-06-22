@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import path from 'node:path';
-import { MemoryDiagnosticWriter } from '@megumi/desktop/main/services/memory/memory-diagnostic-writer.service';
-import type { MemoryRuntimeFileSystem } from '@megumi/desktop/main/services/memory/memory-runtime-file-system';
+import { MemoryDiagnosticWriter } from '@megumi/coding-agent/adapters/local/memory/memory-diagnostic-writer.service';
+import type { MemoryRuntimeFileSystem } from '@megumi/coding-agent/adapters/local/memory/memory-runtime-file-system';
 
 class FakeMemoryRuntimeFileSystem implements MemoryRuntimeFileSystem {
   readonly appended: Array<{ filePath: string; entry: unknown }> = [];

@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -58,7 +58,7 @@ function listSourceFiles(relativeDirectory: string): string[] {
 }
 
 function isAllowedLegacyArchiveLine(file: string, line: string): boolean {
-  if (file !== 'packages/db/schema/migrations.ts' && file !== 'apps/desktop/src/main/persistence/schema/migrations.ts') {
+  if (file !== 'packages/db/schema/migrations.ts' && file !== 'packages/coding-agent/persistence/schema/migrations.ts') {
     return false;
   }
 

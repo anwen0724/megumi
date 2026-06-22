@@ -22,11 +22,11 @@ import {
   redactRuntimeDetails,
   redactRuntimeMessage,
   redactRuntimeValue,
-} from '../services/security/redaction';
+} from '@megumi/coding-agent/adapters/local/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/runtime/runtime-logger.service';
+} from '../services/agent-run/runtime-logger.service';
 import { ipcOperationNameFromChannel } from './ipc-operation-name';
 
 export interface RuntimeIpcHandlerOptions<
@@ -272,6 +272,5 @@ function extractRawContext(rawRequest: unknown): unknown {
 
   return undefined;
 }
-
 
 
