@@ -1,11 +1,11 @@
 ﻿// @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, type MegumiDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { createDatabase, type MegumiDatabase } from '@megumi/desktop/main/persistence/connection';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
 import {
   TimelineMessageRepository,
   type TimelineCommitDiagnostic,
-} from '@megumi/db/repos/timeline-message.repo';
+} from '@megumi/desktop/main/persistence/repos/timeline-message.repo';
 import type {
   TimelineAssistantMessage,
   TimelineUserMessage,

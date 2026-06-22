@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, type MegumiDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { MemoryRepository } from '@megumi/db/repos/memory.repo';
+import { createDatabase, type MegumiDatabase } from '@megumi/desktop/main/persistence/connection';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { MemoryRepository } from '@megumi/desktop/main/persistence/repos/memory.repo';
 import type {
   MemoryAccessLog,
   MemoryAuditLog,

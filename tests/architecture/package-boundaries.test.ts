@@ -377,6 +377,37 @@ describe('package dependency boundaries', () => {
     expect(violations).toEqual([]);
   });
 
+  it('keeps concrete SQLite persistence under desktop main instead of packages', () => {
+    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/connection.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/schema/migrations.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/repos/session-run.repo.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence/compose-desktop-persistence.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/db/connection.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/db/schema/migrations.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/db/repos/session-run.repo.ts'))).toBe(false);
+  });
+
+  it('keeps production code from importing the old @megumi/db alias', () => {
+    const checkedRoots = [
+      path.join(root, 'apps'),
+      path.join(root, 'packages'),
+    ];
+    const violations = checkedRoots.flatMap((directory) =>
+      walkSourceFiles(directory).flatMap((file) => {
+        const relative = relativePath(file);
+        if (relative.startsWith('packages/db/')) {
+          return [];
+        }
+        const source = fs.readFileSync(file, 'utf8');
+        return /@megumi\/db(\/|['"]|$)/.test(source)
+          ? [`${relative} imports @megumi/db`]
+          : [];
+      }),
+    );
+
+    expect(violations).toEqual([]);
+  });
+
   it('keeps moved packages/security policy files as deprecated compatibility re-exports only', () => {
     const compatibilityFiles = [
       'packages/security/command-classifier.ts',

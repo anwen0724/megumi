@@ -1,9 +1,9 @@
 // @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { RunContextRepository } from '@megumi/db/repos/run-context.repo';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { RunContextRepository } from '@megumi/desktop/main/persistence/repos/run-context.repo';
 
 let db: Database.Database | null = null;
 

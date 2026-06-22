@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { ProjectRepository, createProjectIdFromRepoPathKey, toProjectRepoPathKey } from '@megumi/db/repos/project.repo';
+import { createDatabase } from '@megumi/desktop/main/persistence/connection';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { ProjectRepository, createProjectIdFromRepoPathKey, toProjectRepoPathKey } from '@megumi/desktop/main/persistence/repos/project.repo';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');

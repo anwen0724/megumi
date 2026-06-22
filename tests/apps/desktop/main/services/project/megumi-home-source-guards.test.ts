@@ -21,7 +21,7 @@ describe('Megumi Home source guards', () => {
   it('keeps database creation on Megumi Home sqlite path in main composition', () => {
     const source = [
       readProjectFile('apps/desktop/src/main/composition/desktop-main-composition.ts'),
-      readProjectFile('apps/desktop/src/main/composition/compose-database.ts'),
+      readProjectFile('apps/desktop/src/main/persistence/compose-desktop-persistence.ts'),
     ].join('\n');
     const singleQuotedUserData = term("app.getPath('", 'userData', "')");
     const doubleQuotedUserData = term('app.getPath("', 'userData', '")');

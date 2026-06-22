@@ -1,4 +1,4 @@
-﻿import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
+﻿import type { PermissionSnapshotRepository } from '@megumi/desktop/main/persistence/repos/permission-snapshot.repo';
 import {
   PermissionModeStateSchema,
   type ImplementationPlanArtifactRecord,

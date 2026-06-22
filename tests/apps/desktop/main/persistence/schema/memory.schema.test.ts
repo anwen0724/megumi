@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, type MegumiDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { createDatabase, type MegumiDatabase } from '@megumi/desktop/main/persistence/connection';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
 
 let database: MegumiDatabase | undefined;
 

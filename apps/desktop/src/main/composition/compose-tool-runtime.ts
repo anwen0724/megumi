@@ -2,9 +2,9 @@
 import fs from 'fs-extra';
 import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
 import type { ToolRegistry } from '@megumi/coding-agent/tools/registry';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { ToolRepository } from '@megumi/db/repos/tool.repo';
-import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { ToolRepository } from '@megumi/desktop/main/persistence/repos/tool.repo';
+import { WorkspaceChangeRepository } from '@megumi/desktop/main/persistence/repos/workspace-change.repo';
 import { ToolService } from '../services/tool/tool.service';
 import { createBuiltInToolSourceExecutor } from '../services/tool/built-in-tool-source-executor.service';
 import { createExternalTestToolSourceExecutor } from '../services/tool/external-test-tool-source-executor.service';

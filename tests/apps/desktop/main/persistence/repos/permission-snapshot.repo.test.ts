@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
+import { createDatabase } from '@megumi/desktop/main/persistence/connection';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { PermissionSnapshotRepository } from '@megumi/desktop/main/persistence/repos/permission-snapshot.repo';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');

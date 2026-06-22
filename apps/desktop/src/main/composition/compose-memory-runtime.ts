@@ -1,5 +1,5 @@
 // Composes Desktop Main memory runtime services and the review-facing memory service.
-import { MemoryRepository } from '@megumi/db/repos/memory.repo';
+import { MemoryRepository } from '@megumi/desktop/main/persistence/repos/memory.repo';
 import {
   MemoryExtractionModelClientService,
   MemoryRecallRuntimeService,

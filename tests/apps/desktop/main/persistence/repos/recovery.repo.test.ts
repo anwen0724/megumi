@@ -1,9 +1,9 @@
 ﻿import { describe, expect, it } from 'vitest';
 
-import { createDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
+import { createDatabase } from '@megumi/desktop/main/persistence/connection';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { RecoveryRepository } from '@megumi/desktop/main/persistence/repos/recovery.repo';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
 import type {
   CancelRequest,
   Checkpoint,

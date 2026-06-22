@@ -1,9 +1,9 @@
 ﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { SessionActivePathRepository } from '@megumi/desktop/main/persistence/repos/session-active-path.repo';
 import { SessionContextInputService } from '@megumi/coding-agent/session';
 import type { ModelInputContextSourceKind, ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';

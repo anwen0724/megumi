@@ -1,7 +1,7 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
 
 import { createRecoveryService } from '@megumi/desktop/main/services/runtime/recovery.service';
-import type { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
+import type { RecoveryRepository } from '@megumi/desktop/main/persistence/repos/recovery.repo';
 import type {
   CancelRequest,
   Checkpoint,

@@ -1,11 +1,11 @@
 // Composes the Desktop Main session run service and its immediate runtime collaborators.
-import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
-import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
-import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
-import { ToolRepository } from '@megumi/db/repos/tool.repo';
-import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
+import { ArtifactRepository } from '@megumi/desktop/main/persistence/repos/artifact.repo';
+import { PermissionSnapshotRepository } from '@megumi/desktop/main/persistence/repos/permission-snapshot.repo';
+import { SessionActivePathRepository } from '@megumi/desktop/main/persistence/repos/session-active-path.repo';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { TimelineMessageRepository } from '@megumi/desktop/main/persistence/repos/timeline-message.repo';
+import { ToolRepository } from '@megumi/desktop/main/persistence/repos/tool.repo';
+import { WorkspaceChangeRepository } from '@megumi/desktop/main/persistence/repos/workspace-change.repo';
 import type { ToolRegistry } from '@megumi/coding-agent/tools/registry';
 import { forwardChatStreamEvent } from '../ipc/chat-stream-event-forwarder';
 import { PermissionSnapshotService } from '../services/security/permission-snapshot.service';
@@ -13,6 +13,7 @@ import { createDefaultRunContextService } from '../services/runtime/run-context.
 import type { RuntimeLogger } from '../services/runtime/runtime-logger.service';
 import type { ModelStepProviderService } from '../services/runtime/model-step-provider.service';
 import { SessionRunService, type SessionRunToolRuntimeFactory } from '../services/session/session-run.service';
+import type { RunContextRepository } from '@megumi/desktop/main/persistence/repos/run-context.repo';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService } from '@megumi/coding-agent/artifacts';
 import { TimelineHistoryCommitProjectorService } from '../projections/timeline/timeline-history-commit-projector.service';
@@ -37,12 +38,15 @@ export interface ComposeSessionRuntimeOptions {
   modelStepProviderService: ModelStepProviderService;
   toolRuntimeFactory: SessionRunToolRuntimeFactory;
   memoryRuntime: ReturnType<typeof import('./compose-memory-runtime').composeMemoryRuntime>['memoryRuntime'];
+  runContextRepository?: RunContextRepository;
   windowHost?: DesktopWindowHost;
 }
 
 export function composeSessionRuntime(options: ComposeSessionRuntimeOptions) {
   const windowHost = options.windowHost ?? electronWindowHost;
-  const runContextService = createDefaultRunContextService(options.megumiHomePaths);
+  const runContextService = createDefaultRunContextService(options.megumiHomePaths, {
+    ...(options.runContextRepository ? { repository: options.runContextRepository } : {}),
+  });
   const planArtifactCompatibility = new PlanArtifactCompatibilityService({
     repository: options.artifactRepository,
   });

@@ -146,6 +146,23 @@ const mocks = vi.hoisted(() => {
     })),
     createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
     migrateDatabase: vi.fn(),
+    composeDesktopPersistence: vi.fn(() => {
+      const db = { databaseId: 'desktop-persistence-database' };
+      return {
+        database: db,
+        sessionRunRepository: new mocks.SessionRunRepository(db),
+        activePathRepository: new mocks.SessionActivePathRepository(db),
+        recoveryRepository: new mocks.RecoveryRepository(db),
+        permissionSnapshotRepository: new mocks.PermissionSnapshotRepository(db),
+        toolRepository: new mocks.ToolRepository(db),
+        artifactRepository: new mocks.ArtifactRepository(db),
+        memoryRepository: new mocks.MemoryRepository(db),
+        timelineMessageRepository: new mocks.TimelineMessageRepository(db),
+        workspaceChangeRepository: new mocks.WorkspaceChangeRepository(db),
+        projectRepository: new mocks.ProjectRepository(db),
+        runContextRepository: { repositoryName: 'run-context-repository' },
+      };
+    }),
     RecoveryRepository: vi.fn(function RecoveryRepository(
       this: { database?: unknown },
       database: unknown,
@@ -214,6 +231,19 @@ const mocks = vi.hoisted(() => {
       this.database = database;
     }),
     ArtifactRepository: vi.fn(function ArtifactRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
+    ToolRepository: vi.fn(function ToolRepository(
+      this: { database?: unknown; getToolExecution?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+      this.getToolExecution = vi.fn();
+    }),
+    TimelineMessageRepository: vi.fn(function TimelineMessageRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
@@ -390,44 +420,12 @@ vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () =>
   createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
 
-vi.mock('@megumi/db/connection', () => ({
-  createDatabase: mocks.createDatabase,
-}));
-
-vi.mock('@megumi/db/schema/migrations', () => ({
-  migrateDatabase: mocks.migrateDatabase,
-}));
-
-vi.mock('@megumi/db/repos/recovery.repo', () => ({
-  RecoveryRepository: mocks.RecoveryRepository,
-}));
-
-vi.mock('@megumi/db/repos/workspace-change.repo', () => ({
-  WorkspaceChangeRepository: mocks.WorkspaceChangeRepository,
-}));
-
-vi.mock('@megumi/db/repos/session-active-path.repo', () => ({
-  SessionActivePathRepository: mocks.SessionActivePathRepository,
-}));
-
-vi.mock('@megumi/db/repos/session-run.repo', () => ({
-  SessionRunRepository: mocks.SessionRunRepository,
-}));
-
-vi.mock('@megumi/db/repos/permission-snapshot.repo', () => ({
-  PermissionSnapshotRepository: mocks.PermissionSnapshotRepository,
+vi.mock('@megumi/desktop/main/persistence', () => ({
+  composeDesktopPersistence: mocks.composeDesktopPersistence,
 }));
 
 vi.mock('@megumi/desktop/main/services/security/permission-snapshot.service', () => ({
   PermissionSnapshotService: mocks.PermissionSnapshotService,
-}));
-
-vi.mock('@megumi/db/repos/artifact.repo', () => ({
-  ArtifactRepository: mocks.ArtifactRepository,
-}));
-
-vi.mock('@megumi/db/repos/memory.repo', () => ({
-  MemoryRepository: mocks.MemoryRepository,
 }));
 
 vi.mock('@megumi/desktop/main/services/artifact/artifact-content-store.service', () => ({
@@ -448,10 +446,6 @@ vi.mock('@megumi/coding-agent/memory', () => ({
 
 vi.mock('@megumi/desktop/main/services/project/project.service', () => ({
   createProjectService: mocks.createProjectService,
-}));
-
-vi.mock('@megumi/db/repos/project.repo', () => ({
-  ProjectRepository: mocks.ProjectRepository,
 }));
 
 vi.mock('electron', () => ({
@@ -483,8 +477,7 @@ describe('main runtime logger composition', () => {
     mocks.createAppSettingsService.mockClear();
     mocks.ToolService.mockClear();
     mocks.createDefaultToolService.mockClear();
-    mocks.createDatabase.mockClear();
-    mocks.migrateDatabase.mockClear();
+    mocks.composeDesktopPersistence.mockClear();
     mocks.RecoveryRepository.mockClear();
     mocks.WorkspaceChangeRepository.mockClear();
     mocks.WorkspaceRestoreService.mockClear();
@@ -510,7 +503,7 @@ describe('main runtime logger composition', () => {
 
   it('uses permission snapshot naming for service composition', () => {
     const source = [
-      'apps/desktop/src/main/composition/compose-database.ts',
+      'apps/desktop/src/main/persistence/compose-desktop-persistence.ts',
       'apps/desktop/src/main/composition/compose-session-runtime.ts',
     ]
       .map((filePath) => readFileSync(join(process.cwd(), filePath), 'utf8'))
@@ -553,19 +546,14 @@ describe('main runtime logger composition', () => {
 
     expect(mocks.createDefaultRunContextService).toHaveBeenCalledWith(
       mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
+      { repository: expect.any(Object) },
     );
     expect(mocks.createAppSettingsService).toHaveBeenCalledWith({
       settingsPath: `${mocks.homePath}/settings.json`,
     });
-    expect(mocks.migrateDatabase).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.SessionRunRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.SessionActivePathRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.PermissionSnapshotRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.RecoveryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.WorkspaceChangeRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.ArtifactRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.MemoryRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
-    expect(mocks.ProjectRepository).toHaveBeenCalledWith(mocks.createDatabase.mock.results[0]?.value);
+    expect(mocks.composeDesktopPersistence).toHaveBeenCalledWith(
+      mocks.initializeElectronMegumiHomeSync.mock.results[0]?.value,
+    );
     expect(mocks.ArtifactContentStore).toHaveBeenCalledWith({
       artifactRoot: join(mocks.homePath, 'artifacts'),
     });

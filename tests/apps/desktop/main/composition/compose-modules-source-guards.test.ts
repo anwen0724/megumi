@@ -11,8 +11,11 @@ function readComposition(fileName: string): string {
 }
 
 describe('Desktop Main composition modules', () => {
-  it('keeps database composition on Megumi Home sqlite path with repository construction', () => {
-    const source = readComposition('compose-database.ts');
+  it('keeps desktop persistence on Megumi Home sqlite path with repository construction', () => {
+    const source = readFileSync(
+      join(root, 'apps', 'desktop', 'src', 'main', 'persistence', 'compose-desktop-persistence.ts'),
+      'utf8',
+    );
 
     expect(source).toContain("path.join(megumiHomePaths.sqlitePath, 'megumi.sqlite3')");
     expect(source).toContain('migrateDatabase(database)');

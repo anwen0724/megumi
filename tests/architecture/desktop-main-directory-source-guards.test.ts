@@ -56,7 +56,7 @@ describe('Desktop Main directory boundaries', () => {
   it('keeps desktop-main-composition as a compose-module coordinator', () => {
     const source = read('apps/desktop/src/main/composition/desktop-main-composition.ts');
 
-    expect(source).toContain('composeDatabase');
+    expect(source).toContain('composeDesktopPersistence');
     expect(source).toContain('composeProviderRuntime');
     expect(source).toContain('composeMemoryRuntime');
     expect(source).toContain('composeToolRuntimeFactory');
@@ -126,6 +126,21 @@ describe('Desktop Main directory boundaries', () => {
     expect(read('apps/desktop/src/main/host/electron-window-host.ts')).toContain('BrowserWindow.getAllWindows');
   });
 
+  it('keeps desktop persistence as a local SQLite adapter without Electron or service imports', () => {
+    const source = sourceUnder('apps/desktop/src/main/persistence');
+
+    expect(source).toContain('better-sqlite3');
+    expect(source).toContain('migrateDatabase');
+    expect(source).toContain('SessionRunRepository');
+    expect(source).toContain('WorkspaceChangeRepository');
+    expect(source).not.toContain("from 'electron'");
+    expect(source).not.toContain('@megumi/coding-agent');
+    expect(source).not.toContain('@megumi/agent');
+    expect(source).not.toContain('src/main/services');
+    expect(source).not.toContain('src/main/ipc');
+    expect(source).not.toContain('src/renderer');
+  });
+
   it('keeps IPC handlers from constructing services or importing Electron directly', () => {
     const files = walk(join(root, 'apps', 'desktop', 'src', 'main', 'ipc', 'handlers'));
     const violations = files.flatMap((file) => {
@@ -141,5 +156,14 @@ describe('Desktop Main directory boundaries', () => {
     });
 
     expect(violations).toEqual([]);
+  });
+
+  it('keeps services from opening SQLite connections directly', () => {
+    const source = sourceUnder('apps/desktop/src/main/services');
+
+    expect(source).not.toContain("from '@megumi/desktop/main/persistence/connection'");
+    expect(source).not.toContain("from '@megumi/desktop/main/persistence/schema/migrations'");
+    expect(source).not.toContain('createDatabase(');
+    expect(source).not.toContain('migrateDatabase(');
   });
 });

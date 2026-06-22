@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { WorkspaceChangeRepository } from '@megumi/desktop/main/persistence/repos/workspace-change.repo';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,

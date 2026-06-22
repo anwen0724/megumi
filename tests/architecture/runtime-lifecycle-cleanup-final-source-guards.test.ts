@@ -52,8 +52,8 @@ describe('runtime lifecycle cleanup final source guards', () => {
   });
 
   it('keeps canonical tool schema names on tool_calls and tool_executions', () => {
-    const migrations = read('packages/db/schema/migrations.ts');
-    const repository = read('packages/db/repos/tool.repo.ts');
+    const migrations = read('apps/desktop/src/main/persistence/schema/migrations.ts');
+    const repository = read('apps/desktop/src/main/persistence/repos/tool.repo.ts');
 
     expect(migrations).toContain('CREATE TABLE IF NOT EXISTS tool_calls');
     expect(migrations).toContain('CREATE TABLE IF NOT EXISTS tool_executions');

@@ -1,3 +1,4 @@
+// Applies Desktop Main SQLite migrations for local Megumi persistence.
 import type { MegumiDatabase } from '../connection';
 
 type TableColumnInfo = {

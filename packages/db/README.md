@@ -1,5 +1,11 @@
 # @megumi/db
 
-Owns SQLite connection, migrations, repositories, and row/domain mapping for Megumi.
+Deprecated placeholder.
 
-This package stores structured local runtime data. It must not decrypt API keys, call provider SDKs, run tools, or import Electron APIs.
+SQLite connection, migrations, repositories, and row/domain mapping now live under:
+
+```text
+apps/desktop/src/main/persistence
+```
+
+Do not add new imports from `@megumi/db`. Plan9 removes the stale aliases and this placeholder package.

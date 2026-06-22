@@ -1,8 +1,8 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { createDatabase } from '@megumi/db/connection';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { ArtifactRepository } from '@megumi/db/repos/artifact.repo';
+import { createDatabase } from '@megumi/desktop/main/persistence/connection';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { ArtifactRepository } from '@megumi/desktop/main/persistence/repos/artifact.repo';
 import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact';
 
 function createTestDatabase() {

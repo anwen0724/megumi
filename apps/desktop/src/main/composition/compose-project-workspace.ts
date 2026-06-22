@@ -1,6 +1,6 @@
 // Composes project selection and workspace file access services for Desktop Main.
 import fs from 'fs-extra';
-import { ProjectRepository } from '@megumi/db/repos/project.repo';
+import { ProjectRepository } from '@megumi/desktop/main/persistence/repos/project.repo';
 import { createProjectService, type ProjectService } from '../services/project/project.service';
 import { createWorkspaceFilesService } from '../services/workspace/workspace-files.service';
 import { createWorkspaceRootAuthorizer } from '../services/security/workspace-root-authorization.service';

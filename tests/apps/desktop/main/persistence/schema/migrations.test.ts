@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
 
 let db: Database.Database | null = null;
 
@@ -3053,7 +3053,7 @@ describe('database migrations', () => {
   });
 
   it('does not create active agent-prefixed session run tables or indexes', () => {
-    const source = readFileSync('packages/db/schema/migrations.ts', 'utf8');
+    const source = readFileSync('apps/desktop/src/main/persistence/schema/migrations.ts', 'utf8');
 
     expect(source).not.toMatch(/CREATE TABLE IF NOT EXISTS agent_(sessions|runs|steps|actions|observations|context_baselines|run_mode_snapshots|run_source_plans|checkpoints|resume_requests|cancel_requests|retry_requests)/);
     expect(source).not.toMatch(/CREATE INDEX IF NOT EXISTS idx_agent_(runs|steps|actions|observations|context|run_mode|run_source|checkpoints|resume|cancel|retry)/);

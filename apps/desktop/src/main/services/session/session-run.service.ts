@@ -54,13 +54,11 @@ import {
   createStepFailedEvent,
   createStepStatusChangedEvent,
 } from '@megumi/agent';
-import { createDatabase } from '@megumi/db/connection';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
-import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
-import { ToolRepository } from '@megumi/db/repos/tool.repo';
+import { composeDesktopPersistence } from '@megumi/desktop/main/persistence';
+import type { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import type { SessionActivePathRepository } from '@megumi/desktop/main/persistence/repos/session-active-path.repo';
 import { createInterruptedExecutionObservation } from '@megumi/coding-agent/tools/observation-shaper';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import type { ToolRepository } from '@megumi/desktop/main/persistence/repos/tool.repo';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   RunContext,
@@ -3335,14 +3333,13 @@ export function createDefaultSessionRunService(
   homePaths: MegumiHomePaths,
   options: CreateDefaultSessionRunServiceOptions = {},
 ): SessionRunService {
-  const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
-  migrateDatabase(database);
-  const permissionSnapshotRepository = new PermissionSnapshotRepository(database);
-  const activePathRepository = new SessionActivePathRepository(database);
-  const toolRepository = new ToolRepository(database);
+  const persistence = composeDesktopPersistence(homePaths);
+  const permissionSnapshotRepository = persistence.permissionSnapshotRepository;
+  const activePathRepository = persistence.activePathRepository;
+  const toolRepository = persistence.toolRepository;
 
   const service = new SessionRunService({
-    repository: new SessionRunRepository(database),
+    repository: persistence.sessionRunRepository,
     activePathRepository,
     toolRepository,
     toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),

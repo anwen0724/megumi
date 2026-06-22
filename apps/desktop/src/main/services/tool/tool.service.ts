@@ -1,7 +1,5 @@
-﻿import path from 'node:path';
-import { createDatabase } from '@megumi/db/connection';
-import { ToolRepository } from '@megumi/db/repos/tool.repo';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+﻿import { composeDesktopPersistence } from '@megumi/desktop/main/persistence';
+import type { ToolRepository } from '@megumi/desktop/main/persistence/repos/tool.repo';
 import type {
   ApprovalRecord,
   ToolDefinition,
@@ -102,11 +100,10 @@ export class ToolService {
 }
 
 export function createDefaultToolService(homePaths: MegumiHomePaths): ToolService {
-  const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
-  migrateDatabase(database);
+  const persistence = composeDesktopPersistence(homePaths);
 
   return new ToolService({
-    repository: new ToolRepository(database),
+    repository: persistence.toolRepository,
     registry: createBuiltInToolRegistry(),
   });
 }

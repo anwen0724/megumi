@@ -6,7 +6,7 @@ import { createPermissionSettingsService } from '../services/security/permission
 import { createAppSettingsService } from '../services/settings/app-settings.service';
 import { ArtifactContentStore } from '../services/artifact/artifact-content-store.service';
 import { ArtifactService } from '@megumi/coding-agent/artifacts';
-import { composeDatabase } from './compose-database';
+import { composeDesktopPersistence } from '../persistence';
 import { composeMemoryRuntime } from './compose-memory-runtime';
 import { composeProjectService, composeWorkspaceFilesService } from './compose-project-workspace';
 import { composeProviderRuntime } from './compose-provider-runtime';
@@ -25,46 +25,47 @@ export function composeDesktopMain() {
     settingsPath: megumiHomePaths.settingsPath,
   });
   const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
-  const database = composeDatabase(megumiHomePaths);
+  const persistence = composeDesktopPersistence(megumiHomePaths);
   const toolRegistry = composeToolRegistry();
   const permissionSettingsService = createPermissionSettingsService({
     userSettingsPath: megumiHomePaths.settingsPath,
     fileSystem: fs,
   });
-  const projectService = composeProjectService(database.projectRepository);
+  const projectService = composeProjectService(persistence.projectRepository);
   const providerRuntime = composeProviderRuntime(appSettingsService);
   const memory = composeMemoryRuntime({
-    repository: database.memoryRepository,
+    repository: persistence.memoryRepository,
     modelStepProvider: providerRuntime.modelStepProviderService,
     appSettingsService,
     runtimeLogger,
     megumiHomePath: megumiHomePaths.homePath,
   });
   const toolRuntimeFactory = composeToolRuntimeFactory({
-    toolRepository: database.toolRepository,
+    toolRepository: persistence.toolRepository,
     toolRegistry,
-    workspaceChangeRepository: database.workspaceChangeRepository,
-    sessionRunRepository: database.sessionRunRepository,
+    workspaceChangeRepository: persistence.workspaceChangeRepository,
+    sessionRunRepository: persistence.sessionRunRepository,
     permissionSettingsService,
   });
   const sessionRuntime = composeSessionRuntime({
     megumiHomePaths,
     runtimeLogger,
     appSettingsService,
-    artifactRepository: database.artifactRepository,
-    permissionSnapshotRepository: database.permissionSnapshotRepository,
-    sessionRunRepository: database.sessionRunRepository,
-    activePathRepository: database.activePathRepository,
-    toolRepository: database.toolRepository,
-    workspaceChangeRepository: database.workspaceChangeRepository,
-    timelineMessageRepository: database.timelineMessageRepository,
+    artifactRepository: persistence.artifactRepository,
+    permissionSnapshotRepository: persistence.permissionSnapshotRepository,
+    sessionRunRepository: persistence.sessionRunRepository,
+    activePathRepository: persistence.activePathRepository,
+    toolRepository: persistence.toolRepository,
+    workspaceChangeRepository: persistence.workspaceChangeRepository,
+    timelineMessageRepository: persistence.timelineMessageRepository,
     toolRegistry,
     modelStepProviderService: providerRuntime.modelStepProviderService,
     toolRuntimeFactory,
     memoryRuntime: memory.memoryRuntime,
+    runContextRepository: persistence.runContextRepository,
   });
   const toolService = composeToolService({
-    toolRepository: database.toolRepository,
+    toolRepository: persistence.toolRepository,
     toolRegistry,
     sessionRunService: sessionRuntime.sessionRunService,
   });
@@ -76,13 +77,13 @@ export function composeDesktopMain() {
     artifactRoot: path.join(megumiHomePaths.homePath, 'artifacts'),
   });
   const artifactService = new ArtifactService({
-    repository: database.artifactRepository,
+    repository: persistence.artifactRepository,
     contentStore: artifactContentStore,
   });
   const recoveryService = composeRecoveryRuntime({
-    recoveryRepository: database.recoveryRepository,
-    sessionRunRepository: database.sessionRunRepository,
-    workspaceChangeRepository: database.workspaceChangeRepository,
+    recoveryRepository: persistence.recoveryRepository,
+    sessionRunRepository: persistence.sessionRunRepository,
+    workspaceChangeRepository: persistence.workspaceChangeRepository,
     workspaceChangeFooterProjector: sessionRuntime.workspaceChangeFooterProjector,
     chatStreamSink: sessionRuntime.chatStreamSink,
   });

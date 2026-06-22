@@ -1,8 +1,8 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createDatabase } from '@megumi/db/connection';
-import { ProjectRepository } from '@megumi/db/repos/project.repo';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { createDatabase } from '@megumi/desktop/main/persistence/connection';
+import { ProjectRepository } from '@megumi/desktop/main/persistence/repos/project.repo';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
 import {
   ProjectPathValidationError,
   createProjectService,

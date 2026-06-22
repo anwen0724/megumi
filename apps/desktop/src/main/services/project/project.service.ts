@@ -1,4 +1,4 @@
-﻿import type { ProjectRepository } from '@megumi/db/repos/project.repo';
+﻿import type { ProjectRepository } from '@megumi/desktop/main/persistence/repos/project.repo';
 import type {
   ProjectListData,
   ProjectOpenData,

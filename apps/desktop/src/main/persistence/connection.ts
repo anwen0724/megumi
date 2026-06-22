@@ -1,3 +1,4 @@
+// Opens the Desktop Main SQLite database used by Megumi local persistence.
 import Database from 'better-sqlite3';
 
 export type MegumiDatabase = Database.Database;

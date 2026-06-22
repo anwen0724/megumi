@@ -2,9 +2,9 @@
 import fs from 'fs-extra';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createChatStreamEvent } from '@megumi/shared/chat-stream';
-import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
+import { RecoveryRepository } from '@megumi/desktop/main/persistence/repos/recovery.repo';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { WorkspaceChangeRepository } from '@megumi/desktop/main/persistence/repos/workspace-change.repo';
 import { createRecoveryService } from '../services/runtime/recovery.service';
 import { WorkspaceRestoreService } from '@megumi/coding-agent/workspace';
 import type { WorkspaceChangeFooterProjectorService } from '../projections/workspace/workspace-change-footer-projector.service';

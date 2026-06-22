@@ -39,8 +39,8 @@ describe('agent action permission tools v1 source guards', () => {
   });
 
   it('keeps permission decision persistence markers in schema and repository code', () => {
-    const migrations = readProjectFile('packages/db/schema/migrations.ts');
-    const repository = readProjectFile('packages/db/repos/tool.repo.ts');
+    const migrations = readProjectFile('apps/desktop/src/main/persistence/schema/migrations.ts');
+    const repository = readProjectFile('apps/desktop/src/main/persistence/repos/tool.repo.ts');
     const persistenceSources = `${migrations}\n${repository}`;
 
     expect(migrations).toContain('CREATE TABLE IF NOT EXISTS permission_decisions');

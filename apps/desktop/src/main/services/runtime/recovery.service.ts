@@ -1,4 +1,4 @@
-﻿import type { RecoveryRepository } from '@megumi/db';
+﻿import type { RecoveryRepository } from '@megumi/desktop/main/persistence';
 import type {
   CancelRequest,
   RecoverableRunSummary,

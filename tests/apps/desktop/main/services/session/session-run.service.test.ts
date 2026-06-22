@@ -3,17 +3,17 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
-import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
-import { ToolRepository } from '@megumi/db/repos/tool.repo';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { SessionActivePathRepository } from '@megumi/desktop/main/persistence/repos/session-active-path.repo';
+import { PermissionSnapshotRepository } from '@megumi/desktop/main/persistence/repos/permission-snapshot.repo';
+import { ToolRepository } from '@megumi/desktop/main/persistence/repos/tool.repo';
 import { createExternalTestToolSourceExecutor } from '@megumi/desktop/main/services/tool/external-test-tool-source-executor.service';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool/tool-call-handler.service';
 import { createToolExecutionRouter } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
 import type { ToolSourceExecutor } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
-import { TimelineMessageRepository } from '@megumi/db/repos/timeline-message.repo';
+import { TimelineMessageRepository } from '@megumi/desktop/main/persistence/repos/timeline-message.repo';
 import {
   SessionRunService,
   type SessionRunContextService,

@@ -1,9 +1,8 @@
 // Desktop adapter for Coding Agent run context resources.
 import { readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
-import { createDatabase } from '@megumi/db/connection';
-import { RunContextRepository } from '@megumi/db/repos/run-context.repo';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { composeDesktopPersistence } from '@megumi/desktop/main/persistence';
+import type { RunContextRepository } from '@megumi/desktop/main/persistence/repos/run-context.repo';
 import {
   RunContextService,
   type ListWorkspaceSourcesInput,
@@ -24,12 +23,14 @@ export type {
 
 const BLOCKED_FILE_NAMES = new Set(['.env', '.env.local', '.env.production']);
 
-export function createDefaultRunContextService(homePaths: MegumiHomePaths): RunContextService {
-  const database = createDatabase(path.join(homePaths.sqlitePath, 'megumi.sqlite3'));
-  migrateDatabase(database);
+export function createDefaultRunContextService(
+  homePaths: MegumiHomePaths,
+  options: { repository?: RunContextRepository } = {},
+): RunContextService {
+  const contextRepository = options.repository ?? composeDesktopPersistence(homePaths).runContextRepository;
 
   return new RunContextService({
-    contextRepository: new RunContextRepository(database),
+    contextRepository,
     workspaceSourceProvider: {
       listWorkspaceSources(input) {
         return listDesktopWorkspaceSources(input);

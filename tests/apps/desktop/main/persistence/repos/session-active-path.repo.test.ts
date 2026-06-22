@@ -2,10 +2,10 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createDatabase } from '@megumi/db/connection';
-import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
-import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
-import { migrateDatabase } from '@megumi/db/schema/migrations';
+import { createDatabase } from '@megumi/desktop/main/persistence/connection';
+import { SessionActivePathRepository } from '@megumi/desktop/main/persistence/repos/session-active-path.repo';
+import { SessionRunRepository } from '@megumi/desktop/main/persistence/repos/session-run.repo';
+import { migrateDatabase } from '@megumi/desktop/main/persistence/schema/migrations';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
   SessionRetryAttempt,
