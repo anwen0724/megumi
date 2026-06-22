@@ -18,6 +18,10 @@ import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/perm
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import { resolveModelStepEffectiveCwd, type ModelStepEffectiveCwd } from './effective-cwd';
+import {
+  createRuntimeFactsForRunInput,
+  type CodingAgentRunInputFacts,
+} from '../run/input-facts';
 
 export interface LoadInstructionSourcesInput {
   projectRoot?: string;
@@ -68,6 +72,7 @@ export interface BuildModelStepInputInput {
   providerStates?: ModelStepProviderState[];
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+  runInputFacts?: CodingAgentRunInputFacts;
   budgetPolicy?: ContextBudgetPolicy;
   builtAt: string;
 }
@@ -265,6 +270,10 @@ function runtimeFactsForInput(
       text: `Permission mode: ${input.permissionSnapshot.permissionMode}.`,
       required: true,
     });
+  }
+
+  if (input.runInputFacts) {
+    facts.push(...createRuntimeFactsForRunInput(input.runInputFacts));
   }
 
   return facts;

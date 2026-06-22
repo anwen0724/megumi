@@ -41,7 +41,27 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/input-facts.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/run-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/model-step-stream.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/event-utils.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/ports/index.ts'))).toBe(true);
+  });
+
+  it('keeps run orchestration in coding-agent instead of desktop session service', () => {
+    const codingAgentRun = sourceUnder('packages/coding-agent/run');
+    const desktopSessionRun = readFileSync(
+      join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'),
+      'utf8',
+    );
+
+    expect(codingAgentRun).toContain('class CodingAgentRunOrchestrator');
+    expect(codingAgentRun).toContain('runModelToolLoop');
+    expect(codingAgentRun).toContain('buildContinuationInputContext');
+    expect(codingAgentRun).toContain('createCodingAgentRunInputFacts');
+    expect(desktopSessionRun).toContain('new CodingAgentRunOrchestrator');
+    expect(desktopSessionRun).not.toContain("contextKind: 'compaction-probe'");
+    expect(desktopSessionRun).not.toContain("contextKind: 'initial'");
   });
 
   it('keeps product core free of desktop, Electron, and concrete SQLite dependencies', () => {

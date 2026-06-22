@@ -12,7 +12,6 @@ import {
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/agent';
 import type { ModelStepCompletionResult } from '@megumi/agent';
 import {
-  runModelToolLoop,
   type PendingToolApprovalContinuation,
   type ToolApprovalResumeInput,
   type ToolApprovalResumeOutcome,
@@ -34,6 +33,18 @@ import {
   SessionContextInputService,
   type BuildSessionContextInputFromRepositoryInput,
 } from '@megumi/coding-agent/session';
+import {
+  CodingAgentRunOrchestrator,
+  streamCodingAgentModelStep,
+  type CodingAgentRunOrchestratorOptions,
+} from '@megumi/coding-agent/run';
+import {
+  BUILT_IN_INPUT_COMMAND_REGISTRY,
+} from '@megumi/command';
+import {
+  parseRawInput,
+  type ParsedInput,
+} from '@megumi/input';
 import {
   createRunCompletedEvent,
   createRunFailedEvent,
@@ -595,6 +606,141 @@ export class SessionRunService {
     }
   }
 
+
+  private createToolRegistrySnapshotForCodingAgentRun(input: RunToolRegistrySnapshotBuildInput & {
+    sessionId: string;
+    providerCapabilitySummary?: { supportsToolCall?: boolean };
+  }): {
+    modelVisibleToolDefinitions: ToolDefinition[];
+    events: RuntimeEvent[];
+  } {
+    if (!this.toolRegistrySnapshotService) {
+      return { modelVisibleToolDefinitions: [], events: [] };
+    }
+
+    const registrySnapshotResult = this.toolRegistrySnapshotService.createRunSnapshot(input);
+    const events = [
+      createToolRegistrySourcesEnsuredEvent({
+        eventId: this.ids.eventId(),
+        runId: input.runId,
+        sessionId: input.sessionId,
+        sequence: 1,
+        createdAt: input.createdAt,
+        payload: {
+          sourceIds: registrySnapshotResult.diagnostics.sourceIds,
+          createdSourceIds: registrySnapshotResult.diagnostics.createdSourceIds,
+        },
+      }),
+      createToolRegistrySnapshotCreatedEvent({
+        eventId: this.ids.eventId(),
+        runId: input.runId,
+        sessionId: input.sessionId,
+        sequence: 2,
+        createdAt: input.createdAt,
+        payload: {
+          snapshotId: registrySnapshotResult.snapshot.snapshotId,
+          projectId: registrySnapshotResult.snapshot.projectId,
+          permissionMode: registrySnapshotResult.snapshot.permissionMode,
+          modelId: registrySnapshotResult.snapshot.modelId,
+          registryVersion: registrySnapshotResult.snapshot.registryVersion,
+          sourceVersionHash: registrySnapshotResult.snapshot.sourceVersionHash,
+          sourceCount: registrySnapshotResult.snapshot.sourceEntries.length,
+          entryCount: registrySnapshotResult.snapshot.entries.length,
+          exposedCount: registrySnapshotResult.snapshot.entries.filter((entry) => entry.exposedToModel).length,
+        },
+      }),
+      ...registrySnapshotResult.snapshot.entries.map((entry, index) => createToolRegistryEntryResolvedEvent({
+        eventId: this.ids.eventId(),
+        runId: input.runId,
+        sessionId: input.sessionId,
+        sequence: index + 3,
+        createdAt: input.createdAt,
+        payload: {
+          snapshotId: entry.snapshotId,
+          snapshotEntryId: entry.snapshotEntryId,
+          registrationId: entry.registrationId,
+          canonicalToolId: entry.canonicalToolId,
+          modelVisibleName: entry.modelVisibleName,
+          sourceId: entry.sourceId,
+          namespace: entry.namespace,
+          sourceToolName: entry.sourceToolName,
+          effectiveStatus: entry.effectiveStatus,
+          exposedToModel: entry.exposedToModel,
+          ...(entry.disabledReason ? { disabledReason: entry.disabledReason } : {}),
+          ...(entry.unavailableReason ? { unavailableReason: entry.unavailableReason } : {}),
+          ...(entry.conflictReason ? { conflictReason: entry.conflictReason } : {}),
+        },
+      })),
+      createToolRegistryModelVisibleToolsDerivedEvent({
+        eventId: this.ids.eventId(),
+        runId: input.runId,
+        sessionId: input.sessionId,
+        sequence: registrySnapshotResult.snapshot.entries.length + 3,
+        createdAt: input.createdAt,
+        payload: {
+          snapshotId: registrySnapshotResult.snapshot.snapshotId,
+          modelId: registrySnapshotResult.snapshot.modelId,
+          modelSupportsToolCall: registrySnapshotResult.diagnostics.modelSupportsToolCall,
+          toolNames: registrySnapshotResult.diagnostics.modelVisibleToolNames,
+          hiddenCount: registrySnapshotResult.diagnostics.hiddenCount,
+        },
+      }),
+    ];
+
+    return { modelVisibleToolDefinitions: registrySnapshotResult.modelVisibleToolDefinitions, events };
+  }
+
+  private createCodingAgentRunOrchestratorOptions(): CodingAgentRunOrchestratorOptions {
+    return {
+      clock: this.clock,
+      ids: { eventId: this.ids.eventId },
+      ...(this.contextService ? { contextService: this.contextService } : {}),
+      ...(this.providerCapabilitySummaryProvider ? { providerCapabilitySummaryProvider: this.providerCapabilitySummaryProvider } : {}),
+      ...(this.toolRegistrySnapshotService ? {
+        toolRegistrySnapshotProvider: {
+          createRunSnapshot: (snapshotInput) => this.createToolRegistrySnapshotForCodingAgentRun({ ...snapshotInput }),
+        },
+      } : {}),
+      ...(this.toolDefinitionProvider ? { toolDefinitionProvider: this.toolDefinitionProvider } : {}),
+      sessionContextInputService: this.sessionContextInputService,
+      sourceOverrideProvider: {
+        resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
+      },
+      ...(this.memoryRecallService ? {
+        memoryRecallService: {
+          recallForNewUserInput: (recallInput) => this.recallMemoryForNewUserInput({ ...recallInput }),
+        },
+      } : {}),
+      modelStepInputBuildService: this.modelStepInputBuildService,
+      ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
+      modelStepExecutor: {
+        streamModelStep: ((service) => async function* (modelStepInput) {
+          const toolRuntime = modelStepInput.projectRoot && service.toolRuntimeFactory
+            ? await service.toolRuntimeFactory.create({
+                projectRoot: modelStepInput.projectRoot,
+                permissionMode: modelStepInput.permissionMode ?? 'default',
+              })
+            : undefined;
+
+          yield* service.streamAndPersistModelStep({
+            request: modelStepInput.request,
+            run: modelStepInput.run,
+            step: modelStepInput.step,
+            userMessageId: modelStepInput.userMessageId,
+            ...(modelStepInput.projectId ? { projectId: modelStepInput.projectId } : {}),
+            ...(modelStepInput.projectRoot ? { projectRoot: modelStepInput.projectRoot } : {}),
+            ...(modelStepInput.permissionMode ? { permissionMode: modelStepInput.permissionMode } : {}),
+            ...(modelStepInput.memoryRecall?.memoryRecallSources ? { memoryRecallSources: modelStepInput.memoryRecall.memoryRecallSources } : {}),
+            ...(modelStepInput.memoryRecall?.memoryRecallSeed ? { memoryRecallSeed: modelStepInput.memoryRecall.memoryRecallSeed } : {}),
+            ...(toolRuntime ? { toolRuntime } : {}),
+            ...(modelStepInput.startSequence != null ? { startSequence: modelStepInput.startSequence } : {}),
+            emitRunStarted: false,
+          });
+        })(this),
+      },
+    };
+  }
+
   private scheduleProjectMemoryMirrorSync(session: Session): void {
     if (!this.megumiHomePath || !this.memoryMarkdownSyncService || !session.workspaceId) {
       return;
@@ -783,6 +929,24 @@ export class SessionRunService {
       sourceRef: sessionMessageSourceRef(String(userMessage.messageId), currentUserMessage.createdAt),
       createdAt: currentUserMessage.createdAt,
     });
+    const parsedInput = parseRawInput({
+      id: `raw-input:${input.requestId}`,
+      source: {
+        kind: 'desktop',
+        surface: 'session-message',
+      },
+      text: currentUserMessage.content,
+      target: {
+        kind: 'session',
+        sessionId: String(session.sessionId),
+      },
+      metadata: {
+        requestId: input.requestId,
+      },
+      createdAt,
+    }, {
+      commandRegistry: BUILT_IN_INPUT_COMMAND_REGISTRY,
+    });
     const initialRun = this.repository.saveRun({
       runId,
       sessionId: session.sessionId,
@@ -880,6 +1044,7 @@ export class SessionRunService {
         inputPreprocessing: normalizedInput.inputPreprocessing,
         ...(permissionSnapshot ? { permissionSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
+        parsedInput,
       })),
     };
   }
@@ -1542,340 +1707,28 @@ export class SessionRunService {
     inputPreprocessing: InputPreprocessingResult;
     permissionSnapshot?: PermissionSnapshotRecord;
     chatStreamAdapter?: ChatStreamEventAdapter;
+    parsedInput?: ParsedInput;
   }): AsyncIterable<RuntimeEvent> {
-    let lastSequence = 0;
-    const runStarted = withSessionMessageRequestMetadata(createRunStartedEvent({
-      eventId: this.ids.eventId(),
-      sessionId: input.session.sessionId,
-      runId: input.run.runId,
-      sequence: lastSequence += 1,
-      createdAt: input.payload.createdAt,
-    }), {
+    const orchestrator = new CodingAgentRunOrchestrator(this.createCodingAgentRunOrchestratorOptions());
+    yield* orchestrator.runSessionMessage({
       requestId: input.requestId,
-      runtimeContext: input.runtimeContext,
+      session: input.session,
+      run: input.run,
+      step: input.step,
+      userMessage: input.userMessage,
+      providerId: input.payload.providerId,
+      modelId: input.payload.modelId,
+      permissionMode: input.permissionMode,
+      inputPreprocessing: input.inputPreprocessing,
+      ...(input.parsedInput ? { parsedInput: input.parsedInput } : {}),
+      ...(input.permissionSnapshot ? {
+        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
+      } : {}),
+      ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+      createdAt: input.payload.createdAt,
+      memoryEnabled: this.resolveMemoryEnabled(),
     });
-    this.appendRuntimeEvent(runStarted, input.chatStreamAdapter);
-    let runStartedYielded = false;
-
-    try {
-      const context = this.createInitialContextForSessionMessage({
-        runId: String(input.run.runId),
-        goal: input.userMessage.content,
-        session: input.session,
-      });
-      const budgetPolicy = context?.contextBudgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
-      const providerCapabilitySummary = this.providerCapabilitySummaryProvider?.getProviderCapabilitySummary({
-        providerId: input.payload.providerId,
-        modelId: input.payload.modelId,
-      }) ?? { supportsToolCall: true };
-      let toolDefinitions: ToolDefinition[] | undefined;
-      if (input.session.workspacePath && input.session.workspaceId && this.toolRegistrySnapshotService) {
-        const registrySnapshotResult = this.toolRegistrySnapshotService.createRunSnapshot({
-          runId: String(input.run.runId),
-          projectId: String(input.session.workspaceId),
-          permissionMode: input.permissionMode,
-          modelId: input.payload.modelId,
-          createdAt: input.payload.createdAt,
-          providerCapabilitySummary,
-        });
-        toolDefinitions = registrySnapshotResult.modelVisibleToolDefinitions;
-        const registryEvents = [
-          createToolRegistrySourcesEnsuredEvent({
-            eventId: this.ids.eventId(),
-            runId: String(input.run.runId),
-            sessionId: String(input.session.sessionId),
-            sequence: lastSequence += 1,
-            createdAt: input.payload.createdAt,
-            payload: {
-              sourceIds: registrySnapshotResult.diagnostics.sourceIds,
-              createdSourceIds: registrySnapshotResult.diagnostics.createdSourceIds,
-            },
-          }),
-          createToolRegistrySnapshotCreatedEvent({
-            eventId: this.ids.eventId(),
-            runId: String(input.run.runId),
-            sessionId: String(input.session.sessionId),
-            sequence: lastSequence += 1,
-            createdAt: input.payload.createdAt,
-            payload: {
-              snapshotId: registrySnapshotResult.snapshot.snapshotId,
-              projectId: registrySnapshotResult.snapshot.projectId,
-              permissionMode: registrySnapshotResult.snapshot.permissionMode,
-              modelId: registrySnapshotResult.snapshot.modelId,
-              registryVersion: registrySnapshotResult.snapshot.registryVersion,
-              sourceVersionHash: registrySnapshotResult.snapshot.sourceVersionHash,
-              sourceCount: registrySnapshotResult.snapshot.sourceEntries.length,
-              entryCount: registrySnapshotResult.snapshot.entries.length,
-              exposedCount: registrySnapshotResult.snapshot.entries.filter((entry) => entry.exposedToModel).length,
-            },
-          }),
-          ...registrySnapshotResult.snapshot.entries.map((entry) => createToolRegistryEntryResolvedEvent({
-            eventId: this.ids.eventId(),
-            runId: String(input.run.runId),
-            sessionId: String(input.session.sessionId),
-            sequence: lastSequence += 1,
-            createdAt: input.payload.createdAt,
-            payload: {
-              snapshotId: entry.snapshotId,
-              snapshotEntryId: entry.snapshotEntryId,
-              registrationId: entry.registrationId,
-              canonicalToolId: entry.canonicalToolId,
-              modelVisibleName: entry.modelVisibleName,
-              sourceId: entry.sourceId,
-              namespace: entry.namespace,
-              sourceToolName: entry.sourceToolName,
-              effectiveStatus: entry.effectiveStatus,
-              exposedToModel: entry.exposedToModel,
-              ...(entry.disabledReason ? { disabledReason: entry.disabledReason } : {}),
-              ...(entry.unavailableReason ? { unavailableReason: entry.unavailableReason } : {}),
-              ...(entry.conflictReason ? { conflictReason: entry.conflictReason } : {}),
-            },
-          })),
-          createToolRegistryModelVisibleToolsDerivedEvent({
-            eventId: this.ids.eventId(),
-            runId: String(input.run.runId),
-            sessionId: String(input.session.sessionId),
-            sequence: lastSequence += 1,
-            createdAt: input.payload.createdAt,
-            payload: {
-              snapshotId: registrySnapshotResult.snapshot.snapshotId,
-              modelId: registrySnapshotResult.snapshot.modelId,
-              modelSupportsToolCall: registrySnapshotResult.diagnostics.modelSupportsToolCall,
-              toolNames: registrySnapshotResult.diagnostics.modelVisibleToolNames,
-              hiddenCount: registrySnapshotResult.diagnostics.hiddenCount,
-            },
-          }),
-        ].map((event) => withSessionMessageRequestMetadata(event, {
-          requestId: input.requestId,
-          runtimeContext: input.runtimeContext,
-        }));
-
-        for (const event of registryEvents) {
-          this.appendRuntimeEvent(event, input.chatStreamAdapter);
-        }
-      } else if (input.session.workspacePath && this.toolDefinitionProvider) {
-        toolDefinitions = this.toolDefinitionProvider.listDefinitions({
-            runId: String(input.run.runId),
-            permissionMode: input.permissionMode,
-            providerCapabilitySummary,
-          });
-      }
-      const sessionContext = this.sessionContextInputService.buildSessionContextInput({
-        sessionId: String(input.session.sessionId),
-        currentRunId: String(input.run.runId),
-        currentMessageId: String(input.userMessage.messageId),
-        builtAt: input.payload.createdAt,
-      });
-      const modelInputSourceOverrides = this.modelInputRuntimeSourceOverrides({
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        builtAt: input.payload.createdAt,
-      });
-      const memoryRecallEffectiveCwd = resolveRecallEffectiveCwd(
-        input.session.workspacePath,
-        modelInputSourceOverrides.requestedCwd,
-      );
-      const memoryEnabled = this.resolveMemoryEnabled();
-      const memoryRecall = await this.recallMemoryForNewUserInput({
-        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-        ...(memoryRecallEffectiveCwd ? { effectiveCwd: memoryRecallEffectiveCwd } : {}),
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        modelStepId: String(input.step.stepId),
-        queryText: input.inputPreprocessing.effectiveUserText,
-        providerId: input.payload.providerId,
-        modelId: input.payload.modelId,
-        enabled: memoryEnabled,
-        createdAt: input.payload.createdAt,
-      });
-      const compactionProbeModelInput = await this.modelStepInputBuildService.buildModelStepInput({
-        requestId: input.requestId,
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        contextKind: 'compaction-probe',
-        providerId: input.payload.providerId,
-        modelId: input.payload.modelId,
-        modelContextWindow: budgetPolicy.modelContextWindow,
-        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-        ...modelInputSourceOverrides,
-        permissionMode: input.permissionMode,
-        ...(input.permissionSnapshot ? {
-          permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-          permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
-        } : {}),
-        currentMessage: input.userMessage,
-        inputPreprocessing: input.inputPreprocessing,
-        sessionContext,
-        ...memoryRecall,
-        ...(toolDefinitions ? { toolDefinitions } : {}),
-        budgetPolicy: {
-          modelContextWindow: Number.MAX_SAFE_INTEGER,
-          reservedOutputTokens: 0,
-          keepRecentTokens: Number.MAX_SAFE_INTEGER,
-        },
-        builtAt: input.payload.createdAt,
-      });
-      const compactionPromise = compactionProbeModelInput.failure
-        ? Promise.resolve({
-            status: 'failed' as const,
-            events: [],
-            failure: modelStepInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
-          })
-        : this.sessionCompactionOrchestrator
-        ? this.sessionCompactionOrchestrator.compactIfNeeded({
-            requestId: input.requestId,
-            sessionId: String(input.session.sessionId),
-            runId: String(input.run.runId),
-            stepId: String(input.step.stepId),
-            providerId: input.payload.providerId,
-            modelId: input.payload.modelId,
-            runtimeContext: input.runtimeContext,
-            createdAt: input.payload.createdAt,
-            sessionContext,
-            budgetProbeInputContext: compactionProbeModelInput.inputContext,
-            budgetPolicy,
-            startSequence: lastSequence,
-        })
-        : Promise.resolve({ status: 'skipped' as const, events: [] });
-
-      yield runStarted;
-      runStartedYielded = true;
-      for (const event of this.repository.listRuntimeEventsByRun(String(input.run.runId)).filter((event) =>
-        event.sequence > runStarted.sequence && event.eventType.startsWith('tool.registry.'))) {
-        yield event;
-      }
-      const compaction = await compactionPromise;
-
-      for (const event of compaction.events) {
-        lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(input.run.runId))));
-        const eventWithRequest = withSessionMessageRequestMetadata(event, {
-          requestId: input.requestId,
-          runtimeContext: input.runtimeContext,
-        });
-        const sequencedEvent = withSequenceAfter(eventWithRequest, lastSequence);
-        lastSequence = sequencedEvent.sequence;
-        this.appendRuntimeEvent(sequencedEvent, input.chatStreamAdapter);
-        yield sequencedEvent;
-      }
-
-      const persistedRun = this.repository.getRun(String(input.run.runId));
-      if (persistedRun?.status === 'cancelled') {
-        return;
-      }
-
-      if (compaction.status === 'failed') {
-        yield* this.failRunBeforeModelStep({
-          requestId: input.requestId,
-          runtimeContext: input.runtimeContext,
-          sessionId: String(input.session.sessionId),
-          run: input.run,
-          step: input.step,
-          error: compaction.failure,
-          startSequence: lastSequence,
-          createdAt: this.clock.now(),
-          chatStreamAdapter: input.chatStreamAdapter,
-        });
-        return;
-      }
-
-      const finalSessionContext = this.sessionContextInputService.buildSessionContextInput({
-        sessionId: String(input.session.sessionId),
-        currentRunId: String(input.run.runId),
-        currentMessageId: String(input.userMessage.messageId),
-        builtAt: input.payload.createdAt,
-      });
-      const initialModelInput = await this.modelStepInputBuildService.buildModelStepInput({
-        requestId: input.requestId,
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        contextKind: 'initial',
-        providerId: input.payload.providerId,
-        modelId: input.payload.modelId,
-        modelContextWindow: budgetPolicy.modelContextWindow,
-        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-        ...modelInputSourceOverrides,
-        permissionMode: input.permissionMode,
-        ...(input.permissionSnapshot ? {
-          permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-          permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
-        } : {}),
-        currentMessage: input.userMessage,
-        inputPreprocessing: input.inputPreprocessing,
-        sessionContext: finalSessionContext,
-        ...memoryRecall,
-        ...(toolDefinitions ? { toolDefinitions } : {}),
-        budgetPolicy,
-        builtAt: input.payload.createdAt,
-      });
-      if (initialModelInput.failure) {
-        yield* this.failRunBeforeModelStep({
-          requestId: input.requestId,
-          runtimeContext: input.runtimeContext,
-          sessionId: String(input.session.sessionId),
-          run: input.run,
-          step: input.step,
-          error: modelStepInputBuildFailureToRuntimeError(initialModelInput.failure),
-          startSequence: lastSequence,
-          createdAt: this.clock.now(),
-          chatStreamAdapter: input.chatStreamAdapter,
-        });
-        return;
-      }
-      const request: ModelStepRuntimeRequest = {
-        requestId: input.requestId,
-        sessionId: input.session.sessionId,
-        runId: input.run.runId,
-        stepId: input.step.stepId,
-        providerId: input.payload.providerId,
-        modelId: input.payload.modelId,
-        inputContext: initialModelInput.inputContext,
-        ...(initialModelInput.toolDefinitions.length > 0 ? { toolDefinitions: initialModelInput.toolDefinitions } : {}),
-        runtimeContext: input.runtimeContext,
-        createdAt: input.payload.createdAt,
-      };
-      const toolRuntime = input.session.workspacePath
-        ? await this.toolRuntimeFactory?.create({
-            projectRoot: input.session.workspacePath,
-            permissionMode: input.permissionMode,
-          })
-        : undefined;
-
-      yield* this.streamAndPersistModelStep({
-        request,
-        run: input.run,
-        step: input.step,
-        userMessageId: input.userMessage.messageId,
-        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-        ...(toolRuntime ? { toolRuntime } : {}),
-        ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
-        startSequence: lastSequence,
-        emitRunStarted: false,
-        permissionMode: input.permissionMode,
-        ...memoryRecall,
-      });
-    } catch (error) {
-      if (!runStartedYielded) {
-        yield runStarted;
-      }
-      yield* this.failRunBeforeModelStep({
-        requestId: input.requestId,
-        runtimeContext: input.runtimeContext,
-        sessionId: String(input.session.sessionId),
-        run: input.run,
-        step: input.step,
-        error: createRuntimeErrorFromUnknown(error),
-        startSequence: lastSequence,
-        createdAt: this.clock.now(),
-        chatStreamAdapter: input.chatStreamAdapter,
-      });
-    }
   }
 
   private scheduleRunCompletedMemoryCapture(input: {
@@ -2111,83 +1964,64 @@ export class SessionRunService {
       yield startedEvent;
     }
 
-    const modelStepProvider = this.requireModelStepProvider();
+        const modelStepProvider = this.requireModelStepProvider();
     const toolRuntime = input.toolRuntime;
     const streamProviderModelStep = (request: ModelStepRuntimeRequest) =>
       modelStepProvider.streamModelStep(request);
-    const modelEvents = toolRuntime
-      ? runModelToolLoop({
-          request: input.request,
-          modelStepPort: {
-            streamModelStep: ({ request }) => streamProviderModelStep(request),
-          },
-          toolCallHandler: toolRuntime,
-          ids: {
-            nextEventId: this.ids.eventId,
-            nextStepId: () => {
-              const step = this.repository.saveStep({
-                stepId: this.ids.stepId(),
-                runId: input.request.runId,
-                kind: 'model',
-                status: 'running',
-                title: 'Model response',
-                startedAt: this.clock.now(),
-              });
-              currentModelStep = step;
-              modelStepsById.set(step.stepId, step);
-              return step.stepId;
-            },
-            nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
-          },
-          onPendingApproval: (pending) => {
-            pendingContinuations.push(pending);
-          },
-          onToolContinuationEmitted: ({ request, toolResults, emittedAt }) => {
+    const modelEvents = streamCodingAgentModelStep({
+      request: input.request,
+      ports: {
+        modelStepPort: {
+          streamModelStep: ({ request }) => streamProviderModelStep(request),
+        },
+        ...(toolRuntime ? { toolCallHandler: toolRuntime } : {}),
+        modelStepInputBuildService: this.modelStepInputBuildService,
+        sourceOverrideProvider: {
+          resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
+        },
+        toolContinuationRecorder: {
+          markToolContinuationEmitted: ({ request, stepId, toolResults, emittedAt, sequence }) => {
             const event = this.markToolContinuationEmitted({
               request,
-              stepId: request.stepId,
+              stepId,
               toolResults,
               emittedAt,
-              sequence: 0,
+              sequence,
             });
             return event ? [event] : [];
           },
-          buildContinuationInputContext: async (contextInput) => {
-            const continuationInput = await this.modelStepInputBuildService.buildModelStepInput({
-              baseInputContext: contextInput.baseInputContext,
-              requestId: input.request.requestId,
-              sessionId: contextInput.sessionId,
-              runId: contextInput.runId,
-              stepId: contextInput.stepId,
-              contextKind: 'tool-continuation',
-              providerId: input.request.providerId,
-              modelId: String(input.request.modelId),
-              ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
-              ...this.modelInputRuntimeSourceOverrides({
-                sessionId: contextInput.sessionId,
-                runId: contextInput.runId,
-                stepId: contextInput.stepId,
-                builtAt: contextInput.builtAt,
-              }),
-              permissionMode: input.permissionMode ?? 'default',
-              toolDefinitions: input.request.toolDefinitions ?? [],
-              toolCalls: contextInput.toolCalls,
-              toolResults: contextInput.toolResults,
-              providerStates: contextInput.providerStates,
-              ...(input.memoryRecallSources ? { memoryRecallSources: input.memoryRecallSources } : {}),
-              ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
-              builtAt: contextInput.builtAt,
+        },
+        ids: {
+          nextEventId: this.ids.eventId,
+          nextStepId: ({ runId }) => {
+            const step = this.repository.saveStep({
+              stepId: this.ids.stepId(),
+              runId,
+              kind: 'model',
+              status: 'running',
+              title: 'Model response',
+              startedAt: this.clock.now(),
             });
-            if (continuationInput.failure) {
-              throw modelStepInputBuildFailureToRuntimeError(continuationInput.failure);
-            }
-            return continuationInput.inputContext;
+            currentModelStep = step;
+            modelStepsById.set(step.stepId, step);
+            return step.stepId;
           },
-        })
-      : streamProviderModelStep(input.request);
+          nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
+        },
+      },
+      ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+      permissionMode: input.permissionMode ?? 'default',
+      memoryRecall: {
+        ...(input.memoryRecallSources ? { memoryRecallSources: input.memoryRecallSources } : {}),
+        ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
+      },
+      onPendingApproval: (pending) => {
+        pendingContinuations.push(pending);
+      },
+    });
 
     try {
-      for await (const event of coalesceTextDeltaRuntimeEvents(modelEvents)) {
+      for await (const event of modelEvents) {
         registerPendingApprovalGroup();
         lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(input.request.runId)));
         const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
@@ -3394,161 +3228,6 @@ function createPermissionModeState(
 
 function nextRuntimeSequence(events: RuntimeEvent[]): number {
   return events.reduce((max, event) => Math.max(max, event.sequence), 0);
-}
-
-const TEXT_DELTA_FLUSH_DELAY_MS = 50;
-const TEXT_DELTA_MAX_CHARS = 512;
-
-async function* coalesceTextDeltaRuntimeEvents(
-  events: AsyncIterable<RuntimeEvent>,
-  options: {
-    flushDelayMs?: number;
-    maxChars?: number;
-  } = {},
-): AsyncIterable<RuntimeEvent> {
-  const flushDelayMs = options.flushDelayMs ?? TEXT_DELTA_FLUSH_DELAY_MS;
-  const maxChars = options.maxChars ?? TEXT_DELTA_MAX_CHARS;
-  const iterator = events[Symbol.asyncIterator]();
-  let pendingNext = iterator.next();
-  let bufferedEvent: RuntimeEvent | null = null;
-  let bufferedDelta = '';
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-  let flushPromise: Promise<'flush'> | null = null;
-
-  const clearFlushTimer = () => {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-    flushPromise = null;
-  };
-
-  const startFlushTimer = () => {
-    if (flushPromise) {
-      return;
-    }
-    flushPromise = new Promise((resolve) => {
-      flushTimer = setTimeout(() => {
-        flushTimer = null;
-        flushPromise = null;
-        resolve('flush');
-      }, flushDelayMs);
-    });
-  };
-
-  const flush = (): RuntimeEvent | null => {
-    if (!bufferedEvent) {
-      return null;
-    }
-    const event = withTextDelta(bufferedEvent, bufferedDelta);
-    bufferedEvent = null;
-    bufferedDelta = '';
-    clearFlushTimer();
-    return event;
-  };
-
-  const buffer = (event: RuntimeEvent) => {
-    bufferedEvent = event;
-    bufferedDelta = getAssistantDeltaContent(event.payload);
-    startFlushTimer();
-  };
-
-  while (true) {
-    if (!bufferedEvent) {
-      const result = await pendingNext;
-      pendingNext = iterator.next();
-
-      if (result.done) {
-        return;
-      }
-
-      if (isTextDeltaRuntimeEvent(result.value)) {
-        buffer(result.value);
-        if (bufferedDelta.length >= maxChars) {
-          const event = flush();
-          if (event) {
-            yield event;
-          }
-        }
-      } else {
-        yield result.value;
-      }
-      continue;
-    }
-
-    const result = await Promise.race([
-      pendingNext.then((next) => ({ kind: 'next' as const, next })),
-      (flushPromise ?? Promise.resolve('flush')).then(() => ({ kind: 'flush' as const })),
-    ]);
-
-    if (result.kind === 'flush') {
-      const event = flush();
-      if (event) {
-        yield event;
-      }
-      continue;
-    }
-
-    pendingNext = iterator.next();
-
-    if (result.next.done) {
-      const event = flush();
-      if (event) {
-        yield event;
-      }
-      return;
-    }
-
-    if (canMergeTextDelta(bufferedEvent, result.next.value)) {
-      bufferedDelta += getAssistantDeltaContent(result.next.value.payload);
-      if (bufferedDelta.length >= maxChars) {
-        const event = flush();
-        if (event) {
-          yield event;
-        }
-      }
-      continue;
-    }
-
-    const event = flush();
-    if (event) {
-      yield event;
-    }
-
-    if (isTextDeltaRuntimeEvent(result.next.value)) {
-      buffer(result.next.value);
-    } else {
-      yield result.next.value;
-    }
-  }
-}
-
-function isTextDeltaRuntimeEvent(event: RuntimeEvent): boolean {
-  return event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta';
-}
-
-function canMergeTextDelta(left: RuntimeEvent, right: RuntimeEvent): boolean {
-  if (!isTextDeltaRuntimeEvent(left) || !isTextDeltaRuntimeEvent(right) || left.eventType !== right.eventType) {
-    return false;
-  }
-
-  if (left.eventType === 'model.output.delta') {
-    const leftModelStepId = (left.payload as { modelStepId?: unknown }).modelStepId;
-    const rightModelStepId = (right.payload as { modelStepId?: unknown }).modelStepId;
-    return leftModelStepId === rightModelStepId;
-  }
-
-  return true;
-}
-
-function withTextDelta(event: RuntimeEvent, delta: string): RuntimeEvent {
-  return {
-    ...event,
-    payload: {
-      ...(event.payload as Record<string, unknown>),
-      delta,
-    },
-  };
 }
 
 function resolveRecallEffectiveCwd(projectRoot: string | undefined, requestedCwd: string | undefined): string | undefined {

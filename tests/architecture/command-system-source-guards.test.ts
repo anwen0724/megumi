@@ -155,10 +155,15 @@ describe('Command system source guards', () => {
     ], [
       /parseSlashCommand/,
       /dispatchCommandText/,
-      /BUILT_IN_INPUT_COMMAND/,
       /listCommandSuggestions/,
       /\/review\b/,
     ])).toEqual([]);
+    // session-run.service.ts may import BUILT_IN_INPUT_COMMAND_REGISTRY
+    // for the ParsedInput bridge that feeds command facts into CodingAgentRunOrchestrator.
+    const sessionRun = readFileSync(join(repoRoot, 'apps/desktop/src/main/services/session/session-run.service.ts'), 'utf8');
+    expect(sessionRun).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(sessionRun).not.toContain('parseSlashCommand');
+    expect(sessionRun).not.toContain('dispatchCommandText');
   });
 
   it('keeps context management free of raw slash command parsing', () => {

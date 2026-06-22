@@ -52,7 +52,10 @@ describe('run context and model input boundaries', () => {
     expect(contextManagement).not.toMatch(/workflow-command-contracts/);
     expect(sessionRun).toContain('ModelStepInputBuildService');
     expect(sessionRun).toContain('modelStepInputBuildService');
-    expect(sessionRun).toMatch(/context\??\.contextBudgetPolicy/);
+    // contextBudgetPolicy resolution moved to CodingAgentRunOrchestrator in packages/coding-agent/run
+    expect(sessionRun).toContain('CodingAgentRunOrchestrator');
+    const codingAgentRun = read('packages/coding-agent/run/run-orchestrator.ts');
+    expect(codingAgentRun).toMatch(/contextBudgetPolicy/);
   });
 
   it('keeps input preprocessing materialization in coding-agent context and out of provider adapters', () => {

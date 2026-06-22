@@ -7834,6 +7834,53 @@ describe('SessionRunService', () => {
     expect(streamed.every((event) => event.requestId === 'ipc-session-message-send-1')).toBe(true);
   });
 
+  it('passes ParsedInput command facts into coding-agent run model input', async () => {
+    const buildInputs: BuildModelStepInputInput[] = [];
+    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
+      modelStepInputBuildService: {
+        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+          buildInputs.push(input);
+          return successfulModelStepInputBuild(input);
+        },
+      },
+    });
+
+    const result = await service.sendSessionMessage({
+      requestId: 'request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        createdAt: '2026-06-21T00:00:00.000Z',
+        message: {
+          id: 'client-message-1',
+          content: '/review src/session.ts',
+          createdAt: '2026-06-21T00:00:00.000Z',
+        },
+      },
+    });
+    // Drain all events
+    const streamed = [];
+    for await (const event of result.events) {
+      streamed.push(event);
+    }
+
+    expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
+    expect(buildInputs[0]?.runInputFacts).toMatchObject({
+      inputKind: 'command_input',
+      rawKind: 'slash_command',
+      facts: [{
+        kind: 'agent_command',
+        commandName: 'review',
+        argsText: 'src/session.ts',
+      }],
+    });
+    expect(buildInputs[1]?.runInputFacts).toMatchObject({
+      inputKind: 'command_input',
+      rawKind: 'slash_command',
+    });
+  });
+
   it('does not mark a session message run completed after provider failure', async () => {
     const service = createServiceWithModelStepStream([
       {

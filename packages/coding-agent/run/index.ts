@@ -1,2 +1,5 @@
-// Run-level product orchestration exports live here as they are migrated from desktop.
-export {};
+// Public exports for Coding Agent product-level run orchestration.
+export * from './input-facts';
+export * from './event-utils';
+export * from './model-step-stream';
+export * from './run-orchestrator';

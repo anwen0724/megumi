@@ -485,6 +485,52 @@ describe('ModelStepInputBuildService', () => {
     })).rejects.toThrow(/Effective cwd is outside the project/);
     expect(loadInstructionSources).not.toHaveBeenCalled();
   });
+
+  it('adds ParsedInput command facts to runtime facts', async () => {
+    const service = new ModelStepInputBuildService();
+
+    const result = await service.buildModelStepInput({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      stepId: 'step-1',
+      contextKind: 'initial',
+      providerId: 'openai',
+      modelId: 'gpt-test',
+      permissionMode: 'default',
+      runInputFacts: {
+        parsedInputId: 'parsed-input:1',
+        rawInputId: 'raw-input:1',
+        rawKind: 'slash_command',
+        inputKind: 'command_input',
+        effectiveUserText: '/review src',
+        facts: [{
+          kind: 'agent_command',
+          commandName: 'review',
+          argsText: 'src',
+          rawText: '/review src',
+        }],
+      },
+      builtAt: '2026-06-21T00:00:00.000Z',
+    });
+
+    expect(result.buildRequest.runtimeFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        factKind: 'parsed_input',
+        text: 'Input kind: command_input. Raw kind: slash_command.',
+      }),
+      expect.objectContaining({
+        factKind: 'agent_command',
+        text: 'Agent command review was selected with args: src.',
+      }),
+    ]));
+    expect(result.inputContext.parts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'runtime_constraint',
+        text: expect.stringContaining('Agent command review was selected'),
+      }),
+    ]));
+  });
 });
 
 function userMessage(): SessionMessage {
