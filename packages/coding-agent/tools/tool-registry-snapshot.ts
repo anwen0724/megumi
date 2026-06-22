@@ -1,16 +1,23 @@
 // Builds and persists run-level tool registry snapshots by composing durable source state with platform-neutral registry resolution.
 import type { PermissionMode } from '@megumi/shared/permission';
-import type { ToolDefinition, ToolRegistrySnapshot } from '@megumi/shared/tool';
-import type { ToolRepository } from '@megumi/db/repos/tool.repo';
+import type { ToolDefinition, ToolRegistrySnapshot, ToolSource } from '@megumi/shared/tool';
 import {
   createToolRegistrySnapshot,
   getToolRegistrySnapshotResolutionTrace,
   listModelVisibleToolDefinitions,
-} from '@megumi/tools/registry';
+} from './registry';
 import {
   createBuiltInToolRegistrations,
   createExternalTestToolRegistrations,
-} from '@megumi/tools/sources';
+} from './sources';
+
+export interface ToolRegistrySnapshotRepositoryPort {
+  getToolSource(sourceId: string): ToolSource | undefined;
+  listToolSources(): ToolSource[];
+  seedDefaultToolSources(createdAt: string): void;
+  saveToolRegistrySnapshot(snapshot: ToolRegistrySnapshot): ToolRegistrySnapshot;
+  getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined;
+}
 
 export interface RunToolRegistrySnapshotBuildInput {
   runId: string;
@@ -36,14 +43,7 @@ export interface RunToolRegistrySnapshotBuildResult {
 }
 
 export class ToolRegistrySnapshotService {
-  constructor(private readonly repository: Pick<
-    ToolRepository,
-    | 'getToolSource'
-    | 'listToolSources'
-    | 'seedDefaultToolSources'
-    | 'saveToolRegistrySnapshot'
-    | 'getToolRegistrySnapshotByRun'
-  >) {}
+  constructor(private readonly repository: ToolRegistrySnapshotRepositoryPort) {}
 
   createRunSnapshot(input: RunToolRegistrySnapshotBuildInput): RunToolRegistrySnapshotBuildResult {
     const existingSnapshot = this.repository.getToolRegistrySnapshotByRun(input.runId);

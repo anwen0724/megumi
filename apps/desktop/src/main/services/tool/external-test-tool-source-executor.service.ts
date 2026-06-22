@@ -1,5 +1,5 @@
 // Implements the external_test demo source executor used to prove source-aware execution without MCP or plugins.
-import { createRawToolResultFromContent, normalizeToolError } from '@megumi/tools/normalization';
+import { createRawToolResultFromContent, normalizeToolError } from '@megumi/coding-agent/tools/normalization';
 import type { RawToolResult, ToolExecution, ToolSourceIdentity } from '@megumi/shared/tool';
 import type { ToolSourceExecutor } from './tool-execution-router.service';
 

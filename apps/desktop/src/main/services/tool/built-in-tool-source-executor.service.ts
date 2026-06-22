@@ -1,6 +1,6 @@
 // Adapts Desktop Main built-in tool executors to the source-aware ToolSourceExecutor port.
 import fs from 'fs-extra';
-import { createRawToolResultFromContent, normalizeToolError } from '@megumi/tools/normalization';
+import { createRawToolResultFromContent, normalizeToolError } from '@megumi/coding-agent/tools/normalization';
 import type { RawToolResult, ToolExecution, ToolSourceIdentity } from '@megumi/shared/tool';
 import {
   createEditFileExecutor,

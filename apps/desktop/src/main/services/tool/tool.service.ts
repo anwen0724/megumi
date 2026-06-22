@@ -11,8 +11,8 @@ import type {
   ApprovalResolvePayload,
   ToolDefinitionsListPayload,
 } from '@megumi/shared/ipc';
-import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
-import type { ToolRegistry } from '@megumi/tools/registry';
+import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
+import type { ToolRegistry } from '@megumi/coding-agent/tools/registry';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { MegumiHomePaths } from '../project/megumi-home.service';
 

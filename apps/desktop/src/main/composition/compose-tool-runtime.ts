@@ -1,14 +1,14 @@
 // Composes tool registry access, tool execution runtime factory, and tool IPC service.
 import fs from 'fs-extra';
-import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
-import type { ToolRegistry } from '@megumi/tools/registry';
+import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
+import type { ToolRegistry } from '@megumi/coding-agent/tools/registry';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
 import { ToolService } from '../services/tool/tool.service';
 import { createBuiltInToolSourceExecutor } from '../services/tool/built-in-tool-source-executor.service';
 import { createExternalTestToolSourceExecutor } from '../services/tool/external-test-tool-source-executor.service';
-import { createToolCallHandlerService } from '../services/tool/tool-call-handler.service';
+import { createToolOrchestratorService } from '@megumi/coding-agent/tools/tool-orchestrator';
 import { createToolExecutionRouter } from '../services/tool/tool-execution-router.service';
 import { WorkspaceChangeTrackerService } from '../services/workspace/workspace-change-tracker.service';
 import type { PermissionSettingsService } from '../services/security/permission-settings.service';
@@ -38,7 +38,7 @@ export function composeToolRuntimeFactory(input: {
           changedFileId: () => `workspace-changed-file:${crypto.randomUUID()}`,
         },
       });
-      return createToolCallHandlerService({
+      return createToolOrchestratorService({
         registry: input.toolRegistry,
         repository: {
           saveToolCall: (toolCall) => input.toolRepository.saveToolCall(toolCall),

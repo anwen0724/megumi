@@ -1,23 +1,2 @@
-﻿import type {
-  SandboxRequirement,
-  ToolCall,
-  ToolDefinition,
-  ToolError,
-  ToolPolicyDecision,
-  RawToolResult,
-} from '@megumi/shared/tool';
-import type { RuntimeContext } from '@megumi/shared/runtime';
-
-export interface HostToolExecutionInput {
-  toolCall: ToolCall;
-  definition: ToolDefinition;
-  validatedInput: unknown;
-  policyDecision: ToolPolicyDecision;
-  sandboxRequirement?: SandboxRequirement;
-  runtimeContext?: RuntimeContext;
-}
-
-export interface HostToolExecutor {
-  execute(input: HostToolExecutionInput): Promise<RawToolResult | ToolError>;
-}
-
+// Deprecated compatibility exports. Use @megumi/coding-agent/tools instead.
+export * from '@megumi/coding-agent/tools/executor-port';

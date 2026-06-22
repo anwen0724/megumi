@@ -1,7 +1,7 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { ToolService } from '@megumi/desktop/main/services/tool/tool.service';
-import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
+import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 

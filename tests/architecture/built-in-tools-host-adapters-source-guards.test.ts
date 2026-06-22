@@ -33,7 +33,7 @@ function functionSection(source: string, functionName: string, nextFunctionName:
 
 describe('built-in tools and host adapters source guards', () => {
   it('keeps provider-facing tool names platform neutral', () => {
-    const definitions = read('packages/tools/built-ins/index.ts');
+    const definitions = read('packages/coding-agent/tools/built-ins/index.ts');
 
     expect(definitions).toContain("'run_command'");
     expect(definitions).not.toContain("'powershell'");
@@ -42,8 +42,11 @@ describe('built-in tools and host adapters source guards', () => {
     expect(definitions).not.toContain("'workspace_read_file'");
   });
 
-  it('keeps real filesystem and shell execution out of packages/tools', () => {
-    const source = listSourceFiles('packages/tools')
+  it('keeps real filesystem and shell execution out of coding-agent tools', () => {
+    const source = [
+      ...listSourceFiles('packages/coding-agent/tools'),
+      ...listSourceFiles('packages/tools'),
+    ]
       .map(read)
       .join('\n');
 
@@ -54,7 +57,7 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps Host execution behind PermissionPolicy', () => {
-    const orchestrator = read('apps/desktop/src/main/services/tool/tool-orchestrator.service.ts');
+    const orchestrator = read('packages/coding-agent/tools/tool-orchestrator.ts');
     const applyDecision = functionSection(orchestrator, 'applyDecision', 'advanceExecutionWindows');
     const runRecord = functionSection(orchestrator, 'runRecord', 'budgetProfileForRecord');
 
@@ -66,7 +69,7 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
-    const orchestrator = read('apps/desktop/src/main/services/tool/tool-orchestrator.service.ts');
+    const orchestrator = read('packages/coding-agent/tools/tool-orchestrator.ts');
     const resumeToolApproval = functionSection(orchestrator, 'resumeToolApproval', 'prepareRecords');
     const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
     const getToolExecutionIndex = resumeToolApproval.indexOf('repository.getToolExecution(approval.toolExecutionId)');
@@ -88,8 +91,8 @@ describe('built-in tools and host adapters source guards', () => {
 
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {
     const combined = [
-      ...listSourceFiles('packages/tools/built-ins'),
-      'apps/desktop/src/main/services/tool/tool-orchestrator.service.ts',
+      ...listSourceFiles('packages/coding-agent/tools/built-ins'),
+      'packages/coding-agent/tools/tool-orchestrator.ts',
       'apps/desktop/src/main/services/tool/built-in-tool-source-executor.service.ts',
       'apps/desktop/src/main/services/tool/tool-execution-router.service.ts',
       ...listSourceFiles('apps/desktop/src/main/services/tool/tool-executors'),

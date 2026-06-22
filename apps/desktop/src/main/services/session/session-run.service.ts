@@ -59,7 +59,7 @@ import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/db/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
-import { createInterruptedExecutionObservation } from '@megumi/tools/observation-shaper';
+import { createInterruptedExecutionObservation } from '@megumi/coding-agent/tools/observation-shaper';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
@@ -150,7 +150,7 @@ import {
   ToolRegistrySnapshotService,
   type RunToolRegistrySnapshotBuildInput,
   type RunToolRegistrySnapshotBuildResult,
-} from '../tool/tool-registry-snapshot.service';
+} from '@megumi/coding-agent/tools/tool-registry-snapshot';
 
 export interface SessionRunServiceClock {
   now(): string;

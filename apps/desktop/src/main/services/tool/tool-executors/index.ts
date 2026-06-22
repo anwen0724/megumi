@@ -3,10 +3,10 @@ import {
   classifyProjectPath,
   isProtectedProjectPath,
   isSensitiveProjectPath,
-} from '@megumi/security/project-boundary-policy';
+} from '@megumi/coding-agent/permissions/project-boundary-policy';
 import { redactRuntimeMessage } from '@megumi/security/redaction';
-import { normalizeToolResult } from '@megumi/tools/normalization';
-import { createRawToolResultFromContent } from '@megumi/tools/normalization';
+import { normalizeToolResult } from '@megumi/coding-agent/tools/normalization';
+import { createRawToolResultFromContent } from '@megumi/coding-agent/tools/normalization';
 import type { RawToolResult, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { WorkspaceChangeTrackerService } from '../../workspace/workspace-change-tracker.service';
 import type { SpawnLike } from './run-command.executor';

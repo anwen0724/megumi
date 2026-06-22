@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool/tool-call-handler.service';
-import { createToolOrchestratorService } from '@megumi/desktop/main/services/tool/tool-orchestrator.service';
+import { createToolOrchestratorService } from '@megumi/coding-agent/tools/tool-orchestrator';
 
 describe('ToolCallHandlerService compatibility export', () => {
   it('exports the 19.03 ToolOrchestrator factory for existing call sites', () => {

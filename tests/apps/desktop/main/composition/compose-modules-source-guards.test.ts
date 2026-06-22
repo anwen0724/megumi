@@ -51,7 +51,7 @@ describe('Desktop Main composition modules', () => {
 
     expect(source).toContain('createBuiltInToolRegistry');
     expect(source).toContain('WorkspaceChangeTrackerService');
-    expect(source).toContain('createToolCallHandlerService');
+    expect(source).toContain('createToolOrchestratorService');
     expect(source).toContain('createToolExecutionRouter');
     expect(source).toContain('createBuiltInToolSourceExecutor');
     expect(source).toContain('createExternalTestToolSourceExecutor');

@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { createToolOrchestratorService } from '@megumi/desktop/main/services/tool/tool-orchestrator.service';
+import { createToolOrchestratorService } from '@megumi/coding-agent/tools/tool-orchestrator';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   ApprovalRequest,

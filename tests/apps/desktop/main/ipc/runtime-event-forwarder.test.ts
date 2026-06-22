@@ -2,11 +2,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { createToolRegistrySnapshot } from '@megumi/tools/registry';
+import { createToolRegistrySnapshot } from '@megumi/coding-agent/tools/registry';
 import {
   createBuiltInToolRegistrations,
   createExternalTestToolRegistrations,
-} from '@megumi/tools/sources';
+} from '@megumi/coding-agent/tools/sources';
 import { forwardRuntimeEvents } from '@megumi/desktop/main/ipc/runtime-event-forwarder';
 
 const runtimeContext = {

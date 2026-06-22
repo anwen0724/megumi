@@ -1,8 +1,8 @@
-// Backward-compatible export for callers still named around the 19.02 tool-call handler.
+// Desktop compatibility export for the Coding Agent tool orchestrator.
 export {
   createToolOrchestratorService as createToolCallHandlerService,
-} from './tool-orchestrator.service';
+} from '@megumi/coding-agent/tools/tool-orchestrator';
 export type {
   ToolOrchestratorRepositoryPort as ToolCallHandlerRepositoryPort,
   ToolOrchestratorServiceOptions as ToolCallHandlerServiceOptions,
-} from './tool-orchestrator.service';
+} from '@megumi/coding-agent/tools/tool-orchestrator';

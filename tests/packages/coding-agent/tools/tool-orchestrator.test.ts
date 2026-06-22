@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
-import { createToolRegistrySnapshot } from '@megumi/tools/registry';
-import { createBuiltInToolRegistrations } from '@megumi/tools/sources';
+import { createToolRegistrySnapshot } from '@megumi/coding-agent/tools/registry';
+import { createBuiltInToolRegistrations } from '@megumi/coding-agent/tools/sources';
 import type { ToolSource } from '@megumi/shared/tool';
 import {
   allowParallel,

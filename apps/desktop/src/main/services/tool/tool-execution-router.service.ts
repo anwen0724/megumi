@@ -1,5 +1,5 @@
 // Routes validated ToolExecution records to Desktop Main source executors using run snapshot identity.
-import { createRawToolResultFromContent, normalizeToolError } from '@megumi/tools/normalization';
+import { createRawToolResultFromContent, normalizeToolError } from '@megumi/coding-agent/tools/normalization';
 import type {
   RawToolResult,
   ToolExecution,

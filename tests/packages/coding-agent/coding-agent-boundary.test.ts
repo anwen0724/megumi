@@ -46,6 +46,13 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/model-step-stream.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/event-utils.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/ports/index.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/tool-registry-snapshot.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/registry.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/built-ins/index.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-policy.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-execution-decision.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/permissions/project-boundary-policy.ts'))).toBe(true);
   });
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
@@ -81,6 +88,22 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/agent/session'))).toBe(false);
     expect(existsSync(join(root, 'packages/agent/sessions'))).toBe(false);
     expect(existsSync(join(root, 'packages/agent/multi-agent'))).toBe(false);
+  });
+
+  it('keeps tool orchestration and permission policy in coding-agent instead of desktop services', () => {
+    const tools = sourceUnder('packages/coding-agent/tools');
+    const permissions = sourceUnder('packages/coding-agent/permissions');
+    const desktopToolServices = sourceUnder('apps/desktop/src/main/services/tool');
+
+    expect(tools).toContain('createToolOrchestratorService');
+    expect(tools).toContain('class ToolRegistrySnapshotService');
+    expect(tools).toContain('createToolRegistrySnapshot');
+    expect(permissions).toContain('evaluatePermissionPolicy');
+    expect(permissions).toContain('evaluateToolExecutionDecision');
+    expect(desktopToolServices).not.toContain('function applyDecision');
+    expect(desktopToolServices).not.toContain('function prepareRecords');
+    expect(desktopToolServices).not.toContain('class ToolRegistrySnapshotService');
+    expect(desktopToolServices).not.toContain('function evaluateToolExecutionDecision');
   });
 
   it('keeps context-management as compatibility re-export files only', () => {

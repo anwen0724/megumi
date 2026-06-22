@@ -111,6 +111,28 @@ describe('package dependency boundaries', () => {
         /better-sqlite3/,
         /\bBrowserWindow\b/,
         /\bipcMain\b/,
+        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
+        /from ['"]fs(?:\/[^'"]+)?['"]/,
+        /from ['"]fs-extra['"]/,
+        /from ['"]node:child_process['"]/,
+        /from ['"]child_process['"]/,
+        /\bspawn\b/,
+        /\bexecFile\b/,
+      ]),
+    ).toEqual([]);
+  });
+
+  it('keeps packages/coding-agent tools and permissions independent from legacy tools/security packages', () => {
+    expect(
+      findForbiddenReferences('packages/coding-agent/tools', [
+        /@megumi\/tools(\/|['"]|$)/,
+        /@megumi\/security(\/|['"]|$)/,
+      ]),
+    ).toEqual([]);
+    expect(
+      findForbiddenReferences('packages/coding-agent/permissions', [
+        /@megumi\/tools(\/|['"]|$)/,
+        /@megumi\/security(\/|['"]|$)/,
       ]),
     ).toEqual([]);
   });
@@ -205,16 +227,17 @@ describe('package dependency boundaries', () => {
 
   it('keeps ToolCallHandlerService behind the source-aware execution router', () => {
     const source = fs.readFileSync(
-      path.join(root, 'apps/desktop/src/main/services/tool/tool-orchestrator.service.ts'),
+      path.join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'),
       'utf8',
     );
 
-    expect(source).toContain('ToolExecutionRouter');
-    expect(source).toContain('toolExecutionRouter');
-    expect(source).not.toContain('ProjectToolExecutor');
-    expect(source).not.toContain('createReadFileExecutor');
-    expect(source).not.toContain('createWriteFileExecutor');
-    expect(source).not.toContain('createRunCommandExecutor');
+    expect(source).toContain('ToolCallHandlerPort');
+    expect(source).toContain('ToolApprovalResumePort');
+    expect(source).toContain('evaluatePermissionPolicy');
+    expect(source).toContain('evaluateToolExecutionDecision');
+    expect(source).not.toContain('createBuiltInToolSourceExecutor');
+    expect(source).not.toContain('fs-extra');
+    expect(source).not.toContain('child_process');
   });
 
   it('keeps legacy project tool executor wrapper removed', () => {
@@ -273,6 +296,7 @@ describe('package dependency boundaries', () => {
     const source = [
       ...walkSourceFiles(path.join(root, 'apps/desktop/src/main/services/tool')),
       ...walkSourceFiles(path.join(root, 'packages/tools')),
+      ...walkSourceFiles(path.join(root, 'packages/coding-agent/tools')),
     ]
       .map((file) => fs.readFileSync(file, 'utf8'))
       .join('\n');
@@ -281,5 +305,43 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/\bstructured_result\b/);
     expect(source).not.toMatch(/\bresponse_format\b/);
     expect(source).not.toMatch(/\bjson_schema\b/);
+  });
+
+  it('keeps packages/tools as deprecated compatibility re-exports only', () => {
+    const files = walkSourceFiles(path.join(root, 'packages/tools'));
+    const violations = files.flatMap((file) => {
+      const source = fs.readFileSync(file, 'utf8');
+      const invalid = [
+        /\bexport function\b/,
+        /\bexport class\b/,
+        /\bexport interface\b/,
+        /from ['"]electron['"]/,
+        /@megumi\/db(\/|['"]|$)/,
+        /apps\/desktop/,
+      ].filter((pattern) => pattern.test(source));
+
+      return invalid.map((pattern) => `${relativePath(file)} matches ${pattern}`);
+    });
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps moved packages/security policy files as deprecated compatibility re-exports only', () => {
+    const compatibilityFiles = [
+      'packages/security/command-classifier.ts',
+      'packages/security/permission-classifier.ts',
+      'packages/security/permission-rule-matcher.ts',
+      'packages/security/project-boundary-policy.ts',
+      'packages/security/tool-policy.ts',
+    ];
+
+    for (const file of compatibilityFiles) {
+      const source = fs.readFileSync(path.join(root, file), 'utf8');
+      expect(source).toContain('Deprecated compatibility exports');
+      expect(source).toContain('@megumi/coding-agent/permissions');
+      expect(source).not.toMatch(/\bexport function\b/);
+      expect(source).not.toMatch(/\bexport class\b/);
+      expect(source).not.toMatch(/\bexport interface\b/);
+    }
   });
 });

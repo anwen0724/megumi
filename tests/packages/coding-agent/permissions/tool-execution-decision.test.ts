@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateToolExecutionDecision } from '@megumi/desktop/main/services/tool/tool-execution-decision.service';
+import { evaluateToolExecutionDecision } from '@megumi/coding-agent/permissions/tool-execution-decision';
 
 describe('evaluateToolExecutionDecision', () => {
   it('allows read-only built-ins as parallel when security policy allows', () => {

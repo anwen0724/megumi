@@ -1,16 +1,18 @@
 ﻿// Coordinates durable tool execution records for agent-loop tool calls.
-import { evaluatePermissionPolicy } from '@megumi/security/tool-policy';
+import { evaluatePermissionPolicy } from '../permissions/tool-policy';
+import {
+  createRawToolResultFromContent,
+  normalizeToolError,
+} from './normalization';
 import {
   createObservationFromRawToolResult,
-  createRawToolResultFromContent,
   createRejectionObservation,
-  normalizeToolError,
-} from '@megumi/tools';
+} from './observation-shaper';
 import {
   modelVisibleDefinitionForSnapshotEntry,
   resolveToolCallFromSnapshot,
-} from '@megumi/tools/registry';
-import { validateToolInput } from '@megumi/tools/validation';
+} from './registry';
+import { validateToolInput } from './validation';
 import type {
   PendingToolApproval,
   ToolApprovalResumeInput,
@@ -39,8 +41,11 @@ import type {
 import {
   evaluateToolExecutionDecision,
   type ToolExecutionDecisionInput,
-} from './tool-execution-decision.service';
-import type { ToolExecutionRouter, ToolExecutionRunOptions } from './tool-execution-router.service';
+} from '../permissions/tool-execution-decision';
+import type {
+  CodingAgentToolExecutionHostPort,
+  CodingAgentToolExecutionRunOptions,
+} from './tool-execution-host-port';
 
 export interface ToolOrchestratorHandleInput {
   request: ModelStepRuntimeRequest;
@@ -97,7 +102,7 @@ export interface ToolOrchestratorServiceOptions {
   permissionMode: PermissionMode;
   projectRoot: string;
   settings: MergedPermissionSettings;
-  toolExecutionRouter: ToolExecutionRouter;
+  toolExecutionRouter: CodingAgentToolExecutionHostPort;
   now?: () => string;
   ids?: {
     toolExecutionId(): string;
@@ -407,7 +412,7 @@ async function advanceExecutionWindows(
   input: {
     runId: string;
     assistantMessageId: string;
-    executionOptions?: ToolExecutionRunOptions;
+    executionOptions?: CodingAgentToolExecutionRunOptions;
   },
 ): Promise<ToolExecutionRecord[]> {
   try {
@@ -445,7 +450,7 @@ async function advanceExecutionWindows(
 
 function finalizeWorkspaceChangeSet(
   options: ResolvedToolOrchestratorOptions,
-  executionOptions?: ToolExecutionRunOptions,
+  executionOptions?: CodingAgentToolExecutionRunOptions,
 ): void {
   if (!executionOptions?.scope) {
     return;
@@ -488,7 +493,7 @@ function nextExecutableWindow(records: readonly ToolExecutionRecord[]): ToolExec
 async function runRecord(
   options: ResolvedToolOrchestratorOptions,
   record: ToolExecutionRecord,
-  executionOptions?: ToolExecutionRunOptions,
+  executionOptions?: CodingAgentToolExecutionRunOptions,
 ): Promise<ToolExecutionRecord> {
   if (isContinuationTerminal(record.status) || record.status === 'cancelled') {
     return record;
@@ -899,7 +904,7 @@ function pendingApprovalsFromRecords(
 function executionOptionsFromRequest(
   request: ModelStepRuntimeRequest,
   signal?: AbortSignal,
-): ToolExecutionRunOptions {
+): CodingAgentToolExecutionRunOptions {
   return {
     scope: {
       sessionId: String(request.sessionId),
@@ -913,7 +918,7 @@ function executionOptionsFromRequest(
 function executionOptionsFromRecord(
   options: ResolvedToolOrchestratorOptions,
   record: ToolExecutionRecord,
-): ToolExecutionRunOptions {
+): CodingAgentToolExecutionRunOptions {
   return {
     scope: {
       sessionId: options.repository.getRunSessionId(String(record.runId)) ?? String(record.metadata?.sessionId ?? ''),

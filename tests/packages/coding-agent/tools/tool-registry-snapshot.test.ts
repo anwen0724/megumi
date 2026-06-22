@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/db/schema/migrations';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
-import { ToolRegistrySnapshotService } from '@megumi/desktop/main/services/tool/tool-registry-snapshot.service';
+import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 
 let db: Database.Database | null = null;
 

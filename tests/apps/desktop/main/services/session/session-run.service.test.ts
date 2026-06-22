@@ -9,7 +9,7 @@ import { SessionActivePathRepository } from '@megumi/db/repos/session-active-pat
 import { PermissionSnapshotRepository } from '@megumi/db/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/db/repos/tool.repo';
 import { createExternalTestToolSourceExecutor } from '@megumi/desktop/main/services/tool/external-test-tool-source-executor.service';
-import { ToolRegistrySnapshotService } from '@megumi/desktop/main/services/tool/tool-registry-snapshot.service';
+import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import { createToolCallHandlerService } from '@megumi/desktop/main/services/tool/tool-call-handler.service';
 import { createToolExecutionRouter } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
 import type { ToolSourceExecutor } from '@megumi/desktop/main/services/tool/tool-execution-router.service';
@@ -37,7 +37,7 @@ import type { SessionSourceEntry } from '@megumi/shared/session';
 import type { ApprovalRequest, RawToolResult, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
-import { createBuiltInToolRegistry } from '@megumi/tools/built-ins';
+import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,

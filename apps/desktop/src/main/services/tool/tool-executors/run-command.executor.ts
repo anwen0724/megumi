@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
-import { classifyProjectPath } from '@megumi/security/project-boundary-policy';
+import { classifyProjectPath } from '@megumi/coding-agent/permissions/project-boundary-policy';
 import { redactRuntimeMessage } from '@megumi/security/redaction';
-import { createRawToolResultFromContent } from '@megumi/tools/normalization';
+import { createRawToolResultFromContent } from '@megumi/coding-agent/tools/normalization';
 import {
   inputRecord,
   optionalPositiveInteger,

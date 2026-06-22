@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { classifyProjectPath } from '@megumi/security/project-boundary-policy';
+import { classifyProjectPath } from '@megumi/coding-agent/permissions/project-boundary-policy';
 import {
   inputRecord,
   isHiddenProjectPath,

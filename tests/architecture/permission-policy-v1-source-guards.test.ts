@@ -22,7 +22,7 @@ describe('permission policy v1 source guards', () => {
   });
 
   it('keeps PermissionPolicy as a pure decision layer', () => {
-    const policy = read('packages/security/tool-policy.ts');
+    const policy = read('packages/coding-agent/permissions/tool-policy.ts');
 
     expect(policy).toContain('evaluatePermissionPolicy');
     expect(policy).not.toContain('spawn(');
@@ -32,7 +32,7 @@ describe('permission policy v1 source guards', () => {
   });
 
   it('keeps hard guards before allow rules', () => {
-    const policy = read('packages/security/tool-policy.ts');
+    const policy = read('packages/coding-agent/permissions/tool-policy.ts');
     const denyIndex = policy.indexOf("findMatchedRule(input, 'deny')");
     const hardGuardIndex = policy.indexOf('evaluateHardGuards');
     const allowIndex = policy.indexOf("findMatchedRule(input, 'allow')");
