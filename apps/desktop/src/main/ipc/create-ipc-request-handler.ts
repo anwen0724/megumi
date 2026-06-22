@@ -22,7 +22,7 @@ import {
   redactRuntimeDetails,
   redactRuntimeMessage,
   redactRuntimeValue,
-} from '@megumi/security/redaction';
+} from '../services/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,

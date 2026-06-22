@@ -2,7 +2,7 @@
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { redactRuntimeValue } from '@megumi/security/redaction';
+import { redactRuntimeValue } from '../services/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,

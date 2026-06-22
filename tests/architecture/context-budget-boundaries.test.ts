@@ -92,12 +92,12 @@ describe('context budget and model input chain boundaries', () => {
     expect(source).not.toMatch(/from ['"]fs(?:\/[^'"]+)?['"]/);
   });
 
-  it('keeps the context budget executor out of provider, renderer, main, and core layers', () => {
+  it('keeps the context budget executor out of provider, renderer, main, and agent layers', () => {
     const source = [
       sourceUnder('packages/ai'),
       sourceUnder('apps/desktop/src/renderer'),
       sourceUnder('apps/desktop/src/main'),
-      sourceUnder('packages/core'),
+      sourceUnder('packages/agent'),
     ].join('\n');
 
     expect(source).not.toContain('apply' + 'ContextBudget');

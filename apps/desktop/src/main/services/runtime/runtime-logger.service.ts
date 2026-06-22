@@ -1,7 +1,7 @@
 ﻿import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import path from 'node:path';
-import { redactRuntimeValue } from '@megumi/security/redaction';
+import { redactRuntimeValue } from '../security/redaction';
 import type { MegumiHomePaths } from '../project/megumi-home.service';
 
 export type RuntimeLogLevel = 'info' | 'warn' | 'error';

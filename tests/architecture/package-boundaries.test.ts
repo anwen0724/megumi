@@ -171,59 +171,54 @@ describe('package dependency boundaries', () => {
     ).toEqual([]);
   });
 
-  it('keeps packages/context-management as deprecated compatibility re-exports only', () => {
-    const files = walkSourceFiles(path.join(root, 'packages/context-management'));
-    const violations = files.flatMap((file) => {
-      const source = fs.readFileSync(file, 'utf8');
-      const invalid = [
-        /\bexport function\b/,
-        /\bexport class\b/,
-        /\bexport interface\b/,
-        /from ['"]electron['"]/,
-        /@megumi\/db(\/|['"]|$)/,
-        /apps\/desktop/,
-      ].filter((pattern) => pattern.test(source));
+  it('removes deprecated compatibility packages after realignment', () => {
+    const removedPackageRoots = [
+      'packages/core',
+      'packages/context-management',
+      'packages/db',
+      'packages/memory',
+      'packages/tools',
+      'packages/security',
+      'tests/packages/tools',
+      'tests/packages/security',
+    ];
 
-      return invalid.map((pattern) => `${relativePath(file)} matches ${pattern}`);
-    });
+    const existing = removedPackageRoots.filter((directory) =>
+      fs.existsSync(path.join(root, directory)),
+    );
+
+    expect(existing).toEqual([]);
+  });
+
+  it('keeps active source and tests from importing removed package aliases', () => {
+    const removedAliases = [
+      /@megumi\/core(\/|['"]|$)/,
+      /@megumi\/context-management(\/|['"]|$)/,
+      /@megumi\/db(\/|['"]|$)/,
+      /@megumi\/memory(\/|['"]|$)/,
+      /@megumi\/tools(\/|['"]|$)/,
+      /@megumi\/security(\/|['"]|$)/,
+    ];
+    const checkedRoots = [
+      path.join(root, 'apps'),
+      path.join(root, 'packages'),
+      path.join(root, 'tests'),
+    ];
+    const violations = checkedRoots.flatMap((directory) =>
+      walkSourceFiles(directory).flatMap((file) => {
+        const relative = relativePath(file);
+        // Architecture guards and boundary tests intentionally reference old aliases in forbidden-list assertions.
+        if (relative.startsWith('tests/architecture/') || relative.endsWith('-boundary.test.ts')) {
+          return [];
+        }
+        const source = fs.readFileSync(file, 'utf8');
+        return removedAliases
+          .filter((pattern) => pattern.test(source))
+          .map((pattern) => `${relative} matches ${pattern}`);
+      }),
+    );
 
     expect(violations).toEqual([]);
-  });
-
-  it('keeps packages/db independent from runtime providers, core, Electron, and app code', () => {
-    expect(
-      findForbiddenReferences('packages/db', [
-        /@megumi\/ai(\/|['"]|$)/,
-        /@megumi\/core(\/|['"]|$)/,
-        /from ['"]electron['"]/,
-        /apps\/desktop/,
-      ]),
-    ).toEqual([]);
-  });
-
-  it('keeps packages/tools independent from host, db, provider adapters, and app code', () => {
-    expect(
-      findForbiddenReferences('packages/tools', [
-        /@megumi\/db(\/|['"]|$)/,
-        /@megumi\/ai(\/|['"]|$)/,
-        /@megumi\/security(\/|['"]|$)/,
-        /from ['"]electron['"]/,
-        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
-        /from ['"]fs(?:\/[^'"]+)?['"]/,
-        /apps\/desktop/,
-      ]),
-    ).toEqual([]);
-  });
-
-  it('keeps packages/security independent from db, tool registry, provider adapters, and app code', () => {
-    expect(
-      findForbiddenReferences('packages/security', [
-        /@megumi\/db(\/|['"]|$)/,
-        /@megumi\/tools(\/|['"]|$)/,
-        /@megumi\/ai(\/|['"]|$)/,
-        /apps\/desktop/,
-      ]),
-    ).toEqual([]);
   });
 
   it('keeps ToolCallHandlerService behind the source-aware execution router', () => {
@@ -296,7 +291,7 @@ describe('package dependency boundaries', () => {
   it('keeps structured output out of 19.02 tool registry runtime', () => {
     const source = [
       ...walkSourceFiles(path.join(root, 'apps/desktop/src/main/services/tool')),
-      ...walkSourceFiles(path.join(root, 'packages/tools')),
+
       ...walkSourceFiles(path.join(root, 'packages/coding-agent/tools')),
     ]
       .map((file) => fs.readFileSync(file, 'utf8'))
@@ -306,75 +301,6 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/\bstructured_result\b/);
     expect(source).not.toMatch(/\bresponse_format\b/);
     expect(source).not.toMatch(/\bjson_schema\b/);
-  });
-
-  it('keeps packages/tools as deprecated compatibility re-exports only', () => {
-    const files = walkSourceFiles(path.join(root, 'packages/tools'));
-    const violations = files.flatMap((file) => {
-      const source = fs.readFileSync(file, 'utf8');
-      const invalid = [
-        /\bexport function\b/,
-        /\bexport class\b/,
-        /\bexport interface\b/,
-        /from ['"]electron['"]/,
-        /@megumi\/db(\/|['"]|$)/,
-        /apps\/desktop/,
-      ].filter((pattern) => pattern.test(source));
-
-      return invalid.map((pattern) => `${relativePath(file)} matches ${pattern}`);
-    });
-
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps packages/memory as deprecated compatibility re-exports only', () => {
-    const compatibilityFiles = [
-      'packages/memory/index.ts',
-      'packages/memory/candidate-validation.ts',
-      'packages/memory/capture-trigger-classifier.ts',
-      'packages/memory/extraction.ts',
-      'packages/memory/markdown-memory-format.ts',
-      'packages/memory/memory-resolution.ts',
-      'packages/memory/memory-security-policy.ts',
-      'packages/memory/recall-scoring.ts',
-      'packages/memory/text-normalization.ts',
-    ];
-
-    for (const file of compatibilityFiles) {
-      expect(fs.existsSync(path.join(root, file))).toBe(true);
-      const source = fs.readFileSync(path.join(root, file), 'utf8');
-      expect(source).toContain('Deprecated compatibility exports');
-    }
-
-    const subpathFiles = compatibilityFiles.filter((f) => f !== 'packages/memory/index.ts');
-    for (const file of subpathFiles) {
-      const source = fs.readFileSync(path.join(root, file), 'utf8');
-      const base = path.basename(file, '.ts');
-      expect(source).toContain(`export * from '@megumi/coding-agent/memory/${base}'`);
-    }
-
-    {
-      const source = fs.readFileSync(path.join(root, 'packages/memory/index.ts'), 'utf8');
-      expect(source).toContain("export * from '@megumi/coding-agent/memory'");
-    }
-
-    const violations = walkSourceFiles(path.join(root, 'packages/memory')).flatMap((file) => {
-      const source = fs.readFileSync(file, 'utf8');
-      const invalid = [
-        /\bexport function\b/,
-        /\bexport class\b/,
-        /\bexport interface\b/,
-        /from ['"]electron['"]/,
-        /@megumi\/db(\/|['"]|$)/,
-        /apps\/desktop/,
-        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
-        /from ['"]fs(?:\/[^'"]+)?['"]/,
-      ].filter((pattern) => pattern.test(source));
-
-      return invalid.map((pattern) => `${relativePath(file)} matches ${pattern}`);
-    });
-
-    expect(violations).toEqual([]);
   });
 
   it('keeps concrete SQLite persistence under desktop main instead of packages', () => {
@@ -406,24 +332,5 @@ describe('package dependency boundaries', () => {
     );
 
     expect(violations).toEqual([]);
-  });
-
-  it('keeps moved packages/security policy files as deprecated compatibility re-exports only', () => {
-    const compatibilityFiles = [
-      'packages/security/command-classifier.ts',
-      'packages/security/permission-classifier.ts',
-      'packages/security/permission-rule-matcher.ts',
-      'packages/security/project-boundary-policy.ts',
-      'packages/security/tool-policy.ts',
-    ];
-
-    for (const file of compatibilityFiles) {
-      const source = fs.readFileSync(path.join(root, file), 'utf8');
-      expect(source).toContain('Deprecated compatibility exports');
-      expect(source).toContain('@megumi/coding-agent/permissions');
-      expect(source).not.toMatch(/\bexport function\b/);
-      expect(source).not.toMatch(/\bexport class\b/);
-      expect(source).not.toMatch(/\bexport interface\b/);
-    }
   });
 });

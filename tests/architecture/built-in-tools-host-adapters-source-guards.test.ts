@@ -45,7 +45,6 @@ describe('built-in tools and host adapters source guards', () => {
   it('keeps real filesystem and shell execution out of coding-agent tools', () => {
     const source = [
       ...listSourceFiles('packages/coding-agent/tools'),
-      ...listSourceFiles('packages/tools'),
     ]
       .map(read)
       .join('\n');

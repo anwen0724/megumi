@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const coreDir = join(process.cwd(), 'packages/core');
+const agentDir = join(process.cwd(), 'packages/agent');
 
 describe('agent tool core boundary', () => {
-  it('does not import Host privileged modules from packages/core', () => {
-    const files = collectTsFiles(coreDir);
+  it('does not import Host privileged modules from packages/agent', () => {
+    const files = collectTsFiles(agentDir);
     const offenders = files.filter((file) => {
       const source = readFileSync(file, 'utf8');
       return /from ['"](?:electron|node:fs|fs|node:child_process|child_process|better-sqlite3)['"]/.test(source);
@@ -15,8 +15,8 @@ describe('agent tool core boundary', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('does not import concrete desktop main services from packages/core', () => {
-    const files = collectTsFiles(coreDir);
+  it('does not import concrete desktop main services from packages/agent', () => {
+    const files = collectTsFiles(agentDir);
     const offenders = files.filter((file) => {
       const source = readFileSync(file, 'utf8');
       return source.includes('apps/desktop/src/main') || source.includes('@megumi/db/repos');

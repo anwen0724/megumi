@@ -133,16 +133,6 @@ describe('Runtime Common Foundation source guards', () => {
     expect(invalidImports).toEqual([]);
   });
 
-  it('keeps packages/core free from platform and service implementations', () => {
-    const coreFiles = listSourceFiles('packages/core');
-    const invalidImports = coreFiles.filter((file) => {
-      const text = readProjectFile(file);
-      return /from ['"](@megumi\/(ai|security|db|desktop|tools|memory)|electron|better-sqlite3)[^'"]*['"]/.test(text);
-    });
-
-    expect(invalidImports).toEqual([]);
-  });
-
   it('keeps renderer-facing runtime boundary code from exposing raw stack or raw cause', () => {
     const boundaryFiles = [
       'apps/desktop/src/main/ipc/create-ipc-request-handler.ts',

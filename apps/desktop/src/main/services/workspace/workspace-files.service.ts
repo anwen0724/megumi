@@ -4,7 +4,7 @@ import path from 'node:path';
 import {
   PathSandboxViolationError,
   resolveSafePath,
-} from '@megumi/security/sandbox-policy';
+} from '../security/sandbox-policy';
 import type {
   WorkspaceFileOpenData,
   WorkspaceFileOpenPayload,

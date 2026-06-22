@@ -54,8 +54,11 @@ describe('artifact system source guards', () => {
   });
 
   it('keeps core artifact helpers free of Host privileges and persistence', () => {
-    const offenders = filesUnder('packages/core')
-      .filter((file) => projectPath(file).includes('agent-runtime/artifact-observation-mapper'))
+    const offenders = [
+      ...filesUnder('packages/agent'),
+      ...filesUnder('packages/coding-agent'),
+    ]
+      .filter((file) => projectPath(file).includes('artifact') || projectPath(file).includes('plan-artifact'))
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|path|node:path|child_process|node:child_process)/.test(source);
@@ -92,8 +95,9 @@ describe('artifact system source guards', () => {
   it('does not implement future artifact editing export publish memory or tool execution capabilities', () => {
     const artifactFiles = [
       ...filesUnder('packages/shared'),
-      ...filesUnder('packages/core'),
-      ...filesUnder('packages/db'),
+      ...filesUnder('packages/agent'),
+      ...filesUnder('packages/coding-agent'),
+      ...filesUnder('apps/desktop/src/main/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/preload'),
       ...filesUnder('apps/desktop/src/renderer'),

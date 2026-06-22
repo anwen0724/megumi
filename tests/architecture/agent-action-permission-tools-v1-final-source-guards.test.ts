@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest';
 const ROOT = process.cwd();
 const PRODUCTION_ROOTS = [
   'packages/shared',
-  'packages/core',
   'packages/ai',
-  'packages/tools',
-  'packages/security',
-  'packages/db',
+  'packages/agent',
+  'packages/input',
+  'packages/command',
+  'packages/coding-agent',
   'apps/desktop/src/main',
   'apps/desktop/src/preload',
   'apps/desktop/src/renderer',
@@ -128,8 +128,15 @@ describe('agent action permission tools v1 final source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps packages core away from concrete Host privileges', () => {
-    const offenders = collectTsFiles('packages/core')
+  it('keeps active packages away from concrete Host privileges', () => {
+    const offenders = [
+      ...collectTsFiles('packages/shared'),
+      ...collectTsFiles('packages/ai'),
+      ...collectTsFiles('packages/agent'),
+      ...collectTsFiles('packages/input'),
+      ...collectTsFiles('packages/command'),
+      ...collectTsFiles('packages/coding-agent'),
+    ]
       .filter((file) => {
         const source = readFileSync(file, 'utf8');
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|node:fs|fs|node:child_process|child_process)/.test(source)

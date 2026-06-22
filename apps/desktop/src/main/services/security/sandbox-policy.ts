@@ -1,3 +1,4 @@
+// Resolves Desktop Main workspace paths while rejecting paths outside the workspace root.
 import path from 'node:path';
 
 export class PathSandboxViolationError extends Error {

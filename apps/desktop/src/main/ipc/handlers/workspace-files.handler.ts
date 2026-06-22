@@ -1,4 +1,4 @@
-﻿import { PathSandboxViolationError } from '@megumi/security/sandbox-policy';
+﻿import { PathSandboxViolationError } from '../../services/security/sandbox-policy';
 import type { z } from 'zod';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';

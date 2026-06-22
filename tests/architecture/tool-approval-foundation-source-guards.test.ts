@@ -4,16 +4,15 @@ import { join } from 'node:path';
 
 const productionRoots = [
   join(process.cwd(), 'packages/shared'),
-  join(process.cwd(), 'packages/tools'),
-  join(process.cwd(), 'packages/security'),
-  join(process.cwd(), 'packages/core'),
+  join(process.cwd(), 'packages/agent'),
+  join(process.cwd(), 'packages/coding-agent'),
   join(process.cwd(), 'apps/desktop/src/main'),
   join(process.cwd(), 'apps/desktop/src/preload'),
   join(process.cwd(), 'apps/desktop/src/renderer'),
 ];
 
 const concreteToolBoundaryTargets = [
-  join(process.cwd(), 'packages/tools'),
+  join(process.cwd(), 'packages/coding-agent/tools'),
   join(process.cwd(), 'packages/agent'),
   join(process.cwd(), 'apps/desktop/src/main/services/tool/tool.service.ts'),
   join(process.cwd(), 'apps/desktop/src/main/ipc/handlers/tool.handler.ts'),

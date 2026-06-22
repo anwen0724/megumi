@@ -145,23 +145,7 @@ describe('coding-agent package boundary', () => {
     expect(desktopToolServices).not.toContain('function evaluateToolExecutionDecision');
   });
 
-  it('keeps context-management as compatibility re-export files only', () => {
-    const compatibilityFiles = [
-      'packages/context-management/index.ts',
-      'packages/context-management/context-budget.ts',
-      'packages/context-management/model-input-context-builder.ts',
-      'packages/context-management/model-step-input-context.ts',
-      'packages/context-management/session-context.ts',
-      'packages/context-management/session-compaction.ts',
-    ];
-
-    for (const file of compatibilityFiles) {
-      const source = readFileSync(join(root, file), 'utf8');
-      expect(source).toContain('Deprecated compatibility exports');
-      expect(source).toMatch(/export \* from ['"]@megumi\/coding-agent\/(context|session)/);
-      expect(source).not.toMatch(/\bexport function\b/);
-      expect(source).not.toMatch(/\bexport class\b/);
-      expect(source).not.toMatch(/\bexport interface\b/);
-    }
+  it('does not keep the context-management compatibility package after final cleanup', () => {
+    expect(existsSync(join(root, 'packages/context-management'))).toBe(false);
   });
 });

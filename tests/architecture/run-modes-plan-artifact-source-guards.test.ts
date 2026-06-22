@@ -60,8 +60,8 @@ describe('run modes and plan artifact source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps core run mode runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/core')
+  it('keeps agent run mode runtime free of Host privileges and concrete persistence', () => {
+    const offenders = filesUnder('packages/agent')
       .filter((file) => projectPath(file).includes('agent-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);

@@ -1,3 +1,4 @@
+// Redacts secrets from Desktop Main logs, IPC errors, and runtime event forwarding.
 export interface RedactionOptions {
   visiblePrefix?: number;
   visibleSuffix?: number;

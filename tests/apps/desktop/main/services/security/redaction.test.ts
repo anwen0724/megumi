@@ -6,7 +6,7 @@ import {
   redactRuntimeMessage,
   redactRuntimeValue,
   redactSecret,
-} from '@megumi/security/redaction';
+} from '@megumi/desktop/main/services/security/redaction';
 
 describe('redaction', () => {
   it('redacts full secret values by default', () => {

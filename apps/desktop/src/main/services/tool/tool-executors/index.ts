@@ -4,7 +4,7 @@ import {
   isProtectedProjectPath,
   isSensitiveProjectPath,
 } from '@megumi/coding-agent/permissions/project-boundary-policy';
-import { redactRuntimeMessage } from '@megumi/security/redaction';
+import { redactRuntimeMessage } from '../../security/redaction';
 import { normalizeToolResult } from '@megumi/coding-agent/tools/normalization';
 import { createRawToolResultFromContent } from '@megumi/coding-agent/tools/normalization';
 import type { RawToolResult, ToolExecution, ToolResult } from '@megumi/shared/tool';

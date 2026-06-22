@@ -2,7 +2,7 @@
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { ChatStreamEventSchema } from '@megumi/shared/chat-stream';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import { redactRuntimeValue } from '@megumi/security/redaction';
+import { redactRuntimeValue } from '../services/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,

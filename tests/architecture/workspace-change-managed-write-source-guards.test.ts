@@ -38,7 +38,7 @@ describe('workspace change managed write source guards', () => {
     const roots = [
       'apps/desktop/src/main',
       'packages/shared',
-      'packages/db',
+      'apps/desktop/src/main/persistence',
     ];
     const files = roots.flatMap((root) => productionFiles(path.join(repoRoot, root)));
     const matches = files.flatMap((file) => scanRunCommandWorkspaceWindows(file));

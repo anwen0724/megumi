@@ -12,20 +12,18 @@ function term(...parts: string[]): string {
 const activeRoots = [
   'apps/desktop/src',
   'packages/shared',
-  'packages/core',
   'packages/ai',
-  'packages/db',
-  'packages/security',
-  'packages/tools',
-  'packages/memory',
+  'packages/agent',
+  'packages/input',
+  'packages/command',
+  'packages/coding-agent',
   'tests/apps',
   'tests/packages/shared',
-  'tests/packages/core',
   'tests/packages/ai',
-  'tests/packages/db',
-  'tests/packages/security',
-  'tests/packages/tools',
-  'tests/packages/memory',
+  'tests/packages/agent',
+  'tests/packages/input',
+  'tests/packages/command',
+  'tests/packages/coding-agent',
 ];
 
 const textExtensions = new Set([

@@ -53,8 +53,8 @@ describe('run context workspace grounding source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps core context runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/core')
+  it('keeps agent context runtime free of Host privileges and concrete persistence', () => {
+    const offenders = filesUnder('packages/agent')
       .filter((file) => projectPath(file).includes('agent-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);
@@ -65,8 +65,8 @@ describe('run context workspace grounding source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps DB context repository from doing relevance decisions or workspace reads', () => {
-    const offenders = filesUnder('packages/db')
+  it('keeps persistence context repository from doing relevance decisions or workspace reads', () => {
+    const offenders = filesUnder('apps/desktop/src/main/persistence')
       .filter((file) => projectPath(file).includes('run-context'))
       .filter((file) => {
         const source = readProjectFile(file);
@@ -93,8 +93,8 @@ describe('run context workspace grounding source guards', () => {
   it('does not add future Agent capabilities in context foundation files', () => {
     const contextFiles = [
       ...filesUnder('packages/shared'),
-      ...filesUnder('packages/core'),
-      ...filesUnder('packages/db'),
+      ...filesUnder('packages/agent'),
+      ...filesUnder('apps/desktop/src/main/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
     ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)))

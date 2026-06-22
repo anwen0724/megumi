@@ -1,6 +1,6 @@
 ﻿import { normalizeRuntimeError } from '@megumi/agent';
 import { createRuntimeDebugId } from '@megumi/shared/runtime';
-import { redactRuntimeValue } from '@megumi/security/redaction';
+import { redactRuntimeValue } from '../services/security/redaction';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,

@@ -9,8 +9,8 @@ const productionRoots = [
   'apps/desktop/src',
   'packages/ai',
   'packages/coding-agent/context',
-  'packages/core',
-  'packages/db',
+  'packages/agent',
+  'apps/desktop/src/main/persistence',
   'packages/shared',
 ];
 
@@ -41,8 +41,6 @@ const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/services/session/session-run.service.ts',
   'packages/coding-agent/workspace/workspace-change-tracker.ts',
   'packages/coding-agent/workspace/workspace-restore.ts',
-  'packages/db/repos/workspace-change.repo.ts',
-  'packages/db/schema/migrations.ts',
   'packages/shared/ipc/schemas.ts',
   'packages/shared/recovery/contracts.ts',
   'packages/shared/runtime/event-factory.ts',

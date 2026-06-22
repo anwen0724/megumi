@@ -37,14 +37,14 @@ function offenders(files: string[], pattern: RegExp): string[] {
 }
 
 describe('memory foundation boundaries', () => {
-  it('keeps packages/memory platform independent', () => {
-    const files = productionFilesUnder('packages', 'memory');
+  it('keeps packages/coding-agent/memory platform independent', () => {
+    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
     expect(offenders(files, /from ['"](electron|node:fs|fs|node:path|path)['"]|@megumi\/(db|ai)(\/|['"]|$)|packages\/(db|ai)|apps\/desktop|session-run|provider adapter|providers\//i)).toEqual([]);
   });
 
-  it('keeps packages/db memory repository free from memory business logic and Desktop Main runtime', () => {
-    const files = productionFilesUnder('packages', 'db');
-    expect(offenders(files, /@megumi\/memory|apps\/desktop|memory-markdown-sync\.service|memory-runtime-capture\.service|memory-diagnostic-writer\.service/)).toEqual([]);
+  it('keeps Desktop Main persistence memory repository free from memory business logic', () => {
+    const files = productionFilesUnder('apps', 'desktop', 'src', 'main', 'persistence', 'repos');
+    expect(offenders(files, /@megumi\/memory|memory-markdown-sync\.service|memory-runtime-capture\.service|memory-diagnostic-writer\.service/)).toEqual([]);
   });
 
   it('keeps Desktop Main memory runtime away from provider adapter implementations', () => {
@@ -108,19 +108,19 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /memory-runtime-capture\.service|memory-markdown-sync\.service|memory-diagnostic-writer\.service|memory-runtime-file-system|memory-runtime-paths/)).toEqual([]);
   });
 
-  it('keeps packages/memory on deterministic recall without vector search', () => {
-    const files = productionFilesUnder('packages', 'memory');
+  it('keeps packages/coding-agent/memory on deterministic recall without vector search', () => {
+    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
     expect(offenders(files, /\bembedding\b|\bvector\b|cosineSimilarity|\bann\b|faiss/i)).toEqual([]);
   });
 
-  it('keeps packages/memory free from runtime file IO operations', () => {
-    const files = productionFilesUnder('packages', 'memory');
+  it('keeps packages/coding-agent/memory free from runtime file IO operations', () => {
+    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
     expect(offenders(files, /\b(readFile|writeFile|appendFile|rename|watch)\b/)).toEqual([]);
   });
 
-  it('keeps core memory helpers free from Host and persistence dependencies', () => {
-    const files = productionFilesUnder('packages', 'core', 'agent-runtime');
-    expect(offenders(files, /memory\.service|MemoryRepository|@megumi\/db|from ['"]electron['"]|from ['"]node:fs['"]|from ['"]fs['"]|apps\//)).toEqual([]);
+  it('keeps coding-agent memory helpers free from Host and persistence dependencies', () => {
+    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
+    expect(offenders(files, /MemoryRepository|@megumi\/db|from ['"]electron['"]|from ['"]node:fs['"]|from ['"]fs['"]|apps\//)).toEqual([]);
   });
 
   it('keeps renderer memory behind preload and away from privileged storage', () => {
@@ -130,7 +130,7 @@ describe('memory foundation boundaries', () => {
 
   it('does not implement out-of-scope memory capabilities in 08 foundation', () => {
     const files = [
-      ...productionFilesUnder('packages', 'memory'),
+      ...productionFilesUnder('packages', 'coding-agent', 'memory'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main', 'services'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'renderer', 'entities', 'memory'),
     ];
@@ -140,7 +140,7 @@ describe('memory foundation boundaries', () => {
   it('does not expose raw sensitive memory content through events logs or renderer state', () => {
     const files = [
       ...productionFilesUnder('packages', 'shared'),
-      ...productionFilesUnder('packages', 'memory'),
+      ...productionFilesUnder('packages', 'coding-agent', 'memory'),
       ...productionFilesUnder('packages', 'coding-agent'),
       ...productionFilesUnder('packages', 'core'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main'),

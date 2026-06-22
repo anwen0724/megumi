@@ -954,6 +954,57 @@ describe('run model tool loop', () => {
     ]);
   });
 
+  it('builds fallback tool continuation context without context-management dependency', async () => {
+    const requests: ModelStepRuntimeRequest[] = [];
+
+    await collect(runModelToolLoop({
+      request: createRequest(),
+      modelStepPort: {
+        async *streamModelStep(input) {
+          requests.push(input.request);
+          if (requests.length === 1) {
+            yield toolCallCreatedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            });
+            yield modelStepCompletedEvent({
+              eventId: input.eventIdFactory(),
+              sequence: input.nextSequence(),
+              stepId: input.request.stepId,
+              modelStepId: String(input.request.modelStepId),
+            });
+            return;
+          }
+          yield assistantCompletedEvent({
+            eventId: input.eventIdFactory(),
+            sequence: input.nextSequence(),
+            stepId: input.request.stepId,
+          });
+        },
+      },
+      toolCallHandler: {
+        async handleToolCalls() {
+          return {
+            toolResults: [createToolResult({
+              textContent: 'done',
+            })],
+          };
+        },
+      },
+      ids: {
+        nextEventId: () => `event-${Math.random().toString(36).slice(2)}`,
+        nextStepId: () => 'step-2',
+        nextModelStepId: () => 'model-step-2',
+      },
+    }));
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.inputContext.contextId).toContain(':continuation');
+    expect(requests[1]?.inputContext.parts.some((part) => part.kind === 'tool_continuation')).toBe(true);
+  });
+
   it('emits run failed instead of throwing when model step limit is exhausted', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),

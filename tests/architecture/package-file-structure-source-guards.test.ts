@@ -123,9 +123,14 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/agent/model/model-step-provider-adapter.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/agent/events/runtime-event-factory.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/agent/state/state-policy.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/core', 'agent-runtime'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'packages/core/ports/ai-port.ts'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'packages/ai', 'compat'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/run-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/persistence/connection.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/context-management'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/tools'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/memory'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/db'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/security'))).toBe(false);
 
     expect(offenders(productionFiles(), [
       /@megumi\/core\/run-runtime/,

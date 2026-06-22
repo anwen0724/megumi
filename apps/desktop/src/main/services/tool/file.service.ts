@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { spawn } from 'child_process';
-import { resolveSafePath } from '@megumi/security/sandbox-policy';
+import { resolveSafePath } from '../security/sandbox-policy';
 
 export async function readFile(workspaceRoot: string, filePath: string): Promise<string> {
   return fs.readFile(resolveSafePath(workspaceRoot, filePath), 'utf-8');

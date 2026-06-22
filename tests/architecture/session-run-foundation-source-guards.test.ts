@@ -54,8 +54,8 @@ describe('session run foundation source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps packages/core run runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/core')
+  it('keeps packages/agent run runtime free of Host privileges and concrete persistence', () => {
+    const offenders = filesUnder('packages/agent')
       .filter((file) => projectPath(file).includes('agent-runtime'))
       .filter((file) => {
         const source = readProjectFile(file);
@@ -111,8 +111,8 @@ describe('session run foundation source guards', () => {
   it('does not implement later Agent capabilities in lifecycle foundation files', () => {
     const lifecycleFiles = [
       ...filesUnder('packages/shared'),
-      ...filesUnder('packages/core'),
-      ...filesUnder('packages/db'),
+      ...filesUnder('packages/agent'),
+      ...filesUnder('apps/desktop/src/main/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
     ].filter((file) => /session-run|agent-runtime|agent\.handler/.test(projectPath(file)));
