@@ -690,7 +690,10 @@ export class SessionRunService {
     return { modelVisibleToolDefinitions: registrySnapshotResult.modelVisibleToolDefinitions, events };
   }
 
-  private createCodingAgentRunOrchestratorOptions(): CodingAgentRunOrchestratorOptions {
+  private createCodingAgentRunOrchestratorOptions(
+    chatStreamAdapter?: ChatStreamEventAdapter,
+  ): CodingAgentRunOrchestratorOptions {
+    const service = this;
     return {
       clock: this.clock,
       ids: { eventId: this.ids.eventId },
@@ -714,13 +717,28 @@ export class SessionRunService {
       modelStepInputBuildService: this.modelStepInputBuildService,
       ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
       modelStepExecutor: {
-        streamModelStep: ((service) => async function* (modelStepInput) {
-          const toolRuntime = modelStepInput.projectRoot && service.toolRuntimeFactory
-            ? await service.toolRuntimeFactory.create({
-                projectRoot: modelStepInput.projectRoot,
-                permissionMode: modelStepInput.permissionMode ?? 'default',
-              })
-            : undefined;
+        streamModelStep: async function* (modelStepInput) {
+          let toolRuntime: (ToolCallHandlerPort & ToolApprovalResumePort) | undefined;
+          try {
+            toolRuntime = modelStepInput.projectRoot && service.toolRuntimeFactory
+              ? await service.toolRuntimeFactory.create({
+                  projectRoot: modelStepInput.projectRoot,
+                  permissionMode: modelStepInput.permissionMode ?? 'default',
+                })
+              : undefined;
+          } catch (error) {
+            // Tool runtime creation failure is a pre-model failure.
+            const failureError = createRuntimeErrorFromUnknown(error);
+            yield createRunFailedEvent({
+              eventId: service.ids.eventId(),
+              sessionId: String(modelStepInput.request.sessionId),
+              runId: String(modelStepInput.request.runId),
+              sequence: 1,
+              createdAt: service.clock.now(),
+              error: failureError,
+            });
+            return;
+          }
 
           yield* service.streamAndPersistModelStep({
             request: modelStepInput.request,
@@ -733,10 +751,11 @@ export class SessionRunService {
             ...(modelStepInput.memoryRecall?.memoryRecallSources ? { memoryRecallSources: modelStepInput.memoryRecall.memoryRecallSources } : {}),
             ...(modelStepInput.memoryRecall?.memoryRecallSeed ? { memoryRecallSeed: modelStepInput.memoryRecall.memoryRecallSeed } : {}),
             ...(toolRuntime ? { toolRuntime } : {}),
+            ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
             ...(modelStepInput.startSequence != null ? { startSequence: modelStepInput.startSequence } : {}),
             emitRunStarted: false,
           });
-        })(this),
+        },
       },
     };
   }
@@ -929,8 +948,9 @@ export class SessionRunService {
       sourceRef: sessionMessageSourceRef(String(userMessage.messageId), currentUserMessage.createdAt),
       createdAt: currentUserMessage.createdAt,
     });
+    const rawInputId = `raw-input:${runId}:${userMessage.messageId}`;
     const parsedInput = parseRawInput({
-      id: `raw-input:${input.requestId}`,
+      id: rawInputId,
       source: {
         kind: 'desktop',
         surface: 'session-message',
@@ -1709,8 +1729,17 @@ export class SessionRunService {
     chatStreamAdapter?: ChatStreamEventAdapter;
     parsedInput?: ParsedInput;
   }): AsyncIterable<RuntimeEvent> {
-    const orchestrator = new CodingAgentRunOrchestrator(this.createCodingAgentRunOrchestratorOptions());
-    yield* orchestrator.runSessionMessage({
+    let lastSequence = nextRuntimeSequence(
+      this.repository.listRuntimeEventsByRun(String(input.run.runId)),
+    );
+    let runStartedYielded = false;
+
+    const orchestrator = new CodingAgentRunOrchestrator(
+      this.createCodingAgentRunOrchestratorOptions(input.chatStreamAdapter),
+    );
+
+    try {
+      for await (const event of orchestrator.runSessionMessage({
       requestId: input.requestId,
       session: input.session,
       run: input.run,
@@ -1728,7 +1757,81 @@ export class SessionRunService {
       ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
       createdAt: input.payload.createdAt,
       memoryEnabled: this.resolveMemoryEnabled(),
-    });
+    })) {
+        if (event.eventType === 'run.started') {
+          runStartedYielded = true;
+        }
+
+        // Pre-model run.failed (no stepId from the orchestrator) delegates to
+        // desktop failure finalization. Model-executor run.failed events already
+        // handled by streamAndPersistModelStep pass through normally.
+        if (event.eventType === 'run.failed' && !event.stepId) {
+          const error = getRunFailedError(event.payload)
+            ?? createRuntimeErrorFromUnknown(new Error('Run failed before model step.'));
+          yield* this.failRunBeforeModelStep({
+            requestId: input.requestId,
+            runtimeContext: input.runtimeContext,
+            sessionId: String(input.session.sessionId),
+            run: input.run,
+            step: input.step,
+            error,
+            startSequence: lastSequence,
+            createdAt: this.clock.now(),
+            chatStreamAdapter: input.chatStreamAdapter,
+          });
+          return;
+        }
+
+        // Orchestrator-owned events (run.started, tool.registry.*, context.compaction.*)
+        // must be persisted into the repository so streamAndPersistModelStep can
+        // calculate correct sequences.
+        if (isOrchestratorOwnedEvent(event)) {
+          lastSequence = Math.max(lastSequence, nextRuntimeSequence(
+            this.repository.listRuntimeEventsByRun(String(input.run.runId)),
+          ));
+          const eventWithRequest = withSessionMessageRequestMetadata(event, {
+            requestId: input.requestId,
+            runtimeContext: input.runtimeContext,
+          });
+          const sequencedEvent = withSequenceAfter(eventWithRequest, lastSequence);
+          lastSequence = sequencedEvent.sequence;
+          this.appendRuntimeEvent(sequencedEvent, input.chatStreamAdapter);
+          yield sequencedEvent;
+        } else {
+          // Model-executor events are already persisted by streamAndPersistModelStep.
+          yield withSessionMessageRequestMetadata(event, {
+            requestId: input.requestId,
+            runtimeContext: input.runtimeContext,
+          });
+        }
+      }
+    } catch (error) {
+      if (!runStartedYielded) {
+        const runStarted = withSessionMessageRequestMetadata(createRunStartedEvent({
+          eventId: this.ids.eventId(),
+          sessionId: input.session.sessionId,
+          runId: input.run.runId,
+          sequence: lastSequence += 1,
+          createdAt: input.payload.createdAt,
+        }), {
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+        });
+        this.appendRuntimeEvent(runStarted, input.chatStreamAdapter);
+        yield runStarted;
+      }
+      yield* this.failRunBeforeModelStep({
+        requestId: input.requestId,
+        runtimeContext: input.runtimeContext,
+        sessionId: String(input.session.sessionId),
+        run: input.run,
+        step: input.step,
+        error: createRuntimeErrorFromUnknown(error),
+        startSequence: lastSequence,
+        createdAt: this.clock.now(),
+        chatStreamAdapter: input.chatStreamAdapter,
+      });
+    }
   }
 
   private scheduleRunCompletedMemoryCapture(input: {
@@ -3071,6 +3174,17 @@ function isRunTerminalRuntimeEvent(event: RuntimeEvent): boolean {
   return event.eventType === 'run.completed'
     || event.eventType === 'run.failed'
     || event.eventType === 'run.cancelled';
+}
+
+// Events owned by the orchestrator (not by streamAndPersistModelStep) that need
+// desktop-side persistence before the model executor runs.
+function isOrchestratorOwnedEvent(event: RuntimeEvent): boolean {
+  return event.eventType === 'run.started'
+    || event.eventType.startsWith('tool.registry.')
+    || event.eventType === 'context.compaction.started'
+    || event.eventType === 'context.compaction.completed'
+    || event.eventType === 'context.compaction.failed'
+    || (event.eventType === 'run.failed' && !event.stepId);
 }
 
 function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | undefined {

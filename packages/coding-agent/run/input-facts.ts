@@ -35,10 +35,16 @@ export interface CodingAgentRunInputFacts {
   facts: CodingAgentRunInputFact[];
 }
 
+const MAX_ID_LENGTH = 128;
+
+function truncateId(id: string): string {
+  return id.length <= MAX_ID_LENGTH ? id : id.slice(0, MAX_ID_LENGTH);
+}
+
 export function createCodingAgentRunInputFacts(parsedInput: ParsedInput): CodingAgentRunInputFacts {
   return {
-    parsedInputId: String(parsedInput.id),
-    rawInputId: String(parsedInput.rawInputId),
+    parsedInputId: truncateId(String(parsedInput.id)),
+    rawInputId: truncateId(String(parsedInput.rawInputId)),
     rawKind: parsedInput.rawKind,
     inputKind: parsedInput.kind,
     effectiveUserText: parsedInput.text,
@@ -50,7 +56,7 @@ export function createRuntimeFactsForRunInput(
   input: CodingAgentRunInputFacts,
 ): ModelInputContextBuildRequest['runtimeFacts'] {
   const baseFact = {
-    factId: `run-input:${input.parsedInputId}`,
+    factId: truncateId(`run-input:${input.parsedInputId}`),
     factKind: 'parsed_input' as const,
     text: `Input kind: ${input.inputKind}. Raw kind: ${input.rawKind}.`,
     required: true,
@@ -102,7 +108,10 @@ function factToRuntimeFact(
   fact: CodingAgentRunInputFact,
   index: number,
 ): ModelInputContextBuildRequest['runtimeFacts'][number] {
-  const factId = `run-input:${parsedInputId}:fact:${index}`;
+  const suffix = `:fact:${index}`;
+  const availableLength = MAX_ID_LENGTH - 'run-input:'.length - suffix.length;
+  const truncatedId = parsedInputId.slice(0, Math.max(1, availableLength));
+  const factId = `run-input:${truncatedId}${suffix}`;
 
   switch (fact.kind) {
     case 'agent_command':
