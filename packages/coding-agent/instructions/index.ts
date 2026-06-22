@@ -1,2 +1,2 @@
-// Coding Agent instruction source orchestration exports live here as they are migrated from desktop.
-export {};
+// Public exports for Coding Agent instruction source product rules.
+export * from './agent-instruction-source';

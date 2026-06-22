@@ -1,11 +1,13 @@
 // Composes Desktop Main memory runtime services and the review-facing memory service.
 import { MemoryRepository } from '@megumi/db/repos/memory.repo';
-import { createMemoryService } from '../services/memory/memory.service';
+import {
+  MemoryExtractionModelClientService,
+  MemoryRecallRuntimeService,
+  MemoryRuntimeCaptureService,
+  createMemoryService,
+} from '@megumi/coding-agent/memory';
 import { MemoryDiagnosticWriter } from '../services/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from '../services/memory/memory-markdown-sync.service';
-import { MemoryRecallRuntimeService } from '../services/memory/memory-recall-runtime.service';
-import { MemoryRuntimeCaptureService } from '../services/memory/memory-runtime-capture.service';
-import { MemoryExtractionModelClientService } from '../services/memory/memory-extraction-model-client.service';
 import { createNodeMemoryRuntimeFileSystem } from '../services/memory/memory-runtime-file-system';
 import type { ModelStepProviderService } from '../services/runtime/model-step-provider.service';
 import type { RuntimeLogger } from '../services/runtime/runtime-logger.service';

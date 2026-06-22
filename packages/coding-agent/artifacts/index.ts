@@ -1,2 +1,3 @@
-// Coding Agent artifact product strategy exports live here as they are migrated from desktop.
-export {};
+// Public exports for Coding Agent artifact product services.
+export * from './artifact-service';
+export * from './plan-artifact-compatibility';

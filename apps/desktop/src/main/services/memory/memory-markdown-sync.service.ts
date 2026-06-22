@@ -6,8 +6,8 @@ import {
   renderMemoryMarkdown,
   resolveMemoryCandidate,
   validateMemoryCandidate,
-} from '@megumi/memory';
-import type { ValidatedMemoryCandidate } from '@megumi/memory';
+} from '@megumi/coding-agent/memory';
+import type { ValidatedMemoryCandidate } from '@megumi/coding-agent/memory';
 import type {
   MemoryAuditLog,
   MemoryKind,

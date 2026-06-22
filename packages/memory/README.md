@@ -1,5 +1,3 @@
-# @megumi/memory
+# @megumi/memory (Deprecated)
 
-Owns future context-window management, token budgeting, compaction, and long-term memory logic for Megumi.
-
-This package should operate on explicit inputs and must not directly call provider SDKs, Electron APIs, or SQLite repositories.
+The implementation moved to `@megumi/coding-agent/memory`. This package remains as a temporary compatibility shim until Plan9 cleanup.

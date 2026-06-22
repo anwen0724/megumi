@@ -118,6 +118,7 @@ describe('package dependency boundaries', () => {
         /from ['"]child_process['"]/,
         /\bspawn\b/,
         /\bexecFile\b/,
+        /\bprocess\.env\b/,
       ]),
     ).toEqual([]);
   });
@@ -318,6 +319,56 @@ describe('package dependency boundaries', () => {
         /from ['"]electron['"]/,
         /@megumi\/db(\/|['"]|$)/,
         /apps\/desktop/,
+      ].filter((pattern) => pattern.test(source));
+
+      return invalid.map((pattern) => `${relativePath(file)} matches ${pattern}`);
+    });
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps packages/memory as deprecated compatibility re-exports only', () => {
+    const compatibilityFiles = [
+      'packages/memory/index.ts',
+      'packages/memory/candidate-validation.ts',
+      'packages/memory/capture-trigger-classifier.ts',
+      'packages/memory/extraction.ts',
+      'packages/memory/markdown-memory-format.ts',
+      'packages/memory/memory-resolution.ts',
+      'packages/memory/memory-security-policy.ts',
+      'packages/memory/recall-scoring.ts',
+      'packages/memory/text-normalization.ts',
+    ];
+
+    for (const file of compatibilityFiles) {
+      expect(fs.existsSync(path.join(root, file))).toBe(true);
+      const source = fs.readFileSync(path.join(root, file), 'utf8');
+      expect(source).toContain('Deprecated compatibility exports');
+    }
+
+    const subpathFiles = compatibilityFiles.filter((f) => f !== 'packages/memory/index.ts');
+    for (const file of subpathFiles) {
+      const source = fs.readFileSync(path.join(root, file), 'utf8');
+      const base = path.basename(file, '.ts');
+      expect(source).toContain(`export * from '@megumi/coding-agent/memory/${base}'`);
+    }
+
+    {
+      const source = fs.readFileSync(path.join(root, 'packages/memory/index.ts'), 'utf8');
+      expect(source).toContain("export * from '@megumi/coding-agent/memory'");
+    }
+
+    const violations = walkSourceFiles(path.join(root, 'packages/memory')).flatMap((file) => {
+      const source = fs.readFileSync(file, 'utf8');
+      const invalid = [
+        /\bexport function\b/,
+        /\bexport class\b/,
+        /\bexport interface\b/,
+        /from ['"]electron['"]/,
+        /@megumi\/db(\/|['"]|$)/,
+        /apps\/desktop/,
+        /from ['"]node:fs(?:\/[^'"]+)?['"]/,
+        /from ['"]fs(?:\/[^'"]+)?['"]/,
       ].filter((pattern) => pattern.test(source));
 
       return invalid.map((pattern) => `${relativePath(file)} matches ${pattern}`);

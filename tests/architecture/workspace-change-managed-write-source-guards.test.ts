@@ -29,7 +29,7 @@ describe('workspace change managed write source guards', () => {
 
   it('does not make run_command restorable in production code', () => {
     const trackerSource = fs.readFileSync(
-      path.join(repoRoot, 'apps/desktop/src/main/services/workspace/workspace-change-tracker.service.ts'),
+      path.join(repoRoot, 'packages/coding-agent/workspace/workspace-change-tracker.ts'),
       'utf8',
     );
     expect(trackerSource).toContain("MANAGED_FILE_TOOL_NAMES = new Set(['edit_file', 'write_file'])");

@@ -53,6 +53,17 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-policy.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-execution-decision.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/project-boundary-policy.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/memory/memory-recall-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/memory/memory-runtime-capture.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/memory/memory-management-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/artifacts/artifact-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/artifacts/plan-artifact-compatibility.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-change-tracker.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/settings/provider-settings.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/settings/provider-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/instructions/agent-instruction-source.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/resources/run-context-service.ts'))).toBe(true);
   });
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
@@ -82,6 +93,34 @@ describe('coding-agent package boundary', () => {
     expect(source).not.toContain('@megumi/db');
     expect(source).not.toContain('better-sqlite3');
     expect(source).not.toContain('@megumi/core');
+  });
+
+  it('keeps memory, artifacts, workspace, settings, instructions, and resources in coding-agent', () => {
+    const memory = sourceUnder('packages/coding-agent/memory');
+    const artifacts = sourceUnder('packages/coding-agent/artifacts');
+    const workspace = sourceUnder('packages/coding-agent/workspace');
+    const settings = sourceUnder('packages/coding-agent/settings');
+    const instructions = sourceUnder('packages/coding-agent/instructions');
+    const resources = sourceUnder('packages/coding-agent/resources');
+    const desktopServices = sourceUnder('apps/desktop/src/main/services');
+
+    expect(memory).toContain('class MemoryRecallRuntimeService');
+    expect(memory).toContain('class MemoryRuntimeCaptureService');
+    expect(memory).toContain('createMemoryService');
+    expect(artifacts).toContain('class ArtifactService');
+    expect(artifacts).toContain('class PlanArtifactCompatibilityService');
+    expect(workspace).toContain('class WorkspaceChangeTrackerService');
+    expect(workspace).toContain('class WorkspaceRestoreService');
+    expect(settings).toContain('class ProviderSettingsService');
+    expect(settings).toContain('class ProviderRuntimeService');
+    expect(instructions).toContain('class AgentInstructionSourceService');
+    expect(resources).toContain('class RunContextService');
+
+    expect(desktopServices).not.toContain('class MemoryRecallRuntimeService');
+    expect(desktopServices).not.toContain('class MemoryRuntimeCaptureService');
+    expect(desktopServices).not.toContain('class ArtifactService');
+    expect(desktopServices).not.toContain('class WorkspaceChangeTrackerService');
+    expect(desktopServices).not.toContain('class WorkspaceRestoreService');
   });
 
   it('does not place sessions or multi-agent behavior under packages/agent', () => {

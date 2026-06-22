@@ -42,7 +42,7 @@ describe('Megumi Home source guards', () => {
 
   it('keeps provider credentials in Megumi Home settings.json instead of secret-store files', () => {
     const homeSource = readProjectFile('apps/desktop/src/main/services/project/megumi-home.service.ts');
-    const providerSettingsSource = readProjectFile('apps/desktop/src/main/services/provider/provider-settings.service.ts');
+    const providerSettingsSource = readProjectFile('packages/coding-agent/settings/provider-settings.ts');
 
     expect(projectFileExists('apps/desktop/src/main/services/security/secret-store.service.ts')).toBe(false);
     expect(homeSource).toContain('settings.json');
@@ -67,8 +67,8 @@ describe('Megumi Home source guards', () => {
     const mainSources = [
       'apps/desktop/src/main/ipc/handlers/provider.handler.ts',
       'apps/desktop/src/main/ipc/handlers/session.handler.ts',
-      'apps/desktop/src/main/services/provider/provider-settings.service.ts',
-      'apps/desktop/src/main/services/provider/provider-runtime.service.ts',
+      'packages/coding-agent/settings/provider-settings.ts',
+      'packages/coding-agent/settings/provider-runtime.ts',
     ]
       .map(readProjectFile)
       .join('\n');

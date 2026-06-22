@@ -1,2 +1,4 @@
-// Coding Agent workspace product semantics exports live here as they are migrated from desktop.
-export {};
+// Public exports for Coding Agent workspace product services.
+export * from './path-policy';
+export * from './workspace-change-tracker';
+export * from './workspace-restore';

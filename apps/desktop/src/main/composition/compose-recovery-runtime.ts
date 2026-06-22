@@ -6,7 +6,7 @@ import { RecoveryRepository } from '@megumi/db/repos/recovery.repo';
 import { SessionRunRepository } from '@megumi/db/repos/session-run.repo';
 import { WorkspaceChangeRepository } from '@megumi/db/repos/workspace-change.repo';
 import { createRecoveryService } from '../services/runtime/recovery.service';
-import { WorkspaceRestoreService } from '../services/workspace/workspace-restore.service';
+import { WorkspaceRestoreService } from '@megumi/coding-agent/workspace';
 import type { WorkspaceChangeFooterProjectorService } from '../projections/workspace/workspace-change-footer-projector.service';
 import type { ChatStreamEventSink } from '../projections/chat-stream/chat-stream-event-adapter.service';
 

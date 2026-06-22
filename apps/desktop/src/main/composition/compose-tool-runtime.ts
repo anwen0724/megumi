@@ -10,7 +10,7 @@ import { createBuiltInToolSourceExecutor } from '../services/tool/built-in-tool-
 import { createExternalTestToolSourceExecutor } from '../services/tool/external-test-tool-source-executor.service';
 import { createToolOrchestratorService } from '@megumi/coding-agent/tools/tool-orchestrator';
 import { createToolExecutionRouter } from '../services/tool/tool-execution-router.service';
-import { WorkspaceChangeTrackerService } from '../services/workspace/workspace-change-tracker.service';
+import { WorkspaceChangeTrackerService } from '@megumi/coding-agent/workspace';
 import type { PermissionSettingsService } from '../services/security/permission-settings.service';
 import type { SessionRunService, SessionRunToolRuntimeFactory } from '../services/session/session-run.service';
 

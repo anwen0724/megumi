@@ -9,7 +9,7 @@ import {
   ProviderUpdateRequestSchema,
 } from '@megumi/shared/ipc';
 import type { ProviderId, ProviderPublicStatus, ProviderSettings } from '@megumi/shared/provider';
-import type { ProviderSettingsUpdateInput } from '@megumi/desktop/main/services/provider/provider-settings.service';
+import type { ProviderSettingsUpdateInput } from '@megumi/coding-agent/settings';
 import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';

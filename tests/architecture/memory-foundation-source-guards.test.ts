@@ -84,7 +84,7 @@ describe('memory foundation boundaries', () => {
 
   it('keeps internal memory extraction client behind model-step provider boundary', () => {
     const files = [
-      join(root, 'apps', 'desktop', 'src', 'main', 'services', 'memory', 'memory-extraction-model-client.service.ts'),
+      join(root, 'packages', 'coding-agent', 'memory', 'memory-extraction-model-client.ts'),
     ];
     expect(offenders(files, /MemoryRepository|better-sqlite3|memory-markdown-sync|memory-runtime-capture|packages\/ai\/providers|@megumi\/ai\/providers|openai-compatible/)).toEqual([]);
   });

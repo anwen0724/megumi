@@ -14,9 +14,9 @@ import type { RuntimeLogger } from '../services/runtime/runtime-logger.service';
 import type { ModelStepProviderService } from '../services/runtime/model-step-provider.service';
 import { SessionRunService, type SessionRunToolRuntimeFactory } from '../services/session/session-run.service';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-import { PlanArtifactCompatibilityService } from '../services/artifact/plan-artifact-compatibility.service';
+import { PlanArtifactCompatibilityService } from '@megumi/coding-agent/artifacts';
 import { TimelineHistoryCommitProjectorService } from '../projections/timeline/timeline-history-commit-projector.service';
-import { AgentInstructionSourceService } from '../services/session/agent-instruction-source.service';
+import { createDesktopAgentInstructionSourceService } from '../services/session/agent-instruction-source.service';
 import { createWorkspaceChangeFooterProjectorService } from '../projections/workspace/workspace-change-footer-projector.service';
 import type { MegumiHomePaths } from '../services/project/megumi-home.service';
 import type { AppSettingsService } from '../services/settings/app-settings.service';
@@ -50,7 +50,7 @@ export function composeSessionRuntime(options: ComposeSessionRuntimeOptions) {
     repository: options.permissionSnapshotRepository,
     planArtifactCompatibility,
   });
-  const agentInstructionSourceService = new AgentInstructionSourceService();
+  const agentInstructionSourceService = createDesktopAgentInstructionSourceService();
   const workspaceChangeFooterProjector = createWorkspaceChangeFooterProjectorService({
     workspaceChanges: options.workspaceChangeRepository,
   });

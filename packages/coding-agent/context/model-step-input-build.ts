@@ -23,12 +23,8 @@ import {
   type CodingAgentRunInputFacts,
 } from '../run/input-facts';
 
-export interface LoadInstructionSourcesInput {
-  projectRoot?: string;
-  effectiveCwd?: string;
-  globalInstructionDirs?: string[];
-  loadedAt: string;
-}
+import type { LoadInstructionSourcesInput } from '../instructions/agent-instruction-source';
+export type { LoadInstructionSourcesInput };
 
 export interface ModelStepInputBuildInstructionSourceService {
   loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;

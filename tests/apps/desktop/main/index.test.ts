@@ -265,6 +265,39 @@ const mocks = vi.hoisted(() => {
       listAccessLogs: vi.fn(),
       recallPreview: vi.fn(),
     })),
+    MemoryRecallRuntimeService: vi.fn(function MemoryRecallRuntimeService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
+        recallForNewUserInput: vi.fn(() =>
+          Promise.resolve({ status: 'skipped', reason: 'memory_disabled', memoryRecallSources: [] }),
+        ),
+      };
+    }),
+    MemoryRuntimeCaptureService: vi.fn(function MemoryRuntimeCaptureService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
+        evaluateRunCompletedCapture: vi.fn(() =>
+          Promise.resolve({ status: 'skipped', reason: 'memory_disabled' }),
+        ),
+      };
+    }),
+    MemoryExtractionModelClientService: vi.fn(function MemoryExtractionModelClientService(
+      this: { options?: unknown },
+      options: unknown,
+    ) {
+      this.options = options;
+      return {
+        extractMemoryCandidates: vi.fn(() =>
+          Promise.resolve({ ok: false, reason: 'not_configured' }),
+        ),
+      };
+    }),
     PlanArtifactCompatibilityService: vi.fn(function PlanArtifactCompatibilityService(
       this: { options?: unknown },
       options: unknown,
@@ -327,11 +360,8 @@ vi.mock('@megumi/desktop/main/services/runtime/model-step-provider.service', () 
   createModelStepProviderService: mocks.createModelStepProviderService,
 }));
 
-vi.mock('@megumi/desktop/main/services/provider/provider-settings.service', () => ({
+vi.mock('@megumi/coding-agent/settings', () => ({
   ProviderSettingsService: mocks.ProviderSettingsService,
-}));
-
-vi.mock('@megumi/desktop/main/services/provider/provider-runtime.service', () => ({
   ProviderRuntimeService: mocks.ProviderRuntimeService,
 }));
 
@@ -352,7 +382,7 @@ vi.mock('@megumi/desktop/main/services/runtime/recovery.service', () => ({
   createRecoveryService: mocks.createRecoveryService,
 }));
 
-vi.mock('@megumi/desktop/main/services/workspace/workspace-restore.service', () => ({
+vi.mock('@megumi/coding-agent/workspace', () => ({
   WorkspaceRestoreService: mocks.WorkspaceRestoreService,
 }));
 
@@ -404,16 +434,16 @@ vi.mock('@megumi/desktop/main/services/artifact/artifact-content-store.service',
   ArtifactContentStore: mocks.ArtifactContentStore,
 }));
 
-vi.mock('@megumi/desktop/main/services/artifact/artifact.service', () => ({
+vi.mock('@megumi/coding-agent/artifacts', () => ({
   ArtifactService: mocks.ArtifactService,
-}));
-
-vi.mock('@megumi/desktop/main/services/memory/memory.service', () => ({
-  createMemoryService: mocks.createMemoryService,
-}));
-
-vi.mock('@megumi/desktop/main/services/artifact/plan-artifact-compatibility.service', () => ({
   PlanArtifactCompatibilityService: mocks.PlanArtifactCompatibilityService,
+}));
+
+vi.mock('@megumi/coding-agent/memory', () => ({
+  createMemoryService: mocks.createMemoryService,
+  MemoryRecallRuntimeService: mocks.MemoryRecallRuntimeService,
+  MemoryRuntimeCaptureService: mocks.MemoryRuntimeCaptureService,
+  MemoryExtractionModelClientService: mocks.MemoryExtractionModelClientService,
 }));
 
 vi.mock('@megumi/desktop/main/services/project/project.service', () => ({
@@ -548,11 +578,13 @@ describe('main runtime logger composition', () => {
       repository: expect.any(Object),
       planArtifactCompatibility,
     }));
-    expect(mocks.ProviderSettingsService).toHaveBeenCalledWith({
+    expect(mocks.ProviderSettingsService).toHaveBeenCalledWith(expect.objectContaining({
       settings: settingsService,
-    });
+      env: process.env,
+    }));
     expect(mocks.ProviderRuntimeService).toHaveBeenCalledWith(expect.objectContaining({
       settings: mocks.ProviderSettingsService.mock.results[0]?.value,
+      env: process.env,
     }));
     const modelStepProviderService = mocks.createModelStepProviderService.mock.results[0]?.value;
     expect(mocks.createModelStepProviderService).toHaveBeenCalledWith(

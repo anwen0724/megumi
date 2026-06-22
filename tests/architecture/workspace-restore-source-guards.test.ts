@@ -36,8 +36,8 @@ const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/ipc/register-ipc-handlers.ts',
   'apps/desktop/src/main/services/runtime/recovery.service.ts',
   'apps/desktop/src/main/services/session/session-run.service.ts',
-  'apps/desktop/src/main/services/workspace/workspace-change-tracker.service.ts',
-  'apps/desktop/src/main/services/workspace/workspace-restore.service.ts',
+  'packages/coding-agent/workspace/workspace-change-tracker.ts',
+  'packages/coding-agent/workspace/workspace-restore.ts',
   'packages/db/repos/workspace-change.repo.ts',
   'packages/db/schema/migrations.ts',
   'packages/shared/ipc/schemas.ts',
@@ -123,7 +123,7 @@ describe('workspace restore source guards', () => {
   });
 
   it('keeps WorkspaceRestoreService free of git and stash commands', () => {
-    const source = read('apps/desktop/src/main/services/workspace/workspace-restore.service.ts');
+    const source = read('packages/coding-agent/workspace/workspace-restore.ts');
 
     expect(source).not.toContain('child_process');
     expect(source).not.toContain('simple-git');

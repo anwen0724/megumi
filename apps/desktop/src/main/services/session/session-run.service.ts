@@ -140,7 +140,7 @@ import {
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
 } from '../../projections/chat-stream/chat-stream-event-adapter.service';
-import { AgentInstructionSourceService } from './agent-instruction-source.service';
+import { createDesktopAgentInstructionSourceService } from './agent-instruction-source.service';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
@@ -3349,7 +3349,7 @@ export function createDefaultSessionRunService(
     permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
-    agentInstructionSourceService: options.agentInstructionSourceService ?? new AgentInstructionSourceService(),
+    agentInstructionSourceService: options.agentInstructionSourceService ?? createDesktopAgentInstructionSourceService(),
     megumiHomePath: homePaths.homePath,
     globalInstructionDirectoryProvider: {
       listGlobalInstructionDirs: () => [homePaths.homePath],

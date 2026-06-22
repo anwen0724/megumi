@@ -5,7 +5,7 @@ import { createRuntimeJsonlLoggerForMegumiHome } from '../services/runtime/runti
 import { createPermissionSettingsService } from '../services/security/permission-settings.service';
 import { createAppSettingsService } from '../services/settings/app-settings.service';
 import { ArtifactContentStore } from '../services/artifact/artifact-content-store.service';
-import { ArtifactService } from '../services/artifact/artifact.service';
+import { ArtifactService } from '@megumi/coding-agent/artifacts';
 import { composeDatabase } from './compose-database';
 import { composeMemoryRuntime } from './compose-memory-runtime';
 import { composeProjectService, composeWorkspaceFilesService } from './compose-project-workspace';

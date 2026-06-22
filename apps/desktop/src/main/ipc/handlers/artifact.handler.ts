@@ -26,7 +26,7 @@ import {
   ArtifactVersionCreateRequestSchema,
   ArtifactVersionGetRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ArtifactService } from '../../services/artifact/artifact.service';
+import type { ArtifactService } from '@megumi/coding-agent/artifacts';
 import type { RuntimeLogger } from '../../services/runtime/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../host/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';

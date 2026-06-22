@@ -6,7 +6,7 @@ import type {
   ToolSourceIdentity,
   ToolSourceKind,
 } from '@megumi/shared/tool';
-import type { WorkspaceChangeExecutionScope } from '../workspace/workspace-change-tracker.service';
+import type { WorkspaceChangeExecutionScope } from '@megumi/coding-agent/workspace';
 
 export interface ToolExecutionRunOptions {
   scope?: WorkspaceChangeExecutionScope;

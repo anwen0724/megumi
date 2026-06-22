@@ -1,2 +1,3 @@
-// Coding Agent settings policy exports live here as they are migrated from desktop.
-export {};
+// Public exports for Coding Agent settings and provider runtime policy.
+export * from './provider-settings';
+export * from './provider-runtime';

@@ -151,7 +151,7 @@ describe('Command system source guards', () => {
     expect(offenders([
       'apps/desktop/src/main/services/session/session-run.service.ts',
       'apps/desktop/src/main/services/runtime/model-step-provider.service.ts',
-      'apps/desktop/src/main/services/provider/provider-runtime.service.ts',
+      'packages/coding-agent/settings/provider-runtime.ts',
     ], [
       /parseSlashCommand/,
       /dispatchCommandText/,

@@ -8,7 +8,7 @@ import { redactRuntimeMessage } from '@megumi/security/redaction';
 import { normalizeToolResult } from '@megumi/coding-agent/tools/normalization';
 import { createRawToolResultFromContent } from '@megumi/coding-agent/tools/normalization';
 import type { RawToolResult, ToolExecution, ToolResult } from '@megumi/shared/tool';
-import type { WorkspaceChangeTrackerService } from '../../workspace/workspace-change-tracker.service';
+import type { WorkspaceChangeTrackerService } from '@megumi/coding-agent/workspace';
 import type { SpawnLike } from './run-command.executor';
 
 export interface ProjectToolFileSystem {
