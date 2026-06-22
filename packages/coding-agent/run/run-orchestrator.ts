@@ -129,6 +129,9 @@ export interface CodingAgentRunOrchestratorOptions {
   compactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
+  runStatusProvider?: {
+    getRunStatus(runId: string): string | undefined;
+  };
   modelStepExecutor: CodingAgentRunModelStepExecutor;
 }
 
@@ -240,7 +243,8 @@ export class CodingAgentRunOrchestrator {
         },
         builtAt: input.createdAt,
       });
-      const compaction = compactionProbeModelInput.failure
+      const compaction: SessionCompactionOrchestrationResult =
+        compactionProbeModelInput.failure
         ? {
             status: 'failed' as const,
             events: [],
@@ -277,6 +281,13 @@ export class CodingAgentRunOrchestrator {
           createdAt: this.options.clock.now(),
           error: compaction.failure,
         });
+        return;
+      }
+
+      const currentRunStatus = this.options.runStatusProvider?.getRunStatus(
+        String(input.run.runId),
+      );
+      if (currentRunStatus === 'cancelling' || currentRunStatus === 'cancelled') {
         return;
       }
 

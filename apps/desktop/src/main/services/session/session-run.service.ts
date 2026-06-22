@@ -716,6 +716,9 @@ export class SessionRunService {
       } : {}),
       modelStepInputBuildService: this.modelStepInputBuildService,
       ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
+      runStatusProvider: {
+        getRunStatus: (runId: string) => this.repository.getRun(runId)?.status,
+      },
       modelStepExecutor: {
         streamModelStep: async function* (modelStepInput) {
           let toolRuntime: (ToolCallHandlerPort & ToolApprovalResumePort) | undefined;
@@ -1768,6 +1771,12 @@ export class SessionRunService {
         if (event.eventType === 'run.failed' && !event.stepId) {
           const error = getRunFailedError(event.payload)
             ?? createRuntimeErrorFromUnknown(new Error('Run failed before model step.'));
+          // Recalculate from the repository to avoid UNIQUE constraint collisions
+          // with events already persisted by this wrapper or prior messages.
+          const safeSequence = Math.max(
+            lastSequence,
+            nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(input.run.runId))),
+          );
           yield* this.failRunBeforeModelStep({
             requestId: input.requestId,
             runtimeContext: input.runtimeContext,
@@ -1775,7 +1784,7 @@ export class SessionRunService {
             run: input.run,
             step: input.step,
             error,
-            startSequence: lastSequence,
+            startSequence: safeSequence,
             createdAt: this.clock.now(),
             chatStreamAdapter: input.chatStreamAdapter,
           });
@@ -2171,14 +2180,17 @@ export class SessionRunService {
         return;
       }
       lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(input.request.runId)));
-      const failedEvent = withRequestMetadata(createRunFailedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.request.sessionId,
-        runId: input.request.runId,
-        sequence: lastSequence += 1,
-        createdAt: this.clock.now(),
-        error: createRuntimeErrorFromUnknown(error),
-      }), input.request);
+      const failedEvent = withRequestMetadata({
+        ...createRunFailedEvent({
+          eventId: this.ids.eventId(),
+          sessionId: input.request.sessionId,
+          runId: input.request.runId,
+          sequence: lastSequence += 1,
+          createdAt: this.clock.now(),
+          error: createRuntimeErrorFromUnknown(error),
+        }),
+        stepId: currentModelStep.stepId,
+      }, input.request);
       this.appendRuntimeEvent(failedEvent, input.chatStreamAdapter);
       terminalEvent = failedEvent;
       yield failedEvent;
