@@ -52,7 +52,7 @@ describe('CodingAgentRunOrchestrator', () => {
       createdAt: '2026-06-21T00:00:00.000Z',
     }));
 
-    expect(order).toEqual(['session-context', 'memory', 'build:compaction-probe', 'compact', 'session-context', 'build:initial', 'model']);
+    expect(order).toEqual(['session-context', 'memory', 'build:compaction-probe', 'compact', 'append:run.started', 'session-context', 'build:initial', 'model']);
     expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
     expect(modelRequests).toHaveLength(1);
     expect(modelRequests[0]?.inputContext.contextId).toBe('context:initial');
@@ -226,6 +226,32 @@ function createOptions(
     clock: { now: () => '2026-06-21T00:00:01.000Z' },
     ids: {
       eventId: () => `event-${Math.random()}`,
+    },
+    eventPort: {
+      append(event, _requestId, _runtimeContext) {
+        order.push(`append:${event.eventType}`);
+        return event;
+      },
+    },
+    runStatePort: {
+      getRunStatus(_runId) { return undefined; },
+    },
+    failurePort: {
+      async *failBeforeModelStep(failureInput) {
+        order.push('failure');
+        yield createRuntimeEvent({
+          eventId: `event-failure-${Math.random()}`,
+          eventType: 'run.failed',
+          runId: 'run-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          createdAt: '2026-06-21T00:00:01.000Z',
+          source: 'core',
+          visibility: 'user',
+          persist: 'required',
+          payload: { error: failureInput.error },
+        });
+      },
     },
     contextService: {
       createBaselineContext() {

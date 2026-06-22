@@ -693,10 +693,47 @@ export class SessionRunService {
   private createCodingAgentRunOrchestratorOptions(
     chatStreamAdapter?: ChatStreamEventAdapter,
   ): CodingAgentRunOrchestratorOptions {
-    const service = this;
+    const svc = this;
     return {
       clock: this.clock,
       ids: { eventId: this.ids.eventId },
+      // === Required ports ===
+      eventPort: {
+        append(event, requestId, runtimeContext) {
+          const lastSeq = nextRuntimeSequence(
+            svc.repository.listRuntimeEventsByRun(event.runId ?? ''),
+          );
+          const ev = withSessionMessageRequestMetadata(
+            withSequenceAfter(event, lastSeq),
+            { requestId, runtimeContext },
+          );
+          svc.appendRuntimeEvent(ev, chatStreamAdapter);
+          return ev;
+        },
+      },
+      runStatePort: {
+        getRunStatus: (runId: string) => svc.repository.getRun(runId)?.status,
+      },
+      failurePort: {
+        async *failBeforeModelStep(failureInput) {
+          const seq = Math.max(
+            0,
+            nextRuntimeSequence(svc.repository.listRuntimeEventsByRun(String(failureInput.run.runId))),
+          );
+          yield* svc.failRunBeforeModelStep({
+            requestId: failureInput.requestId,
+            runtimeContext: failureInput.runtimeContext,
+            sessionId: failureInput.sessionId,
+            run: failureInput.run,
+            step: failureInput.step,
+            error: failureInput.error,
+            startSequence: seq,
+            createdAt: svc.clock.now(),
+            chatStreamAdapter,
+          });
+        },
+      },
+      // === Optional / passthrough ports ===
       ...(this.contextService ? { contextService: this.contextService } : {}),
       ...(this.providerCapabilitySummaryProvider ? { providerCapabilitySummaryProvider: this.providerCapabilitySummaryProvider } : {}),
       ...(this.toolRegistrySnapshotService ? {
@@ -716,34 +753,34 @@ export class SessionRunService {
       } : {}),
       modelStepInputBuildService: this.modelStepInputBuildService,
       ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
-      runStatusProvider: {
-        getRunStatus: (runId: string) => this.repository.getRun(runId)?.status,
-      },
       modelStepExecutor: {
         streamModelStep: async function* (modelStepInput) {
           let toolRuntime: (ToolCallHandlerPort & ToolApprovalResumePort) | undefined;
           try {
-            toolRuntime = modelStepInput.projectRoot && service.toolRuntimeFactory
-              ? await service.toolRuntimeFactory.create({
+            toolRuntime = modelStepInput.projectRoot && svc.toolRuntimeFactory
+              ? await svc.toolRuntimeFactory.create({
                   projectRoot: modelStepInput.projectRoot,
                   permissionMode: modelStepInput.permissionMode ?? 'default',
                 })
               : undefined;
           } catch (error) {
-            // Tool runtime creation failure is a pre-model failure.
-            const failureError = createRuntimeErrorFromUnknown(error);
-            yield createRunFailedEvent({
-              eventId: service.ids.eventId(),
+            yield* svc.failRunBeforeModelStep({
+              requestId: modelStepInput.request.requestId,
+              runtimeContext: modelStepInput.request.runtimeContext,
               sessionId: String(modelStepInput.request.sessionId),
-              runId: String(modelStepInput.request.runId),
-              sequence: 1,
-              createdAt: service.clock.now(),
-              error: failureError,
+              run: modelStepInput.run,
+              step: modelStepInput.step,
+              error: createRuntimeErrorFromUnknown(error),
+              startSequence: nextRuntimeSequence(
+                svc.repository.listRuntimeEventsByRun(String(modelStepInput.request.runId)),
+              ),
+              createdAt: svc.clock.now(),
+              chatStreamAdapter,
             });
             return;
           }
 
-          yield* service.streamAndPersistModelStep({
+          yield* svc.streamAndPersistModelStep({
             request: modelStepInput.request,
             run: modelStepInput.run,
             step: modelStepInput.step,
@@ -1732,17 +1769,10 @@ export class SessionRunService {
     chatStreamAdapter?: ChatStreamEventAdapter;
     parsedInput?: ParsedInput;
   }): AsyncIterable<RuntimeEvent> {
-    let lastSequence = nextRuntimeSequence(
-      this.repository.listRuntimeEventsByRun(String(input.run.runId)),
-    );
-    let runStartedYielded = false;
-
     const orchestrator = new CodingAgentRunOrchestrator(
       this.createCodingAgentRunOrchestratorOptions(input.chatStreamAdapter),
     );
-
-    try {
-      for await (const event of orchestrator.runSessionMessage({
+    yield* orchestrator.runSessionMessage({
       requestId: input.requestId,
       session: input.session,
       run: input.run,
@@ -1760,87 +1790,7 @@ export class SessionRunService {
       ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
       createdAt: input.payload.createdAt,
       memoryEnabled: this.resolveMemoryEnabled(),
-    })) {
-        if (event.eventType === 'run.started') {
-          runStartedYielded = true;
-        }
-
-        // Pre-model run.failed (no stepId from the orchestrator) delegates to
-        // desktop failure finalization. Model-executor run.failed events already
-        // handled by streamAndPersistModelStep pass through normally.
-        if (event.eventType === 'run.failed' && !event.stepId) {
-          const error = getRunFailedError(event.payload)
-            ?? createRuntimeErrorFromUnknown(new Error('Run failed before model step.'));
-          // Recalculate from the repository to avoid UNIQUE constraint collisions
-          // with events already persisted by this wrapper or prior messages.
-          const safeSequence = Math.max(
-            lastSequence,
-            nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(input.run.runId))),
-          );
-          yield* this.failRunBeforeModelStep({
-            requestId: input.requestId,
-            runtimeContext: input.runtimeContext,
-            sessionId: String(input.session.sessionId),
-            run: input.run,
-            step: input.step,
-            error,
-            startSequence: safeSequence,
-            createdAt: this.clock.now(),
-            chatStreamAdapter: input.chatStreamAdapter,
-          });
-          return;
-        }
-
-        // Orchestrator-owned events (run.started, tool.registry.*, context.compaction.*)
-        // must be persisted into the repository so streamAndPersistModelStep can
-        // calculate correct sequences.
-        if (isOrchestratorOwnedEvent(event)) {
-          lastSequence = Math.max(lastSequence, nextRuntimeSequence(
-            this.repository.listRuntimeEventsByRun(String(input.run.runId)),
-          ));
-          const eventWithRequest = withSessionMessageRequestMetadata(event, {
-            requestId: input.requestId,
-            runtimeContext: input.runtimeContext,
-          });
-          const sequencedEvent = withSequenceAfter(eventWithRequest, lastSequence);
-          lastSequence = sequencedEvent.sequence;
-          this.appendRuntimeEvent(sequencedEvent, input.chatStreamAdapter);
-          yield sequencedEvent;
-        } else {
-          // Model-executor events are already persisted by streamAndPersistModelStep.
-          yield withSessionMessageRequestMetadata(event, {
-            requestId: input.requestId,
-            runtimeContext: input.runtimeContext,
-          });
-        }
-      }
-    } catch (error) {
-      if (!runStartedYielded) {
-        const runStarted = withSessionMessageRequestMetadata(createRunStartedEvent({
-          eventId: this.ids.eventId(),
-          sessionId: input.session.sessionId,
-          runId: input.run.runId,
-          sequence: lastSequence += 1,
-          createdAt: input.payload.createdAt,
-        }), {
-          requestId: input.requestId,
-          runtimeContext: input.runtimeContext,
-        });
-        this.appendRuntimeEvent(runStarted, input.chatStreamAdapter);
-        yield runStarted;
-      }
-      yield* this.failRunBeforeModelStep({
-        requestId: input.requestId,
-        runtimeContext: input.runtimeContext,
-        sessionId: String(input.session.sessionId),
-        run: input.run,
-        step: input.step,
-        error: createRuntimeErrorFromUnknown(error),
-        startSequence: lastSequence,
-        createdAt: this.clock.now(),
-        chatStreamAdapter: input.chatStreamAdapter,
-      });
-    }
+    });
   }
 
   private scheduleRunCompletedMemoryCapture(input: {
@@ -3186,17 +3136,6 @@ function isRunTerminalRuntimeEvent(event: RuntimeEvent): boolean {
   return event.eventType === 'run.completed'
     || event.eventType === 'run.failed'
     || event.eventType === 'run.cancelled';
-}
-
-// Events owned by the orchestrator (not by streamAndPersistModelStep) that need
-// desktop-side persistence before the model executor runs.
-function isOrchestratorOwnedEvent(event: RuntimeEvent): boolean {
-  return event.eventType === 'run.started'
-    || event.eventType.startsWith('tool.registry.')
-    || event.eventType === 'context.compaction.started'
-    || event.eventType === 'context.compaction.completed'
-    || event.eventType === 'context.compaction.failed'
-    || (event.eventType === 'run.failed' && !event.stepId);
 }
 
 function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | undefined {

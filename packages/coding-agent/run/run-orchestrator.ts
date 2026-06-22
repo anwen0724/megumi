@@ -5,13 +5,11 @@ import type { ModelCapabilitySummary } from '@megumi/shared/run';
 import type { ModelInputContextBuildRequest, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
-import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
-import { createRunFailedEvent, createRunStartedEvent } from '@megumi/agent';
+import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolDefinition } from '@megumi/shared/tool';
 import type { ParsedInput } from '@megumi/input';
 import type {
-  BuildModelStepInputFailure,
   BuildModelStepInputInput,
   BuildModelStepInputResult,
   CompactIfNeededInput,
@@ -19,6 +17,7 @@ import type {
   SessionCompactionOrchestrationResult,
 } from '../context';
 import type { BuildSessionContextInputFromRepositoryInput } from '../session';
+import { createRunFailedEvent, createRunStartedEvent } from '@megumi/agent';
 import { createCodingAgentRunInputFacts } from './input-facts';
 import {
   createRuntimeErrorFromUnknown,
@@ -32,6 +31,31 @@ export interface CodingAgentRunClock {
 
 export interface CodingAgentRunIds {
   eventId(): string;
+}
+
+export interface CodingAgentRunEventPort {
+  /** Persist a runtime event and return it with caller metadata attached. */
+  append(
+    event: RuntimeEvent,
+    requestId: string,
+    runtimeContext?: RuntimeContext,
+  ): RuntimeEvent;
+}
+
+export interface CodingAgentRunStatePort {
+  getRunStatus(runId: string): string | undefined;
+}
+
+export interface CodingAgentRunFailurePort {
+  /** Produce the desktop-side terminal events for a pre-model-step failure. */
+  failBeforeModelStep(input: {
+    requestId: string;
+    runtimeContext?: RuntimeContext;
+    sessionId: string;
+    run: Run;
+    step: RunStep;
+    error: RuntimeError;
+  }): AsyncIterable<RuntimeEvent>;
 }
 
 export interface CodingAgentRunContextService {
@@ -110,6 +134,9 @@ export interface CodingAgentRunModelStepExecutor {
 export interface CodingAgentRunOrchestratorOptions {
   clock: CodingAgentRunClock;
   ids: CodingAgentRunIds;
+  eventPort: CodingAgentRunEventPort;
+  runStatePort: CodingAgentRunStatePort;
+  failurePort: CodingAgentRunFailurePort;
   contextService?: CodingAgentRunContextService;
   providerCapabilitySummaryProvider?: CodingAgentRunProviderCapabilitySummaryProvider;
   toolRegistrySnapshotProvider?: CodingAgentRunToolRegistrySnapshotProvider;
@@ -128,9 +155,6 @@ export interface CodingAgentRunOrchestratorOptions {
   };
   compactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
-  };
-  runStatusProvider?: {
-    getRunStatus(runId: string): string | undefined;
   };
   modelStepExecutor: CodingAgentRunModelStepExecutor;
 }
@@ -169,17 +193,11 @@ export class CodingAgentRunOrchestrator {
   constructor(private readonly options: CodingAgentRunOrchestratorOptions) {}
 
   async *runSessionMessage(input: CodingAgentRunSessionMessageInput): AsyncIterable<RuntimeEvent> {
-    let lastSequence = 0;
-    const runStarted = createRunStartedEvent({
-      eventId: this.options.ids.eventId(),
-      sessionId: String(input.session.sessionId),
-      runId: String(input.run.runId),
-      sequence: lastSequence += 1,
-      createdAt: input.createdAt,
-    });
-    yield withRequestMetadata(runStarted, input);
+    const requestMeta = { requestId: input.requestId, runtimeContext: input.runtimeContext };
 
     try {
+      // Build context / tool definitions / session context / memory before
+      // starting compaction so we can pass the result into the probe build.
       const context = this.options.contextService?.createBaselineContext({
         runId: String(input.run.runId),
         goal: input.userMessage.content,
@@ -193,12 +211,7 @@ export class CodingAgentRunOrchestrator {
         providerId: String(input.providerId),
         modelId: input.modelId,
       }) ?? { supportsToolCall: true };
-      const toolDefinitions = this.resolveToolDefinitions(input, providerCapabilitySummary, lastSequence);
-      for (const event of toolDefinitions.events) {
-        lastSequence = Math.max(lastSequence, event.sequence);
-        yield withRequestMetadata(event, input);
-      }
-
+      const toolDefinitions = this.resolveToolDefinitions(input, providerCapabilitySummary, 0);
       const sessionContext = this.options.sessionContextInputService.buildSessionContextInput({
         sessionId: String(input.session.sessionId),
         currentRunId: String(input.run.runId),
@@ -213,6 +226,9 @@ export class CodingAgentRunOrchestrator {
       });
       const memoryRecall = await this.recallMemory(input, modelInputSourceOverrides.requestedCwd);
       const runInputFacts = input.parsedInput ? createCodingAgentRunInputFacts(input.parsedInput) : undefined;
+
+      // Build compaction probe and start compaction asynchronously so that
+      // run.started is yielded while compaction may still be in-flight.
       const compactionProbeModelInput = await this.options.modelStepInputBuildService.buildModelStepInput({
         requestId: input.requestId,
         sessionId: String(input.session.sessionId),
@@ -243,15 +259,37 @@ export class CodingAgentRunOrchestrator {
         },
         builtAt: input.createdAt,
       });
-      const compaction: SessionCompactionOrchestrationResult =
-        compactionProbeModelInput.failure
-        ? {
-            status: 'failed' as const,
-            events: [],
-            failure: modelStepInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
-          }
-        : this.options.compactionOrchestrator
-        ? await this.options.compactionOrchestrator.compactIfNeeded({
+
+      // If the probe already failed, yield run.started + the failure and return.
+      if (compactionProbeModelInput.failure) {
+        const runStarted = this.options.eventPort.append(
+          createRunStartedEvent({
+            eventId: this.options.ids.eventId(),
+            sessionId: String(input.session.sessionId),
+            runId: String(input.run.runId),
+            sequence: 1,
+            createdAt: input.createdAt,
+          }),
+          requestMeta.requestId,
+          requestMeta.runtimeContext,
+        );
+        yield runStarted;
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: modelStepInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
+        });
+        return;
+      }
+
+      // Start compaction asynchronously so the caller can cancel the run
+      // while compaction is still in progress.
+      const compactionPromise: Promise<SessionCompactionOrchestrationResult> =
+        this.options.compactionOrchestrator
+        ? this.options.compactionOrchestrator.compactIfNeeded({
             requestId: input.requestId,
             sessionId: String(input.session.sessionId),
             runId: String(input.run.runId),
@@ -263,34 +301,62 @@ export class CodingAgentRunOrchestrator {
             sessionContext,
             budgetProbeInputContext: compactionProbeModelInput.inputContext,
             budgetPolicy,
-            startSequence: lastSequence,
+            startSequence: 1,
           })
-        : { status: 'skipped' as const, events: [] };
+        : Promise.resolve({ status: 'skipped' as const, events: [] });
+
+      // Yield run.started and tool-registry events.  The caller can now
+      // cancel the run while compaction is still in progress.
+      {
+        const ev = this.options.eventPort.append(
+          createRunStartedEvent({
+            eventId: this.options.ids.eventId(),
+            sessionId: String(input.session.sessionId),
+            runId: String(input.run.runId),
+            sequence: 1,
+            createdAt: input.createdAt,
+          }),
+          requestMeta.requestId,
+          requestMeta.runtimeContext,
+        );
+        yield ev;
+      }
+      for (const event of toolDefinitions.events) {
+        const ev = this.options.eventPort.append(event, requestMeta.requestId, requestMeta.runtimeContext);
+        yield ev;
+      }
+
+      // Await the already-started compaction.
+      const compaction = await compactionPromise;
 
       for (const event of compaction.events) {
-        lastSequence = Math.max(lastSequence, event.sequence);
-        yield withRequestMetadata(event, input);
+        const ev = this.options.eventPort.append(event, requestMeta.requestId, requestMeta.runtimeContext);
+        yield ev;
       }
 
-      if (compaction.status === 'failed') {
-        yield createRunFailedEvent({
-          eventId: this.options.ids.eventId(),
-          sessionId: String(input.session.sessionId),
-          runId: String(input.run.runId),
-          sequence: lastSequence + 1,
-          createdAt: this.options.clock.now(),
-          error: compaction.failure,
-        });
-        return;
-      }
-
-      const currentRunStatus = this.options.runStatusProvider?.getRunStatus(
+      // After compaction, check whether the run was cancelled.  This must
+      // happen before the failure check so that a cancelled run does not
+      // receive extra terminal events.
+      const currentRunStatus = this.options.runStatePort.getRunStatus(
         String(input.run.runId),
       );
       if (currentRunStatus === 'cancelling' || currentRunStatus === 'cancelled') {
         return;
       }
 
+      if (compaction.status === 'failed') {
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: compaction.failure,
+        });
+        return;
+      }
+
+      // Build the initial model input and stream through the model executor.
       const finalSessionContext = this.options.sessionContextInputService.buildSessionContextInput({
         sessionId: String(input.session.sessionId),
         currentRunId: String(input.run.runId),
@@ -324,12 +390,12 @@ export class CodingAgentRunOrchestrator {
         builtAt: input.createdAt,
       });
       if (initialModelInput.failure) {
-        yield createRunFailedEvent({
-          eventId: this.options.ids.eventId(),
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
           sessionId: String(input.session.sessionId),
-          runId: String(input.run.runId),
-          sequence: lastSequence + 1,
-          createdAt: this.options.clock.now(),
+          run: input.run,
+          step: input.step,
           error: modelStepInputBuildFailureToRuntimeError(initialModelInput.failure),
         });
         return;
@@ -356,15 +422,29 @@ export class CodingAgentRunOrchestrator {
         ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
         permissionMode: input.permissionMode,
         memoryRecall,
-        startSequence: lastSequence,
+        startSequence: 1,
       });
     } catch (error) {
-      yield createRunFailedEvent({
-        eventId: this.options.ids.eventId(),
+      // Yield run.started first so the caller always sees it, then
+      // delegate to the failure port for terminal events.
+      const runStarted = this.options.eventPort.append(
+        createRunStartedEvent({
+          eventId: this.options.ids.eventId(),
+          sessionId: String(input.session.sessionId),
+          runId: String(input.run.runId),
+          sequence: 1,
+          createdAt: input.createdAt,
+        }),
+        requestMeta.requestId,
+        requestMeta.runtimeContext,
+      );
+      yield runStarted;
+      yield* this.options.failurePort.failBeforeModelStep({
+        requestId: input.requestId,
+        runtimeContext: input.runtimeContext,
         sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        sequence: lastSequence + 1,
-        createdAt: this.options.clock.now(),
+        run: input.run,
+        step: input.step,
         error: createRuntimeErrorFromUnknown(error),
       });
     }
@@ -447,15 +527,4 @@ function resolveRecallEffectiveCwd(projectRoot: string | undefined, requestedCwd
     return requestedCwd;
   }
   return projectRoot ? `${projectRoot.replace(/[\\/]+$/, '')}/${requestedCwd.replace(/^[\\/]+/, '')}` : requestedCwd;
-}
-
-function withRequestMetadata(
-  event: RuntimeEvent,
-  input: CodingAgentRunSessionMessageInput,
-): RuntimeEvent {
-  return {
-    ...event,
-    requestId: event.requestId ?? input.requestId,
-    ...(event.context ? { context: event.context } : input.runtimeContext ? { context: input.runtimeContext } : {}),
-  };
 }
