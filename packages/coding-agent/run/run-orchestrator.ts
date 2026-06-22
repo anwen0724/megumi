@@ -194,6 +194,7 @@ export class CodingAgentRunOrchestrator {
 
   async *runSessionMessage(input: CodingAgentRunSessionMessageInput): AsyncIterable<RuntimeEvent> {
     const requestMeta = { requestId: input.requestId, runtimeContext: input.runtimeContext };
+    let runStartedAppended = false;
 
     try {
       // Build context / tool definitions / session context / memory before
@@ -273,6 +274,7 @@ export class CodingAgentRunOrchestrator {
           requestMeta.requestId,
           requestMeta.runtimeContext,
         );
+        runStartedAppended = true;
         yield runStarted;
         yield* this.options.failurePort.failBeforeModelStep({
           requestId: input.requestId,
@@ -319,6 +321,7 @@ export class CodingAgentRunOrchestrator {
           requestMeta.requestId,
           requestMeta.runtimeContext,
         );
+        runStartedAppended = true;
         yield ev;
       }
       for (const event of toolDefinitions.events) {
@@ -427,18 +430,21 @@ export class CodingAgentRunOrchestrator {
     } catch (error) {
       // Yield run.started first so the caller always sees it, then
       // delegate to the failure port for terminal events.
-      const runStarted = this.options.eventPort.append(
-        createRunStartedEvent({
-          eventId: this.options.ids.eventId(),
-          sessionId: String(input.session.sessionId),
-          runId: String(input.run.runId),
-          sequence: 1,
-          createdAt: input.createdAt,
-        }),
-        requestMeta.requestId,
-        requestMeta.runtimeContext,
-      );
-      yield runStarted;
+      if (!runStartedAppended) {
+        const runStarted = this.options.eventPort.append(
+          createRunStartedEvent({
+            eventId: this.options.ids.eventId(),
+            sessionId: String(input.session.sessionId),
+            runId: String(input.run.runId),
+            sequence: 1,
+            createdAt: input.createdAt,
+          }),
+          requestMeta.requestId,
+          requestMeta.runtimeContext,
+        );
+        runStartedAppended = true;
+        yield runStarted;
+      }
       yield* this.options.failurePort.failBeforeModelStep({
         requestId: input.requestId,
         runtimeContext: input.runtimeContext,

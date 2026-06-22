@@ -171,6 +171,45 @@ describe('CodingAgentRunOrchestrator', () => {
       },
     });
   });
+
+  it('does not append run.started twice when the initial model input build throws', async () => {
+    const order: string[] = [];
+    const buildInputs: BuildModelStepInputInput[] = [];
+    const orchestrator = new CodingAgentRunOrchestrator(createOptions({
+      async buildModelStepInput(input) {
+        buildInputs.push(input);
+        if (input.contextKind === 'initial') {
+          throw new Error('initial build exploded');
+        }
+        return successfulModelStepInputBuild(input);
+      },
+    }, order));
+
+    const events = await collect(orchestrator.runSessionMessage({
+      requestId: 'request-1',
+      session,
+      run,
+      step,
+      userMessage,
+      providerId: 'openai',
+      modelId: 'gpt-test',
+      permissionMode: 'default',
+      inputPreprocessing: {
+        originalText: 'Hello',
+        effectiveUserText: 'Hello',
+        entries: [],
+        diagnostics: [],
+      },
+      createdAt: '2026-06-21T00:00:00.000Z',
+    }));
+
+    expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
+    expect(order.filter((entry) => entry === 'append:run.started')).toHaveLength(1);
+    expect(events.map((event) => event.eventType)).toEqual([
+      'run.started',
+      'run.failed',
+    ]);
+  });
 });
 
 const session = {
