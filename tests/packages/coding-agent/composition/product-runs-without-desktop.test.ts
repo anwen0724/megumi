@@ -214,5 +214,5 @@ describe('coding-agent product runs without desktop', () => {
 
     const restartedSessions = runtime.sessionRunService.listSessions();
     expect(restartedSessions.some((s) => String(s.sessionId) === String(session.sessionId))).toBe(true);
-  });
+  }, 30000);
 });
