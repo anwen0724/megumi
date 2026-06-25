@@ -1,5 +1,5 @@
 ﻿// @vitest-environment node
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, type Dirent } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -11,7 +11,18 @@ function read(relativePath: string): string {
 
 function walk(directory: string): string[] {
   const files: string[] = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch (error) {
+    // A removed directory (e.g. projections/ after its only module moved into the
+    // product package) has no files, so it trivially satisfies these import guards.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+  for (const entry of entries) {
     const fullPath = join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...walk(fullPath));
