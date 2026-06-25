@@ -1,4 +1,9 @@
-﻿// @vitest-environment node
+// @vitest-environment node
+// Verifies the product workspace project service (moved out of the desktop shell):
+// it is port-driven (directory picker + file system), exposes
+// ProjectPathValidationError, and drives project lifecycle over a real SQLite
+// project repository. Proves project lifecycle is product behavior, not desktop
+// behavior.
 import { describe, expect, it, vi } from 'vitest';
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
 import { ProjectRepository } from '@megumi/coding-agent/persistence/repos/project.repo';
@@ -6,7 +11,7 @@ import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrati
 import {
   ProjectPathValidationError,
   createProjectService,
-} from '@megumi/desktop/main/services/workspace/project.service';
+} from '@megumi/coding-agent/workspace';
 
 function createRepo() {
   const database = createDatabase(':memory:');
@@ -26,15 +31,25 @@ function createFileStat() {
   };
 }
 
-describe('ProjectService', () => {
+describe('product project service', () => {
   it('returns cancelled when the user cancels directory selection', async () => {
     const service = createProjectService({
       repository: createRepo(),
       now: () => '2026-05-19T00:00:00.000Z',
-      chooseDirectory: vi.fn(async () => ({ canceled: true, filePaths: [] })),
+      directoryPicker: { chooseDirectory: vi.fn(async () => ({ canceled: true, filePaths: [] })) },
       fileSystem: {
         stat: vi.fn(),
       },
+    });
+
+    await expect(service.useExistingProject()).resolves.toEqual({ cancelled: true });
+  });
+
+  it('returns cancelled with the default no-op picker (standalone product, no UI shell)', async () => {
+    const service = createProjectService({
+      repository: createRepo(),
+      now: () => '2026-05-19T00:00:00.000Z',
+      fileSystem: { stat: vi.fn() },
     });
 
     await expect(service.useExistingProject()).resolves.toEqual({ cancelled: true });
@@ -51,7 +66,7 @@ describe('ProjectService', () => {
         .fn()
         .mockReturnValueOnce('2026-05-19T00:00:00.000Z')
         .mockReturnValueOnce('2026-05-19T00:00:10.000Z'),
-      chooseDirectory,
+      directoryPicker: { chooseDirectory },
       platform: 'win32',
       fileSystem: {
         stat: vi.fn(async () => createDirectoryStat()),
@@ -73,7 +88,7 @@ describe('ProjectService', () => {
     const service = createProjectService({
       repository: createRepo(),
       now: () => '2026-05-19T00:00:00.000Z',
-      chooseDirectory: vi.fn(async () => ({ canceled: false, filePaths: ['C:/Work/readme.md'] })),
+      directoryPicker: { chooseDirectory: vi.fn(async () => ({ canceled: false, filePaths: ['C:/Work/readme.md'] })) },
       fileSystem: {
         stat: vi.fn(async () => createFileStat()),
       },
@@ -92,7 +107,6 @@ describe('ProjectService', () => {
     const service = createProjectService({
       repository: repo,
       now: () => '2026-05-19T00:00:10.000Z',
-      chooseDirectory: vi.fn(),
       platform: 'win32',
       fileSystem: {
         stat: vi.fn(async () => {
@@ -119,7 +133,6 @@ describe('ProjectService', () => {
     const service = createProjectService({
       repository: repo,
       now: () => '2026-05-19T00:00:10.000Z',
-      chooseDirectory: vi.fn(),
       platform: 'win32',
       fileSystem: {
         stat: vi.fn(async () => createDirectoryStat()),
@@ -145,7 +158,6 @@ describe('ProjectService', () => {
     const service = createProjectService({
       repository: repo,
       now: () => '2026-05-19T00:00:10.000Z',
-      chooseDirectory: vi.fn(),
       platform: 'win32',
       fileSystem: {
         stat: vi.fn(async () => createDirectoryStat()),

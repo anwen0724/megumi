@@ -150,7 +150,7 @@ describe('Command system source guards', () => {
   it('keeps main runtime free of raw slash command parsing', () => {
     expect(offenders([
       'packages/coding-agent/run/session-run-service.ts',
-      'apps/desktop/src/main/services/provider/model-step-provider.service.ts',
+      'packages/coding-agent/run/model-step-provider-service.ts',
       'packages/coding-agent/settings/provider-runtime.ts',
     ], [
       /parseSlashCommand/,

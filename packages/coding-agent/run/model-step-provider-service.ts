@@ -11,7 +11,7 @@ import {
   type ModelStepProviderAdapter,
   type ProviderRuntimeConfig,
 } from '@megumi/agent';
-import { ProviderRuntimeResolutionError } from '@megumi/coding-agent/settings';
+import { ProviderRuntimeResolutionError } from '../settings';
 
 export interface ModelStepRuntimeResolverPort {
   resolveProviderRuntimeConfig(input: {

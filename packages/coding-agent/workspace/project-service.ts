@@ -1,4 +1,9 @@
-﻿import type { ProjectRepository } from '@megumi/coding-agent/persistence/repos/project.repo';
+// Manages Coding Agent project lifecycle (list, open, use-existing, remove) over
+// the product project repository. The directory picker and file system are ports
+// so the product runs standalone (no-op picker) while a UI shell can inject an
+// interactive picker. The default node:fs-backed file system is supplied by the
+// composition layer, keeping this service free of concrete Host privileges.
+import type { ProjectRepository } from '../persistence/repos/project.repo';
 import type {
   ProjectListData,
   ProjectOpenData,
@@ -16,6 +21,10 @@ export interface DirectoryPickerResult {
   filePaths: string[];
 }
 
+export interface DirectoryPickerPort {
+  chooseDirectory(): Promise<DirectoryPickerResult>;
+}
+
 export interface ProjectFileSystem {
   stat(path: string): Promise<{ isDirectory(): boolean }>;
   remove?(path: string): Promise<void> | void;
@@ -23,8 +32,8 @@ export interface ProjectFileSystem {
 
 export interface CreateProjectServiceOptions {
   repository: ProjectRepository;
-  chooseDirectory: () => Promise<DirectoryPickerResult>;
   fileSystem: ProjectFileSystem;
+  directoryPicker?: DirectoryPickerPort;
   now?: () => string;
   platform?: NodePlatform;
 }
@@ -47,9 +56,17 @@ export class ProjectPathValidationError extends Error {
   }
 }
 
+// The product default picker performs no UI interaction and always cancels, so a
+// runtime without a UI shell never blocks on a directory dialog.
+const NO_OP_DIRECTORY_PICKER: DirectoryPickerPort = {
+  chooseDirectory: async () => ({ canceled: true, filePaths: [] }),
+};
+
 export function createProjectService(options: CreateProjectServiceOptions): ProjectService {
   const now = options.now ?? (() => new Date().toISOString());
   const platform = options.platform ?? process.platform;
+  const directoryPicker = options.directoryPicker ?? NO_OP_DIRECTORY_PICKER;
+  const fileSystem = options.fileSystem;
 
   async function refreshProjectStatus(project: ProjectRecord): Promise<ProjectRecord> {
     const status = await getPathStatus(project.repoPath);
@@ -63,7 +80,7 @@ export function createProjectService(options: CreateProjectServiceOptions): Proj
 
   async function getPathStatus(repoPath: string): Promise<ProjectRecord['status']> {
     try {
-      const stats = await options.fileSystem.stat(repoPath);
+      const stats = await fileSystem.stat(repoPath);
       return stats.isDirectory() ? 'available' : 'missing';
     } catch {
       return 'missing';
@@ -74,7 +91,7 @@ export function createProjectService(options: CreateProjectServiceOptions): Proj
     let stats: { isDirectory(): boolean };
 
     try {
-      stats = await options.fileSystem.stat(repoPath);
+      stats = await fileSystem.stat(repoPath);
     } catch {
       throw new ProjectPathValidationError(repoPath, 'missing');
     }
@@ -92,7 +109,7 @@ export function createProjectService(options: CreateProjectServiceOptions): Proj
     },
 
     async useExistingProject() {
-      const result = await options.chooseDirectory();
+      const result = await directoryPicker.chooseDirectory();
 
       if (result.canceled || result.filePaths.length === 0) {
         return { cancelled: true };
@@ -143,4 +160,3 @@ export function createProjectService(options: CreateProjectServiceOptions): Proj
     },
   };
 }
-
