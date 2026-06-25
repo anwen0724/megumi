@@ -44,8 +44,15 @@ function seedOrphanRun(home: string, runId: string, status: 'failed' | 'cancelle
       sessionId: `session-${runId}`, title: 'Old session', workspaceId: project.projectId, workspacePath: home,
       status: 'active', createdAt: '2026-06-23T00:00:00.000Z', updatedAt: '2026-06-23T00:00:00.000Z',
     });
+    const triggerMessageId = `message-user-${runId}`;
+    sessionRepo.saveMessage({
+      messageId: triggerMessageId, sessionId: String(session.sessionId), runId, role: 'user',
+      content: '我爱你', status: 'completed',
+      createdAt: '2026-06-23T00:57:50.000Z', completedAt: '2026-06-23T00:57:50.000Z',
+    });
     sessionRepo.saveRun({
       runId, sessionId: String(session.sessionId), mode: 'default', goal: 'do a thing',
+      triggerMessageId,
       status, createdAt: '2026-06-23T00:57:50.000Z', startedAt: '2026-06-23T00:57:50.000Z',
       completedAt: '2026-06-23T00:57:51.000Z',
       ...(errorJson ? { error: JSON.parse(errorJson) } : {}),
@@ -92,14 +99,18 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
     // First compose triggers recovery startup backfill.
     runtime = composeRuntime(home);
     const after = runtime.sessionRunService.listTimelineMessagesBySession({ projectId, sessionId });
-    expect(after.messages.length).toBe(1);
-    expect(after.messages[0].role).toBe('assistant');
+    // Backfill mirrors a normal turn: the triggering user prompt, then the failure.
+    expect(after.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    const userMessage = after.messages[0];
+    expect(userMessage.role === 'user' && userMessage.blocks.some(
+      (b) => b.kind === 'user_text' && b.text === '我爱你',
+    )).toBe(true);
     runtime.dispose();
 
     // Second compose must NOT duplicate (idempotent via timeline_run_commits row).
     runtime = composeRuntime(home);
     const again = runtime.sessionRunService.listTimelineMessagesBySession({ projectId, sessionId });
-    expect(again.messages.length).toBe(1);
+    expect(again.messages.length).toBe(2);
   }, 30000);
 
   it('commits a cancellation timeline message for an orphan cancelled run', async () => {
@@ -108,7 +119,6 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
 
     runtime = composeRuntime(home);
     const after = runtime.sessionRunService.listTimelineMessagesBySession({ projectId, sessionId });
-    expect(after.messages.length).toBe(1);
-    expect(after.messages[0].role).toBe('assistant');
+    expect(after.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
   }, 30000);
 });

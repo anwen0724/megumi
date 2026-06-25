@@ -49,6 +49,11 @@ export interface RunNeedingTimelineBackfill {
   errorJson: string | null;
   createdAt: string;
   completedAt: string | null;
+  // The user message that triggered the run, so the backfilled timeline includes the
+  // prompt (turn_order 0) above the failure/cancellation bubble — matching a normal turn.
+  triggerMessageId: string | null;
+  triggerMessageContent: string | null;
+  triggerMessageCreatedAt: string | null;
 }
 
 interface RunNeedingTimelineBackfillRow {
@@ -60,6 +65,9 @@ interface RunNeedingTimelineBackfillRow {
   error_json: string | null;
   created_at: string;
   completed_at: string | null;
+  trigger_message_id: string | null;
+  trigger_message_content: string | null;
+  trigger_message_created_at: string | null;
 }
 
 const RECOVERABLE_RUN_STATUSES = [
@@ -333,9 +341,15 @@ export class RecoveryRepository {
         runs.error_json,
         runs.created_at,
         runs.completed_at,
-        latest_marker.interrupted_marker_id AS interrupted_marker_id
+        latest_marker.interrupted_marker_id AS interrupted_marker_id,
+        trigger_message.message_id AS trigger_message_id,
+        trigger_message.content AS trigger_message_content,
+        trigger_message.created_at AS trigger_message_created_at
       FROM runs
       INNER JOIN sessions ON sessions.session_id = runs.session_id
+      LEFT JOIN session_messages AS trigger_message
+        ON trigger_message.message_id = runs.trigger_message_id
+        AND trigger_message.role = 'user'
       LEFT JOIN session_interrupted_run_markers AS latest_marker
         ON latest_marker.interrupted_marker_id = (
           SELECT interrupted_marker_id
@@ -364,6 +378,9 @@ export class RecoveryRepository {
         errorJson: row.error_json,
         createdAt: row.created_at,
         completedAt: row.completed_at,
+        triggerMessageId: row.trigger_message_id,
+        triggerMessageContent: row.trigger_message_content,
+        triggerMessageCreatedAt: row.trigger_message_created_at,
       }));
   }
 

@@ -15,11 +15,19 @@ function setup() {
   return { db, project, sessionRepo, recovery: new RecoveryRepository(db), timeline: new TimelineMessageRepository(db) };
 }
 
-function saveRun(sessionRepo: SessionRunRepository, runId: string, status: string, createdAt = '2026-06-24T00:00:00.000Z') {
+function saveRun(sessionRepo: SessionRunRepository, runId: string, status: string, createdAt = '2026-06-24T00:00:00.000Z', triggerMessageId?: string) {
   sessionRepo.saveRun({
     runId, sessionId: 'session-1', mode: 'default', goal: 'g',
     status: status as never, createdAt, startedAt: createdAt,
+    ...(triggerMessageId ? { triggerMessageId } : {}),
     ...(status === 'failed' || status === 'cancelled' ? { completedAt: '2026-06-24T00:00:01.000Z' } : {}),
+  });
+}
+
+function saveUserMessage(sessionRepo: SessionRunRepository, runId: string, messageId: string, content: string) {
+  sessionRepo.saveMessage({
+    messageId, sessionId: 'session-1', runId, role: 'user', content,
+    status: 'completed', createdAt: '2026-06-24T00:00:00.000Z', completedAt: '2026-06-24T00:00:00.000Z',
   });
 }
 
@@ -35,6 +43,25 @@ describe('listRunsNeedingTimelineBackfill', () => {
     expect(failed?.projectId).toBe(project.projectId);
     expect(failed?.reason).toBe('failed');
     expect(result.find((r) => r.runId === 'run-cancelled')?.reason).toBe('cancelled');
+  });
+
+  it('includes the triggering user message content for the prompt above the failure', () => {
+    const { sessionRepo, recovery } = setup();
+    saveUserMessage(sessionRepo, 'run-with-prompt', 'message-user-1', '我爱你');
+    saveRun(sessionRepo, 'run-with-prompt', 'failed', '2026-06-24T00:00:00.000Z', 'message-user-1');
+
+    const result = recovery.listRunsNeedingTimelineBackfill();
+    const run = result.find((r) => r.runId === 'run-with-prompt');
+    expect(run?.triggerMessageId).toBe('message-user-1');
+    expect(run?.triggerMessageContent).toBe('我爱你');
+  });
+
+  it('leaves trigger message fields null when the run has no trigger message', () => {
+    const { sessionRepo, recovery } = setup();
+    saveRun(sessionRepo, 'run-no-trigger', 'failed');
+    const run = recovery.listRunsNeedingTimelineBackfill().find((r) => r.runId === 'run-no-trigger');
+    expect(run?.triggerMessageId).toBeNull();
+    expect(run?.triggerMessageContent).toBeNull();
   });
 
   it('excludes runs that already have a committed timeline', () => {

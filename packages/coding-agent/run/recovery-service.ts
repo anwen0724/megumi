@@ -208,8 +208,11 @@ function backfillTerminalRunTimelines(
         continue;
       }
       const committedAt = run.completedAt ?? run.createdAt;
-      const event = createBackfillTerminalEvent(run, committedAt);
-      const messages = reduceChatStreamEvent([], event);
+      const events = createBackfillEvents(run, committedAt);
+      const messages = events.reduce<TimelineMessage[]>(
+        (acc, event) => reduceChatStreamEvent(acc, event),
+        [],
+      );
       backfill.commitRunTimeline({
         projectId: run.projectId,
         sessionId: run.sessionId,
@@ -227,9 +230,42 @@ function backfillTerminalRunTimelines(
   }
 }
 
+// Builds the chat-stream events that reduce into the backfilled timeline: the
+// triggering user prompt (when known) followed by the terminal failure/cancellation,
+// mirroring a normal turn's user + assistant pair.
+function createBackfillEvents(
+  run: RunNeedingTimelineBackfill,
+  committedAt: string,
+): ChatStreamEvent[] {
+  const streamId = `chat-stream:${run.runId}:recovery-backfill`;
+  const events: ChatStreamEvent[] = [];
+
+  if (run.triggerMessageId && run.triggerMessageContent !== null) {
+    events.push(ChatStreamEventSchema.parse({
+      eventId: `recovery-backfill:${run.runId}:user`,
+      projectId: run.projectId,
+      sessionId: run.sessionId,
+      runId: run.runId,
+      streamId,
+      streamKind: 'main',
+      seq: 1,
+      createdAt: run.triggerMessageCreatedAt ?? run.createdAt,
+      eventType: 'user.message.committed',
+      clientMessageId: run.triggerMessageId,
+      messageId: run.triggerMessageId,
+      text: run.triggerMessageContent,
+    }));
+  }
+
+  events.push(createBackfillTerminalEvent(run, committedAt, streamId, events.length + 1));
+  return events;
+}
+
 function createBackfillTerminalEvent(
   run: RunNeedingTimelineBackfill,
   committedAt: string,
+  streamId: string,
+  seq: number,
 ): ChatStreamEvent {
   const base = {
     eventId: `recovery-backfill:${run.runId}`,
@@ -237,9 +273,9 @@ function createBackfillTerminalEvent(
     sessionId: run.sessionId,
     runId: run.runId,
     // streamId must differ from runId per ChatStreamEvent schema.
-    streamId: `chat-stream:${run.runId}:recovery-backfill`,
+    streamId,
     streamKind: 'main' as const,
-    seq: 1,
+    seq,
     createdAt: committedAt,
   };
 
