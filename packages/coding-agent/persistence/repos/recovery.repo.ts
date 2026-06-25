@@ -40,6 +40,28 @@ interface InterruptibleRunRow {
   status: SessionInterruptedRunPreviousStatus;
 }
 
+export interface RunNeedingTimelineBackfill {
+  runId: string;
+  sessionId: string;
+  projectId: string;
+  status: RecoverableRunSummary['status'];
+  reason: RecoverableRunReason;
+  errorJson: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+interface RunNeedingTimelineBackfillRow {
+  run_id: string;
+  session_id: string;
+  project_id: string | null;
+  status: RecoverableRunSummary['status'];
+  interrupted_marker_id: string | null;
+  error_json: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
 const RECOVERABLE_RUN_STATUSES = [
   'waiting_for_approval',
   'paused',
@@ -293,6 +315,55 @@ export class RecoveryRepository {
         ...(row.title ? { title: row.title } : {}),
         ...(row.goal ? { preview: row.goal.slice(0, 240) } : {}),
         ...(row.interrupted_marker_id ? { metadata: { interruptedMarkerId: row.interrupted_marker_id } } : {}),
+      }));
+  }
+
+  // Runs that reached a recoverable terminal state (failed/cancelled, or interrupted
+  // on a prior restart) but never committed any timeline history — so they would
+  // otherwise show only as an anchorless recovery action. These get a backfilled
+  // failure/cancellation timeline message at recovery startup. A run is excluded once
+  // it has a timeline_run_commits row, making the backfill idempotent.
+  listRunsNeedingTimelineBackfill(): RunNeedingTimelineBackfill[] {
+    return (this.database.prepare(`
+      SELECT
+        runs.run_id,
+        runs.session_id,
+        sessions.workspace_id AS project_id,
+        runs.status,
+        runs.error_json,
+        runs.created_at,
+        runs.completed_at,
+        latest_marker.interrupted_marker_id AS interrupted_marker_id
+      FROM runs
+      INNER JOIN sessions ON sessions.session_id = runs.session_id
+      LEFT JOIN session_interrupted_run_markers AS latest_marker
+        ON latest_marker.interrupted_marker_id = (
+          SELECT interrupted_marker_id
+          FROM session_interrupted_run_markers
+          WHERE run_id = runs.run_id
+          ORDER BY marked_at DESC, interrupted_marker_id DESC
+          LIMIT 1
+        )
+      WHERE NOT EXISTS (
+          SELECT 1 FROM timeline_run_commits WHERE timeline_run_commits.run_id = runs.run_id
+        )
+        AND sessions.workspace_id IS NOT NULL
+        AND (
+          runs.status IN ('failed', 'cancelled')
+          OR latest_marker.interrupted_marker_id IS NOT NULL
+        )
+      ORDER BY runs.created_at ASC, runs.run_id ASC
+    `).all() as RunNeedingTimelineBackfillRow[])
+      .filter((row): row is RunNeedingTimelineBackfillRow & { project_id: string } => row.project_id !== null)
+      .map((row) => ({
+        runId: row.run_id,
+        sessionId: row.session_id,
+        projectId: row.project_id,
+        status: row.status,
+        reason: recoverableReasonFor(row.status, row.interrupted_marker_id),
+        errorJson: row.error_json,
+        createdAt: row.created_at,
+        completedAt: row.completed_at,
       }));
   }
 
