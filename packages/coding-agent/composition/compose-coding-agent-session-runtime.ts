@@ -1,6 +1,7 @@
 // Composes Coding Agent session/run product services and their product collaborators.
 import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
 import { RunContextService } from '../resources/run-context-service';
+import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import type { RuntimeLogger } from '../ports';
 import {
   SessionRunService,
@@ -48,6 +49,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
   const runContextService = new RunContextService({
     contextRepository: options.runContextRepository,
+    workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
   });
   const planArtifactCompatibility = new PlanArtifactCompatibilityService({
     repository: options.artifactRepository,

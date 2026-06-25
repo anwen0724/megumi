@@ -149,10 +149,6 @@ const mocks = vi.hoisted(() => {
     ) {
       this.options = options;
     }),
-    createDefaultRunContextService: vi.fn(() => ({
-      getBaselineContext: vi.fn(),
-      listWorkspaceSourcesByRun: vi.fn(),
-    })),
     createAppSettingsService: vi.fn(() => ({
       getResolvedSettings: vi.fn(() => ({
         theme: 'midnight-blue',
@@ -437,10 +433,6 @@ vi.mock('@megumi/coding-agent/settings', () => ({
   ProviderRuntimeService: mocks.ProviderRuntimeService,
 }));
 
-vi.mock('@megumi/desktop/main/services/runtime/run-context.service', () => ({
-  createDefaultRunContextService: mocks.createDefaultRunContextService,
-}));
-
 vi.mock('@megumi/desktop/main/services/settings/app-settings.service', () => ({
   createAppSettingsService: mocks.createAppSettingsService,
 }));
@@ -522,7 +514,6 @@ describe('main runtime logger composition', () => {
     mocks.createModelStepProviderService.mockClear();
     mocks.ProviderSettingsService.mockClear();
     mocks.ProviderRuntimeService.mockClear();
-    mocks.createDefaultRunContextService.mockClear();
     mocks.createAppSettingsService.mockClear();
     mocks.ToolService.mockClear();
     mocks.createDefaultToolService.mockClear();

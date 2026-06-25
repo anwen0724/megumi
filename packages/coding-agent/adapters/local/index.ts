@@ -8,3 +8,4 @@ export * from './memory/memory-diagnostic-writer.service';
 export * from './memory/memory-markdown-sync.service';
 export * from './memory/memory-runtime-file-system';
 export * from './memory/memory-runtime-paths';
+export * from './run-context/workspace-source-provider';
