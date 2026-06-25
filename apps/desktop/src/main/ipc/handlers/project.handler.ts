@@ -18,8 +18,8 @@ import {
   ProjectRemoveRequestSchema,
   ProjectUseExistingRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ProjectService } from '../../services/workspace/project.service';
-import { ProjectPathValidationError } from '../../services/workspace/project.service';
+import type { ProjectService } from '@megumi/coding-agent/workspace';
+import { ProjectPathValidationError } from '@megumi/coding-agent/workspace';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';

@@ -450,6 +450,7 @@ vi.mock('@megumi/coding-agent/workspace', () => ({
   WorkspaceRestoreService: mocks.WorkspaceRestoreService,
   createWorkspaceChangeFooterProjectorService: vi.fn(() => ({ projectRunFooter: vi.fn() })),
   isWorkspaceChangeFooterProjectorPort: vi.fn(() => false),
+  createProjectService: mocks.createProjectService,
 }));
 
 vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () => ({
@@ -483,10 +484,6 @@ vi.mock('@megumi/coding-agent/memory', () => ({
   MemoryRecallRuntimeService: mocks.MemoryRecallRuntimeService,
   MemoryRuntimeCaptureService: mocks.MemoryRuntimeCaptureService,
   MemoryExtractionModelClientService: mocks.MemoryExtractionModelClientService,
-}));
-
-vi.mock('@megumi/desktop/main/services/workspace/project.service', () => ({
-  createProjectService: mocks.createProjectService,
 }));
 
 vi.mock('electron', () => ({
@@ -602,7 +599,9 @@ describe('main runtime logger composition', () => {
     expect(runtimeOptions.memorySettingsProvider.isMemoryEnabled()).toBe(false);
     expect(mocks.createProjectService).toHaveBeenCalledWith(expect.objectContaining({
       repository: expect.any(Object),
-      chooseDirectory: expect.any(Function),
+      directoryPicker: expect.objectContaining({
+        chooseDirectory: expect.any(Function),
+      }),
       fileSystem: expect.objectContaining({
         stat: expect.any(Function),
       }),

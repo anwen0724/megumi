@@ -14,6 +14,12 @@ import { TimelineHistoryCommitProjectorService } from '../run/timeline-history-c
 import type { MemorySettingsProvider } from './compose-coding-agent-memory';
 import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
 import { ProviderRuntimeService, ProviderSettingsService, type ProviderSettingsAppSettingsPort } from '../settings';
+import {
+  createProjectService,
+  type DirectoryPickerPort,
+  type ProjectFileSystem,
+} from '../workspace';
+import { createLocalProjectFileSystem } from '../adapters/local/workspace/project-file-system';
 
 export interface ComposeCodingAgentRuntimeOptions {
   homePaths: CodingAgentHomePaths;
@@ -26,6 +32,10 @@ export interface ComposeCodingAgentRuntimeOptions {
   permissionSettingsProvider: PermissionSettingsProvider;
   chatStreamEventSink?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['chatStreamEventSink'];
   workspaceChangeFooterProjector?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['workspaceChangeFooterProjector'];
+  // Optional UI-shell hooks for project lifecycle. Omitted in standalone/non-UI
+  // runs: the picker defaults to a no-op (cancels) and the file system to node fs.
+  directoryPicker?: DirectoryPickerPort;
+  projectFileSystem?: ProjectFileSystem;
 }
 
 export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentProductRuntime {
@@ -97,6 +107,11 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     workspaceChangeRepository: persistence.workspaceChangeRepository,
     sessionRunService: sessionRuntime.sessionRunService,
   });
+  const projectService = createProjectService({
+    repository: persistence.projectRepository,
+    fileSystem: options.projectFileSystem ?? createLocalProjectFileSystem(),
+    ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
+  });
 
   return {
     sessionRunService: sessionRuntime.sessionRunService,
@@ -106,6 +121,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     memoryService: memory.memoryService,
     runContextService: sessionRuntime.runContextService,
     providerSettingsService,
+    projectService,
     dispose: () => persistence.database.close(),
   };
 }

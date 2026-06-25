@@ -6,6 +6,7 @@ import type { ArtifactService } from '../artifacts';
 import type { MemoryService } from '../memory';
 import type { RunContextService } from '../resources';
 import type { ProviderSettingsService } from '../settings';
+import type { ProjectService } from '../workspace';
 
 export interface CodingAgentProductRuntime {
   sessionRunService: SessionRunService;
@@ -15,5 +16,6 @@ export interface CodingAgentProductRuntime {
   memoryService: MemoryService;
   runContextService: RunContextService;
   providerSettingsService: ProviderSettingsService;
+  projectService: ProjectService;
   dispose(): void;
 }

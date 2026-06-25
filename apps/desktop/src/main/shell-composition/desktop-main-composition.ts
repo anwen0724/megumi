@@ -3,13 +3,13 @@ import { initializeElectronMegumiHomeSync } from '../services/workspace/megumi-h
 import { createRuntimeJsonlLoggerForMegumiHome } from '../services/agent-run/runtime-logger.service';
 import { createPermissionSettingsService } from '../services/security/permission-settings.service';
 import { createAppSettingsService } from '../services/settings/app-settings.service';
-import { createProjectService } from '../services/workspace/project.service';
 import { createWorkspaceFilesService } from '../services/workspace/workspace-files.service';
 import {
   composeCodingAgentRuntime,
   type CodingAgentHomePaths,
   composeCodingAgentPersistence,
 } from '@megumi/coding-agent/composition';
+import { createProjectService } from '@megumi/coding-agent/workspace';
 import fs from 'fs-extra';
 import type { ModelStepCompletionResult } from '@megumi/agent';
 import type { SessionRunService } from '@megumi/coding-agent/run';
@@ -53,7 +53,7 @@ export function composeDesktopMain() {
 
   const projectService = createProjectService({
     repository: codingAgentPersistence.projectRepository,
-    chooseDirectory: () => electronDialogHost.chooseDirectory(),
+    directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
     fileSystem: fs,
   });
   const workspaceFilesService = createWorkspaceFilesService({
