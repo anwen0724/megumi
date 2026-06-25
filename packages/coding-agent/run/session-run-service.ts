@@ -28,7 +28,7 @@ import {
   type LoadInstructionSourcesInput,
   type ModelInputMemoryRecallSource,
   type SessionCompactionOrchestrationResult,
-} from '@megumi/coding-agent/context';
+} from '@megumi/coding-agent/run/context';
 import {
   SessionContextInputService,
   type BuildSessionContextInputFromRepositoryInput,
@@ -40,11 +40,11 @@ import {
 } from '@megumi/coding-agent/run';
 import {
   BUILT_IN_INPUT_COMMAND_REGISTRY,
-} from '@megumi/command';
+} from '@megumi/coding-agent/input/command';
 import {
   parseRawInput,
   type ParsedInput,
-} from '@megumi/input';
+} from '@megumi/coding-agent/input';
 import {
   createRunCompletedEvent,
   createRunFailedEvent,
@@ -136,7 +136,7 @@ import {
   normalizeSessionMessageInputPreprocessing,
   type NormalizedSessionMessageInputPreprocessing,
 } from './runtime-input';
-import { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
+import { PermissionSnapshotService } from '@megumi/coding-agent/run/permissions';
 import {
   ToolRegistrySnapshotService,
   type RunToolRegistrySnapshotBuildInput,

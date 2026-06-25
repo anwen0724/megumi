@@ -8,8 +8,6 @@ const PRODUCTION_ROOTS = [
   'packages/shared',
   'packages/ai',
   'packages/agent',
-  'packages/input',
-  'packages/command',
   'packages/coding-agent',
   'apps/desktop/src/main',
   'apps/desktop/src/preload',
@@ -97,7 +95,7 @@ describe('agent action permission tools v1 final source guards', () => {
 
   it('keeps first-version policy decisions to allow ask deny only', () => {
     const toolContracts = read('packages/shared/tool/contracts.ts');
-    const securityPolicy = read('packages/coding-agent/permissions/tool-policy.ts');
+    const securityPolicy = read('packages/coding-agent/run/permissions/tool-policy.ts');
 
     expect(toolContracts).toContain("['allow', 'ask', 'deny']");
     expect(toolContracts).not.toContain('require_sandbox');
@@ -133,13 +131,12 @@ describe('agent action permission tools v1 final source guards', () => {
       ...collectTsFiles('packages/shared'),
       ...collectTsFiles('packages/ai'),
       ...collectTsFiles('packages/agent'),
-      ...collectTsFiles('packages/input'),
-      ...collectTsFiles('packages/command'),
       ...collectTsFiles('packages/coding-agent'),
     ]
       .filter((file) => {
         const relativePath = projectPath(file);
         return !relativePath.startsWith('packages/coding-agent/adapters/local/')
+          && !relativePath.startsWith('packages/coding-agent/tools/execution/')
           && !relativePath.startsWith('packages/coding-agent/persistence/')
           && !relativePath.startsWith('packages/coding-agent/composition/')
           && relativePath !== 'packages/coding-agent/artifacts/artifact-content-store.ts';

@@ -42,10 +42,11 @@ describe('built-in tools and host adapters source guards', () => {
     expect(definitions).not.toContain("'workspace_read_file'");
   });
 
-  it('keeps real filesystem and shell execution out of coding-agent tools', () => {
+  it('keeps real filesystem and shell execution isolated to coding-agent tool execution', () => {
     const source = [
       ...listSourceFiles('packages/coding-agent/tools'),
     ]
+      .filter((file) => !file.startsWith('packages/coding-agent/tools/execution/'))
       .map(read)
       .join('\n');
 
@@ -92,9 +93,9 @@ describe('built-in tools and host adapters source guards', () => {
     const combined = [
       ...listSourceFiles('packages/coding-agent/tools/built-ins'),
       'packages/coding-agent/tools/tool-orchestrator.ts',
-      'packages/coding-agent/adapters/local/tools/built-in-tool-source-executor.ts',
-      'packages/coding-agent/adapters/local/tools/tool-execution-router.ts',
-      ...listSourceFiles('packages/coding-agent/adapters/local/tools/tool-executors'),
+      'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
+      'packages/coding-agent/tools/execution/tool-execution-router.ts',
+      ...listSourceFiles('packages/coding-agent/tools/execution/tool-executors'),
     ].map(read).join('\n');
 
     expect(combined).not.toContain('bypassPermissions');

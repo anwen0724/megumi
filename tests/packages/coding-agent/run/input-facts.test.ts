@@ -1,10 +1,10 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   createCodingAgentRunInputFacts,
   createRuntimeFactsForRunInput,
 } from '@megumi/coding-agent/run';
-import type { ParsedInput } from '@megumi/input';
+import type { ParsedInput } from '@megumi/coding-agent/input';
 
 describe('coding-agent run input facts', () => {
   it('maps ParsedInput command facts into Coding Agent run facts', () => {

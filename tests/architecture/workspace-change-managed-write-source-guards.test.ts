@@ -19,7 +19,7 @@ describe('workspace change managed write source guards', () => {
     ];
     const roots = [
       'apps/desktop/src/renderer',
-      'packages/coding-agent/context',
+      'packages/coding-agent/run/context',
       'packages/ai',
     ];
 
@@ -48,10 +48,10 @@ describe('workspace change managed write source guards', () => {
 
   it('keeps run_command executor path away from workspace restore record writes', () => {
     const files = [
-      'packages/coding-agent/adapters/local/tools/tool-executors/run-command.executor.ts',
-      'packages/coding-agent/adapters/local/tools/built-in-tool-source-executor.ts',
-      'packages/coding-agent/adapters/local/tools/tool-execution-router.ts',
-      'packages/coding-agent/adapters/local/tools/tool-call-handler.service.ts',
+      'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts',
+      'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
+      'packages/coding-agent/tools/execution/tool-execution-router.ts',
+      'packages/coding-agent/tools/execution/tool-call-handler.service.ts',
     ];
     const forbidden = [
       'saveRestoreRequest',

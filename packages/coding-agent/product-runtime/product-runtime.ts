@@ -6,7 +6,7 @@ import type { RecoveryService } from '../run/recovery-service';
 import type { ToolService } from '../tools/tool-service-port';
 import type { ArtifactServicePort } from '../artifacts';
 import type { MemoryService } from '../memory';
-import type { RunContextServicePort } from '../resources';
+import type { RunContextServicePort } from '../run/resources';
 import type { ProviderSettingsPort } from '../settings';
 import type { ProjectService } from '../workspace';
 

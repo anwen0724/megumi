@@ -8,11 +8,11 @@ import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/ses
 import { SessionActivePathRepository } from '@megumi/coding-agent/persistence/repos/session-active-path.repo';
 import { PermissionSnapshotRepository } from '@megumi/coding-agent/persistence/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
-import { createExternalTestToolSourceExecutor } from '@megumi/coding-agent/adapters/local/tools/external-test-tool-source-executor';
+import { createExternalTestToolSourceExecutor } from '@megumi/coding-agent/tools/execution/external-test-tool-source-executor';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-import { createToolCallHandlerService } from '@megumi/coding-agent/adapters/local/tools/tool-call-handler.service';
-import { createToolExecutionRouter } from '@megumi/coding-agent/adapters/local/tools/tool-execution-router';
-import type { ToolSourceExecutor } from '@megumi/coding-agent/adapters/local/tools/tool-execution-router';
+import { createToolCallHandlerService } from '@megumi/coding-agent/tools/execution/tool-call-handler.service';
+import { createToolExecutionRouter } from '@megumi/coding-agent/tools/execution/tool-execution-router';
+import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/tool-execution-router';
 import { TimelineMessageRepository } from '@megumi/coding-agent/persistence/repos/timeline-message.repo';
 import {
   SessionRunService,
@@ -25,8 +25,8 @@ import type {
   BuildModelStepInputInput,
   BuildModelStepInputResult,
   SessionCompactionOrchestrationResult,
-} from '@megumi/coding-agent/context';
-import { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
+} from '@megumi/coding-agent/run/context';
+import { PermissionSnapshotService } from '@megumi/coding-agent/run/permissions';
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelInputContext, ModelStepRuntimeRequest, SessionInstructionSourceSnapshot } from '@megumi/shared/model';
 import type { ModelInputContextSourceKind } from '@megumi/shared/model';

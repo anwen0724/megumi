@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -35,9 +35,9 @@ function sourceUnder(relativeDirectory: string): string {
 describe('coding-agent package boundary', () => {
   it('exists as the Megumi Coding Agent product-core package', () => {
     expect(existsSync(join(root, 'packages/coding-agent/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/model-step-input-context.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/model-step-input-build.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/session-compaction-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/model-step-input-context.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/model-step-input-build.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/session-compaction-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
@@ -48,15 +48,15 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/adapters/local/tools/tool-execution-router.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/runtime-logger.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-registry-snapshot.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/registry.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/built-ins/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-policy.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-execution-decision.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/permissions/project-boundary-policy.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/permissions/tool-policy.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/permissions/tool-execution-decision.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/permissions/project-boundary-policy.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-recall-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-runtime-capture.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-management-service.ts'))).toBe(true);
@@ -66,8 +66,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/provider-settings.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/provider-runtime.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/instructions/agent-instruction-source.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/resources/run-context-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/instructions/agent-instruction-source.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/resources/run-context-service.ts'))).toBe(true);
   });
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
@@ -103,8 +103,8 @@ describe('coding-agent package boundary', () => {
     const artifacts = sourceUnder('packages/coding-agent/artifacts');
     const workspace = sourceUnder('packages/coding-agent/workspace');
     const settings = sourceUnder('packages/coding-agent/settings');
-    const instructions = sourceUnder('packages/coding-agent/instructions');
-    const resources = sourceUnder('packages/coding-agent/resources');
+    const instructions = sourceUnder('packages/coding-agent/run/instructions');
+    const resources = sourceUnder('packages/coding-agent/run/resources');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(memory).toContain('class MemoryRecallRuntimeService');
@@ -134,7 +134,7 @@ describe('coding-agent package boundary', () => {
 
   it('keeps tool orchestration and permission policy in coding-agent instead of desktop services', () => {
     const tools = sourceUnder('packages/coding-agent/tools');
-    const permissions = sourceUnder('packages/coding-agent/permissions');
+    const permissions = sourceUnder('packages/coding-agent/run/permissions');
     const desktopToolServices = sourceUnder('apps/desktop/src/main/services/tool');
 
     expect(tools).toContain('createToolOrchestratorService');

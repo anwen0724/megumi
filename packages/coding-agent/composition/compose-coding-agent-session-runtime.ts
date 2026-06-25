@@ -1,6 +1,6 @@
 // Composes Coding Agent session/run product services and their product collaborators.
-import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
-import { RunContextService } from '../resources/run-context-service';
+import { PermissionSnapshotService } from '../run/permissions/permission-snapshot-service';
+import { RunContextService } from '../run/resources/run-context-service';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import type { RuntimeLogger } from '../product-runtime';
 import {

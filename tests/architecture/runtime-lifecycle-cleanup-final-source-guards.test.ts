@@ -64,7 +64,7 @@ describe('runtime lifecycle cleanup final source guards', () => {
   });
 
   it('keeps RunContext out of coding-agent context and final budget fields out of RunContext', () => {
-    const contextManagement = read('packages/coding-agent/context/model-step-input-context.ts');
+    const contextManagement = read('packages/coding-agent/run/context/model-step-input-context.ts');
     const runContext = read('packages/shared/run/context-contracts.ts');
 
     expect(contextManagement).not.toContain('@megumi/shared/run');

@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { buildModelInputContext } from '@megumi/coding-agent/context';
+import { buildModelInputContext } from '@megumi/coding-agent/run/context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import { createModelStepProviderAdapter } from '@megumi/agent';

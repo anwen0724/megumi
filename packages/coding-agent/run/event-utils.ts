@@ -1,6 +1,6 @@
 // Provides run-stream event utilities that are platform-independent and safe for package use.
 import type { RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
-import type { BuildModelStepInputFailure } from '../context';
+import type { BuildModelStepInputFailure } from './context';
 
 const TEXT_DELTA_FLUSH_DELAY_MS = 50;
 const TEXT_DELTA_MAX_CHARS = 512;

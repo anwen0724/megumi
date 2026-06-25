@@ -50,8 +50,8 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
     expect(existsSync(join(root, 'packages/coding-agent/persistence/schema/migrations.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/tool.repo.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/adapters/local/tools/tool-execution-router.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/adapters/local/tools/tool-executors/run-command.executor.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts'))).toBe(true);
   });
 
   it('removes desktop-owned product persistence and local coding tool execution', () => {

@@ -124,7 +124,7 @@ describe('package dependency boundaries', () => {
     expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });
 
-  it('keeps packages/coding-agent tools and permissions independent from legacy tools/security packages', () => {
+  it('keeps packages/coding-agent tools and run permissions independent from legacy tools/security packages', () => {
     expect(
       findForbiddenReferences('packages/coding-agent/tools', [
         /@megumi\/tools(\/|['"]|$)/,
@@ -132,35 +132,24 @@ describe('package dependency boundaries', () => {
       ]),
     ).toEqual([]);
     expect(
-      findForbiddenReferences('packages/coding-agent/permissions', [
+      findForbiddenReferences('packages/coding-agent/run/permissions', [
         /@megumi\/tools(\/|['"]|$)/,
         /@megumi\/security(\/|['"]|$)/,
       ]),
     ).toEqual([]);
   });
 
-  it('keeps packages/command independent from input, agent, coding-agent, desktop, tools, db, and Electron', () => {
-    expect(
-      findForbiddenReferences('packages/command', [
-        /@megumi\/input(\/|['"]|$)/,
-        /@megumi\/agent(\/|['"]|$)/,
-        /@megumi\/coding-agent(\/|['"]|$)/,
-        /@megumi\/tools(\/|['"]|$)/,
-        /@megumi\/db(\/|['"]|$)/,
-        /from ['"]electron['"]/,
-        /apps\/desktop/,
-        /child_process/,
-        /\bexecFile\b/,
-        /\bspawn\b/,
-      ]),
-    ).toEqual([]);
+  it('keeps input and command inside the Coding Agent product package', () => {
+    expect(fs.existsSync(path.join(root, 'packages/input'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/command'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/input/index.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/input/command/index.ts'))).toBe(true);
   });
 
-  it('keeps packages/input as input facts plus optional command handoff only', () => {
+  it('keeps coding-agent input free of agent runtime, desktop, tools, db, and Electron concerns', () => {
     expect(
-      findForbiddenReferences('packages/input', [
+      findForbiddenReferences('packages/coding-agent/input', [
         /@megumi\/agent(\/|['"]|$)/,
-        /@megumi\/coding-agent(\/|['"]|$)/,
         /@megumi\/tools(\/|['"]|$)/,
         /@megumi\/db(\/|['"]|$)/,
         /from ['"]electron['"]/,
@@ -168,6 +157,21 @@ describe('package dependency boundaries', () => {
         /\bToolCall\b/,
         /\bPermissionDecision\b/,
         /\bSessionRepository\b/,
+      ]),
+    ).toEqual([]);
+  });
+
+  it('keeps coding-agent command input free of runtime, desktop, tools, db, shell execution, and Electron concerns', () => {
+    expect(
+      findForbiddenReferences('packages/coding-agent/input/command', [
+        /@megumi\/agent(\/|['"]|$)/,
+        /@megumi\/tools(\/|['"]|$)/,
+        /@megumi\/db(\/|['"]|$)/,
+        /from ['"]electron['"]/,
+        /apps\/desktop/,
+        /child_process/,
+        /\bexecFile\b/,
+        /\bspawn\b/,
       ]),
     ).toEqual([]);
   });
@@ -180,8 +184,12 @@ describe('package dependency boundaries', () => {
       'packages/memory',
       'packages/tools',
       'packages/security',
+      'packages/input',
+      'packages/command',
       'tests/packages/tools',
       'tests/packages/security',
+      'tests/packages/input',
+      'tests/packages/command',
     ];
 
     const existing = removedPackageRoots.filter((directory) =>
@@ -242,7 +250,7 @@ describe('package dependency boundaries', () => {
     const legacyFactoryName = `createProjectTool${'Executor'}`;
     const legacyModulePath = `project-tool-${'executor.service'}`;
 
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/adapters/local/tools', legacyWrapperFileName))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/tools/execution', legacyWrapperFileName))).toBe(false);
 
     const source = [
       ...walkSourceFiles(path.join(root, 'apps')),
@@ -258,7 +266,7 @@ describe('package dependency boundaries', () => {
   });
 
   it('does not add non-goal source executors to the desktop tool services', () => {
-    const source = walkSourceFiles(path.join(root, 'packages/coding-agent/adapters/local/tools'))
+    const source = walkSourceFiles(path.join(root, 'packages/coding-agent/tools/execution'))
       .map((file) => fs.readFileSync(file, 'utf8'))
       .join('\n');
 
@@ -274,11 +282,11 @@ describe('package dependency boundaries', () => {
 
   it('keeps 19.02 tool handling sequential without batch orchestration', () => {
     const handler = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/adapters/local/tools/tool-call-handler.service.ts'),
+      path.join(root, 'packages/coding-agent/tools/execution/tool-call-handler.service.ts'),
       'utf8',
     );
     const router = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/adapters/local/tools/tool-execution-router.ts'),
+      path.join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'),
       'utf8',
     );
 
@@ -291,7 +299,7 @@ describe('package dependency boundaries', () => {
 
   it('keeps structured output out of 19.02 tool registry runtime', () => {
     const source = [
-      ...walkSourceFiles(path.join(root, 'packages/coding-agent/adapters/local/tools')),
+      ...walkSourceFiles(path.join(root, 'packages/coding-agent/tools/execution')),
 
       ...walkSourceFiles(path.join(root, 'packages/coding-agent/tools')),
     ]

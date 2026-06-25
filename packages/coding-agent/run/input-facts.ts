@@ -1,6 +1,6 @@
-// Converts ParsedInput facts into Coding Agent run facts without parsing input or executing commands.
+﻿// Converts ParsedInput facts into Coding Agent run facts without parsing input or executing commands.
 import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
-import type { ParsedInput, ParsedInputFact } from '@megumi/input';
+import type { ParsedInput, ParsedInputFact } from '@megumi/coding-agent/input';
 
 export type CodingAgentRunInputFact =
   | {

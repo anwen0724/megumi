@@ -1,10 +1,10 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   CodingAgentRunOrchestrator,
   type CodingAgentRunOrchestratorOptions,
 } from '@megumi/coding-agent/run';
-import type { BuildModelStepInputInput, BuildModelStepInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/context';
+import type { BuildModelStepInputInput, BuildModelStepInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/run/context';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';

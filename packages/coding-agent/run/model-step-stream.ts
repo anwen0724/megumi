@@ -15,7 +15,7 @@ import type {
   BuildModelStepInputInput,
   BuildModelStepInputResult,
   ModelInputMemoryRecallSource,
-} from '../context';
+} from './context';
 import { coalesceTextDeltaRuntimeEvents, modelStepInputBuildFailureToRuntimeError } from './event-utils';
 
 export interface CodingAgentRunSourceOverrideProvider {

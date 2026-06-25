@@ -1,10 +1,10 @@
-// Coding Agent memory recall runtime orchestrates long-term memory recall for session runs.
+﻿// Coding Agent memory recall runtime orchestrates long-term memory recall for session runs.
 // Host provides repository, markdown sync, diagnostics, clock, and id factories through ports.
 import {
   buildMemoryRecallSnapshot,
   selectMemoryRecallResults,
 } from './recall-scoring';
-import type { ModelInputMemoryRecallSource } from '@megumi/coding-agent/context';
+import type { ModelInputMemoryRecallSource } from '@megumi/coding-agent/run/context';
 import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
 import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
 import type {

@@ -124,7 +124,7 @@ describe('Command system source guards', () => {
   it('keeps required input preprocessing boundary comments in production code', () => {
     expect(source('packages/coding-agent/run/runtime-input.ts'))
       .toContain('before session runs trust it');
-    expect(source('packages/coding-agent/context/model-step-input-context.ts'))
+    expect(source('packages/coding-agent/run/context/model-step-input-context.ts'))
       .toContain('never parses raw slash commands');
     expect(source('packages/coding-agent/run/session-run-service.ts'))
       .toContain('runtime normalization is the trust boundary');
@@ -167,7 +167,7 @@ describe('Command system source guards', () => {
   });
 
   it('keeps context management free of raw slash command parsing', () => {
-    expect(offenders(filesUnder('packages/coding-agent/context'), [
+    expect(offenders(filesUnder('packages/coding-agent/run/context'), [
       /parseSlashCommand/,
       /dispatchCommandText/,
       /BUILT_IN_INPUT_COMMAND/,

@@ -1,5 +1,5 @@
 // Workspace path helpers shared by product workspace services without importing desktop host executors.
-import { classifyProjectPath } from '../permissions/project-boundary-policy';
+import { classifyProjectPath } from '../run/permissions/project-boundary-policy';
 
 export function normalizeWorkspaceSlash(value: string): string {
   return value.replace(/\\/g, '/').replace(/^\.\/+/, '');

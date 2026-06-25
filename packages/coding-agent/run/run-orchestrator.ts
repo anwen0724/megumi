@@ -1,4 +1,4 @@
-// Owns Coding Agent product-level run orchestration while callers own persistence and UI projection.
+﻿// Owns Coding Agent product-level run orchestration while callers own persistence and UI projection.
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type { ModelCapabilitySummary } from '@megumi/shared/run';
@@ -8,14 +8,14 @@ import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolDefinition } from '@megumi/shared/tool';
-import type { ParsedInput } from '@megumi/input';
+import type { ParsedInput } from '@megumi/coding-agent/input';
 import type {
   BuildModelStepInputInput,
   BuildModelStepInputResult,
   CompactIfNeededInput,
   ModelInputMemoryRecallSource,
   SessionCompactionOrchestrationResult,
-} from '../context';
+} from './context';
 import type { BuildSessionContextInputFromRepositoryInput } from '../session';
 import { createRunFailedEvent, createRunStartedEvent } from '@megumi/agent';
 import { createCodingAgentRunInputFacts } from './input-facts';

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -56,8 +56,8 @@ describe('agent package boundary', () => {
     expect(source).not.toContain('BrowserWindow');
     expect(source).not.toContain('ipcMain');
     expect(source).not.toContain('@megumi/coding-agent');
-    expect(source).not.toContain('@megumi/input');
-    expect(source).not.toContain('@megumi/command');
+    expect(source).not.toContain('@megumi/coding-agent/input');
+    expect(source).not.toContain('@megumi/coding-agent/input/command');
     expect(source).not.toContain('better-sqlite3');
   });
 

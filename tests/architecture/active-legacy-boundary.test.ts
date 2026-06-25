@@ -14,15 +14,11 @@ const activeRoots = [
   'packages/shared',
   'packages/ai',
   'packages/agent',
-  'packages/input',
-  'packages/command',
   'packages/coding-agent',
   'tests/apps',
   'tests/packages/shared',
   'tests/packages/ai',
   'tests/packages/agent',
-  'tests/packages/input',
-  'tests/packages/command',
   'tests/packages/coding-agent',
 ];
 

@@ -146,7 +146,7 @@ describe('package and file structure source guards', () => {
     expect(flatServiceFiles).toEqual([]);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/session-run-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step-provider-service.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/adapters/local/tools/tool-executors/read-file.executor.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/execution/tool-executors/read-file.executor.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);
   });

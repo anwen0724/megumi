@@ -12,7 +12,7 @@ import type { SessionRunModelStepProvider } from '../run/session-run-service';
 import { createModelStepProviderService } from '../run/model-step-provider-service';
 import { TimelineHistoryCommitProjectorService } from '../run/timeline-history-commit-projector';
 import type { MemorySettingsProvider } from './compose-coding-agent-memory';
-import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
+import type { PermissionSettingsProvider } from '../run/permissions/permission-settings-provider';
 import { ProviderRuntimeService, ProviderSettingsService, type ProviderSettingsAppSettingsPort } from '../settings';
 import {
   createProjectService,

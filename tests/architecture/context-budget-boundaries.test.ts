@@ -39,8 +39,8 @@ const oldModelInputPathNames = [
 describe('context budget and model input chain boundaries', () => {
   it('keeps coding-agent context builder APIs centered on ContextBudgetPolicy', () => {
     const source = [
-      read('packages/coding-agent/context/model-input-context-builder.ts'),
-      read('packages/coding-agent/context/model-step-input-context.ts'),
+      read('packages/coding-agent/run/context/model-input-context-builder.ts'),
+      read('packages/coding-agent/run/context/model-step-input-context.ts'),
     ].join('\n');
 
     expect(source).toContain('budgetPolicy?: ContextBudgetPolicy');
@@ -51,7 +51,7 @@ describe('context budget and model input chain boundaries', () => {
   });
 
   it('keeps coding-agent context independent from RunContext budget result inputs', () => {
-    const source = read('packages/coding-agent/context/model-step-input-context.ts');
+    const source = read('packages/coding-agent/run/context/model-step-input-context.ts');
 
     expect(source).not.toContain('@megumi/shared/run');
     expect(source).not.toContain('runContext?:');
@@ -62,10 +62,10 @@ describe('context budget and model input chain boundaries', () => {
 
   it('keeps final budget decisions inside the context budget executor', () => {
     const sourceBuilders = [
-      read('packages/coding-agent/context/model-step-input-context.ts'),
+      read('packages/coding-agent/run/context/model-step-input-context.ts'),
       read('packages/coding-agent/session/session-context.ts'),
     ].join('\n');
-    const budgetExecutor = read('packages/coding-agent/context/context-budget.ts');
+    const budgetExecutor = read('packages/coding-agent/run/context/context-budget.ts');
 
     expect(sourceBuilders).not.toContain('budgetStatus:');
     expect(sourceBuilders).not.toContain('outside_recent_session_window');
@@ -101,7 +101,7 @@ describe('context budget and model input chain boundaries', () => {
     ].join('\n');
 
     expect(source).not.toContain('apply' + 'ContextBudget');
-    expect(source).not.toContain('@megumi/coding-agent/context/' + 'context-budget');
+    expect(source).not.toContain('@megumi/coding-agent/run/context/' + 'context-budget');
     expect(source).not.toMatch(/from ['"]@megumi\/coding-agent\/context\/context-budget['"]/);
     expect(source).not.toMatch(/from ['"]@megumi\/coding-agent\/context\/context-budget\.js['"]/);
   });

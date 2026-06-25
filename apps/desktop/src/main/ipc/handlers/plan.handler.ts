@@ -12,7 +12,7 @@ import {
   PlanByRunGetRequestSchema,
   PlanStatusUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
+import type { PermissionSnapshotService } from '@megumi/coding-agent/run/permissions';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';

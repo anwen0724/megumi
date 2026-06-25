@@ -1,4 +1,4 @@
-// Desktop filesystem adapter for Coding Agent instruction source loading.
+﻿// Desktop filesystem adapter for Coding Agent instruction source loading.
 import { promises as fs } from 'node:fs';
 import {
   AgentInstructionSourceService,
@@ -7,7 +7,7 @@ import {
   AGENT_INSTRUCTION_SOURCE_HARD_CAP_BYTES,
   type AgentInstructionSourceServiceOptions,
   type LoadInstructionSourcesInput,
-} from '@megumi/coding-agent/instructions';
+} from '@megumi/coding-agent/run/instructions';
 
 export {
   AgentInstructionSourceService,

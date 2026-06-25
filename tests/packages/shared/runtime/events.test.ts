@@ -284,7 +284,7 @@ describe('runtime event contracts', () => {
         },
         summarizedSourceCount: 2,
         previousCompactionId: 'compaction-0',
-        readFiles: ['packages/coding-agent/context/session-compaction.ts'],
+        readFiles: ['packages/coding-agent/run/context/session-compaction.ts'],
         modifiedFiles: ['apps/desktop/src/main/services/session-run.service.ts'],
       },
     });

@@ -447,7 +447,7 @@ vi.mock('@megumi/desktop/main/services/settings/app-settings.service', () => ({
   createAppSettingsService: mocks.createAppSettingsService,
 }));
 
-vi.mock('@megumi/coding-agent/adapters/local/tools/tool.service', () => ({
+vi.mock('@megumi/coding-agent/tools/tool-service', () => ({
   ToolService: mocks.ToolService,
   createDefaultToolService: mocks.createDefaultToolService,
 }));

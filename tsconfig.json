@@ -20,10 +20,6 @@
       "@megumi/coding-agent/*": ["packages/coding-agent/*"],
       "@megumi/ai": ["packages/ai/index.ts"],
       "@megumi/ai/*": ["packages/ai/*"],
-      "@megumi/command": ["packages/command/index.ts"],
-      "@megumi/command/*": ["packages/command/*"],
-      "@megumi/input": ["packages/input/index.ts"],
-      "@megumi/input/*": ["packages/input/*"],
       "@megumi/shared": ["packages/shared/index.ts"],
       "@megumi/shared/*": ["packages/shared/*"]
     }

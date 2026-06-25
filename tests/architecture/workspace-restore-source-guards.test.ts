@@ -8,7 +8,7 @@ const repoRoot = process.cwd();
 const productionRoots = [
   'apps/desktop/src',
   'packages/ai',
-  'packages/coding-agent/context',
+  'packages/coding-agent/run/context',
   'packages/agent',
   'packages/coding-agent/persistence',
   'packages/shared',
@@ -52,7 +52,7 @@ const restoreBoundaryAllowlist = new Set([
 const forbiddenRestoreRoots = [
   'apps/desktop/src/renderer',
   'packages/ai',
-  'packages/coding-agent/context',
+  'packages/coding-agent/run/context',
 ];
 
 const rawContentTerms = [
@@ -74,12 +74,12 @@ const runtimeAndIpcSchemaFiles = [
   'packages/shared/ipc/schemas.ts',
 ];
 
-const runCommandExecutorPath = 'packages/coding-agent/adapters/local/tools/tool-executors/run-command.executor.ts';
+const runCommandExecutorPath = 'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts';
 const runCommandPathFiles = [
   runCommandExecutorPath,
-  'packages/coding-agent/adapters/local/tools/built-in-tool-source-executor.ts',
-  'packages/coding-agent/adapters/local/tools/tool-execution-router.ts',
-  'packages/coding-agent/adapters/local/tools/tool-call-handler.service.ts',
+  'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
+  'packages/coding-agent/tools/execution/tool-execution-router.ts',
+  'packages/coding-agent/tools/execution/tool-call-handler.service.ts',
 ];
 
 describe('workspace restore source guards', () => {

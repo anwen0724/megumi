@@ -1,5 +1,5 @@
 ﻿// Coordinates durable tool execution records for agent-loop tool calls.
-import { evaluatePermissionPolicy } from '../permissions/tool-policy';
+import { evaluatePermissionPolicy } from '../run/permissions/tool-policy';
 import {
   createRawToolResultFromContent,
   normalizeToolError,
@@ -41,7 +41,7 @@ import type {
 import {
   evaluateToolExecutionDecision,
   type ToolExecutionDecisionInput,
-} from '../permissions/tool-execution-decision';
+} from '../run/permissions/tool-execution-decision';
 import type {
   CodingAgentToolExecutionHostPort,
   CodingAgentToolExecutionRunOptions,

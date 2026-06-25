@@ -8,7 +8,7 @@ import type {
   SessionRuntimeFact,
   SessionSummaryEntry,
 } from '@megumi/shared/session';
-import type { ModelInputContextPartDraft } from '../context/context-budget';
+import type { ModelInputContextPartDraft } from '../run/context/context-budget';
 
 export interface BuildSessionContextPartsInput {
   input?: SessionContextInput;
