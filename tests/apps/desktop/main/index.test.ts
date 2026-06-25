@@ -44,6 +44,13 @@ const mocks = vi.hoisted(() => {
     memoryService: {
       listMemories: vi.fn(),
     },
+    projectService: {
+      listProjects: vi.fn(),
+      useExistingProject: vi.fn(),
+      openProject: vi.fn(),
+      removeProject: vi.fn(),
+      listAuthorizedWorkspaceRoots: vi.fn(() => ['C:/all/work/study/megumi']),
+    },
     dispose: vi.fn(),
   };
   return {
@@ -64,7 +71,11 @@ const mocks = vi.hoisted(() => {
     registerAllHandlers: vi.fn(),
     registerRuntimeProcessErrorHandlers: vi.fn(),
     registerAppLifecycle: vi.fn(),
-    createMainWindow: vi.fn(),
+    createMainWindow: vi.fn(() => ({
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      webContents: { send: vi.fn() },
+    })),
     SessionRunRepository: vi.fn(function SessionRunRepository(
       this: {
         database?: unknown;
@@ -381,13 +392,6 @@ const mocks = vi.hoisted(() => {
       cancelRun: vi.fn(),
       retryRun: vi.fn(),
     })),
-    createProjectService: vi.fn(() => ({
-      listProjects: vi.fn(),
-      useExistingProject: vi.fn(),
-      openProject: vi.fn(),
-      removeProject: vi.fn(),
-      listAuthorizedWorkspaceRoots: vi.fn(() => ['C:/all/work/study/megumi']),
-    })),
     createWorkspaceFilesService: vi.fn(() => ({
       listDirectory: vi.fn(),
     })),
@@ -450,7 +454,6 @@ vi.mock('@megumi/coding-agent/workspace', () => ({
   WorkspaceRestoreService: mocks.WorkspaceRestoreService,
   createWorkspaceChangeFooterProjectorService: vi.fn(() => ({ projectRunFooter: vi.fn() })),
   isWorkspaceChangeFooterProjectorPort: vi.fn(() => false),
-  createProjectService: mocks.createProjectService,
 }));
 
 vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () => ({
@@ -528,7 +531,6 @@ describe('main runtime logger composition', () => {
     mocks.createRecoveryService.mockClear();
     mocks.createWorkspaceFilesService.mockClear();
     mocks.ProjectRepository.mockClear();
-    mocks.createProjectService.mockClear();
     mocks.showOpenDialog.mockClear();
     mocks.getAllWindows.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
@@ -564,7 +566,7 @@ describe('main runtime logger composition', () => {
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
     const settingsService = mocks.createAppSettingsService.mock.results[0]?.value;
     const workspaceFilesService = mocks.createWorkspaceFilesService.mock.results[0]?.value;
-    const projectService = mocks.createProjectService.mock.results[0]?.value;
+    const projectService = mocks.codingAgentRuntime.projectService;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -577,9 +579,6 @@ describe('main runtime logger composition', () => {
     expect(mocks.createAppSettingsService).toHaveBeenCalledWith({
       settingsPath: `${mocks.homePath}/settings.json`,
     });
-    expect(mocks.composeCodingAgentPersistence).toHaveBeenCalledWith(
-      { sqlitePath: `${mocks.homePath}/sqlite` },
-    );
     expect(mocks.composeCodingAgentRuntime).toHaveBeenCalledWith(expect.objectContaining({
       homePaths: {
         homePath: mocks.homePath,
@@ -592,20 +591,18 @@ describe('main runtime logger composition', () => {
         isMemoryEnabled: expect.any(Function),
       }),
       permissionSettingsProvider: expect.any(Object),
+      chatStreamEventSink: expect.objectContaining({
+        publish: expect.any(Function),
+        setWindow: expect.any(Function),
+      }),
+      directoryPicker: expect.objectContaining({
+        chooseDirectory: expect.any(Function),
+      }),
     }));
     const runtimeOptions = (mocks.composeCodingAgentRuntime.mock.calls as unknown as Array<[{
       memorySettingsProvider: { isMemoryEnabled(): boolean };
     }]>)[0]?.[0];
     expect(runtimeOptions.memorySettingsProvider.isMemoryEnabled()).toBe(false);
-    expect(mocks.createProjectService).toHaveBeenCalledWith(expect.objectContaining({
-      repository: expect.any(Object),
-      directoryPicker: expect.objectContaining({
-        chooseDirectory: expect.any(Function),
-      }),
-      fileSystem: expect.objectContaining({
-        stat: expect.any(Function),
-      }),
-    }));
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith(expect.objectContaining({
       fileSystem: expect.any(Object),
       isWorkspaceRootAllowed: expect.any(Function),

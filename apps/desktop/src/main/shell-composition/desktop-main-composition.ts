@@ -7,16 +7,14 @@ import { createWorkspaceFilesService } from '../services/workspace/workspace-fil
 import {
   composeCodingAgentRuntime,
   type CodingAgentHomePaths,
-  composeCodingAgentPersistence,
 } from '@megumi/coding-agent/composition';
-import { createProjectService } from '@megumi/coding-agent/workspace';
 import { createDesktopSessionService } from '../services/session/session.service';
 import { createDesktopAgentRunService } from '../services/agent-run/agent-run.service';
 import fs from 'fs-extra';
-import type { ModelStepCompletionResult } from '@megumi/agent';
 import type { SessionRunService } from '@megumi/coding-agent/run';
 import { electronDialogHost } from '../shell/electron-dialog-host';
 import { electronShellHost } from '../shell/electron-shell-host';
+import { createChatStreamBroadcaster } from '../shell/chat-stream-broadcaster';
 
 export function composeDesktopMain() {
   const megumiHomePaths = initializeElectronMegumiHomeSync();
@@ -33,17 +31,13 @@ export function composeDesktopMain() {
     sqlitePath: megumiHomePaths.sqlitePath,
     settingsPath: megumiHomePaths.settingsPath,
   };
-  const codingAgentPersistence = composeCodingAgentPersistence({
-    sqlitePath: codingAgentHomePaths.sqlitePath,
-  });
+  // The broadcaster is built before the window exists; createWindow attaches the
+  // live window via setWindow. The product runtime persists timeline history and
+  // forwards chat stream events to this sink, which relays them to the renderer.
+  const chatStreamBroadcaster = createChatStreamBroadcaster({ logger: runtimeLogger });
   const codingAgentRuntime = composeCodingAgentRuntime({
     homePaths: codingAgentHomePaths,
     runtimeLogger,
-    modelStepProviderService: {
-      streamModelStep: async function* () { return; },
-      completeModelStep: async (): Promise<ModelStepCompletionResult> => ({ ok: true, text: '' }),
-      cancelModelStep: () => false,
-    },
     appSettingsProvider: appSettingsService,
     memorySettingsProvider: {
       isMemoryEnabled() {
@@ -51,13 +45,11 @@ export function composeDesktopMain() {
       },
     },
     permissionSettingsProvider: permissionSettingsService,
+    chatStreamEventSink: chatStreamBroadcaster,
+    directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
   });
 
-  const projectService = createProjectService({
-    repository: codingAgentPersistence.projectRepository,
-    directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
-    fileSystem: fs,
-  });
+  const projectService = codingAgentRuntime.projectService;
   const workspaceFilesService = createWorkspaceFilesService({
     fileSystem: fs,
     isWorkspaceRootAllowed: (root) => projectService.listAuthorizedWorkspaceRoots().includes(root),
@@ -72,6 +64,7 @@ export function composeDesktopMain() {
     megumiHomePaths,
     runtimeLogger,
     appSettingsService,
+    chatStreamBroadcaster,
     providerService: codingAgentRuntime.providerSettingsService,
     sessionRunService: desktopSessionService,
     agentRunService: desktopAgentRunService,
@@ -83,5 +76,6 @@ export function composeDesktopMain() {
     memoryService: codingAgentRuntime.memoryService,
     projectService,
     workspaceFilesService,
+    dispose: () => codingAgentRuntime.dispose(),
   };
 }

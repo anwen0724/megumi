@@ -4,12 +4,14 @@ export interface RegisterAppLifecycleOptions {
   runMigrations: () => void;
   registerAllHandlers: () => void;
   createWindow: () => void;
+  dispose?: () => void;
 }
 
 export function registerAppLifecycle({
   runMigrations,
   registerAllHandlers,
   createWindow,
+  dispose,
 }: RegisterAppLifecycleOptions): void {
   app.whenReady().then(() => {
     runMigrations();
@@ -28,4 +30,10 @@ export function registerAppLifecycle({
       createWindow();
     }
   });
+
+  if (dispose) {
+    app.on('will-quit', () => {
+      dispose();
+    });
+  }
 }

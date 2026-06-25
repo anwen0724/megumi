@@ -31,10 +31,15 @@ registerAppLifecycle({
     workspaceFilesService: desktopMain.workspaceFilesService,
   }),
   createWindow: () => {
-    createMainWindow({
+    const window = createMainWindow({
       devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
       rendererName: MAIN_WINDOW_VITE_NAME,
       dirname: __dirname,
     });
+    desktopMain.chatStreamBroadcaster.setWindow(window);
+    window.on('closed', () => {
+      desktopMain.chatStreamBroadcaster.setWindow(undefined);
+    });
   },
+  dispose: () => desktopMain.dispose(),
 });
