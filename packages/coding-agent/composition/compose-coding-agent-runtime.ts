@@ -105,7 +105,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     recoveryRepository: persistence.recoveryRepository,
     sessionRunRepository: persistence.sessionRunRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
+    timelineMessageRepository: persistence.timelineMessageRepository,
     sessionRunService: sessionRuntime.sessionRunService,
+    logger: options.runtimeLogger,
   });
   const projectService = createProjectService({
     repository: persistence.projectRepository,

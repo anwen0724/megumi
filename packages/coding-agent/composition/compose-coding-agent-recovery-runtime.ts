@@ -4,7 +4,8 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { RecoveryRepository } from '../persistence/repos/recovery.repo';
 import { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
-import { createRecoveryService } from '../run/recovery-service';
+import { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
+import { createRecoveryService, type RecoveryLogger } from '../run/recovery-service';
 import { WorkspaceRestoreService } from '../workspace';
 import type { SessionRunService } from '../run/session-run-service';
 
@@ -12,7 +13,9 @@ export interface ComposeCodingAgentRecoveryRuntimeOptions {
   recoveryRepository: RecoveryRepository;
   sessionRunRepository: SessionRunRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
+  timelineMessageRepository: TimelineMessageRepository;
   sessionRunService: SessionRunService;
+  logger?: RecoveryLogger;
 }
 
 export function composeCodingAgentRecoveryRuntime(options: ComposeCodingAgentRecoveryRuntimeOptions) {
@@ -27,6 +30,12 @@ export function composeCodingAgentRecoveryRuntime(options: ComposeCodingAgentRec
       interruptedMarkerId: (runId) => `interrupted-marker:${runId}:${crypto.randomUUID()}`,
     },
     workspaceChanges: options.workspaceChangeRepository,
+    timelineBackfill: {
+      listRunsNeedingTimelineBackfill: () => options.recoveryRepository.listRunsNeedingTimelineBackfill(),
+      hasCommittedTimeline: (runId) => Boolean(options.timelineMessageRepository.getRunCommit(runId)),
+      commitRunTimeline: (input) => options.timelineMessageRepository.commitRunTimeline(input),
+    },
+    ...(options.logger ? { logger: options.logger } : {}),
     workspaceRestore: {
       restoreChangeSet(input) {
         return createWorkspaceRestoreForChangeSet({

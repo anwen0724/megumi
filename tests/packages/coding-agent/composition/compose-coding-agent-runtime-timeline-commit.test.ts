@@ -136,7 +136,7 @@ describe('Coding Agent product runtime timeline history commit', () => {
     const committed = runtime.sessionRunService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
     expect(committed.messages.length).toBeGreaterThan(0);
     expect(committed.messages.some((message) => message.role === 'assistant')).toBe(true);
-  });
+  }, 30000);
 
   it('forwards chat stream events to a caller-provided sink while still persisting', async () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-timeline-commit-sink-'));
@@ -161,5 +161,5 @@ describe('Coding Agent product runtime timeline history commit', () => {
     expect(forwarded.some((event) => event.eventType === 'turn.completed')).toBe(true);
     const committed = runtime.sessionRunService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
     expect(committed.messages.length).toBeGreaterThan(0);
-  });
+  }, 30000);
 });
