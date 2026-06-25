@@ -620,7 +620,17 @@ describe('main runtime logger composition', () => {
       logger: processLogger,
       providerService: mocks.codingAgentRuntime.providerSettingsService,
       settingsService,
-      sessionRunService: mocks.codingAgentRuntime.sessionRunService,
+      sessionRunService: expect.objectContaining({
+        createSession: expect.any(Function),
+        listSessions: expect.any(Function),
+        sendSessionMessage: expect.any(Function),
+        createBranchDraft: expect.any(Function),
+        cancelBranchDraft: expect.any(Function),
+      }),
+      agentRunService: expect.objectContaining({
+        listRunsBySession: expect.any(Function),
+        listRuntimeEventsByRun: expect.any(Function),
+      }),
       runContextService: mocks.codingAgentRuntime.runContextService,
       planService: mocks.codingAgentRuntime.sessionRunService,
       toolService: mocks.codingAgentRuntime.toolService,

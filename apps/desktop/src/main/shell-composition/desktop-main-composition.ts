@@ -10,6 +10,8 @@ import {
   composeCodingAgentPersistence,
 } from '@megumi/coding-agent/composition';
 import { createProjectService } from '@megumi/coding-agent/workspace';
+import { createDesktopSessionService } from '../services/session/session.service';
+import { createDesktopAgentRunService } from '../services/agent-run/agent-run.service';
 import fs from 'fs-extra';
 import type { ModelStepCompletionResult } from '@megumi/agent';
 import type { SessionRunService } from '@megumi/coding-agent/run';
@@ -63,13 +65,16 @@ export function composeDesktopMain() {
   });
 
   const sessionRunService = codingAgentRuntime.sessionRunService as SessionRunService;
+  const desktopSessionService = createDesktopSessionService(sessionRunService);
+  const desktopAgentRunService = createDesktopAgentRunService(sessionRunService);
 
   return {
     megumiHomePaths,
     runtimeLogger,
     appSettingsService,
     providerService: codingAgentRuntime.providerSettingsService,
-    sessionRunService,
+    sessionRunService: desktopSessionService,
+    agentRunService: desktopAgentRunService,
     runContextService: codingAgentRuntime.runContextService,
     planService: sessionRunService,
     toolService: codingAgentRuntime.toolService,

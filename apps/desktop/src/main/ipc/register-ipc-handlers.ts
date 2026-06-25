@@ -45,7 +45,8 @@ export interface RegisterAllHandlersOptions {
   ipcMain?: DesktopIpcMain;
   providerService?: ProviderHandlersService;
   settingsService?: SettingsHandlersService;
-  sessionRunService?: SessionHandlersService & RunHandlersService;
+  sessionRunService?: SessionHandlersService;
+  agentRunService?: RunHandlersService;
   runContextService?: RunContextHandlersService;
   planService?: PlanHandlersService;
   toolService?: ToolHandlersService;
@@ -75,7 +76,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.sessionRunService) {
     registerSessionHandlers(options.sessionRunService, { logger: options.logger, ipcMain });
-    registerRunHandlers(options.sessionRunService, { logger: options.logger, ipcMain });
+  }
+
+  if (options.agentRunService) {
+    registerRunHandlers(options.agentRunService, { logger: options.logger, ipcMain });
   }
 
   if (options.runContextService) {
