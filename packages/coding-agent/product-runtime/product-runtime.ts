@@ -1,21 +1,23 @@
 // Defines the complete Coding Agent product runtime exposed to UI shells and non-desktop entries.
-import type { SessionRunService } from '../run/session-run-service';
+// Every member is a product-owned port interface — this is the single shell-agnostic
+// contract that desktop, and future web/cli shells, code against.
+import type { SessionRunPort } from '../run/session-run-service';
 import type { RecoveryService } from '../run/recovery-service';
 import type { ToolService } from '../tools/tool-service-port';
-import type { ArtifactService } from '../artifacts';
+import type { ArtifactServicePort } from '../artifacts';
 import type { MemoryService } from '../memory';
-import type { RunContextService } from '../resources';
-import type { ProviderSettingsService } from '../settings';
+import type { RunContextServicePort } from '../resources';
+import type { ProviderSettingsPort } from '../settings';
 import type { ProjectService } from '../workspace';
 
 export interface CodingAgentProductRuntime {
-  sessionRunService: SessionRunService;
+  sessionRunService: SessionRunPort;
   recoveryService: RecoveryService;
   toolService: ToolService;
-  artifactService: ArtifactService;
+  artifactService: ArtifactServicePort;
   memoryService: MemoryService;
-  runContextService: RunContextService;
-  providerSettingsService: ProviderSettingsService;
+  runContextService: RunContextServicePort;
+  providerSettingsService: ProviderSettingsPort;
   projectService: ProjectService;
   dispose(): void;
 }

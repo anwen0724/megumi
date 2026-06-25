@@ -8,12 +8,13 @@ import type {
   RunListBySessionPayload,
 } from '@megumi/shared/ipc';
 import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megumi/shared/ipc';
-import type { DesktopAgentRunService } from '../../services/agent-run/agent-run.service';
+import type { SessionRunPort } from '@megumi/coding-agent/run';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
-export type RunHandlersService = DesktopAgentRunService;
+// Run IPC handlers code against the product SessionRunPort, narrowed to run queries.
+export type RunHandlersService = Pick<SessionRunPort, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
 
 export interface RegisterRunHandlersOptions {
   logger?: RuntimeLogger;

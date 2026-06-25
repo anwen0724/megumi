@@ -28,7 +28,18 @@ export interface ProviderSettingsUpdateInput {
   apiKeyEnv?: string | null;
 }
 
-export class ProviderSettingsService {
+// Product-facing provider settings surface consumed by UI shells. Shells code
+// against this port, not the concrete ProviderSettingsService. API keys may be
+// written, but the port never returns plaintext keys.
+export interface ProviderSettingsPort {
+  listProviderStatuses(): Promise<ProviderPublicStatus[]>;
+  getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;
+  updateProviderSettings(providerId: ProviderId, input: ProviderSettingsUpdateInput): Promise<ProviderSettings>;
+  setProviderApiKey(providerId: ProviderId, apiKey: string): Promise<ProviderSettings>;
+  deleteProviderApiKey(providerId: ProviderId): Promise<ProviderSettings>;
+}
+
+export class ProviderSettingsService implements ProviderSettingsPort {
   private readonly env: NodeJS.ProcessEnv | Record<string, string | undefined>;
 
   constructor(private readonly options: ProviderSettingsServiceOptions) {
