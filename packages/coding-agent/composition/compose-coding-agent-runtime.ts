@@ -7,7 +7,7 @@ import { composeCodingAgentToolRegistry, composeCodingAgentToolRuntimeFactory, c
 import { composeCodingAgentSessionRuntime, type CodingAgentHomePaths } from './compose-coding-agent-session-runtime';
 import { composeCodingAgentMemory } from './compose-coding-agent-memory';
 import { composeCodingAgentRecoveryRuntime } from './compose-coding-agent-recovery-runtime';
-import type { RuntimeLogger } from '../ports';
+import type { RuntimeLogger } from '../product-runtime';
 import type { SessionRunModelStepProvider } from '../run/session-run-service';
 import { createModelStepProviderService } from '../run/model-step-provider-service';
 import { TimelineHistoryCommitProjectorService } from '../run/timeline-history-commit-projector';

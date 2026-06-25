@@ -10,7 +10,7 @@ import { MemoryDiagnosticWriter } from '../adapters/local/memory/memory-diagnost
 import { MemoryMarkdownSyncService } from '../adapters/local/memory/memory-markdown-sync.service';
 import { createNodeMemoryRuntimeFileSystem } from '../adapters/local/memory/memory-runtime-file-system';
 import type { SessionRunModelStepProvider } from '../run/session-run-service';
-import type { RuntimeLogger } from '../ports';
+import type { RuntimeLogger } from '../product-runtime';
 
 export interface MemorySettingsProvider {
   isMemoryEnabled(): boolean;
