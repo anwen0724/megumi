@@ -117,4 +117,40 @@ describe('coding-agent run input facts', () => {
       },
     ]);
   });
+
+  it('keeps the derived runtime-fact part id within the 128-char id limit for UUID-based ids', () => {
+    // Production ids are UUID-based, e.g. raw-input:run:<uuid>:message:<uuid>, which
+    // is far longer than the short ids unit tests usually use. The model input context
+    // derives a part id of the form `part:runtime-fact:${factId}` that is validated
+    // against the shared 128-char id schema, so the fact id must reserve room for that
+    // prefix or the run fails validation before the first model step.
+    const PART_PREFIX = 'part:runtime-fact:';
+    const MAX_ID_LENGTH = 128;
+    const longParsedInputId = `parsed-input_raw-input:run:${'a'.repeat(36)}:message:${'b'.repeat(36)}`;
+
+    const facts = createRuntimeFactsForRunInput(
+      createCodingAgentRunInputFacts({
+        id: longParsedInputId,
+        rawInputId: longParsedInputId,
+        source: { kind: 'desktop', surface: 'session-message' },
+        rawKind: 'text',
+        kind: 'user_input',
+        text: 'Say hello',
+        attachments: [],
+        references: [],
+        facts: [{
+          kind: 'command',
+          commandName: 'review',
+          argsText: 'src/session.ts',
+          rawText: '/review src/session.ts',
+          target: 'agent_command',
+        }],
+        createdAt: '2026-06-21T00:00:00.000Z',
+      }),
+    );
+
+    for (const fact of facts) {
+      expect(`${PART_PREFIX}${fact.factId}`.length).toBeLessThanOrEqual(MAX_ID_LENGTH);
+    }
+  });
 });

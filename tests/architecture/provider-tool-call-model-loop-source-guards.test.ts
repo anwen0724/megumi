@@ -67,7 +67,7 @@ describe('provider tool call model loop source guards', () => {
       'packages/agent/ports/model-step-port.ts',
       'packages/agent/loop/agent-loop.ts',
       'packages/agent/model/model-step-request-mapper.ts',
-      'apps/desktop/src/main/services/provider/model-step-provider.service.ts',
+      'packages/coding-agent/run/model-step-provider-service.ts',
       'packages/coding-agent/run/session-run-service.ts',
     ];
 

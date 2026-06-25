@@ -1,9 +1,11 @@
-﻿import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+﻿// Persists committed timeline history into product storage on terminal turns,
+// and forwards chat stream events to an optional downstream sink (e.g. a UI bridge).
+import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { reduceChatStreamEvent } from '@megumi/shared/timeline';
 import type { TimelineMessage } from '@megumi/shared/timeline';
-import type { ChatStreamEventSink } from '@megumi/coding-agent/run/chat-stream-event-adapter';
+import type { ChatStreamEventSink } from './chat-stream-event-adapter';
 
-export interface TimelineCommitDiagnostic {
+export interface TimelineHistoryCommitDiagnostic {
   diagnosticId: string;
   projectId: string;
   sessionId: string;
@@ -22,7 +24,7 @@ export interface TimelineHistoryCommitRepository {
     messages: TimelineMessage[];
     sessionPreview?: string;
   }): TimelineMessage[];
-  recordCommitDiagnostic(diagnostic: TimelineCommitDiagnostic): void;
+  recordCommitDiagnostic(diagnostic: TimelineHistoryCommitDiagnostic): void;
 }
 
 export interface TimelineHistoryCommitProjectorIds {

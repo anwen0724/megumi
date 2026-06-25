@@ -36,9 +36,20 @@ export interface CodingAgentRunInputFacts {
 }
 
 const MAX_ID_LENGTH = 128;
+// The model input context derives a part id of the form
+// `part:runtime-fact:${factId}` from each runtime fact. That part id is validated
+// against the shared 128-char id schema, so the longest downstream prefix
+// (`part:runtime-fact:`) must be reserved here or the run fails validation before
+// the model step. Cap fact ids so the derived part id always fits.
+const RUNTIME_FACT_PART_PREFIX = 'part:runtime-fact:';
+const MAX_FACT_ID_LENGTH = MAX_ID_LENGTH - RUNTIME_FACT_PART_PREFIX.length;
 
 function truncateId(id: string): string {
   return id.length <= MAX_ID_LENGTH ? id : id.slice(0, MAX_ID_LENGTH);
+}
+
+function truncateFactId(factId: string): string {
+  return factId.length <= MAX_FACT_ID_LENGTH ? factId : factId.slice(0, MAX_FACT_ID_LENGTH);
 }
 
 export function createCodingAgentRunInputFacts(parsedInput: ParsedInput): CodingAgentRunInputFacts {
@@ -56,7 +67,7 @@ export function createRuntimeFactsForRunInput(
   input: CodingAgentRunInputFacts,
 ): ModelInputContextBuildRequest['runtimeFacts'] {
   const baseFact = {
-    factId: truncateId(`run-input:${input.parsedInputId}`),
+    factId: truncateFactId(`run-input:${input.parsedInputId}`),
     factKind: 'parsed_input' as const,
     text: `Input kind: ${input.inputKind}. Raw kind: ${input.rawKind}.`,
     required: true,
@@ -109,7 +120,7 @@ function factToRuntimeFact(
   index: number,
 ): ModelInputContextBuildRequest['runtimeFacts'][number] {
   const suffix = `:fact:${index}`;
-  const availableLength = MAX_ID_LENGTH - 'run-input:'.length - suffix.length;
+  const availableLength = MAX_FACT_ID_LENGTH - 'run-input:'.length - suffix.length;
   const truncatedId = parsedInputId.slice(0, Math.max(1, availableLength));
   const factId = `run-input:${truncatedId}${suffix}`;
 
