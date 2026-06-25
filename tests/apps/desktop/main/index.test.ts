@@ -615,7 +615,13 @@ describe('main runtime logger composition', () => {
     expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      providerService: mocks.codingAgentRuntime.providerSettingsService,
+      providerService: expect.objectContaining({
+        listProviderStatuses: expect.any(Function),
+        getProviderSettings: expect.any(Function),
+        updateProviderSettings: expect.any(Function),
+        setProviderApiKey: expect.any(Function),
+        deleteProviderApiKey: expect.any(Function),
+      }),
       settingsService,
       sessionRunService: expect.objectContaining({
         createSession: expect.any(Function),

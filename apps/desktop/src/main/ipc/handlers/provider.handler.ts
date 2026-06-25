@@ -8,20 +8,13 @@ import {
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ProviderId, ProviderPublicStatus, ProviderSettings } from '@megumi/shared/provider';
-import type { ProviderSettingsUpdateInput } from '@megumi/coding-agent/settings';
+import type { DesktopProviderStatusService } from '../../services/provider/provider-status-facade';
 import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
-export interface ProviderHandlersService {
-  getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;
-  listProviderStatuses(): Promise<ProviderPublicStatus[]>;
-  updateProviderSettings(providerId: ProviderId, input: ProviderSettingsUpdateInput): Promise<unknown>;
-  setProviderApiKey(providerId: ProviderId, apiKey: string): Promise<unknown>;
-  deleteProviderApiKey(providerId: ProviderId): Promise<unknown>;
-}
+export type ProviderHandlersService = DesktopProviderStatusService;
 
 export interface RegisterProviderHandlersOptions {
   logger?: RuntimeLogger;

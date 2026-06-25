@@ -19,7 +19,7 @@ describe('Desktop Main shell composition', () => {
     const desktopComposition = source('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
     expect(desktopComposition).toContain('composeCodingAgentRuntime');
-    expect(desktopComposition).toContain('providerService: codingAgentRuntime.providerSettingsService');
+    expect(desktopComposition).toContain('createDesktopProviderStatusService(codingAgentRuntime.providerSettingsService)');
     expect(desktopComposition).toContain('sessionRunService');
     expect(desktopComposition).toContain('runContextService: codingAgentRuntime.runContextService');
     expect(desktopComposition).toContain('toolService: codingAgentRuntime.toolService');

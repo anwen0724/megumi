@@ -10,6 +10,7 @@ import {
 } from '@megumi/coding-agent/composition';
 import { createDesktopSessionService } from '../services/session/session.service';
 import { createDesktopAgentRunService } from '../services/agent-run/agent-run.service';
+import { createDesktopProviderStatusService } from '../services/provider/provider-status-facade';
 import fs from 'fs-extra';
 import type { SessionRunService } from '@megumi/coding-agent/run';
 import { electronDialogHost } from '../shell/electron-dialog-host';
@@ -65,7 +66,7 @@ export function composeDesktopMain() {
     runtimeLogger,
     appSettingsService,
     chatStreamBroadcaster,
-    providerService: codingAgentRuntime.providerSettingsService,
+    providerService: createDesktopProviderStatusService(codingAgentRuntime.providerSettingsService),
     sessionRunService: desktopSessionService,
     agentRunService: desktopAgentRunService,
     runContextService: codingAgentRuntime.runContextService,
