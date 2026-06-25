@@ -62,7 +62,12 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
   });
 
   it('keeps desktop main services as UI shell facades only', () => {
-    expect(topLevelDirectories('apps/desktop/src/main/services')).toEqual([
+    // Desktop services only host real Electron/shell adapter logic. Pure pass-through
+    // facades were removed (handlers code against product runtime ports directly), so
+    // the directory set is asserted as a SUBSET of allowed shell-adapter homes rather
+    // than an exact list — a dir legitimately disappears when it has no shell logic
+    // left (e.g. provider/ after its facade was deleted).
+    const allowedServiceDirectories = new Set([
       'agent-run',
       'provider',
       'security',
@@ -70,6 +75,8 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
       'settings',
       'workspace',
     ]);
+    const actual = topLevelDirectories('apps/desktop/src/main/services');
+    expect(actual.filter((name) => !allowedServiceDirectories.has(name))).toEqual([]);
 
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
     expect(desktopServices).not.toContain('class SessionRunService');

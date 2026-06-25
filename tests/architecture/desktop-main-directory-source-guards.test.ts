@@ -68,7 +68,7 @@ describe('Desktop Main directory boundaries', () => {
     const source = read('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
     expect(source).toContain('composeCodingAgentRuntime');
-    expect(source).toContain('createDesktopProviderStatusService(codingAgentRuntime.providerSettingsService)');
+    expect(source).toContain('providerService: codingAgentRuntime.providerSettingsService');
     expect(source).toContain('runContextService: codingAgentRuntime.runContextService');
     expect(source).toContain('toolService: codingAgentRuntime.toolService');
     for (const forbidden of [

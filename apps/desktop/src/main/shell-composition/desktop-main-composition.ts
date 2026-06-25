@@ -8,11 +8,7 @@ import {
   composeCodingAgentRuntime,
   type CodingAgentHomePaths,
 } from '@megumi/coding-agent/composition';
-import { createDesktopSessionService } from '../services/session/session.service';
-import { createDesktopAgentRunService } from '../services/agent-run/agent-run.service';
-import { createDesktopProviderStatusService } from '../services/provider/provider-status-facade';
 import fs from 'fs-extra';
-import type { SessionRunService } from '@megumi/coding-agent/run';
 import { electronDialogHost } from '../shell/electron-dialog-host';
 import { electronShellHost } from '../shell/electron-shell-host';
 import { createChatStreamBroadcaster } from '../shell/chat-stream-broadcaster';
@@ -57,18 +53,16 @@ export function composeDesktopMain() {
     openPath: (absolutePath) => electronShellHost.openPath(absolutePath),
   });
 
-  const sessionRunService = codingAgentRuntime.sessionRunService as SessionRunService;
-  const desktopSessionService = createDesktopSessionService(sessionRunService);
-  const desktopAgentRunService = createDesktopAgentRunService(sessionRunService);
+  const sessionRunService = codingAgentRuntime.sessionRunService;
 
   return {
     megumiHomePaths,
     runtimeLogger,
     appSettingsService,
     chatStreamBroadcaster,
-    providerService: createDesktopProviderStatusService(codingAgentRuntime.providerSettingsService),
-    sessionRunService: desktopSessionService,
-    agentRunService: desktopAgentRunService,
+    providerService: codingAgentRuntime.providerSettingsService,
+    sessionRunService,
+    agentRunService: sessionRunService,
     runContextService: codingAgentRuntime.runContextService,
     planService: sessionRunService,
     toolService: codingAgentRuntime.toolService,

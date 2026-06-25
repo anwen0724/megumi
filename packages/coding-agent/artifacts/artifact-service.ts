@@ -55,7 +55,42 @@ const defaultIds: ArtifactServiceIds = {
   relationId: () => `artifact-relation:${crypto.randomUUID()}`,
 };
 
-export class ArtifactService {
+// Product-facing artifact surface consumed by UI shells. Shells code against this
+// port, not the concrete ArtifactService.
+export interface ArtifactServicePort {
+  get(artifactId: string): {
+    artifact: Artifact | undefined;
+    currentVersion: ArtifactVersion | undefined;
+    sourceRefs: ArtifactSourceRef[];
+    relations: ArtifactRelation[];
+  };
+  getVersion(artifactVersionId: string): ArtifactVersion | undefined;
+  listByRun(runId: string): Artifact[];
+  listBySession(sessionId: string): Artifact[];
+  createVersion(input: {
+    artifactId: string;
+    contentType: ArtifactVersion['contentType'];
+    contentFormat: string;
+    text: string;
+    textPreview: string;
+    changeSummary?: string;
+    createdByRunId: string;
+    createdByStepId?: string;
+    createdAt: string;
+    metadata?: JsonObject;
+  }): Promise<ArtifactVersion>;
+  reference(input: {
+    artifactId: string;
+    artifactVersionId?: string;
+    referencedByKind: 'run' | 'step' | 'artifact' | 'message';
+    referencedById: string;
+    createdAt: string;
+    metadata?: JsonObject;
+  }): ArtifactSourceRef;
+  updateStatus(input: { artifactId: string; status: ArtifactStatus; updatedAt: string }): Artifact;
+}
+
+export class ArtifactService implements ArtifactServicePort {
   private readonly ids: ArtifactServiceIds;
 
   constructor(private readonly options: ArtifactServiceOptions) {

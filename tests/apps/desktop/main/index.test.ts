@@ -10,8 +10,13 @@ const mocks = vi.hoisted(() => {
     sessionRunService: {
       createSession: vi.fn(),
       listSessions: vi.fn(),
+      listMessagesBySession: vi.fn(),
+      listTimelineMessagesBySession: vi.fn(),
+      listRunsBySession: vi.fn(),
       sendSessionMessage: vi.fn(),
       cancelSessionMessage: vi.fn(),
+      createBranchDraft: vi.fn(),
+      cancelBranchDraft: vi.fn(),
       listRuntimeEventsByRun: vi.fn(),
       startRun: vi.fn(),
       getPlanByRun: vi.fn(),
@@ -23,6 +28,7 @@ const mocks = vi.hoisted(() => {
     },
     providerSettingsService: {
       listProviderStatuses: vi.fn(),
+      getProviderSettings: vi.fn(),
       updateProviderSettings: vi.fn(),
       setProviderApiKey: vi.fn(),
       deleteProviderApiKey: vi.fn(),
@@ -615,25 +621,10 @@ describe('main runtime logger composition', () => {
     expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      providerService: expect.objectContaining({
-        listProviderStatuses: expect.any(Function),
-        getProviderSettings: expect.any(Function),
-        updateProviderSettings: expect.any(Function),
-        setProviderApiKey: expect.any(Function),
-        deleteProviderApiKey: expect.any(Function),
-      }),
+      providerService: mocks.codingAgentRuntime.providerSettingsService,
       settingsService,
-      sessionRunService: expect.objectContaining({
-        createSession: expect.any(Function),
-        listSessions: expect.any(Function),
-        sendSessionMessage: expect.any(Function),
-        createBranchDraft: expect.any(Function),
-        cancelBranchDraft: expect.any(Function),
-      }),
-      agentRunService: expect.objectContaining({
-        listRunsBySession: expect.any(Function),
-        listRuntimeEventsByRun: expect.any(Function),
-      }),
+      sessionRunService: mocks.codingAgentRuntime.sessionRunService,
+      agentRunService: mocks.codingAgentRuntime.sessionRunService,
       runContextService: mocks.codingAgentRuntime.runContextService,
       planService: mocks.codingAgentRuntime.sessionRunService,
       toolService: mocks.codingAgentRuntime.toolService,

@@ -28,13 +28,25 @@ import {
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { DesktopSessionService } from '../../services/session/session.service';
+import type { SessionRunPort } from '@megumi/coding-agent/run';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
-export type SessionHandlersService = DesktopSessionService;
+// Session IPC handlers code against the product SessionRunPort, narrowed to the
+// session surface the desktop UI consumes.
+export type SessionHandlersService = Pick<
+  SessionRunPort,
+  | 'createSession'
+  | 'listSessions'
+  | 'listMessagesBySession'
+  | 'listTimelineMessagesBySession'
+  | 'sendSessionMessage'
+  | 'cancelSessionMessage'
+  | 'createBranchDraft'
+  | 'cancelBranchDraft'
+>;
 
 export interface RegisterSessionHandlersOptions {
   logger?: RuntimeLogger;

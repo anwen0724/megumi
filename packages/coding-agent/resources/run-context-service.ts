@@ -49,7 +49,14 @@ const defaultClock: RunContextServiceClock = {
 
 const DEFAULT_DENIED_GLOBS = ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'];
 
-export class RunContextService {
+// Product-facing run-context surface consumed by UI shells. Shells code against
+// this port, not the concrete RunContextService.
+export interface RunContextServicePort {
+  getBaselineContext(runId: string): RunContext | undefined;
+  listWorkspaceSourcesByRun(runId: string): RunContextSource[];
+}
+
+export class RunContextService implements RunContextServicePort {
   private readonly contextRepository: RunContextRepositoryPort;
   private readonly workspaceSourceProvider?: WorkspaceSourceProviderPort;
   private readonly clock: RunContextServiceClock;

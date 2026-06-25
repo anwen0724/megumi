@@ -8,13 +8,14 @@ import {
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { DesktopProviderStatusService } from '../../services/provider/provider-status-facade';
+import type { ProviderSettingsPort } from '@megumi/coding-agent/settings';
 import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
-export type ProviderHandlersService = DesktopProviderStatusService;
+// Provider IPC handlers code against the product ProviderSettingsPort directly.
+export type ProviderHandlersService = ProviderSettingsPort;
 
 export interface RegisterProviderHandlersOptions {
   logger?: RuntimeLogger;

@@ -431,7 +431,45 @@ function createDefaultIds(): SessionRunServiceIds {
   };
 }
 
-export class SessionRunService {
+// Product-facing session/run surface consumed by UI shells (desktop IPC, future
+// web/cli). Shells code against this port, not the concrete SessionRunService.
+export interface SessionRunPort {
+  createSession(payload: SessionCreatePayload): Session;
+  listSessions(): Session[];
+  listMessagesBySession(sessionId: string): SessionMessage[];
+  listTimelineMessagesBySession(input: SessionTimelineListPayload): SessionTimelineListData;
+  listRunsBySession(sessionId: string): Run[];
+  sendSessionMessage(input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+  }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
+  cancelSessionMessage(payload: SessionMessageCancelPayload): boolean;
+  createBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    messageId: string;
+    intent: 'branch' | 'rerun';
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): { branchDraft: SessionBranchDraftView; events: RuntimeEvent[] };
+  cancelBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    branchMarkerId: string;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    cancelled: boolean;
+    reason?: 'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found';
+    events: RuntimeEvent[];
+  };
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+  getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined;
+  updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord;
+}
+
+export class SessionRunService implements SessionRunPort {
   private readonly repository: SessionRunRepository;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
