@@ -78,7 +78,7 @@ const runCommandPathFiles = [
   runCommandExecutorPath,
   'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
   'packages/coding-agent/tools/execution/tool-execution-router.ts',
-  'packages/coding-agent/tools/execution/tool-call-handler.service.ts',
+  'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
 ];
 
 describe('workspace restore source guards', () => {

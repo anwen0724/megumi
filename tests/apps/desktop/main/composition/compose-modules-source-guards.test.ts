@@ -43,7 +43,7 @@ describe('Desktop Main shell composition', () => {
     expect(persistenceComposition).toContain('new SessionRunRepository(database)');
     expect(sessionComposition).toContain('new SessionRunService');
     expect(sessionComposition).toContain('new PermissionSnapshotService');
-    expect(toolComposition).toContain('createToolOrchestratorService');
+    expect(toolComposition).toContain('createToolCallHandlerService');
     expect(toolComposition).toContain('createToolExecutionRouter');
   });
 });

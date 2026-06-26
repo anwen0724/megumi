@@ -77,8 +77,6 @@ export interface ToolApprovalResumePort {
   resumeToolApproval(input: ToolApprovalResumeInput): Promise<ToolApprovalResumeOutcome | undefined>;
 }
 
-export interface ToolOrchestratorPort extends ToolCallHandlerPort, ToolApprovalResumePort {}
-
 export interface PendingToolApprovalContinuation {
   pendingApproval: PendingToolApproval;
   request: ModelStepRuntimeRequest;

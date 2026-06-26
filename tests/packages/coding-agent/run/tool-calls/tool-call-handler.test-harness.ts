@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { createToolOrchestratorService } from '@megumi/coding-agent/tools/tool-orchestrator';
+import { createToolCallHandlerService } from '@megumi/coding-agent/run/tool-calls';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   ApprovalRequest,
@@ -13,7 +13,7 @@ import type {
   ToolResult,
 } from '@megumi/shared/tool';
 
-export function createToolOrchestratorHarness(input: {
+export function createToolCallHandlerHarness(input: {
   decisions?: readonly ToolExecutionDecision[];
   existingRecords?: readonly ToolExecutionRecord[];
   snapshot?: ToolRegistrySnapshot;
@@ -22,7 +22,7 @@ export function createToolOrchestratorHarness(input: {
   const repository = createInMemoryToolRepository(input.existingRecords ?? [], input.snapshot);
   const executor = createRecordingRawExecutor(new Set(input.failedToolCallIds ?? []));
   const decisions = [...(input.decisions ?? [])];
-  const orchestrator = createToolOrchestratorService({
+  const toolCallHandler = createToolCallHandlerService({
     repository,
     permissionMode: 'default',
     projectRoot: 'C:/project',
@@ -36,7 +36,7 @@ export function createToolOrchestratorHarness(input: {
     runtimeCapabilityPolicy: { customToolsEnabled: false, processExecutionEnabled: true },
   });
   return {
-    orchestrator,
+    toolCallHandler,
     repository,
     executor,
     recordsByCallOrder: () => repository.records().sort((a, b) => (a.callOrder ?? 0) - (b.callOrder ?? 0)),

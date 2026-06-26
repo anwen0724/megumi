@@ -1,8 +1,8 @@
-﻿// Composes Coding Agent tool registry, local tool adapters, and tool orchestration.
+// Composes Coding Agent tool registry, local tool adapters, and tool orchestration.
 import fs from 'fs-extra';
 import { createBuiltInToolRegistry } from '../tools/built-ins';
 import type { ToolRegistry } from '../tools/registry';
-import { createToolOrchestratorService } from '../tools/tool-orchestrator';
+import { createToolCallHandlerService } from '../run/tool-calls';
 import { ToolService } from '../tools/tool-service';
 import { WorkspaceChangeTrackerService } from '../workspace';
 import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
@@ -39,7 +39,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
         },
       });
 
-      return createToolOrchestratorService({
+      return createToolCallHandlerService({
         registry: input.toolRegistry,
         repository: {
           saveToolCall: (toolCall) => input.toolRepository.saveToolCall(toolCall),

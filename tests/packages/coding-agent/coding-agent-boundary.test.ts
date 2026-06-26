@@ -50,7 +50,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/runtime-logger.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/tool-calls/tool-call-handler.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-registry-snapshot.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/registry.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/built-ins/index.ts'))).toBe(true);
@@ -132,10 +133,12 @@ describe('coding-agent package boundary', () => {
 
   it('keeps tool orchestration and permission policy in coding-agent instead of desktop services', () => {
     const tools = sourceUnder('packages/coding-agent/tools');
+    const toolCalls = sourceUnder('packages/coding-agent/run/tool-calls');
     const permissions = sourceUnder('packages/coding-agent/run/permissions');
     const desktopToolServices = sourceUnder('apps/desktop/src/main/services/tool');
 
-    expect(tools).toContain('createToolOrchestratorService');
+    expect(toolCalls).toContain('createToolCallHandlerService');
+    expect(tools).not.toContain('createToolCallHandlerService');
     expect(tools).toContain('class ToolRegistrySnapshotService');
     expect(tools).toContain('createToolRegistrySnapshot');
     expect(permissions).toContain('evaluatePermissionPolicy');

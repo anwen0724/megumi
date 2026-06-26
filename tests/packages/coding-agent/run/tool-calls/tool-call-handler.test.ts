@@ -9,15 +9,15 @@ import {
   awaitingApprovalRecord,
   createHandleInput,
   createdRecord,
-  createToolOrchestratorHarness,
+  createToolCallHandlerHarness,
   requireApprovalSerial,
   terminalSucceededRecord,
   toolCall,
-} from './tool-orchestrator.test-harness';
+} from './tool-call-handler.test-harness';
 
-describe('ToolOrchestrator source-order barrier', () => {
+describe('ToolCallHandler source-order barrier', () => {
   it('runs consecutive parallel records before an approval barrier', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [
         allowParallel('read_file'),
         allowParallel('search_text'),
@@ -26,7 +26,7 @@ describe('ToolOrchestrator source-order barrier', () => {
       ],
     });
 
-    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+    const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),
       toolCall('call:1', 'search_text'),
       toolCall('call:2', 'edit_file'),
@@ -46,7 +46,7 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('runs a serial record alone between parallel windows', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [
         allowParallel('read_file'),
         allowSerial('run_command'),
@@ -54,7 +54,7 @@ describe('ToolOrchestrator source-order barrier', () => {
       ],
     });
 
-    await harness.orchestrator.handleToolCalls(createHandleInput([
+    await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),
       toolCall('call:1', 'run_command'),
       toolCall('call:2', 'search_text'),
@@ -74,11 +74,11 @@ describe('ToolOrchestrator source-order barrier', () => {
 
   it('passes workspace scope separately from abort signal to routed executors', async () => {
     const abortController = new AbortController();
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [allowSerial('edit_file')],
     });
 
-    await harness.orchestrator.handleToolCalls({
+    await harness.toolCallHandler.handleToolCalls({
       ...createHandleInput([toolCall('call:0', 'edit_file')]),
       signal: abortController.signal,
     });
@@ -97,11 +97,11 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('finalizes the workspace change scope after managed execution windows', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [allowSerial('write_file')],
     });
 
-    await harness.orchestrator.handleToolCalls(createHandleInput([
+    await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'write_file'),
     ]));
 
@@ -113,14 +113,14 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('finalizes the workspace change scope after approval resume execution windows', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       existingRecords: [
         terminalSucceededRecord('call:0', 0),
         awaitingApprovalRecord('call:1', 1),
       ],
     });
 
-    await harness.orchestrator.resumeToolApproval({
+    await harness.toolCallHandler.resumeToolApproval({
       approvalRequestId: 'approval:1',
       decision: 'approved',
       decidedAt: '2026-06-15T00:00:10.000Z',
@@ -134,7 +134,7 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('does not re-execute terminal records during resume', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       existingRecords: [
         terminalSucceededRecord('call:0', 0),
         awaitingApprovalRecord('call:1', 1),
@@ -146,7 +146,7 @@ describe('ToolOrchestrator source-order barrier', () => {
       ],
     });
 
-    await harness.orchestrator.resumeToolApproval({
+    await harness.toolCallHandler.resumeToolApproval({
       approvalRequestId: 'approval:1',
       decision: 'approved',
       decidedAt: '2026-06-15T00:00:10.000Z',
@@ -161,7 +161,7 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('turns approval rejection into observation and continues later records', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       existingRecords: [
         terminalSucceededRecord('call:0', 0),
         awaitingApprovalRecord('call:1', 1),
@@ -170,7 +170,7 @@ describe('ToolOrchestrator source-order barrier', () => {
       decisions: [allowParallel('read_file')],
     });
 
-    const outcome = await harness.orchestrator.resumeToolApproval({
+    const outcome = await harness.toolCallHandler.resumeToolApproval({
       approvalRequestId: 'approval:1',
       decision: 'denied',
       decidedAt: '2026-06-15T00:00:10.000Z',
@@ -187,11 +187,11 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('emits runtime events for decisions, observations, and continuation readiness', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [allowParallel('read_file')],
     });
 
-    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+    const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),
     ]));
 
@@ -204,11 +204,11 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('emits legacy projection events for requested, started, and completed tool execution facts', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [allowParallel('read_file')],
     });
 
-    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+    const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),
     ]));
 
@@ -230,7 +230,7 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('emits legacy denial projection events for rejected records', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [{
         outcome: 'reject',
         reasonCode: 'CUSTOM_TOOL_REJECTED',
@@ -240,7 +240,7 @@ describe('ToolOrchestrator source-order barrier', () => {
       }],
     });
 
-    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+    const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'custom_tool'),
     ]));
 
@@ -252,12 +252,12 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('emits legacy failure projection events for failed records', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [allowParallel('read_file')],
       failedToolCallIds: ['call:0'],
     });
 
-    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+    const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),
     ]));
 
@@ -280,11 +280,11 @@ describe('ToolOrchestrator source-order barrier', () => {
   });
 
   it('emits approval request runtime events for approval barriers', async () => {
-    const harness = createToolOrchestratorHarness({
+    const harness = createToolCallHandlerHarness({
       decisions: [requireApprovalSerial('write_file')],
     });
 
-    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+    const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'write_file'),
     ]));
 
@@ -313,9 +313,9 @@ describe('ToolOrchestrator source-order barrier', () => {
       registrations: createBuiltInToolRegistrations(),
       providerCapabilitySummary: { supportsToolCall: true },
     });
-    const harness = createToolOrchestratorHarness({ snapshot });
+    const harness = createToolCallHandlerHarness({ snapshot });
 
-    const outcome = await harness.orchestrator.handleToolCalls(createHandleInput([
+    const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),
     ]));
 

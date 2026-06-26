@@ -57,9 +57,9 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps Host execution behind PermissionPolicy', () => {
-    const orchestrator = read('packages/coding-agent/tools/tool-orchestrator.ts');
-    const applyDecision = functionSection(orchestrator, 'applyDecision', 'advanceExecutionWindows');
-    const runRecord = functionSection(orchestrator, 'runRecord', 'budgetProfileForRecord');
+    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-handler.ts');
+    const applyDecision = functionSection(toolCallHandler, 'applyDecision', 'advanceExecutionWindows');
+    const runRecord = functionSection(toolCallHandler, 'runRecord', 'budgetProfileForRecord');
 
     expect(applyDecision).toContain('permissionDecisionForRecord');
     expect(applyDecision).toContain('decisionEvaluator.evaluate');
@@ -69,8 +69,8 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
-    const orchestrator = read('packages/coding-agent/tools/tool-orchestrator.ts');
-    const resumeToolApproval = functionSection(orchestrator, 'resumeToolApproval', 'prepareRecords');
+    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-handler.ts');
+    const resumeToolApproval = functionSection(toolCallHandler, 'resumeToolApproval', 'prepareRecords');
     const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
     const getToolExecutionIndex = resumeToolApproval.indexOf('repository.getToolExecution(approval.toolExecutionId)');
     const deniedBranchIndex = resumeToolApproval.indexOf("input.decision === 'denied'");
@@ -92,7 +92,7 @@ describe('built-in tools and host adapters source guards', () => {
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {
     const combined = [
       ...listSourceFiles('packages/coding-agent/tools/built-ins'),
-      'packages/coding-agent/tools/tool-orchestrator.ts',
+      'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
       'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
       'packages/coding-agent/tools/execution/tool-execution-router.ts',
       ...listSourceFiles('packages/coding-agent/tools/execution/tool-executors'),

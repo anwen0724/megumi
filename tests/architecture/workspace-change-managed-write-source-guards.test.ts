@@ -51,7 +51,7 @@ describe('workspace change managed write source guards', () => {
       'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts',
       'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
       'packages/coding-agent/tools/execution/tool-execution-router.ts',
-      'packages/coding-agent/tools/execution/tool-call-handler.service.ts',
+      'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
     ];
     const forbidden = [
       'saveRestoreRequest',

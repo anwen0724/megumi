@@ -269,7 +269,7 @@ describe('package dependency boundaries', () => {
 
   it('keeps ToolCallHandlerService behind the source-aware execution router', () => {
     const source = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'),
+      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-handler.ts'),
       'utf8',
     );
 
@@ -280,6 +280,28 @@ describe('package dependency boundaries', () => {
     expect(source).not.toContain('createBuiltInToolSourceExecutor');
     expect(source).not.toContain('fs-extra');
     expect(source).not.toContain('child_process');
+  });
+
+  it('keeps run-time tool call orchestration out of the tool system package', () => {
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/tools/execution/tool-call-handler.service.ts'))).toBe(false);
+
+    const source = walkSourceFiles(path.join(root, 'packages/coding-agent/tools'))
+      .map((file) => fs.readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(source).not.toContain("from '@megumi/coding-agent/run/tool-calls");
+    expect(source).not.toContain("from '../run/tool-calls");
+    expect(source).not.toContain("from '../../run/tool-calls");
+    expect(source).not.toContain('run/loop');
+    expect(source).not.toContain('run/lifecycle');
+    expect(source).not.toContain('run/events');
+    expect(source).not.toContain('createToolCallHandlerService');
+    expect(source).not.toContain('ToolCallHandlerPort');
+    expect(source).not.toContain('ToolApprovalResumePort');
+    expect(source).not.toContain('runModelToolLoop');
+    expect(source).not.toContain('advanceExecutionWindows');
+    expect(source).not.toContain('prepareRecords');
   });
 
   it('keeps legacy project tool executor wrapper removed', () => {
@@ -317,9 +339,9 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/createProjectLocalToolSourceExecutor/);
   });
 
-  it('keeps 19.02 tool handling sequential without batch orchestration', () => {
+  it('keeps tool handling source-ordered without batch orchestration objects', () => {
     const handler = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/tools/execution/tool-call-handler.service.ts'),
+      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-handler.ts'),
       'utf8',
     );
     const router = fs.readFileSync(
@@ -327,10 +349,10 @@ describe('package dependency boundaries', () => {
       'utf8',
     );
 
-    expect(handler).not.toContain('Promise.all');
+    expect(handler).toContain('nextExecutableWindow');
+    expect(handler).toContain('advanceExecutionWindows');
     expect(handler).not.toMatch(/\bToolBatch\b/);
     expect(handler).not.toMatch(/\bBatchToolCall\b/);
-    expect(router).not.toContain('Promise.all');
     expect(router).not.toMatch(/\bToolBatch\b/);
   });
 
