@@ -67,7 +67,7 @@ const obsoleteRuntimeErrorFieldPattern = new RegExp(`\\b${['recover', 'able'].jo
 const runtimeErrorContractFiles = [
   'packages/shared/runtime/errors.ts',
   'packages/shared/ipc/errors.ts',
-  'packages/agent/errors.ts',
+  'packages/coding-agent/run/lifecycle/runtime-errors.ts',
 ];
 
 describe('Runtime Common Foundation source guards', () => {

@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import type { ModelStepCompletionResult } from '@megumi/agent';
+import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { MemoryExtractionModelClientService } from '@megumi/coding-agent/memory';
 

@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { ModelInputContext } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ModelStepCompletionResult, ProviderRuntimeConfig } from '@megumi/agent';
+import type { ModelStepCompletionResult, ProviderRuntimeConfig } from '@megumi/coding-agent/run';
 import {
   ModelStepProviderService,
   type ModelStepProviderRegistryPort,
   type ModelStepRuntimeResolverPort,
-} from '@megumi/coding-agent/run/model-step-provider-service';
+} from '@megumi/coding-agent/run/model-step/model-step-provider-service';
 import { ProviderRuntimeResolutionError } from '@megumi/coding-agent/settings';
 
 const runtimeContext = {

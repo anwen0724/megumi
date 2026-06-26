@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -37,14 +37,14 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/context/model-step-input-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/context/model-step-input-build.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/session-compaction-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/compaction/session-compaction-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/input-facts.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/run-orchestrator.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/model-step-stream.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/event-utils.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/model-step/model-step-stream.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/events/runtime-event-utils.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
@@ -66,8 +66,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/provider-settings.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/provider-runtime.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/instructions/agent-instruction-source.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/resources/run-context-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/instructions/agent-instruction-source.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/resources/run-context-service.ts'))).toBe(true);
   });
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
@@ -103,8 +103,8 @@ describe('coding-agent package boundary', () => {
     const artifacts = sourceUnder('packages/coding-agent/artifacts');
     const workspace = sourceUnder('packages/coding-agent/workspace');
     const settings = sourceUnder('packages/coding-agent/settings');
-    const instructions = sourceUnder('packages/coding-agent/run/instructions');
-    const resources = sourceUnder('packages/coding-agent/run/resources');
+    const instructions = sourceUnder('packages/coding-agent/run/context/instructions');
+    const resources = sourceUnder('packages/coding-agent/run/context/resources');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(memory).toContain('class MemoryRecallRuntimeService');
@@ -126,10 +126,8 @@ describe('coding-agent package boundary', () => {
     expect(desktopServices).not.toContain('class WorkspaceRestoreService');
   });
 
-  it('does not place sessions or multi-agent behavior under packages/agent', () => {
-    expect(existsSync(join(root, 'packages/agent/session'))).toBe(false);
-    expect(existsSync(join(root, 'packages/agent/sessions'))).toBe(false);
-    expect(existsSync(join(root, 'packages/agent/multi-agent'))).toBe(false);
+  it('does not keep a top-level packages/agent package', () => {
+    expect(existsSync(join(root, 'packages/agent'))).toBe(false);
   });
 
   it('keeps tool orchestration and permission policy in coding-agent instead of desktop services', () => {

@@ -11,7 +11,7 @@ import {
   RunContextBaselineGetRequestSchema,
   RunContextSourcesListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RunContextService } from '@megumi/coding-agent/run/resources';
+import type { RunContextService } from '@megumi/coding-agent/run/context/resources';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';

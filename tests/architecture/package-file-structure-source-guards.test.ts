@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -116,13 +116,14 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/input-command'))).toBe(false);
   });
 
-  it('keeps generic Agent Runtime under packages/agent', () => {
-    expect(existsSync(join(repoRoot, 'packages/agent/loop/agent-loop.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/agent/model/model-step.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/agent/model/model-step-event-adapter.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/agent/model/model-step-provider-adapter.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/agent/events/runtime-event-factory.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/agent/state/state-policy.ts'))).toBe(true);
+  it('keeps agent loop runtime inside packages/coding-agent/run', () => {
+    expect(existsSync(join(repoRoot, 'packages/agent'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step-event-adapter.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step-provider-adapter.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/run-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);
@@ -145,7 +146,7 @@ describe('package and file structure source guards', () => {
 
     expect(flatServiceFiles).toEqual([]);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/session-run-service.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step-provider-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step-provider-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/execution/tool-executors/read-file.executor.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);

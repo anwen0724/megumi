@@ -11,7 +11,7 @@ function read(path: string): string {
 
 describe('main chat stream adapter source guards', () => {
   it('keeps ChatStreamEvent adapter in main and out of renderer', () => {
-    const adapter = read('packages/coding-agent/run/chat-stream-event-adapter.ts');
+    const adapter = read('packages/coding-agent/run/events/chat-stream-event-adapter.ts');
 
     expect(adapter).toContain('ChatStreamEventSink');
     expect(adapter).toContain('RuntimeEvent');
@@ -31,7 +31,7 @@ describe('main chat stream adapter source guards', () => {
 
   it('does not introduce assistant answer event naming in runtime adapter path', () => {
     for (const file of [
-      'packages/coding-agent/run/chat-stream-event-adapter.ts',
+      'packages/coding-agent/run/events/chat-stream-event-adapter.ts',
       'packages/coding-agent/run/session-run-service.ts',
       'packages/ai/providers/openai-compatible.ts',
     ]) {

@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -53,9 +53,8 @@ describe('run context workspace grounding source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps agent context runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/agent')
-      .filter((file) => projectPath(file).includes('agent-runtime'))
+  it('keeps coding-agent context runtime free of Host privileges and concrete persistence', () => {
+    const offenders = filesUnder('packages/coding-agent/run/context')
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process|node:http|node:https|node:net)/.test(source);
@@ -93,12 +92,12 @@ describe('run context workspace grounding source guards', () => {
   it('does not add future Agent capabilities in context foundation files', () => {
     const contextFiles = [
       ...filesUnder('packages/shared'),
-      ...filesUnder('packages/agent'),
+      ...filesUnder('packages/coding-agent/run/context'),
       ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
     ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)))
-      .filter((file) => projectPath(file) !== 'packages/agent/loop/agent-loop.ts');
+      .filter((file) => projectPath(file) !== 'packages/coding-agent/run/loop/agent-loop.ts');
 
     const forbiddenPatterns = [
       /tool registry/i,

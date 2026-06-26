@@ -4,7 +4,7 @@ import {
   RunContextService,
   type RunContextRepositoryPort,
   type WorkspaceSourceProviderPort,
-} from '@megumi/coding-agent/run/resources';
+} from '@megumi/coding-agent/run/context/resources';
 import type { RunContext, RunContextSource } from '@megumi/shared/run';
 
 function createInMemoryRepository(): RunContextRepositoryPort {

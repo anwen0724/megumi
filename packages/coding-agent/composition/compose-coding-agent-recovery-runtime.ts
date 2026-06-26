@@ -5,7 +5,7 @@ import { RecoveryRepository } from '../persistence/repos/recovery.repo';
 import { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
-import { createRecoveryService, type RecoveryLogger } from '../run/recovery-service';
+import { createRecoveryService, type RecoveryLogger } from '../run/recovery';
 import { WorkspaceRestoreService } from '../workspace';
 import type { SessionRunService } from '../run/session-run-service';
 

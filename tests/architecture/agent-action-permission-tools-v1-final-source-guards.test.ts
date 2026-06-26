@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -7,7 +7,6 @@ const ROOT = process.cwd();
 const PRODUCTION_ROOTS = [
   'packages/shared',
   'packages/ai',
-  'packages/agent',
   'packages/coding-agent',
   'apps/desktop/src/main',
   'apps/desktop/src/preload',
@@ -130,7 +129,6 @@ describe('agent action permission tools v1 final source guards', () => {
     const offenders = [
       ...collectTsFiles('packages/shared'),
       ...collectTsFiles('packages/ai'),
-      ...collectTsFiles('packages/agent'),
       ...collectTsFiles('packages/coding-agent'),
     ]
       .filter((file) => {

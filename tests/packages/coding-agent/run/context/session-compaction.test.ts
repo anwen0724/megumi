@@ -6,7 +6,7 @@ import {
   prepareSessionCompactionInput,
   serializeSessionCompactionInput,
   shouldRunSessionCompaction,
-} from '@megumi/coding-agent/run/context/session-compaction';
+} from '@megumi/coding-agent/run/context/compaction/session-compaction';
 import { estimateModelInputContextTokens } from '@megumi/coding-agent/run/context/context-budget';
 import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/run/context/model-step-input-context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';

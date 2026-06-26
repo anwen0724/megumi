@@ -1,7 +1,7 @@
 ﻿// Coding Agent memory extraction model client adapts extraction prompts to hidden model-step requests.
 // The provider sees a normal ModelStepRuntimeRequest; memory persistence stays in host services.
 import type { MemoryExtractionPrompt } from './extraction';
-import type { ModelStepCompletionResult } from '@megumi/agent';
+import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId } from '@megumi/shared/provider';

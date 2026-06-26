@@ -17,7 +17,7 @@ import {
 } from '@megumi/shared/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { ModelStepCompletionResult } from '@megumi/agent';
+import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
 function appSettingsProvider() {

@@ -2,11 +2,11 @@
 // Every member is a product-owned port interface — this is the single shell-agnostic
 // contract that desktop, and future web/cli shells, code against.
 import type { SessionRunPort } from '../run/session-run-service';
-import type { RecoveryService } from '../run/recovery-service';
+import type { RecoveryService } from '../run/recovery';
 import type { ToolService } from '../tools/tool-service-port';
 import type { ArtifactServicePort } from '../artifacts';
 import type { MemoryService } from '../memory';
-import type { RunContextServicePort } from '../run/resources';
+import type { RunContextServicePort } from '../run/context/resources';
 import type { ProviderSettingsPort } from '../settings';
 import type { ProjectService } from '../workspace';
 

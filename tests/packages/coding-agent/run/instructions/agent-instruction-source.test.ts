@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   AgentInstructionSourceService,
   AGENT_INSTRUCTION_SOURCE_HARD_CAP_BYTES,
-} from '@megumi/coding-agent/run/instructions';
+} from '@megumi/coding-agent/run/context/instructions';
 
 const loadedAt = '2026-05-28T00:00:00.000Z';
 const tempDirs: string[] = [];

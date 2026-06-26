@@ -45,9 +45,8 @@ function offenders(pathsToScan: string[], forbidden: RegExp[]): string[] {
 }
 
 describe('Project Instruction Context source guards', () => {
-  it('keeps AGENTS.md file reading in desktop main only', () => {
+  it('keeps AGENTS.md file reading out of provider and renderer layers', () => {
     expect(offenders([
-      'packages/coding-agent/run/context',
       'packages/ai',
       'apps/desktop/src/renderer',
     ], [

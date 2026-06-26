@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -97,7 +97,8 @@ describe('context budget and model input chain boundaries', () => {
       sourceUnder('packages/ai'),
       sourceUnder('apps/desktop/src/renderer'),
       sourceUnder('apps/desktop/src/main'),
-      sourceUnder('packages/agent'),
+      sourceUnder('packages/coding-agent/run/model-step'),
+      sourceUnder('packages/coding-agent/run/loop'),
     ].join('\n');
 
     expect(source).not.toContain('apply' + 'ContextBudget');

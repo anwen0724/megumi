@@ -21,9 +21,9 @@ import { resolveModelStepEffectiveCwd, type ModelStepEffectiveCwd } from './effe
 import {
   createRuntimeFactsForRunInput,
   type CodingAgentRunInputFacts,
-} from '../input-facts';
+} from './input-facts';
 
-import type { LoadInstructionSourcesInput } from '../instructions/agent-instruction-source';
+import type { LoadInstructionSourcesInput } from './instructions/agent-instruction-source';
 export type { LoadInstructionSourcesInput };
 
 export interface ModelStepInputBuildInstructionSourceService {

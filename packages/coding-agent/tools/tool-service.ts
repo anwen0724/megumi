@@ -1,5 +1,5 @@
 // Provides the product-facing tool service used by UI shells and product composition.
-import type { ToolApprovalResumeInput } from '@megumi/agent';
+import type { ToolApprovalResumeInput } from '@megumi/coding-agent/run';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   ApprovalRecord,

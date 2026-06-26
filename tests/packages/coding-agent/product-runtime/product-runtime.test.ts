@@ -10,7 +10,7 @@ import {
   resolveAppSettings,
   type AppSettingsRaw,
 } from '@megumi/shared/settings';
-import type { ModelStepCompletionResult } from '@megumi/agent';
+import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
 describe('Coding Agent product runtime', () => {

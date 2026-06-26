@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,12 +13,10 @@ const activeRoots = [
   'apps/desktop/src',
   'packages/shared',
   'packages/ai',
-  'packages/agent',
   'packages/coding-agent',
   'tests/apps',
   'tests/packages/shared',
   'tests/packages/ai',
-  'tests/packages/agent',
   'tests/packages/coding-agent',
 ];
 

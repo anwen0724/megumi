@@ -133,7 +133,7 @@ describe('session context source guards', () => {
       read('packages/coding-agent/run/context/context-budget.ts'),
       read('packages/coding-agent/run/context/model-input-context-builder.ts'),
       read('packages/coding-agent/run/context/model-step-input-context.ts'),
-      read('packages/coding-agent/run/context/session-compaction.ts'),
+      read('packages/coding-agent/run/context/compaction/session-compaction.ts'),
     ].join('\n');
 
     for (const forbidden of forbiddenContextManagementNames) {

@@ -144,7 +144,7 @@ describe('Desktop Main directory boundaries', () => {
     expect(source).toContain('WorkspaceChangeRepository');
     expect(source).not.toContain("from 'electron'");
     expect(source).not.toContain('@megumi/coding-agent');
-    expect(source).not.toContain('@megumi/agent');
+    expect(source).not.toContain('@megumi/coding-agent/run');
     expect(source).not.toContain('src/main/services');
     expect(source).not.toContain('src/main/ipc');
     expect(source).not.toContain('src/renderer');

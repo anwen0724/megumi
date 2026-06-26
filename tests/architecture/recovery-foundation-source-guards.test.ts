@@ -6,8 +6,8 @@ const root = process.cwd();
 
 const recoveryProductionFiles = [
   'packages/shared/recovery/contracts.ts',
-  'packages/agent/recovery/recovery-observation-mapper.ts',
-  'packages/coding-agent/run/recovery-service.ts',
+  'packages/coding-agent/run/recovery/recovery-observation-mapper.ts',
+  'packages/coding-agent/run/recovery/recovery-service.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/renderer/entities/recovery/store.ts',
 ];
@@ -45,14 +45,14 @@ describe('recovery foundation source guards', () => {
     const runtimeContractFiles = [
       'packages/shared/runtime/errors.ts',
       'packages/shared/ipc/errors.ts',
-      'packages/agent/errors.ts',
+      'packages/coding-agent/run/lifecycle/runtime-errors.ts',
     ];
 
     expect(offenders(/\brecoverable\b/, runtimeContractFiles)).toEqual([]);
   });
 
   it('keeps core recovery platform independent', () => {
-    const coreRecovery = read('packages/agent/recovery/recovery-observation-mapper.ts');
+    const coreRecovery = read('packages/coding-agent/run/recovery/recovery-observation-mapper.ts');
 
     expect(coreRecovery).not.toMatch(/from ['"]electron['"]/);
     expect(coreRecovery).not.toMatch(/from ['"]node:fs['"]/);

@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -60,9 +60,8 @@ describe('run modes and plan artifact source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps agent run mode runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/agent')
-      .filter((file) => projectPath(file).includes('agent-runtime'))
+  it('keeps coding-agent run mode runtime free of Host privileges and concrete persistence', () => {
+    const offenders = filesUnder('packages/coding-agent/run')
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process|node:http|node:https|node:net)/.test(source);

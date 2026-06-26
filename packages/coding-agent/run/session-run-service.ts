@@ -1,4 +1,4 @@
-﻿// Orchestrates Coding Agent product session runs by coordinating input facts,
+// Orchestrates Coding Agent product session runs by coordinating input facts,
 // product persistence, permissions, context construction, tools, and model execution.
 import path from 'node:path';
 import {
@@ -8,16 +8,16 @@ import {
   createTerminalRuntimeError,
   isTerminalRunStatus,
   runTurn,
-} from '@megumi/agent';
-import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/agent';
-import type { ModelStepCompletionResult } from '@megumi/agent';
+} from '@megumi/coding-agent/run';
+import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/coding-agent/run';
+import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
 import {
   type PendingToolApprovalContinuation,
   type ToolApprovalResumeInput,
   type ToolApprovalResumeOutcome,
   type ToolApprovalResumePort,
   type ToolCallHandlerPort,
-} from '@megumi/agent';
+} from '@megumi/coding-agent/run';
 import {
   ModelStepInputBuildService,
   SessionCompactionOrchestrator,
@@ -53,7 +53,7 @@ import {
   createStepCompletedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
-} from '@megumi/agent';
+} from '@megumi/coding-agent/run';
 import { composeCodingAgentPersistence } from '../composition/compose-coding-agent-persistence';
 import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
@@ -102,7 +102,7 @@ import {
   createChatStreamEventAdapter,
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
-} from './chat-stream-event-adapter';
+} from './events/chat-stream-event-adapter';
 import type { TimelineMessage } from '@megumi/shared/timeline';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {

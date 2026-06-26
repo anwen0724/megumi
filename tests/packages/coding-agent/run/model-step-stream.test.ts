@@ -5,7 +5,7 @@ import {
   type RuntimeEvent,
 } from '@megumi/shared/runtime';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { ToolCallHandlerPort } from '@megumi/agent';
+import type { ToolCallHandlerPort } from '@megumi/coding-agent/run';
 import {
   streamCodingAgentModelStep,
   type CodingAgentModelStepStreamPorts,

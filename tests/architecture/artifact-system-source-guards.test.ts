@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -55,7 +55,6 @@ describe('artifact system source guards', () => {
 
   it('keeps core artifact helpers free of Host privileges and persistence', () => {
     const offenders = [
-      ...filesUnder('packages/agent'),
       ...filesUnder('packages/coding-agent'),
     ]
       .filter((file) => projectPath(file).includes('artifact') || projectPath(file).includes('plan-artifact'))
@@ -96,7 +95,6 @@ describe('artifact system source guards', () => {
   it('does not implement future artifact editing export publish memory or tool execution capabilities', () => {
     const artifactFiles = [
       ...filesUnder('packages/shared'),
-      ...filesUnder('packages/agent'),
       ...filesUnder('packages/coding-agent'),
       ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),

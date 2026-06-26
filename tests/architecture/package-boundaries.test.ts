@@ -1,9 +1,10 @@
-﻿// @vitest-environment node
-import fs from 'node:fs';
-import path from 'node:path';
+// @vitest-environment node
+import fs, { existsSync, readFileSync, readdirSync } from 'node:fs';
+import path, { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
+const repoRoot = root;
 const sourceExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 
 function walkSourceFiles(directory: string): string[] {
@@ -50,6 +51,33 @@ function findForbiddenReferences(packageRoot: string, forbiddenReferences: RegEx
   return violations;
 }
 
+function sourceFilesUnder(relativeDir: string): string[] {
+  const rootDir = join(repoRoot, relativeDir);
+  if (!existsSync(rootDir)) {
+    return [];
+  }
+
+  const result: string[] = [];
+  const visit = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === '.git') {
+          continue;
+        }
+        visit(fullPath);
+        continue;
+      }
+      if (/\.(ts|tsx|js|json)$/.test(entry.name)) {
+        result.push(relative(repoRoot, fullPath).replaceAll(sep, '/'));
+      }
+    }
+  };
+
+  visit(rootDir);
+  return result;
+}
+
 describe('package dependency boundaries', () => {
   it('keeps packages/shared independent from implementation packages', () => {
     expect(
@@ -87,17 +115,26 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/\bmodelVisibleName\b/);
   });
 
-  it('keeps packages/agent independent from desktop, coding-agent, db, and Electron', () => {
-    expect(
-      findForbiddenReferences('packages/agent', [
-        /@megumi\/coding-agent(\/|['"]|$)/,
-        /@megumi\/input(\/|['"]|$)/,
-        /@megumi\/command(\/|['"]|$)/,
-        /@megumi\/db(\/|['"]|$)/,
-        /from ['"]electron['"]/,
-        /apps\/desktop/,
-      ]),
-    ).toEqual([]);
+  it('does not keep a top-level packages/agent package or removed agent alias', () => {
+    expect(existsSync(join(repoRoot, 'packages/agent'))).toBe(false);
+    const removedAgentAlias = '@megumi/' + 'agent';
+
+    const scannedFiles = [
+      'tsconfig.json',
+      'vitest.config.ts',
+      'vite.main.config.ts',
+      'vite.preload.config.ts',
+      'vite.renderer.config.ts',
+      ...sourceFilesUnder('apps'),
+      ...sourceFilesUnder('packages'),
+      ...sourceFilesUnder('tests'),
+    ].filter((file) => !file.includes('.local-docs'));
+
+    const offenders = scannedFiles
+      .filter((file) => existsSync(join(repoRoot, file)))
+      .filter((file) => readFileSync(join(repoRoot, file), 'utf8').includes(removedAgentAlias));
+
+    expect(offenders).toEqual([]);
   });
 
   it('keeps packages/coding-agent independent from desktop, db, core, and Electron', () => {

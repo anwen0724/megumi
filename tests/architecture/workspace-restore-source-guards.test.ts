@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -9,7 +9,6 @@ const productionRoots = [
   'apps/desktop/src',
   'packages/ai',
   'packages/coding-agent/run/context',
-  'packages/agent',
   'packages/coding-agent/persistence',
   'packages/shared',
 ];
@@ -37,7 +36,7 @@ const restoreBoundaryAllowlist = new Set([
   'packages/coding-agent/composition/compose-tool-runtime.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/main/ipc/register-ipc-handlers.ts',
-  'packages/coding-agent/run/recovery-service.ts',
+  'packages/coding-agent/run/recovery/recovery-service.ts',
   'packages/coding-agent/run/session-run-service.ts',
   'packages/coding-agent/workspace/workspace-change-tracker.ts',
   'packages/coding-agent/workspace/workspace-restore.ts',

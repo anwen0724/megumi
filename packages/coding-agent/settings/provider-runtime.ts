@@ -1,6 +1,6 @@
-ï»¿// Resolves provider runtime configuration from Main-owned settings and the env port only.
+// Resolves provider runtime configuration from Main-owned settings and the env port only.
 // SQLite and other host persistence details are kept outside provider request execution.
-// The env port is required â€” the desktop composition supplies the host process environment.
+// The env port is required ¡ª the desktop composition supplies the host process environment.
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type {
@@ -8,7 +8,7 @@ import type {
   ProviderSettings,
 } from '@megumi/shared/provider';
 import { DEFAULT_PROVIDER_SETTINGS } from '@megumi/shared/provider';
-import type { ProviderRuntimeConfig } from '@megumi/agent';
+import type { ProviderRuntimeConfig } from '@megumi/coding-agent/run';
 
 export interface ProviderRuntimeSettingsPort {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;

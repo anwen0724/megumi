@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -54,9 +54,8 @@ describe('session run foundation source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps packages/agent run runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/agent')
-      .filter((file) => projectPath(file).includes('agent-runtime'))
+  it('keeps coding-agent run runtime free of Host privileges and concrete persistence', () => {
+    const offenders = filesUnder('packages/coding-agent/run')
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process)/.test(source);
@@ -66,10 +65,10 @@ describe('session run foundation source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps agent runtime implementation under the agent-runtime path', () => {
-    const agentRuntimeFiles = filesUnder('packages/agent');
-
-    expect(agentRuntimeFiles.length).toBeGreaterThan(0);
+  it('keeps agent runtime implementation under coding-agent run', () => {
+    expect(existsSync(join(ROOT, 'packages/agent'))).toBe(false);
+    expect(existsSync(join(ROOT, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
+    expect(existsSync(join(ROOT, 'packages/coding-agent/run/model-step/model-step.ts'))).toBe(true);
     expect(existsSync(join(ROOT, 'packages/core/run-runtime'))).toBe(false);
   });
 
@@ -98,7 +97,7 @@ describe('session run foundation source guards', () => {
     const runtimeErrorContractFiles = [
       join(ROOT, 'packages/shared/runtime/errors.ts'),
       join(ROOT, 'packages/shared/ipc/errors.ts'),
-      join(ROOT, 'packages/agent/errors.ts'),
+      join(ROOT, 'packages/coding-agent/run/lifecycle/runtime-errors.ts'),
     ];
 
     const offenders = runtimeErrorContractFiles
@@ -111,7 +110,7 @@ describe('session run foundation source guards', () => {
   it('does not implement later Agent capabilities in lifecycle foundation files', () => {
     const lifecycleFiles = [
       ...filesUnder('packages/shared'),
-      ...filesUnder('packages/agent'),
+      ...filesUnder('packages/coding-agent/run'),
       ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
