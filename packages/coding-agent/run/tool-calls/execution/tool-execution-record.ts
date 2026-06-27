@@ -1,6 +1,14 @@
-// Provides shared projections for persisted tool execution records.
+// Owns persisted tool execution record transitions and projections.
+import {
+  createRawToolResultFromContent,
+  normalizeToolError,
+} from '../../../tools/normalization';
+import { createObservationFromRawToolResult } from '../../../tools/observation-shaper';
 import type { RuntimeError } from '@megumi/shared/runtime';
-import type { ToolExecutionRecord } from '@megumi/shared/tool';
+import type { RawToolResult, ToolExecutionRecord, ToolObservationBudgetProfile } from '@megumi/shared/tool';
+import type { CodingAgentToolExecutionRunOptions } from '../../../tools/tool-execution-host-port';
+import type { ResolvedToolCallRunnerOptions } from '../tool-call-runner';
+import { isContinuationTerminal } from './tool-execution-window';
 
 export function runtimeErrorFromFailedRecord(record: ToolExecutionRecord): RuntimeError {
   return {
@@ -22,4 +30,92 @@ export function recordEventPayload(record: ToolExecutionRecord) {
     callOrder: record.callOrder ?? 0,
     status: record.status,
   };
+}
+
+export async function runToolExecutionRecord(
+  options: ResolvedToolCallRunnerOptions,
+  record: ToolExecutionRecord,
+  executionOptions?: CodingAgentToolExecutionRunOptions,
+): Promise<ToolExecutionRecord> {
+  if (isContinuationTerminal(record.status) || record.status === 'cancelled') {
+    return record;
+  }
+
+  const running = options.repository.saveToolExecution({
+    ...record,
+    status: 'running',
+    startedAt: options.now(),
+  });
+
+  try {
+    const rawResult = await options.toolExecutionRouter.executeToolExecution(
+      running,
+      executionOptions,
+    );
+    const observation = createObservationFromRawToolResult({
+      rawResult,
+      profile: budgetProfileForRecord(running, rawResult),
+      record: running,
+      ids: options.ids,
+      now: options.now,
+    });
+    return options.repository.saveToolExecution({
+      ...running,
+      status: rawResult.isError ? 'failed' : 'succeeded',
+      completedAt: observation.createdAt,
+      rawResultRef: rawResult.rawToolResultId,
+      observation,
+      resultPreview: observation.content.slice(0, 500),
+      ...(rawResult.isError ? { error: normalizeToolError(rawResult.content, {
+        debugId: `tool-error:${running.toolExecutionId}`,
+        fallbackMessage: 'Tool execution failed.',
+      }) } : {}),
+    });
+  } catch (error) {
+    const normalizedError = normalizeToolError(error, {
+      debugId: `tool-error:${running.toolExecutionId}`,
+      fallbackMessage: 'Tool execution failed.',
+    });
+    const rawResult = createRawToolResultFromContent({
+      rawToolResultId: options.ids.rawToolResultId(),
+      toolExecutionId: String(running.toolExecutionId),
+      toolCallId: String(running.toolCallId),
+      isError: true,
+      outputKind: 'error',
+      content: normalizedError,
+      createdAt: options.now(),
+    });
+    const observation = createObservationFromRawToolResult({
+      rawResult,
+      profile: 'error',
+      record: running,
+      ids: options.ids,
+      now: options.now,
+    });
+    return options.repository.saveToolExecution({
+      ...running,
+      status: 'failed',
+      completedAt: observation.createdAt,
+      rawResultRef: rawResult.rawToolResultId,
+      observation,
+      error: normalizedError,
+      resultPreview: observation.content.slice(0, 500),
+    });
+  }
+}
+
+function budgetProfileForRecord(
+  record: ToolExecutionRecord,
+  rawResult: RawToolResult,
+): ToolObservationBudgetProfile {
+  if (rawResult.isError || rawResult.outputKind === 'error') {
+    return 'error';
+  }
+  if (rawResult.outputKind === 'command' || record.toolName === 'run_command') {
+    return 'commandOutput';
+  }
+  if (rawResult.outputKind === 'file' || record.toolName === 'read_file') {
+    return 'fileRead';
+  }
+  return 'largeText';
 }

@@ -224,8 +224,8 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           requests.push(input.request);
 
           if (requests.length === 1) {
@@ -340,8 +340,8 @@ describe('run model tool loop', () => {
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
       }),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           requests.push(input.request);
 
           if (requests.length === 1) {
@@ -408,8 +408,8 @@ describe('run model tool loop', () => {
     let callbackCallCount = 0;
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep({ request }) {
+      modelCallPort: {
+        async *streamModelCall({ request }) {
           requests.push(request);
           if (requests.length === 1) {
             yield toolCallCreatedEvent({
@@ -490,8 +490,8 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           requests.push(input.request);
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
@@ -585,8 +585,8 @@ describe('run model tool loop', () => {
         stepId: 'step:11111111-2222-4333-8444-555555555555',
         modelStepId: 'model-step:11111111-2222-4333-8444-555555555555',
       }),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
@@ -636,8 +636,8 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           requests.push(input.request);
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
@@ -720,8 +720,8 @@ describe('run model tool loop', () => {
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep() {
+      modelCallPort: {
+        async *streamModelCall() {
           yield malformedToolCallEvent;
         },
       },
@@ -748,8 +748,8 @@ describe('run model tool loop', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           requests.push(input.request);
           if (requests.length === 1) {
             yield toolCallCreatedEvent({
@@ -805,8 +805,8 @@ describe('run model tool loop', () => {
   it('fails with terminal reason when tool results are empty after tool calls', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
@@ -849,8 +849,8 @@ describe('run model tool loop', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(request) {
+      modelCallPort: {
+        async *streamModelCall(request) {
           requests.push(request.request);
           if (requests.length === 1) {
             yield toolCallCreatedEvent({
@@ -896,8 +896,8 @@ describe('run model tool loop', () => {
   it('preserves tool result ordering for multiple tool calls in the conservative 19.01 path', async () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),
@@ -959,8 +959,8 @@ describe('run model tool loop', () => {
 
     await collect(runModelToolLoop({
       request: createRequest(),
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           requests.push(input.request);
           if (requests.length === 1) {
             yield toolCallCreatedEvent({
@@ -1009,8 +1009,8 @@ describe('run model tool loop', () => {
     const events = await collect(runModelToolLoop({
       request: createRequest(),
       maxModelSteps: 1,
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           yield toolCallCreatedEvent({
             eventId: input.eventIdFactory(),
             sequence: input.nextSequence(),

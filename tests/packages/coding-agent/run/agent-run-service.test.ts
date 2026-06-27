@@ -20,7 +20,7 @@ import {
   type AgentRunServiceOptions,
   type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/coding-agent/run';
-import { TimelineHistoryCommitProjectorService } from '@megumi/coding-agent/run/events/timeline-history-commit-projector';
+import { TimelineHistoryCommitProjectorService } from '@megumi/coding-agent/run/events/timeline-history-projector';
 import type {
   BuildModelStepInputInput,
   BuildModelStepInputResult,
@@ -316,13 +316,13 @@ function createServiceWithModelStepStream(
     ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
     ...(toolRepository ? { toolRepository } : {}),
     modelStepProvider: {
-      streamModelStep: async function* (request) {
+      streamModelCall: async function* (request) {
         callIndex += 1;
         options?.onRequest?.(request);
         yield* (typeof events === 'function' ? events(request, callIndex) : events);
       },
-      completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+      completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
     },
     clock: { now: () => '2026-05-17T00:00:00.000Z' },
     ids: {
@@ -524,11 +524,11 @@ function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
     repository,
     activePathRepository: activePathRepo,
     modelStepProvider: {
-      streamModelStep: async function* () {
+      streamModelCall: async function* () {
         yield* events;
       },
-      completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+      completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
     },
     clock: { now: () => '2026-06-01T08:00:00.000Z' },
     ids: {
@@ -700,12 +700,12 @@ function createServiceWithProviderStream(
     repository,
     activePathRepository: activePathRepo,
     modelStepProvider: {
-      streamModelStep: async function* (request) {
+      streamModelCall: async function* (request) {
         callIndex += 1;
         yield* events(request, callIndex);
       },
-      completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+      completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
     },
     workspaceChanges: options?.workspaceChanges,
     clock: { now: () => '2026-06-01T10:00:00.000Z' },
@@ -1046,12 +1046,12 @@ function createServiceWithChatStreamSink(
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
     ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
     modelStepProvider: {
-      streamModelStep: async function* (request) {
+      streamModelCall: async function* (request) {
         callIndex += 1;
         yield* (typeof events === 'function' ? events(request, callIndex) : events);
       },
-      completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+      completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
     },
     chatStreamEventSink: {
       publish: (event) => chatEvents.push(event),
@@ -3514,12 +3514,12 @@ describe('AgentRunService', () => {
         },
       },
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       clock: { now: () => '2026-05-31T11:05:00.000Z' },
       ids: {
@@ -3688,12 +3688,12 @@ describe('AgentRunService', () => {
         },
       },
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       clock: { now: () => '2026-05-31T11:05:00.000Z' },
       ids: {
@@ -4422,12 +4422,12 @@ describe('AgentRunService', () => {
       repository,
       activePathRepository: activePathRepo,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       clock: { now: () => '2026-05-28T00:01:00.000Z' },
       ids: {
@@ -4560,7 +4560,7 @@ describe('AgentRunService', () => {
     const service = new AgentRunService({
       repository,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
 
           if (requests.length === 1) {
@@ -4574,8 +4574,8 @@ describe('AgentRunService', () => {
             stepId: request.stepId,
           };
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       toolRuntimeFactory: {
         async create(input) {
@@ -4817,7 +4817,7 @@ describe('AgentRunService', () => {
     const service = new AgentRunService({
       repository,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
 
           if (requests.length === 1) {
@@ -4831,8 +4831,8 @@ describe('AgentRunService', () => {
             stepId: request.stepId,
           };
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       toolRuntimeFactory: {
         async create() {
@@ -4995,7 +4995,7 @@ describe('AgentRunService', () => {
     const service = new AgentRunService({
       repository,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
 
           if (requests.length === 1) {
@@ -5009,8 +5009,8 @@ describe('AgentRunService', () => {
             stepId: request.stepId,
           };
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       toolRuntimeFactory: {
         async create() {
@@ -5791,7 +5791,7 @@ describe('AgentRunService', () => {
     const service = new AgentRunService({
       repository,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
           if (requests.length === 1) {
             yield toolUseCreatedEvent(1);
@@ -5804,8 +5804,8 @@ describe('AgentRunService', () => {
             stepId: request.stepId,
           };
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       toolRuntimeFactory: {
         async create(input) {
@@ -6430,7 +6430,7 @@ describe('AgentRunService', () => {
     const service = new AgentRunService({
       repository,
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
           if (requests.length === 1) {
             yield toolUseCreatedEventFor({
@@ -6454,8 +6454,8 @@ describe('AgentRunService', () => {
             stepId: request.stepId,
           };
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       toolRuntimeFactory: {
         async create() {
@@ -7582,11 +7582,11 @@ describe('AgentRunService', () => {
         },
       }),
       modelStepProvider: {
-        streamModelStep: async function* (request) {
+        streamModelCall: async function* (request) {
           requests.push(request);
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       clock: { now: () => '2026-05-17T00:00:00.000Z' },
       ids: {
@@ -7659,11 +7659,11 @@ describe('AgentRunService', () => {
         },
       }),
       modelStepProvider: {
-        streamModelStep: async function* () {
+        streamModelCall: async function* () {
           // No provider events are needed for snapshot persistence.
         },
-        completeModelStep: async () => ({ ok: true, text: '' }),
-      cancelModelStep: () => true,
+        completeModelCall: async () => ({ ok: true, text: '' }),
+      cancelModelCall: () => true,
       },
       clock: { now: () => '2026-05-17T00:00:00.000Z' },
       ids: {

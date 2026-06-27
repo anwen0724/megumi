@@ -223,7 +223,7 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        async completeModelStep(request) {
+        async completeModelCall(request) {
           requests.push(request);
           return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
@@ -296,7 +296,7 @@ describe('SessionCompactionOrchestrator', () => {
       repository: repo,
       activePathRepository: activePathRepo,
       modelStepProvider: {
-        async completeModelStep(_request: ModelStepRuntimeRequest) {
+        async completeModelCall(_request: ModelStepRuntimeRequest) {
           return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
@@ -365,7 +365,7 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        async completeModelStep(_request: ModelStepRuntimeRequest) {
+        async completeModelCall(_request: ModelStepRuntimeRequest) {
           return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
@@ -409,7 +409,7 @@ describe('SessionCompactionOrchestrator', () => {
       repository: repo,
       activePathRepository: activePathRepo,
       modelStepProvider: {
-        async completeModelStep(_request: ModelStepRuntimeRequest) {
+        async completeModelCall(_request: ModelStepRuntimeRequest) {
           activePathRepo.appendSourceEntry({
             sourceEntryId: 'source-entry-new-branch',
             sessionId: 'session-1',
@@ -472,7 +472,7 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        async completeModelStep() {
+        async completeModelCall() {
           throw new Error('summary provider should not be called');
         },
       },
@@ -513,7 +513,7 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        async completeModelStep() {
+        async completeModelCall() {
           return {
             ok: false,
             error: {
@@ -568,7 +568,7 @@ describe('SessionCompactionOrchestrator', () => {
     const orchestrator = new SessionCompactionOrchestrator({
       repository: repo,
       modelStepProvider: {
-        async completeModelStep(_request: ModelStepRuntimeRequest) {
+        async completeModelCall(_request: ModelStepRuntimeRequest) {
           return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },
@@ -615,7 +615,7 @@ describe('SessionCompactionOrchestrator', () => {
       repository: repo,
       activePathRepository: activePathRepo,
       modelStepProvider: {
-        async completeModelStep(_request: ModelStepRuntimeRequest) {
+        async completeModelCall(_request: ModelStepRuntimeRequest) {
           return { ok: true, text: completedSummaryText(), finishReason: 'stop' };
         },
       },

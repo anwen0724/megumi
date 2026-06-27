@@ -5,7 +5,7 @@ import {
   prepareSessionCompactionInput,
   shouldRunSessionCompaction,
 } from './session-compaction';
-import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelId } from '@megumi/shared/model';
 import type {
@@ -54,7 +54,7 @@ export interface SessionCompactionActivePathRepository {
 }
 
 export interface SessionCompactionOrchestratorModelStepProvider {
-  completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult>;
+  completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult>;
 }
 
 export interface SessionCompactionOrchestratorClock {
@@ -302,7 +302,7 @@ export class SessionCompactionOrchestrator {
     | { ok: false; error: RuntimeError }
   > {
     try {
-      const completion = await this.options.modelStepProvider.completeModelStep(request);
+      const completion = await this.options.modelStepProvider.completeModelCall(request);
       if (!completion.ok) {
         return {
           ok: false,
@@ -405,4 +405,3 @@ function runtimeError(input: {
     source: input.source,
   };
 }
-

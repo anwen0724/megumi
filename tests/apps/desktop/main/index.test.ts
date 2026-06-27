@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -143,9 +143,9 @@ const mocks = vi.hoisted(() => {
         updatePlanStatus: vi.fn(),
       };
     }),
-    createModelStepProviderService: vi.fn(() => ({
-      streamModelStep: vi.fn(),
-      cancelModelStep: vi.fn(),
+    createModelCallRunner: vi.fn(() => ({
+      streamModelCall: vi.fn(),
+      cancelModelCall: vi.fn(),
     })),
     ProviderSettingsService: vi.fn(function ProviderSettingsService(
       this: { options?: unknown },
@@ -435,7 +435,7 @@ vi.mock('@megumi/desktop/main/services/session/session-run.service', () => ({
 }));
 
 vi.mock('@megumi/desktop/main/services/runtime/model-step-provider.service', () => ({
-  createModelStepProviderService: mocks.createModelStepProviderService,
+  createModelCallRunner: mocks.createModelCallRunner,
 }));
 
 vi.mock('@megumi/coding-agent/settings', () => ({
@@ -517,7 +517,7 @@ describe('main runtime logger composition', () => {
     mocks.PermissionSnapshotRepository.mockClear();
     mocks.PermissionSnapshotService.mockClear();
     mocks.SessionRunService.mockClear();
-    mocks.createModelStepProviderService.mockClear();
+    mocks.createModelCallRunner.mockClear();
     mocks.ProviderSettingsService.mockClear();
     mocks.ProviderRuntimeService.mockClear();
     mocks.createAppSettingsService.mockClear();

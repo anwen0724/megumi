@@ -1,13 +1,13 @@
-﻿// Coding Agent memory extraction model client adapts extraction prompts to hidden model-step requests.
+// Coding Agent memory extraction model client adapts extraction prompts to hidden model-step requests.
 // The provider sees a normal ModelStepRuntimeRequest; memory persistence stays in host services.
 import type { MemoryExtractionPrompt } from './extraction';
-import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId } from '@megumi/shared/provider';
 
 export interface MemoryExtractionModelStepProvider {
-  completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult>;
+  completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult>;
 }
 
 export interface ExtractMemoryCandidatesInput {
@@ -44,7 +44,7 @@ export class MemoryExtractionModelClientService {
     const request = this.buildRequest(input);
 
     try {
-      const completion = await this.options.modelStepProvider.completeModelStep(request);
+      const completion = await this.options.modelStepProvider.completeModelCall(request);
       if (input.signal?.aborted) {
         return { ok: false, reason: 'request_cancelled' };
       }

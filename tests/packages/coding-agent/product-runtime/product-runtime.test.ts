@@ -10,7 +10,7 @@ import {
   resolveAppSettings,
   type AppSettingsRaw,
 } from '@megumi/shared/settings';
-import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
 describe('Coding Agent product runtime', () => {
@@ -40,9 +40,9 @@ describe('Coding Agent product runtime', () => {
         warn: () => undefined,
       },
       modelStepProviderService: {
-        streamModelStep: async function* (): AsyncIterable<RuntimeEvent> {},
-        completeModelStep: async (): Promise<ModelStepCompletionResult> => ({ ok: true, text: '' }),
-        cancelModelStep: () => false,
+        streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
+        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        cancelModelCall: () => false,
       },
       appSettingsProvider: {
         getResolvedSettings: () => resolveAppSettings(rawSettings),

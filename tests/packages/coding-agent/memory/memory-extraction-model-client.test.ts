@@ -1,20 +1,20 @@
-﻿import { describe, expect, it } from 'vitest';
-import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
+import { describe, expect, it } from 'vitest';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { MemoryExtractionModelClientService } from '@megumi/coding-agent/memory';
 
 class FakeModelStepProvider {
   requests: ModelStepRuntimeRequest[] = [];
 
-  constructor(private readonly result: ModelStepCompletionResult) {}
+  constructor(private readonly result: ModelCallCompletionResult) {}
 
-  async completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult> {
+  async completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult> {
     this.requests.push(request);
     return this.result;
   }
 }
 
-function providerFailure(): ModelStepCompletionResult {
+function providerFailure(): ModelCallCompletionResult {
   return {
     ok: false,
     error: {

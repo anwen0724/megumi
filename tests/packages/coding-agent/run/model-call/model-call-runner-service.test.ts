@@ -59,7 +59,7 @@ describe('ModelCallRunner', () => {
       },
     });
 
-    const events = await collect(runner.streamModelStep(request));
+    const events = await collect(runner.streamModelCall(request));
 
     expect(resolvedInputs).toEqual([{
       providerId: 'deepseek',
@@ -100,7 +100,7 @@ describe('ModelCallRunner', () => {
       }),
     });
 
-    await expect(runner.completeModelStep(request)).resolves.toEqual({
+    await expect(runner.completeModelCall(request)).resolves.toEqual({
       ok: true,
       text: '{ "candidates": [] }',
       finishReason: 'stop',
@@ -143,7 +143,7 @@ describe('ModelCallRunner', () => {
       },
     });
 
-    await expect(collect(runner.streamModelStep(request))).resolves.toEqual([
+    await expect(collect(runner.streamModelCall(request))).resolves.toEqual([
       expect.objectContaining({
         eventType: 'run.failed',
         requestId: 'request-1',
@@ -173,7 +173,7 @@ describe('ModelCallRunner', () => {
       },
     });
 
-    const events = await collect(runner.streamModelStep(request));
+    const events = await collect(runner.streamModelCall(request));
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -206,7 +206,7 @@ describe('ModelCallRunner', () => {
       }),
     });
 
-    const events = await collect(runner.streamModelStep(request));
+    const events = await collect(runner.streamModelCall(request));
 
     expect(events.map((event) => event.eventType)).toEqual([
       'model.step.started',
@@ -229,11 +229,11 @@ describe('ModelCallRunner', () => {
         },
       }),
     });
-    const iterator = runner.streamModelStep(request)[Symbol.asyncIterator]();
+    const iterator = runner.streamModelCall(request)[Symbol.asyncIterator]();
 
     await iterator.next();
 
-    expect(runner.cancelModelStep('request-1')).toBe(true);
+    expect(runner.cancelModelCall('request-1')).toBe(true);
     expect(capturedSignal?.aborted).toBe(true);
   });
 });

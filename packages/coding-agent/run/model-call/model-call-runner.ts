@@ -68,14 +68,14 @@ export function createModelMessageObservation(input: {
   };
 }
 
-export interface RunModelStepInput {
+export interface RunModelCallInput {
   request: ModelStepRuntimeRequest;
-  modelStepPort: ModelCallPort;
+  modelCallPort: ModelCallPort;
   signal?: AbortSignal;
   eventIdFactory?: () => string;
 }
 
-export async function* runModelStep(input: RunModelStepInput): AsyncIterable<RuntimeEvent> {
+export async function* runModelCall(input: RunModelCallInput): AsyncIterable<RuntimeEvent> {
   let sequence = 0;
   const nextSequence = () => {
     sequence += 1;
@@ -102,7 +102,7 @@ export async function* runModelStep(input: RunModelStepInput): AsyncIterable<Run
   }
 
   try {
-    for await (const event of input.modelStepPort.streamModelStep({
+    for await (const event of input.modelCallPort.streamModelCall({
       request: input.request,
       runId: input.request.runId,
       stepId: input.request.stepId,
@@ -144,7 +144,7 @@ export class ModelCallRunner {
 
   constructor(private readonly options: ModelCallRunnerOptions) {}
 
-  async *streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent> {
+  async *streamModelCall(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent> {
     const controller = new AbortController();
     let sequence = 0;
     const nextSequence = () => {
@@ -183,7 +183,7 @@ export class ModelCallRunner {
     }
   }
 
-  async completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult> {
+  async completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult> {
     const controller = new AbortController();
     this.activeRequests.set(request.requestId, controller);
 
@@ -250,7 +250,7 @@ export class ModelCallRunner {
     }
   }
 
-  cancelModelStep(requestId: string): boolean {
+  cancelModelCall(requestId: string): boolean {
     const controller = this.activeRequests.get(requestId);
 
     if (!controller) {
@@ -273,9 +273,6 @@ export class ModelCallRunner {
 export function createModelCallRunner(input: ModelCallRunnerOptions): ModelCallRunner {
   return new ModelCallRunner(input);
 }
-
-export const ModelStepProviderService = ModelCallRunner;
-export const createModelStepProviderService = createModelCallRunner;
 
 function providerStatesFromThinkingBlocks(
   request: ModelStepRuntimeRequest,

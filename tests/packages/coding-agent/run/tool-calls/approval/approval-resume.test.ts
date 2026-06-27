@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createToolCallHandlerHarness, awaitingApprovalRecord, terminalSucceededRecord } from '../tool-call-runner.test-harness';
+import { createToolCallRunnerHarness, awaitingApprovalRecord, terminalSucceededRecord } from '../tool-call-runner.test-harness';
 
 describe('approval-resume', () => {
   it('resumes a pending approval through the tool-call runner contract', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       existingRecords: [
         terminalSucceededRecord('call-read', 0),
         awaitingApprovalRecord('call-edit', 1),

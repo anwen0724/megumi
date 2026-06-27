@@ -16,7 +16,7 @@ import {
 } from '@megumi/shared/settings';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
 // Seeds a real project row in the same SQLite file the runtime will open, mirroring
@@ -52,7 +52,7 @@ function appSettingsProvider() {
 // run loop turns into a terminal `turn.completed` chat stream event.
 function answeringModelStepProvider() {
   return {
-    async *streamModelStep(request: { sessionId: string; runId: string; stepId: string }): AsyncIterable<RuntimeEvent> {
+    async *streamModelCall(request: { sessionId: string; runId: string; stepId: string }): AsyncIterable<RuntimeEvent> {
       yield {
         eventId: 'event-assistant-completed',
         schemaVersion: 1,
@@ -68,8 +68,8 @@ function answeringModelStepProvider() {
         payload: { content: 'Hello from the product runtime' },
       } as RuntimeEvent;
     },
-    completeModelStep: async (): Promise<ModelStepCompletionResult> => ({ ok: true, text: '' }),
-    cancelModelStep: () => false,
+    completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+    cancelModelCall: () => false,
   };
 }
 

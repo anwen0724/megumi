@@ -32,7 +32,7 @@ describe('provider tool call model loop source guards', () => {
     const toolLoop = read('packages/coding-agent/run/loop/agent-loop.ts');
     const toolCallContract = read('packages/coding-agent/run/tool-calls/tool-call-contract.ts');
 
-    expect(toolLoop).toContain('ToolCallHandlerPort');
+    expect(toolLoop).toContain('ToolCallRunner');
     expect(toolCallContract).toContain('ToolExecution');
     expect(toolLoop).toContain('tool.call.created');
     expect(toolLoop).toContain('tool.result.created');

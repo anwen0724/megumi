@@ -5,7 +5,7 @@ import {
   type RuntimeEvent,
 } from '@megumi/shared/runtime';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { ToolCallHandlerPort } from '@megumi/coding-agent/run/tool-calls';
+import type { ToolCallRunner } from '@megumi/coding-agent/run/tool-calls';
 import {
   streamCodingAgentModelStep,
   type CodingAgentModelStepStreamPorts,
@@ -15,8 +15,8 @@ describe('coding-agent model step stream', () => {
   it('calls the agent runtime through ports and builds continuation context in coding-agent', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const continuationBuilds: unknown[] = [];
-    const modelStepPort = {
-      async *streamModelStep({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
+    const modelCallPort = {
+      async *streamModelCall({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
         requests.push(request);
         yield modelStepStarted(request, 1);
         if (requests.length === 1) {
@@ -48,7 +48,7 @@ describe('coding-agent model step stream', () => {
       },
     };
     const ports: CodingAgentModelStepStreamPorts = {
-      modelStepPort,
+      modelCallPort,
       toolCallHandler: toolCallHandler as CodingAgentModelStepStreamPorts['toolCallHandler'],
       modelStepInputBuildService: {
         async buildModelStepInput(input) {

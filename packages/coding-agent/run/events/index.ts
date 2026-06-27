@@ -2,4 +2,4 @@
 export * from './runtime-event-factory';
 export * from './runtime-event-utils';
 export * from './chat-stream-event-adapter';
-export * from './timeline-history-commit-projector';
+export * from './timeline-history-projector';

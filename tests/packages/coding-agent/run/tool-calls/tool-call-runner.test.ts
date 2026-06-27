@@ -9,15 +9,15 @@ import {
   awaitingApprovalRecord,
   createHandleInput,
   createdRecord,
-  createToolCallHandlerHarness,
+  createToolCallRunnerHarness,
   requireApprovalSerial,
   terminalSucceededRecord,
   toolCall,
 } from './tool-call-runner.test-harness';
 
-describe('ToolCallHandler source-order barrier', () => {
+describe('ToolCallRunner source-order barrier', () => {
   it('runs consecutive parallel records before an approval barrier', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [
         allowParallel('read_file'),
         allowParallel('search_text'),
@@ -46,7 +46,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('runs a serial record alone between parallel windows', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [
         allowParallel('read_file'),
         allowSerial('run_command'),
@@ -74,7 +74,7 @@ describe('ToolCallHandler source-order barrier', () => {
 
   it('passes workspace scope separately from abort signal to routed executors', async () => {
     const abortController = new AbortController();
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [allowSerial('edit_file')],
     });
 
@@ -97,7 +97,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('finalizes the workspace change scope after managed execution windows', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [allowSerial('write_file')],
     });
 
@@ -113,7 +113,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('finalizes the workspace change scope after approval resume execution windows', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       existingRecords: [
         terminalSucceededRecord('call:0', 0),
         awaitingApprovalRecord('call:1', 1),
@@ -134,7 +134,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('does not re-execute terminal records during resume', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       existingRecords: [
         terminalSucceededRecord('call:0', 0),
         awaitingApprovalRecord('call:1', 1),
@@ -161,7 +161,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('turns approval rejection into observation and continues later records', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       existingRecords: [
         terminalSucceededRecord('call:0', 0),
         awaitingApprovalRecord('call:1', 1),
@@ -187,7 +187,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('emits runtime events for decisions, observations, and continuation readiness', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [allowParallel('read_file')],
     });
 
@@ -204,7 +204,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('emits legacy projection events for requested, started, and completed tool execution facts', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [allowParallel('read_file')],
     });
 
@@ -230,7 +230,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('emits legacy denial projection events for rejected records', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [{
         outcome: 'reject',
         reasonCode: 'CUSTOM_TOOL_REJECTED',
@@ -252,7 +252,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('emits legacy failure projection events for failed records', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [allowParallel('read_file')],
       failedToolCallIds: ['call:0'],
     });
@@ -280,7 +280,7 @@ describe('ToolCallHandler source-order barrier', () => {
   });
 
   it('emits approval request runtime events for approval barriers', async () => {
-    const harness = createToolCallHandlerHarness({
+    const harness = createToolCallRunnerHarness({
       decisions: [requireApprovalSerial('write_file')],
     });
 
@@ -313,7 +313,7 @@ describe('ToolCallHandler source-order barrier', () => {
       registrations: createBuiltInToolRegistrations(),
       providerCapabilitySummary: { supportsToolCall: true },
     });
-    const harness = createToolCallHandlerHarness({ snapshot });
+    const harness = createToolCallRunnerHarness({ snapshot });
 
     const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),

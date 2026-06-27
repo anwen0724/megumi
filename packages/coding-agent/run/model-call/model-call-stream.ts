@@ -3,11 +3,11 @@ import {
   runModelToolLoop,
   type ToolContinuationInputContextBuilderInput,
 } from '../loop';
-import type { ModelStepPort } from './model-call-contract';
+import type { ModelCallPort } from './model-call-contract';
 import type {
   PendingToolApprovalContinuation,
   ToolApprovalResumePort,
-  ToolCallHandlerPort,
+  ToolCallRunner,
 } from '../tool-calls/tool-call-contract';
 import type { ModelInputContext, ModelInputContextBuildRequest, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { PermissionMode } from '@megumi/shared/permission';
@@ -75,8 +75,8 @@ export interface CodingAgentModelStepStreamIds {
 }
 
 export interface CodingAgentModelStepStreamPorts {
-  modelStepPort: ModelStepPort;
-  toolCallHandler?: ToolCallHandlerPort & ToolApprovalResumePort;
+  modelCallPort: ModelCallPort;
+  toolCallHandler?: ToolCallRunner & ToolApprovalResumePort;
   modelStepInputBuildService: {
     buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
   };
@@ -104,7 +104,7 @@ export async function* streamCodingAgentModelStep(
   const modelEvents = input.ports.toolCallHandler
     ? runModelToolLoop({
         request: input.request,
-        modelStepPort: input.ports.modelStepPort,
+        modelCallPort: input.ports.modelCallPort,
         toolCallHandler: input.ports.toolCallHandler,
         ids: {
           nextEventId: input.ports.ids.nextEventId,
@@ -131,7 +131,7 @@ export async function* streamCodingAgentModelStep(
           ports: input.ports,
         }),
       })
-    : input.ports.modelStepPort.streamModelStep({
+    : input.ports.modelCallPort.streamModelCall({
         request: input.request,
         runId: input.request.runId,
         stepId: input.request.stepId,

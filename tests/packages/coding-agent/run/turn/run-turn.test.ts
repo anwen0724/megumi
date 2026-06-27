@@ -25,7 +25,7 @@ describe('RunTurn', () => {
         order.push('compact');
         return { status: 'skipped', events: [] };
       },
-      async *streamModelStep({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
+      async *streamModelCall({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
         order.push('model');
         modelRequests.push(request);
         yield assistantOutputCompleted(request, 1, 'Hello');
@@ -136,7 +136,7 @@ describe('RunTurn', () => {
         }
         return successfulModelStepInputBuild(input);
       },
-      async *streamModelStep({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
+      async *streamModelCall({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
         modelRequests.push(request);
       },
     }));
@@ -257,7 +257,7 @@ function createOptions(
   overrides: Partial<{
     buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
     compactIfNeeded(): Promise<SessionCompactionOrchestrationResult>;
-    streamModelStep(input: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent>;
+    streamModelCall(input: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent>;
   }> = {},
   order: string[] = [],
 ): RunTurnOptions {
@@ -327,7 +327,7 @@ function createOptions(
       compactIfNeeded: overrides.compactIfNeeded ?? (async () => ({ status: 'skipped', events: [] })),
     },
     modelStepExecutor: {
-      streamModelStep: overrides.streamModelStep ?? (async function* ({ request }) {
+      streamModelCall: overrides.streamModelCall ?? (async function* ({ request }) {
         order.push('model');
         yield assistantOutputCompleted(request, 1, 'Hello');
         yield modelStepCompleted(request, 2);

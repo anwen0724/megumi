@@ -5,10 +5,10 @@ export {
 } from '../loop';
 
 export type {
-  ToolCallHandlerPort,
-  ToolCallHandlerOutcome,
-  ToolApprovalResumeInput,
-  ToolApprovalResumeOutcome,
+  ToolCallRunner,
+  ToolCallRunOutcome,
+  ResumeToolApprovalInput,
+  ResumeToolApprovalOutcome,
   ToolApprovalResumePort,
   PendingToolApproval,
   PendingToolApprovalContinuation,

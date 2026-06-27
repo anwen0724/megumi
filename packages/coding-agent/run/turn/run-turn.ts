@@ -115,7 +115,7 @@ export interface CodingAgentRunToolRegistrySnapshotProvider {
 }
 
 export interface CodingAgentRunModelStepExecutor {
-  streamModelStep(input: {
+  streamModelCall(input: {
     request: ModelStepRuntimeRequest;
     run: Run;
     step: RunStep;
@@ -416,7 +416,7 @@ export class RunTurn {
         runtimeContext: input.runtimeContext,
         createdAt: input.createdAt,
       };
-      yield* this.options.modelStepExecutor.streamModelStep({
+      yield* this.options.modelStepExecutor.streamModelCall({
         request,
         run: input.run,
         step: input.step,

@@ -48,7 +48,7 @@ export interface ModelCallPortStreamInput {
 }
 
 export interface ModelCallPort {
-  streamModelStep(input: ModelCallPortStreamInput): AsyncIterable<RuntimeEvent>;
+  streamModelCall(input: ModelCallPortStreamInput): AsyncIterable<RuntimeEvent>;
 }
 
 export type ModelCallCompletionResult =
@@ -78,7 +78,3 @@ export interface Clock {
 export const systemClock: Clock = {
   now: () => new Date().toISOString(),
 };
-
-export type ModelStepCompletionResult = ModelCallCompletionResult;
-export type ModelStepPortStreamInput = ModelCallPortStreamInput;
-export type ModelStepPort = ModelCallPort;

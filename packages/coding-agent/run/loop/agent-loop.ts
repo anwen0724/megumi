@@ -12,12 +12,12 @@ import {
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
-import type { ModelStepPort } from '../model-call/model-call-contract';
-import { runModelStep } from '../model-call/model-call-runner';
+import type { ModelCallPort } from '../model-call/model-call-contract';
+import { runModelCall } from '../model-call/model-call-runner';
 import { createTerminalRuntimeError } from '../lifecycle/run-state-policy';
 import type {
   PendingToolApprovalContinuation,
-  ToolCallHandlerPort,
+  ToolCallRunner,
 } from '../tool-calls/tool-call-contract';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
@@ -60,8 +60,8 @@ export interface ToolContinuationInputContextBuilderInput {
 
 export interface RunModelToolLoopInput {
   request: ModelStepRuntimeRequest;
-  modelStepPort: ModelStepPort;
-  toolCallHandler: ToolCallHandlerPort;
+  modelCallPort: ModelCallPort;
+  toolCallHandler: ToolCallRunner;
   ids: ModelToolLoopIds;
   signal?: AbortSignal;
   maxModelSteps?: number;
@@ -92,9 +92,9 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     const providerStates: ModelStepProviderState[] = [];
     let stepMaxSequence = sequenceOffset;
 
-    for await (const event of runModelStep({
+    for await (const event of runModelCall({
       request,
-      modelStepPort: input.modelStepPort,
+      modelCallPort: input.modelCallPort,
       signal: input.signal,
       eventIdFactory: input.ids.nextEventId,
     })) {

@@ -19,7 +19,7 @@ export interface ToolCallRunOutcome {
 
 export interface HandleToolCallsInput {
   request: ModelStepRuntimeRequest;
-  toolCalls: ToolCall[];
+  toolCalls: readonly ToolCall[];
   signal?: AbortSignal;
 }
 
@@ -54,8 +54,3 @@ export interface PendingToolApprovalContinuation {
   accumulatedToolResults: ToolResult[];
   accumulatedProviderStates: ModelStepProviderState[];
 }
-
-export type ToolCallHandlerOutcome = ToolCallRunOutcome;
-export type ToolCallHandlerPort = ToolCallRunner;
-export type ToolApprovalResumeInput = ResumeToolApprovalInput;
-export type ToolApprovalResumeOutcome = ResumeToolApprovalOutcome;

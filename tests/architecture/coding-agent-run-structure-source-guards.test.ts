@@ -95,7 +95,7 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/lifecycle/run-failure.ts',
       'packages/coding-agent/run/lifecycle/run-retry.ts',
       'packages/coding-agent/run/lifecycle/run-error.ts',
-      'packages/coding-agent/run/events/timeline-history-commit-projector.ts',
+      'packages/coding-agent/run/events/timeline-history-projector.ts',
       'packages/coding-agent/workspace/path-policy.ts',
     ]) {
       expect(exists(requiredPath), requiredPath).toBe(true);
@@ -108,8 +108,54 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/turn/turn-events.ts',
       'packages/coding-agent/run/lifecycle/run-state-store.ts',
       'packages/coding-agent/run/permissions/project-boundary-policy.ts',
+      'packages/coding-agent/run/loop/model-tool-loop.ts',
+      'packages/coding-agent/run/events/timeline-history-commit-projector.ts',
     ]) {
       expect(exists(removedPath), removedPath).toBe(false);
+    }
+  });
+
+  it('does not keep legacy model-step or provider-service names inside model-call', () => {
+    const modelCallSource = combinedSource('packages/coding-agent/run/model-call');
+
+    for (const forbiddenToken of [
+      'ModelStepProviderService',
+      'createModelStepProviderService',
+      'RunModelStepInput',
+      'runModelStep',
+      'streamModelStep',
+      'completeModelStep',
+      'cancelModelStep',
+      'modelStepPort',
+    ]) {
+      expect(modelCallSource).not.toContain(forbiddenToken);
+    }
+  });
+
+  it('keeps tool call contracts and runner names aligned with tool-call-runner', () => {
+    const contractSource = read('packages/coding-agent/run/tool-calls/tool-call-contract.ts');
+    const runnerSource = read('packages/coding-agent/run/tool-calls/tool-call-runner.ts');
+
+    for (const forbiddenToken of [
+      'ToolCallHandler',
+      'ToolCallHandlerPort',
+      'ToolCallHandlerOutcome',
+      'ToolCallHandlerService',
+      'ToolCallHandlerInput',
+    ]) {
+      expect(contractSource).not.toContain(forbiddenToken);
+      expect(runnerSource).not.toContain(forbiddenToken);
+    }
+
+    for (const implementationToken of [
+      'function resumeToolApproval',
+      'function advanceExecutionWindows',
+      'function runRecord',
+      'function outcomeFromRecords',
+      'function runtimeEventsFromRecords',
+      'function buildContinuationToolResults',
+    ]) {
+      expect(runnerSource).not.toContain(implementationToken);
     }
   });
 

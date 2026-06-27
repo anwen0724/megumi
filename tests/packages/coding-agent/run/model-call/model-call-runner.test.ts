@@ -7,7 +7,7 @@ import {
   createModelStepInputPreview,
   isModelMessageAction,
   isModelStep,
-  runModelStep,
+  runModelCall,
 } from '@megumi/coding-agent/run';
 
 describe('run model step foundation', () => {
@@ -53,7 +53,7 @@ describe('run model step foundation', () => {
   it('streams provider events through a model step without buffering assistant deltas', async () => {
     const events: RuntimeEvent[] = [];
 
-    for await (const event of runModelStep({
+    for await (const event of runModelCall({
       request: {
         requestId: 'request-1',
         sessionId: 'session-1',
@@ -79,8 +79,8 @@ describe('run model step foundation', () => {
         }),
         createdAt: '2026-05-17T00:00:00.000Z',
       },
-      modelStepPort: {
-        async *streamModelStep(input) {
+      modelCallPort: {
+        async *streamModelCall(input) {
           expect(input.request.runId).toBe('run-1');
           expect(input.request.stepId).toBe('step-1');
           yield {
@@ -125,6 +125,3 @@ describe('run model step foundation', () => {
     expect(events.map((event) => event.sequence)).toEqual([1, 2]);
   });
 });
-
-
-

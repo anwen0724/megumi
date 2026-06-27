@@ -17,7 +17,7 @@ import {
 } from '@megumi/shared/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
 function appSettingsProvider() {
@@ -37,7 +37,7 @@ function appSettingsProvider() {
 function toolCallingModelStepProvider(targetFileName: string) {
   let call = 0;
   return {
-    async *streamModelStep(request: { sessionId: string; runId: string; stepId: string }): AsyncIterable<RuntimeEvent> {
+    async *streamModelCall(request: { sessionId: string; runId: string; stepId: string }): AsyncIterable<RuntimeEvent> {
       call += 1;
       if (call === 1) {
         yield {
@@ -91,8 +91,8 @@ function toolCallingModelStepProvider(targetFileName: string) {
         payload: { content: 'Read the file as requested.' },
       } as RuntimeEvent;
     },
-    completeModelStep: async (): Promise<ModelStepCompletionResult> => ({ ok: true, text: '' }),
-    cancelModelStep: () => false,
+    completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+    cancelModelCall: () => false,
   };
 }
 

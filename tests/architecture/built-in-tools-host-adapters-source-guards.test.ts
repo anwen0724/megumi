@@ -57,9 +57,10 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps Host execution behind PermissionPolicy', () => {
-    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-runner.ts');
-    const applyDecision = functionSection(toolCallHandler, 'applyDecision', 'advanceExecutionWindows');
-    const runRecord = functionSection(toolCallHandler, 'runRecord', 'budgetProfileForRecord');
+    const approval = read('packages/coding-agent/run/tool-calls/approval/tool-call-approval.ts');
+    const executionRecord = read('packages/coding-agent/run/tool-calls/execution/tool-execution-record.ts');
+    const applyDecision = functionSection(approval, 'applyDecision', 'permissionDecisionForRecord');
+    const runRecord = functionSection(executionRecord, 'runToolExecutionRecord', 'budgetProfileForRecord');
 
     expect(applyDecision).toContain('permissionDecisionForRecord');
     expect(applyDecision).toContain('decisionEvaluator.evaluate');
@@ -69,21 +70,24 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
-    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-runner.ts');
-    const resumeToolApproval = functionSection(toolCallHandler, 'resumeToolApproval', 'prepareRecords');
+    const approvalResume = read('packages/coding-agent/run/tool-calls/approval/approval-resume.ts');
+    const resumeToolApproval = functionSection(approvalResume, 'resumeToolApproval', 'rejectApprovedRecord');
     const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
     const getToolExecutionIndex = resumeToolApproval.indexOf('repository.getToolExecution(approval.toolExecutionId)');
     const deniedBranchIndex = resumeToolApproval.indexOf("input.decision === 'denied'");
     const rejectionObservationIndex = resumeToolApproval.indexOf('createRejectionObservation');
     const approvedQueueIndex = resumeToolApproval.indexOf("status: 'queued'");
+    const rejectHelperIndex = resumeToolApproval.indexOf('rejectApprovedRecord');
     const advanceIndex = resumeToolApproval.indexOf('advanceExecutionWindows');
     const saveApprovalIndex = resumeToolApproval.indexOf('repository.saveApprovalRequest');
+    const rejectApprovedRecord = approvalResume.slice(approvalResume.indexOf('function rejectApprovedRecord'));
 
     expect(getApprovalIndex).toBeGreaterThan(-1);
     expect(getToolExecutionIndex).toBeGreaterThan(getApprovalIndex);
     expect(saveApprovalIndex).toBeGreaterThan(getToolExecutionIndex);
     expect(deniedBranchIndex).toBeGreaterThan(saveApprovalIndex);
-    expect(rejectionObservationIndex).toBeGreaterThan(deniedBranchIndex);
+    expect(rejectHelperIndex).toBeGreaterThan(deniedBranchIndex);
+    expect(rejectApprovedRecord).toContain('createRejectionObservation');
     expect(approvedQueueIndex).toBeGreaterThan(saveApprovalIndex);
     expect(advanceIndex).toBeGreaterThan(approvedQueueIndex);
     expect(resumeToolApproval).not.toContain('decisionEvaluator.evaluate');

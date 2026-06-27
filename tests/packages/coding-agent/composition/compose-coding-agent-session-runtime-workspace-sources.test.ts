@@ -46,9 +46,9 @@ describe('composed session runtime workspace sources', () => {
         timelineMessageRepository: persistence.timelineMessageRepository,
         toolRegistry: composeCodingAgentToolRegistry(),
         modelStepProviderService: {
-          streamModelStep: async function* () {},
-          completeModelStep: async () => ({ ok: true, text: '' }),
-          cancelModelStep: () => false,
+          streamModelCall: async function* () {},
+          completeModelCall: async () => ({ ok: true, text: '' }),
+          cancelModelCall: () => false,
         } as never,
         toolRuntimeFactory: (() => undefined) as never,
         memoryRuntime: noopMemoryRuntime(),

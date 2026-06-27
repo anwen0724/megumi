@@ -13,7 +13,7 @@ import type {
   ToolResult,
 } from '@megumi/shared/tool';
 
-export function createToolCallHandlerHarness(input: {
+export function createToolCallRunnerHarness(input: {
   decisions?: readonly ToolExecutionDecision[];
   existingRecords?: readonly ToolExecutionRecord[];
   snapshot?: ToolRegistrySnapshot;

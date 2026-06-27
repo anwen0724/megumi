@@ -267,19 +267,24 @@ describe('package dependency boundaries', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps ToolCallHandlerService behind the source-aware execution router', () => {
-    const source = fs.readFileSync(
+  it('keeps ToolCallRunner behind the source-aware execution router', () => {
+    const runnerSource = fs.readFileSync(
       path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
       'utf8',
     );
+    const approvalSource = fs.readFileSync(
+      path.join(root, 'packages/coding-agent/run/tool-calls/approval/tool-call-approval.ts'),
+      'utf8',
+    );
 
-    expect(source).toContain('ToolCallHandlerPort');
-    expect(source).toContain('ToolApprovalResumePort');
-    expect(source).toContain('evaluatePermissionPolicy');
-    expect(source).toContain('evaluateToolExecutionDecision');
-    expect(source).not.toContain('createBuiltInToolSourceExecutor');
-    expect(source).not.toContain('fs-extra');
-    expect(source).not.toContain('child_process');
+    expect(runnerSource).toContain('ToolCallRunner');
+    expect(runnerSource).toContain('ToolApprovalResumePort');
+    expect(runnerSource).toContain('evaluateToolExecutionDecision');
+    expect(approvalSource).toContain('evaluatePermissionPolicy');
+    expect(approvalSource).toContain('decisionEvaluator.evaluate');
+    expect(`${runnerSource}\n${approvalSource}`).not.toContain('createBuiltInToolSourceExecutor');
+    expect(`${runnerSource}\n${approvalSource}`).not.toContain('fs-extra');
+    expect(`${runnerSource}\n${approvalSource}`).not.toContain('child_process');
   });
 
   it('keeps run-time tool call orchestration out of the tool system package', () => {
@@ -297,7 +302,7 @@ describe('package dependency boundaries', () => {
     expect(source).not.toContain('run/lifecycle');
     expect(source).not.toContain('run/events');
     expect(source).not.toContain('createToolCallRunner');
-    expect(source).not.toContain('ToolCallHandlerPort');
+    expect(source).not.toContain('ToolCallRunner');
     expect(source).not.toContain('ToolApprovalResumePort');
     expect(source).not.toContain('runModelToolLoop');
     expect(source).not.toContain('advanceExecutionWindows');
@@ -340,8 +345,12 @@ describe('package dependency boundaries', () => {
   });
 
   it('keeps tool handling source-ordered without batch orchestration objects', () => {
-    const handler = fs.readFileSync(
+    const runner = fs.readFileSync(
       path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
+      'utf8',
+    );
+    const executionWindow = fs.readFileSync(
+      path.join(root, 'packages/coding-agent/run/tool-calls/execution/tool-execution-window.ts'),
       'utf8',
     );
     const router = fs.readFileSync(
@@ -349,10 +358,11 @@ describe('package dependency boundaries', () => {
       'utf8',
     );
 
-    expect(handler).toContain('nextExecutableWindow');
-    expect(handler).toContain('advanceExecutionWindows');
-    expect(handler).not.toMatch(/\bToolBatch\b/);
-    expect(handler).not.toMatch(/\bBatchToolCall\b/);
+    expect(executionWindow).toContain('nextExecutableWindow');
+    expect(executionWindow).toContain('advanceExecutionWindows');
+    expect(runner).toContain('advanceExecutionWindows');
+    expect(`${runner}\n${executionWindow}`).not.toMatch(/\bToolBatch\b/);
+    expect(`${runner}\n${executionWindow}`).not.toMatch(/\bBatchToolCall\b/);
     expect(router).not.toMatch(/\bToolBatch\b/);
   });
 

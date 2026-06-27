@@ -10,13 +10,13 @@ import {
   runTurn,
 } from '@megumi/coding-agent/run';
 import type { RunHostBoundaryPort, RunIdFactory } from '@megumi/coding-agent/run';
-import type { ModelStepCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import {
   type PendingToolApprovalContinuation,
-  type ToolApprovalResumeInput,
-  type ToolApprovalResumeOutcome,
+  type ResumeToolApprovalInput,
+  type ResumeToolApprovalOutcome,
   type ToolApprovalResumePort,
-  type ToolCallHandlerPort,
+  type ToolCallRunner,
 } from '@megumi/coding-agent/run';
 import {
   ModelStepInputBuildService,
@@ -176,9 +176,9 @@ export interface SessionRunContextService {
 }
 
 export interface AgentRunModelStepProvider {
-  streamModelStep(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
-  completeModelStep(request: ModelStepRuntimeRequest): Promise<ModelStepCompletionResult>;
-  cancelModelStep(requestId: string): boolean;
+  streamModelCall(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
+  completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult>;
+  cancelModelCall(requestId: string): boolean;
 }
 
 export interface SessionBranchDraftView {
@@ -195,7 +195,7 @@ export interface AgentRunToolRuntimeFactory {
   create(input: {
     projectRoot: string;
     permissionMode: PermissionMode;
-  }): Promise<ToolCallHandlerPort & ToolApprovalResumePort>;
+  }): Promise<ToolCallRunner & ToolApprovalResumePort>;
 }
 
 export interface SessionRunToolDefinitionProvider {
@@ -227,7 +227,7 @@ export interface SessionRunSessionContextInputService {
   buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
 }
 
-export interface SessionRunModelStepInputBuildService {
+export interface SessionRunModelCallInputBuildService {
   buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
 }
 
@@ -322,7 +322,7 @@ interface ApprovalContinuationGroup {
   userMessageId: string;
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
-  toolRuntime: ToolCallHandlerPort & ToolApprovalResumePort;
+  toolRuntime: ToolCallRunner & ToolApprovalResumePort;
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
   chatStreamAdapter?: ChatStreamEventAdapter;
@@ -354,7 +354,7 @@ export interface AgentRunServiceOptions {
     'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun' | 'markToolContinuationEmitted'
   >;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
-  modelStepInputBuildService?: SessionRunModelStepInputBuildService;
+  modelStepInputBuildService?: SessionRunModelCallInputBuildService;
   memoryRecallService?: SessionRunMemoryRecallService;
   memoryCaptureService?: SessionRunMemoryCaptureService;
   memorySettingsProvider?: SessionRunMemorySettingsProvider;
@@ -490,7 +490,7 @@ export class AgentRunService implements AgentRunPort {
     ToolRepository,
     'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun' | 'markToolContinuationEmitted'
   >;
-  private readonly modelStepInputBuildService: SessionRunModelStepInputBuildService;
+  private readonly modelStepInputBuildService: SessionRunModelCallInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
   private readonly memoryCaptureService?: SessionRunMemoryCaptureService;
   private readonly memorySettingsProvider?: SessionRunMemorySettingsProvider;
@@ -793,8 +793,8 @@ export class AgentRunService implements AgentRunPort {
       modelStepInputBuildService: this.modelStepInputBuildService,
       ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
       modelStepExecutor: {
-        streamModelStep: async function* (modelStepInput) {
-          let toolRuntime: (ToolCallHandlerPort & ToolApprovalResumePort) | undefined;
+        streamModelCall: async function* (modelStepInput) {
+          let toolRuntime: (ToolCallRunner & ToolApprovalResumePort) | undefined;
           try {
             toolRuntime = modelStepInput.projectRoot && svc.toolRuntimeFactory
               ? await svc.toolRuntimeFactory.create({
@@ -1523,7 +1523,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
-    const providerCancelled = this.modelStepProvider?.cancelModelStep(payload.targetRequestId) ?? false;
+    const providerCancelled = this.modelStepProvider?.cancelModelCall(payload.targetRequestId) ?? false;
     const activeRun = this.activeSessionMessageRuns.get(payload.targetRequestId);
 
     if (!activeRun) {
@@ -1629,7 +1629,7 @@ export class AgentRunService implements AgentRunPort {
     return true;
   }
 
-  resumeApproval(input: ToolApprovalResumeInput): AsyncIterable<RuntimeEvent> | undefined {
+  resumeApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined {
     const continuation = this.pendingApprovals.get(input.approvalRequestId);
     if (!continuation) {
       return undefined;
@@ -1989,7 +1989,7 @@ export class AgentRunService implements AgentRunPort {
     run: Run;
     step: RunStep;
     userMessageId: string;
-    toolRuntime?: ToolCallHandlerPort & ToolApprovalResumePort;
+    toolRuntime?: ToolCallRunner & ToolApprovalResumePort;
     chatStreamAdapter?: ChatStreamEventAdapter;
     projectId?: string;
     projectRoot?: string;
@@ -2068,12 +2068,12 @@ export class AgentRunService implements AgentRunPort {
         const modelStepProvider = this.requireModelStepProvider();
     const toolRuntime = input.toolRuntime;
     const streamProviderModelStep = (request: ModelStepRuntimeRequest) =>
-      modelStepProvider.streamModelStep(request);
+      modelStepProvider.streamModelCall(request);
     const modelEvents = streamCodingAgentModelStep({
       request: input.request,
       ports: {
-        modelStepPort: {
-          streamModelStep: ({ request }) => streamProviderModelStep(request),
+        modelCallPort: {
+          streamModelCall: ({ request }) => streamProviderModelStep(request),
         },
         ...(toolRuntime ? { toolCallHandler: toolRuntime } : {}),
         modelStepInputBuildService: this.modelStepInputBuildService,
@@ -2666,7 +2666,7 @@ export class AgentRunService implements AgentRunPort {
 
   private async *resumeApprovalContinuation(
     continuation: ApprovalContinuationGroup,
-    input: ToolApprovalResumeInput,
+    input: ResumeToolApprovalInput,
   ): AsyncIterable<RuntimeEvent> {
     const pending = continuation.pendingByApprovalId.get(input.approvalRequestId);
     if (!pending) {
@@ -2876,7 +2876,7 @@ export class AgentRunService implements AgentRunPort {
     request: ModelStepRuntimeRequest;
     stepId: RunStep['stepId'];
     lastSequence: number;
-    outcome: ToolApprovalResumeOutcome;
+    outcome: ResumeToolApprovalOutcome;
   }): {
     events: RuntimeEvent[];
     lastSequence: number;
