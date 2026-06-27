@@ -1,32 +1,11 @@
 // @vitest-environment node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const pureFiles = [
-  'complete.ts',
-  'context.ts',
-  'errors.ts',
-  'event-stream.ts',
-  'index.ts',
-  'message.ts',
-  'model.ts',
-  'provider.ts',
-  'registry.ts',
-  'request.ts',
-  'stream.ts',
-  'tool-set.ts',
-  'usage.ts',
-  'providers/openai-compatible.ts',
-  'providers/openai.ts',
-  'providers/deepseek.ts',
-  'providers/anthropic.ts',
-];
-
 describe('pure AI package boundary', () => {
   it('keeps runtime and desktop concepts out of pure AI files', () => {
-    const violations = pureFiles.flatMap((file) => {
-      const path = join(process.cwd(), 'packages/ai', file);
+    const violations = listTypeScriptFiles(join(process.cwd(), 'packages/ai')).flatMap((path) => {
       const source = readFileSync(path, 'utf8');
       const forbidden = [
         '@megumi/shared/runtime',
@@ -56,3 +35,15 @@ describe('pure AI package boundary', () => {
     expect(existsSync(join(process.cwd(), 'packages/ai', 'compat'))).toBe(false);
   });
 });
+
+function listTypeScriptFiles(root: string): string[] {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(root, entry.name);
+
+    if (entry.isDirectory()) {
+      return listTypeScriptFiles(path);
+    }
+
+    return entry.isFile() && entry.name.endsWith('.ts') ? [path] : [];
+  });
+}

@@ -60,7 +60,7 @@ describe('run context and model input boundaries', () => {
 
   it('keeps input preprocessing materialization in coding-agent context and out of provider adapters', () => {
     const contextSource = read('packages/coding-agent/run/context/model-step-input-context.ts');
-    const providerSource = read('packages/ai/prompt/model-input-context-mapper.ts');
+    const providerSource = read('packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts');
 
     expect(contextSource).toContain('inputPreprocessing');
     expect(contextSource).toContain("instructionKind: 'prompt_template'");

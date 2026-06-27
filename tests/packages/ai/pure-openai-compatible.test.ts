@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createOpenAICompatibleAdapter,
+  createAiClient,
+  createOpenAICompatibleProviderAdapter,
+  ProviderRegistry,
   type FetchLike,
   type ProviderAdapterRequest,
 } from '@megumi/ai';
@@ -60,27 +62,21 @@ function request(overrides: Partial<ProviderAdapterRequest> = {}): ProviderAdapt
         },
       },
     ],
-    options: {
-      credential: { type: 'api_key', value: 'sk-test' },
-    },
+    credential: { type: 'api_key', value: 'sk-test' },
     ...overrides,
   };
 }
 
 describe('pure OpenAI-compatible provider adapter', () => {
-  it('materializes ModelContextInput and ToolSet into provider request body', async () => {
+  it('materializes ModelContext and ToolSet into provider request body', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
       'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
       'data: {"choices":[{"delta":{"content":"lo"}}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}\n\n',
       'data: [DONE]\n\n',
     ]));
-    const adapter = createOpenAICompatibleAdapter({
-      providerId: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      fetch,
-    });
+    const aiClient = createOpenAICompatibleTestClient(fetch);
 
-    const events = await collect(adapter.stream(request()));
+    const events = await collect(aiClient.stream(request()));
 
     const [, init] = fetch.mock.calls[0];
     expect(JSON.parse(String(init?.body))).toEqual({
@@ -138,13 +134,9 @@ describe('pure OpenAI-compatible provider adapter', () => {
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
       'data: [DONE]\n\n',
     ]));
-    const adapter = createOpenAICompatibleAdapter({
-      providerId: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      fetch,
-    });
+    const aiClient = createOpenAICompatibleTestClient(fetch);
 
-    const events = await collect(adapter.stream(request()));
+    const events = await collect(aiClient.stream(request()));
 
     expect(events).toEqual([
       { type: 'message_start', messageId: 'assistant-0', role: 'assistant' },
@@ -213,13 +205,9 @@ describe('pure OpenAI-compatible provider adapter', () => {
       '{"error":{"message":"bad sk-provider-secret-12345678"}}',
       { status: 401, statusText: 'Unauthorized' },
     ));
-    const adapter = createOpenAICompatibleAdapter({
-      providerId: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      fetch,
-    });
+    const aiClient = createOpenAICompatibleTestClient(fetch);
 
-    const [event] = await collect(adapter.stream(request()));
+    const [event] = await collect(aiClient.stream(request()));
 
     expect(event).toMatchObject({
       type: 'error',
@@ -244,3 +232,15 @@ describe('pure OpenAI-compatible provider adapter', () => {
     expect(JSON.stringify(event)).not.toContain('sk-provider-secret-12345678');
   });
 });
+
+function createOpenAICompatibleTestClient(fetch: FetchLike) {
+  return createAiClient({
+    registry: new ProviderRegistry([
+      createOpenAICompatibleProviderAdapter({
+        providerId: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        fetch,
+      }),
+    ]),
+  });
+}

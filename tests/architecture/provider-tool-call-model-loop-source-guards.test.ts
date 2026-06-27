@@ -60,10 +60,10 @@ describe('provider tool call model loop source guards', () => {
 
   it('does not keep legacy chat runtime or model input fields in core provider paths', () => {
     const files = [
-      'packages/ai/types.ts',
-      'packages/ai/prompt/message-mapper.ts',
-      'packages/ai/providers/openai-compatible.ts',
-      'packages/ai/providers/anthropic.ts',
+      'packages/ai/messages/conversation-message.ts',
+      'packages/ai/context/model-context.ts',
+      'packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts',
+      'packages/ai/providers/anthropic/anthropic-provider-adapter.ts',
       'packages/coding-agent/run/model-step/model-step-port.ts',
       'packages/coding-agent/run/loop/agent-loop.ts',
       'packages/coding-agent/run/model-step/model-step-request-mapper.ts',

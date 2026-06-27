@@ -1,15 +1,15 @@
 // Maps current ModelStepRuntimeRequest into pure AI model, context, and ToolSet inputs.
 import type { ModelInputContextPart, ModelStepRuntimeRequest, ToolContinuationPart } from '@megumi/shared/model';
 import type { ToolDefinition } from '@megumi/shared/tool';
-import type { Message, Model, ModelContextInput, ToolSet } from '@megumi/ai';
+import type { AiModel, ConversationMessage, ModelContext, ToolSet } from '@megumi/ai';
 import type { ProviderRuntimeConfig } from './model-step-types';
 
 export function mapModelStepToAiInput(input: {
   request: ModelStepRuntimeRequest;
   config: ProviderRuntimeConfig;
 }): {
-  model: Model;
-  context: ModelContextInput;
+  model: AiModel;
+  context: ModelContext;
   toolSet?: ToolSet;
 } {
   return {
@@ -29,8 +29,8 @@ export function mapModelStepToAiInput(input: {
   };
 }
 
-function mapModelInputContext(parts: ModelInputContextPart[]): ModelContextInput {
-  const messages: Message[] = [];
+function mapModelInputContext(parts: ModelInputContextPart[]): ModelContext {
+  const messages: ConversationMessage[] = [];
   const systemPromptParts: string[] = [];
   const nativeReplay = mapNativeToolReplay(parts);
   const consumedPartIds = new Set(nativeReplay.consumedPartIds);
@@ -78,7 +78,7 @@ function mapPartToMessage(part: ModelInputContextPart):
 }
 
 function mapNativeToolReplay(parts: ModelInputContextPart[]): {
-  messages: Message[];
+  messages: ConversationMessage[];
   consumedPartIds: string[];
 } {
   const toolParts = parts.filter((part): part is ToolContinuationPart => part.kind === 'tool_continuation');
@@ -102,7 +102,7 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
     }
   }
 
-  const messages: Message[] = [];
+  const messages: ConversationMessage[] = [];
   const consumedPartIds = new Set<string>();
   const replayedModelStepIds = new Set<string>();
   let currentModelStepId: string | undefined;

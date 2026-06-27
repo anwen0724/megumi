@@ -33,7 +33,7 @@ describe('main chat stream adapter source guards', () => {
     for (const file of [
       'packages/coding-agent/run/events/chat-stream-event-adapter.ts',
       'packages/coding-agent/run/session-run-service.ts',
-      'packages/ai/providers/openai-compatible.ts',
+      'packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts',
     ]) {
       expect(read(file)).not.toContain('assistant.answer.');
     }

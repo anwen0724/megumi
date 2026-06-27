@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createProviderRegistry, type FetchLike } from '@megumi/ai';
+import { createDefaultProviderRegistry, type FetchLike } from '@megumi/ai';
 
 describe('pure AI provider registry', () => {
   it('registers DeepSeek, OpenAI, and Anthropic provider adapters', () => {
-    const registry = createProviderRegistry({
+    const registry = createDefaultProviderRegistry({
       fetch: vi.fn<FetchLike>(),
     });
 
@@ -15,7 +15,7 @@ describe('pure AI provider registry', () => {
   });
 
   it('throws a typed registry error for unknown providers', () => {
-    const registry = createProviderRegistry({
+    const registry = createDefaultProviderRegistry({
       fetch: vi.fn<FetchLike>(),
     });
 

@@ -1,19 +1,19 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  AssistantMessageEventStream,
+  AssistantEventStream,
   AssistantMessageSchema,
-  ModelContextInputSchema,
+  ModelContextSchema,
   ToolSetSchema,
   createProviderError,
-  defineModel,
+  defineAiModel,
   defineToolSet,
   type AssistantStreamEvent,
 } from '@megumi/ai';
 
 describe('pure AI contracts', () => {
   it('defines provider-bound model identity and model context input', () => {
-    expect(defineModel({
+    expect(defineAiModel({
       providerId: 'openai',
       modelId: 'gpt-5.5',
       displayName: 'GPT-5.5',
@@ -33,7 +33,7 @@ describe('pure AI contracts', () => {
       },
     });
 
-    expect(ModelContextInputSchema.parse({
+    expect(ModelContextSchema.parse({
       systemPrompt: 'You are Megumi.',
       messages: [
         { role: 'user', content: 'Read package.json.' },
@@ -50,6 +50,14 @@ describe('pure AI contracts', () => {
       systemPrompt: 'You are Megumi.',
       messages: [
         { role: 'user', content: 'Read package.json.' },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'I will inspect it.' },
+            { type: 'toolCall', id: 'call-1', name: 'read_file', argumentsText: '{"path":"package.json"}' },
+          ],
+        },
+        { role: 'toolResult', toolCallId: 'call-1', content: 'file contents' },
       ],
     });
   });
@@ -118,7 +126,7 @@ describe('pure AI contracts', () => {
       },
     ];
 
-    const stream = AssistantMessageEventStream.from(events);
+    const stream = AssistantEventStream.from(events);
 
     await expect(collect(stream)).resolves.toEqual(events);
     await expect(stream.result()).resolves.toEqual({

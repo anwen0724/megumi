@@ -13,12 +13,12 @@ import {
   createRunFailedEvent,
   createToolCallCreatedEvent,
 } from '@megumi/shared/runtime';
-import type { AssistantContentBlock, AssistantMessageEventStream, AssistantStreamEvent } from '@megumi/ai';
+import type { AssistantContentBlock, AssistantEventStream, AssistantStreamEvent } from '@megumi/ai';
 import type { Clock, ModelStepAdapterRequest } from './model-step-types';
 
 export async function* adaptAssistantStreamToRuntimeEvents(input: {
   request: ModelStepAdapterRequest;
-  stream: AssistantMessageEventStream;
+  stream: AssistantEventStream;
   clock: Clock;
 }): AsyncIterable<RuntimeEvent> {
   const state: StreamState = {

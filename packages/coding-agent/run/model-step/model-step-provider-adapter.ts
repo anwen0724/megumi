@@ -1,7 +1,7 @@
 // Wraps a pure ProviderAdapter with the current runtime-shaped model-step adapter interface.
 import { JsonObjectSchema } from '@megumi/shared/primitives/json';
 import type { RuntimeErrorCode } from '@megumi/shared/runtime';
-import type { AssistantContentBlock, ProviderAdapter } from '@megumi/ai';
+import type { AiClient, AssistantContentBlock } from '@megumi/ai';
 import { mapModelStepToAiInput } from './model-step-request-mapper';
 import { adaptAssistantStreamToRuntimeEvents } from './model-step-event-adapter';
 import type {
@@ -15,7 +15,7 @@ import { systemClock } from './model-step-types';
 
 export function createModelStepProviderAdapter(input: {
   providerId: ProviderRuntimeConfig['providerId'];
-  provider: ProviderAdapter;
+  aiClient: AiClient;
   clock?: Clock;
 }): ModelStepProviderAdapter {
   const clock = input.clock ?? systemClock;
@@ -27,14 +27,12 @@ export function createModelStepProviderAdapter(input: {
         request: request.request,
         config: request.config,
       });
-      const stream = input.provider.stream({
+      const stream = input.aiClient.stream({
         model: aiInput.model,
         context: aiInput.context,
         toolSet: aiInput.toolSet,
-        options: {
-          signal: request.signal,
-          credential: { type: 'api_key', value: request.config.apiKey },
-        },
+        signal: request.signal,
+        credential: { type: 'api_key', value: request.config.apiKey },
       });
 
       yield* adaptAssistantStreamToRuntimeEvents({
@@ -48,16 +46,13 @@ export function createModelStepProviderAdapter(input: {
         request: request.request,
         config: request.config,
       });
-      const message = await input.provider.stream({
+      const message = await input.aiClient.complete({
         model: aiInput.model,
         context: aiInput.context,
         toolSet: aiInput.toolSet,
-        options: {
-          signal: request.signal,
-          credential: { type: 'api_key', value: request.config.apiKey },
-          responseMode: 'complete',
-        },
-      }).result();
+        signal: request.signal,
+        credential: { type: 'api_key', value: request.config.apiKey },
+      });
 
       if (message.error) {
         return {

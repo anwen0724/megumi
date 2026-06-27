@@ -5,7 +5,8 @@ import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import { createModelStepProviderAdapter } from '@megumi/coding-agent/run';
 import type { FetchLike, ProviderRuntimeConfig } from '@megumi/coding-agent/run';
-import { createOpenAICompatibleAdapter } from '@megumi/ai/providers/openai-compatible';
+import { createAiClient, ProviderRegistry } from '@megumi/ai';
+import { createOpenAICompatibleProviderAdapter } from '@megumi/ai/providers/openai-compatible';
 
 const config: ProviderRuntimeConfig = {
   providerId: 'openai',
@@ -38,6 +39,22 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
     output.push(event);
   }
   return output;
+}
+
+function createTestModelStepAdapter(fetch: FetchLike) {
+  return createModelStepProviderAdapter({
+    providerId: 'openai',
+    aiClient: createAiClient({
+      registry: new ProviderRegistry([
+        createOpenAICompatibleProviderAdapter({
+          providerId: 'openai',
+          baseUrl: 'https://api.openai.com/v1',
+          fetch,
+        }),
+      ]),
+    }),
+    clock: { now: () => '2026-05-17T00:00:01.000Z' },
+  });
 }
 
 function runtimeRequest(overrides: Partial<ModelStepRuntimeRequest> = {}): ModelStepRuntimeRequest {
@@ -101,15 +118,7 @@ describe('model-step compatibility adapter', () => {
       'data: {"choices":[{"delta":{"content":"lo"}}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}\n\n',
       'data: [DONE]\n\n',
     ]));
-    const adapter = createModelStepProviderAdapter({
-      providerId: 'openai',
-      provider: createOpenAICompatibleAdapter({
-        providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        fetch,
-      }),
-      clock: { now: () => '2026-05-17T00:00:01.000Z' },
-    });
+    const adapter = createTestModelStepAdapter(fetch);
     let sequence = 0;
 
     const events = await collect(adapter.streamModelStep({
@@ -154,15 +163,7 @@ describe('model-step compatibility adapter', () => {
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"package.json\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n',
       'data: [DONE]\n\n',
     ]));
-    const adapter = createModelStepProviderAdapter({
-      providerId: 'openai',
-      provider: createOpenAICompatibleAdapter({
-        providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        fetch,
-      }),
-      clock: { now: () => '2026-05-17T00:00:01.000Z' },
-    });
+    const adapter = createTestModelStepAdapter(fetch);
     let sequence = 0;
 
     const events = await collect(adapter.streamModelStep({
@@ -220,15 +221,7 @@ describe('model-step compatibility adapter', () => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
-    const adapter = createModelStepProviderAdapter({
-      providerId: 'openai',
-      provider: createOpenAICompatibleAdapter({
-        providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        fetch,
-      }),
-      clock: { now: () => '2026-05-17T00:00:01.000Z' },
-    });
+    const adapter = createTestModelStepAdapter(fetch);
 
     const result = await adapter.completeModelStep({
       request: runtimeRequest(),
@@ -265,15 +258,7 @@ describe('model-step compatibility adapter', () => {
       'data: {"choices":[{"delta":{"content":"Ok"}}]}\n\n',
       'data: [DONE]\n\n',
     ]));
-    const adapter = createModelStepProviderAdapter({
-      providerId: 'openai',
-      provider: createOpenAICompatibleAdapter({
-        providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        fetch,
-      }),
-      clock: { now: () => '2026-05-17T00:00:01.000Z' },
-    });
+    const adapter = createTestModelStepAdapter(fetch);
 
     await collect(adapter.streamModelStep({
       request: runtimeRequest({
@@ -349,15 +334,7 @@ describe('model-step compatibility adapter', () => {
       'data: {"choices":[{"delta":{"content":"Done"}}]}\n\n',
       'data: [DONE]\n\n',
     ]));
-    const adapter = createModelStepProviderAdapter({
-      providerId: 'openai',
-      provider: createOpenAICompatibleAdapter({
-        providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        fetch,
-      }),
-      clock: { now: () => '2026-05-17T00:00:01.000Z' },
-    });
+    const adapter = createTestModelStepAdapter(fetch);
 
     await collect(adapter.streamModelStep({
       request: runtimeRequest({
@@ -443,15 +420,7 @@ describe('model-step compatibility adapter', () => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
-    const adapter = createModelStepProviderAdapter({
-      providerId: 'openai',
-      provider: createOpenAICompatibleAdapter({
-        providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        fetch,
-      }),
-      clock: { now: () => '2026-05-17T00:00:01.000Z' },
-    });
+    const adapter = createTestModelStepAdapter(fetch);
 
     await adapter.completeModelStep({
       request: runtimeRequest(),
