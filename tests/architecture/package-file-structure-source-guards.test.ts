@@ -119,12 +119,12 @@ describe('package and file structure source guards', () => {
   it('keeps agent loop runtime inside packages/coding-agent/run', () => {
     expect(existsSync(join(repoRoot, 'packages/agent'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step-event-adapter.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step-provider-adapter.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-event-adapter.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-step-provider-adapter.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/run-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/context-management'))).toBe(false);
@@ -145,8 +145,8 @@ describe('package and file structure source guards', () => {
       .filter((entry) => entry.endsWith('.service.ts'));
 
     expect(flatServiceFiles).toEqual([]);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/session-run-service.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-step/model-step-provider-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/execution/tool-executors/read-file.executor.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);

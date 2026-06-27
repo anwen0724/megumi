@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -45,7 +45,7 @@ describe('recovery foundation source guards', () => {
     const runtimeContractFiles = [
       'packages/shared/runtime/errors.ts',
       'packages/shared/ipc/errors.ts',
-      'packages/coding-agent/run/lifecycle/runtime-errors.ts',
+      'packages/coding-agent/run/lifecycle/run-error.ts',
     ];
 
     expect(offenders(/\brecoverable\b/, runtimeContractFiles)).toEqual([]);

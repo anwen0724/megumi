@@ -37,7 +37,7 @@ const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/main/ipc/register-ipc-handlers.ts',
   'packages/coding-agent/run/recovery/recovery-service.ts',
-  'packages/coding-agent/run/session-run-service.ts',
+  'packages/coding-agent/run/agent-run-service.ts',
   'packages/coding-agent/workspace/workspace-change-tracker.ts',
   'packages/coding-agent/workspace/workspace-restore.ts',
   'packages/shared/ipc/schemas.ts',
@@ -78,7 +78,7 @@ const runCommandPathFiles = [
   runCommandExecutorPath,
   'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
   'packages/coding-agent/tools/execution/tool-execution-router.ts',
-  'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
+  'packages/coding-agent/run/tool-calls/tool-call-runner.ts',
 ];
 
 describe('workspace restore source guards', () => {

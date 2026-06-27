@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -57,9 +57,9 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /MemoryRepository|@megumi\/db|better-sqlite3|memory-markdown-sync|memory-recall-runtime|memory-runtime-capture|recall-scoring|@megumi\/memory/)).toEqual([]);
   });
 
-  it('keeps SessionRunService orchestration behind the recall port instead of recall scoring', () => {
+  it('keeps AgentRunService orchestration behind the recall port instead of recall scoring', () => {
     const files = [
-      join(root, 'packages', 'coding-agent', 'run', 'session-run-service.ts'),
+      join(root, 'packages', 'coding-agent', 'run', 'agent-run-service.ts'),
     ];
     expect(offenders(files, /@megumi\/memory|MemoryRepository|@megumi\/db\/repos\/memory|memory-runtime-capture\.service|memory-recall-runtime\.service|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
   });
@@ -69,7 +69,7 @@ describe('memory foundation boundaries', () => {
       read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-memory.ts')),
       read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-session-runtime.ts')),
     ].join('\n');
-    const sessionRun = read(join(root, 'packages', 'coding-agent', 'run', 'session-run-service.ts'));
+    const sessionRun = read(join(root, 'packages', 'coding-agent', 'run', 'agent-run-service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
     expect(index).toContain('options.memorySettingsProvider.isMemoryEnabled()');

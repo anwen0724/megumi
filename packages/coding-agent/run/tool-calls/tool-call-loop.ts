@@ -2,11 +2,14 @@
 export {
   runModelToolLoop,
   type RunModelToolLoopInput,
-  type ToolCallHandlerPort,
-  type ToolCallHandlerOutcome,
-  type ToolApprovalResumeInput,
-  type ToolApprovalResumeOutcome,
-  type ToolApprovalResumePort,
-  type PendingToolApproval,
-  type PendingToolApprovalContinuation,
 } from '../loop';
+
+export type {
+  ToolCallHandlerPort,
+  ToolCallHandlerOutcome,
+  ToolApprovalResumeInput,
+  ToolApprovalResumeOutcome,
+  ToolApprovalResumePort,
+  PendingToolApproval,
+  PendingToolApprovalContinuation,
+} from './tool-call-contract';

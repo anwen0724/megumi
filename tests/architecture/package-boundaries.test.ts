@@ -269,7 +269,7 @@ describe('package dependency boundaries', () => {
 
   it('keeps ToolCallHandlerService behind the source-aware execution router', () => {
     const source = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-handler.ts'),
+      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
       'utf8',
     );
 
@@ -296,7 +296,7 @@ describe('package dependency boundaries', () => {
     expect(source).not.toContain('run/loop');
     expect(source).not.toContain('run/lifecycle');
     expect(source).not.toContain('run/events');
-    expect(source).not.toContain('createToolCallHandlerService');
+    expect(source).not.toContain('createToolCallRunner');
     expect(source).not.toContain('ToolCallHandlerPort');
     expect(source).not.toContain('ToolApprovalResumePort');
     expect(source).not.toContain('runModelToolLoop');
@@ -341,7 +341,7 @@ describe('package dependency boundaries', () => {
 
   it('keeps tool handling source-ordered without batch orchestration objects', () => {
     const handler = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-handler.ts'),
+      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
       'utf8',
     );
     const router = fs.readFileSync(

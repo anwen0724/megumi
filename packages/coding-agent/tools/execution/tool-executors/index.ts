@@ -1,9 +1,9 @@
-﻿import path from 'node:path';
+import path from 'node:path';
 import {
   classifyProjectPath,
   isProtectedProjectPath,
   isSensitiveProjectPath,
-} from '@megumi/coding-agent/run/permissions/project-boundary-policy';
+} from '@megumi/coding-agent/workspace';
 import { redactRuntimeMessage } from '../../../adapters/local/security/redaction';
 import { normalizeToolResult } from '@megumi/coding-agent/tools/normalization';
 import { createRawToolResultFromContent } from '@megumi/coding-agent/tools/normalization';
@@ -315,5 +315,3 @@ export { createSearchTextExecutor } from './search-text.executor';
 export { createEditFileExecutor } from './edit-file.executor';
 export { createWriteFileExecutor } from './write-file.executor';
 export { createRunCommandExecutor } from './run-command.executor';
-
-

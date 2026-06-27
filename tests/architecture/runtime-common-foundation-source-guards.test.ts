@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -67,7 +67,7 @@ const obsoleteRuntimeErrorFieldPattern = new RegExp(`\\b${['recover', 'able'].jo
 const runtimeErrorContractFiles = [
   'packages/shared/runtime/errors.ts',
   'packages/shared/ipc/errors.ts',
-  'packages/coding-agent/run/lifecycle/runtime-errors.ts',
+  'packages/coding-agent/run/lifecycle/run-error.ts',
 ];
 
 describe('Runtime Common Foundation source guards', () => {

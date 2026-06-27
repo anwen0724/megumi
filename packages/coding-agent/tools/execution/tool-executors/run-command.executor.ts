@@ -1,5 +1,5 @@
-﻿import { spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
-import { classifyProjectPath } from '@megumi/coding-agent/run/permissions/project-boundary-policy';
+import { spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
+import { classifyProjectPath } from '@megumi/coding-agent/workspace';
 import { redactRuntimeMessage } from '../../../adapters/local/security/redaction';
 import { createRawToolResultFromContent } from '@megumi/coding-agent/tools/normalization';
 import {

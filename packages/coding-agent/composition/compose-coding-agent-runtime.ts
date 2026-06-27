@@ -8,8 +8,16 @@ import { composeCodingAgentSessionRuntime, type CodingAgentHomePaths } from './c
 import { composeCodingAgentMemory } from './compose-coding-agent-memory';
 import { composeCodingAgentRecoveryRuntime } from './compose-coding-agent-recovery-runtime';
 import type { RuntimeLogger } from '../product-runtime';
-import type { SessionRunModelStepProvider } from '../run/session-run-service';
-import { createModelStepProviderService } from '../run/model-step/model-step-provider-service';
+import type { AgentRunModelStepProvider } from '../run/run-contract';
+import {
+  createAiClient,
+  createAnthropicProviderAdapter,
+  createDeepSeekProviderAdapter,
+  createOpenAIProviderAdapter,
+  ProviderRegistry,
+  type AiClient,
+} from '@megumi/ai';
+import { createModelCallRunner, type ProviderRuntimeConfig } from '../run/model-call';
 import { TimelineHistoryCommitProjectorService } from '../run/events/timeline-history-commit-projector';
 import type { MemorySettingsProvider } from './compose-coding-agent-memory';
 import type { PermissionSettingsProvider } from '../run/permissions/permission-settings-provider';
@@ -26,7 +34,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   runtimeLogger: RuntimeLogger;
   // Optional override for tests / alternative entries. When omitted, the product
   // builds a real OpenAI-compatible model step provider so it runs standalone.
-  modelStepProviderService?: SessionRunModelStepProvider;
+  modelStepProviderService?: AgentRunModelStepProvider;
   appSettingsProvider: ProviderSettingsAppSettingsPort;
   memorySettingsProvider: MemorySettingsProvider;
   permissionSettingsProvider: PermissionSettingsProvider;
@@ -46,9 +54,10 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     env: process.env,
   });
   const modelStepProviderService = options.modelStepProviderService
-    ?? createModelStepProviderService(
-      new ProviderRuntimeService({ settings: providerSettingsService, env: process.env }),
-    );
+    ?? createModelCallRunner({
+      resolver: new ProviderRuntimeService({ settings: providerSettingsService, env: process.env }),
+      aiClientFactory: ({ config }) => createAiClientForProviderRuntime(config),
+    });
   const memory = composeCodingAgentMemory({
     repository: persistence.memoryRepository,
     modelStepProvider: modelStepProviderService,
@@ -126,4 +135,38 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     projectService,
     dispose: () => persistence.database.close(),
   };
+}
+
+function createAiClientForProviderRuntime(config: ProviderRuntimeConfig): AiClient {
+  return createAiClient({
+    registry: new ProviderRegistry([createProviderAdapterForRuntimeConfig(config)]),
+  });
+}
+
+function createProviderAdapterForRuntimeConfig(config: ProviderRuntimeConfig) {
+  switch (config.providerId) {
+    case 'openai':
+      return createOpenAIProviderAdapter({
+        baseUrl: requireBaseUrl(config),
+        fetch,
+      });
+    case 'deepseek':
+      return createDeepSeekProviderAdapter({
+        baseUrl: requireBaseUrl(config),
+        fetch,
+      });
+    case 'anthropic':
+      return createAnthropicProviderAdapter({
+        ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+        fetch,
+      });
+  }
+}
+
+function requireBaseUrl(config: ProviderRuntimeConfig): string {
+  if (!config.baseUrl) {
+    throw new Error(`Provider base URL is required: ${config.providerId}`);
+  }
+
+  return config.baseUrl;
 }

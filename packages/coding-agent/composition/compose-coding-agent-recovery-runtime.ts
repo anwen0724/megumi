@@ -7,14 +7,14 @@ import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change
 import { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
 import { createRecoveryService, type RecoveryLogger } from '../run/recovery';
 import { WorkspaceRestoreService } from '../workspace';
-import type { SessionRunService } from '../run/session-run-service';
+import type { AgentRunService } from '../run/agent-run-service';
 
 export interface ComposeCodingAgentRecoveryRuntimeOptions {
   recoveryRepository: RecoveryRepository;
   sessionRunRepository: SessionRunRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
   timelineMessageRepository: TimelineMessageRepository;
-  sessionRunService: SessionRunService;
+  sessionRunService: AgentRunService;
   logger?: RecoveryLogger;
 }
 

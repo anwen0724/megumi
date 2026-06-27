@@ -1,5 +1,4 @@
 // Provides the product-facing tool service used by UI shells and product composition.
-import type { ToolApprovalResumeInput } from '@megumi/coding-agent/run';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   ApprovalRecord,
@@ -13,6 +12,13 @@ import type {
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { ToolRegistry } from './registry';
 
+export interface ToolServiceApprovalResumeInput {
+  approvalRequestId: string;
+  decision: 'approved' | 'denied';
+  decidedAt: string;
+  reason?: string;
+}
+
 export interface ApprovalResolveServiceResult {
   approval: ApprovalRecord;
   events?: AsyncIterable<RuntimeEvent>;
@@ -21,7 +27,7 @@ export interface ApprovalResolveServiceResult {
 export interface ToolServiceOptions {
   registry: ToolRegistry;
   repository: ToolRepository;
-  resumeApproval?: (input: ToolApprovalResumeInput) => AsyncIterable<RuntimeEvent> | undefined;
+  resumeApproval?: (input: ToolServiceApprovalResumeInput) => AsyncIterable<RuntimeEvent> | undefined;
   now?: () => string;
   idFactory?: {
     approvalRecordId(): string;
@@ -100,7 +106,7 @@ export class ToolService {
     };
   }
 
-  resumeApproval(input: ToolApprovalResumeInput): AsyncIterable<RuntimeEvent> | undefined {
+  resumeApproval(input: ToolServiceApprovalResumeInput): AsyncIterable<RuntimeEvent> | undefined {
     return this.options.resumeApproval?.(input);
   }
 }

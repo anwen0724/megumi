@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { readFileSync, readdirSync, type Dirent } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -54,8 +54,8 @@ describe('Desktop Main directory boundaries', () => {
     for (const forbidden of [
       '@megumi/db/repos',
       'createDatabase(',
-      'new SessionRunService',
-      'createToolCallHandlerService',
+      'new AgentRunService',
+      'createToolCallRunner',
       'new ProviderRuntimeService',
       'MemoryMarkdownSyncService',
       'WorkspaceRestoreService',
@@ -73,8 +73,8 @@ describe('Desktop Main directory boundaries', () => {
     expect(source).toContain('toolService: codingAgentRuntime.toolService');
     for (const forbidden of [
       'createDatabase(',
-      'new SessionRunService',
-      'createToolCallHandlerService',
+      'new AgentRunService',
+      'createToolCallRunner',
       'new ProviderRuntimeService',
       'new WorkspaceRestoreService',
       'new TimelineHistoryCommitProjectorService',

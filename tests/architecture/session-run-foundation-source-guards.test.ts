@@ -68,7 +68,7 @@ describe('session run foundation source guards', () => {
   it('keeps agent runtime implementation under coding-agent run', () => {
     expect(existsSync(join(ROOT, 'packages/agent'))).toBe(false);
     expect(existsSync(join(ROOT, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
-    expect(existsSync(join(ROOT, 'packages/coding-agent/run/model-step/model-step.ts'))).toBe(true);
+    expect(existsSync(join(ROOT, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(ROOT, 'packages/core/run-runtime'))).toBe(false);
   });
 
@@ -97,7 +97,7 @@ describe('session run foundation source guards', () => {
     const runtimeErrorContractFiles = [
       join(ROOT, 'packages/shared/runtime/errors.ts'),
       join(ROOT, 'packages/shared/ipc/errors.ts'),
-      join(ROOT, 'packages/coding-agent/run/lifecycle/runtime-errors.ts'),
+      join(ROOT, 'packages/coding-agent/run/lifecycle/run-error.ts'),
     ];
 
     const offenders = runtimeErrorContractFiles

@@ -41,9 +41,9 @@ describe('Desktop Main shell composition', () => {
     expect(productComposition).toContain('new ProviderSettingsService');
     expect(persistenceComposition).toContain('migrateDatabase(database)');
     expect(persistenceComposition).toContain('new SessionRunRepository(database)');
-    expect(sessionComposition).toContain('new SessionRunService');
+    expect(sessionComposition).toContain('new AgentRunService');
     expect(sessionComposition).toContain('new PermissionSnapshotService');
-    expect(toolComposition).toContain('createToolCallHandlerService');
+    expect(toolComposition).toContain('createToolCallRunner');
     expect(toolComposition).toContain('createToolExecutionRouter');
   });
 });

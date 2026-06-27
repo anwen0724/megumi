@@ -1,4 +1,4 @@
-﻿// Evaluates Coding Agent tool permission policy without depending on host execution or UI approval.
+// Evaluates Coding Agent tool permission policy without depending on host execution or UI approval.
 import type { PermissionMode } from '@megumi/shared/permission';
 import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type {
@@ -22,7 +22,7 @@ import {
   classifyProjectPath,
   DEFAULT_PROTECTED_PATHS,
   type ProjectPathClassification,
-} from './project-boundary-policy';
+} from '../../workspace/path-policy';
 import { matchPermissionRule } from './permission-rule-matcher';
 
 export interface EvaluatePermissionPolicyInput {
@@ -579,4 +579,3 @@ function escalateRisk(current: ToolRiskLevel, minimum: ToolRiskLevel): ToolRiskL
 }
 
 export type { ToolPolicyDecision };
-

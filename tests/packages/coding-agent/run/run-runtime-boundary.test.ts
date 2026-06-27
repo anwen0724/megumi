@@ -36,10 +36,10 @@ describe('agent package boundary', () => {
   it('owns model/tool loop runtime under packages/coding-agent/run', () => {
     expect(existsSync(join(root, 'packages/agent'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/model-step/model-step.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/model-step/model-step-event-adapter.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/model-step/model-step-provider-adapter.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/model-step/model-step-port.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-event-adapter.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-contract.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/model-call/provider-adapter.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(true);
   });
 

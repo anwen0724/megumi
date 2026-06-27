@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import {
   buildSessionCompactionSummaryInputContext,
@@ -8,7 +8,7 @@ import {
   shouldRunSessionCompaction,
 } from '@megumi/coding-agent/run/context/compaction/session-compaction';
 import { estimateModelInputContextTokens } from '@megumi/coding-agent/run/context/context-budget';
-import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/run/context/model-step-input-context';
+import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
   SessionContextInput,
@@ -355,4 +355,3 @@ describe('serializeSessionCompactionInput', () => {
     expect(text.length).toBeLessThan(2500);
   });
 });
-

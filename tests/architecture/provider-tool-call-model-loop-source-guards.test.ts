@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -30,16 +30,17 @@ function sourceUnder(relativeDirectory: string): string {
 describe('provider tool call model loop source guards', () => {
   it('keeps provider loop centered on ToolCall, ToolResult, and ToolExecution events', () => {
     const toolLoop = read('packages/coding-agent/run/loop/agent-loop.ts');
+    const toolCallContract = read('packages/coding-agent/run/tool-calls/tool-call-contract.ts');
 
     expect(toolLoop).toContain('ToolCallHandlerPort');
-    expect(toolLoop).toContain('ToolExecution');
+    expect(toolCallContract).toContain('ToolExecution');
     expect(toolLoop).toContain('tool.call.created');
     expect(toolLoop).toContain('tool.result.created');
     expect(toolLoop).toContain('toolResults');
   });
 
   it('does not reintroduce RunAction.call_tool as the model tool path', () => {
-    const sessionRun = read('packages/coding-agent/run/session-run-service.ts');
+    const sessionRun = read('packages/coding-agent/run/agent-run-service.ts');
     const toolLoop = read('packages/coding-agent/run/loop/agent-loop.ts');
 
     expect(sessionRun).not.toContain("actionKind: 'call_tool'");
@@ -49,7 +50,7 @@ describe('provider tool call model loop source guards', () => {
 
   it('does not implement real built-in tools or permission policy in Plan 2 code paths', () => {
     const toolLoop = read('packages/coding-agent/run/loop/agent-loop.ts');
-    const sessionRun = read('packages/coding-agent/run/session-run-service.ts');
+    const sessionRun = read('packages/coding-agent/run/agent-run-service.ts');
 
     expect(toolLoop).not.toContain('readFileSync');
     expect(toolLoop).not.toContain('writeFileSync');
@@ -64,11 +65,11 @@ describe('provider tool call model loop source guards', () => {
       'packages/ai/context/model-context.ts',
       'packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts',
       'packages/ai/providers/anthropic/anthropic-provider-adapter.ts',
-      'packages/coding-agent/run/model-step/model-step-port.ts',
+      'packages/coding-agent/run/model-call/model-call-contract.ts',
       'packages/coding-agent/run/loop/agent-loop.ts',
-      'packages/coding-agent/run/model-step/model-step-request-mapper.ts',
-      'packages/coding-agent/run/model-step/model-step-provider-service.ts',
-      'packages/coding-agent/run/session-run-service.ts',
+      'packages/coding-agent/run/model-call/model-call-request-mapper.ts',
+      'packages/coding-agent/run/model-call/model-call-runner.ts',
+      'packages/coding-agent/run/agent-run-service.ts',
     ];
 
     for (const file of files) {
@@ -96,14 +97,14 @@ describe('provider tool call model loop source guards', () => {
   });
 
   it('requires provider request materialization to use full model step runtime requests', () => {
-    const source = read('packages/coding-agent/run/model-step/model-step-request-mapper.ts');
+    const source = read('packages/coding-agent/run/model-call/model-call-request-mapper.ts');
 
     expect(source).not.toMatch(/\bPartial<ModelStepRuntimeRequest>\b/);
     expect(source).not.toMatch(/\bModelStepPromptRequest\b/);
   });
 
   it('keeps provider request materialization out of Host source selection', () => {
-    const source = read('packages/coding-agent/run/model-step/model-step-request-mapper.ts');
+    const source = read('packages/coding-agent/run/model-call/model-call-request-mapper.ts');
 
     expect(source).toContain('mapModelStepToAiInput');
     expect(source).not.toContain('@megumi/context-management');

@@ -1,6 +1,6 @@
-﻿// Resolves the run-level working directory used by ModelStep input builds.
+// Resolves the run-level working directory used by ModelStep input builds.
 // Tool-local cwd values are validated by tool executors and must not mutate this state.
-import { classifyProjectPath } from '@megumi/coding-agent/run/permissions/project-boundary-policy';
+import { classifyProjectPath } from '@megumi/coding-agent/workspace';
 
 export interface ResolveModelStepEffectiveCwdInput {
   projectRoot?: string;

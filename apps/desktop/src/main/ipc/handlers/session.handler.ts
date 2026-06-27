@@ -1,4 +1,4 @@
-﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
@@ -28,16 +28,16 @@ import {
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { SessionRunPort } from '@megumi/coding-agent/run';
+import type { AgentRunPort } from '@megumi/coding-agent/run';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
-// Session IPC handlers code against the product SessionRunPort, narrowed to the
+// Session IPC handlers code against the product AgentRunPort, narrowed to the
 // session surface the desktop UI consumes.
 export type SessionHandlersService = Pick<
-  SessionRunPort,
+  AgentRunPort,
   | 'createSession'
   | 'listSessions'
   | 'listMessagesBySession'
@@ -218,4 +218,3 @@ async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {
     yield item;
   }
 }
-

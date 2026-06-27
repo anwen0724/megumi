@@ -11,10 +11,14 @@ import {
   createRunFailedEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
-import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
-import type { ModelStepPort } from '../model-step/model-step-port';
-import { runModelStep } from '../model-step/model-step';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool';
+import type { ModelStepPort } from '../model-call/model-call-contract';
+import { runModelStep } from '../model-call/model-call-runner';
 import { createTerminalRuntimeError } from '../lifecycle/run-state-policy';
+import type {
+  PendingToolApprovalContinuation,
+  ToolCallHandlerPort,
+} from '../tool-calls/tool-call-contract';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
 const MODEL_INPUT_CONTEXT_ID_MAX_LENGTH = 128;
@@ -33,56 +37,6 @@ function createAgentLoopModelInputContextId(input: { stepId: string; contextKind
     - MODEL_INPUT_CONTEXT_ID_PREFIX.length
     - suffix.length;
   return `${MODEL_INPUT_CONTEXT_ID_PREFIX}${input.stepId.slice(0, Math.max(1, availableStepIdLength))}${suffix}`;
-}
-
-export interface PendingToolApproval {
-  approvalRequest: ApprovalRequest;
-  toolCall: ToolCall;
-  toolExecution: ToolExecution;
-}
-
-export interface ToolCallHandlerOutcome {
-  toolResults?: readonly ToolResult[];
-  pendingApprovals?: readonly PendingToolApproval[];
-  runtimeEvents?: readonly RuntimeEvent[];
-  continuationReady?: boolean;
-  assistantMessageId?: string;
-}
-
-export interface ToolCallHandlerPort {
-  handleToolCalls(input: {
-    request: ModelStepRuntimeRequest;
-    toolCalls: ToolCall[];
-    signal?: AbortSignal;
-  }): Promise<ToolCallHandlerOutcome>;
-}
-
-export interface ToolApprovalResumeInput {
-  approvalRequestId: string;
-  decision: 'approved' | 'denied';
-  decidedAt: string;
-  reason?: string;
-}
-
-export interface ToolApprovalResumeOutcome {
-  assistantMessageId?: string;
-  toolResults?: readonly ToolResult[];
-  toolResult?: ToolResult;
-  pendingApprovals?: readonly PendingToolApproval[];
-  runtimeEvents?: readonly RuntimeEvent[];
-  continuationReady?: boolean;
-}
-
-export interface ToolApprovalResumePort {
-  resumeToolApproval(input: ToolApprovalResumeInput): Promise<ToolApprovalResumeOutcome | undefined>;
-}
-
-export interface PendingToolApprovalContinuation {
-  pendingApproval: PendingToolApproval;
-  request: ModelStepRuntimeRequest;
-  accumulatedToolCalls: ToolCall[];
-  accumulatedToolResults: ToolResult[];
-  accumulatedProviderStates: ModelStepProviderState[];
 }
 
 export interface ModelToolLoopIds {
@@ -625,4 +579,3 @@ function createToolResultSummary(toolResult: ToolResult): string {
 
   return toolResult.kind;
 }
-

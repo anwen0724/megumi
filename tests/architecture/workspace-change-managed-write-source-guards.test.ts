@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -51,7 +51,7 @@ describe('workspace change managed write source guards', () => {
       'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts',
       'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
       'packages/coding-agent/tools/execution/tool-execution-router.ts',
-      'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
+      'packages/coding-agent/run/tool-calls/tool-call-runner.ts',
     ];
     const forbidden = [
       'saveRestoreRequest',

@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -50,7 +50,7 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('keeps renderer timeline history on timeline repository instead of flat session messages', () => {
-    const source = read('packages/coding-agent/run/session-run-service.ts');
+    const source = read('packages/coding-agent/run/agent-run-service.ts');
 
     expect(source).toContain('timelineMessageRepository.listCommittedMessagesBySession(input)');
     expect(source).not.toContain('timelineMessagesFromPersistedMessages');

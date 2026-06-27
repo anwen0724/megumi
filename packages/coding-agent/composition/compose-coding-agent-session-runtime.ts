@@ -4,10 +4,12 @@ import { RunContextService } from '../run/context/resources/run-context-service'
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import type { RuntimeLogger } from '../product-runtime';
 import {
-  SessionRunService,
-  type SessionRunModelStepProvider,
-  type SessionRunToolRuntimeFactory,
-} from '../run/session-run-service';
+  AgentRunService,
+} from '../run/agent-run-service';
+import type {
+  AgentRunModelStepProvider,
+  AgentRunToolRuntimeFactory,
+} from '../run/run-contract';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
@@ -38,12 +40,12 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   workspaceChangeRepository: WorkspaceChangeRepository;
   timelineMessageRepository: TimelineMessageRepository;
   toolRegistry: ToolRegistry;
-  modelStepProviderService: SessionRunModelStepProvider;
-  toolRuntimeFactory: SessionRunToolRuntimeFactory;
+  modelStepProviderService: AgentRunModelStepProvider;
+  toolRuntimeFactory: AgentRunToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
   runContextRepository: RunContextRepository;
-  chatStreamEventSink?: ConstructorParameters<typeof SessionRunService>[0]['chatStreamEventSink'];
-  workspaceChangeFooterProjector?: ConstructorParameters<typeof SessionRunService>[0]['workspaceChanges'];
+  chatStreamEventSink?: ConstructorParameters<typeof AgentRunService>[0]['chatStreamEventSink'];
+  workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentRunService>[0]['workspaceChanges'];
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
@@ -58,7 +60,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     repository: options.permissionSnapshotRepository,
     planArtifactCompatibility,
   });
-  const sessionRunService = new SessionRunService({
+  const sessionRunService = new AgentRunService({
     repository: options.sessionRunRepository,
     activePathRepository: options.activePathRepository,
     permissionSnapshotService,
@@ -83,4 +85,3 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     sessionRunService,
   };
 }
-

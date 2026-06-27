@@ -2,13 +2,13 @@
 import fs from 'fs-extra';
 import { createBuiltInToolRegistry } from '../tools/built-ins';
 import type { ToolRegistry } from '../tools/registry';
-import { createToolCallHandlerService } from '../run/tool-calls';
+import { createToolCallRunner } from '../run/tool-calls';
 import { ToolService } from '../tools/tool-service';
 import { WorkspaceChangeTrackerService } from '../workspace';
 import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
-import type { SessionRunToolRuntimeFactory } from '../run/session-run-service';
+import type { AgentRunToolRuntimeFactory } from '../run/run-contract';
 import { createBuiltInToolSourceExecutor } from '../tools/execution/built-in-tool-source-executor';
 import { createExternalTestToolSourceExecutor } from '../tools/execution/external-test-tool-source-executor';
 import { createToolExecutionRouter } from '../tools/execution/tool-execution-router';
@@ -24,7 +24,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
   workspaceChangeRepository: WorkspaceChangeRepository;
   sessionRunRepository: SessionRunRepository;
   permissionSettingsProvider: PermissionSettingsProvider;
-}): SessionRunToolRuntimeFactory {
+}): AgentRunToolRuntimeFactory {
   return {
     async create({ projectRoot, permissionMode }) {
       const workspaceChangeTracker = new WorkspaceChangeTrackerService({
@@ -39,7 +39,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
         },
       });
 
-      return createToolCallHandlerService({
+      return createToolCallRunner({
         registry: input.toolRegistry,
         repository: {
           saveToolCall: (toolCall) => input.toolRepository.saveToolCall(toolCall),

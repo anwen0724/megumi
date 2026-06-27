@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -21,8 +21,8 @@ describe('main chat stream adapter source guards', () => {
     expect(adapter).not.toContain('ipcRenderer');
   });
 
-  it('does not replace SessionRunService runtime event stream with ChatStreamEvent', () => {
-    const source = read('packages/coding-agent/run/session-run-service.ts');
+  it('does not replace AgentRunService runtime event stream with ChatStreamEvent', () => {
+    const source = read('packages/coding-agent/run/agent-run-service.ts');
 
     expect(source).toContain('events: AsyncIterable<RuntimeEvent>');
     expect(source).toContain('chatStreamEventSink');
@@ -32,7 +32,7 @@ describe('main chat stream adapter source guards', () => {
   it('does not introduce assistant answer event naming in runtime adapter path', () => {
     for (const file of [
       'packages/coding-agent/run/events/chat-stream-event-adapter.ts',
-      'packages/coding-agent/run/session-run-service.ts',
+      'packages/coding-agent/run/agent-run-service.ts',
       'packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts',
     ]) {
       expect(read(file)).not.toContain('assistant.answer.');

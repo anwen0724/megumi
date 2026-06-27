@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -57,7 +57,7 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps Host execution behind PermissionPolicy', () => {
-    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-handler.ts');
+    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-runner.ts');
     const applyDecision = functionSection(toolCallHandler, 'applyDecision', 'advanceExecutionWindows');
     const runRecord = functionSection(toolCallHandler, 'runRecord', 'budgetProfileForRecord');
 
@@ -69,7 +69,7 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
-    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-handler.ts');
+    const toolCallHandler = read('packages/coding-agent/run/tool-calls/tool-call-runner.ts');
     const resumeToolApproval = functionSection(toolCallHandler, 'resumeToolApproval', 'prepareRecords');
     const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
     const getToolExecutionIndex = resumeToolApproval.indexOf('repository.getToolExecution(approval.toolExecutionId)');
@@ -92,7 +92,7 @@ describe('built-in tools and host adapters source guards', () => {
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {
     const combined = [
       ...listSourceFiles('packages/coding-agent/tools/built-ins'),
-      'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
+      'packages/coding-agent/run/tool-calls/tool-call-runner.ts',
       'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
       'packages/coding-agent/tools/execution/tool-execution-router.ts',
       ...listSourceFiles('packages/coding-agent/tools/execution/tool-executors'),
