@@ -5,8 +5,6 @@ import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import { createModelStepProviderAdapter } from '@megumi/coding-agent/run';
 import type { FetchLike, ProviderRuntimeConfig } from '@megumi/coding-agent/run';
-import { createAiClient, ProviderRegistry } from '@megumi/ai';
-import { createOpenAICompatibleProviderAdapter } from '@megumi/ai/providers/openai-compatible';
 
 const config: ProviderRuntimeConfig = {
   providerId: 'openai',
@@ -44,15 +42,7 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
 function createTestModelStepAdapter(fetch: FetchLike) {
   return createModelStepProviderAdapter({
     providerId: 'openai',
-    aiClient: createAiClient({
-      registry: new ProviderRegistry([
-        createOpenAICompatibleProviderAdapter({
-          providerId: 'openai',
-          baseUrl: 'https://api.openai.com/v1',
-          fetch,
-        }),
-      ]),
-    }),
+    fetch,
     clock: { now: () => '2026-05-17T00:00:01.000Z' },
   });
 }
@@ -155,6 +145,28 @@ describe('model-step compatibility adapter', () => {
     });
     expect(events[3].payload).not.toHaveProperty('outputText');
     expect(events[3].payload).not.toHaveProperty('usage');
+  });
+
+  it('uses the provider runtime base URL from the model step config', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse([
+      'data: {"choices":[{"delta":{"content":"Ok"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const adapter = createTestModelStepAdapter(fetch);
+
+    await collect(adapter.streamModelStep({
+      request: runtimeRequest(),
+      runId: 'run-1',
+      stepId: 'step-1',
+      config: {
+        ...config,
+        baseUrl: 'https://proxy.local/openai',
+      },
+      nextSequence: () => 1,
+      eventIdFactory: () => 'event-1',
+    }));
+
+    expect(fetch.mock.calls[0][0]).toBe('https://proxy.local/openai/chat/completions');
   });
 
   it('adapts tool call content blocks to current tool.call.created events', async () => {

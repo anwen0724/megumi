@@ -4,8 +4,14 @@ import {
     createProviderAdapter,
     type ProviderAdapter,
 } from '../provider-adapter';
+import { type FetchLike } from '../openai-compatible';
 
-export function createAnthropicProviderAdapter(): ProviderAdapter {
+export interface AnthropicProviderAdapterOptions {
+    baseUrl?: string;
+    fetch?: FetchLike;
+}
+
+export function createAnthropicProviderAdapter(_options: AnthropicProviderAdapterOptions = {}): ProviderAdapter {
     return createProviderAdapter({
         providerId: 'anthropic',
 

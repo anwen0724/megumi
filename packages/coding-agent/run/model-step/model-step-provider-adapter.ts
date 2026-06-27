@@ -1,7 +1,14 @@
 // Wraps a pure ProviderAdapter with the current runtime-shaped model-step adapter interface.
 import { JsonObjectSchema } from '@megumi/shared/primitives/json';
 import type { RuntimeErrorCode } from '@megumi/shared/runtime';
-import type { AiClient, AssistantContentBlock } from '@megumi/ai';
+import {
+  createAiClient,
+  createAnthropicProviderAdapter,
+  createDeepSeekProviderAdapter,
+  createOpenAIProviderAdapter,
+  ProviderRegistry,
+  type AssistantContentBlock,
+} from '@megumi/ai';
 import { mapModelStepToAiInput } from './model-step-request-mapper';
 import { adaptAssistantStreamToRuntimeEvents } from './model-step-event-adapter';
 import type {
@@ -11,14 +18,15 @@ import type {
   ModelStepProviderAdapter,
   ProviderRuntimeConfig,
 } from './model-step-types';
-import { systemClock } from './model-step-types';
+import { systemClock, type FetchLike } from './model-step-types';
 
 export function createModelStepProviderAdapter(input: {
   providerId: ProviderRuntimeConfig['providerId'];
-  aiClient: AiClient;
+  fetch?: FetchLike;
   clock?: Clock;
 }): ModelStepProviderAdapter {
   const clock = input.clock ?? systemClock;
+  const fetchImpl = input.fetch ?? fetch;
 
   return {
     providerId: input.providerId,
@@ -27,7 +35,8 @@ export function createModelStepProviderAdapter(input: {
         request: request.request,
         config: request.config,
       });
-      const stream = input.aiClient.stream({
+      const aiClient = createAiClientForRuntimeConfig(request.config, fetchImpl);
+      const stream = aiClient.stream({
         model: aiInput.model,
         context: aiInput.context,
         toolSet: aiInput.toolSet,
@@ -46,7 +55,8 @@ export function createModelStepProviderAdapter(input: {
         request: request.request,
         config: request.config,
       });
-      const message = await input.aiClient.complete({
+      const aiClient = createAiClientForRuntimeConfig(request.config, fetchImpl);
+      const message = await aiClient.complete({
         model: aiInput.model,
         context: aiInput.context,
         toolSet: aiInput.toolSet,
@@ -97,6 +107,42 @@ export function createModelStepProviderAdapter(input: {
       };
     },
   };
+}
+
+function createAiClientForRuntimeConfig(config: ProviderRuntimeConfig, fetchImpl: FetchLike) {
+  return createAiClient({
+    registry: new ProviderRegistry([
+      createProviderAdapterForRuntimeConfig(config, fetchImpl),
+    ]),
+  });
+}
+
+function createProviderAdapterForRuntimeConfig(config: ProviderRuntimeConfig, fetchImpl: FetchLike) {
+  switch (config.providerId) {
+    case 'openai':
+      return createOpenAIProviderAdapter({
+        baseUrl: requireBaseUrl(config),
+        fetch: fetchImpl,
+      });
+    case 'deepseek':
+      return createDeepSeekProviderAdapter({
+        baseUrl: requireBaseUrl(config),
+        fetch: fetchImpl,
+      });
+    case 'anthropic':
+      return createAnthropicProviderAdapter({
+        ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+        fetch: fetchImpl,
+      });
+  }
+}
+
+function requireBaseUrl(config: ProviderRuntimeConfig): string {
+  if (!config.baseUrl) {
+    throw new Error(`Provider base URL is required: ${config.providerId}`);
+  }
+
+  return config.baseUrl;
 }
 
 function providerStatesFromThinkingBlocks(

@@ -3,10 +3,15 @@ import {
     type FetchLike,
 } from '../openai-compatible/openai-compatible-provider-adapter';
 
-export function createOpenAIProviderAdapter(options: { fetch: FetchLike }) {
+export interface OpenAIProviderAdapterOptions {
+    baseUrl: string;
+    fetch: FetchLike;
+}
+
+export function createOpenAIProviderAdapter(options: OpenAIProviderAdapterOptions) {
     return createOpenAICompatibleProviderAdapter({
         providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
+        baseUrl: options.baseUrl,
         fetch: options.fetch,
     });
 }

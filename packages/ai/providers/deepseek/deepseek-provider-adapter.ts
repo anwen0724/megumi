@@ -3,10 +3,15 @@ import {
     type FetchLike,
 } from '../openai-compatible/openai-compatible-provider-adapter';
 
-export function createDeepSeekProviderAdapter(options: { fetch: FetchLike }) {
+export interface DeepSeekProviderAdapterOptions {
+    baseUrl: string;
+    fetch: FetchLike;
+}
+
+export function createDeepSeekProviderAdapter(options: DeepSeekProviderAdapterOptions) {
     return createOpenAICompatibleProviderAdapter({
         providerId: 'deepseek',
-        baseUrl: 'https://api.deepseek.com',
+        baseUrl: options.baseUrl,
         fetch: options.fetch,
     });
 }

@@ -19,7 +19,6 @@ export * from './streaming/assistant-event-stream';
 export * from './providers/provider-adapter';
 export * from './providers/provider-adapter-request';
 export * from './providers/provider-registry';
-export * from './providers/default-provider-registry';
 
 export * from './providers/openai';
 export * from './providers/deepseek';
