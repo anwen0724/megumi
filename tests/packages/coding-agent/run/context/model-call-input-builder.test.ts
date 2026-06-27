@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ModelStepInputBuildService } from '@megumi/coding-agent/run/context';
+import { ModelCallInputBuildService } from '@megumi/coding-agent/run/context';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,
@@ -12,7 +12,7 @@ import type { ToolDefinition } from '@megumi/shared/tool';
 
 const builtAt = '2026-06-12T00:00:00.000Z';
 
-describe('ModelStepInputBuildService', () => {
+describe('ModelCallInputBuildService', () => {
   it('builds a ModelInputContext through ModelInputContextBuildRequest with effective cwd and capability summary', async () => {
     const instructionSources: AgentInstructionSourceSnapshot[] = [{
       sourceId: 'project-instruction:AGENTS.md',
@@ -29,7 +29,7 @@ describe('ModelStepInputBuildService', () => {
     }];
     const loadInstructionSources = vi.fn(async () => instructionSources);
     const toolDefinitions = [toolDefinition('read_file', ['project_read']), toolDefinition('run_command', ['command_run'])];
-    const service = new ModelStepInputBuildService({
+    const service = new ModelCallInputBuildService({
       instructionSourceService: { loadInstructionSources },
       idFactory: {
         buildRequestId: () => 'model-input-build:test',
@@ -37,7 +37,7 @@ describe('ModelStepInputBuildService', () => {
       },
     });
 
-    const result = await service.buildModelStepInput({
+    const result = await service.buildModelCallInput({
       requestId: 'request:1',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -129,11 +129,11 @@ describe('ModelStepInputBuildService', () => {
       loadedAt: builtAt,
       metadata: { mode: 'plan' },
     }];
-    const service = new ModelStepInputBuildService({
+    const service = new ModelCallInputBuildService({
       instructionSourceService: { loadInstructionSources: vi.fn(async () => instructionSources) },
     });
 
-    const result = await service.buildModelStepInput({
+    const result = await service.buildModelCallInput({
       requestId: 'request:1',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -179,8 +179,8 @@ describe('ModelStepInputBuildService', () => {
   });
 
   it('returns a build failure when required model input exceeds budget', async () => {
-    const service = new ModelStepInputBuildService();
-    const result = await service.buildModelStepInput({
+    const service = new ModelCallInputBuildService();
+    const result = await service.buildModelCallInput({
       requestId: 'request:1',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -212,8 +212,8 @@ describe('ModelStepInputBuildService', () => {
   });
 
   it('keeps runtime constraint source ids within schema limits for real uuid run and step ids', async () => {
-    const service = new ModelStepInputBuildService();
-    const result = await service.buildModelStepInput({
+    const service = new ModelCallInputBuildService();
+    const result = await service.buildModelCallInput({
       requestId: 'request:real-ids',
       sessionId: '4449c3f1-b160-41cd-bc5e-34cd1a3248bc',
       runId: 'c25f17d0-5578-4fc8-ae3c-a73296fbcbf2',
@@ -252,14 +252,14 @@ describe('ModelStepInputBuildService', () => {
   });
 
   it('passes memory recall seed into the build request trace without creating memory text by itself', async () => {
-    const service = new ModelStepInputBuildService({
+    const service = new ModelCallInputBuildService({
       idFactory: {
         buildRequestId: () => 'model-input-build:memory-seed',
         traceId: () => 'trace:model-input:memory-seed',
       },
     });
 
-    const result = await service.buildModelStepInput({
+    const result = await service.buildModelCallInput({
       requestId: 'request:1',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -348,7 +348,7 @@ describe('ModelStepInputBuildService', () => {
         excludedSources: [],
       },
     };
-    const service = new ModelStepInputBuildService({
+    const service = new ModelCallInputBuildService({
       instructionSourceService: { loadInstructionSources: vi.fn(async () => []) },
       idFactory: {
         buildRequestId: () => 'model-input-build:continuation',
@@ -356,7 +356,7 @@ describe('ModelStepInputBuildService', () => {
       },
     });
 
-    const result = await service.buildModelStepInput({
+    const result = await service.buildModelCallInput({
       baseInputContext,
       requestId: 'request:1',
       sessionId: 'session:1',
@@ -418,7 +418,7 @@ describe('ModelStepInputBuildService', () => {
   });
 
   it('does not let tool-local cwd change run-level effective cwd', async () => {
-    const service = new ModelStepInputBuildService({
+    const service = new ModelCallInputBuildService({
       instructionSourceService: { loadInstructionSources: vi.fn(async () => []) },
       idFactory: {
         buildRequestId: () => 'model-input-build:cwd',
@@ -426,7 +426,7 @@ describe('ModelStepInputBuildService', () => {
       },
     });
 
-    const result = await service.buildModelStepInput({
+    const result = await service.buildModelCallInput({
       requestId: 'request:1',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -464,11 +464,11 @@ describe('ModelStepInputBuildService', () => {
 
   it('rejects requested cwd outside the project before loading instructions', async () => {
     const loadInstructionSources = vi.fn(async () => []);
-    const service = new ModelStepInputBuildService({
+    const service = new ModelCallInputBuildService({
       instructionSourceService: { loadInstructionSources },
     });
 
-    await expect(service.buildModelStepInput({
+    await expect(service.buildModelCallInput({
       requestId: 'request:1',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -487,9 +487,9 @@ describe('ModelStepInputBuildService', () => {
   });
 
   it('adds ParsedInput command facts to runtime facts', async () => {
-    const service = new ModelStepInputBuildService();
+    const service = new ModelCallInputBuildService();
 
-    const result = await service.buildModelStepInput({
+    const result = await service.buildModelCallInput({
       requestId: 'request-1',
       sessionId: 'session-1',
       runId: 'run-1',

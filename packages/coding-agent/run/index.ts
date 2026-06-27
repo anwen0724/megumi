@@ -1,4 +1,4 @@
-// Public exports for Coding Agent product-level run orchestration.
+﻿// Public exports for Coding Agent product-level run orchestration.
 export * from './context';
 export * from './permissions';
 export * from './events';
@@ -10,4 +10,5 @@ export * from './recovery';
 export * from './turn';
 export * from './runtime-input';
 export * from './run-contract';
-export * from './agent-run-service';
+export { AgentRunService, createDefaultAgentRunService } from './agent-run-service';
+export type { CreateDefaultAgentRunServiceOptions } from './agent-run-service';

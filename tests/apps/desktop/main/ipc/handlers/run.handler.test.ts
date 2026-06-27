@@ -22,8 +22,12 @@ describe('registerRunHandlers', () => {
     const { registerRunHandlers } = await import('@megumi/desktop/main/ipc/handlers/run.handler');
 
     registerRunHandlers({
+      sessionService: {
       listRunsBySession: vi.fn(),
+      },
+      agentRunService: {
       listRuntimeEventsByRun: vi.fn(),
+      },
     });
 
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.run.listBySession, expect.any(Function));
@@ -45,8 +49,12 @@ describe('registerRunHandlers', () => {
       },
     ];
     const service = {
+      sessionService: {
       listRunsBySession: vi.fn(() => runs),
+      },
+      agentRunService: {
       listRuntimeEventsByRun: vi.fn(),
+      },
     };
 
     registerRunHandlers(service);
@@ -68,7 +76,7 @@ describe('registerRunHandlers', () => {
         channel: IPC_CHANNELS.run.listBySession,
       },
     });
-    expect(service.listRunsBySession).toHaveBeenCalledWith('session-1');
+    expect(service.sessionService.listRunsBySession).toHaveBeenCalledWith('session-1');
   });
 
   it('returns runtime events for a run', async () => {
@@ -90,8 +98,12 @@ describe('registerRunHandlers', () => {
       },
     ];
     const service = {
+      sessionService: {
       listRunsBySession: vi.fn(),
+      },
+      agentRunService: {
       listRuntimeEventsByRun: vi.fn(() => events),
+      },
     };
 
     registerRunHandlers(service);
@@ -117,7 +129,7 @@ describe('registerRunHandlers', () => {
         channel: IPC_CHANNELS.run.events.list,
       },
     });
-    expect(service.listRuntimeEventsByRun).toHaveBeenCalledWith('run-1');
+    expect(service.agentRunService.listRuntimeEventsByRun).toHaveBeenCalledWith('run-1');
   });
 });
 

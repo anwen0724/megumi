@@ -22,7 +22,7 @@ import {
   classifyProjectPath,
   DEFAULT_PROTECTED_PATHS,
   type ProjectPathClassification,
-} from '../../workspace/path-policy';
+} from '../workspace/path-policy';
 import { matchPermissionRule } from './permission-rule-matcher';
 
 export interface EvaluatePermissionPolicyInput {

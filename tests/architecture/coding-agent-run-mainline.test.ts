@@ -1,0 +1,120 @@
+// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+const repoRoot = process.cwd();
+
+function exists(relativePath: string): boolean {
+  return existsSync(join(repoRoot, relativePath));
+}
+
+function read(relativePath: string): string {
+  return readFileSync(join(repoRoot, relativePath), 'utf8');
+}
+
+function sourceFiles(relativePath: string): string[] {
+  const absolute = join(repoRoot, relativePath);
+  if (!existsSync(absolute)) return [];
+
+  const stat = statSync(absolute);
+  if (stat.isFile()) {
+    return /\.(ts|tsx)$/.test(absolute) ? [absolute] : [];
+  }
+
+  return readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
+    const child = join(absolute, entry.name);
+    if (entry.isDirectory()) return sourceFiles(relative(repoRoot, child));
+    return /\.(ts|tsx)$/.test(entry.name) ? [child] : [];
+  });
+}
+
+function filesContaining(relativePath: string, predicate: (source: string) => boolean): string[] {
+  return sourceFiles(relativePath)
+    .filter((file) => predicate(readFileSync(file, 'utf8')))
+    .map((file) => relative(repoRoot, file).replace(/\\/g, '/'));
+}
+
+describe('coding agent run mainline guards', () => {
+  it('keeps obsolete run structure files removed and explicit replacements present', () => {
+    expect(exists('packages/coding-agent/run/tool-calls/tool-call-loop.ts')).toBe(false);
+    expect(exists('packages/coding-agent/run/lifecycle/run-state-repository.ts')).toBe(false);
+    expect(exists('packages/coding-agent/run/lifecycle/run-lifecycle.ts')).toBe(true);
+  });
+
+  it('keeps model-call independent from loop and tool-call internals', () => {
+    const offenders = filesContaining('packages/coding-agent/run/model-call', (source) => {
+      return /from ['"][^'"]*(\.\.\/loop|\.\.\/tool-calls\/(approval|execution|continuation))/.test(source);
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps loop dependent only on the tool-call contract boundary', () => {
+    const offenders = filesContaining('packages/coding-agent/run/loop', (source) => {
+      return /from ['"][^'"]*\.\.\/tool-calls\/(approval|execution|continuation)/.test(source);
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps run internals from importing their own public barrel', () => {
+    const offenders = filesContaining('packages/coding-agent/run', (source) => {
+      return /from ['"]@megumi\/coding-agent\/run['"]/.test(source)
+        || /from ['"](?:\.\/|\.\.\/)index['"]/.test(source);
+    }).filter((file) => !file.endsWith('/index.ts'));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps AgentRunService from owning session, branch, and timeline entrypoints', () => {
+    const source = read('packages/coding-agent/run/agent-run-service.ts');
+
+    for (const forbiddenImplementation of [
+      'createSession(',
+      'listSessions(',
+      'listTimelineMessagesBySession(',
+      'createBranchDraft(',
+      'cancelBranchDraft(',
+    ]) {
+      expect(source).not.toContain(forbiddenImplementation);
+    }
+  });
+
+  it('keeps run-contract as the real run boundary instead of re-exporting implementation types', () => {
+    const source = read('packages/coding-agent/run/run-contract.ts');
+
+    expect(source).toContain('export interface AgentRunPort');
+    expect(source).not.toContain("from './agent-run-service'");
+  });
+
+  it('keeps model call context materialization split into focused part builders', () => {
+    for (const requiredPath of [
+      'packages/coding-agent/run/context/parts/runtime-constraints.ts',
+      'packages/coding-agent/run/context/parts/instructions.ts',
+      'packages/coding-agent/run/context/parts/session.ts',
+      'packages/coding-agent/run/context/parts/input-preprocessing.ts',
+      'packages/coding-agent/run/context/parts/memory.ts',
+      'packages/coding-agent/run/context/parts/tool-continuation.ts',
+      'packages/coding-agent/run/context/parts/provider-state.ts',
+      'packages/coding-agent/run/context/parts/index.ts',
+    ]) {
+      expect(exists(requiredPath), requiredPath).toBe(true);
+    }
+
+    const contextSource = read('packages/coding-agent/run/context/model-call-context.ts');
+
+    for (const movedImplementation of [
+      'function instructionParts(',
+      'function sessionInstructionParts(',
+      'function inputPreprocessingInstructionParts(',
+      'function memoryRecallParts(',
+      'function runtimeConstraintParts(',
+      'function toolContinuationParts(',
+      'function providerStateSummary(',
+    ]) {
+      expect(contextSource).not.toContain(movedImplementation);
+    }
+  });
+});

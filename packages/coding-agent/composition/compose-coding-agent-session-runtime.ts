@@ -1,11 +1,15 @@
-// Composes Coding Agent session/run product services and their product collaborators.
-import { PermissionSnapshotService } from '../run/permissions/permission-snapshot-service';
+﻿// Composes Coding Agent session/run product services and their product collaborators.
+import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
 import { RunContextService } from '../run/context/resources/run-context-service';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import type { RuntimeLogger } from '../product-runtime';
 import {
   AgentRunService,
 } from '../run/agent-run-service';
+import {
+  SessionBranchService,
+  SessionService,
+} from '../session';
 import type {
   AgentRunModelStepProvider,
   AgentRunToolRuntimeFactory,
@@ -20,7 +24,7 @@ import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import type { ToolRegistry } from '../tools/registry';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
-import { PlanArtifactCompatibilityService } from '../artifacts';
+import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
 
 export interface CodingAgentHomePaths {
@@ -58,12 +62,38 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   });
   const permissionSnapshotService = new PermissionSnapshotService({
     repository: options.permissionSnapshotRepository,
+  });
+  const planArtifactService = new PlanArtifactService({
+    repository: options.permissionSnapshotRepository,
     planArtifactCompatibility,
   });
-  const sessionRunService = new AgentRunService({
+  const sessionService = new SessionService({
+    repository: options.sessionRunRepository,
+    ids: { sessionId: () => `session:${crypto.randomUUID()}` },
+    activePathRepository: options.activePathRepository,
+    timelineMessageRepository: options.timelineMessageRepository,
+    memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
+    memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
+    megumiHomePath: options.homePaths.homePath,
+  });
+  const branchIds = {
+    branchMarkerId: () => `branch-marker:${crypto.randomUUID()}`,
+    sourceEntryId: () => `source-entry:${crypto.randomUUID()}`,
+    eventId: () => `event:${crypto.randomUUID()}`,
+    chatStreamEventId: () => `chat-stream-event:${crypto.randomUUID()}`,
+  };
+  const sessionBranchService = new SessionBranchService({
     repository: options.sessionRunRepository,
     activePathRepository: options.activePathRepository,
+    ids: branchIds,
+    chatStreamEventSink: options.chatStreamEventSink,
+  });
+  const agentRunService = new AgentRunService({
+    repository: options.sessionRunRepository,
+    activePathRepository: options.activePathRepository,
+    sessionBranchService,
     permissionSnapshotService,
+    planArtifactService,
     toolRegistrySnapshotService: new ToolRegistrySnapshotService(options.toolRepository),
     contextService: runContextService,
     modelStepProvider: options.modelStepProviderService,
@@ -72,7 +102,6 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     toolRepository: options.toolRepository,
     workspaceChanges: options.workspaceChangeFooterProjector ?? options.workspaceChangeRepository,
     chatStreamEventSink: options.chatStreamEventSink,
-    timelineMessageRepository: options.timelineMessageRepository,
     memoryRecallService: options.memoryRuntime.recallService,
     memoryCaptureService: options.memoryRuntime.captureService,
     memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
@@ -82,6 +111,9 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
 
   return {
     runContextService,
-    sessionRunService,
+    sessionService,
+    sessionBranchService,
+    agentRunService,
+    planArtifactService,
   };
 }

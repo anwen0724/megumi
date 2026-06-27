@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -113,7 +113,7 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('@megumi/security');
     expect(source).not.toContain('apps/desktop');
     expect(source).not.toContain('AgentInstructionSourceService');
-    expect(source).not.toContain('ModelStepInputBuildService');
+    expect(source).not.toContain('ModelCallInputBuildService');
     expect(source).not.toContain('SessionRepository');
     expect(source).not.toContain('MemoryRepository');
     expect(source).not.toContain('readFileSync');
@@ -127,7 +127,7 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('RuntimeEvent');
     expect(source).not.toContain('@megumi/context-management');
     expect(source).not.toContain('AgentInstructionSourceService');
-    expect(source).not.toContain('ModelStepInputBuildService');
+    expect(source).not.toContain('ModelCallInputBuildService');
     expect(source).not.toContain('globalInstructionDirs');
     expect(source).not.toContain('sessionInstructionSources');
     expect(source).not.toContain('memoryRecallSources');

@@ -20,7 +20,8 @@ describe('Desktop Main shell composition', () => {
 
     expect(desktopComposition).toContain('composeCodingAgentRuntime');
     expect(desktopComposition).toContain('providerService: codingAgentRuntime.providerSettingsService');
-    expect(desktopComposition).toContain('sessionRunService');
+    expect(desktopComposition).toContain('sessionHandlers: { sessionService, sessionBranchService, agentRunService }');
+    expect(desktopComposition).toContain('runHandlers: { sessionService, agentRunService }');
     expect(desktopComposition).toContain('runContextService: codingAgentRuntime.runContextService');
     expect(desktopComposition).toContain('toolService: codingAgentRuntime.toolService');
     expect(desktopComposition).not.toContain('new SessionRunService');

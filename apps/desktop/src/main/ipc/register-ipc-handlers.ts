@@ -5,8 +5,8 @@ import {
   registerSettingsHandlers,
   type SettingsHandlersService,
 } from './handlers/settings.handler';
-import { registerSessionHandlers, type SessionHandlersService } from './handlers/session.handler';
-import { registerRunHandlers, type RunHandlersService } from './handlers/run.handler';
+import { registerSessionHandlers, type SessionHandlersServices } from './handlers/session.handler';
+import { registerRunHandlers, type RunHandlersServices } from './handlers/run.handler';
 import {
   registerRunContextHandlers,
   type RunContextHandlersService,
@@ -45,8 +45,8 @@ export interface RegisterAllHandlersOptions {
   ipcMain?: DesktopIpcMain;
   providerService?: ProviderHandlersService;
   settingsService?: SettingsHandlersService;
-  sessionRunService?: SessionHandlersService;
-  agentRunService?: RunHandlersService;
+  sessionHandlers?: SessionHandlersServices;
+  runHandlers?: RunHandlersServices;
   runContextService?: RunContextHandlersService;
   planService?: PlanHandlersService;
   toolService?: ToolHandlersService;
@@ -74,12 +74,12 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
     });
   }
 
-  if (options.sessionRunService) {
-    registerSessionHandlers(options.sessionRunService, { logger: options.logger, ipcMain });
+  if (options.sessionHandlers) {
+    registerSessionHandlers(options.sessionHandlers, { logger: options.logger, ipcMain });
   }
 
-  if (options.agentRunService) {
-    registerRunHandlers(options.agentRunService, { logger: options.logger, ipcMain });
+  if (options.runHandlers) {
+    registerRunHandlers(options.runHandlers, { logger: options.logger, ipcMain });
   }
 
   if (options.runContextService) {

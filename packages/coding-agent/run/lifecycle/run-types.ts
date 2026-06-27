@@ -11,7 +11,7 @@ import type {
 } from '@megumi/shared/run';
 import type { PermissionModeState } from '@megumi/shared/permission';
 import { createRuntimeDebugId } from '@megumi/shared/runtime';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface RunClock {
   now(): string;
@@ -42,6 +42,29 @@ export interface RunLifecycleSink {
 
 export interface RunHostBoundaryPort {
   handleAction(action: RunAction): Promise<RunObservation> | RunObservation;
+}
+
+export interface CancelRunInput {
+  runId: string;
+  reason?: string;
+}
+
+export interface CancelRunPort {
+  cancelRun(input: CancelRunInput): boolean;
+}
+
+export interface RunRetryInput {
+  runId: string;
+  retryKind: 'manual_retry' | 'manual_rerun';
+  reason?: string;
+  requestedAt: string;
+}
+
+export interface RunFailureInput {
+  runId: string;
+  stepId?: string;
+  error: RuntimeError;
+  failedAt: string;
 }
 
 export interface RunTurnInput {

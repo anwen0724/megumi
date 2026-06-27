@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
   createRuntimeEvent,
@@ -7,11 +7,11 @@ import {
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ToolCallRunner } from '@megumi/coding-agent/run/tool-calls';
 import {
-  streamCodingAgentModelStep,
-  type CodingAgentModelStepStreamPorts,
+  streamCodingAgentModelToolLoop,
+  type CodingAgentModelToolLoopStreamPorts,
 } from '@megumi/coding-agent/run';
 
-describe('coding-agent model step stream', () => {
+describe('coding-agent model/tool loop stream', () => {
   it('calls the agent runtime through ports and builds continuation context in coding-agent', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const continuationBuilds: unknown[] = [];
@@ -47,11 +47,11 @@ describe('coding-agent model step stream', () => {
         return undefined;
       },
     };
-    const ports: CodingAgentModelStepStreamPorts = {
+    const ports: CodingAgentModelToolLoopStreamPorts = {
       modelCallPort,
-      toolCallHandler: toolCallHandler as CodingAgentModelStepStreamPorts['toolCallHandler'],
-      modelStepInputBuildService: {
-        async buildModelStepInput(input) {
+      toolCallHandler: toolCallHandler as CodingAgentModelToolLoopStreamPorts['toolCallHandler'],
+      modelCallInputBuildService: {
+        async buildModelCallInput(input) {
           continuationBuilds.push(input);
           return {
             buildRequest: {} as never,
@@ -79,7 +79,7 @@ describe('coding-agent model step stream', () => {
       },
     };
 
-    const events = await collect(streamCodingAgentModelStep({
+    const events = await collect(streamCodingAgentModelToolLoop({
       request: runtimeRequest(),
       ports,
       permissionMode: 'default',

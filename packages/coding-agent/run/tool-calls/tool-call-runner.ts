@@ -1,4 +1,4 @@
-// Owns run-time tool call orchestration for a Coding Agent turn.
+﻿// Owns run-time tool call orchestration for a Coding Agent turn.
 // It delegates approval, execution, and continuation details to the matching tool-calls submodules.
 import {
   createRejectionObservation,
@@ -32,7 +32,7 @@ import type {
 import {
   evaluateToolExecutionDecision,
   type ToolExecutionDecisionInput,
-} from '../permissions/tool-execution-decision';
+} from '../../permissions/tool-execution-decision';
 import { resumeToolApproval } from './approval/approval-resume';
 import { applyDecisionsToCreated, inferredDefinitionFields } from './approval/tool-call-approval';
 import { advanceExecutionWindows } from './execution/tool-execution-window';

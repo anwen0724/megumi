@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { classifyCommand } from '@megumi/coding-agent/run/permissions/command-classifier';
+import { classifyCommand } from '@megumi/coding-agent/permissions/command-classifier';
 
 describe('classifyCommand', () => {
   it('classifies read-only, verification, and git read commands', () => {

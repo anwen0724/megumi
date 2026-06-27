@@ -94,26 +94,3 @@ export function assertFailedRunHasTerminalReason(run: Pick<Run, 'status' | 'erro
     throw new Error('Failed run must include a terminal reason.');
   }
 }
-
-export function createTerminalRuntimeError(input: {
-  reason: RunTerminalReason;
-  code: RuntimeError['code'];
-  message: string;
-  source: RuntimeError['source'];
-  retryable?: boolean;
-  debugId?: string;
-  details?: Record<string, unknown>;
-}): RuntimeError {
-  return {
-    code: input.code,
-    message: input.message,
-    severity: 'error',
-    retryable: input.retryable ?? false,
-    source: input.source,
-    ...(input.debugId ? { debugId: input.debugId } : {}),
-    details: {
-      ...(input.details ?? {}),
-      reason: input.reason,
-    },
-  };
-}

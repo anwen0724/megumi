@@ -1,20 +1,20 @@
-// Resolves the run-level working directory used by ModelStep input builds.
+﻿// Resolves the run-level working directory used by ModelStep input builds.
 // Tool-local cwd values are validated by tool executors and must not mutate this state.
 import { classifyProjectPath } from '@megumi/coding-agent/workspace';
 
-export interface ResolveModelStepEffectiveCwdInput {
+export interface ResolveModelCallEffectiveCwdInput {
   projectRoot?: string;
   requestedCwd?: string;
 }
 
-export interface ModelStepEffectiveCwd {
+export interface ModelCallEffectiveCwd {
   absolutePath: string;
   projectRelativePath: string;
 }
 
-export function resolveModelStepEffectiveCwd(
-  input: ResolveModelStepEffectiveCwdInput,
-): ModelStepEffectiveCwd | undefined {
+export function resolveModelCallEffectiveCwd(
+  input: ResolveModelCallEffectiveCwdInput,
+): ModelCallEffectiveCwd | undefined {
   if (!input.projectRoot) {
     return undefined;
   }

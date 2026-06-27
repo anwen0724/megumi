@@ -1,13 +1,13 @@
 ﻿// @vitest-environment node
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveModelStepEffectiveCwd } from '@megumi/coding-agent/run/context';
+import { resolveModelCallEffectiveCwd } from '@megumi/coding-agent/run/context';
 
-describe('resolveModelStepEffectiveCwd', () => {
+describe('resolveModelCallEffectiveCwd', () => {
   it('defaults to the project root when no requested cwd is provided', () => {
     const projectRoot = path.resolve('C:/all/work/study/megumi');
 
-    expect(resolveModelStepEffectiveCwd({ projectRoot })).toEqual({
+    expect(resolveModelCallEffectiveCwd({ projectRoot })).toEqual({
       absolutePath: projectRoot,
       projectRelativePath: '.',
     });
@@ -16,7 +16,7 @@ describe('resolveModelStepEffectiveCwd', () => {
   it('accepts project-relative cwd inside the project boundary', () => {
     const projectRoot = path.resolve('C:/all/work/study/megumi');
 
-    expect(resolveModelStepEffectiveCwd({
+    expect(resolveModelCallEffectiveCwd({
       projectRoot,
       requestedCwd: 'packages/context-management',
     })).toEqual({
@@ -29,7 +29,7 @@ describe('resolveModelStepEffectiveCwd', () => {
     const projectRoot = path.resolve('C:/all/work/study/megumi');
     const requestedCwd = path.resolve(projectRoot, 'packages/core');
 
-    expect(resolveModelStepEffectiveCwd({ projectRoot, requestedCwd })).toEqual({
+    expect(resolveModelCallEffectiveCwd({ projectRoot, requestedCwd })).toEqual({
       absolutePath: requestedCwd,
       projectRelativePath: 'packages/core',
     });
@@ -38,13 +38,13 @@ describe('resolveModelStepEffectiveCwd', () => {
   it('rejects cwd outside the project boundary', () => {
     const projectRoot = path.resolve('C:/all/work/study/megumi');
 
-    expect(() => resolveModelStepEffectiveCwd({
+    expect(() => resolveModelCallEffectiveCwd({
       projectRoot,
       requestedCwd: '../outside',
     })).toThrow(/Effective cwd is outside the project/);
   });
 
   it('returns undefined when there is no project root', () => {
-    expect(resolveModelStepEffectiveCwd({})).toBeUndefined();
+    expect(resolveModelCallEffectiveCwd({})).toBeUndefined();
   });
 });

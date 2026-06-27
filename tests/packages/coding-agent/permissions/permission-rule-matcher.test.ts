@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { matchPermissionRule } from '@megumi/coding-agent/run/permissions/permission-rule-matcher';
+import { matchPermissionRule } from '@megumi/coding-agent/permissions/permission-rule-matcher';
 
 describe('matchPermissionRule', () => {
   it('matches command and path patterns against normalized tool input', () => {

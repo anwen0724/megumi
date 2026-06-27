@@ -1,4 +1,4 @@
-// Owns Coding Agent product-level run orchestration while callers own persistence and UI projection.
+﻿// Owns Coding Agent product-level run orchestration while callers own persistence and UI projection.
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type { ModelCapabilitySummary } from '@megumi/shared/run';
@@ -7,23 +7,32 @@ import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/perm
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolDefinition } from '@megumi/shared/tool';
+import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import type { ParsedInput } from '@megumi/coding-agent/input';
 import type {
-  BuildModelStepInputInput,
-  BuildModelStepInputResult,
+  BuildModelCallInputInput,
+  BuildModelCallInputResult,
   CompactIfNeededInput,
   ModelInputMemoryRecallSource,
   SessionCompactionOrchestrationResult,
 } from '../context';
 import type { BuildSessionContextInputFromRepositoryInput } from '../../session';
-import { createRunFailedEvent, createRunStartedEvent } from '../index';
+import { createRunFailedEvent, createRunStartedEvent } from '../events/runtime-event-factory';
 import { createCodingAgentRunInputFacts } from '../context/run-input-facts';
 import {
   createRuntimeErrorFromUnknown,
-  modelStepInputBuildFailureToRuntimeError,
+  modelCallInputBuildFailureToRuntimeError,
 } from '../events/runtime-event-utils';
-import type { CodingAgentRunSourceOverrideProvider } from '../model-call/model-call-stream';
+import type { ModelCallPort } from '../model-call/model-call-contract';
+import {
+  streamCodingAgentModelToolLoop,
+  type CodingAgentRunSourceOverrideProvider,
+} from '../loop/model-tool-loop-stream';
+import type {
+  PendingToolApprovalContinuation,
+  ToolApprovalResumePort,
+  ToolCallRunner,
+} from '../tool-calls/tool-call-contract';
 
 export interface CodingAgentRunClock {
   now(): string;
@@ -114,21 +123,39 @@ export interface CodingAgentRunToolRegistrySnapshotProvider {
   };
 }
 
-export interface CodingAgentRunModelStepExecutor {
-  streamModelCall(input: {
+export interface CodingAgentRunToolCallRunnerFactory {
+  create(input: {
+    projectRoot: string;
+    permissionMode: PermissionMode;
+  }): Promise<ToolCallRunner & ToolApprovalResumePort>;
+}
+
+export interface CodingAgentRunEventRecorder {
+  createModelStep?(input: { runId: string }): string;
+
+  recordModelCallEvents(input: {
     request: ModelStepRuntimeRequest;
+    modelEvents: AsyncIterable<RuntimeEvent>;
+    pendingContinuations: PendingToolApprovalContinuation[];
     run: Run;
     step: RunStep;
     userMessageId: string;
+    toolRuntime?: ToolCallRunner & ToolApprovalResumePort;
     projectId?: string;
     projectRoot?: string;
     permissionMode?: PermissionMode;
-    memoryRecall?: {
-      memoryRecallSources?: ModelInputMemoryRecallSource[];
-      memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-    };
+    memoryRecallSources?: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
     startSequence?: number;
   }): AsyncIterable<RuntimeEvent>;
+
+  markToolContinuationEmitted?(input: {
+    request: ModelStepRuntimeRequest;
+    stepId: string;
+    toolResults: readonly ToolResult[];
+    emittedAt: string;
+    sequence: number;
+  }): readonly RuntimeEvent[] | undefined;
 }
 
 export interface RunTurnOptions {
@@ -150,13 +177,15 @@ export interface RunTurnOptions {
   sessionContextInputService: CodingAgentRunSessionContextInputService;
   sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
   memoryRecallService?: CodingAgentRunMemoryRecallService;
-  modelStepInputBuildService: {
-    buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
+  modelCallPort: ModelCallPort;
+  toolCallRunnerFactory?: CodingAgentRunToolCallRunnerFactory;
+  modelCallInputBuildService: {
+    buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
   };
   compactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
-  modelStepExecutor: CodingAgentRunModelStepExecutor;
+  runEventRecorder: CodingAgentRunEventRecorder;
 }
 
 export interface CodingAgentRunSessionMessageInput {
@@ -230,7 +259,7 @@ export class RunTurn {
 
       // Build compaction probe and start compaction asynchronously so that
       // run.started is yielded while compaction may still be in-flight.
-      const compactionProbeModelInput = await this.options.modelStepInputBuildService.buildModelStepInput({
+      const compactionProbeModelInput = await this.options.modelCallInputBuildService.buildModelCallInput({
         requestId: input.requestId,
         sessionId: String(input.session.sessionId),
         runId: String(input.run.runId),
@@ -282,7 +311,7 @@ export class RunTurn {
           sessionId: String(input.session.sessionId),
           run: input.run,
           step: input.step,
-          error: modelStepInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
+          error: modelCallInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
         });
         return;
       }
@@ -366,7 +395,7 @@ export class RunTurn {
         currentMessageId: String(input.userMessage.messageId),
         builtAt: input.createdAt,
       });
-      const initialModelInput = await this.options.modelStepInputBuildService.buildModelStepInput({
+      const initialModelInput = await this.options.modelCallInputBuildService.buildModelCallInput({
         requestId: input.requestId,
         sessionId: String(input.session.sessionId),
         runId: String(input.run.runId),
@@ -399,12 +428,12 @@ export class RunTurn {
           sessionId: String(input.session.sessionId),
           run: input.run,
           step: input.step,
-          error: modelStepInputBuildFailureToRuntimeError(initialModelInput.failure),
+          error: modelCallInputBuildFailureToRuntimeError(initialModelInput.failure),
         });
         return;
       }
 
-      const request: ModelStepRuntimeRequest = {
+      const modelCallRequest: ModelStepRuntimeRequest = {
         requestId: input.requestId,
         sessionId: input.session.sessionId,
         runId: input.run.runId,
@@ -416,16 +445,70 @@ export class RunTurn {
         runtimeContext: input.runtimeContext,
         createdAt: input.createdAt,
       };
-      yield* this.options.modelStepExecutor.streamModelCall({
-        request,
+
+      let toolRuntime: (ToolCallRunner & ToolApprovalResumePort) | undefined;
+      try {
+        toolRuntime = input.session.workspacePath && this.options.toolCallRunnerFactory
+          ? await this.options.toolCallRunnerFactory.create({
+              projectRoot: input.session.workspacePath,
+              permissionMode: input.permissionMode,
+            })
+          : undefined;
+      } catch (error) {
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: createRuntimeErrorFromUnknown(error),
+        });
+        return;
+      }
+
+      const pendingContinuations: PendingToolApprovalContinuation[] = [];
+      const modelEvents = streamCodingAgentModelToolLoop({
+        request: modelCallRequest,
+        ports: {
+          modelCallPort: this.options.modelCallPort,
+          ...(toolRuntime ? { toolCallHandler: toolRuntime } : {}),
+          modelCallInputBuildService: this.options.modelCallInputBuildService,
+          sourceOverrideProvider: this.options.sourceOverrideProvider,
+          ...(this.options.runEventRecorder.markToolContinuationEmitted ? {
+            toolContinuationRecorder: {
+              markToolContinuationEmitted: (recorderInput) =>
+                this.options.runEventRecorder.markToolContinuationEmitted?.(recorderInput),
+            },
+          } : {}),
+          ids: {
+            nextEventId: this.options.ids.eventId,
+            nextStepId: ({ runId }) => this.options.runEventRecorder.createModelStep?.({ runId })
+              ?? `${runId}:step:${crypto.randomUUID()}`,
+            nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
+          },
+        },
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        permissionMode: input.permissionMode,
+        memoryRecall,
+        onPendingApproval: (pending) => {
+          pendingContinuations.push(pending);
+        },
+      });
+
+      yield* this.options.runEventRecorder.recordModelCallEvents({
+        request: modelCallRequest,
+        modelEvents,
+        pendingContinuations,
         run: input.run,
         step: input.step,
         userMessageId: String(input.userMessage.messageId),
         ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
         ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
         permissionMode: input.permissionMode,
-        memoryRecall,
+        ...(memoryRecall.memoryRecallSources ? { memoryRecallSources: memoryRecall.memoryRecallSources } : {}),
+        ...(memoryRecall.memoryRecallSeed ? { memoryRecallSeed: memoryRecall.memoryRecallSeed } : {}),
         startSequence: 1,
+        ...(toolRuntime ? { toolRuntime } : {}),
       });
     } catch (error) {
       // Yield run.started first so the caller always sees it, then

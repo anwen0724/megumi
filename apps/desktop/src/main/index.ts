@@ -18,8 +18,8 @@ registerAppLifecycle({
   registerAllHandlers: () => registerAllHandlers({
     logger: desktopMain.runtimeLogger,
     providerService: desktopMain.providerService,
-    sessionRunService: desktopMain.sessionRunService,
-    agentRunService: desktopMain.agentRunService,
+    sessionHandlers: desktopMain.sessionHandlers,
+    runHandlers: desktopMain.runHandlers,
     runContextService: desktopMain.runContextService,
     planService: desktopMain.planService,
     toolService: desktopMain.toolService,

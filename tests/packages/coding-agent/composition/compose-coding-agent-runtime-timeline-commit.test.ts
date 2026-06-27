@@ -74,13 +74,13 @@ function answeringModelStepProvider() {
 }
 
 async function sendOneMessage(runtime: CodingAgentProductRuntime, projectId: string, workspacePath: string) {
-  const session = runtime.sessionRunService.createSession({
+  const session = runtime.sessionService.createSession({
     title: 'Session',
     workspaceId: projectId,
     workspacePath,
     createdAt: '2026-06-24T00:00:00.000Z',
   });
-  const result = await runtime.sessionRunService.sendSessionMessage({
+  const result = await runtime.agentRunService.sendSessionMessage({
     requestId: 'request-1',
     payload: {
       sessionId: String(session.sessionId),
@@ -133,7 +133,7 @@ describe('Coding Agent product runtime timeline history commit', () => {
 
     const sessionId = await sendOneMessage(runtime, project.projectId, project.repoPath);
 
-    const committed = runtime.sessionRunService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
+    const committed = runtime.sessionService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
     expect(committed.messages.length).toBeGreaterThan(0);
     expect(committed.messages.some((message) => message.role === 'assistant')).toBe(true);
   }, 30000);
@@ -159,7 +159,7 @@ describe('Coding Agent product runtime timeline history commit', () => {
     const sessionId = await sendOneMessage(runtime, project.projectId, project.repoPath);
 
     expect(forwarded.some((event) => event.eventType === 'turn.completed')).toBe(true);
-    const committed = runtime.sessionRunService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
+    const committed = runtime.sessionService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
     expect(committed.messages.length).toBeGreaterThan(0);
   }, 30000);
 });

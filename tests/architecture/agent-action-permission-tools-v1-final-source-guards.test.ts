@@ -94,7 +94,7 @@ describe('agent action permission tools v1 final source guards', () => {
 
   it('keeps first-version policy decisions to allow ask deny only', () => {
     const toolContracts = read('packages/shared/tool/contracts.ts');
-    const securityPolicy = read('packages/coding-agent/run/permissions/tool-policy.ts');
+    const securityPolicy = read('packages/coding-agent/permissions/tool-policy.ts');
 
     expect(toolContracts).toContain("['allow', 'ask', 'deny']");
     expect(toolContracts).not.toContain('require_sandbox');

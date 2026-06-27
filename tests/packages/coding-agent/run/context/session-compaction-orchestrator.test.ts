@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { SessionCompactionEntry } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session';
-import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
 import {
   SessionCompactionOrchestrator,
   type SessionCompactionOrchestratorRepository,
@@ -187,7 +187,7 @@ function sessionContext(): SessionContextInput {
 }
 
 function budgetProbeInputContext(input: SessionContextInput = sessionContext()) {
-  return buildModelStepInputContextFromSources({
+  return buildModelCallInputContextFromSources({
     contextId: 'model-input-context:compaction-probe',
     sessionId: 'session-1',
     runId: 'run-1',

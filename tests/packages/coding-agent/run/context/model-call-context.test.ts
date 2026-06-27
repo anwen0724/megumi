@@ -1,10 +1,10 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  buildModelStepInputContextFromBuildRequest,
-  buildModelStepInputContextFromSources,
-  createModelStepInputContextId,
+  buildModelCallInputContextFromBuildRequest,
+  buildModelCallInputContextFromSources,
+  createModelCallInputContextId,
 } from '@megumi/coding-agent/run/context';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionMessage } from '@megumi/shared/session';
@@ -258,9 +258,9 @@ function providerState(): ModelStepProviderState {
   };
 }
 
-describe('buildModelStepInputContextFromSources', () => {
+describe('buildModelCallInputContextFromSources', () => {
   it('creates schema-safe context ids from long step ids', () => {
-    const contextId = createModelStepInputContextId({
+    const contextId = createModelCallInputContextId({
       stepId: `step:${'a'.repeat(124)}`,
       contextKind: 'approval-resume',
     });
@@ -271,7 +271,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('builds required runtime constraints and current turn from ModelInputContextBuildRequest', () => {
-    const context = buildModelStepInputContextFromBuildRequest({
+    const context = buildModelCallInputContextFromBuildRequest({
       request: buildRequestFixture(),
       budgetPolicy: budgetPolicy(),
     });
@@ -316,7 +316,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('materializes memory recall sources as contextual memory parts', () => {
-    const context = buildModelStepInputContextFromBuildRequest({
+    const context = buildModelCallInputContextFromBuildRequest({
       request: buildRequestFixture(),
       memoryRecallSources: [
         {
@@ -358,7 +358,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('keeps memory recall seed as trace metadata without materializing memory text', () => {
-    const context = buildModelStepInputContextFromBuildRequest({
+    const context = buildModelCallInputContextFromBuildRequest({
       request: buildRequestFixture({
         memoryRecallSeed: {
           queryText: 'Review package scripts.',
@@ -387,7 +387,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('materializes permission posture as permission_constraint provenance', () => {
-    const context = buildModelStepInputContextFromBuildRequest({
+    const context = buildModelCallInputContextFromBuildRequest({
       request: buildRequestFixture({
         runtimeFacts: [{
           factId: 'runtime-fact:permission-posture',
@@ -411,7 +411,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('records canonical source diagnostics for conflicting lower-priority instructions', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:conflict',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -454,7 +454,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('builds current turn, session, runtime constraint, and tool continuation parts from explicit sources', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:1',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -535,7 +535,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('applies context budget after assembling model step source drafts', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:step-budget',
       sessionId: 'session-1',
       runId: 'run-1',
@@ -581,7 +581,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('keeps compaction session_summary as required context while pruning older session history', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:step-1:initial',
       sessionId: 'session-1',
       runId: 'run-1',
@@ -659,7 +659,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('uses explicit context budget policy without accepting run context', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:explicit-budget-policy',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -694,7 +694,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('does not include raw runtime trace metadata as model-visible text', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:2',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -712,7 +712,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('stores provider-native tool replay fields in tool continuation parts', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:tool-replay',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -749,7 +749,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('builds semantic session parts from SessionContextInput before tool continuation and current turn', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:session-context',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -800,7 +800,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('keeps tool continuation as provider-native replay parts when session context is present', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:session-context-tool-replay',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -836,7 +836,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('keeps tool continuation required under a tight context budget', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:tool-tight-budget',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -863,7 +863,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('places project instruction before runtime, session, tool, and current turn parts', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:project-instruction',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -947,7 +947,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('preserves multi-level file instruction semantics in parts and trace', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:multi-level-instructions',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1064,7 +1064,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('materializes session and mode instruction sources with lifecycle-specific kinds', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:session-mode-instructions',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1115,7 +1115,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('materializes normalized input preprocessing after project instructions and before runtime constraints', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:input-preprocessing',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1231,7 +1231,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('replaces stale input-derived instructions when rebuilding from a base context', () => {
-    const base = buildModelStepInputContextFromSources({
+    const base = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:base-input-preprocessing',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1258,7 +1258,7 @@ describe('buildModelStepInputContextFromSources', () => {
       currentMessage: message({ messageId: 'message:current', content: '/summary' }),
     });
 
-    const rebuilt = buildModelStepInputContextFromSources({
+    const rebuilt = buildModelCallInputContextFromSources({
       baseInputContext: base,
       contextId: 'model-input-context:rebuilt-input-preprocessing',
       sessionId: 'session:1',
@@ -1290,7 +1290,7 @@ describe('buildModelStepInputContextFromSources', () => {
     ]);
   });
   it('marks truncated project instruction parts with truncation metadata', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:project-instruction-truncated',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1346,7 +1346,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('keeps included empty project instructions model-visible and traceable', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:project-instruction-empty',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1400,7 +1400,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('records missing, unavailable, and read-failed instruction sources as excluded trace only', () => {
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:project-instruction-excluded',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1490,7 +1490,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('refreshes project instruction parts when rebuilding from a base input context', () => {
-    const baseInputContext = buildModelStepInputContextFromSources({
+    const baseInputContext = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:project-instruction-base',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1513,7 +1513,7 @@ describe('buildModelStepInputContextFromSources', () => {
       currentMessage: message({ messageId: 'message:current' }),
     });
 
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       baseInputContext,
       contextId: 'model-input-context:project-instruction-continuation',
       sessionId: 'session:1',
@@ -1547,7 +1547,7 @@ describe('buildModelStepInputContextFromSources', () => {
   });
 
   it('refreshes all managed instruction layers when rebuilding from a base input context', () => {
-    const baseInputContext = buildModelStepInputContextFromSources({
+    const baseInputContext = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:instruction-layers-base',
       sessionId: 'session:1',
       runId: 'run:1',
@@ -1594,7 +1594,7 @@ describe('buildModelStepInputContextFromSources', () => {
       currentMessage: message({ messageId: 'message:current' }),
     });
 
-    const context = buildModelStepInputContextFromSources({
+    const context = buildModelCallInputContextFromSources({
       baseInputContext,
       contextId: 'model-input-context:instruction-layers-refresh',
       sessionId: 'session:1',

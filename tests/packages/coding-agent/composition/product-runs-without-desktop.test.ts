@@ -143,7 +143,7 @@ describe('coding-agent product runs without desktop', () => {
     });
 
     // create session
-    const session = runtime.sessionRunService.createSession({
+    const session = runtime.sessionService.createSession({
       title: 'Proof session',
       workspaceId: projectId,
       workspacePath: workspace,
@@ -151,7 +151,7 @@ describe('coding-agent product runs without desktop', () => {
     });
 
     // advance run (drives model step -> real tool execution -> terminal)
-    const result = await runtime.sessionRunService.sendSessionMessage({
+    const result = await runtime.agentRunService.sendSessionMessage({
       requestId: 'request-1',
       payload: {
         sessionId: String(session.sessionId),
@@ -187,7 +187,7 @@ describe('coding-agent product runs without desktop', () => {
     expect(runtimeEventTypes.some((type) => type.startsWith('tool.execution.'))).toBe(true);
 
     // persists history: timeline rows committed
-    const committed = runtime.sessionRunService.listTimelineMessagesBySession({
+    const committed = runtime.sessionService.listTimelineMessagesBySession({
       projectId,
       sessionId: String(session.sessionId),
     });
@@ -205,14 +205,14 @@ describe('coding-agent product runs without desktop', () => {
       permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
     });
 
-    const afterRestart = runtime.sessionRunService.listTimelineMessagesBySession({
+    const afterRestart = runtime.sessionService.listTimelineMessagesBySession({
       projectId,
       sessionId: String(session.sessionId),
     });
     expect(afterRestart.messages.length).toBe(committed.messages.length);
     expect(afterRestart.messages.some((message) => message.role === 'assistant')).toBe(true);
 
-    const restartedSessions = runtime.sessionRunService.listSessions();
+    const restartedSessions = runtime.sessionService.listSessions();
     expect(restartedSessions.some((s) => String(s.sessionId) === String(session.sessionId))).toBe(true);
   }, 30000);
 });

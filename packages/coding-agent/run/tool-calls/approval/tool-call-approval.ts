@@ -1,5 +1,5 @@
-// Applies run permission policy to tool executions created by model tool calls.
-import { evaluatePermissionPolicy } from '../../permissions/tool-policy';
+﻿// Applies run permission policy to tool executions created by model tool calls.
+import { evaluatePermissionPolicy } from '../../../permissions/tool-policy';
 import { createRejectionObservation } from '../../../tools/observation-shaper';
 import { modelVisibleDefinitionForSnapshotEntry } from '../../../tools/registry';
 import type {
@@ -7,7 +7,7 @@ import type {
   ToolDefinition,
   ToolExecutionRecord,
 } from '@megumi/shared/tool';
-import type { ToolExecutionDecisionInput } from '../../permissions/tool-execution-decision';
+import type { ToolExecutionDecisionInput } from '../../../permissions/tool-execution-decision';
 import type { ResolvedToolCallRunnerOptions } from '../tool-call-runner';
 import { createApprovalRequest } from './approval-events';
 

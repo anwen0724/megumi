@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -50,8 +50,8 @@ describe('run context and model input boundaries', () => {
     expect(contextManagement).not.toMatch(/\bmodeSnapshot\?:/);
     expect(contextManagement).not.toMatch(/\bmodeSnapshotRef\?:/);
     expect(contextManagement).not.toMatch(/workflow-command-contracts/);
-    expect(sessionRun).toContain('ModelStepInputBuildService');
-    expect(sessionRun).toContain('modelStepInputBuildService');
+    expect(sessionRun).toContain('ModelCallInputBuildService');
+    expect(sessionRun).toContain('modelCallInputBuildService');
     // contextBudgetPolicy resolution moved to RunTurn in packages/coding-agent/run.
     expect(sessionRun).toContain('RunTurn');
     const codingAgentRun = read('packages/coding-agent/run/turn/run-turn.ts');
@@ -60,19 +60,20 @@ describe('run context and model input boundaries', () => {
 
   it('keeps input preprocessing materialization in coding-agent context and out of provider adapters', () => {
     const contextSource = read('packages/coding-agent/run/context/model-call-context.ts');
+    const inputPreprocessingSource = read('packages/coding-agent/run/context/parts/input-preprocessing.ts');
     const providerSource = read('packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts');
 
     expect(contextSource).toContain('inputPreprocessing');
-    expect(contextSource).toContain("instructionKind: 'prompt_template'");
-    expect(contextSource).toContain("instructionKind: 'skill'");
-    expect(contextSource).toContain("instructionKind: 'intent'");
+    expect(inputPreprocessingSource).toContain("return 'prompt_template'");
+    expect(inputPreprocessingSource).toContain("return 'skill'");
+    expect(inputPreprocessingSource).toContain("return 'intent'");
     expect(providerSource).not.toContain('InputPreprocessingResult');
     expect(providerSource).not.toContain('InputIntentCommandMetadata');
     expect(providerSource).not.toContain('input-command-contracts');
   });
 
   it('preserves multi-level instruction source semantics in context materialization', () => {
-    const contextSource = read('packages/coding-agent/run/context/model-call-context.ts');
+    const contextSource = read('packages/coding-agent/run/context/parts/instructions.ts');
 
     expect(contextSource).toContain('instructionKindForAgentSource');
     expect(contextSource).toContain('sessionInstructionParts');

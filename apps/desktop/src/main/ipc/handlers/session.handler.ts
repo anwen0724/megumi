@@ -1,6 +1,8 @@
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
+import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
+import type { Session, SessionMessage } from '@megumi/shared/session';
 import type {
   SessionCreateData,
   SessionCreatePayload,
@@ -28,25 +30,54 @@ import {
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
 } from '@megumi/shared/ipc';
-import type { AgentRunPort } from '@megumi/coding-agent/run';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '../runtime-event-forwarder';
 
-// Session IPC handlers code against the product AgentRunPort, narrowed to the
-// session surface the desktop UI consumes.
-export type SessionHandlersService = Pick<
-  AgentRunPort,
-  | 'createSession'
-  | 'listSessions'
-  | 'listMessagesBySession'
-  | 'listTimelineMessagesBySession'
-  | 'sendSessionMessage'
-  | 'cancelSessionMessage'
-  | 'createBranchDraft'
-  | 'cancelBranchDraft'
->;
+export interface SessionHandlersSessionService {
+  createSession(payload: SessionCreatePayload): Session;
+  listSessions(): Session[];
+  listMessagesBySession(sessionId: string): SessionMessage[];
+  listTimelineMessagesBySession(payload: SessionTimelineListPayload): SessionTimelineListData;
+}
+
+export interface SessionHandlersAgentRunService {
+  sendSessionMessage(input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+  }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
+  cancelSessionMessage(payload: SessionMessageCancelPayload): boolean;
+}
+
+export interface SessionHandlersBranchService {
+  createBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    messageId: string;
+    intent: 'branch' | 'rerun';
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): { branchDraft: SessionBranchDraftCreateData['branchDraft']; events: Iterable<RuntimeEvent> };
+  cancelBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    branchMarkerId: string;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    cancelled: boolean;
+    reason?: SessionBranchDraftCancelData['reason'];
+    events: Iterable<RuntimeEvent>;
+  };
+}
+
+export interface SessionHandlersServices {
+  sessionService: SessionHandlersSessionService;
+  agentRunService: SessionHandlersAgentRunService;
+  sessionBranchService: SessionHandlersBranchService;
+}
 
 export interface RegisterSessionHandlersOptions {
   logger?: RuntimeLogger;
@@ -54,7 +85,7 @@ export interface RegisterSessionHandlersOptions {
 }
 
 export function registerSessionHandlers(
-  service: SessionHandlersService,
+  services: SessionHandlersServices,
   options: RegisterSessionHandlersOptions = {},
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
@@ -68,7 +99,7 @@ export function registerSessionHandlers(
       handle: (
         request: RuntimeIpcRequest<SessionCreatePayload, typeof IPC_CHANNELS.session.create>,
       ): SessionCreateData => ({
-        session: service.createSession(request.payload),
+        session: services.sessionService.createSession(request.payload),
       }),
       mapError: mapSessionIpcError,
     }),
@@ -81,7 +112,7 @@ export function registerSessionHandlers(
       requestSchema: SessionListRequestSchema,
       logger: options.logger,
       handle: (): SessionListData => ({
-        sessions: service.listSessions(),
+        sessions: services.sessionService.listSessions(),
       }),
       mapError: mapSessionIpcError,
     }),
@@ -96,7 +127,7 @@ export function registerSessionHandlers(
       handle: (
         request: RuntimeIpcRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.message.list>,
       ): SessionMessageListData => ({
-        messages: service.listMessagesBySession(request.payload.sessionId) as SessionMessageListData['messages'],
+        messages: services.sessionService.listMessagesBySession(request.payload.sessionId) as SessionMessageListData['messages'],
       }),
       mapError: mapSessionIpcError,
     }),
@@ -110,7 +141,7 @@ export function registerSessionHandlers(
       logger: options.logger,
       handle: (
         request: RuntimeIpcRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.session.timeline.list>,
-      ): SessionTimelineListData => service.listTimelineMessagesBySession(request.payload),
+      ): SessionTimelineListData => services.sessionService.listTimelineMessagesBySession(request.payload),
       mapError: mapSessionIpcError,
     }),
   );
@@ -126,7 +157,7 @@ export function registerSessionHandlers(
         event,
         context,
       ): Promise<SessionMessageSendData> => {
-        const result = await service.sendSessionMessage({
+        const result = await services.agentRunService.sendSessionMessage({
           requestId: request.requestId,
           payload: request.payload,
           runtimeContext: context,
@@ -147,7 +178,7 @@ export function registerSessionHandlers(
       handle: (
         request: RuntimeIpcRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.session.message.cancel>,
       ): SessionMessageCancelData => ({
-        cancelled: service.cancelSessionMessage(request.payload),
+        cancelled: services.agentRunService.cancelSessionMessage(request.payload),
       }),
       mapError: mapSessionIpcError,
     }),
@@ -164,7 +195,7 @@ export function registerSessionHandlers(
         event,
         context,
       ): SessionBranchDraftCreateData => {
-        const result = service.createBranchDraft({
+        const result = services.sessionBranchService.createBranchDraft({
           requestId: request.requestId,
           ...request.payload,
           runtimeContext: context,
@@ -187,7 +218,7 @@ export function registerSessionHandlers(
         event,
         context,
       ): SessionBranchDraftCancelData => {
-        const result = service.cancelBranchDraft({
+        const result = services.sessionBranchService.cancelBranchDraft({
           requestId: request.requestId,
           ...request.payload,
           runtimeContext: context,

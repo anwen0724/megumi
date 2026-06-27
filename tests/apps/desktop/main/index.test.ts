@@ -7,18 +7,24 @@ const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
   const logsPath = `${homePath}/logs`;
   const codingAgentRuntime = {
-    sessionRunService: {
+    sessionService: {
       createSession: vi.fn(),
       listSessions: vi.fn(),
       listMessagesBySession: vi.fn(),
       listTimelineMessagesBySession: vi.fn(),
       listRunsBySession: vi.fn(),
-      sendSessionMessage: vi.fn(),
-      cancelSessionMessage: vi.fn(),
+    },
+    sessionBranchService: {
       createBranchDraft: vi.fn(),
       cancelBranchDraft: vi.fn(),
+    },
+    agentRunService: {
+      sendSessionMessage: vi.fn(),
+      cancelSessionMessage: vi.fn(),
       listRuntimeEventsByRun: vi.fn(),
       startRun: vi.fn(),
+    },
+    planArtifactService: {
       getPlanByRun: vi.fn(),
       updatePlanStatus: vi.fn(),
     },
@@ -623,10 +629,17 @@ describe('main runtime logger composition', () => {
       logger: processLogger,
       providerService: mocks.codingAgentRuntime.providerSettingsService,
       settingsService,
-      sessionRunService: mocks.codingAgentRuntime.sessionRunService,
-      agentRunService: mocks.codingAgentRuntime.sessionRunService,
+      sessionHandlers: {
+        sessionService: mocks.codingAgentRuntime.sessionService,
+        sessionBranchService: mocks.codingAgentRuntime.sessionBranchService,
+        agentRunService: mocks.codingAgentRuntime.agentRunService,
+      },
+      runHandlers: {
+        sessionService: mocks.codingAgentRuntime.sessionService,
+        agentRunService: mocks.codingAgentRuntime.agentRunService,
+      },
       runContextService: mocks.codingAgentRuntime.runContextService,
-      planService: mocks.codingAgentRuntime.sessionRunService,
+      planService: mocks.codingAgentRuntime.planArtifactService,
       toolService: mocks.codingAgentRuntime.toolService,
       recoveryService: mocks.codingAgentRuntime.recoveryService,
       artifactService: mocks.codingAgentRuntime.artifactService,

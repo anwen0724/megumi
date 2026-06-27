@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import {
   buildSessionCompactionSummaryInputContext,
@@ -8,7 +8,7 @@ import {
   shouldRunSessionCompaction,
 } from '@megumi/coding-agent/run/context/compaction/session-compaction';
 import { estimateModelInputContextTokens } from '@megumi/coding-agent/run/context/context-budget';
-import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
   SessionContextInput,
@@ -198,7 +198,7 @@ describe('shouldRunSessionCompaction', () => {
       reservedOutputTokens: 10,
       keepRecentTokens: 12,
     };
-    const budgetProbe = buildModelStepInputContextFromSources({
+    const budgetProbe = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:step-1:compaction-probe',
       sessionId: 'session-1',
       runId: 'run-1',
@@ -236,7 +236,7 @@ describe('shouldRunSessionCompaction', () => {
       reservedOutputTokens: 1024,
       keepRecentTokens: 4096,
     };
-    const budgetProbe = buildModelStepInputContextFromSources({
+    const budgetProbe = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:step-1:compaction-probe',
       sessionId: 'session-1',
       runId: 'run-1',

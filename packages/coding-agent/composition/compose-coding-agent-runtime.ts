@@ -1,4 +1,4 @@
-// Composes the complete Coding Agent product runtime without depending on any UI shell.
+﻿// Composes the complete Coding Agent product runtime without depending on any UI shell.
 import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService } from '../artifacts';
 import type { CodingAgentProductRuntime } from '../product-runtime';
@@ -18,9 +18,9 @@ import {
   type AiClient,
 } from '@megumi/ai';
 import { createModelCallRunner, type ProviderRuntimeConfig } from '../run/model-call';
-import { TimelineHistoryCommitProjectorService } from '../run/events/timeline-history-projector';
+import { TimelineHistoryCommitProjectorService } from '../projections/timeline';
 import type { MemorySettingsProvider } from './compose-coding-agent-memory';
-import type { PermissionSettingsProvider } from '../run/permissions/permission-settings-provider';
+import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
 import { ProviderRuntimeService, ProviderSettingsService, type ProviderSettingsAppSettingsPort } from '../settings';
 import {
   createProjectService,
@@ -101,7 +101,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const toolService = composeCodingAgentToolService({
     toolRegistry,
     toolRepository: persistence.toolRepository,
-    resumeApproval: (request) => sessionRuntime.sessionRunService.resumeApproval(request),
+    resumeApproval: (request) => sessionRuntime.agentRunService.resumeApproval(request),
   });
   const artifactContentStore = new ArtifactContentStore({
     artifactRoot: `${options.homePaths.homePath}/artifacts`,
@@ -115,7 +115,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     sessionRunRepository: persistence.sessionRunRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
     timelineMessageRepository: persistence.timelineMessageRepository,
-    sessionRunService: sessionRuntime.sessionRunService,
+    sessionRunService: sessionRuntime.agentRunService,
     logger: options.runtimeLogger,
   });
   const projectService = createProjectService({
@@ -125,10 +125,13 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   });
 
   return {
-    sessionRunService: sessionRuntime.sessionRunService,
+    sessionService: sessionRuntime.sessionService,
+    sessionBranchService: sessionRuntime.sessionBranchService,
+    agentRunService: sessionRuntime.agentRunService,
     recoveryService,
     toolService,
     artifactService,
+    planArtifactService: sessionRuntime.planArtifactService,
     memoryService: memory.memoryService,
     runContextService: sessionRuntime.runContextService,
     providerSettingsService,

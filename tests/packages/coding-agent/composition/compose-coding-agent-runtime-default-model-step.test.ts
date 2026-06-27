@@ -55,7 +55,8 @@ describe('Coding Agent product runtime default model step provider', () => {
       },
     });
 
-    expect(runtime.sessionRunService).toBeDefined();
-    expect(typeof runtime.sessionRunService.sendSessionMessage).toBe('function');
+    expect(runtime.sessionService).toBeDefined();
+    expect(runtime.agentRunService).toBeDefined();
+    expect(typeof runtime.agentRunService.sendSessionMessage).toBe('function');
   });
 });

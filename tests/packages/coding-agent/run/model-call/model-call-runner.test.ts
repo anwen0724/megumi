@@ -1,10 +1,10 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/run/context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createModelMessageObservation,
-  createModelStepInputPreview,
+  createModelCallInputPreview,
   isModelMessageAction,
   isModelStep,
   runModelCall,
@@ -12,7 +12,7 @@ import {
 
 describe('run model step foundation', () => {
   it('describes model step input without provider execution', () => {
-    expect(createModelStepInputPreview({
+    expect(createModelCallInputPreview({
       providerId: 'deepseek',
       modelId: 'deepseek-v4-flash',
       goal: 'Answer',
@@ -61,7 +61,7 @@ describe('run model step foundation', () => {
         stepId: 'step-1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
-        inputContext: buildModelStepInputContextFromSources({
+        inputContext: buildModelCallInputContextFromSources({
           contextId: 'model-input-context:step-1',
           sessionId: 'session-1',
           runId: 'run-1',

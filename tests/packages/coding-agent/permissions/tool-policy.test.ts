@@ -3,14 +3,14 @@ import {
   evaluatePermissionPolicy,
   evaluateToolPolicy,
   type EvaluatePermissionPolicyInput,
-} from '@megumi/coding-agent/run/permissions/tool-policy';
+} from '@megumi/coding-agent/permissions/tool-policy';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode } from '@megumi/shared/permission';
 import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type {
   PermissionClassifier,
   PermissionClassifierResult,
-} from '@megumi/coding-agent/run/permissions/permission-classifier';
+} from '@megumi/coding-agent/permissions/permission-classifier';
 import type { ToolExecution, ToolDefinition } from '@megumi/shared/tool';
 
 const projectRoot = 'C:/all/work/study/megumi';

@@ -53,7 +53,9 @@ export function composeDesktopMain() {
     openPath: (absolutePath) => electronShellHost.openPath(absolutePath),
   });
 
-  const sessionRunService = codingAgentRuntime.sessionRunService;
+  const sessionService = codingAgentRuntime.sessionService;
+  const sessionBranchService = codingAgentRuntime.sessionBranchService;
+  const agentRunService = codingAgentRuntime.agentRunService;
 
   return {
     megumiHomePaths,
@@ -61,10 +63,10 @@ export function composeDesktopMain() {
     appSettingsService,
     chatStreamBroadcaster,
     providerService: codingAgentRuntime.providerSettingsService,
-    sessionRunService,
-    agentRunService: sessionRunService,
+    sessionHandlers: { sessionService, sessionBranchService, agentRunService },
+    runHandlers: { sessionService, agentRunService },
     runContextService: codingAgentRuntime.runContextService,
-    planService: sessionRunService,
+    planService: codingAgentRuntime.planArtifactService,
     toolService: codingAgentRuntime.toolService,
     recoveryService: codingAgentRuntime.recoveryService,
     artifactService: codingAgentRuntime.artifactService,

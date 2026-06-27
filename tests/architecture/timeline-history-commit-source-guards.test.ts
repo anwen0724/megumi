@@ -42,7 +42,7 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('does not let the timeline commit projector import renderer chat-stream projection code', () => {
-    const source = read('packages/coding-agent/run/events/timeline-history-projector.ts');
+    const source = read('packages/coding-agent/projections/timeline/timeline-history-projector.ts');
 
     expect(source).toContain('@megumi/shared/timeline');
     expect(source).not.toContain('features/chat-stream');
@@ -50,7 +50,7 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('keeps renderer timeline history on timeline repository instead of flat session messages', () => {
-    const source = read('packages/coding-agent/run/agent-run-service.ts');
+    const source = read('packages/coding-agent/session/session-service.ts');
 
     expect(source).toContain('timelineMessageRepository.listCommittedMessagesBySession(input)');
     expect(source).not.toContain('timelineMessagesFromPersistedMessages');
@@ -81,7 +81,7 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('keeps persistence failure out of timeline answer/process blocks', () => {
-    const source = read('packages/coding-agent/run/events/timeline-history-projector.ts');
+    const source = read('packages/coding-agent/projections/timeline/timeline-history-projector.ts');
 
     expect(source).toContain('recordCommitDiagnostic');
     expect(source).not.toContain('AnswerTextBlock');

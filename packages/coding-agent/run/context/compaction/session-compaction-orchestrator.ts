@@ -1,11 +1,13 @@
-// Orchestrates Coding Agent session compaction through provider and persistence ports.
+// Runs the turn-level session compaction phase.
+// Pure compaction input shaping stays in session-compaction.ts; this collaborator
+// owns provider completion, active-path update, persistence, and compaction events.
 import {
   buildSessionCompactionSummaryInputContext,
   extractSessionCompactionFileMetadata,
   prepareSessionCompactionInput,
   shouldRunSessionCompaction,
 } from './session-compaction';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '../../model-call';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelId } from '@megumi/shared/model';
 import type {

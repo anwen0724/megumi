@@ -1,3 +1,5 @@
+﻿// Runs legacy action-style run lifecycle operations and emits runtime events.
+// Main chat turns are owned by turn/run-turn.ts.
 import type {
   RunAction,
   RunObservation,

@@ -1,4 +1,4 @@
-// Runs Coding Agent model calls through an injected provider-neutral AI client.
+﻿// Runs Coding Agent model calls through an injected provider-neutral AI client.
 import type { AssistantContentBlock } from '@megumi/ai';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { JsonObject } from '@megumi/shared/primitives';
@@ -23,13 +23,13 @@ import type {
   ModelCallRuntimeResolverPort,
 } from './model-call-contract';
 
-export interface CreateModelStepInputPreviewInput {
+export interface CreateModelCallInputPreviewInput {
   providerId?: string;
   modelId?: string;
   goal: string;
 }
 
-export function createModelStepInputPreview(input: CreateModelStepInputPreviewInput): JsonObject {
+export function createModelCallInputPreview(input: CreateModelCallInputPreviewInput): JsonObject {
   return {
     stepKind: 'model',
     goal: input.goal,

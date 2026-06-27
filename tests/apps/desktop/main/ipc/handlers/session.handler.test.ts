@@ -49,7 +49,7 @@ function createSessionMessageSendPayload() {
 }
 
 function createSessionServiceMock(overrides: Record<string, unknown> = {}) {
-  return {
+  const flat = {
     createSession: vi.fn(),
     listSessions: vi.fn(),
     listMessagesBySession: vi.fn(),
@@ -59,6 +59,12 @@ function createSessionServiceMock(overrides: Record<string, unknown> = {}) {
     createBranchDraft: vi.fn(),
     cancelBranchDraft: vi.fn(),
     ...overrides,
+  };
+  return {
+    ...flat,
+    sessionService: flat,
+    agentRunService: flat,
+    sessionBranchService: flat,
   };
 }
 

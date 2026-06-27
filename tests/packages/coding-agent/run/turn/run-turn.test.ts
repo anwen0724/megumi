@@ -1,10 +1,10 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   RunTurn,
   type RunTurnOptions,
 } from '@megumi/coding-agent/run';
-import type { BuildModelStepInputInput, BuildModelStepInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/run/context';
+import type { BuildModelCallInputInput, BuildModelCallInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/run/context';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -13,10 +13,10 @@ import { createRuntimeEvent } from '@megumi/shared/runtime';
 describe('RunTurn', () => {
   it('builds compaction probe, runs compaction, builds initial input, and streams through agent runtime', async () => {
     const order: string[] = [];
-    const buildInputs: BuildModelStepInputInput[] = [];
+    const buildInputs: BuildModelCallInputInput[] = [];
     const modelRequests: ModelStepRuntimeRequest[] = [];
     const options = createOptions({
-      async buildModelStepInput(input) {
+      async buildModelCallInput(input) {
         order.push(`build:${input.contextKind}`);
         buildInputs.push(input);
         return successfulModelStepInputBuild(input);
@@ -64,9 +64,9 @@ describe('RunTurn', () => {
   });
 
   it('adds ParsedInput command facts to both compaction probe and initial model input builds', async () => {
-    const buildInputs: BuildModelStepInputInput[] = [];
+    const buildInputs: BuildModelCallInputInput[] = [];
     const orchestrator = new RunTurn(createOptions({
-      async buildModelStepInput(input) {
+      async buildModelCallInput(input) {
         buildInputs.push(input);
         return successfulModelStepInputBuild(input);
       },
@@ -123,7 +123,7 @@ describe('RunTurn', () => {
   it('fails before provider streaming when compaction probe input build fails', async () => {
     const modelRequests: ModelStepRuntimeRequest[] = [];
     const orchestrator = new RunTurn(createOptions({
-      async buildModelStepInput(input) {
+      async buildModelCallInput(input) {
         if (input.contextKind === 'compaction-probe') {
           return {
             ...successfulModelStepInputBuild(input),
@@ -174,9 +174,9 @@ describe('RunTurn', () => {
 
   it('does not append run.started twice when the initial model input build throws', async () => {
     const order: string[] = [];
-    const buildInputs: BuildModelStepInputInput[] = [];
+    const buildInputs: BuildModelCallInputInput[] = [];
     const orchestrator = new RunTurn(createOptions({
-      async buildModelStepInput(input) {
+      async buildModelCallInput(input) {
         buildInputs.push(input);
         if (input.contextKind === 'initial') {
           throw new Error('initial build exploded');
@@ -255,7 +255,7 @@ const userMessage = {
 
 function createOptions(
   overrides: Partial<{
-    buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult>;
+    buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
     compactIfNeeded(): Promise<SessionCompactionOrchestrationResult>;
     streamModelCall(input: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent>;
   }> = {},
@@ -320,23 +320,30 @@ function createOptions(
         return {};
       },
     },
-    modelStepInputBuildService: {
-      buildModelStepInput: overrides.buildModelStepInput ?? (async (input) => successfulModelStepInputBuild(input)),
+    modelCallInputBuildService: {
+      buildModelCallInput: overrides.buildModelCallInput ?? (async (input) => successfulModelStepInputBuild(input)),
     },
     compactionOrchestrator: {
       compactIfNeeded: overrides.compactIfNeeded ?? (async () => ({ status: 'skipped', events: [] })),
     },
-    modelStepExecutor: {
+    modelCallPort: {
       streamModelCall: overrides.streamModelCall ?? (async function* ({ request }) {
         order.push('model');
         yield assistantOutputCompleted(request, 1, 'Hello');
         yield modelStepCompleted(request, 2);
       }),
     },
+    runEventRecorder: {
+      async *recordModelCallEvents(input) {
+        for await (const event of input.modelEvents) {
+          yield event;
+        }
+      },
+    },
   };
 }
 
-function successfulModelStepInputBuild(input: BuildModelStepInputInput): BuildModelStepInputResult {
+function successfulModelStepInputBuild(input: BuildModelCallInputInput): BuildModelCallInputResult {
   return {
     buildRequest: {} as never,
     inputContext: {

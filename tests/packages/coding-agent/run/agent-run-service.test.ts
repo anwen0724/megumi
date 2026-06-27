@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,13 +20,19 @@ import {
   type AgentRunServiceOptions,
   type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/coding-agent/run';
-import { TimelineHistoryCommitProjectorService } from '@megumi/coding-agent/run/events/timeline-history-projector';
+import {
+  SessionBranchService,
+  SessionService,
+  type SessionBranchServicePort,
+  type SessionServicePort,
+} from '@megumi/coding-agent/session';
+import { TimelineHistoryCommitProjectorService } from '@megumi/coding-agent/projections/timeline';
 import type {
-  BuildModelStepInputInput,
-  BuildModelStepInputResult,
+  BuildModelCallInputInput,
+  BuildModelCallInputResult,
   SessionCompactionOrchestrationResult,
 } from '@megumi/coding-agent/run/context';
-import { PermissionSnapshotService } from '@megumi/coding-agent/run/permissions';
+import { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelInputContext, ModelStepRuntimeRequest, SessionInstructionSourceSnapshot } from '@megumi/shared/model';
 import type { ModelInputContextSourceKind } from '@megumi/shared/model';
@@ -45,6 +51,63 @@ import type {
 } from '@megumi/shared/workspace';
 
 let db: Database.Database | null = null;
+
+type AgentRunServiceTestFacade = AgentRunService & SessionServicePort & SessionBranchServicePort;
+
+function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunServiceTestFacade {
+  const ids = {
+    sessionId: options.ids?.sessionId ?? (() => `session:${crypto.randomUUID()}`),
+    branchMarkerId: options.ids?.branchMarkerId ?? (() => `branch-marker:${crypto.randomUUID()}`),
+    sourceEntryId: options.ids?.sourceEntryId ?? (() => `source-entry:${crypto.randomUUID()}`),
+    eventId: options.ids?.eventId ?? (() => `event:${crypto.randomUUID()}`),
+    chatStreamEventId: options.ids?.chatStreamEventId ?? (() => `chat-stream-event:${crypto.randomUUID()}`),
+  };
+  const sessionService = new SessionService({
+    repository: options.repository,
+    ids,
+    ...(options.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
+    ...(options.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
+    ...(options.memorySettingsProvider ? { memorySettingsProvider: options.memorySettingsProvider } : {}),
+    ...(options.memoryMarkdownSyncService ? { memoryMarkdownSyncService: options.memoryMarkdownSyncService } : {}),
+    ...(options.megumiHomePath ? { megumiHomePath: options.megumiHomePath } : {}),
+  });
+  const sessionBranchService = options.activePathRepository
+    ? new SessionBranchService({
+        repository: options.repository,
+        activePathRepository: options.activePathRepository,
+        ids,
+        ...(options.chatStreamEventSink ? { chatStreamEventSink: options.chatStreamEventSink } : {}),
+      })
+    : undefined;
+  const runService = new AgentRunService({
+    ...options,
+    ...(sessionBranchService ? { sessionBranchService } : {}),
+  });
+
+  return Object.assign(runService, {
+    createSession: sessionService.createSession.bind(sessionService),
+    listSessions: sessionService.listSessions.bind(sessionService),
+    listMessagesBySession: sessionService.listMessagesBySession.bind(sessionService),
+    listTimelineMessagesBySession: sessionService.listTimelineMessagesBySession.bind(sessionService),
+    listRunsBySession: sessionService.listRunsBySession.bind(sessionService),
+    createBranchFromUserMessage: ((input: Parameters<SessionBranchServicePort['createBranchFromUserMessage']>[0]) =>
+      requireBranchService(sessionBranchService, 'createBranchFromUserMessage').createBranchFromUserMessage(input)),
+    createBranchDraft: ((input: Parameters<SessionBranchServicePort['createBranchDraft']>[0]) =>
+      requireBranchService(sessionBranchService, 'createBranchDraft').createBranchDraft(input)),
+    cancelBranchDraft: ((input: Parameters<SessionBranchServicePort['cancelBranchDraft']>[0]) =>
+      requireBranchService(sessionBranchService, 'cancelBranchDraft').cancelBranchDraft(input)),
+  });
+}
+
+function requireBranchService(
+  service: SessionBranchService | undefined,
+  methodName: string,
+): SessionBranchService {
+  if (!service) {
+    throw new Error(`SessionBranchService is required for ${methodName}.`);
+  }
+  return service;
+}
 
 function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile> = {}): WorkspaceChangedFile {
   return {
@@ -75,7 +138,7 @@ function createService() {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentRunService({
+  return createAgentRunTestService({
     repository,
     clock: { now: () => '2026-05-15T00:00:00.000Z' },
     ids: {
@@ -94,7 +157,7 @@ function createServiceWithContextRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentRunService({
+  return createAgentRunTestService({
     repository,
     contextService: {
       createBaselineContext: (input) => {
@@ -155,7 +218,7 @@ function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentRunService({
+  return createAgentRunTestService({
     repository,
     permissionSnapshotService: {
       createPermissionSnapshot: (input) => {
@@ -175,6 +238,8 @@ function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
         records.push({ type: 'sourcePlan', input });
         return input;
       },
+    },
+    planArtifactService: {
       createPlanRecordForRun: (input) => {
         records.push({ type: 'planRecord', input });
         return undefined;
@@ -201,7 +266,7 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
-  return new AgentRunService({
+  return createAgentRunTestService({
     repository,
     permissionSnapshotService: {
       createPermissionSnapshot: (input) => {
@@ -221,6 +286,8 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
         records.push({ type: 'sourcePlan', input });
         return input;
       },
+    },
+    planArtifactService: {
       createPlanRecordForRun: (input) => {
         records.push({ type: 'planRecord', input });
         return undefined;
@@ -262,7 +329,7 @@ function createServiceWithModelStepStream(
   agentInstructionSourceService?: AgentRunServiceOptions['agentInstructionSourceService'];
   sessionContextInputService?: AgentRunServiceOptions['sessionContextInputService'];
   sessionCompactionOrchestrator?: AgentRunServiceOptions['sessionCompactionOrchestrator'];
-  modelStepInputBuildService?: AgentRunServiceOptions['modelStepInputBuildService'];
+  modelCallInputBuildService?: AgentRunServiceOptions['modelCallInputBuildService'];
   memoryRecallService?: AgentRunServiceOptions['memoryRecallService'];
   memoryCaptureService?: AgentRunServiceOptions['memoryCaptureService'];
   memorySettingsProvider?: AgentRunServiceOptions['memorySettingsProvider'];
@@ -299,7 +366,7 @@ function createServiceWithModelStepStream(
     ...(options?.sessionCompactionOrchestrator ? {
       sessionCompactionOrchestrator: options.sessionCompactionOrchestrator,
     } : {}),
-    ...(options?.modelStepInputBuildService ? { modelStepInputBuildService: options.modelStepInputBuildService } : {}),
+    ...(options?.modelCallInputBuildService ? { modelCallInputBuildService: options.modelCallInputBuildService } : {}),
     ...(options?.memoryRecallService ? { memoryRecallService: options.memoryRecallService } : {}),
     ...(options?.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
     ...(options?.memorySettingsProvider ? { memorySettingsProvider: options.memorySettingsProvider } : {}),
@@ -355,7 +422,7 @@ function createServiceWithModelStepStream(
       })(),
     },
   };
-  return new AgentRunService(serviceOptions);
+  return createAgentRunTestService(serviceOptions);
 }
 
 function createServiceWithRealToolResolution(input: {
@@ -520,7 +587,7 @@ function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   let messageIndex = 0;
   let sourceEntryIndex = 0;
   let branchMarkerIndex = 0;
-  const service = new AgentRunService({
+  const service = createAgentRunTestService({
     repository,
     activePathRepository: activePathRepo,
     modelStepProvider: {
@@ -560,7 +627,7 @@ function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   return { service, repository, activePathRepo };
 }
 
-function modelInputContextFromBuildInput(input: BuildModelStepInputInput): ModelInputContext {
+function modelInputContextFromBuildInput(input: BuildModelCallInputInput): ModelInputContext {
   const sourceId = input.currentMessage
     ? `session-message:${input.currentMessage.messageId}`
     : `run:${input.runId}`;
@@ -657,7 +724,7 @@ function modelInputContextFromBuildInput(input: BuildModelStepInputInput): Model
   };
 }
 
-function successfulModelStepInputBuild(input: BuildModelStepInputInput): BuildModelStepInputResult {
+function successfulModelStepInputBuild(input: BuildModelCallInputInput): BuildModelCallInputResult {
   const inputContext = modelInputContextFromBuildInput(input);
   return {
     buildRequest: {
@@ -696,7 +763,7 @@ function createServiceWithProviderStream(
   let callIndex = 0;
   let messageIndex = 0;
   let sourceEntryIndex = 0;
-  const service = new AgentRunService({
+  const service = createAgentRunTestService({
     repository,
     activePathRepository: activePathRepo,
     modelStepProvider: {
@@ -759,7 +826,7 @@ function createBranchServiceFixture(options: {
       })
     : undefined;
   let branchMarkerIndex = 0;
-  const service = new AgentRunService({
+  const service = createAgentRunTestService({
     repository,
     activePathRepository: activePathRepo,
     ...(timelineRepository ? { timelineMessageRepository: timelineRepository } : {}),
@@ -806,7 +873,7 @@ function createManualRetryFixture() {
   let sourceEntryIndex = 0;
   let branchMarkerIndex = 0;
   let retryAttemptIndex = 0;
-  const service = new AgentRunService({
+  const service = createAgentRunTestService({
     repository,
     activePathRepository: activePathRepo,
     clock: { now: () => '2026-06-01T11:00:00.000Z' },
@@ -1040,7 +1107,7 @@ function createServiceWithChatStreamSink(
   migrateDatabase(db);
   const repository = new SessionRunRepository(db);
   let callIndex = 0;
-  return new AgentRunService({
+  return createAgentRunTestService({
     repository,
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
@@ -2472,7 +2539,7 @@ describe('AgentRunService', () => {
 
   it('blocks provider streaming when the initial model step input build fails', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const buildInputs: BuildModelStepInputInput[] = [];
+    const buildInputs: BuildModelCallInputInput[] = [];
     const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
       onRequest: (request) => requests.push(request),
       sessionCompactionOrchestrator: {
@@ -2480,8 +2547,8 @@ describe('AgentRunService', () => {
           return { status: 'skipped', events: [] };
         },
       },
-      modelStepInputBuildService: {
-        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+      modelCallInputBuildService: {
+        async buildModelCallInput(input): Promise<BuildModelCallInputResult> {
           buildInputs.push(input);
           const result = successfulModelStepInputBuild(input);
           if (input.contextKind === 'initial') {
@@ -2553,8 +2620,8 @@ describe('AgentRunService', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
       onRequest: (request) => requests.push(request),
-      modelStepInputBuildService: {
-        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+      modelCallInputBuildService: {
+        async buildModelCallInput(input): Promise<BuildModelCallInputResult> {
           if (input.contextKind === 'compaction-probe') {
             throw new Error('compaction probe build exploded');
           }
@@ -2682,7 +2749,7 @@ describe('AgentRunService', () => {
 
   it('recalls memory before the compaction probe and reuses that source for the initial build', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const buildInputs: BuildModelStepInputInput[] = [];
+    const buildInputs: BuildModelCallInputInput[] = [];
     const order: string[] = [];
     const memoryRecallSources = [{
       sourceId: 'memory-recall:snapshot-1',
@@ -2740,8 +2807,8 @@ describe('AgentRunService', () => {
           return { status: 'skipped', events: [] };
         },
       },
-      modelStepInputBuildService: {
-        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+      modelCallInputBuildService: {
+        async buildModelCallInput(input): Promise<BuildModelCallInputResult> {
           order.push(`build:${input.contextKind}`);
           buildInputs.push(input);
           return successfulModelStepInputBuild(input);
@@ -3470,7 +3537,7 @@ describe('AgentRunService', () => {
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       activePathRepository: activePathRepo,
       sessionCompactionOrchestrator: {
@@ -3628,7 +3695,7 @@ describe('AgentRunService', () => {
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       activePathRepository: activePathRepo,
       sessionCompactionOrchestrator: {
@@ -4418,7 +4485,7 @@ describe('AgentRunService', () => {
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       activePathRepository: activePathRepo,
       modelStepProvider: {
@@ -4557,7 +4624,7 @@ describe('AgentRunService', () => {
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
         streamModelCall: async function* (request) {
@@ -4814,7 +4881,7 @@ describe('AgentRunService', () => {
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
     const toolRepository = new ToolRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
         streamModelCall: async function* (request) {
@@ -4992,7 +5059,7 @@ describe('AgentRunService', () => {
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
         streamModelCall: async function* (request) {
@@ -5788,7 +5855,7 @@ describe('AgentRunService', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
         streamModelCall: async function* (request) {
@@ -6348,7 +6415,7 @@ describe('AgentRunService', () => {
       startedAt: '2026-06-14T00:00:11.000Z',
       continuationEmitted: false,
     });
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       toolRepository,
       clock: { now: () => '2026-06-14T00:01:00.000Z' },
@@ -6427,7 +6494,7 @@ describe('AgentRunService', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const repository = new SessionRunRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
         streamModelCall: async function* (request) {
@@ -7322,11 +7389,6 @@ describe('AgentRunService', () => {
           };
         },
         linkAcceptedSourcePlan: (input) => input,
-        createPlanRecordForRun: () => undefined,
-        getPlanByRun: () => undefined,
-        updatePlanStatus: () => {
-          throw new Error('not implemented');
-        },
       },
       onRequest: (request) => requests.push(request),
     });
@@ -7392,11 +7454,6 @@ describe('AgentRunService', () => {
           };
         },
         linkAcceptedSourcePlan: (input) => input,
-        createPlanRecordForRun: () => undefined,
-        getPlanByRun: () => undefined,
-        updatePlanStatus: () => {
-          throw new Error('not implemented');
-        },
       },
       onRequest: (request) => {
         requests.push(request);
@@ -7493,11 +7550,6 @@ describe('AgentRunService', () => {
           };
         },
         linkAcceptedSourcePlan: (input) => input,
-        createPlanRecordForRun: () => undefined,
-        getPlanByRun: () => undefined,
-        updatePlanStatus: () => {
-          throw new Error('not implemented');
-        },
       },
       onRequest: (request) => {
         requests.push(request);
@@ -7572,13 +7624,12 @@ describe('AgentRunService', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const sessionRepository = new SessionRunRepository(db);
     const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository: sessionRepository,
       permissionSnapshotService: new PermissionSnapshotService({
         repository: permissionSnapshotRepository,
         ids: {
           permissionSnapshotId: () => 'permission-snapshot:real-repo',
-          planArtifactId: () => 'plan:real-repo',
         },
       }),
       modelStepProvider: {
@@ -7649,13 +7700,12 @@ describe('AgentRunService', () => {
     migrateDatabase(db);
     const sessionRepository = new SessionRunRepository(db);
     const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
-    const service = new AgentRunService({
+    const service = createAgentRunTestService({
       repository: sessionRepository,
       permissionSnapshotService: new PermissionSnapshotService({
         repository: permissionSnapshotRepository,
         ids: {
           permissionSnapshotId: () => 'permission-snapshot:workflow-real-repo',
-          planArtifactId: () => 'plan:workflow-real-repo',
         },
       }),
       modelStepProvider: {
@@ -7835,10 +7885,10 @@ describe('AgentRunService', () => {
   });
 
   it('passes ParsedInput command facts into coding-agent run model input', async () => {
-    const buildInputs: BuildModelStepInputInput[] = [];
+    const buildInputs: BuildModelCallInputInput[] = [];
     const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
-      modelStepInputBuildService: {
-        async buildModelStepInput(input): Promise<BuildModelStepInputResult> {
+      modelCallInputBuildService: {
+        async buildModelCallInput(input): Promise<BuildModelCallInputResult> {
           buildInputs.push(input);
           return successfulModelStepInputBuild(input);
         },

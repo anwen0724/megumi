@@ -1,6 +1,6 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { evaluatePermissionPolicy } from '@megumi/coding-agent/run/permissions/tool-policy';
+import { evaluatePermissionPolicy } from '@megumi/coding-agent/permissions/tool-policy';
 import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
 import type { ToolExecution } from '@megumi/shared/tool';
 

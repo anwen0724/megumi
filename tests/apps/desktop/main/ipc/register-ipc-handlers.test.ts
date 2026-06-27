@@ -76,7 +76,7 @@ describe('registerAllHandlers', () => {
       error: vi.fn(),
     };
 
-    const sessionRunService = {
+    const flatSessionService = {
       createSession: vi.fn(),
       listSessions: vi.fn(),
       listMessagesBySession: vi.fn(),
@@ -86,9 +86,18 @@ describe('registerAllHandlers', () => {
       createBranchDraft: vi.fn(),
       cancelBranchDraft: vi.fn(),
     };
-    const agentRunService = {
+    const sessionHandlers = {
+      sessionService: flatSessionService,
+      agentRunService: flatSessionService,
+      sessionBranchService: flatSessionService,
+    };
+    const runHandlers = {
+      sessionService: {
       listRunsBySession: vi.fn(),
+      },
+      agentRunService: {
       listRuntimeEventsByRun: vi.fn(),
+      },
     };
     const providerService = {
       getProviderSettings: vi.fn(),
@@ -98,17 +107,17 @@ describe('registerAllHandlers', () => {
       deleteProviderApiKey: vi.fn(),
     };
 
-    registerAllHandlers({ logger, providerService, sessionRunService, agentRunService });
+    registerAllHandlers({ logger, providerService, sessionHandlers, runHandlers });
 
     expect(registerProviderHandlers).toHaveBeenCalledWith(providerService, {
       logger,
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
     });
-    expect(registerSessionHandlers).toHaveBeenCalledWith(sessionRunService, {
+    expect(registerSessionHandlers).toHaveBeenCalledWith(sessionHandlers, {
       logger,
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
     });
-    expect(registerRunHandlers).toHaveBeenCalledWith(agentRunService, {
+    expect(registerRunHandlers).toHaveBeenCalledWith(runHandlers, {
       logger,
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
     });

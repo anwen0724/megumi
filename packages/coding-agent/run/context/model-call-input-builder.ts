@@ -1,8 +1,8 @@
-// Composes Coding Agent product sources into a provider-neutral ModelInputContext for one ModelStep.
+﻿// Composes Coding Agent product sources into a provider-neutral ModelInputContext for one ModelStep.
 // This service does not call providers, execute tools, or perform memory recall scoring.
 import {
-  buildModelStepInputContextFromBuildRequest,
-  createModelStepInputContextId,
+  buildModelCallInputContextFromBuildRequest,
+  createModelCallInputContextId,
   type ModelInputMemoryRecallSource,
 } from './model-call-context';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
@@ -17,7 +17,7 @@ import type {
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
-import { resolveModelStepEffectiveCwd, type ModelStepEffectiveCwd } from './effective-cwd';
+import { resolveModelCallEffectiveCwd, type ModelCallEffectiveCwd } from './effective-cwd';
 import {
   createRuntimeFactsForRunInput,
   type CodingAgentRunInputFacts,
@@ -26,22 +26,22 @@ import {
 import type { LoadInstructionSourcesInput } from './instructions/agent-instruction-source';
 export type { LoadInstructionSourcesInput };
 
-export interface ModelStepInputBuildInstructionSourceService {
+export interface ModelCallInputBuildInstructionSourceService {
   loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
 }
 
-export interface ModelStepInputBuildIds {
+export interface ModelCallInputBuildIds {
   buildRequestId(input: { runId: string; stepId: string; contextKind: string }): string;
   traceId(input: { runId: string; stepId: string; contextKind: string }): string;
 }
 
-export interface ModelStepInputBuildServiceOptions {
-  instructionSourceService?: ModelStepInputBuildInstructionSourceService;
+export interface ModelCallInputBuildServiceOptions {
+  instructionSourceService?: ModelCallInputBuildInstructionSourceService;
   defaultBudgetPolicy?: ContextBudgetPolicy;
-  idFactory?: Partial<ModelStepInputBuildIds>;
+  idFactory?: Partial<ModelCallInputBuildIds>;
 }
 
-export interface BuildModelStepInputInput {
+export interface BuildModelCallInputInput {
   baseInputContext?: ModelInputContext;
   requestId: string;
   sessionId: string;
@@ -73,39 +73,39 @@ export interface BuildModelStepInputInput {
   builtAt: string;
 }
 
-export interface BuildModelStepInputResult {
+export interface BuildModelCallInputResult {
   buildRequest: ModelInputContextBuildRequest;
   inputContext: ModelInputContext;
   toolDefinitions: ToolDefinition[];
   instructionSources: AgentInstructionSourceSnapshot[];
   availableCapabilitySummary: string;
-  effectiveCwd?: ModelStepEffectiveCwd;
-  failure?: BuildModelStepInputFailure;
+  effectiveCwd?: ModelCallEffectiveCwd;
+  failure?: BuildModelCallInputFailure;
 }
 
-export interface BuildModelStepInputFailure {
+export interface BuildModelCallInputFailure {
   code: 'context_required_over_budget';
   message: string;
   retryable: false;
 }
 
-const DEFAULT_IDS: ModelStepInputBuildIds = {
+const DEFAULT_IDS: ModelCallInputBuildIds = {
   buildRequestId: ({ runId, stepId, contextKind }) => `model-input-build:${runId}:${stepId}:${contextKind}`,
   traceId: ({ runId, stepId, contextKind }) => `trace:model-input:${runId}:${stepId}:${contextKind}`,
 };
 
-export class ModelStepInputBuildService {
-  private readonly idFactory: ModelStepInputBuildIds;
+export class ModelCallInputBuildService {
+  private readonly idFactory: ModelCallInputBuildIds;
 
-  constructor(private readonly options: ModelStepInputBuildServiceOptions = {}) {
+  constructor(private readonly options: ModelCallInputBuildServiceOptions = {}) {
     this.idFactory = {
       ...DEFAULT_IDS,
       ...options.idFactory,
     };
   }
 
-  async buildModelStepInput(input: BuildModelStepInputInput): Promise<BuildModelStepInputResult> {
-    const effectiveCwd = resolveModelStepEffectiveCwd({
+  async buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult> {
+    const effectiveCwd = resolveModelCallEffectiveCwd({
       projectRoot: input.projectRoot,
       requestedCwd: input.requestedCwd,
     });
@@ -113,7 +113,7 @@ export class ModelStepInputBuildService {
     const toolDefinitions = input.toolDefinitions ?? [];
     const availableCapabilitySummary = availableCapabilitySummaryFor(toolDefinitions);
     const buildRequest = this.buildRequest(input, effectiveCwd, availableCapabilitySummary);
-    const inputContext = buildModelStepInputContextFromBuildRequest({
+    const inputContext = buildModelCallInputContextFromBuildRequest({
       request: buildRequest,
       baseInputContext: input.baseInputContext,
       instructionSources,
@@ -140,8 +140,8 @@ export class ModelStepInputBuildService {
   }
 
   private async loadInstructionSources(
-    input: BuildModelStepInputInput,
-    effectiveCwd: ModelStepEffectiveCwd | undefined,
+    input: BuildModelCallInputInput,
+    effectiveCwd: ModelCallEffectiveCwd | undefined,
   ): Promise<AgentInstructionSourceSnapshot[]> {
     if (!this.options.instructionSourceService) {
       return [];
@@ -156,8 +156,8 @@ export class ModelStepInputBuildService {
   }
 
   private buildRequest(
-    input: BuildModelStepInputInput,
-    effectiveCwd: ModelStepEffectiveCwd | undefined,
+    input: BuildModelCallInputInput,
+    effectiveCwd: ModelCallEffectiveCwd | undefined,
     availableCapabilitySummary: string,
   ): ModelInputContextBuildRequest {
     const identity = {
@@ -168,7 +168,7 @@ export class ModelStepInputBuildService {
 
     return {
       requestId: this.idFactory.buildRequestId(identity),
-      contextId: createModelStepInputContextId({
+      contextId: createModelCallInputContextId({
         stepId: input.stepId,
         contextKind: input.contextKind,
       }),
@@ -206,7 +206,7 @@ export class ModelStepInputBuildService {
   }
 }
 
-function buildFailureForInputContext(inputContext: ModelInputContext): BuildModelStepInputFailure | undefined {
+function buildFailureForInputContext(inputContext: ModelInputContext): BuildModelCallInputFailure | undefined {
   const hasRequiredOverflow = inputContext.trace.budgetWarnings?.some(
     (warning) => warning.reason === 'required_context_over_budget',
   ) === true;
@@ -233,8 +233,8 @@ function availableCapabilitySummaryFor(toolDefinitions: ToolDefinition[]): strin
 }
 
 function runtimeFactsForInput(
-  input: BuildModelStepInputInput,
-  effectiveCwd: ModelStepEffectiveCwd | undefined,
+  input: BuildModelCallInputInput,
+  effectiveCwd: ModelCallEffectiveCwd | undefined,
 ): ModelInputContextBuildRequest['runtimeFacts'] {
   const facts: ModelInputContextBuildRequest['runtimeFacts'] = [];
 

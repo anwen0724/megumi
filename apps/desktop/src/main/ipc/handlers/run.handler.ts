@@ -8,13 +8,24 @@ import type {
   RunListBySessionPayload,
 } from '@megumi/shared/ipc';
 import { RunEventsListRequestSchema, RunListBySessionRequestSchema } from '@megumi/shared/ipc';
-import type { AgentRunPort } from '@megumi/coding-agent/run';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { Run } from '@megumi/shared/session';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
-// Run IPC handlers code against the product AgentRunPort, narrowed to run queries.
-export type RunHandlersService = Pick<AgentRunPort, 'listRunsBySession' | 'listRuntimeEventsByRun'>;
+export interface RunHandlersSessionService {
+  listRunsBySession(sessionId: string): Run[];
+}
+
+export interface RunHandlersAgentRunService {
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+}
+
+export interface RunHandlersServices {
+  sessionService: RunHandlersSessionService;
+  agentRunService: RunHandlersAgentRunService;
+}
 
 export interface RegisterRunHandlersOptions {
   logger?: RuntimeLogger;
@@ -22,7 +33,7 @@ export interface RegisterRunHandlersOptions {
 }
 
 export function registerRunHandlers(
-  service: RunHandlersService,
+  services: RunHandlersServices,
   options: RegisterRunHandlersOptions = {},
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
@@ -36,7 +47,7 @@ export function registerRunHandlers(
       handle: (
         request: RuntimeIpcRequest<RunListBySessionPayload, typeof IPC_CHANNELS.run.listBySession>,
       ): RunListBySessionData => ({
-        runs: service.listRunsBySession(request.payload.sessionId),
+        runs: services.sessionService.listRunsBySession(request.payload.sessionId),
       }),
       mapError: mapRunIpcError,
     }),
@@ -51,7 +62,7 @@ export function registerRunHandlers(
       handle: (
         request: RuntimeIpcRequest<RunEventsListPayload, typeof IPC_CHANNELS.run.events.list>,
       ): RunEventsListData => ({
-        events: service.listRuntimeEventsByRun(request.payload.runId) as RunEventsListData['events'],
+        events: services.agentRunService.listRuntimeEventsByRun(request.payload.runId) as RunEventsListData['events'],
       }),
       mapError: mapRunIpcError,
     }),

@@ -12,13 +12,13 @@ import {
   PlanByRunGetRequestSchema,
   PlanStatusUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { PermissionSnapshotService } from '@megumi/coding-agent/run/permissions';
+import type { PlanArtifactServicePort } from '@megumi/coding-agent/artifacts';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type PlanHandlersService = Pick<
-  PermissionSnapshotService,
+  PlanArtifactServicePort,
   'getPlanByRun' | 'updatePlanStatus'
 >;
 

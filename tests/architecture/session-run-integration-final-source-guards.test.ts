@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -129,14 +129,14 @@ describe('09 session run integration final source guards', () => {
     expect(ipcContracts).not.toMatch(/\boperationName\b.*RuntimeIpcRequestMeta/);
   });
 
-  it('routes session-run model input construction through ModelStepInputBuildService', () => {
+  it('routes session-run model input construction through ModelCallInputBuildService', () => {
     const sessionRun = source('packages/coding-agent/run/agent-run-service.ts');
 
-    expect(sessionRun).toContain('ModelStepInputBuildService');
-    expect(sessionRun).toContain('modelStepInputBuildService');
+    expect(sessionRun).toContain('ModelCallInputBuildService');
+    expect(sessionRun).toContain('modelCallInputBuildService');
     expect(sessionRun).toContain('modelInputRuntimeSourceOverrides');
-    expect(sessionRun).not.toContain('buildModelStepInputContextFromSources');
-    expect(sessionRun).not.toContain('createModelStepInputContextId');
+    expect(sessionRun).not.toContain('buildModelCallInputContextFromSources');
+    expect(sessionRun).not.toContain('createModelCallInputContextId');
     expect(sessionRun).not.toContain('loadInstructionSourcesForModelStep');
     expect(sessionRun).not.toContain("contextKind: 'preflight'");
     expect(sessionRun).not.toContain('initial_model_step_preflight');

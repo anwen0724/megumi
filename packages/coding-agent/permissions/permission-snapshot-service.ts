@@ -1,8 +1,6 @@
 ﻿import type { PermissionSnapshotRepository } from '@megumi/coding-agent/persistence/repos/permission-snapshot.repo';
 import {
   PermissionModeStateSchema,
-  type ImplementationPlanArtifactRecord,
-  type ImplementationPlanArtifactStatus,
   type PermissionModeState,
   type PermissionSnapshotRecord,
   type RunSourcePlanRelation,
@@ -10,30 +8,20 @@ import {
 
 export interface PermissionSnapshotServiceIds {
   permissionSnapshotId(): string;
-  planArtifactId(): string;
-}
-
-export interface PlanArtifactCompatibility {
-  syncImplementationPlanArtifact(plan: ImplementationPlanArtifactRecord): void;
 }
 
 export interface PermissionSnapshotServiceOptions {
   repository: Pick<
     PermissionSnapshotRepository,
     | 'savePermissionSnapshot'
-    | 'saveImplementationPlan'
     | 'getImplementationPlan'
-    | 'getImplementationPlanByProducingRun'
-    | 'updateImplementationPlanStatus'
     | 'saveSourcePlanRelation'
   >;
-  planArtifactCompatibility?: PlanArtifactCompatibility;
   ids?: PermissionSnapshotServiceIds;
 }
 
 const defaultIds: PermissionSnapshotServiceIds = {
   permissionSnapshotId: () => `permission-snapshot:${crypto.randomUUID()}`,
-  planArtifactId: () => `plan:${crypto.randomUUID()}`,
 };
 
 export class PermissionSnapshotService {
@@ -73,52 +61,6 @@ export class PermissionSnapshotService {
     return this.options.repository.saveSourcePlanRelation(input);
   }
 
-  createPlanRecordForRun(input: {
-    runId: string;
-    goal: string;
-    permissionModeState: PermissionModeState;
-    createdAt: string;
-  }): ImplementationPlanArtifactRecord | undefined {
-    if (input.permissionModeState.permissionMode !== 'plan') {
-      return undefined;
-    }
-
-    const plan = this.options.repository.saveImplementationPlan({
-      planArtifactId: this.ids.planArtifactId(),
-      producingRunId: input.runId,
-      title: input.goal,
-      status: 'proposed',
-      createdAt: input.createdAt,
-      updatedAt: input.createdAt,
-      metadata: {
-        artifactKind: 'implementation_plan',
-        permissionMode: input.permissionModeState.permissionMode,
-      },
-    });
-
-    this.options.planArtifactCompatibility?.syncImplementationPlanArtifact(plan);
-    return plan;
-  }
-
-  getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined {
-    return this.options.repository.getImplementationPlanByProducingRun(runId);
-  }
-
-  updatePlanStatus(input: {
-    planArtifactId: string;
-    status: ImplementationPlanArtifactStatus;
-    updatedAt: string;
-    supersededByPlanId?: string;
-  }): ImplementationPlanArtifactRecord {
-    const plan = this.options.repository.updateImplementationPlanStatus(input);
-
-    if (!plan) {
-      throw new Error('Implementation plan was not found.');
-    }
-
-    this.options.planArtifactCompatibility?.syncImplementationPlanArtifact(plan);
-    return plan;
-  }
 }
 
 function normalizePermissionModeState(input: PermissionModeState | string): PermissionModeState {

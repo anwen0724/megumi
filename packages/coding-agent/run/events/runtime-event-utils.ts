@@ -1,6 +1,6 @@
-// Provides run-stream event utilities that are platform-independent and safe for package use.
+﻿// Provides run-stream event utilities that are platform-independent and safe for package use.
 import type { RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
-import type { BuildModelStepInputFailure } from '../context';
+import type { BuildModelCallInputFailure } from '../context';
 
 const TEXT_DELTA_FLUSH_DELAY_MS = 50;
 const TEXT_DELTA_MAX_CHARS = 512;
@@ -129,7 +129,7 @@ export async function* coalesceTextDeltaRuntimeEvents(
   }
 }
 
-export function modelStepInputBuildFailureToRuntimeError(failure: BuildModelStepInputFailure): RuntimeError {
+export function modelCallInputBuildFailureToRuntimeError(failure: BuildModelCallInputFailure): RuntimeError {
   return {
     code: 'context_budget_exceeded',
     message: failure.message,

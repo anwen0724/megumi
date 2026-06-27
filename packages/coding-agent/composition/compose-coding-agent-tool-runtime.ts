@@ -1,4 +1,4 @@
-// Composes Coding Agent tool registry, local tool adapters, and tool orchestration.
+﻿// Composes Coding Agent tool registry, local tool adapters, and tool orchestration.
 import fs from 'fs-extra';
 import { createBuiltInToolRegistry } from '../tools/built-ins';
 import type { ToolRegistry } from '../tools/registry';
@@ -12,7 +12,7 @@ import type { AgentRunToolRuntimeFactory } from '../run/run-contract';
 import { createBuiltInToolSourceExecutor } from '../tools/execution/built-in-tool-source-executor';
 import { createExternalTestToolSourceExecutor } from '../tools/execution/external-test-tool-source-executor';
 import { createToolExecutionRouter } from '../tools/execution/tool-execution-router';
-import type { PermissionSettingsProvider } from '../run/permissions/permission-settings-provider';
+import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
 
 export function composeCodingAgentToolRegistry(): ToolRegistry {
   return createBuiltInToolRegistry();

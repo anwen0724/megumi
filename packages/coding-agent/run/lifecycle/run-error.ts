@@ -2,6 +2,7 @@ import type {
   RuntimeError,
   RuntimeErrorSource,
 } from '@megumi/shared/runtime';
+import type { RunTerminalReason } from '@megumi/shared/session';
 
 export interface RuntimeExceptionOptions {
   cause?: unknown;
@@ -58,5 +59,28 @@ export function assertRuntime(
   if (!condition) {
     throwRuntimeError(error);
   }
+}
+
+export function createTerminalRuntimeError(input: {
+  reason: RunTerminalReason;
+  code: RuntimeError['code'];
+  message: string;
+  source: RuntimeError['source'];
+  retryable?: boolean;
+  debugId?: string;
+  details?: Record<string, unknown>;
+}): RuntimeError {
+  return {
+    code: input.code,
+    message: input.message,
+    severity: 'error',
+    retryable: input.retryable ?? false,
+    source: input.source,
+    ...(input.debugId ? { debugId: input.debugId } : {}),
+    details: {
+      ...(input.details ?? {}),
+      reason: input.reason,
+    },
+  };
 }
 

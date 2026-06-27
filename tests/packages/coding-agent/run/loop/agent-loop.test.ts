@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildModelStepInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
@@ -19,7 +19,7 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
 }
 
 function createRequest(overrides: Partial<ModelStepRuntimeRequest> = {}): ModelStepRuntimeRequest {
-  const inputContext = buildModelStepInputContextFromSources({
+  const inputContext = buildModelCallInputContextFromSources({
     contextId: 'model-input-context:request-1',
     sessionId: 'session-1',
     runId: 'run-1',
@@ -456,7 +456,7 @@ describe('run model tool loop', () => {
       },
       buildContinuationInputContext: async (input) => {
         callbackCallCount += 1;
-        return buildModelStepInputContextFromSources({
+        return buildModelCallInputContextFromSources({
           ...input,
           instructionSources: [{
             sourceId: 'project-instruction:AGENTS.md',

@@ -98,7 +98,7 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
 
     // First compose triggers recovery startup backfill.
     runtime = composeRuntime(home);
-    const after = runtime.sessionRunService.listTimelineMessagesBySession({ projectId, sessionId });
+    const after = runtime.sessionService.listTimelineMessagesBySession({ projectId, sessionId });
     // Backfill mirrors a normal turn: the triggering user prompt, then the failure.
     expect(after.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
     const userMessage = after.messages[0];
@@ -109,7 +109,7 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
 
     // Second compose must NOT duplicate (idempotent via timeline_run_commits row).
     runtime = composeRuntime(home);
-    const again = runtime.sessionRunService.listTimelineMessagesBySession({ projectId, sessionId });
+    const again = runtime.sessionService.listTimelineMessagesBySession({ projectId, sessionId });
     expect(again.messages.length).toBe(2);
   }, 30000);
 
@@ -118,7 +118,7 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
     const { projectId, sessionId } = seedOrphanRun(home, 'run-cancelled-1', 'cancelled');
 
     runtime = composeRuntime(home);
-    const after = runtime.sessionRunService.listTimelineMessagesBySession({ projectId, sessionId });
+    const after = runtime.sessionService.listTimelineMessagesBySession({ projectId, sessionId });
     expect(after.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
   }, 30000);
 });

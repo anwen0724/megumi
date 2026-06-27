@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { createRuleBasedPermissionClassifier } from '@megumi/coding-agent/run/permissions/permission-classifier';
+import { createRuleBasedPermissionClassifier } from '@megumi/coding-agent/permissions/permission-classifier';
 
 describe('rule-based permission classifier', () => {
   const classifier = createRuleBasedPermissionClassifier();

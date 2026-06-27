@@ -59,7 +59,9 @@ describe('Coding Agent product runtime', () => {
       },
     });
 
-    expect(runtime.sessionRunService).toBeDefined();
+    expect(runtime.sessionService).toBeDefined();
+    expect(runtime.sessionBranchService).toBeDefined();
+    expect(runtime.agentRunService).toBeDefined();
     expect(runtime.recoveryService).toBeDefined();
     expect(runtime.artifactService).toBeDefined();
     expect(runtime.memoryService).toBeDefined();
