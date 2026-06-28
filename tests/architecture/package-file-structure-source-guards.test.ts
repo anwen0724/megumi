@@ -522,20 +522,34 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
     const workspaceIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/workspace/index.ts'), 'utf8');
+    const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
+    const toolRegistrySnapshotSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/tools/tool-registry-snapshot.ts'),
+      'utf8',
+    );
 
     expect(runContractSource).not.toContain('export interface AgentRunPostRunHooksPort');
     expect(runContractSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
     expect(runContractSource).not.toContain('export interface AgentRunRetryCoordinatorPort');
     expect(runContractSource).not.toContain('export interface SessionRunWorkspaceChangeReadPort');
+    expect(runContractSource).not.toContain('export interface SessionRunToolDefinitionProvider');
+    expect(runContractSource).not.toContain('export interface SessionRunProviderCapabilitySummaryProvider');
+    expect(runContractSource).not.toContain('export interface SessionRunToolRegistrySnapshotService');
     expect(runContractSource).toContain('postRunHooks: PostRunHooksPort;');
     expect(runContractSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
     expect(runContractSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
     expect(runContractSource).toContain('workspaceChanges?: WorkspaceChangeReadPort;');
+    expect(runContractSource).toContain('toolDefinitionProvider?: ToolSetRegistryProvider;');
+    expect(runContractSource).toContain('providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;');
+    expect(runContractSource).toContain('toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;');
     expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
     expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
     expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');
     expect(workspaceChangeReadSource).toContain('export interface WorkspaceChangeReadPort');
     expect(workspaceIndexSource).toContain("export * from './workspace-change-read';");
+    expect(agentLoopSource).toContain('export interface ToolSetRegistryProvider');
+    expect(agentLoopSource).toContain('export interface ToolSetCapabilityProvider');
+    expect(toolRegistrySnapshotSource).toContain('export interface ToolRegistrySnapshotServicePort');
     expect(agentRunServiceSource).not.toContain('new RunCompletionHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new PostRunHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');

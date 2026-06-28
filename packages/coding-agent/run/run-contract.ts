@@ -15,7 +15,7 @@ import type { ProviderId } from '@megumi/shared/provider';
 import type { RunContext, ModelCapabilitySummary } from '@megumi/shared/run';
 import type { Run, RunStep } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
-import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { ToolResult } from '@megumi/shared/tool';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
@@ -52,6 +52,10 @@ import type {
 } from '../agent-loop/tool-call';
 import type { ToolCallRunnerService } from '../agent-loop/tool-call';
 import type { ModelCallProvider } from '../agent-loop/model-call';
+import type {
+  ToolSetCapabilityProvider,
+  ToolSetRegistryProvider,
+} from '../agent-loop';
 import type { RunHostBoundaryPort, RunIdFactory } from '../state/lifecycle';
 import type {
   RunRetryCoordinatorPort,
@@ -61,8 +65,7 @@ import type {
   PostRunHooksPort,
 } from '../hooks';
 import type {
-  RunToolRegistrySnapshotBuildInput,
-  RunToolRegistrySnapshotBuildResult,
+  ToolRegistrySnapshotServicePort,
 } from '../tools/tool-registry-snapshot';
 import type {
   ChatStreamEventSink,
@@ -94,27 +97,6 @@ export interface SessionRunContextService {
     modelCapabilitySummary: ModelCapabilitySummary;
     contextBudgetPolicy: ContextBudgetPolicy;
   }): RunContext;
-}
-
-export interface SessionRunToolDefinitionProvider {
-  listDefinitions(input: {
-    runId: string;
-    permissionMode: PermissionMode;
-    providerCapabilitySummary?: {
-      supportsToolCall?: boolean;
-    };
-  }): ToolDefinition[];
-}
-
-export interface SessionRunProviderCapabilitySummaryProvider {
-  getProviderCapabilitySummary(input: {
-    providerId: string;
-    modelId: string;
-  }): { supportsToolCall?: boolean };
-}
-
-export interface SessionRunToolRegistrySnapshotService {
-  createRunSnapshot(input: RunToolRegistrySnapshotBuildInput): RunToolRegistrySnapshotBuildResult;
 }
 
 export interface SessionRunAgentInstructionSourceService {
@@ -222,9 +204,9 @@ export interface AgentRunServiceOptions {
   planArtifactService?: PlanArtifactServicePort;
   modelStepProvider?: ModelCallProvider;
   toolRuntimeFactory?: ToolRuntimeFactory;
-  toolDefinitionProvider?: SessionRunToolDefinitionProvider;
-  toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
-  providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
+  toolDefinitionProvider?: ToolSetRegistryProvider;
+  toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
+  providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
   toolRepository?: AgentRunToolRepositoryPort;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelCallInputBuildService?: SessionRunModelCallInputBuildService;

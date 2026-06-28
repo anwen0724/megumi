@@ -42,6 +42,10 @@ export interface RunToolRegistrySnapshotBuildResult {
   };
 }
 
+export interface ToolRegistrySnapshotServicePort {
+  createRunSnapshot(input: RunToolRegistrySnapshotBuildInput): RunToolRegistrySnapshotBuildResult;
+}
+
 export class ToolRegistrySnapshotService {
   constructor(private readonly repository: ToolRegistrySnapshotRepositoryPort) {}
 

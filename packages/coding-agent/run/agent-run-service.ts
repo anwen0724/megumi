@@ -36,6 +36,8 @@ import {
   type AgentLoopOptions,
   streamApprovalResumeModelLoop,
   ToolSetService,
+  type ToolSetCapabilityProvider,
+  type ToolSetRegistryProvider,
 } from '../agent-loop';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
@@ -128,6 +130,7 @@ import type { PostRunHooksPort } from '../hooks';
 import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
+  ToolRegistrySnapshotServicePort,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import type {
   AgentRunServiceClock,
@@ -140,11 +143,8 @@ import type {
   SessionRunMemoryRecallService,
   SessionRunMemorySettingsProvider,
   SessionRunModelCallInputBuildService,
-  SessionRunProviderCapabilitySummaryProvider,
   SessionRunSessionContextInputService,
   SessionRunSessionInstructionSourceProvider,
-  SessionRunToolDefinitionProvider,
-  SessionRunToolRegistrySnapshotService,
 } from './run-contract';
 
 interface ApprovalResumeGroup {
@@ -207,9 +207,9 @@ export class AgentRunService implements AgentRunPort {
   private readonly planArtifactService?: PlanArtifactServicePort;
   private readonly modelStepProvider?: ModelCallProvider;
   private readonly toolRuntimeFactory?: ToolRuntimeFactory;
-  private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
-  private readonly toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
-  private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
+  private readonly toolDefinitionProvider?: ToolSetRegistryProvider;
+  private readonly toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
+  private readonly providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
   private readonly toolRepository?: AgentRunToolRepositoryPort;
   private readonly modelCallInputBuildService: SessionRunModelCallInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
