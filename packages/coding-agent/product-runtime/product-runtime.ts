@@ -14,6 +14,11 @@ import type { PermissionMode } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Session } from '@megumi/shared/session';
+import type {
+  SessionMessageCancelPayload,
+  SessionMessageSendData,
+  SessionMessageSendPayload,
+} from '@megumi/shared/ipc';
 
 export interface ProductRuntimeSubmitInput {
   requestId?: string;
@@ -39,6 +44,28 @@ export interface ProductRuntimeSubmitInputResult {
 
 export interface CodingAgentProductRuntime {
   submitInput(input: ProductRuntimeSubmitInput): Promise<ProductRuntimeSubmitInputResult>;
+  sendSessionMessage(input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+  }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
+  cancelSessionMessage(payload: SessionMessageCancelPayload): boolean;
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+  sessionService: SessionServicePort;
+  sessionBranchService: SessionBranchServicePort;
+  recoveryService: RecoveryService;
+  toolService: ToolService;
+  artifactService: ArtifactServicePort;
+  planArtifactService: PlanArtifactServicePort;
+  memoryService: MemoryService;
+  runContextService: RunContextServicePort;
+  settingsService: ProductSettingsPort;
+  providerSettingsService: ProviderSettingsPort;
+  projectService: ProjectService;
+  dispose(): void;
+}
+
+export interface CodingAgentProductRuntimeServices {
   sessionService: SessionServicePort;
   sessionBranchService: SessionBranchServicePort;
   agentRunService: AgentRunPort;
@@ -54,14 +81,26 @@ export interface CodingAgentProductRuntime {
   dispose(): void;
 }
 
-export type CodingAgentProductRuntimeServices = Omit<CodingAgentProductRuntime, 'submitInput'>;
-
 export function createCodingAgentProductRuntime(
   services: CodingAgentProductRuntimeServices,
 ): CodingAgentProductRuntime {
   return {
     submitInput: (input) => submitInput(services, input),
-    ...services,
+    sendSessionMessage: (input) => services.agentRunService.sendSessionMessage(input),
+    cancelSessionMessage: (payload) => services.agentRunService.cancelSessionMessage(payload),
+    listRuntimeEventsByRun: (runId) => services.agentRunService.listRuntimeEventsByRun(runId),
+    sessionService: services.sessionService,
+    sessionBranchService: services.sessionBranchService,
+    recoveryService: services.recoveryService,
+    toolService: services.toolService,
+    artifactService: services.artifactService,
+    planArtifactService: services.planArtifactService,
+    memoryService: services.memoryService,
+    runContextService: services.runContextService,
+    settingsService: services.settingsService,
+    providerSettingsService: services.providerSettingsService,
+    projectService: services.projectService,
+    dispose: services.dispose,
   };
 }
 

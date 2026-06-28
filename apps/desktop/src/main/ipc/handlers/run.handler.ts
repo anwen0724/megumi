@@ -18,13 +18,13 @@ export interface RunHandlersSessionService {
   listRunsBySession(sessionId: string): Run[];
 }
 
-export interface RunHandlersAgentRunService {
+export interface RunHandlersProductRuntime {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
 
 export interface RunHandlersServices {
   sessionService: RunHandlersSessionService;
-  agentRunService: RunHandlersAgentRunService;
+  productRuntime: RunHandlersProductRuntime;
 }
 
 export interface RegisterRunHandlersOptions {
@@ -62,7 +62,7 @@ export function registerRunHandlers(
       handle: (
         request: RuntimeIpcRequest<RunEventsListPayload, typeof IPC_CHANNELS.run.events.list>,
       ): RunEventsListData => ({
-        events: services.agentRunService.listRuntimeEventsByRun(request.payload.runId) as RunEventsListData['events'],
+        events: services.productRuntime.listRuntimeEventsByRun(request.payload.runId) as RunEventsListData['events'],
       }),
       mapError: mapRunIpcError,
     }),

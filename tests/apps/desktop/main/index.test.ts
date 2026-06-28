@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
   const logsPath = `${homePath}/logs`;
   const codingAgentRuntime = {
+    submitInput: vi.fn(),
+    sendSessionMessage: vi.fn(),
+    cancelSessionMessage: vi.fn(),
+    listRuntimeEventsByRun: vi.fn(),
     sessionService: {
       createSession: vi.fn(),
       listSessions: vi.fn(),
@@ -17,12 +21,6 @@ const mocks = vi.hoisted(() => {
     sessionBranchService: {
       createBranchDraft: vi.fn(),
       cancelBranchDraft: vi.fn(),
-    },
-    agentRunService: {
-      sendSessionMessage: vi.fn(),
-      cancelSessionMessage: vi.fn(),
-      listRuntimeEventsByRun: vi.fn(),
-      startRun: vi.fn(),
     },
     planArtifactService: {
       getPlanByRun: vi.fn(),
@@ -604,11 +602,11 @@ describe('main runtime logger composition', () => {
       sessionHandlers: {
         sessionService: mocks.codingAgentRuntime.sessionService,
         sessionBranchService: mocks.codingAgentRuntime.sessionBranchService,
-        agentRunService: mocks.codingAgentRuntime.agentRunService,
+        productRuntime: mocks.codingAgentRuntime,
       },
       runHandlers: {
         sessionService: mocks.codingAgentRuntime.sessionService,
-        agentRunService: mocks.codingAgentRuntime.agentRunService,
+        productRuntime: mocks.codingAgentRuntime,
       },
       runContextService: mocks.codingAgentRuntime.runContextService,
       planService: mocks.codingAgentRuntime.planArtifactService,

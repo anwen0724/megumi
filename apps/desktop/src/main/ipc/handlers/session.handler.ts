@@ -42,7 +42,7 @@ export interface SessionHandlersSessionService {
   listTimelineMessagesBySession(payload: SessionTimelineListPayload): SessionTimelineListData;
 }
 
-export interface SessionHandlersAgentRunService {
+export interface SessionHandlersProductRuntime {
   sendSessionMessage(input: {
     requestId: string;
     payload: SessionMessageSendPayload;
@@ -75,7 +75,7 @@ export interface SessionHandlersBranchService {
 
 export interface SessionHandlersServices {
   sessionService: SessionHandlersSessionService;
-  agentRunService: SessionHandlersAgentRunService;
+  productRuntime: SessionHandlersProductRuntime;
   sessionBranchService: SessionHandlersBranchService;
 }
 
@@ -157,7 +157,7 @@ export function registerSessionHandlers(
         event,
         context,
       ): Promise<SessionMessageSendData> => {
-        const result = await services.agentRunService.sendSessionMessage({
+        const result = await services.productRuntime.sendSessionMessage({
           requestId: request.requestId,
           payload: request.payload,
           runtimeContext: context,
@@ -178,7 +178,7 @@ export function registerSessionHandlers(
       handle: (
         request: RuntimeIpcRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.session.message.cancel>,
       ): SessionMessageCancelData => ({
-        cancelled: services.agentRunService.cancelSessionMessage(request.payload),
+        cancelled: services.productRuntime.cancelSessionMessage(request.payload),
       }),
       mapError: mapSessionIpcError,
     }),

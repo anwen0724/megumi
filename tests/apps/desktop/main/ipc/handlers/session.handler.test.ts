@@ -63,7 +63,7 @@ function createSessionServiceMock(overrides: Record<string, unknown> = {}) {
   return {
     ...flat,
     sessionService: flat,
-    agentRunService: flat,
+    productRuntime: flat,
     sessionBranchService: flat,
   };
 }

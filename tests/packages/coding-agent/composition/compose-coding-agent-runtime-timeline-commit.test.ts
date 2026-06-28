@@ -80,7 +80,7 @@ async function sendOneMessage(runtime: CodingAgentProductRuntime, projectId: str
     workspacePath,
     createdAt: '2026-06-24T00:00:00.000Z',
   });
-  const result = await runtime.agentRunService.sendSessionMessage({
+  const result = await runtime.sendSessionMessage({
     requestId: 'request-1',
     payload: {
       sessionId: String(session.sessionId),

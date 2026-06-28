@@ -23,10 +23,10 @@ describe('registerRunHandlers', () => {
 
     registerRunHandlers({
       sessionService: {
-      listRunsBySession: vi.fn(),
+        listRunsBySession: vi.fn(),
       },
-      agentRunService: {
-      listRuntimeEventsByRun: vi.fn(),
+      productRuntime: {
+        listRuntimeEventsByRun: vi.fn(),
       },
     });
 
@@ -50,10 +50,10 @@ describe('registerRunHandlers', () => {
     ];
     const service = {
       sessionService: {
-      listRunsBySession: vi.fn(() => runs),
+        listRunsBySession: vi.fn(() => runs),
       },
-      agentRunService: {
-      listRuntimeEventsByRun: vi.fn(),
+      productRuntime: {
+        listRuntimeEventsByRun: vi.fn(),
       },
     };
 
@@ -99,10 +99,10 @@ describe('registerRunHandlers', () => {
     ];
     const service = {
       sessionService: {
-      listRunsBySession: vi.fn(),
+        listRunsBySession: vi.fn(),
       },
-      agentRunService: {
-      listRuntimeEventsByRun: vi.fn(() => events),
+      productRuntime: {
+        listRuntimeEventsByRun: vi.fn(() => events),
       },
     };
 
@@ -129,7 +129,7 @@ describe('registerRunHandlers', () => {
         channel: IPC_CHANNELS.run.events.list,
       },
     });
-    expect(service.agentRunService.listRuntimeEventsByRun).toHaveBeenCalledWith('run-1');
+    expect(service.productRuntime.listRuntimeEventsByRun).toHaveBeenCalledWith('run-1');
   });
 });
 

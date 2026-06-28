@@ -55,7 +55,6 @@ export function composeDesktopMain() {
 
   const sessionService = codingAgentRuntime.sessionService;
   const sessionBranchService = codingAgentRuntime.sessionBranchService;
-  const agentRunService = codingAgentRuntime.agentRunService;
 
   return {
     megumiHomePaths,
@@ -63,8 +62,8 @@ export function composeDesktopMain() {
     appSettingsService,
     chatStreamBroadcaster,
     providerService: codingAgentRuntime.providerSettingsService,
-    sessionHandlers: { sessionService, sessionBranchService, agentRunService },
-    runHandlers: { sessionService, agentRunService },
+    sessionHandlers: { sessionService, sessionBranchService, productRuntime: codingAgentRuntime },
+    runHandlers: { sessionService, productRuntime: codingAgentRuntime },
     runContextService: codingAgentRuntime.runContextService,
     planService: codingAgentRuntime.planArtifactService,
     toolService: codingAgentRuntime.toolService,

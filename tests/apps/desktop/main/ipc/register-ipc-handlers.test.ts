@@ -88,15 +88,15 @@ describe('registerAllHandlers', () => {
     };
     const sessionHandlers = {
       sessionService: flatSessionService,
-      agentRunService: flatSessionService,
+      productRuntime: flatSessionService,
       sessionBranchService: flatSessionService,
     };
     const runHandlers = {
       sessionService: {
-      listRunsBySession: vi.fn(),
+        listRunsBySession: vi.fn(),
       },
-      agentRunService: {
-      listRuntimeEventsByRun: vi.fn(),
+      productRuntime: {
+        listRuntimeEventsByRun: vi.fn(),
       },
     };
     const providerService = {
