@@ -23,7 +23,7 @@ import {
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
 } from '../../events';
-import type { ModelCallPort } from '../model-call/model-call-contract';
+import type { ModelCallPort } from '../../agent-loop/model-call';
 import {
   streamCodingAgentModelToolLoop,
   type CodingAgentRunSourceOverrideProvider,

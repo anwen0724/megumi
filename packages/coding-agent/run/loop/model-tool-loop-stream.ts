@@ -9,7 +9,7 @@ import type {
   ModelInputMemoryRecallSource,
 } from '../../context';
 import { coalesceTextDeltaRuntimeEvents, modelCallInputBuildFailureToRuntimeError } from '../../events';
-import type { ModelCallPort } from '../model-call/model-call-contract';
+import type { ModelCallPort } from '../../agent-loop/model-call';
 import type {
   PendingToolApprovalContinuation,
   ToolApprovalResumePort,

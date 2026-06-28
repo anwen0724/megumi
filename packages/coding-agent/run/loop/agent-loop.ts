@@ -12,8 +12,7 @@ import {
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
-import type { ModelCallPort } from '../model-call/model-call-contract';
-import { runModelCall } from '../model-call/model-call-runner';
+import { runModelCall, type ModelCallPort } from '../../agent-loop/model-call';
 import { createTerminalRuntimeError } from '../../state';
 import type {
   PendingToolApprovalContinuation,

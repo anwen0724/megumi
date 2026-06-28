@@ -70,7 +70,7 @@ import type {
   ToolCallRunner,
 } from './tool-calls';
 import type { ToolCallRunnerService } from './tool-calls';
-import type { ModelCallCompletionResult } from './model-call';
+import type { ModelCallCompletionResult } from '../agent-loop/model-call';
 import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
 import type {
   CancelActiveSessionMessageRunInput,

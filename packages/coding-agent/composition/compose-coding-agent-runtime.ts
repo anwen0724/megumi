@@ -17,7 +17,7 @@ import {
   ProviderRegistry,
   type AiClient,
 } from '@megumi/ai';
-import { createModelCallRunner, type ProviderRuntimeConfig } from '../run/model-call';
+import { createModelCallRunner, type ProviderRuntimeConfig } from '../agent-loop/model-call';
 import { TimelineHistoryCommitProjectorService } from '../projections/timeline';
 import type { MemorySettingsProvider } from './compose-coding-agent-memory';
 import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
