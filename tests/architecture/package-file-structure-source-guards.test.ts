@@ -517,16 +517,25 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'),
       'utf8',
     );
+    const workspaceChangeReadSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/workspace/workspace-change-read.ts'),
+      'utf8',
+    );
+    const workspaceIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/workspace/index.ts'), 'utf8');
 
     expect(runContractSource).not.toContain('export interface AgentRunPostRunHooksPort');
     expect(runContractSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
     expect(runContractSource).not.toContain('export interface AgentRunRetryCoordinatorPort');
+    expect(runContractSource).not.toContain('export interface SessionRunWorkspaceChangeReadPort');
     expect(runContractSource).toContain('postRunHooks: PostRunHooksPort;');
     expect(runContractSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
     expect(runContractSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
+    expect(runContractSource).toContain('workspaceChanges?: WorkspaceChangeReadPort;');
     expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
     expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
     expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');
+    expect(workspaceChangeReadSource).toContain('export interface WorkspaceChangeReadPort');
+    expect(workspaceIndexSource).toContain("export * from './workspace-change-read';");
     expect(agentRunServiceSource).not.toContain('new RunCompletionHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new PostRunHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');

@@ -17,11 +17,6 @@ import type { Run, RunStep } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
-import type {
-  WorkspaceChangedFile,
-  WorkspaceChangeSet,
-  WorkspaceChangeSummary,
-} from '@megumi/shared/workspace';
 
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type {
@@ -72,6 +67,7 @@ import type {
 import type {
   ChatStreamEventSink,
 } from '../projections/chat-stream';
+import type { WorkspaceChangeReadPort } from '../workspace';
 
 export interface AgentRunServiceClock {
   now(): string;
@@ -201,13 +197,6 @@ export interface SessionRunEffectiveCwdProvider {
   getRunEffectiveCwd(input: { sessionId: string; runId: string; stepId: string }): string | undefined;
 }
 
-export interface SessionRunWorkspaceChangeReadPort {
-  listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
-  listChangeSetsByRun?(runId: string): WorkspaceChangeSet[];
-  getChangeSummary?(changeSetId: string): WorkspaceChangeSummary | undefined;
-  listChangedFilesByChangeSet?(changeSetId: string): WorkspaceChangedFile[];
-}
-
 export interface AgentRunServiceHomePaths {
   homePath: string;
   sqlitePath: string;
@@ -254,7 +243,7 @@ export interface AgentRunServiceOptions {
   sessionCompactionRepository?: SessionCompactionOrchestratorRepository;
   activePathRepository?: SessionActivePathRepository;
   sessionBranchService?: SessionBranchServicePort;
-  workspaceChanges?: SessionRunWorkspaceChangeReadPort;
+  workspaceChanges?: WorkspaceChangeReadPort;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
   timelineMessageRepository?: {

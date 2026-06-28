@@ -145,7 +145,6 @@ import type {
   SessionRunSessionInstructionSourceProvider,
   SessionRunToolDefinitionProvider,
   SessionRunToolRegistrySnapshotService,
-  SessionRunWorkspaceChangeReadPort,
 } from './run-contract';
 
 interface ApprovalResumeGroup {

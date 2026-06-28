@@ -24,8 +24,8 @@ import {
   AgentRunService,
   type SessionRunContextService,
   type AgentRunServiceOptions,
-  type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/coding-agent/run';
+import type { WorkspaceChangeReadPort } from '@megumi/coding-agent/workspace';
 import type {
   AgentRunExecutionFactRepositoryPort,
   AgentRunMessageRepositoryPort,
@@ -925,7 +925,7 @@ function successfulModelStepInputBuild(input: BuildModelCallInputInput): BuildMo
 function createServiceWithProviderStream(
   events: (request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[],
   options?: {
-    workspaceChanges?: SessionRunWorkspaceChangeReadPort;
+    workspaceChanges?: WorkspaceChangeReadPort;
   },
 ) {
   db = new Database(':memory:');
