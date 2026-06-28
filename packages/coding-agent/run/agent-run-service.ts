@@ -6,8 +6,7 @@ import {
   canResumeApprovalFromRunStatus,
   resumeRunAfterApproval,
 } from '../state';
-import { runTurn } from './lifecycle/run-lifecycle';
-import type { RunHostBoundaryPort } from './lifecycle';
+import { runTurn, type RunHostBoundaryPort } from '../state/lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   ensureToolCallRunnerService,

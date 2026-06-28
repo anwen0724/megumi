@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runTurn } from '@megumi/coding-agent/run';
+import { runTurn } from '@megumi/coding-agent/state';
 import { createRunCreatedEvent } from '@megumi/coding-agent/events';
-import type { RunLifecycleSink } from '@megumi/coding-agent/run';
+import type { RunLifecycleSink } from '@megumi/coding-agent/state';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 function createSink() {

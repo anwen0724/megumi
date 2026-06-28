@@ -9,7 +9,7 @@ import type {
 import type { PermissionModeState } from '@megumi/shared/permission';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '../../state';
+import { normalizeRuntimeError } from '../run-error';
 import {
   createContextUpdateInputPreview,
   toContextPatchAppliedPayload,
@@ -40,7 +40,7 @@ import {
   createCancelObservation,
   createCheckpointObservation,
   toCheckpointCreatedPayload,
-} from '../../state';
+} from '../recovery-observation-mapper';
 import {
   createDefaultRunIds,
   defaultRunClock,

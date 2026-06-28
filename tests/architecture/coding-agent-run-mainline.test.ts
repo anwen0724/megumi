@@ -40,7 +40,8 @@ describe('coding agent run mainline guards', () => {
   it('keeps obsolete run structure files removed and explicit replacements present', () => {
     expect(exists('packages/coding-agent/run/tool-calls/tool-call-loop.ts')).toBe(false);
     expect(exists('packages/coding-agent/run/lifecycle/run-state-repository.ts')).toBe(false);
-    expect(exists('packages/coding-agent/run/lifecycle/run-lifecycle.ts')).toBe(true);
+    expect(exists('packages/coding-agent/run/lifecycle')).toBe(false);
+    expect(exists('packages/coding-agent/state/lifecycle/run-lifecycle.ts')).toBe(true);
   });
 
   it('keeps model-call independent from loop and tool-call internals', () => {

@@ -502,14 +502,16 @@ describe('package and file structure source guards', () => {
   it('keeps retry lifecycle ownership in the top-level state module', () => {
     const stateRetryPath = join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts');
     const runRetryPath = join(repoRoot, 'packages/coding-agent/run/lifecycle/run-retry-coordinator.ts');
-    const runLifecycleIndex = readFileSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/index.ts'), 'utf8');
+    const stateLifecycleIndex = readFileSync(join(repoRoot, 'packages/coding-agent/state/lifecycle/index.ts'), 'utf8');
     const stateIndex = readFileSync(join(repoRoot, 'packages/coding-agent/state/index.ts'), 'utf8');
 
     expect(existsSync(stateRetryPath)).toBe(true);
     expect(existsSync(runRetryPath)).toBe(false);
-    expect(runLifecycleIndex).not.toContain('run-retry-coordinator');
-    expect(runLifecycleIndex).not.toContain('../../state');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle'))).toBe(false);
+    expect(stateLifecycleIndex).toContain("export * from './run-lifecycle';");
+    expect(stateLifecycleIndex).toContain("export * from './run-types';");
     expect(stateIndex).toContain("export * from './run-retry-coordinator';");
+    expect(stateIndex).toContain("export * from './lifecycle';");
   });
 
   it('keeps approval resume event shaping in the approval submodule', () => {
