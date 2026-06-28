@@ -130,7 +130,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   });
   const recoveryService = composeCodingAgentRecoveryRuntime({
     recoveryRepository: persistence.recoveryRepository,
-    sessionRunRepository: persistence.sessionRunRepository,
+    runRepository: persistence.runRecordRepository,
+    sessionRepository: persistence.sessionRecordRepository,
+    runtimeEventRepository: persistence.runtimeEventRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
     timelineMessageRepository: persistence.timelineMessageRepository,
     sessionRunService: sessionRuntime.agentRunService,

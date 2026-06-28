@@ -2,7 +2,9 @@
 import fs from 'fs-extra';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { RecoveryRepository } from '../persistence/repos/recovery.repo';
-import { SessionRunRepository } from '../persistence/repos/session-run.repo';
+import { RunRecordRepository } from '../persistence/repos/run-record.repo';
+import { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo';
+import { SessionRecordRepository } from '../persistence/repos/session-record.repo';
 import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
 import { createRecoveryService, type RecoveryLogger } from '../run/recovery';
@@ -11,7 +13,9 @@ import type { AgentRunService } from '../run/agent-run-service';
 
 export interface ComposeCodingAgentRecoveryRuntimeOptions {
   recoveryRepository: RecoveryRepository;
-  sessionRunRepository: SessionRunRepository;
+  runRepository: RunRecordRepository;
+  sessionRepository: SessionRecordRepository;
+  runtimeEventRepository: RuntimeEventRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
   timelineMessageRepository: TimelineMessageRepository;
   sessionRunService: AgentRunService;
@@ -40,27 +44,29 @@ export function composeCodingAgentRecoveryRuntime(options: ComposeCodingAgentRec
       restoreChangeSet(input) {
         return createWorkspaceRestoreForChangeSet({
           changeSetId: input.changeSetId,
-          sessionRunRepository: options.sessionRunRepository,
+          runRepository: options.runRepository,
+          sessionRepository: options.sessionRepository,
           workspaceChangeRepository: options.workspaceChangeRepository,
         }).restoreChangeSet(input);
       },
     },
     appendRuntimeEvent: (event) => {
-      options.sessionRunRepository.appendRuntimeEvent(event);
+      options.runtimeEventRepository.appendRuntimeEvent(event);
     },
     publishWorkspaceChangeFooter: (runId, createdAt) => {
       // Workspace change footer publishing is a UI projection concern.
       // Desktop should provide this through the chat stream event sink.
     },
     nextRuntimeSequence: (runId) => nextPersistedRuntimeSequence(
-      options.sessionRunRepository.listRuntimeEventsByRun(runId),
+      options.runtimeEventRepository.listRuntimeEventsByRun(runId),
     ),
   });
 }
 
 function createWorkspaceRestoreForChangeSet(input: {
   changeSetId: string;
-  sessionRunRepository: SessionRunRepository;
+  runRepository: Pick<RunRecordRepository, 'getRun'>;
+  sessionRepository: Pick<SessionRecordRepository, 'getSession'>;
   workspaceChangeRepository: WorkspaceChangeRepository;
 }): WorkspaceRestoreService {
   const changeSet = input.workspaceChangeRepository.getChangeSet(input.changeSetId);
@@ -68,12 +74,12 @@ function createWorkspaceRestoreForChangeSet(input: {
     throw new Error(`Workspace change set not found: ${input.changeSetId}`);
   }
 
-  const run = input.sessionRunRepository.getRun(changeSet.runId);
+  const run = input.runRepository.getRun(changeSet.runId);
   if (!run) {
     throw new Error(`Workspace restore requires run: ${changeSet.runId}`);
   }
 
-  const session = input.sessionRunRepository.getSession(String(run.sessionId));
+  const session = input.sessionRepository.getSession(String(run.sessionId));
   if (!session?.workspacePath) {
     throw new Error(`Workspace restore requires workspacePath for session: ${run.sessionId}`);
   }

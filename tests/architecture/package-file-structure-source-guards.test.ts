@@ -366,4 +366,23 @@ describe('package and file structure source guards', () => {
     expect(sessionRuntimeSource).toContain('runtimeEventRepository: options.runtimeEventRepository');
     expect(runtimeSource).toContain('runtimeEventRepository: persistence.runtimeEventRepository');
   });
+
+  it('wires recovery runtime through split repository ports', () => {
+    const recoveryRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition', `compose-coding-agent-${'recovery'}-runtime.ts`),
+      'utf8',
+    );
+    const runtimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
+      'utf8',
+    );
+
+    expect(recoveryRuntimeSource).not.toContain('SessionRunRepository');
+    expect(recoveryRuntimeSource).toContain('runRepository: RunRecordRepository');
+    expect(recoveryRuntimeSource).toContain('sessionRepository: SessionRecordRepository');
+    expect(recoveryRuntimeSource).toContain('runtimeEventRepository: RuntimeEventRepository');
+    expect(runtimeSource).toContain('runRepository: persistence.runRecordRepository');
+    expect(runtimeSource).toContain('sessionRepository: persistence.sessionRecordRepository');
+    expect(runtimeSource).toContain('runtimeEventRepository: persistence.runtimeEventRepository');
+  });
 });
