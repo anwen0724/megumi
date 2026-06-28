@@ -723,8 +723,11 @@ describe('package and file structure source guards', () => {
     expect(runTurnSource).not.toContain('listDefinitions(input:');
     expect(runTurnSource).not.toContain('providerCapabilitySummaryProvider');
     expect(runTurnSource).not.toContain('getProviderCapabilitySummary');
+    expect(runTurnSource).toContain('prepareToolRunner');
+    expect(runTurnSource).not.toContain('toolCallRunnerFactory.create');
     expect(agentLoopSource).toContain('export class ToolSetService');
     expect(agentLoopSource).toContain('prepareToolSet');
+    expect(agentLoopSource).toContain('export async function prepareToolRunner');
     expect(agentLoopSource).toContain('getProviderCapabilitySummary');
     expect(agentLoopSource).toContain('createRunSnapshot');
     expect(agentLoopSource).toContain('listDefinitions');

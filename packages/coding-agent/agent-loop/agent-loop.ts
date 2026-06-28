@@ -160,6 +160,32 @@ export class ToolSetService {
   }
 }
 
+export interface ToolRunnerFactory {
+  create(input: {
+    projectRoot: string;
+    permissionMode: PermissionMode;
+  }): Promise<ToolCallRunnerService>;
+}
+
+export interface PrepareToolRunnerInput {
+  projectRoot?: string;
+  permissionMode: PermissionMode;
+  factory?: ToolRunnerFactory;
+}
+
+export async function prepareToolRunner(
+  input: PrepareToolRunnerInput,
+): Promise<ToolCallRunnerService | undefined> {
+  if (!input.projectRoot || !input.factory) {
+    return undefined;
+  }
+
+  return input.factory.create({
+    projectRoot: input.projectRoot,
+    permissionMode: input.permissionMode,
+  });
+}
+
 export interface CodingAgentRunSourceOverrideProvider {
   resolveModelInputSourceOverrides(input: {
     sessionId: string;

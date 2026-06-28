@@ -28,10 +28,12 @@ import {
 } from '../../events';
 import type { ModelCallPort } from '../../agent-loop/model-call';
 import {
+  prepareToolRunner,
   streamCodingAgentModelToolLoop,
   type CodingAgentRunSourceOverrideProvider,
   type PrepareToolSetInput,
   type PrepareToolSetResult,
+  type ToolRunnerFactory,
 } from '../../agent-loop';
 import type {
   PendingToolApprovalResume,
@@ -105,13 +107,6 @@ export interface CodingAgentRunMemoryRecallService {
   }>;
 }
 
-export interface CodingAgentRunToolCallRunnerFactory {
-  create(input: {
-    projectRoot: string;
-    permissionMode: PermissionMode;
-  }): Promise<ToolCallRunnerService>;
-}
-
 export interface CodingAgentRunEventRecorder {
   createModelStep?(input: { runId: string }): string;
 
@@ -144,7 +139,7 @@ export interface RunTurnOptions {
   sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
   memoryRecallService?: CodingAgentRunMemoryRecallService;
   modelCallPort: ModelCallPort;
-  toolCallRunnerFactory?: CodingAgentRunToolCallRunnerFactory;
+  toolCallRunnerFactory?: ToolRunnerFactory;
   modelCallInputBuildService: {
     buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
   };
@@ -356,12 +351,11 @@ export class RunTurn {
 
       let toolRuntime: ToolCallRunnerService | undefined;
       try {
-        toolRuntime = input.session.workspacePath && this.options.toolCallRunnerFactory
-          ? await this.options.toolCallRunnerFactory.create({
-              projectRoot: input.session.workspacePath,
-              permissionMode: input.permissionMode,
-            })
-          : undefined;
+        toolRuntime = await prepareToolRunner({
+          ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+          permissionMode: input.permissionMode,
+          ...(this.options.toolCallRunnerFactory ? { factory: this.options.toolCallRunnerFactory } : {}),
+        });
       } catch (error) {
         yield* this.options.failurePort.failBeforeModelStep({
           requestId: input.requestId,
