@@ -6,6 +6,7 @@ export * from './agent-loop';
 export * from './events';
 export * from './state';
 export * from './context';
+export * from './hooks';
 export * from './tools';
 export * from './permissions';
 export * from './memory';

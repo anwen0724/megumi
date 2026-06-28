@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RunCompletionHooksCoordinator } from '@megumi/coding-agent/run/completion';
+import { PostRunHooksCoordinator } from '@megumi/coding-agent/hooks';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
-describe('RunCompletionHooksCoordinator', () => {
+describe('post-run hooks coordinator', () => {
   it('schedules completed-run memory capture with tool and source-of-truth activity signals', () => {
     const calls: unknown[] = [];
-    const coordinator = new RunCompletionHooksCoordinator({
+    const coordinator = new PostRunHooksCoordinator({
       megumiHomePath: 'C:/megumi-home',
       memoryCaptureService: {
         async evaluateRunCompletedCapture(input: unknown) {
@@ -57,7 +57,7 @@ describe('RunCompletionHooksCoordinator', () => {
 
   it('projects workspace change footer through the active chat stream adapter', () => {
     const publishWorkspaceChangeFooter = vi.fn();
-    const coordinator = new RunCompletionHooksCoordinator({
+    const coordinator = new PostRunHooksCoordinator({
       repository: { listRuntimeEventsByRun: () => [] },
       workspaceChangeFooterProjector: {
         projectRunFooter: () => ({ changedFiles: [], summary: 'Changed files' }) as never,

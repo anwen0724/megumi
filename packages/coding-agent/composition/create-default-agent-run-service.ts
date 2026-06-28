@@ -12,7 +12,7 @@ import { createAgentRunRepositoryOptions } from './agent-run-repository-options'
 import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
-import { RunCompletionHooksCoordinator } from '../run/completion';
+import { PostRunHooksCoordinator } from '../hooks';
 import { RunTerminalCoordinator } from '../state';
 import { RunRetryCoordinator } from '../run/lifecycle';
 import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository-adapter';
@@ -36,8 +36,8 @@ export function createDefaultAgentRunService(
 
   const service = new AgentRunService({
     ...agentRunRepositoryOptions,
-    runCompletionHooks: new RunCompletionHooksCoordinator({
-      repository: agentRunRepositoryOptions.runCompletionRepository,
+    postRunHooks: new PostRunHooksCoordinator({
+      repository: agentRunRepositoryOptions.postRunHooksRepository,
       megumiHomePath: homePaths.homePath,
     }),
     runTerminalCoordinator: new RunTerminalCoordinator({

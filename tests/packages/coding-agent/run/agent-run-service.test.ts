@@ -51,9 +51,9 @@ import type {
 } from '@megumi/coding-agent/run/context';
 import { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
 import {
-  RunCompletionHooksCoordinator,
-  type RunCompletionHooksRepositoryPort,
-} from '@megumi/coding-agent/run/completion';
+  PostRunHooksCoordinator,
+  type PostRunHooksRepositoryPort,
+} from '@megumi/coding-agent/hooks';
 import {
   RunRetryCoordinator,
   type RunRetryCoordinatorRepositoryPort,
@@ -95,7 +95,7 @@ type AgentRunServiceRepositoryOptions = Pick<
   | 'sessionContextRepository'
   | 'runtimeEventRepository'
 > & {
-  runCompletionRepository: RunCompletionHooksRepositoryPort;
+  postRunHooksRepository: PostRunHooksRepositoryPort;
   runTerminalRepository: RunTerminalRepositoryPort;
   runRetryRepository: RunRetryCoordinatorRepositoryPort;
 };
@@ -117,13 +117,13 @@ type AgentRunServiceTestOptions =
   & Omit<
     AgentRunServiceOptions,
     keyof AgentRunServiceRepositoryOptions
-      | 'runCompletionHooks'
+      | 'postRunHooks'
       | 'runTerminalCoordinator'
       | 'runRetryCoordinator'
   >
   & Partial<
     AgentRunServiceRepositoryOptions
-      & Pick<AgentRunServiceOptions, 'runCompletionHooks' | 'runTerminalCoordinator' | 'runRetryCoordinator'>
+      & Pick<AgentRunServiceOptions, 'postRunHooks' | 'runTerminalCoordinator' | 'runRetryCoordinator'>
   >
   & {
     terminalToolRepository?: RunTerminalToolRepositoryPort;
@@ -139,7 +139,7 @@ function agentRunServiceRepositoryOptions(repository: AgentRunServiceTestReposit
     modelStepRepository: repository,
     sessionContextRepository: repository,
     runtimeEventRepository: repository,
-    runCompletionRepository: repository,
+    postRunHooksRepository: repository,
     runTerminalRepository: repository,
     runRetryRepository: repository,
   };
@@ -222,8 +222,8 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
   const workspaceChangeFooterProjector = workspaceChanges && isWorkspaceChangeFooterProjectorPort(workspaceChanges)
     ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
     : undefined;
-  const runCompletionHooks = options.runCompletionHooks ?? new RunCompletionHooksCoordinator({
-    repository: repositoryOptions.runCompletionRepository,
+  const postRunHooks = options.postRunHooks ?? new PostRunHooksCoordinator({
+    repository: repositoryOptions.postRunHooksRepository,
     ...(options.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
     ...(options.megumiHomePath ? { megumiHomePath: options.megumiHomePath } : {}),
     ...(workspaceChanges ? { workspaceChanges } : {}),
@@ -242,7 +242,7 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
   });
   const runService = new AgentRunService({
     ...repositoryOptions,
-    runCompletionHooks,
+    postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
     ...options,

@@ -1,22 +1,22 @@
-// Owns post-terminal run hooks such as memory capture and workspace footer projection.
-// These hooks are product behavior, but they must not thicken AgentRunService.
+// Owns post-run hook dispatch for memory capture and workspace footer projection.
+// Hooks coordinate extension points without owning memory or workspace business rules.
 import { isProviderId } from '@megumi/shared/provider';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 import type { WorkspaceChangedFile } from '@megumi/shared/workspace';
-import type { ChatStreamEventAdapter } from '../../projections/chat-stream';
-import type { WorkspaceChangeFooterProjectorService } from '../../workspace';
+import type { ChatStreamEventAdapter } from '../projections/chat-stream';
+import type { WorkspaceChangeFooterProjectorService } from '../workspace';
 
-export interface RunCompletionHooksRepositoryPort {
+export interface PostRunHooksRepositoryPort {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
 
-export interface RunCompletionHooksWorkspaceChangeReadPort {
+export interface PostRunHooksWorkspaceChangeReadPort {
   listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
 }
 
-export interface RunCompletionHooksMemoryCaptureService {
+export interface PostRunHooksMemoryCaptureService {
   evaluateRunCompletedCapture(input: {
     homePath: string;
     runId: string;
@@ -34,11 +34,11 @@ export interface RunCompletionHooksMemoryCaptureService {
   }): Promise<{ status: string; reason?: string; savedMemoryIds?: string[] }>;
 }
 
-export interface RunCompletionHooksCoordinatorOptions {
-  repository: RunCompletionHooksRepositoryPort;
-  memoryCaptureService?: RunCompletionHooksMemoryCaptureService;
+export interface PostRunHooksCoordinatorOptions {
+  repository: PostRunHooksRepositoryPort;
+  memoryCaptureService?: PostRunHooksMemoryCaptureService;
   megumiHomePath?: string;
-  workspaceChanges?: RunCompletionHooksWorkspaceChangeReadPort;
+  workspaceChanges?: PostRunHooksWorkspaceChangeReadPort;
   workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
 }
 
@@ -54,14 +54,14 @@ export interface ScheduleRunCompletedMemoryCaptureInput {
   memoryEnabled?: boolean;
 }
 
-export class RunCompletionHooksCoordinator {
-  private readonly repository: RunCompletionHooksRepositoryPort;
-  private readonly memoryCaptureService?: RunCompletionHooksMemoryCaptureService;
+export class PostRunHooksCoordinator {
+  private readonly repository: PostRunHooksRepositoryPort;
+  private readonly memoryCaptureService?: PostRunHooksMemoryCaptureService;
   private readonly megumiHomePath?: string;
-  private readonly workspaceChanges?: RunCompletionHooksWorkspaceChangeReadPort;
+  private readonly workspaceChanges?: PostRunHooksWorkspaceChangeReadPort;
   private readonly workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
 
-  constructor(options: RunCompletionHooksCoordinatorOptions) {
+  constructor(options: PostRunHooksCoordinatorOptions) {
     this.repository = options.repository;
     this.memoryCaptureService = options.memoryCaptureService;
     this.megumiHomePath = options.megumiHomePath;

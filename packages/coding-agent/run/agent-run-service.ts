@@ -121,7 +121,7 @@ import {
   withSessionMessageRequestMetadata,
 } from '../events';
 import type {
-  AgentRunCompletionHooksPort,
+  AgentRunPostRunHooksPort,
   AgentRunExecutionFactRepositoryPort,
   AgentRunMessageRepositoryPort,
   AgentRunModelStepProvider,
@@ -241,7 +241,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly ids: AgentRunServiceIds;
   private readonly runTerminalCoordinator: AgentRunTerminalCoordinatorPort;
   private readonly runRetryCoordinator: AgentRunRetryCoordinatorPort;
-  private readonly runCompletionHooks: AgentRunCompletionHooksPort;
+  private readonly postRunHooks: AgentRunPostRunHooksPort;
   private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
   });
@@ -260,7 +260,7 @@ export class AgentRunService implements AgentRunPort {
     this.modelStepRepository = options.modelStepRepository;
     this.sessionContextRepository = options.sessionContextRepository;
     this.runtimeEventRepository = options.runtimeEventRepository;
-    this.runCompletionHooks = options.runCompletionHooks;
+    this.postRunHooks = options.postRunHooks;
     this.runTerminalCoordinator = options.runTerminalCoordinator;
     this.runRetryCoordinator = options.runRetryCoordinator;
     this.activePathRepository = options.activePathRepository;
@@ -1407,7 +1407,7 @@ export class AgentRunService implements AgentRunPort {
       const eventWithRequest = withRequestMetadata(event, input.request);
       this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
       if (eventWithRequest.eventType === 'run.completed') {
-        this.runCompletionHooks.scheduleRunCompletedMemoryCapture({
+        this.postRunHooks.scheduleRunCompletedMemoryCapture({
           runId: String(input.request.runId),
           sessionId: String(input.request.sessionId),
           ...(input.projectId ? { projectId: input.projectId } : {}),
@@ -1500,7 +1500,7 @@ export class AgentRunService implements AgentRunPort {
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
     if (isRunTerminalRuntimeEvent(event)) {
-      this.runCompletionHooks.publishWorkspaceChangeFooter({
+      this.postRunHooks.publishWorkspaceChangeFooter({
         runId: String(event.runId),
         createdAt: event.createdAt,
         chatStreamAdapter,

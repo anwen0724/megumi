@@ -84,7 +84,7 @@ import type {
 } from './lifecycle';
 import type {
   ScheduleRunCompletedMemoryCaptureInput,
-} from './completion';
+} from '../hooks';
 import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
@@ -291,7 +291,7 @@ export interface AgentRunRuntimeEventRepositoryPort {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
 
-export interface AgentRunCompletionHooksPort {
+export interface AgentRunPostRunHooksPort {
   scheduleRunCompletedMemoryCapture(input: ScheduleRunCompletedMemoryCaptureInput): void;
   publishWorkspaceChangeFooter(input: {
     runId: string;
@@ -319,7 +319,7 @@ export interface AgentRunServiceOptions {
   modelStepRepository: AgentRunModelStepRepositoryPort;
   sessionContextRepository: AgentRunSessionContextRepositoryPort;
   runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
-  runCompletionHooks: AgentRunCompletionHooksPort;
+  postRunHooks: AgentRunPostRunHooksPort;
   runTerminalCoordinator: AgentRunTerminalCoordinatorPort;
   runRetryCoordinator: AgentRunRetryCoordinatorPort;
   contextService?: SessionRunContextService;

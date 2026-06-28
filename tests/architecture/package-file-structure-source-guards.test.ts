@@ -446,7 +446,8 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(runContractSource).not.toContain('runCompletionRepository: RunCompletionHooksRepositoryPort;');
+    expect(runContractSource).not.toContain('runCompletionRepository');
+    expect(runContractSource).not.toContain('RunCompletionHooksRepositoryPort');
     expect(runContractSource).not.toContain('runTerminalRepository: RunTerminalRepositoryPort;');
     expect(runContractSource).not.toContain('runRetryRepository: RunRetryCoordinatorRepositoryPort;');
     expect(agentRunServiceSource).not.toContain('private readonly runCompletionRepository');
@@ -458,7 +459,7 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('this.runCompletionRepository = {');
     expect(agentRunServiceSource).not.toContain('this.runTerminalRepository = {');
     expect(agentRunServiceSource).not.toContain('this.runRetryRepository = {');
-    expect(repositoryOptionsSource).toContain('runCompletionRepository');
+    expect(repositoryOptionsSource).toContain('postRunHooksRepository');
     expect(repositoryOptionsSource).toContain('runTerminalRepository');
     expect(repositoryOptionsSource).toContain('runRetryRepository');
   });
@@ -475,19 +476,22 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(runContractSource).toContain('runCompletionHooks: AgentRunCompletionHooksPort;');
+    expect(runContractSource).toContain('postRunHooks: AgentRunPostRunHooksPort;');
     expect(runContractSource).toContain('runTerminalCoordinator: AgentRunTerminalCoordinatorPort;');
     expect(runContractSource).toContain('runRetryCoordinator: AgentRunRetryCoordinatorPort;');
     expect(agentRunServiceSource).not.toContain('new RunCompletionHooksCoordinator');
+    expect(agentRunServiceSource).not.toContain('new PostRunHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunRetryCoordinator');
-    expect(agentRunServiceSource).toContain('this.runCompletionHooks = options.runCompletionHooks');
+    expect(agentRunServiceSource).toContain('this.postRunHooks = options.postRunHooks');
     expect(agentRunServiceSource).toContain('this.runTerminalCoordinator = options.runTerminalCoordinator');
     expect(agentRunServiceSource).toContain('this.runRetryCoordinator = options.runRetryCoordinator');
-    expect(sessionRuntimeSource).toContain('new RunCompletionHooksCoordinator');
+    expect(sessionRuntimeSource).toContain("from '../hooks'");
+    expect(sessionRuntimeSource).toContain('new PostRunHooksCoordinator');
     expect(sessionRuntimeSource).toContain('new RunTerminalCoordinator');
     expect(sessionRuntimeSource).toContain('new RunRetryCoordinator');
-    expect(defaultAgentRunServiceSource).toContain('new RunCompletionHooksCoordinator');
+    expect(defaultAgentRunServiceSource).toContain("from '../hooks'");
+    expect(defaultAgentRunServiceSource).toContain('new PostRunHooksCoordinator');
     expect(defaultAgentRunServiceSource).toContain('new RunTerminalCoordinator');
     expect(defaultAgentRunServiceSource).toContain('new RunRetryCoordinator');
   });

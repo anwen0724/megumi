@@ -35,7 +35,7 @@ import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
 import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
-import { RunCompletionHooksCoordinator } from '../run/completion';
+import { PostRunHooksCoordinator } from '../hooks';
 import { RunTerminalCoordinator } from '../state';
 import { RunRetryCoordinator } from '../run/lifecycle';
 import {
@@ -130,8 +130,8 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   const workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(workspaceChanges)
     ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
     : undefined;
-  const runCompletionHooks = new RunCompletionHooksCoordinator({
-    repository: agentRunRepositoryOptions.runCompletionRepository,
+  const postRunHooks = new PostRunHooksCoordinator({
+    repository: agentRunRepositoryOptions.postRunHooksRepository,
     memoryCaptureService: options.memoryRuntime.captureService,
     megumiHomePath: options.homePaths.homePath,
     workspaceChanges,
@@ -150,7 +150,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   });
   const agentRunService = new AgentRunService({
     ...agentRunRepositoryOptions,
-    runCompletionHooks,
+    postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
     sessionCompactionRepository: options.sessionContextRepository,
