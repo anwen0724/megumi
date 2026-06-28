@@ -453,7 +453,7 @@ describe('buildModelCallInputContextFromSources', () => {
     expect(JSON.stringify(context.parts)).not.toContain('bypass sandbox');
   });
 
-  it('builds current turn, session, runtime constraint, and tool continuation parts from explicit sources', () => {
+  it('builds current turn, session, runtime constraint, and tool result model input parts from explicit sources', () => {
     const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:1',
       sessionId: 'session:1',
@@ -711,7 +711,7 @@ describe('buildModelCallInputContextFromSources', () => {
     expect(serialized).not.toContain('raw provider body');
   });
 
-  it('stores provider-native tool replay fields in tool continuation parts', () => {
+  it('stores provider-native tool replay fields in tool result model input parts', () => {
     const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:tool-replay',
       sessionId: 'session:1',
@@ -748,7 +748,7 @@ describe('buildModelCallInputContextFromSources', () => {
     ]));
   });
 
-  it('builds semantic session parts from SessionContextInput before tool continuation and current turn', () => {
+  it('builds semantic session parts from SessionContextInput before tool result model input and current turn', () => {
     const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:session-context',
       sessionId: 'session:1',
@@ -799,7 +799,7 @@ describe('buildModelCallInputContextFromSources', () => {
     });
   });
 
-  it('keeps tool continuation as provider-native replay parts when session context is present', () => {
+  it('keeps tool result model input as provider-native replay parts when session context is present', () => {
     const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:session-context-tool-replay',
       sessionId: 'session:1',
@@ -835,7 +835,7 @@ describe('buildModelCallInputContextFromSources', () => {
     ))).toBe(false);
   });
 
-  it('keeps tool continuation required under a tight context budget', () => {
+  it('keeps tool result model input required under a tight context budget', () => {
     const context = buildModelCallInputContextFromSources({
       contextId: 'model-input-context:tool-tight-budget',
       sessionId: 'session:1',

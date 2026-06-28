@@ -134,7 +134,7 @@ async function buildNextModelInputContext(input: {
     sessionId: input.contextInput.sessionId,
     runId: input.contextInput.runId,
     stepId: input.contextInput.stepId,
-    contextKind: 'tool-continuation',
+    contextKind: 'tool-results',
     providerId: input.request.providerId,
     modelId: String(input.request.modelId),
     ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),

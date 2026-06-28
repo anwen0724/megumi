@@ -1,2 +1,2 @@
 // Compatibility export while model context ownership moves to packages/coding-agent/context.
-export * from '../../../context/parts/tool-continuation';
+export * from '../../../context/parts/tool-result-model-input';

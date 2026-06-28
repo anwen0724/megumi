@@ -45,7 +45,7 @@ export function createObservationFromRawToolResult(input: CreateObservationInput
     kind: 'text',
     isError: input.rawResult.isError,
     content: truncated
-      ? `${content}\n\n[Observation notice] Output was truncated by Megumi before provider continuation.`
+      ? `${content}\n\n[Observation notice] Output was truncated by Megumi before provider model input.`
       : content,
     truncated,
     ...(truncated ? { truncationReason: 'byteLimit' as const } : {}),

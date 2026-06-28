@@ -35,7 +35,7 @@ import {
   type ModelStepRuntimeConstraintInput,
   selectInstructionSources,
   sessionInstructionParts,
-  toolContinuationParts,
+  toolResultModelInputParts,
 } from './parts';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
@@ -152,7 +152,7 @@ export function buildModelCallInputContextFromBuildRequest(
 export function buildModelCallInputContextFromSources(
   input: BuildModelCallInputContextFromSourcesInput,
 ): ModelInputContext {
-  const toolParts = toolContinuationParts(input);
+  const toolParts = toolResultModelInputParts(input);
   const providerParts = providerStateParts(input.providerStates, input.builtAt);
   const memoryParts = memoryRecallParts(input.memoryRecallSources ?? [], input.builtAt);
   const instructionSelection = selectInstructionSources(input);

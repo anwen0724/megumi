@@ -3034,7 +3034,7 @@ describe('AgentRunService', () => {
     expect(recallForNewUserInput).toHaveBeenCalledTimes(1);
   });
 
-  it('reuses the run-scoped recalled memory snapshot for tool continuation without recalling again', async () => {
+  it('reuses the run-scoped recalled memory snapshot for tool result model input without recalling again', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const memoryRecallSources = [{
       sourceId: 'memory-recall:snapshot-tool',
@@ -3152,7 +3152,7 @@ describe('AgentRunService', () => {
     });
   });
 
-  it('recalls for each independent new user input while tool continuation reuses the same run snapshot', async () => {
+  it('recalls for each independent new user input while tool result model input reuses the same run snapshot', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const recallForNewUserInput = vi.fn(async (input) => ({
       memoryRecallSources: [{
@@ -3254,7 +3254,7 @@ describe('AgentRunService', () => {
       },
     });
     for await (const _event of first.events) {
-      // drain first run including tool continuation
+      // drain first run including tool result model input
     }
 
     const second = await service.sendSessionMessage({
@@ -7042,7 +7042,7 @@ describe('AgentRunService', () => {
     ]));
   });
 
-  it('refreshes project instructions for tool continuation model steps', async () => {
+  it('refreshes project instructions for tool result model input steps', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const sessionInstructionSources: SessionInstructionSourceSnapshot[] = [{
       sourceId: 'session-instruction:continuation',
@@ -7165,7 +7165,7 @@ describe('AgentRunService', () => {
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(requests).toHaveLength(2);
     expect(requests[1]?.inputContext.trace.metadata).toMatchObject({
-      traceId: 'trace:model-input:run-1:step-1:tool-continuation',
+      traceId: 'trace:model-input:run-1:step-1:tool-results',
       modelTarget: {
         providerId: 'openai',
         modelId: 'gpt-4.1',

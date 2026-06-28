@@ -14,7 +14,7 @@ import type {
   MemoryPart,
   RuntimeConstraintPart,
   SessionPart,
-  ToolContinuationPart,
+  ToolContinuationPart as ToolResultModelInputPart,
 } from '@megumi/shared/model';
 
 type DraftFields = {
@@ -29,7 +29,7 @@ export type ModelInputContextPartDraft =
   | (BudgetlessPart<InstructionPart> & DraftFields)
   | (BudgetlessPart<CurrentTurnPart> & DraftFields)
   | (BudgetlessPart<SessionPart> & DraftFields)
-  | (BudgetlessPart<ToolContinuationPart> & DraftFields)
+  | (BudgetlessPart<ToolResultModelInputPart> & DraftFields)
   | (BudgetlessPart<RuntimeConstraintPart> & DraftFields)
   | (BudgetlessPart<MemoryPart> & DraftFields);
 

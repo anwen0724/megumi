@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toolContinuationParts } from '@megumi/coding-agent/run/context';
+import { toolResultModelInputParts } from '@megumi/coding-agent/run/context';
 import type { ToolResult } from '@megumi/shared/tool';
 
 function toolResult(overrides: Partial<ToolResult> = {}): ToolResult {
@@ -17,10 +17,10 @@ function toolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   };
 }
 
-describe('tool continuation parts', () => {
+describe('tool result model input parts', () => {
   it('uses a bounded observation envelope instead of passing huge tool text through required context', () => {
     const huge = `${'x'.repeat(30_000)}UNBOUNDED_SENTINEL`;
-    const parts = toolContinuationParts({
+    const parts = toolResultModelInputParts({
       builtAt: '2026-06-15T00:00:01.000Z',
       toolResults: [toolResult({
         textContent: huge,

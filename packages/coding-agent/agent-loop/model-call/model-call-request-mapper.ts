@@ -1,5 +1,9 @@
 // Maps current ModelStepRuntimeRequest into pure AI model, context, and ToolSet inputs.
-import type { ModelInputContextPart, ModelStepRuntimeRequest, ToolContinuationPart } from '@megumi/shared/model';
+import type {
+  ModelInputContextPart,
+  ModelStepRuntimeRequest,
+  ToolContinuationPart as ToolResultModelInputPart,
+} from '@megumi/shared/model';
 import type { ToolDefinition } from '@megumi/shared/tool';
 import type { AiModel, AiStructuredOutputTarget, ConversationMessage, ModelContext, ToolSet } from '@megumi/ai';
 import type { ProviderRuntimeConfig } from './model-call-contract';
@@ -85,7 +89,7 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
   messages: ConversationMessage[];
   consumedPartIds: string[];
 } {
-  const toolParts = parts.filter((part): part is ToolContinuationPart => part.kind === 'tool_continuation');
+  const toolParts = parts.filter((part): part is ToolResultModelInputPart => part.kind === 'tool_continuation');
   const toolCallParts = toolParts.filter(hasNativeToolCallFields);
   const toolCallById = new Map(toolCallParts.map((part) => [String(part.toolCallId), part]));
   const toolResultParts = toolParts
@@ -110,8 +114,8 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
   const consumedPartIds = new Set<string>();
   const replayedModelStepIds = new Set<string>();
   let currentModelStepId: string | undefined;
-  let currentToolCalls: ToolContinuationPart[] = [];
-  let currentToolResults: Array<{ toolCall?: ToolContinuationPart; toolResult: ToolContinuationPart }> = [];
+  let currentToolCalls: ToolResultModelInputPart[] = [];
+  let currentToolResults: Array<{ toolCall?: ToolResultModelInputPart; toolResult: ToolResultModelInputPart }> = [];
 
   const flush = () => {
     if (currentToolCalls.length > 0) {
@@ -177,15 +181,15 @@ function mapNativeToolReplay(parts: ModelInputContextPart[]): {
   };
 }
 
-function hasNativeToolCallFields(part: ToolContinuationPart): boolean {
+function hasNativeToolCallFields(part: ToolResultModelInputPart): boolean {
   return Boolean(part.toolCallId && part.toolName && part.toolInput !== undefined);
 }
 
-function hasNativeToolResultFields(part: ToolContinuationPart): boolean {
+function hasNativeToolResultFields(part: ToolResultModelInputPart): boolean {
   return Boolean(part.toolCallId && part.toolResultId && part.toolResultContent !== undefined);
 }
 
-function providerToolCallId(part: ToolContinuationPart): string {
+function providerToolCallId(part: ToolResultModelInputPart): string {
   return String(part.providerToolCallId ?? part.toolCallId);
 }
 

@@ -1,4 +1,4 @@
-// Replays provider reasoning state as model-visible continuation context.
+// Replays provider reasoning state as model-visible model input context.
 import type { ModelStepProviderState } from '@megumi/shared/model';
 
 import type { ModelInputContextPartDraft } from '../context-budget';

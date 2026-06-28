@@ -264,7 +264,7 @@ describe('shouldRunSessionCompaction', () => {
 });
 
 describe('buildSessionCompactionSummaryInputContext', () => {
-  it('builds an internal summary ModelInputContext without tool continuation replay', () => {
+  it('builds an internal summary ModelInputContext without tool result model input replay', () => {
     const prepared = prepareSessionCompactionInput({
       sessionId: 'session-1',
       builtAt,

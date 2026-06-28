@@ -118,7 +118,7 @@ describe('coding agent run mainline guards', () => {
       'packages/coding-agent/run/context/parts/session.ts',
       'packages/coding-agent/run/context/parts/input-preprocessing.ts',
       'packages/coding-agent/run/context/parts/memory.ts',
-      'packages/coding-agent/run/context/parts/tool-continuation.ts',
+      'packages/coding-agent/run/context/parts/tool-result-model-input.ts',
       'packages/coding-agent/run/context/parts/provider-state.ts',
       'packages/coding-agent/run/context/parts/index.ts',
     ]) {
@@ -133,7 +133,7 @@ describe('coding agent run mainline guards', () => {
       'function inputPreprocessingInstructionParts(',
       'function memoryRecallParts(',
       'function runtimeConstraintParts(',
-      'function toolContinuationParts(',
+      'function toolResultModelInputParts(',
       'function providerStateSummary(',
     ]) {
       expect(contextSource).not.toContain(movedImplementation);

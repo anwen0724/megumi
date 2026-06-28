@@ -329,7 +329,7 @@ async function createNextModelCallRequest(input: {
     sessionId: input.request.sessionId,
     runId: String(input.request.runId),
     stepId: input.stepId,
-    buildReason: 'tool_continuation',
+    buildReason: 'tool_results_model_input',
     builtAt: input.createdAt,
     baseInputContext: input.request.inputContext,
     toolCalls: input.accumulatedToolCalls,

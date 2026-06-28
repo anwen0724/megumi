@@ -1,19 +1,19 @@
-// Builds model context parts for tool calls and tool results that continue the loop.
+// Builds model context parts that carry tool calls and tool results into the next model call.
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { JsonValue } from '@megumi/shared/primitives';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 
 import type { ModelInputContextPartDraft } from '../context-budget';
 
-const TOOL_RESULT_CONTINUATION_MAX_CHARS = 12_000;
+const TOOL_RESULT_MODEL_INPUT_MAX_CHARS = 12_000;
 
-export interface ToolContinuationPartsInput {
+export interface ToolResultModelInputPartsInput {
   builtAt: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
 }
 
-export function toolContinuationParts(input: ToolContinuationPartsInput): ModelInputContextPartDraft[] {
+export function toolResultModelInputParts(input: ToolResultModelInputPartsInput): ModelInputContextPartDraft[] {
   const toolCallParts = (input.toolCalls ?? []).map((toolCall, index): ModelInputContextPartDraft => ({
     partId: `part:tool-call:${index + 1}:${toolCall.toolCallId}`,
     kind: 'tool_continuation',
@@ -25,32 +25,32 @@ export function toolContinuationParts(input: ToolContinuationPartsInput): ModelI
     toolInput: toolCall.input,
     sourceRefs: [toolCallSourceRef(toolCall, input.builtAt)],
     priority: 80,
-    retentionGroupId: `tool-continuation:${toolCall.toolCallId}`,
+    retentionGroupId: `tool-model-input:${toolCall.toolCallId}`,
     metadata: {
       toolName: toolCall.toolName,
       status: toolCall.status,
     },
   }));
 
-  const toolResultParts = orderToolResultsForContinuation(input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => {
-    const continuation = boundedToolResultContinuation(toolResult);
+  const toolResultParts = orderToolResultsForModelInput(input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => {
+    const modelInput = boundedToolResultModelInput(toolResult);
     return {
       partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
       kind: 'tool_continuation',
-      text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}: ${continuation.summary}`,
+      text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}: ${modelInput.summary}`,
       toolCallId: String(toolResult.toolCallId),
       ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
       toolResultId: String(toolResult.toolResultId),
-      toolResultContent: continuation.content,
+      toolResultContent: modelInput.content,
       sourceRefs: [toolResultSourceRef(toolResult)],
       priority: 85,
-      retentionGroupId: `tool-continuation:${toolResult.toolCallId}`,
+      retentionGroupId: `tool-model-input:${toolResult.toolCallId}`,
       metadata: {
         kind: toolResult.kind,
         redactionState: toolResult.redactionState,
         ...(toolResult.observationId ? { observationId: toolResult.observationId } : {}),
         ...(toolResult.metadata?.callOrder !== undefined ? { callOrder: toolResult.metadata.callOrder } : {}),
-        ...(continuation.truncated ? { contextEnvelopeTruncated: true } : {}),
+        ...(modelInput.truncated ? { contextEnvelopeTruncated: true } : {}),
       },
     };
   });
@@ -61,7 +61,7 @@ export function toolContinuationParts(input: ToolContinuationPartsInput): ModelI
   ];
 }
 
-function orderToolResultsForContinuation(toolResults: readonly ToolResult[]): ToolResult[] {
+function orderToolResultsForModelInput(toolResults: readonly ToolResult[]): ToolResult[] {
   return [...toolResults].sort((left, right) => {
     const leftOrder = Number(left.metadata?.callOrder ?? Number.MAX_SAFE_INTEGER);
     const rightOrder = Number(right.metadata?.callOrder ?? Number.MAX_SAFE_INTEGER);
@@ -111,7 +111,7 @@ function toolResultContent(toolResult: ToolResult): string {
   return toolResult.kind;
 }
 
-function boundedToolResultContinuation(toolResult: ToolResult): {
+function boundedToolResultModelInput(toolResult: ToolResult): {
   content: string;
   summary: string;
   truncated: boolean;
@@ -123,7 +123,7 @@ function boundedToolResultContinuation(toolResult: ToolResult): {
     || toolResult.metadata?.observationContinuationHint
     || toolResult.metadata?.observationByteLength !== undefined
   );
-  const bounded = boundContinuationContent(content);
+  const bounded = boundToolResultModelInputContent(content);
 
   if (!hasObservationEnvelope && !bounded.truncated) {
     return {
@@ -148,11 +148,11 @@ function boundedToolResultContinuation(toolResult: ToolResult): {
       ? [`Raw result ref: ${readString(toolResult.metadata, 'observationRawResultRef')}`]
       : []),
     ...(readString(toolResult.metadata, 'observationContinuationHint')
-      ? [`Continuation hint: ${readString(toolResult.metadata, 'observationContinuationHint')}`]
+      ? [`Follow-up hint: ${readString(toolResult.metadata, 'observationContinuationHint')}`]
       : []),
     'Content:',
     bounded.content,
-    ...(bounded.truncated ? ['[Context notice] Tool result content was bounded before provider continuation.'] : []),
+    ...(bounded.truncated ? ['[Context notice] Tool result content was bounded before provider model input.'] : []),
   ].join('\n');
 
   return {
@@ -162,12 +162,12 @@ function boundedToolResultContinuation(toolResult: ToolResult): {
   };
 }
 
-function boundContinuationContent(content: string): { content: string; truncated: boolean } {
-  if (content.length <= TOOL_RESULT_CONTINUATION_MAX_CHARS) {
+function boundToolResultModelInputContent(content: string): { content: string; truncated: boolean } {
+  if (content.length <= TOOL_RESULT_MODEL_INPUT_MAX_CHARS) {
     return { content, truncated: false };
   }
   return {
-    content: content.slice(0, TOOL_RESULT_CONTINUATION_MAX_CHARS),
+    content: content.slice(0, TOOL_RESULT_MODEL_INPUT_MAX_CHARS),
     truncated: true,
   };
 }

@@ -303,7 +303,7 @@ describe('ModelCallInputBuildService', () => {
     expect(result.inputContext.parts.some((part) => part.kind === 'memory')).toBe(false);
   });
 
-  it('rebuilds continuation input from a base input context without using tool-local cwd as run cwd', async () => {
+  it('rebuilds tool result model input from a base input context without using tool-local cwd as run cwd', async () => {
     const baseInputContext: ModelInputContext = {
       contextId: 'model-input-context:step:1:initial',
       sessionId: 'session:1',
@@ -351,8 +351,8 @@ describe('ModelCallInputBuildService', () => {
     const service = new ModelCallInputBuildService({
       instructionSourceService: { loadInstructionSources: vi.fn(async () => []) },
       idFactory: {
-        buildRequestId: () => 'model-input-build:continuation',
-        traceId: () => 'trace:model-input:continuation',
+        buildRequestId: () => 'model-input-build:tool-results',
+        traceId: () => 'trace:model-input:tool-results',
       },
     });
 
@@ -362,7 +362,7 @@ describe('ModelCallInputBuildService', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      contextKind: 'tool-continuation',
+      contextKind: 'tool-results',
       providerId: 'openai-compatible',
       modelId: 'deepseek-chat',
       projectRoot: 'C:/all/work/study/megumi',
@@ -397,7 +397,7 @@ describe('ModelCallInputBuildService', () => {
       builtAt,
     });
 
-    expect(result.inputContext.contextId).toBe('model-input-context:step:2:tool-continuation');
+    expect(result.inputContext.contextId).toBe('model-input-context:step:2:tool-results');
     expect(result.effectiveCwd?.projectRelativePath).toBe('packages/core');
     expect(result.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -413,7 +413,7 @@ describe('ModelCallInputBuildService', () => {
         toolResultId: 'tool-result:1',
       }),
     ]));
-    expect(JSON.stringify(result.inputContext.trace.metadata)).toContain('trace:model-input:continuation');
+    expect(JSON.stringify(result.inputContext.trace.metadata)).toContain('trace:model-input:tool-results');
     expect(JSON.stringify(result.inputContext.trace.metadata)).not.toContain('packages/ai');
   });
 
@@ -431,7 +431,7 @@ describe('ModelCallInputBuildService', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:1',
-      contextKind: 'tool-continuation',
+      contextKind: 'tool-results',
       providerId: 'openai-compatible',
       modelId: 'deepseek-chat',
       projectRoot: 'C:/all/work/study/megumi',

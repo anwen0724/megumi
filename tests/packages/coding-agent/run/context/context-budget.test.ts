@@ -504,7 +504,7 @@ describe('Context budget executor', () => {
     ]);
   });
 
-  it('keeps tool continuation parts together as required context', () => {
+  it('keeps tool result model input parts together as required context', () => {
     const result = applyContextBudget({
       buildReason: 'tool_continuation',
       policy: {
