@@ -1,8 +1,7 @@
 // Composes AgentRunService owner repository options from persistence repositories.
 import type { AgentRunServiceOptions } from '../run/run-contract';
 import type { PostRunHooksRepositoryPort } from '../hooks';
-import type { RunTerminalRepositoryPort } from '../state';
-import type { RunRetryCoordinatorRepositoryPort } from '../run/lifecycle';
+import type { RunRetryCoordinatorRepositoryPort, RunTerminalRepositoryPort } from '../state';
 import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
 import type { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
 import type { RunRecordRepository } from '../persistence/repos/run-record.repo';

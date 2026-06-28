@@ -13,8 +13,7 @@ import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PostRunHooksCoordinator } from '../hooks';
-import { RunTerminalCoordinator } from '../state';
-import { RunRetryCoordinator } from '../run/lifecycle';
+import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository-adapter';
 
 export interface CreateDefaultAgentRunServiceOptions {

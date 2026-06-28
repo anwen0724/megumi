@@ -81,7 +81,7 @@ import type {
   CreateManualRetryFromRunInput,
   CreateManualRetryFromRunResult,
   RecordManualRerunAttemptForBranchDraftInput,
-} from './lifecycle';
+} from '../state';
 import type {
   ScheduleRunCompletedMemoryCaptureInput,
 } from '../hooks';

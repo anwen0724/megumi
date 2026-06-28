@@ -1,5 +1,3 @@
-// Exposes legacy run lifecycle primitives plus top-level state ownership.
+// Exposes legacy run-local lifecycle primitives that have not moved to top-level state.
 export * from './run-lifecycle';
 export * from './run-types';
-export * from './run-retry-coordinator';
-export * from '../../state';

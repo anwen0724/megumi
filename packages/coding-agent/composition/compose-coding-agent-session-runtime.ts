@@ -36,8 +36,7 @@ import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifa
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
 import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
 import { PostRunHooksCoordinator } from '../hooks';
-import { RunTerminalCoordinator } from '../state';
-import { RunRetryCoordinator } from '../run/lifecycle';
+import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,

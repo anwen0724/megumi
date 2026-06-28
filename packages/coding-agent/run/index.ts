@@ -1,4 +1,7 @@
 ﻿// Public exports for Coding Agent product-level run orchestration.
+// Compatibility note: top-level state exports remain available from this public
+// run barrel while direct run/lifecycle ownership is retired.
+export * from '../state';
 export * from './context';
 export * from './permissions';
 export * from './events';

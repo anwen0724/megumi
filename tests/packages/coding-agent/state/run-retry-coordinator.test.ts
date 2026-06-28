@@ -13,7 +13,7 @@ import type {
 import {
   RunRetryCoordinator,
   type RunRetryCoordinatorOptions,
-} from '@megumi/coding-agent/run/lifecycle';
+} from '@megumi/coding-agent/state';
 
 describe('RunRetryCoordinator', () => {
   it('creates a manual retry attempt without mutating the original failed run', () => {

@@ -406,7 +406,7 @@ describe('package and file structure source guards', () => {
     const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const retryCoordinatorSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/run/lifecycle/run-retry-coordinator.ts'),
+      join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'),
       'utf8',
     );
 
@@ -487,13 +487,28 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).toContain('this.runTerminalCoordinator = options.runTerminalCoordinator');
     expect(agentRunServiceSource).toContain('this.runRetryCoordinator = options.runRetryCoordinator');
     expect(sessionRuntimeSource).toContain("from '../hooks'");
+    expect(sessionRuntimeSource).toContain("from '../state'");
     expect(sessionRuntimeSource).toContain('new PostRunHooksCoordinator');
     expect(sessionRuntimeSource).toContain('new RunTerminalCoordinator');
     expect(sessionRuntimeSource).toContain('new RunRetryCoordinator');
     expect(defaultAgentRunServiceSource).toContain("from '../hooks'");
+    expect(defaultAgentRunServiceSource).toContain("from '../state'");
     expect(defaultAgentRunServiceSource).toContain('new PostRunHooksCoordinator');
     expect(defaultAgentRunServiceSource).toContain('new RunTerminalCoordinator');
     expect(defaultAgentRunServiceSource).toContain('new RunRetryCoordinator');
+  });
+
+  it('keeps retry lifecycle ownership in the top-level state module', () => {
+    const stateRetryPath = join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts');
+    const runRetryPath = join(repoRoot, 'packages/coding-agent/run/lifecycle/run-retry-coordinator.ts');
+    const runLifecycleIndex = readFileSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/index.ts'), 'utf8');
+    const stateIndex = readFileSync(join(repoRoot, 'packages/coding-agent/state/index.ts'), 'utf8');
+
+    expect(existsSync(stateRetryPath)).toBe(true);
+    expect(existsSync(runRetryPath)).toBe(false);
+    expect(runLifecycleIndex).not.toContain('run-retry-coordinator');
+    expect(runLifecycleIndex).not.toContain('../../state');
+    expect(stateIndex).toContain("export * from './run-retry-coordinator';");
   });
 
   it('keeps approval resume event shaping in the approval submodule', () => {

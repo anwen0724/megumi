@@ -14,8 +14,8 @@ import type {
   SessionSourceEntry,
 } from '@megumi/shared/session';
 
-import type { SessionActivePathRepository } from '../../persistence/repos/session-active-path.repo';
-import type { SessionBranchServicePort } from '../../session';
+import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
+import type { SessionBranchServicePort } from '../session';
 
 export interface RunRetryCoordinatorIds {
   eventId(): string;

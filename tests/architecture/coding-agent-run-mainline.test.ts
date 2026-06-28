@@ -95,7 +95,7 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps manual retry and rerun lifecycle rules out of AgentRunService', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
-    const retrySource = read('packages/coding-agent/run/lifecycle/run-retry-coordinator.ts');
+    const retrySource = read('packages/coding-agent/state/run-retry-coordinator.ts');
 
     expect(retrySource).toContain('export class RunRetryCoordinator');
     expect(serviceSource).not.toContain('manualRetryReasonForRunStatus');

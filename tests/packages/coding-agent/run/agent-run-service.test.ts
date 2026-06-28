@@ -60,7 +60,7 @@ import {
   RunTerminalCoordinator,
   type RunTerminalRepositoryPort,
   type RunTerminalToolRepositoryPort,
-} from '@megumi/coding-agent/run/lifecycle';
+} from '@megumi/coding-agent/state';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
