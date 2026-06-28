@@ -7,3 +7,4 @@ export * from './approval/approval-resume-events';
 export * from './approval/pending-approval-registry';
 export * from './continuation/tool-result-continuation';
 export * from './continuation/tool-result-events';
+export * from './continuation/tool-continuation-emitted';

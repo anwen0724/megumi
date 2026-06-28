@@ -13,6 +13,7 @@ import {
   closePendingApprovalGroup,
   collectApprovalResumeRuntimeEvents,
   createApprovalResolvedRuntimeEvent,
+  markToolContinuationEmitted,
   resolvePendingApproval,
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
@@ -107,7 +108,6 @@ import {
   createToolRegistryModelVisibleToolsDerivedEvent,
   createToolRegistrySnapshotCreatedEvent,
   createToolRegistrySourcesEnsuredEvent,
-  createToolContinuationEmittedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import {
@@ -562,12 +562,14 @@ export class AgentRunService implements AgentRunPort {
           return step.stepId;
         },
         markToolContinuationEmitted: ({ request, stepId, toolResults, emittedAt, sequence }) => {
-          const event = svc.markToolContinuationEmitted({
+          const event = markToolContinuationEmitted({
             request,
             stepId,
             toolResults,
             emittedAt,
             sequence,
+            repository: svc.toolRepository,
+            ids: svc.ids,
           });
           return event ? [event] : [];
         },
@@ -1699,12 +1701,14 @@ export class AgentRunService implements AgentRunPort {
       });
       return;
     }
-    const continuationEmittedEvent = this.markToolContinuationEmitted({
+    const continuationEmittedEvent = markToolContinuationEmitted({
       request: pending.request,
       stepId: resumedStep.stepId,
       toolResults: resumedToolResults,
       emittedAt: input.decidedAt,
       sequence: lastSequence += 1,
+      repository: this.toolRepository,
+      ids: this.ids,
     });
     if (continuationEmittedEvent) {
       this.appendRuntimeEvent(continuationEmittedEvent, chatStreamAdapter);
@@ -1732,12 +1736,14 @@ export class AgentRunService implements AgentRunPort {
         },
         toolContinuationRecorder: {
           markToolContinuationEmitted: ({ request, stepId, toolResults, emittedAt, sequence }) => {
-            const event = this.markToolContinuationEmitted({
+            const event = markToolContinuationEmitted({
               request,
               stepId,
               toolResults,
               emittedAt,
               sequence,
+              repository: this.toolRepository,
+              ids: this.ids,
             });
             return event ? [event] : [];
           },
@@ -1785,53 +1791,6 @@ export class AgentRunService implements AgentRunPort {
       ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
       ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
     });
-  }
-
-  private markToolContinuationEmitted(input: {
-    request: ModelStepRuntimeRequest;
-    stepId: RunStep['stepId'];
-    toolResults: readonly ToolResult[];
-    emittedAt: string;
-    sequence: number;
-  }): RuntimeEvent | undefined {
-    const toolExecutionIds = [
-      ...new Set(input.toolResults
-        .map((result) => result.toolExecutionId)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0)),
-    ];
-    if (toolExecutionIds.length === 0) {
-      return undefined;
-    }
-
-    this.toolRepository?.markToolContinuationEmitted({
-      toolExecutionIds,
-      emittedAt: input.emittedAt,
-    });
-
-    const assistantMessageId = input.toolResults
-      .map((result) => result.metadata?.assistantMessageId)
-      .find((value): value is string => typeof value === 'string' && value.length > 0)
-      ?? String(input.request.modelStepId ?? input.request.stepId);
-
-    return withRequestMetadata(createToolContinuationEmittedEvent({
-      eventId: this.ids.eventId(),
-      eventType: 'tool.continuation.emitted',
-      runId: input.request.runId,
-      sessionId: input.request.sessionId,
-      stepId: String(input.stepId),
-      requestId: input.request.requestId,
-      runtimeContext: input.request.runtimeContext,
-      sequence: input.sequence,
-      createdAt: input.emittedAt,
-      source: 'tool',
-      visibility: 'system',
-      persist: 'required',
-      payload: {
-        assistantMessageId,
-        toolExecutionIds,
-        emittedAt: input.emittedAt,
-      },
-    }), input.request);
   }
 
   private persistModelStepRecordFromEvent(

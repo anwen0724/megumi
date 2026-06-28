@@ -497,6 +497,20 @@ describe('package and file structure source guards', () => {
     expect(pendingApprovalRegistrySource).toContain('export function closePendingApprovalGroup');
   });
 
+  it('keeps tool continuation emitted event ownership in the continuation submodule', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const toolContinuationEmittedPath = join(
+      repoRoot,
+      'packages/coding-agent/run/tool-calls/continuation/tool-continuation-emitted.ts',
+    );
+
+    expect(existsSync(toolContinuationEmittedPath)).toBe(true);
+    const toolContinuationEmittedSource = readFileSync(toolContinuationEmittedPath, 'utf8');
+    expect(agentRunServiceSource).not.toContain('private markToolContinuationEmitted');
+    expect(agentRunServiceSource).not.toContain('createToolContinuationEmittedEvent');
+    expect(toolContinuationEmittedSource).toContain('export function markToolContinuationEmitted');
+  });
+
   it('keeps approval resume run status restoration in lifecycle', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeLifecyclePath = join(
