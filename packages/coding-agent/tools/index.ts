@@ -1,6 +1,7 @@
 // Public exports for platform-independent Coding Agent tool definitions, registry resolution, and execution.
 export * from './registry';
 export * from './validation';
+export * from './schemas';
 export * from './normalization';
 export * from './observation-shaper';
 export * from './observations';

@@ -4,7 +4,7 @@ import {
   createRejectionObservation,
 } from '../../tools/observations';
 import { resolveToolCallFromSnapshot } from '../../tools/registry';
-import { validateToolInput } from '../../tools/validation';
+import { validateToolInput } from '../../tools/schemas';
 import type {
   PendingToolApproval,
   HandleToolCallsInput,

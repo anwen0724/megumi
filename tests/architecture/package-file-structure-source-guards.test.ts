@@ -159,4 +159,12 @@ describe('package and file structure source guards', () => {
     expect(existsSync(ownerPath)).toBe(true);
     expect(readFileSync(compatibilityPath, 'utf8')).toContain("export * from './observations/observation-shaper'");
   });
+
+  it('keeps tool input validation in the schemas owner module', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/tools/schemas/tool-input-validation.ts');
+    const compatibilityPath = join(repoRoot, 'packages/coding-agent/tools/validation.ts');
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(readFileSync(compatibilityPath, 'utf8')).toContain("export * from './schemas/tool-input-validation'");
+  });
 });
