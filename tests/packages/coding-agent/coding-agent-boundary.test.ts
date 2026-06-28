@@ -77,6 +77,7 @@ describe('coding-agent package boundary', () => {
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
     const codingAgentRun = sourceUnder('packages/coding-agent/run');
+    const codingAgentLoop = sourceUnder('packages/coding-agent/agent-loop');
     const codingAgentState = sourceUnder('packages/coding-agent/state');
     const codingAgentInput = sourceUnder('packages/coding-agent/input');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
@@ -84,7 +85,7 @@ describe('coding-agent package boundary', () => {
     expect(codingAgentRun).toContain('class RunTurn');
     expect(codingAgentRun).toContain('class RunCompletionHooksCoordinator');
     expect(codingAgentState).toContain('class RunTerminalCoordinator');
-    expect(codingAgentRun).toContain('runModelToolLoop');
+    expect(codingAgentLoop).toContain('runModelToolLoop');
     expect(codingAgentRun).toContain('buildNextModelInputContext');
     expect(codingAgentInput).toContain('createCodingAgentRunInputFacts');
     expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);

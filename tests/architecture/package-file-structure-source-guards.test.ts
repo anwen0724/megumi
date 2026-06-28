@@ -118,7 +118,9 @@ describe('package and file structure source guards', () => {
 
   it('keeps agent loop runtime inside packages/coding-agent while state and events are top-level owners', () => {
     expect(existsSync(join(repoRoot, 'packages/agent'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'))).toBe(true);
+    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/loop/agent-loop.ts'), 'utf8'))
+      .toContain("export * from '../../agent-loop/agent-loop'");
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-event-adapter.ts'))).toBe(true);

@@ -18,7 +18,7 @@ import type {
 } from '../../agent-loop/tool-call';
 import {
   runModelToolLoop,
-} from './agent-loop';
+} from '../../agent-loop/agent-loop';
 
 export interface CodingAgentRunSourceOverrideProvider {
   resolveModelInputSourceOverrides(input: {

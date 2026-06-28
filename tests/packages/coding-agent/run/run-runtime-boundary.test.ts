@@ -33,9 +33,11 @@ function sourceUnder(relativeDirectory: string): string {
 }
 
 describe('agent package boundary', () => {
-  it('owns model/tool loop runtime under packages/coding-agent/run', () => {
+  it('owns model/tool loop runtime under packages/coding-agent/agent-loop', () => {
     expect(existsSync(join(root, 'packages/agent'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/agent-loop.ts'))).toBe(true);
+    expect(readFileSync(join(root, 'packages/coding-agent/run/loop/agent-loop.ts'), 'utf8'))
+      .toContain("export * from '../../agent-loop/agent-loop'");
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-event-adapter.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-contract.ts'))).toBe(true);

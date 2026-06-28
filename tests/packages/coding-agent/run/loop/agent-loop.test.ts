@@ -4,7 +4,7 @@ import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
-import { runModelToolLoop } from '@megumi/coding-agent/run';
+import { runModelToolLoop } from '@megumi/coding-agent/agent-loop';
 import type {
   PendingToolApproval,
   PendingToolApprovalResume,
