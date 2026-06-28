@@ -1,12 +1,12 @@
-// Marks tool results as submitted to the next model input and emits the legacy runtime event.
+// Marks tool results as submitted to the next model input and emits the runtime event.
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import {
-  createToolContinuationEmittedEvent,
-  type RuntimeEvent,
-} from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RunStep } from '@megumi/shared/session';
 import type { ToolResult } from '@megumi/shared/tool';
-import { withRequestMetadata } from '../../../events';
+import {
+  createToolResultsSubmittedToModelInputEvent,
+  withRequestMetadata,
+} from '../../../events';
 
 export interface ToolResultModelInputEmissionRepositoryPort {
   markToolResultsSubmittedToModelInput(input: {
@@ -47,9 +47,8 @@ export function markToolResultsSubmittedToModelInput(input: {
     .find((value): value is string => typeof value === 'string' && value.length > 0)
     ?? String(input.request.modelStepId ?? input.request.stepId);
 
-  return withRequestMetadata(createToolContinuationEmittedEvent({
+  return withRequestMetadata(createToolResultsSubmittedToModelInputEvent({
     eventId: input.ids.eventId(),
-    eventType: 'tool.continuation.emitted',
     runId: input.request.runId,
     sessionId: input.request.sessionId,
     stepId: String(input.stepId),
@@ -57,9 +56,6 @@ export function markToolResultsSubmittedToModelInput(input: {
     runtimeContext: input.request.runtimeContext,
     sequence: input.sequence,
     createdAt: input.emittedAt,
-    source: 'tool',
-    visibility: 'system',
-    persist: 'required',
     payload: {
       assistantMessageId,
       toolExecutionIds,

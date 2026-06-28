@@ -50,7 +50,7 @@ export function createObservationFromRawToolResult(input: CreateObservationInput
     truncated,
     ...(truncated ? { truncationReason: 'byteLimit' as const } : {}),
     ...(truncated ? { rawResultRef: input.rawResult.rawToolResultId } : {}),
-    ...(truncated ? { continuationHint: continuationHintForProfile(input.profile) } : {}),
+    ...(truncated ? { continuationHint: followUpHintForProfile(input.profile) } : {}),
     byteLength,
     tokenEstimate: estimateTokens(content),
     createdAt: input.now(),
@@ -156,7 +156,7 @@ function trimToUtf8Tail(content: string, limit: number): string {
   return output;
 }
 
-function continuationHintForProfile(profile: ToolObservationBudgetProfile): string {
+function followUpHintForProfile(profile: ToolObservationBudgetProfile): string {
   if (profile === 'fileRead') {
     return 'Use a narrower file range to inspect omitted content.';
   }

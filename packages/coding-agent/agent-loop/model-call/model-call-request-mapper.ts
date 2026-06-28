@@ -2,11 +2,12 @@
 import type {
   ModelInputContextPart,
   ModelStepRuntimeRequest,
-  ToolContinuationPart as ToolResultModelInputPart,
 } from '@megumi/shared/model';
 import type { ToolDefinition } from '@megumi/shared/tool';
 import type { AiModel, AiStructuredOutputTarget, ConversationMessage, ModelContext, ToolSet } from '@megumi/ai';
 import type { ProviderRuntimeConfig } from './model-call-contract';
+
+type ToolResultModelInputPart = Extract<ModelInputContextPart, { kind: 'tool_continuation' }>;
 
 export function mapModelCallToAiInput(input: {
   request: ModelStepRuntimeRequest;

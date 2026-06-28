@@ -413,13 +413,6 @@ export class ToolRepository {
     update(input.toolExecutionIds);
   }
 
-  markToolContinuationEmitted(input: {
-    toolExecutionIds: readonly string[];
-    emittedAt: string;
-  }): void {
-    this.markToolResultsSubmittedToModelInput(input);
-  }
-
   savePermissionDecision(decision: PermissionDecision): PermissionDecision {
     this.database.prepare(`
       INSERT INTO permission_decisions (

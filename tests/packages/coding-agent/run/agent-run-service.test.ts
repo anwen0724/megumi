@@ -700,7 +700,7 @@ function createServiceWithRealToolResolution(input: {
   return { service, requests, executeToolExecution };
 }
 
-async function runRealToolResolutionContinuation(input: {
+async function runRealToolResolutionNextModelInput(input: {
   toolCall: RuntimeEvent;
   permissionMode?: 'default' | 'plan';
   enableExternalTestSource?: boolean;
@@ -732,7 +732,7 @@ async function runRealToolResolutionContinuation(input: {
   return { ...setup, streamed };
 }
 
-function expectToolContinuationKind(
+function expectToolResultModelInputKind(
   request: ModelStepRuntimeRequest | undefined,
   kind: ToolResult['kind'],
 ) {
@@ -4939,7 +4939,7 @@ describe('AgentRunService', () => {
   });
 
   it('continues the agent loop after invalid tool calls from the model', async () => {
-    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionNextModelInput({
       toolCall: toolUseCreatedEventFor({
         sequence: 1,
         toolCallId: 'tool-call-invalid',
@@ -4951,14 +4951,14 @@ describe('AgentRunService', () => {
     });
 
     expect(requests).toHaveLength(2);
-    expectToolContinuationKind(requests[1], 'invalid_tool_call');
+    expectToolResultModelInputKind(requests[1], 'invalid_tool_call');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(executeToolExecution).not.toHaveBeenCalled();
   });
 
   it('continues the agent loop after invalid tool input from the model', async () => {
-    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionNextModelInput({
       toolCall: toolUseCreatedEventFor({
         sequence: 1,
         toolCallId: 'tool-call-invalid-input',
@@ -4970,14 +4970,14 @@ describe('AgentRunService', () => {
     });
 
     expect(requests).toHaveLength(2);
-    expectToolContinuationKind(requests[1], 'invalid_tool_input');
+    expectToolResultModelInputKind(requests[1], 'invalid_tool_input');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(executeToolExecution).not.toHaveBeenCalled();
   });
 
   it('continues the agent loop after policy denied tool results', async () => {
-    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionNextModelInput({
       toolCall: toolUseCreatedEventFor({
         sequence: 1,
         toolCallId: 'tool-call-denied',
@@ -4990,14 +4990,14 @@ describe('AgentRunService', () => {
     });
 
     expect(requests).toHaveLength(2);
-    expectToolContinuationKind(requests[1], 'policy_denied');
+    expectToolResultModelInputKind(requests[1], 'policy_denied');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(executeToolExecution).not.toHaveBeenCalled();
   });
 
   it('continues the agent loop after external_test demo_echo tool results', async () => {
-    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionNextModelInput({
       enableExternalTestSource: true,
       settings: {
         allow: [{ scope: 'project', pattern: 'demo_echo(*)' }],
@@ -5015,7 +5015,7 @@ describe('AgentRunService', () => {
     });
 
     expect(requests).toHaveLength(2);
-    expectToolContinuationKind(requests[1], 'success');
+    expectToolResultModelInputKind(requests[1], 'success');
     expect(JSON.stringify(requests[1]?.inputContext.parts)).toContain('hello external test');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
@@ -5023,7 +5023,7 @@ describe('AgentRunService', () => {
   });
 
   it('continues the agent loop when external_test demo_echo is disabled', async () => {
-    const { requests, streamed, executeToolExecution } = await runRealToolResolutionContinuation({
+    const { requests, streamed, executeToolExecution } = await runRealToolResolutionNextModelInput({
       toolCall: toolUseCreatedEventFor({
         sequence: 1,
         toolCallId: 'tool-call-demo-echo-disabled',
@@ -5035,7 +5035,7 @@ describe('AgentRunService', () => {
     });
 
     expect(requests).toHaveLength(2);
-    expectToolContinuationKind(requests[1], 'invalid_tool_call');
+    expectToolResultModelInputKind(requests[1], 'invalid_tool_call');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).not.toContain('tool.execution.routed');

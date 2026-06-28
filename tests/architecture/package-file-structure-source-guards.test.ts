@@ -564,13 +564,10 @@ describe('package and file structure source guards', () => {
 
     expect(existsSync(toolResultModelInputEmittedPath)).toBe(true);
     const toolResultModelInputEmittedSource = readFileSync(toolResultModelInputEmittedPath, 'utf8');
-    expect(agentRunServiceSource).not.toContain('private markToolContinuationEmitted');
-    expect(agentRunServiceSource).not.toContain('createToolContinuationEmittedEvent');
-    expect(agentRunToolRepositoryAdapterSource).not.toContain('markToolContinuationEmitted');
-    expect(composeCodingAgentToolRuntimeSource).not.toContain('markToolContinuationEmitted');
     expect(agentRunToolRepositoryAdapterSource).toContain('markToolResultsSubmittedToModelInput');
     expect(composeCodingAgentToolRuntimeSource).toContain('markToolResultsSubmittedToModelInput');
     expect(toolResultModelInputEmittedSource).toContain('export function markToolResultsSubmittedToModelInput');
+    expect(toolResultModelInputEmittedSource).toContain('createToolResultsSubmittedToModelInputEvent');
   });
 
   it('keeps approval resume model input preparation in the approval submodule', () => {
@@ -601,7 +598,6 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('closePendingApprovalGroup,');
     expect(agentRunServiceSource).not.toContain('collectApprovalResumeRuntimeEvents,');
     expect(agentRunServiceSource).not.toContain('createApprovalResolvedRuntimeEvent,');
-    expect(agentRunServiceSource).not.toContain('markToolContinuationEmitted,');
     expect(agentRunServiceSource).not.toContain('prepareApprovalResumeModelInput,');
     expect(agentRunServiceSource).not.toContain('resolvePendingApproval,');
     expect(agentRunServiceSource).toContain('approvalResume.toolRuntime.resumeToolApproval(input)');

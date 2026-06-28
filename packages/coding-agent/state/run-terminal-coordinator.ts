@@ -267,7 +267,7 @@ function createStartupCleanupError(run: Run): RuntimeError {
   return createTerminalRuntimeError({
     reason: 'runtime_restarted_with_active_run',
     code: 'runtime_restarted_with_active_run',
-    message: 'Runtime restarted while this run was active; pending continuation is not recoverable in 19.01.',
+    message: 'Runtime restarted while this run was active; pending model input replay is not recoverable in 19.01.',
     source: 'main',
     retryable: false,
     details: {

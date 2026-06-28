@@ -14,8 +14,9 @@ import type {
   MemoryPart,
   RuntimeConstraintPart,
   SessionPart,
-  ToolContinuationPart as ToolResultModelInputPart,
 } from '@megumi/shared/model';
+
+type ToolResultModelInputPart = Extract<ModelInputContextPart, { kind: 'tool_continuation' }>;
 
 type DraftFields = {
   truncationHint?: ModelInputContextTruncation;

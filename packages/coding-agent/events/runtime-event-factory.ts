@@ -14,6 +14,7 @@ import {
   createRuntimeRunCancelRequestedEvent,
   createRuntimeRunResumeRequestedEvent,
   createRuntimeRunRetryRequestedEvent,
+  createRuntimeEvent,
 } from '@megumi/shared/runtime';
 import type {
   ContextEffectiveUpdatedPayload,
@@ -21,7 +22,7 @@ import type {
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
 } from '@megumi/shared/run';
-import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeContext, RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent, RuntimeEventPayloadByType } from '@megumi/shared/runtime';
 
 interface BaseEventInput {
@@ -323,5 +324,20 @@ export function createArtifactReferencedEvent(
   payload: RuntimeEventPayloadByType['artifact.referenced'],
 ): RuntimeEvent {
   return createRuntimeArtifactReferencedEvent({ ...input, source: 'core' }, payload);
+}
+
+export function createToolResultsSubmittedToModelInputEvent(input: BaseEventInput & {
+  stepId: string;
+  requestId: string;
+  runtimeContext?: RuntimeContext;
+  payload: RuntimeEventPayloadByType['tool.continuation.emitted'];
+}): RuntimeEvent {
+  return createRuntimeEvent({
+    ...input,
+    eventType: 'tool.continuation.emitted',
+    source: 'tool',
+    visibility: 'system',
+    persist: 'required',
+  });
 }
 

@@ -118,6 +118,10 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/events/timeline-history-projector.ts',
       'packages/coding-agent/run/events/timeline-history-commit-projector.ts',
       'packages/coding-agent/run/tool-calls/execution/tool-execution-events.ts',
+      'packages/coding-agent/run/tool-calls/continuation/index.ts',
+      'packages/coding-agent/run/tool-calls/continuation/tool-continuation-emitted.ts',
+      'packages/coding-agent/run/tool-calls/continuation/tool-result-continuation.ts',
+      'packages/coding-agent/run/tool-calls/continuation/tool-result-events.ts',
       'packages/coding-agent/agent-loop/tool-call/model-input/tool-error-result.ts',
     ]) {
       expect(exists(removedPath), removedPath).toBe(false);
@@ -181,7 +185,7 @@ describe('coding agent run structure source guards', () => {
 
   it('keeps loop dependent only on the tool call contract boundary', () => {
     const offenders = filesContaining('packages/coding-agent/run/loop', (source) => {
-      return /from ['"][^'"]*tool-calls\/(approval|execution|continuation)/.test(source);
+      return /from ['"][^'"]*tool-calls\/(approval|execution|model-input)/.test(source);
     });
 
     expect(offenders).toEqual([]);

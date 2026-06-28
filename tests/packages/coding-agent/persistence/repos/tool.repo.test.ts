@@ -412,7 +412,7 @@ describe('ToolRepository', () => {
     });
   });
 
-  it('persists execution records with decision, observation, and continuation marker', () => {
+  it('persists execution records with decision, observation, and model input submission marker', () => {
     const repo = createRepo();
     const record = createToolExecution({
       assistantMessageId: 'assistant-message:1',
@@ -473,21 +473,6 @@ describe('ToolRepository', () => {
     expect(record?.status).toBe('failed');
     expect(record?.continuationEmitted).toBe(true);
     expect(record?.metadata?.continuationEmittedAt).toBe('2026-06-15T00:00:01.000Z');
-  });
-
-  it('keeps legacy continuation emitted marker as an alias', () => {
-    const repo = createRepo();
-    repo.saveToolCall(createToolCall());
-    repo.saveToolExecution(createToolExecution({ status: 'succeeded', continuationEmitted: false }));
-
-    repo.markToolContinuationEmitted({
-      toolExecutionIds: ['tool-execution-1'],
-      emittedAt: '2026-06-15T00:00:02.000Z',
-    });
-
-    const record = repo.getToolExecution('tool-execution-1');
-    expect(record?.continuationEmitted).toBe(true);
-    expect(record?.metadata?.continuationEmittedAt).toBe('2026-06-15T00:00:02.000Z');
   });
 
   it('lists and updates pending approval and tool execution facts by run', () => {

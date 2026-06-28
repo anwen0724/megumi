@@ -45,7 +45,7 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps model-call independent from loop and tool-call internals', () => {
     const offenders = filesContaining('packages/coding-agent/run/model-call', (source) => {
-      return /from ['"][^'"]*(\.\.\/loop|\.\.\/tool-calls\/(approval|execution|continuation))/.test(source);
+      return /from ['"][^'"]*(\.\.\/loop|\.\.\/tool-calls\/(approval|execution|model-input))/.test(source);
     });
 
     expect(offenders).toEqual([]);
@@ -53,7 +53,7 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps loop dependent only on the tool-call contract boundary', () => {
     const offenders = filesContaining('packages/coding-agent/run/loop', (source) => {
-      return /from ['"][^'"]*\.\.\/tool-calls\/(approval|execution|continuation)/.test(source);
+      return /from ['"][^'"]*\.\.\/tool-calls\/(approval|execution|model-input)/.test(source);
     });
 
     expect(offenders).toEqual([]);
