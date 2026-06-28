@@ -255,6 +255,8 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
     listMessagesBySession: sessionService.listMessagesBySession.bind(sessionService),
     listTimelineMessagesBySession: sessionService.listTimelineMessagesBySession.bind(sessionService),
     listRunsBySession: sessionService.listRunsBySession.bind(sessionService),
+    assertActiveBranchDraftMarker: ((input: Parameters<SessionBranchServicePort['assertActiveBranchDraftMarker']>[0]) =>
+      requireBranchService(sessionBranchService, 'assertActiveBranchDraftMarker').assertActiveBranchDraftMarker(input)),
     createBranchFromUserMessage: ((input: Parameters<SessionBranchServicePort['createBranchFromUserMessage']>[0]) =>
       requireBranchService(sessionBranchService, 'createBranchFromUserMessage').createBranchFromUserMessage(input)),
     createBranchDraft: ((input: Parameters<SessionBranchServicePort['createBranchDraft']>[0]) =>

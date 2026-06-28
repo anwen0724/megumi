@@ -90,6 +90,9 @@ describe('RunRetryCoordinator', () => {
       },
     });
     fixture.coordinatorWithBranch({
+      assertActiveBranchDraftMarker: (() => {
+        throw new Error('not used');
+      }) as never,
       createBranchFromUserMessage: () => ({
         branchMarker,
         branchMarkerSourceEntry,

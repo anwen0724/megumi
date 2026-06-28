@@ -24,6 +24,7 @@ import {
   type SessionCompactionOrchestrationResult,
 } from '../context';
 import {
+  assertActiveBranchDraftMarker as assertSessionActiveBranchDraftMarker,
   SessionContextInputService,
   SessionTurnPreparationService,
   type SessionBranchServicePort,
@@ -660,7 +661,8 @@ export class AgentRunService implements AgentRunPort {
       if (!input.payload.sessionId) {
         throw new Error('Branch draft requires an existing session.');
       }
-      branchDraftMarker = this.assertActiveBranchDraftMarker({
+      branchDraftMarker = assertSessionActiveBranchDraftMarker({
+        activePathRepository: this.requireActivePathRepository(),
         sessionId: input.payload.sessionId,
         branchMarkerId: input.payload.branchDraft.branchMarkerId,
       });
@@ -1402,36 +1404,6 @@ export class AgentRunService implements AgentRunPort {
     runtimeContext?: RuntimeContext;
   }): RuntimeEvent {
     return this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft(input);
-  }
-
-  private assertActiveBranchDraftMarker(input: {
-    sessionId: string;
-    branchMarkerId: string;
-  }): SessionBranchMarker {
-    const activePathRepository = this.requireActivePathRepository();
-    const marker = activePathRepository.getBranchMarker(input.branchMarkerId);
-    if (!marker || marker.sessionId !== input.sessionId) {
-      throw new Error('Branch draft marker was not found.');
-    }
-
-    const markerSourceEntry = activePathRepository.getSourceEntryBySourceRef(input.sessionId, {
-      sourceKind: 'branch_marker',
-      sourceId: input.branchMarkerId,
-    });
-    if (!markerSourceEntry) {
-      throw new Error('Branch draft marker was not found.');
-    }
-
-    const activeLeaf = activePathRepository.getActiveLeaf(input.sessionId);
-    if (activeLeaf?.leafSourceEntryId !== markerSourceEntry.sourceEntryId) {
-      throw new Error('Branch draft marker is not active.');
-    }
-
-    if (activePathRepository.listChildSourceEntries(markerSourceEntry.sourceEntryId).length > 0) {
-      throw new Error('Branch draft marker is not active.');
-    }
-
-    return marker;
   }
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {

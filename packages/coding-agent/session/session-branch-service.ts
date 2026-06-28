@@ -68,6 +68,11 @@ export interface SessionBranchActivePathRepository {
 }
 
 export interface SessionBranchServicePort {
+  assertActiveBranchDraftMarker(input: {
+    sessionId: string;
+    branchMarkerId: string;
+  }): SessionBranchMarker;
+
   createBranchFromUserMessage(input: {
     requestId: string;
     sessionId: string;
@@ -127,6 +132,16 @@ export class SessionBranchService implements SessionBranchServicePort {
     this.activePathRepository = options.activePathRepository;
     this.ids = options.ids;
     this.chatStreamEventSink = options.chatStreamEventSink;
+  }
+
+  assertActiveBranchDraftMarker(input: {
+    sessionId: string;
+    branchMarkerId: string;
+  }): SessionBranchMarker {
+    return assertActiveBranchDraftMarker({
+      activePathRepository: this.activePathRepository,
+      ...input,
+    });
   }
 
   createBranchFromUserMessage(input: {
@@ -412,6 +427,42 @@ export function branchMarkerSourceRef(branchMarkerId: string, builtAt: string): 
     sourceUri: `branch-marker://${branchMarkerId}`,
     loadedAt: builtAt,
   };
+}
+
+export function assertActiveBranchDraftMarker(input: {
+  activePathRepository: Pick<
+    SessionBranchActivePathRepository,
+    | 'getBranchMarker'
+    | 'getSourceEntryBySourceRef'
+    | 'getActiveLeaf'
+    | 'listChildSourceEntries'
+  >;
+  sessionId: string;
+  branchMarkerId: string;
+}): SessionBranchMarker {
+  const marker = input.activePathRepository.getBranchMarker(input.branchMarkerId);
+  if (!marker || marker.sessionId !== input.sessionId) {
+    throw new Error('Branch draft marker was not found.');
+  }
+
+  const markerSourceEntry = input.activePathRepository.getSourceEntryBySourceRef(input.sessionId, {
+    sourceKind: 'branch_marker',
+    sourceId: input.branchMarkerId,
+  });
+  if (!markerSourceEntry) {
+    throw new Error('Branch draft marker was not found.');
+  }
+
+  const activeLeaf = input.activePathRepository.getActiveLeaf(input.sessionId);
+  if (activeLeaf?.leafSourceEntryId !== markerSourceEntry.sourceEntryId) {
+    throw new Error('Branch draft marker is not active.');
+  }
+
+  if (input.activePathRepository.listChildSourceEntries(markerSourceEntry.sourceEntryId).length > 0) {
+    throw new Error('Branch draft marker is not active.');
+  }
+
+  return marker;
 }
 
 export function appendSourceAndMoveLeaf(input: {
