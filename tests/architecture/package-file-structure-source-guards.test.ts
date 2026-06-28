@@ -434,4 +434,11 @@ describe('package and file structure source guards', () => {
     expect(runtimeSource).toContain('modelStepRepository: persistence.modelStepRepository');
     expect(runtimeSource).not.toContain('sessionRunRepository: persistence.sessionRunRepository');
   });
+
+  it('keeps the standalone default agent run service off the session-run repository facade', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+
+    expect(agentRunServiceSource).not.toContain('sessionRunRepository');
+    expect(agentRunServiceSource).toContain('repository: createDefaultAgentRunRepositoryPort(persistence)');
+  });
 });

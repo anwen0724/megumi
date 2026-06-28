@@ -2287,6 +2287,29 @@ export interface CreateDefaultAgentRunServiceOptions {
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
 }
 
+function createDefaultAgentRunRepositoryPort(
+  persistence: ReturnType<typeof composeCodingAgentPersistence>,
+): AgentRunRepositoryPort {
+  return {
+    saveSession: (session) => persistence.sessionRecordRepository.saveSession(session),
+    getSession: (sessionId) => persistence.sessionRecordRepository.getSession(sessionId),
+    saveMessage: (message) => persistence.sessionMessageRepository.saveMessage(message),
+    getMessage: (messageId) => persistence.sessionMessageRepository.getMessage(messageId),
+    saveRun: (run) => persistence.runRecordRepository.saveRun(run),
+    getRun: (runId) => persistence.runRecordRepository.getRun(runId),
+    listRunsByStatuses: (statuses) => persistence.runRecordRepository.listRunsByStatuses(statuses),
+    saveStep: (step) => persistence.runExecutionFactRepository.saveStep(step),
+    listStepsByRun: (runId) => persistence.runExecutionFactRepository.listStepsByRun(runId),
+    saveAction: (action) => persistence.runExecutionFactRepository.saveAction(action),
+    saveObservation: (observation) => persistence.runExecutionFactRepository.saveObservation(observation),
+    saveModelStep: (modelStep) => persistence.modelStepRepository.saveModelStep(modelStep),
+    getModelStep: (modelStepId) => persistence.modelStepRepository.getModelStep(modelStepId),
+    getSessionCompaction: (compactionId) => persistence.sessionContextRepository.getSessionCompaction(compactionId),
+    appendRuntimeEvent: (event) => persistence.runtimeEventRepository.appendRuntimeEvent(event),
+    listRuntimeEventsByRun: (runId) => persistence.runtimeEventRepository.listRuntimeEventsByRun(runId),
+  };
+}
+
 export function createDefaultAgentRunService(
   homePaths: AgentRunServiceHomePaths,
   options: CreateDefaultAgentRunServiceOptions = {},
@@ -2297,7 +2320,7 @@ export function createDefaultAgentRunService(
   const toolRepository = persistence.toolRepository;
 
   const service = new AgentRunService({
-    repository: persistence.sessionRunRepository,
+    repository: createDefaultAgentRunRepositoryPort(persistence),
     sessionCompactionRepository: persistence.sessionContextRepository,
     activePathRepository,
     toolRepository,
