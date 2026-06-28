@@ -22,6 +22,9 @@ import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { RuntimeEventRepository } from './runtime-event.repo';
 import { RunExecutionFactRepository } from './run-execution-fact.repo';
+import { ModelStepRepository, type ModelStepRecord } from './model-step.repo';
+
+export type { ModelStepRecord } from './model-step.repo';
 
 type Nullable<T> = T | null;
 
@@ -82,40 +85,15 @@ interface SessionCompactionRow {
   metadata_json: Nullable<string>;
 }
 
-interface ModelStepRow {
-  model_step_id: string;
-  run_id: string;
-  step_id: Nullable<string>;
-  provider_id: string;
-  model_id: string;
-  status: RunStep['status'];
-  started_at: string;
-  completed_at: Nullable<string>;
-  error_json: Nullable<string>;
-  metadata_json: Nullable<string>;
-  model_step_json: string;
-}
-
-export interface ModelStepRecord {
-  modelStepId: string;
-  runId: string;
-  stepId?: string;
-  providerId: string;
-  modelId: string;
-  status: RunStep['status'];
-  startedAt: string;
-  completedAt?: string;
-  error?: RuntimeError;
-  metadata?: JsonObject;
-}
-
 export class SessionRunRepository {
   private readonly runtimeEvents: RuntimeEventRepository;
   private readonly runExecutionFacts: RunExecutionFactRepository;
+  private readonly modelSteps: ModelStepRepository;
 
   constructor(private readonly database: MegumiDatabase) {
     this.runtimeEvents = new RuntimeEventRepository(database);
     this.runExecutionFacts = new RunExecutionFactRepository(database);
+    this.modelSteps = new ModelStepRepository(database);
   }
 
   saveSession(session: Session): Session {
@@ -374,35 +352,11 @@ export class SessionRunRepository {
   }
 
   saveModelStep(modelStep: ModelStepRecord): ModelStepRecord {
-    this.database.prepare(`
-      INSERT INTO model_steps (
-        model_step_id, run_id, step_id, provider_id, model_id, status,
-        started_at, completed_at, error_json, metadata_json, model_step_json
-      ) VALUES (
-        @model_step_id, @run_id, @step_id, @provider_id, @model_id, @status,
-        @started_at, @completed_at, @error_json, @metadata_json, @model_step_json
-      )
-      ON CONFLICT(model_step_id) DO UPDATE SET
-        run_id = excluded.run_id,
-        step_id = excluded.step_id,
-        provider_id = excluded.provider_id,
-        model_id = excluded.model_id,
-        status = excluded.status,
-        started_at = excluded.started_at,
-        completed_at = excluded.completed_at,
-        error_json = excluded.error_json,
-        metadata_json = excluded.metadata_json,
-        model_step_json = excluded.model_step_json
-    `).run(toModelStepRow(modelStep));
-
-    return this.getModelStep(modelStep.modelStepId) ?? modelStep;
+    return this.modelSteps.saveModelStep(modelStep);
   }
 
   getModelStep(modelStepId: string): ModelStepRecord | undefined {
-    const row = this.database.prepare('SELECT * FROM model_steps WHERE model_step_id = ?').get(modelStepId) as
-      | ModelStepRow
-      | undefined;
-    return row ? fromModelStepRow(row) : undefined;
+    return this.modelSteps.getModelStep(modelStepId);
   }
 
   saveAction(action: RunAction): RunAction {
@@ -661,35 +615,3 @@ function fromRunRow(row: RunRow): Run {
     ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
   };
 }
-
-function toModelStepRow(modelStep: ModelStepRecord): ModelStepRow {
-  return {
-    model_step_id: modelStep.modelStepId,
-    run_id: modelStep.runId,
-    step_id: modelStep.stepId ?? null,
-    provider_id: modelStep.providerId,
-    model_id: modelStep.modelId,
-    status: modelStep.status,
-    started_at: modelStep.startedAt,
-    completed_at: modelStep.completedAt ?? null,
-    error_json: modelStep.error ? stringifyJson(modelStep.error) : null,
-    metadata_json: modelStep.metadata ? stringifyJson(modelStep.metadata) : null,
-    model_step_json: stringifyJson(modelStep),
-  };
-}
-
-function fromModelStepRow(row: ModelStepRow): ModelStepRecord {
-  return {
-    modelStepId: row.model_step_id,
-    runId: row.run_id,
-    ...(row.step_id ? { stepId: row.step_id } : {}),
-    providerId: row.provider_id,
-    modelId: row.model_id,
-    status: row.status,
-    startedAt: row.started_at,
-    ...(row.completed_at ? { completedAt: row.completed_at } : {}),
-    ...(row.error_json ? { error: parseJson<RuntimeError>(row.error_json) } : {}),
-    ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
-  };
-}
-

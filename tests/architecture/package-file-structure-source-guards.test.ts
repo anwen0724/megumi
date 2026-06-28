@@ -195,4 +195,17 @@ describe('package and file structure source guards', () => {
     expect(sessionRunSource).not.toContain('INSERT INTO run_actions');
     expect(sessionRunSource).not.toContain('INSERT INTO run_observations');
   });
+
+  it('keeps model step persistence in its owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/model-step.repo.ts');
+    const sessionRunSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
+      'utf8',
+    );
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(sessionRunSource).toContain('new ModelStepRepository');
+    expect(sessionRunSource).not.toContain('INSERT INTO model_steps');
+    expect(sessionRunSource).not.toContain('SELECT * FROM model_steps');
+  });
 });
