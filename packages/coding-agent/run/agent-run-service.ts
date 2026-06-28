@@ -3,11 +3,9 @@
 import path from 'node:path';
 import {
   assertRunStatusTransition,
-  canCancelRunStatus,
   canResumeApprovalFromRunStatus,
-  isTerminalRunStatus,
 } from './lifecycle/run-state-policy';
-import { createTerminalRuntimeError } from './lifecycle/run-error';
+import { RunTerminalCoordinator } from './lifecycle/run-terminal-coordinator';
 import { runTurn } from './lifecycle/run-lifecycle';
 import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
 import type { ModelCallCompletionResult } from './model-call';
@@ -58,7 +56,6 @@ import {
 import { composeCodingAgentPersistence } from '../composition/compose-coding-agent-persistence';
 import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import { createInterruptedExecutionObservation } from '@megumi/coding-agent/tools/observation-shaper';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
@@ -460,6 +457,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
   private readonly clock: AgentRunServiceClock;
   private readonly ids: AgentRunServiceIds;
+  private readonly runTerminalCoordinator: RunTerminalCoordinator;
   private readonly workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
   private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
@@ -507,6 +505,11 @@ export class AgentRunService implements AgentRunPort {
       : undefined;
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
+    this.runTerminalCoordinator = new RunTerminalCoordinator({
+      repository: this.repository,
+      ...(this.toolRepository ? { toolRepository: this.toolRepository } : {}),
+      ids: this.ids,
+    });
     this.workspaceChanges = options.workspaceChanges;
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
       ?? (options.modelStepProvider
@@ -1196,103 +1199,20 @@ export class AgentRunService implements AgentRunPort {
       return providerCancelled;
     }
 
-    const persistedRun = this.repository.getRun(activeRun.runId);
-    if (!persistedRun || isTerminalRunStatus(persistedRun.status)) {
+    const result = this.runTerminalCoordinator.cancelActiveSessionMessageRun({
+      activeRun,
+      targetRequestId: payload.targetRequestId,
+      cancelRequestId: this.ids.cancelRequestId(),
+      cancelledAt: this.clock.now(),
+      providerCancelled,
+      cancelPendingApprovalGroupsByRun: (runId) => this.cancelPendingApprovalGroupsByRun(runId),
+      appendEvent: (event) => this.appendRuntimeEvent(event, activeRun.chatStreamAdapter),
+    });
+
+    if (result.shouldForgetActiveRun) {
       this.activeSessionMessageRuns.delete(payload.targetRequestId);
-      return providerCancelled;
     }
-    if (!canCancelRunStatus(persistedRun.status)) {
-      return providerCancelled;
-    }
-
-    const cancelledAt = this.clock.now();
-    const lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(activeRun.runId));
-    const runningStep = this.repository.listStepsByRun(activeRun.runId)
-      .reverse()
-      .find((step) => ['running', 'waiting_for_approval'].includes(step.status));
-
-    if (runningStep) {
-      this.repository.saveStep({
-        ...runningStep,
-        status: 'cancelled',
-        completedAt: cancelledAt,
-      });
-    }
-
-    assertRunStatusTransition(persistedRun.status, 'cancelling');
-    const cancellingRun = this.repository.saveRun({
-      ...persistedRun,
-      status: 'cancelling',
-    });
-    const cancelRequestId = this.ids.cancelRequestId();
-    this.appendRuntimeEvent(createRunStatusChangedEvent({
-      eventId: this.ids.eventId(),
-      sessionId: activeRun.sessionId,
-      runId: activeRun.runId,
-      sequence: lastSequence + 1,
-      createdAt: cancelledAt,
-      from: persistedRun.status,
-      to: 'cancelling',
-    }), activeRun.chatStreamAdapter);
-    this.appendRuntimeEvent(createRuntimeEvent({
-      eventId: this.ids.eventId(),
-      eventType: 'run.cancelling',
-      runId: activeRun.runId,
-      sessionId: activeRun.sessionId,
-      stepId: runningStep?.stepId ?? activeRun.stepId,
-      requestId: payload.targetRequestId,
-      sequence: lastSequence + 2,
-      createdAt: cancelledAt,
-      source: 'core',
-      visibility: 'user',
-      persist: 'required',
-      payload: { cancelRequestId },
-    }), activeRun.chatStreamAdapter);
-    this.cancelPendingApprovalGroupsByRun(activeRun.runId);
-    this.toolRepository?.cancelPendingApprovalRequestsByRun({
-      runId: activeRun.runId,
-      resolvedAt: cancelledAt,
-    });
-    this.toolRepository?.cancelPendingToolExecutionsByRun({
-      runId: activeRun.runId,
-      completedAt: cancelledAt,
-    });
-    assertRunStatusTransition(cancellingRun.status, 'cancelled');
-    this.repository.saveRun({
-      ...cancellingRun,
-      status: 'cancelled',
-      cancelledAt,
-    });
-    const cancelledEvent = createRuntimeEvent({
-      eventId: this.ids.eventId(),
-      eventType: 'run.cancelled',
-      runId: activeRun.runId,
-      sessionId: activeRun.sessionId,
-      stepId: runningStep?.stepId ?? activeRun.stepId,
-      requestId: payload.targetRequestId,
-      sequence: lastSequence + 3,
-      createdAt: cancelledAt,
-      source: 'core',
-      visibility: 'user',
-      persist: 'required',
-      payload: {
-        reason: providerCancelled
-          ? 'Provider request was cancelled.'
-          : 'Session message run was cancelled by the user.',
-      },
-    });
-    this.appendRuntimeEvent(cancelledEvent, activeRun.chatStreamAdapter);
-    this.appendRuntimeEvent(createRunStatusChangedEvent({
-      eventId: this.ids.eventId(),
-      sessionId: activeRun.sessionId,
-      runId: activeRun.runId,
-      sequence: lastSequence + 4,
-      createdAt: cancelledAt,
-      from: 'cancelling',
-      to: 'cancelled',
-    }), activeRun.chatStreamAdapter);
-    this.activeSessionMessageRuns.delete(payload.targetRequestId);
-    return true;
+    return result.handled ? true : providerCancelled;
   }
 
   resumeApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined {
@@ -1310,76 +1230,9 @@ export class AgentRunService implements AgentRunPort {
   }
 
   cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] } {
-    const cleanupAt = this.clock.now();
-    const activeRuns = this.repository.listRunsByStatuses([
-      'running',
-      'waiting_for_approval',
-      'cancelling',
-    ]);
-    const cleanedRunIds: string[] = [];
-
-    for (const run of activeRuns) {
-      const lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(String(run.runId)));
-      const error = createTerminalRuntimeError({
-        reason: 'runtime_restarted_with_active_run',
-        code: 'runtime_restarted_with_active_run',
-        message: 'Runtime restarted while this run was active; pending continuation is not recoverable in 19.01.',
-        source: 'main',
-        retryable: false,
-        details: {
-          previousStatus: run.status,
-          startupCleanup: true,
-        },
-      });
-      this.toolRepository?.cancelPendingApprovalRequestsByRun({
-        runId: String(run.runId),
-        resolvedAt: cleanupAt,
-      });
-      this.toolRepository?.failRunningToolExecutionsByRun({
-        runId: String(run.runId),
-        completedAt: cleanupAt,
-        createObservation: (record) => createInterruptedExecutionObservation({
-          record,
-          ids: { observationId: () => `tool-observation:${record.toolExecutionId}:interrupted` },
-          now: () => cleanupAt,
-        }),
-      });
-      this.toolRepository?.cancelPendingToolExecutionsByRun({
-        runId: String(run.runId),
-        completedAt: cleanupAt,
-        statuses: ['created', 'awaitingApproval', 'queued'],
-      });
-      this.repository.saveRun({
-        ...run,
-        status: 'failed',
-        completedAt: cleanupAt,
-        error,
-      });
-      this.repository.appendRuntimeEvent(createRuntimeEvent({
-        eventId: this.ids.eventId(),
-        eventType: 'run.failed',
-        runId: String(run.runId),
-        sessionId: String(run.sessionId),
-        sequence: lastSequence + 1,
-        createdAt: cleanupAt,
-        source: 'main',
-        visibility: 'user',
-        persist: 'required',
-        payload: { error },
-      }));
-      this.repository.appendRuntimeEvent(createRunStatusChangedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: String(run.sessionId),
-        runId: String(run.runId),
-        sequence: lastSequence + 2,
-        createdAt: cleanupAt,
-        from: run.status,
-        to: 'failed',
-      }));
-      cleanedRunIds.push(String(run.runId));
-    }
-
-    return { cleanedRunIds };
+    return this.runTerminalCoordinator.cleanupInterruptedRunsOnStartup({
+      cleanupAt: this.clock.now(),
+    });
   }
 
   private createInitialContextForRun(input: {

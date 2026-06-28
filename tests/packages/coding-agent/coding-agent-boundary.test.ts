@@ -44,6 +44,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/context/run-input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/lifecycle/run-terminal-coordinator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-stream.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/events/runtime-event-utils.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
@@ -78,6 +79,7 @@ describe('coding-agent package boundary', () => {
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(codingAgentRun).toContain('class RunTurn');
+    expect(codingAgentRun).toContain('class RunTerminalCoordinator');
     expect(codingAgentRun).toContain('runModelToolLoop');
     expect(codingAgentRun).toContain('buildContinuationInputContext');
     expect(codingAgentInput).toContain('createCodingAgentRunInputFacts');
