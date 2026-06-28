@@ -6,6 +6,7 @@ import {
   canResumeApprovalFromRunStatus,
 } from './lifecycle/run-state-policy';
 import { RunTerminalCoordinator } from './lifecycle/run-terminal-coordinator';
+import { RunRetryCoordinator } from './lifecycle/run-retry-coordinator';
 import { RunCompletionHooksCoordinator } from './completion';
 import { runTurn } from './lifecycle/run-lifecycle';
 import type { RunHostBoundaryPort } from './lifecycle';
@@ -258,6 +259,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly clock: AgentRunServiceClock;
   private readonly ids: AgentRunServiceIds;
   private readonly runTerminalCoordinator: RunTerminalCoordinator;
+  private readonly runRetryCoordinator: RunRetryCoordinator;
   private readonly runCompletionHooks: RunCompletionHooksCoordinator;
   private readonly workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
@@ -315,6 +317,12 @@ export class AgentRunService implements AgentRunPort {
     this.runTerminalCoordinator = new RunTerminalCoordinator({
       repository: this.repository,
       ...(this.toolRepository ? { toolRepository: this.toolRepository } : {}),
+      ids: this.ids,
+    });
+    this.runRetryCoordinator = new RunRetryCoordinator({
+      repository: this.repository,
+      ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
+      ...(this.sessionBranchService ? { sessionBranchService: this.sessionBranchService } : {}),
       ids: this.ids,
     });
     this.workspaceChanges = options.workspaceChanges;
@@ -857,91 +865,7 @@ export class AgentRunService implements AgentRunPort {
     retryAttemptSourceEntry: SessionSourceEntry;
     events: RuntimeEvent[];
   } {
-    const activePathRepository = this.requireActivePathRepository();
-    const run = this.repository.getRun(input.runId);
-    if (!run || !['failed', 'cancelled', 'cancelling', 'running', 'queued'].includes(run.status)) {
-      throw new Error('Manual retry requires a failed, cancelled, interrupted, or running-like run.');
-    }
-
-    const runSourceEntry = activePathRepository.getSourceEntryBySourceRef(run.sessionId, {
-      sourceKind: 'session_run',
-      sourceId: String(run.runId),
-    });
-    const retryAttemptId = this.ids.retryAttemptId();
-    const retryAttempt = activePathRepository.saveRetryAttempt({
-      retryAttemptId,
-      sessionId: run.sessionId,
-      runId: String(run.runId),
-      baseRunId: String(run.runId),
-      ...(runSourceEntry ? { baseSourceEntryId: runSourceEntry.sourceEntryId } : {}),
-      attemptNumber: activePathRepository.listRetryAttemptsByRun(String(run.runId)).length + 1,
-      retryKind: 'manual_retry',
-      reason: manualRetryReasonForRunStatus(run.status),
-      status: 'pending',
-      retryable: true,
-      createdAt: input.createdAt,
-      metadata: {
-        requestId: input.requestId,
-        previousStatus: run.status,
-        ...(run.error?.message ? { previousErrorMessage: run.error.message } : {}),
-      },
-    });
-    const retryAttemptSourceEntry = this.appendSourceAndMoveLeaf({
-      sessionId: run.sessionId,
-      sourceRef: retryAttemptSourceRef(retryAttempt.retryAttemptId, input.createdAt),
-      createdAt: input.createdAt,
-      metadata: {
-        requestId: input.requestId,
-        baseRunId: String(run.runId),
-      },
-    });
-    if (!retryAttemptSourceEntry) {
-      throw new Error('Manual retry requires active path repository.');
-    }
-
-    const events = [
-      createRuntimeEvent({
-        eventId: this.ids.eventId(),
-        eventType: 'run.retry.requested',
-        runId: String(run.runId),
-        sessionId: run.sessionId,
-        requestId: input.requestId,
-        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
-        sequence: 1,
-        createdAt: input.createdAt,
-        source: 'main',
-        visibility: 'system',
-        persist: 'required',
-        payload: {
-          retryRequestId: retryAttempt.retryAttemptId,
-          requestedBy: 'user',
-          retryKind: 'manual_retry',
-          reason: retryAttempt.reason,
-        },
-      }),
-      createRuntimeEvent({
-        eventId: this.ids.eventId(),
-        eventType: 'retry.started',
-        runId: String(run.runId),
-        sessionId: run.sessionId,
-        requestId: input.requestId,
-        ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
-        sequence: 2,
-        createdAt: input.createdAt,
-        source: 'main',
-        visibility: 'system',
-        persist: 'required',
-        payload: {
-          retryRequestId: retryAttempt.retryAttemptId,
-          retryKind: 'manual_retry',
-        },
-      }),
-    ];
-    for (const event of events) {
-      this.repository.appendRuntimeEvent(event);
-    }
-
-    return { retryAttempt, retryAttemptSourceEntry, events };
+    return this.runRetryCoordinator.createManualRetryFromRun(input);
   }
 
   createManualRerunFromUserMessage(input: {
@@ -958,44 +882,7 @@ export class AgentRunService implements AgentRunPort {
     retryAttemptSourceEntry: SessionSourceEntry;
     events: RuntimeEvent[];
   } {
-    const branch = this.requireSessionBranchService().createBranchFromUserMessage(input);
-    const retryAttemptId = this.ids.retryAttemptId();
-    const retryAttempt = this.requireActivePathRepository().saveRetryAttempt({
-      retryAttemptId,
-      sessionId: input.sessionId,
-      runId: String(branch.seedMessage.runId),
-      baseSourceEntryId: branch.branchMarkerSourceEntry.sourceEntryId,
-      attemptNumber: 1,
-      retryKind: 'manual_rerun',
-      reason: 'user_requested',
-      status: 'pending',
-      retryable: true,
-      createdAt: input.createdAt,
-      metadata: {
-        requestId: input.requestId,
-        seedMessageId: input.messageId,
-        branchMarkerId: branch.branchMarker.branchMarkerId,
-      },
-    });
-    const retryAttemptSourceEntry = this.appendSourceAndMoveLeaf({
-      sessionId: input.sessionId,
-      sourceRef: retryAttemptSourceRef(retryAttempt.retryAttemptId, input.createdAt),
-      createdAt: input.createdAt,
-      metadata: {
-        requestId: input.requestId,
-        branchMarkerId: branch.branchMarker.branchMarkerId,
-      },
-    });
-    if (!retryAttemptSourceEntry) {
-      throw new Error('Manual rerun requires active path repository.');
-    }
-
-    return {
-      ...branch,
-      retryAttempt,
-      retryAttemptSourceEntry,
-      events: branch.events,
-    };
+    return this.runRetryCoordinator.createManualRerunFromUserMessage(input);
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
@@ -1581,51 +1468,7 @@ export class AgentRunService implements AgentRunPort {
     createdAt: string;
     runtimeContext?: RuntimeContext;
   }): RuntimeEvent {
-    const activePathRepository = this.requireActivePathRepository();
-    const marker = input.marker;
-
-    const seedRunId = marker.seedSourceRef?.sourceKind === 'session_message'
-      ? this.repository.getMessage(marker.seedSourceRef.sourceId)?.runId
-      : undefined;
-    const runId = String(seedRunId ?? input.runId);
-    const retryAttemptId = this.ids.retryAttemptId();
-    const retryAttempt = activePathRepository.saveRetryAttempt({
-      retryAttemptId,
-      sessionId: input.sessionId,
-      runId,
-      ...(marker.targetLeafSourceEntryId ? { baseSourceEntryId: marker.targetLeafSourceEntryId } : {}),
-      attemptNumber: activePathRepository.listRetryAttemptsByRun(runId).length + 1,
-      retryKind: 'manual_rerun',
-      reason: 'user_requested',
-      status: 'pending',
-      retryable: true,
-      createdAt: input.createdAt,
-      metadata: {
-        requestId: input.requestId,
-        branchMarkerId: input.branchMarkerId,
-      },
-    });
-
-    return createRuntimeEvent({
-      eventId: this.ids.eventId(),
-      eventType: 'run.retry.requested',
-      runId,
-      sessionId: input.sessionId,
-      requestId: input.requestId,
-      ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
-      sequence: nextRuntimeSequence(this.repository.listRuntimeEventsByRun(runId)),
-      createdAt: input.createdAt,
-      source: 'main',
-      visibility: 'system',
-      persist: 'required',
-      payload: {
-        retryRequestId: retryAttempt.retryAttemptId,
-        requestedBy: 'user',
-        retryKind: 'manual_rerun',
-        reason: 'user_requested',
-        attemptNumber: retryAttempt.attemptNumber,
-      },
-    });
+    return this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft(input);
   }
 
   private assertActiveBranchDraftMarker(input: {
@@ -1728,14 +1571,6 @@ export class AgentRunService implements AgentRunPort {
     }
 
     return this.activePathRepository;
-  }
-
-  private requireSessionBranchService(): SessionBranchServicePort {
-    if (!this.sessionBranchService) {
-      throw new Error('Session branch service is not configured.');
-    }
-
-    return this.sessionBranchService;
   }
 
   private requirePermissionSnapshotService(): NonNullable<AgentRunServiceOptions['permissionSnapshotService']> {
@@ -2221,25 +2056,6 @@ function sessionRunSourceRef(runId: string, builtAt: string): ModelInputContextS
     sourceUri: `session-run://${runId}`,
     loadedAt: builtAt,
   };
-}
-
-function retryAttemptSourceRef(retryAttemptId: string, builtAt: string): ModelInputContextSourceRef {
-  return {
-    sourceKind: 'retry_attempt',
-    sourceId: retryAttemptId,
-    sourceUri: `retry-attempt://${retryAttemptId}`,
-    loadedAt: builtAt,
-  };
-}
-
-function manualRetryReasonForRunStatus(status: Run['status']): SessionRetryAttempt['reason'] {
-  if (status === 'cancelled') {
-    return 'cancelled';
-  }
-  if (status === 'running' || status === 'queued' || status === 'cancelling') {
-    return 'interrupted';
-  }
-  return 'failed';
 }
 
 type SessionMessageSendHistoryMessage = NonNullable<SessionMessageSendPayload['messages']>[number];

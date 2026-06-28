@@ -93,6 +93,15 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('export interface AgentRunServiceIds');
   });
 
+  it('keeps manual retry and rerun lifecycle rules out of AgentRunService', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const retrySource = read('packages/coding-agent/run/lifecycle/run-retry-coordinator.ts');
+
+    expect(retrySource).toContain('export class RunRetryCoordinator');
+    expect(serviceSource).not.toContain('manualRetryReasonForRunStatus');
+    expect(serviceSource).not.toContain('retryAttemptSourceRef');
+  });
+
   it('keeps model call context materialization split into focused part builders', () => {
     for (const requiredPath of [
       'packages/coding-agent/run/context/parts/runtime-constraints.ts',
