@@ -16,12 +16,7 @@ import type { RunContext, ModelCapabilitySummary } from '@megumi/shared/run';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   Run,
-  RunAction,
-  RunObservation,
   RunStep,
-  Session,
-  SessionCompactionEntry,
-  SessionMessage,
 } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
@@ -33,7 +28,16 @@ import type {
 } from '@megumi/shared/workspace';
 
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import type { ModelStepRecord } from '../persistence/repos/model-step.repo';
+import type {
+  AgentRunExecutionFactRepositoryPort,
+  AgentRunMessageRepositoryPort,
+  AgentRunModelStepRepositoryPort,
+  AgentRunRunRecordRepositoryPort,
+  AgentRunRuntimeEventRepositoryPort,
+  AgentRunSessionContextRepositoryPort,
+  AgentRunSessionRepositoryPort,
+  AgentRunToolRepositoryPort,
+} from '../persistence';
 import type {
   PermissionSnapshotService,
 } from '../permissions/permission-snapshot-service';
@@ -233,50 +237,6 @@ export interface SessionRunWorkspaceChangeReadPort {
 export interface AgentRunServiceHomePaths {
   homePath: string;
   sqlitePath: string;
-}
-
-export interface AgentRunToolRepositoryPort {
-  markToolResultsSubmittedToModelInput(input: {
-    toolExecutionIds: string[];
-    emittedAt: string;
-  }): void;
-}
-
-export interface AgentRunSessionRepositoryPort {
-  saveSession(session: Session): Session;
-  getSession(sessionId: string): Session | undefined;
-}
-
-export interface AgentRunMessageRepositoryPort {
-  saveMessage(message: SessionMessage): SessionMessage;
-  getMessage(messageId: string): SessionMessage | undefined;
-}
-
-export interface AgentRunRunRecordRepositoryPort {
-  saveRun(run: Run): Run;
-  getRun(runId: string): Run | undefined;
-  listRunsByStatuses(statuses: Run['status'][]): Run[];
-}
-
-export interface AgentRunExecutionFactRepositoryPort {
-  saveStep(step: RunStep): RunStep;
-  listStepsByRun(runId: string): RunStep[];
-  saveAction(action: RunAction): RunAction;
-  saveObservation(observation: RunObservation): RunObservation;
-}
-
-export interface AgentRunModelStepRepositoryPort {
-  saveModelStep(modelStep: ModelStepRecord): ModelStepRecord;
-  getModelStep(modelStepId: string): ModelStepRecord | undefined;
-}
-
-export interface AgentRunSessionContextRepositoryPort {
-  getSessionCompaction(compactionId: string): SessionCompactionEntry | null;
-}
-
-export interface AgentRunRuntimeEventRepositoryPort {
-  appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
-  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
 
 export interface AgentRunPostRunHooksPort {

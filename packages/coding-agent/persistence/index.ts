@@ -1,6 +1,7 @@
 // Public exports for Coding Agent product persistence.
 export * from './connection';
 export * from './schema';
+export * from './agent-run-repository-ports';
 export * from './repos/run-record.repo';
 export * from './repos/session-record.repo';
 export * from './repos/session-context.repo';

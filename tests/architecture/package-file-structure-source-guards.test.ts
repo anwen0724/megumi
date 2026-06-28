@@ -408,6 +408,10 @@ describe('package and file structure source guards', () => {
 
   it('keeps run service contracts off the concrete session-run repository type', () => {
     const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const persistencePortsSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/agent-run-repository-ports.ts'),
+      'utf8',
+    );
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const runIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/index.ts'), 'utf8');
     const retryCoordinatorSource = readFileSync(
@@ -420,11 +424,16 @@ describe('package and file structure source guards', () => {
     expect(retryCoordinatorSource).not.toContain('SessionRunRepository');
     expect(runContractSource).not.toContain('export interface AgentRunRepositoryPort {');
     expect(runContractSource).not.toContain('export type AgentRunRepositoryPort =');
-    expect(runContractSource).toContain('export interface AgentRunSessionRepositoryPort');
-    expect(runContractSource).toContain('export interface AgentRunRunRecordRepositoryPort');
-    expect(runContractSource).toContain('export interface AgentRunExecutionFactRepositoryPort');
-    expect(runContractSource).toContain('export interface AgentRunModelStepRepositoryPort');
-    expect(runContractSource).toContain('export interface AgentRunRuntimeEventRepositoryPort');
+    expect(runContractSource).not.toContain('export interface AgentRunSessionRepositoryPort');
+    expect(runContractSource).not.toContain('export interface AgentRunRunRecordRepositoryPort');
+    expect(runContractSource).not.toContain('export interface AgentRunExecutionFactRepositoryPort');
+    expect(runContractSource).not.toContain('export interface AgentRunModelStepRepositoryPort');
+    expect(runContractSource).not.toContain('export interface AgentRunRuntimeEventRepositoryPort');
+    expect(persistencePortsSource).toContain('export interface AgentRunSessionRepositoryPort');
+    expect(persistencePortsSource).toContain('export interface AgentRunRunRecordRepositoryPort');
+    expect(persistencePortsSource).toContain('export interface AgentRunExecutionFactRepositoryPort');
+    expect(persistencePortsSource).toContain('export interface AgentRunModelStepRepositoryPort');
+    expect(persistencePortsSource).toContain('export interface AgentRunRuntimeEventRepositoryPort');
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
     expect(runIndexSource).not.toContain("export * from '../state'");
   });

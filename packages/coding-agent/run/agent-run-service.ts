@@ -58,6 +58,16 @@ import {
   RuntimeEventLog,
 } from '../events';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
+import type {
+  AgentRunExecutionFactRepositoryPort,
+  AgentRunMessageRepositoryPort,
+  AgentRunModelStepRepositoryPort,
+  AgentRunRunRecordRepositoryPort,
+  AgentRunRuntimeEventRepositoryPort,
+  AgentRunSessionContextRepositoryPort,
+  AgentRunSessionRepositoryPort,
+  AgentRunToolRepositoryPort,
+} from '../persistence';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   RunContext,
@@ -116,20 +126,12 @@ import type {
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import type {
   AgentRunPostRunHooksPort,
-  AgentRunExecutionFactRepositoryPort,
-  AgentRunMessageRepositoryPort,
   AgentRunModelStepProvider,
-  AgentRunModelStepRepositoryPort,
-  AgentRunRunRecordRepositoryPort,
   AgentRunRetryCoordinatorPort,
   AgentRunServiceClock,
   AgentRunServiceIds,
   AgentRunServiceOptions,
-  AgentRunRuntimeEventRepositoryPort,
-  AgentRunSessionContextRepositoryPort,
-  AgentRunSessionRepositoryPort,
   AgentRunTerminalCoordinatorPort,
-  AgentRunToolRepositoryPort,
   AgentRunToolRuntimeFactory,
   SessionRunContextService,
   SessionRunEffectiveCwdProvider,
