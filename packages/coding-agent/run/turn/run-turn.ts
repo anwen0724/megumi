@@ -9,6 +9,7 @@ import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolDefinition } from '@megumi/shared/tool';
 import type { ParsedInput } from '@megumi/coding-agent/input';
+import { resolveMemoryRecallEffectiveCwd } from '../../context';
 import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
@@ -585,7 +586,10 @@ export class RunTurn {
       return {};
     }
 
-    const effectiveCwd = resolveRecallEffectiveCwd(input.session.workspacePath, requestedCwd);
+    const effectiveCwd = resolveMemoryRecallEffectiveCwd({
+      projectRoot: input.session.workspacePath,
+      requestedCwd,
+    });
     return this.options.memoryRecallService.recallForNewUserInput({
       ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
       ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
@@ -600,14 +604,4 @@ export class RunTurn {
       createdAt: input.createdAt,
     });
   }
-}
-
-function resolveRecallEffectiveCwd(projectRoot: string | undefined, requestedCwd: string | undefined): string | undefined {
-  if (!requestedCwd) {
-    return projectRoot;
-  }
-  if (/^[A-Za-z]:[\\/]/.test(requestedCwd) || requestedCwd.startsWith('/')) {
-    return requestedCwd;
-  }
-  return projectRoot ? `${projectRoot.replace(/[\\/]+$/, '')}/${requestedCwd.replace(/^[\\/]+/, '')}` : requestedCwd;
 }

@@ -1,7 +1,10 @@
 // @vitest-environment node
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveModelCallEffectiveCwd } from '@megumi/coding-agent/context';
+import {
+  resolveMemoryRecallEffectiveCwd,
+  resolveModelCallEffectiveCwd,
+} from '@megumi/coding-agent/context';
 
 describe('resolveModelCallEffectiveCwd', () => {
   it('defaults to the project root when no requested cwd is provided', () => {
@@ -46,5 +49,25 @@ describe('resolveModelCallEffectiveCwd', () => {
 
   it('returns undefined when there is no project root', () => {
     expect(resolveModelCallEffectiveCwd({})).toBeUndefined();
+  });
+});
+
+describe('resolveMemoryRecallEffectiveCwd', () => {
+  it('defaults to project root and resolves project-relative cwd', () => {
+    const projectRoot = path.resolve('C:/all/work/study/megumi');
+
+    expect(resolveMemoryRecallEffectiveCwd({ projectRoot })).toBe(projectRoot);
+    expect(resolveMemoryRecallEffectiveCwd({
+      projectRoot,
+      requestedCwd: 'packages/coding-agent',
+    })).toBe(path.join(projectRoot, 'packages/coding-agent'));
+  });
+
+  it('keeps absolute cwd and falls back to requested cwd without project root', () => {
+    const projectRoot = path.resolve('C:/all/work/study/megumi');
+    const requestedCwd = path.join(projectRoot, 'packages/coding-agent');
+
+    expect(resolveMemoryRecallEffectiveCwd({ projectRoot, requestedCwd })).toBe(requestedCwd);
+    expect(resolveMemoryRecallEffectiveCwd({ requestedCwd: 'relative/path' })).toBe('relative/path');
   });
 });

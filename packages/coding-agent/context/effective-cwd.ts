@@ -1,5 +1,6 @@
 ﻿// Resolves the run-level working directory used by ModelStep input builds.
 // Tool-local cwd values are validated by tool executors and must not mutate this state.
+import path from 'node:path';
 import { classifyProjectPath } from '@megumi/coding-agent/workspace';
 
 export interface ResolveModelCallEffectiveCwdInput {
@@ -10,6 +11,11 @@ export interface ResolveModelCallEffectiveCwdInput {
 export interface ModelCallEffectiveCwd {
   absolutePath: string;
   projectRelativePath: string;
+}
+
+export interface ResolveMemoryRecallEffectiveCwdInput {
+  projectRoot?: string;
+  requestedCwd?: string;
 }
 
 export function resolveModelCallEffectiveCwd(
@@ -33,4 +39,20 @@ export function resolveModelCallEffectiveCwd(
     absolutePath: classification.absolutePath,
     projectRelativePath: classification.relativePath || '.',
   };
+}
+
+export function resolveMemoryRecallEffectiveCwd(
+  input: ResolveMemoryRecallEffectiveCwdInput,
+): string | undefined {
+  if (!input.requestedCwd) {
+    return input.projectRoot;
+  }
+  if (path.isAbsolute(input.requestedCwd) || isWindowsAbsolutePath(input.requestedCwd)) {
+    return input.requestedCwd;
+  }
+  return input.projectRoot ? path.join(input.projectRoot, input.requestedCwd) : input.requestedCwd;
+}
+
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(value);
 }

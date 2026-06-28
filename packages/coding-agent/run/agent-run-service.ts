@@ -1,6 +1,5 @@
 ﻿// Orchestrates Coding Agent product session runs by coordinating input facts,
 // product persistence, permissions, context construction, tools, and model execution.
-import path from 'node:path';
 import {
   assertRunStatusTransition,
   canResumeApprovalFromRunStatus,
@@ -1833,14 +1832,4 @@ function createPermissionModeState(
     permissionMode,
     source,
   };
-}
-
-function resolveRecallEffectiveCwd(projectRoot: string | undefined, requestedCwd: string | undefined): string | undefined {
-  if (!requestedCwd) {
-    return projectRoot;
-  }
-  if (path.isAbsolute(requestedCwd)) {
-    return requestedCwd;
-  }
-  return projectRoot ? path.join(projectRoot, requestedCwd) : requestedCwd;
 }

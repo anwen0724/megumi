@@ -687,6 +687,17 @@ describe('package and file structure source guards', () => {
     expect(eventLogSource).toContain('export class RuntimeEventSequenceCursor');
   });
 
+  it('keeps memory recall cwd resolution in the context owner', () => {
+    const runTurnSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const contextEffectiveCwdSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/effective-cwd.ts'), 'utf8');
+
+    expect(runTurnSource).toContain('resolveMemoryRecallEffectiveCwd');
+    expect(runTurnSource).not.toContain('function resolveRecallEffectiveCwd');
+    expect(agentRunServiceSource).not.toContain('function resolveRecallEffectiveCwd');
+    expect(contextEffectiveCwdSource).toContain('export function resolveMemoryRecallEffectiveCwd');
+  });
+
   it('wires agent run service through split repository owner ports in session runtime composition', () => {
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
