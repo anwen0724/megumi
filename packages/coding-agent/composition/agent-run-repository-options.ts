@@ -27,6 +27,9 @@ export type AgentRunRepositoryOptions = Pick<
   | 'modelStepRepository'
   | 'sessionContextRepository'
   | 'runtimeEventRepository'
+  | 'runCompletionRepository'
+  | 'runTerminalRepository'
+  | 'runRetryRepository'
 >;
 
 export function createAgentRunRepositoryOptions(
@@ -40,5 +43,23 @@ export function createAgentRunRepositoryOptions(
     modelStepRepository: input.modelStepRepository,
     sessionContextRepository: input.sessionContextRepository,
     runtimeEventRepository: input.runtimeEventRepository,
+    runCompletionRepository: {
+      listRuntimeEventsByRun: (runId) => input.runtimeEventRepository.listRuntimeEventsByRun(runId),
+    },
+    runTerminalRepository: {
+      getRun: (runId) => input.runRecordRepository.getRun(runId),
+      saveRun: (run) => input.runRecordRepository.saveRun(run),
+      saveStep: (step) => input.runExecutionFactRepository.saveStep(step),
+      listStepsByRun: (runId) => input.runExecutionFactRepository.listStepsByRun(runId),
+      listRunsByStatuses: (statuses) => input.runRecordRepository.listRunsByStatuses(statuses),
+      listRuntimeEventsByRun: (runId) => input.runtimeEventRepository.listRuntimeEventsByRun(runId),
+      appendRuntimeEvent: (event) => input.runtimeEventRepository.appendRuntimeEvent(event),
+    },
+    runRetryRepository: {
+      getRun: (runId) => input.runRecordRepository.getRun(runId),
+      getMessage: (messageId) => input.sessionMessageRepository.getMessage(messageId),
+      listRuntimeEventsByRun: (runId) => input.runtimeEventRepository.listRuntimeEventsByRun(runId),
+      appendRuntimeEvent: (event) => input.runtimeEventRepository.appendRuntimeEvent(event),
+    },
   };
 }

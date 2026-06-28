@@ -72,6 +72,11 @@ import type {
 import type { ModelCallCompletionResult } from './model-call';
 import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
 import type {
+  RunRetryCoordinatorRepositoryPort,
+  RunTerminalRepositoryPort,
+} from './lifecycle';
+import type { RunCompletionHooksRepositoryPort } from './completion';
+import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '../tools/tool-registry-snapshot';
@@ -275,6 +280,9 @@ export interface AgentRunServiceOptions {
   modelStepRepository: AgentRunModelStepRepositoryPort;
   sessionContextRepository: AgentRunSessionContextRepositoryPort;
   runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
+  runCompletionRepository: RunCompletionHooksRepositoryPort;
+  runTerminalRepository: RunTerminalRepositoryPort;
+  runRetryRepository: RunRetryCoordinatorRepositoryPort;
   contextService?: SessionRunContextService;
   permissionSnapshotService?: Pick<
     PermissionSnapshotService,

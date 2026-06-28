@@ -78,6 +78,9 @@ type AgentRunServiceRepositoryOptions = Pick<
   | 'modelStepRepository'
   | 'sessionContextRepository'
   | 'runtimeEventRepository'
+  | 'runCompletionRepository'
+  | 'runTerminalRepository'
+  | 'runRetryRepository'
 >;
 type AgentRunServiceTestRepository =
   & AgentRunSessionRepositoryPort
@@ -107,6 +110,9 @@ function agentRunServiceRepositoryOptions(repository: AgentRunServiceTestReposit
     modelStepRepository: repository,
     sessionContextRepository: repository,
     runtimeEventRepository: repository,
+    runCompletionRepository: repository,
+    runTerminalRepository: repository,
+    runRetryRepository: repository,
   };
 }
 

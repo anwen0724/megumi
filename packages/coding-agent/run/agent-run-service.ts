@@ -301,24 +301,9 @@ export class AgentRunService implements AgentRunPort {
     this.modelStepRepository = options.modelStepRepository;
     this.sessionContextRepository = options.sessionContextRepository;
     this.runtimeEventRepository = options.runtimeEventRepository;
-    this.runCompletionRepository = {
-      listRuntimeEventsByRun: options.runtimeEventRepository.listRuntimeEventsByRun.bind(options.runtimeEventRepository),
-    };
-    this.runTerminalRepository = {
-      getRun: options.runRecordRepository.getRun.bind(options.runRecordRepository),
-      saveRun: options.runRecordRepository.saveRun.bind(options.runRecordRepository),
-      listRunsByStatuses: options.runRecordRepository.listRunsByStatuses.bind(options.runRecordRepository),
-      saveStep: options.runExecutionFactRepository.saveStep.bind(options.runExecutionFactRepository),
-      listStepsByRun: options.runExecutionFactRepository.listStepsByRun.bind(options.runExecutionFactRepository),
-      appendRuntimeEvent: options.runtimeEventRepository.appendRuntimeEvent.bind(options.runtimeEventRepository),
-      listRuntimeEventsByRun: options.runtimeEventRepository.listRuntimeEventsByRun.bind(options.runtimeEventRepository),
-    };
-    this.runRetryRepository = {
-      getRun: options.runRecordRepository.getRun.bind(options.runRecordRepository),
-      getMessage: options.messageRepository.getMessage.bind(options.messageRepository),
-      appendRuntimeEvent: options.runtimeEventRepository.appendRuntimeEvent.bind(options.runtimeEventRepository),
-      listRuntimeEventsByRun: options.runtimeEventRepository.listRuntimeEventsByRun.bind(options.runtimeEventRepository),
-    };
+    this.runCompletionRepository = options.runCompletionRepository;
+    this.runTerminalRepository = options.runTerminalRepository;
+    this.runRetryRepository = options.runRetryRepository;
     this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
     this.permissionSnapshotService = options.permissionSnapshotService;

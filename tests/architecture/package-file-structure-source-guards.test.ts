@@ -407,6 +407,28 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('const repository = options.repository');
   });
 
+  it('keeps AgentRunService coordinator repository adapters in composition', () => {
+    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const repositoryOptionsSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/agent-run-repository-options.ts'),
+      'utf8',
+    );
+
+    expect(runContractSource).toContain('runCompletionRepository: RunCompletionHooksRepositoryPort;');
+    expect(runContractSource).toContain('runTerminalRepository: RunTerminalRepositoryPort;');
+    expect(runContractSource).toContain('runRetryRepository: RunRetryCoordinatorRepositoryPort;');
+    expect(agentRunServiceSource).toContain('this.runCompletionRepository = options.runCompletionRepository');
+    expect(agentRunServiceSource).toContain('this.runTerminalRepository = options.runTerminalRepository');
+    expect(agentRunServiceSource).toContain('this.runRetryRepository = options.runRetryRepository');
+    expect(agentRunServiceSource).not.toContain('this.runCompletionRepository = {');
+    expect(agentRunServiceSource).not.toContain('this.runTerminalRepository = {');
+    expect(agentRunServiceSource).not.toContain('this.runRetryRepository = {');
+    expect(repositoryOptionsSource).toContain('runCompletionRepository');
+    expect(repositoryOptionsSource).toContain('runTerminalRepository');
+    expect(repositoryOptionsSource).toContain('runRetryRepository');
+  });
+
   it('keeps AgentRunService internals on owner-named repository ports', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
 
