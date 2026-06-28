@@ -19,6 +19,7 @@ import type { RunContextRepository } from '../persistence/repos/run-context.repo
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
 import type { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
+import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
 import type { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { SessionContextRepository } from '../persistence/repos/session-context.repo';
@@ -44,6 +45,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   runtimeLogger: RuntimeLogger;
   artifactRepository: ArtifactRepository;
   permissionSnapshotRepository: PermissionSnapshotRepository;
+  runRecordRepository: RunRecordRepository;
   sessionRecordRepository: SessionRecordRepository;
   sessionRunRepository: SessionRunRepository;
   sessionContextRepository: SessionContextRepository;
@@ -81,7 +83,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   const sessionService = new SessionService({
     sessionRepository: options.sessionRecordRepository,
     messageRepository: options.sessionMessageRepository,
-    runRepository: options.sessionRunRepository,
+    runRepository: options.runRecordRepository,
     ids: { sessionId: () => `session:${crypto.randomUUID()}` },
     activePathRepository: options.activePathRepository,
     timelineMessageRepository: options.timelineMessageRepository,
@@ -102,9 +104,9 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     chatStreamEventSink: options.chatStreamEventSink,
   });
   const sessionContextInputService = new SessionContextInputService({
-    sessionRepository: options.sessionRunRepository,
+    sessionRepository: options.sessionRecordRepository,
     messageRepository: options.sessionMessageRepository,
-    runRepository: options.sessionRunRepository,
+    runRepository: options.runRecordRepository,
     runExecutionFactRepository: options.runExecutionFactRepository,
     runtimeEventRepository: options.runtimeEventRepository,
     sessionCompactionRepository: options.sessionContextRepository,

@@ -235,6 +235,19 @@ describe('package and file structure source guards', () => {
     expect(sessionRunSource).not.toContain('SELECT * FROM sessions');
   });
 
+  it('keeps run records in their owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/run-record.repo.ts');
+    const sessionRunSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
+      'utf8',
+    );
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(sessionRunSource).toContain('new RunRecordRepository');
+    expect(sessionRunSource).not.toContain('INSERT INTO runs');
+    expect(sessionRunSource).not.toContain('SELECT * FROM runs');
+  });
+
   it('keeps session compaction persistence in its owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-compaction.repo.ts');
     const sessionRunSource = readFileSync(
@@ -325,6 +338,8 @@ describe('package and file structure source guards', () => {
     expect(sessionServiceSource).toContain('runRepository: SessionServiceRunRepository');
     expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRecordRepository');
     expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
+    expect(sessionRuntimeSource).toContain('runRepository: options.runRecordRepository');
     expect(runtimeSource).toContain('sessionRecordRepository: persistence.sessionRecordRepository');
+    expect(runtimeSource).toContain('runRecordRepository: persistence.runRecordRepository');
   });
 });

@@ -39,6 +39,7 @@ describe('composed session runtime workspace sources', () => {
         runtimeLogger: { warn: () => undefined },
         artifactRepository: persistence.artifactRepository,
         permissionSnapshotRepository: persistence.permissionSnapshotRepository,
+        runRecordRepository: persistence.runRecordRepository,
         sessionRecordRepository: persistence.sessionRecordRepository,
         sessionRunRepository: persistence.sessionRunRepository,
         sessionContextRepository: persistence.sessionContextRepository,

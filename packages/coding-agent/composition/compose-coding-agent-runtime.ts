@@ -97,6 +97,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     runtimeLogger: options.runtimeLogger,
     artifactRepository: persistence.artifactRepository,
     permissionSnapshotRepository: persistence.permissionSnapshotRepository,
+    runRecordRepository: persistence.runRecordRepository,
     sessionRecordRepository: persistence.sessionRecordRepository,
     sessionRunRepository: persistence.sessionRunRepository,
     sessionContextRepository: persistence.sessionContextRepository,
