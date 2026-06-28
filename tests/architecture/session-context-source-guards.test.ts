@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -130,10 +130,10 @@ describe('session context source guards', () => {
 
   it('requires coding-agent context callers to pass explicit sessionContext instead of legacy history message inputs', () => {
     const source = [
-      read('packages/coding-agent/run/context/context-budget.ts'),
-      read('packages/coding-agent/run/context/model-input-context-builder.ts'),
-      read('packages/coding-agent/run/context/model-call-context.ts'),
-      read('packages/coding-agent/run/context/compaction/session-compaction.ts'),
+      read('packages/coding-agent/context/context-budget.ts'),
+      read('packages/coding-agent/context/model-input-context-builder.ts'),
+      read('packages/coding-agent/context/model-call-context.ts'),
+      read('packages/coding-agent/context/compaction/session-compaction.ts'),
     ].join('\n');
 
     for (const forbidden of forbiddenContextManagementNames) {
@@ -155,7 +155,7 @@ describe('session context source guards', () => {
   });
 
   it('keeps renderer provider and coding-agent context away from workspace change persistence', () => {
-    const contextManagement = sourceUnder('packages/coding-agent/run/context');
+    const contextManagement = sourceUnder('packages/coding-agent/context');
     const provider = sourceUnder('packages/ai');
     const renderer = sourceUnder('apps/desktop/src/renderer');
 
@@ -167,7 +167,7 @@ describe('session context source guards', () => {
   });
 
   it('keeps compaction repository reads in desktop main and db repository boundaries', () => {
-    const contextManagement = sourceUnder('packages/coding-agent/run/context');
+    const contextManagement = sourceUnder('packages/coding-agent/context');
     const provider = sourceUnder('packages/ai');
     const renderer = sourceUnder('apps/desktop/src/renderer');
 

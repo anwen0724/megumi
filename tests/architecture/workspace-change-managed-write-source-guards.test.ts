@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -19,7 +19,7 @@ describe('workspace change managed write source guards', () => {
     ];
     const roots = [
       'apps/desktop/src/renderer',
-      'packages/coding-agent/run/context',
+      'packages/coding-agent/context',
       'packages/ai',
     ];
 

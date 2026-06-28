@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -64,7 +64,7 @@ describe('runtime lifecycle cleanup final source guards', () => {
   });
 
   it('keeps RunContext out of coding-agent context and final budget fields out of RunContext', () => {
-    const contextManagement = read('packages/coding-agent/run/context/model-call-context.ts');
+    const contextManagement = read('packages/coding-agent/context/model-call-context.ts');
     const runContext = read('packages/shared/run/context-contracts.ts');
 
     expect(contextManagement).not.toContain('@megumi/shared/run');

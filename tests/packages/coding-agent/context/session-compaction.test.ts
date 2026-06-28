@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import {
   buildSessionCompactionSummaryInputContext,
@@ -319,13 +319,13 @@ describe('extractSessionCompactionFileMetadata', () => {
       '## Goal',
       'Continue 09.',
       '<read-files>',
-      'packages/coding-agent/run/context/session-compaction.ts',
+      'packages/coding-agent/context/compaction/session-compaction.ts',
       '</read-files>',
       '<modified-files>',
       'apps/desktop/src/main/services/session-run.service.ts',
       '</modified-files>',
     ].join('\n'))).toEqual({
-      readFiles: ['packages/coding-agent/run/context/session-compaction.ts'],
+      readFiles: ['packages/coding-agent/context/compaction/session-compaction.ts'],
       modifiedFiles: ['apps/desktop/src/main/services/session-run.service.ts'],
     });
   });

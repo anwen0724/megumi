@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -688,7 +688,7 @@ describe('buildModelCallInputContextFromSources', () => {
       reason: 'outside_keep_recent_tokens',
     }));
 
-    const source = fs.readFileSync(path.join(process.cwd(), 'packages/coding-agent/run/context/model-call-context.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'packages/coding-agent/context/model-call-context.ts'), 'utf8');
     expect(source).not.toContain('RunContext');
     expect(source).not.toContain('runContext?:');
   });

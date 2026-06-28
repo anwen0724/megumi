@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -35,15 +35,15 @@ function sourceUnder(relativeDirectory: string): string {
 describe('coding-agent package boundary', () => {
   it('exists as the Megumi Coding Agent product-core package', () => {
     expect(existsSync(join(root, 'packages/coding-agent/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/model-call-context.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/model-call-input-builder.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/compaction/session-compaction-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/model-call-context.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/model-call-input-builder.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/compaction/session-compaction-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/parts/session-context.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/parts/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/run-input-facts.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/context/run-input-facts.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/hooks/post-run-hooks.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/completion/run-completion-hooks.ts'))).toBe(false);
@@ -75,8 +75,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/provider-settings.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/provider-runtime.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/instructions/agent-instruction-source.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/resources/run-context-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/instructions/agent-instruction-source.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/resources/run-context-service.ts'))).toBe(true);
   });
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {

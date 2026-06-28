@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
@@ -208,7 +208,7 @@ function completedSummaryText(): string {
     '## Goal',
     'Continue the 09 work.',
     '<read-files>',
-    'packages/coding-agent/run/context/session-compaction.ts',
+    'packages/coding-agent/context/compaction/session-compaction.ts',
     '</read-files>',
     '<modified-files>',
     'apps/desktop/src/main/services/session/session-run.service.ts',
@@ -282,7 +282,7 @@ describe('SessionCompactionOrchestrator', () => {
         metadata: {
           previousCompactionId: 'summary-1',
           summarizedSourceCount: 3,
-          readFiles: ['packages/coding-agent/run/context/session-compaction.ts'],
+          readFiles: ['packages/coding-agent/context/compaction/session-compaction.ts'],
           modifiedFiles: ['apps/desktop/src/main/services/session/session-run.service.ts'],
         },
       }),

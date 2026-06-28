@@ -1,4 +1,4 @@
-// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
+﻿// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -113,19 +113,19 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps model call context materialization split into focused part builders', () => {
     for (const requiredPath of [
-      'packages/coding-agent/run/context/parts/runtime-constraints.ts',
-      'packages/coding-agent/run/context/parts/instructions.ts',
-      'packages/coding-agent/run/context/parts/session.ts',
-      'packages/coding-agent/run/context/parts/input-preprocessing.ts',
-      'packages/coding-agent/run/context/parts/memory.ts',
-      'packages/coding-agent/run/context/parts/tool-result-model-input.ts',
-      'packages/coding-agent/run/context/parts/provider-state.ts',
-      'packages/coding-agent/run/context/parts/index.ts',
+      'packages/coding-agent/context/parts/runtime-constraints.ts',
+      'packages/coding-agent/context/parts/instructions.ts',
+      'packages/coding-agent/context/parts/session.ts',
+      'packages/coding-agent/context/parts/input-preprocessing.ts',
+      'packages/coding-agent/context/parts/memory.ts',
+      'packages/coding-agent/context/parts/tool-result-model-input.ts',
+      'packages/coding-agent/context/parts/provider-state.ts',
+      'packages/coding-agent/context/parts/index.ts',
     ]) {
       expect(exists(requiredPath), requiredPath).toBe(true);
     }
 
-    const contextSource = read('packages/coding-agent/run/context/model-call-context.ts');
+    const contextSource = read('packages/coding-agent/context/model-call-context.ts');
 
     for (const movedImplementation of [
       'function instructionParts(',

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -167,7 +167,7 @@ describe('Command system source guards', () => {
   });
 
   it('keeps context management free of raw slash command parsing', () => {
-    expect(offenders(filesUnder('packages/coding-agent/run/context'), [
+    expect(offenders(filesUnder('packages/coding-agent/context'), [
       /parseSlashCommand/,
       /dispatchCommandText/,
       /BUILT_IN_INPUT_COMMAND/,

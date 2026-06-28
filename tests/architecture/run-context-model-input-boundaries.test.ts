@@ -11,7 +11,7 @@ function read(relativePath: string): string {
 
 describe('run context and model input boundaries', () => {
   it('keeps coding-agent context independent from full RunContext', () => {
-    const source = read('packages/coding-agent/run/context/model-call-context.ts');
+    const source = read('packages/coding-agent/context/model-call-context.ts');
 
     expect(source).not.toContain('@megumi/shared/run');
     expect(source).not.toContain('RunContext');
@@ -41,7 +41,7 @@ describe('run context and model input boundaries', () => {
   });
 
   it('keeps main as the RunContext to ModelStep input build adapter', () => {
-    const contextManagement = read('packages/coding-agent/run/context/model-call-context.ts');
+    const contextManagement = read('packages/coding-agent/context/model-call-context.ts');
     const sessionRun = read('packages/coding-agent/run/agent-run-service.ts');
 
     expect(contextManagement).toContain('runtimeConstraints?: ModelStepRuntimeConstraintInput[]');
@@ -59,8 +59,8 @@ describe('run context and model input boundaries', () => {
   });
 
   it('keeps input preprocessing materialization in coding-agent context and out of provider adapters', () => {
-    const contextSource = read('packages/coding-agent/run/context/model-call-context.ts');
-    const inputPreprocessingSource = read('packages/coding-agent/run/context/parts/input-preprocessing.ts');
+    const contextSource = read('packages/coding-agent/context/model-call-context.ts');
+    const inputPreprocessingSource = read('packages/coding-agent/context/parts/input-preprocessing.ts');
     const providerSource = read('packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts');
 
     expect(contextSource).toContain('inputPreprocessing');
@@ -73,7 +73,7 @@ describe('run context and model input boundaries', () => {
   });
 
   it('preserves multi-level instruction source semantics in context materialization', () => {
-    const contextSource = read('packages/coding-agent/run/context/parts/instructions.ts');
+    const contextSource = read('packages/coding-agent/context/parts/instructions.ts');
 
     expect(contextSource).toContain('instructionKindForAgentSource');
     expect(contextSource).toContain('sessionInstructionParts');
@@ -84,7 +84,7 @@ describe('run context and model input boundaries', () => {
 
   it('keeps canonical model input source contracts in shared model contracts', () => {
     const sharedModel = read('packages/shared/model/input-context-contracts.ts');
-    const contextSource = read('packages/coding-agent/run/context/model-call-context.ts');
+    const contextSource = read('packages/coding-agent/context/model-call-context.ts');
 
     expect(sharedModel).toContain('MODEL_INPUT_CONTEXT_CANONICAL_SOURCE_KINDS');
     expect(sharedModel).toContain('ModelInputContextSourceSchema');

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -8,7 +8,7 @@ const repoRoot = process.cwd();
 const productionRoots = [
   'apps/desktop/src',
   'packages/ai',
-  'packages/coding-agent/run/context',
+  'packages/coding-agent/context',
   'packages/coding-agent/persistence',
   'packages/shared',
 ];
@@ -51,7 +51,7 @@ const restoreBoundaryAllowlist = new Set([
 const forbiddenRestoreRoots = [
   'apps/desktop/src/renderer',
   'packages/ai',
-  'packages/coding-agent/run/context',
+  'packages/coding-agent/context',
 ];
 
 const rawContentTerms = [
