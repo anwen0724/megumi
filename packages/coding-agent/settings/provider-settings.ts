@@ -10,13 +10,13 @@ import {
 } from '@megumi/shared/provider';
 import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
 
-export interface ProviderSettingsAppSettingsPort {
+export interface ProviderSettingsProductSettingsPort {
   getResolvedSettings(): AppSettingsResolved;
   updateSettings(patch: AppSettingsRaw): AppSettingsResolved;
 }
 
 export interface ProviderSettingsServiceOptions {
-  settings: ProviderSettingsAppSettingsPort;
+  settings: ProviderSettingsProductSettingsPort;
   env: NodeJS.ProcessEnv | Record<string, string | undefined>;
 }
 

@@ -21,7 +21,13 @@ import { createModelCallRunner, type ProviderRuntimeConfig } from '../run/model-
 import { TimelineHistoryCommitProjectorService } from '../projections/timeline';
 import type { MemorySettingsProvider } from './compose-coding-agent-memory';
 import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
-import { ProviderRuntimeService, ProviderSettingsService, type ProviderSettingsAppSettingsPort } from '../settings';
+import {
+  ProductSettingsService,
+  ProviderRuntimeService,
+  ProviderSettingsService,
+  type ProductSettingsStoragePort,
+  type ProviderSettingsProductSettingsPort,
+} from '../settings';
 import {
   createProjectService,
   type DirectoryPickerPort,
@@ -35,22 +41,26 @@ export interface ComposeCodingAgentRuntimeOptions {
   // Optional override for tests / alternative entries. When omitted, the product
   // builds a real OpenAI-compatible model step provider so it runs standalone.
   modelStepProviderService?: AgentRunModelStepProvider;
-  appSettingsProvider: ProviderSettingsAppSettingsPort;
-  memorySettingsProvider: MemorySettingsProvider;
-  permissionSettingsProvider: PermissionSettingsProvider;
+  appSettingsProvider?: ProviderSettingsProductSettingsPort;
+  memorySettingsProvider?: MemorySettingsProvider;
+  permissionSettingsProvider?: PermissionSettingsProvider;
   chatStreamEventSink?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['chatStreamEventSink'];
   workspaceChangeFooterProjector?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['workspaceChangeFooterProjector'];
   // Optional UI-shell hooks for project lifecycle. Omitted in standalone/non-UI
   // runs: the picker defaults to a no-op (cancels) and the file system to node fs.
   directoryPicker?: DirectoryPickerPort;
   projectFileSystem?: ProjectFileSystem;
+  settingsStorage?: ProductSettingsStoragePort;
 }
 
 export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentProductRuntime {
   const persistence = composeCodingAgentPersistence({ sqlitePath: options.homePaths.sqlitePath });
   const toolRegistry = composeCodingAgentToolRegistry();
+  const settingsService = new ProductSettingsService({
+    storage: options.settingsStorage ?? createVolatileProductSettingsStorage(),
+  });
   const providerSettingsService = new ProviderSettingsService({
-    settings: options.appSettingsProvider,
+    settings: options.appSettingsProvider ?? settingsService,
     env: process.env,
   });
   const modelStepProviderService = options.modelStepProviderService
@@ -61,7 +71,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const memory = composeCodingAgentMemory({
     repository: persistence.memoryRepository,
     modelStepProvider: modelStepProviderService,
-    memorySettingsProvider: options.memorySettingsProvider,
+    memorySettingsProvider: options.memorySettingsProvider ?? {
+      isMemoryEnabled: () => settingsService.getMemorySettings().enabled,
+    },
     runtimeLogger: options.runtimeLogger,
     megumiHomePath: options.homePaths.homePath,
   });
@@ -70,7 +82,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     toolRegistry,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
     sessionRunRepository: persistence.sessionRunRepository,
-    permissionSettingsProvider: options.permissionSettingsProvider,
+    permissionSettingsProvider: options.permissionSettingsProvider ?? settingsService,
   });
   // Persist committed timeline history in the product, forwarding events to any
   // caller-provided sink (e.g. the desktop UI bridge) downstream. This keeps
@@ -134,6 +146,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     planArtifactService: sessionRuntime.planArtifactService,
     memoryService: memory.memoryService,
     runContextService: sessionRuntime.runContextService,
+    settingsService,
     providerSettingsService,
     projectService,
     dispose: () => persistence.database.close(),
@@ -172,4 +185,14 @@ function requireBaseUrl(config: ProviderRuntimeConfig): string {
   }
 
   return config.baseUrl;
+}
+
+function createVolatileProductSettingsStorage(): ProductSettingsStoragePort {
+  let rawSettings: ReturnType<ProductSettingsStoragePort['readRawSettings']> = {};
+  return {
+    readRawSettings: () => rawSettings,
+    writeRawSettings: (next) => {
+      rawSettings = next;
+    },
+  };
 }

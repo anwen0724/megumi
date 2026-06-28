@@ -10,23 +10,18 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import { ProjectRepository, createDatabase, migrateDatabase } from '@megumi/coding-agent/persistence';
-import {
-  mergeRawAppSettings,
-  resolveAppSettings,
-  type AppSettingsRaw,
-} from '@megumi/shared/settings';
+import type { AppSettingsRaw } from '@megumi/shared/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
-function appSettingsProvider() {
-  let rawSettings: AppSettingsRaw = {};
+function productSettingsStorage(initial: AppSettingsRaw = {}) {
+  let rawSettings: AppSettingsRaw = initial;
   return {
-    getResolvedSettings: () => resolveAppSettings(rawSettings),
-    updateSettings(patch: AppSettingsRaw) {
-      rawSettings = mergeRawAppSettings(rawSettings, patch);
-      return resolveAppSettings(rawSettings);
+    readRawSettings: () => rawSettings,
+    writeRawSettings(next: AppSettingsRaw) {
+      rawSettings = next;
     },
   };
 }
@@ -136,11 +131,13 @@ describe('coding-agent product runs without desktop', () => {
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelStepProviderService: toolCallingModelStepProvider('NOTES.md'),
-      appSettingsProvider: appSettingsProvider(),
-      memorySettingsProvider: { isMemoryEnabled: () => false },
-      permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
+      settingsStorage: productSettingsStorage(),
       chatStreamEventSink: { publish: (event) => chatStreamEvents.push(event) },
     });
+
+    expect(runtime.settingsService.getResolvedSettings().memory.enabled).toBe(false);
+    runtime.settingsService.updateSettings({ memory: { enabled: true } });
+    expect(runtime.settingsService.getMemorySettings()).toEqual({ enabled: true });
 
     // create session
     const session = runtime.sessionService.createSession({
@@ -200,9 +197,7 @@ describe('coding-agent product runs without desktop', () => {
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelStepProviderService: toolCallingModelStepProvider('UNUSED.md'),
-      appSettingsProvider: appSettingsProvider(),
-      memorySettingsProvider: { isMemoryEnabled: () => false },
-      permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
+      settingsStorage: productSettingsStorage(),
     });
 
     const afterRestart = runtime.sessionService.listTimelineMessagesBySession({

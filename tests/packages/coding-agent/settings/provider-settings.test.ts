@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ProviderSettingsService } from '@megumi/coding-agent/settings';
+import { ProductSettingsService, ProviderSettingsService } from '@megumi/coding-agent/settings';
 import {
   type AppSettingsRaw,
   type AppSettingsResolved,
@@ -18,6 +18,18 @@ class MemoryAppSettings {
   updateSettings(patch: AppSettingsRaw): AppSettingsResolved {
     this.raw = mergeRawAppSettings(this.raw, patch);
     return this.getResolvedSettings();
+  }
+}
+
+class ProviderMemorySettingsStorage {
+  raw: AppSettingsRaw = {};
+
+  readRawSettings(): AppSettingsRaw {
+    return this.raw;
+  }
+
+  writeRawSettings(next: AppSettingsRaw): void {
+    this.raw = next;
   }
 }
 
@@ -210,6 +222,33 @@ describe('ProviderSettingsService', () => {
       providers: {
         openai: {},
       },
+    });
+  });
+
+  it('can be backed by the product settings service instead of a shell app settings provider', async () => {
+    const storage = new ProviderMemorySettingsStorage();
+    const productSettings = new ProductSettingsService({ storage });
+    const service = new ProviderSettingsService({
+      settings: productSettings,
+      env: {},
+    });
+
+    await service.updateProviderSettings('deepseek', {
+      enabled: false,
+      defaultModelId: 'deepseek-product-settings',
+    });
+
+    expect(storage.raw).toEqual({
+      providers: {
+        deepseek: {
+          enabled: false,
+          defaultModel: 'deepseek-product-settings',
+        },
+      },
+    });
+    await expect(service.getProviderSettings('deepseek')).resolves.toMatchObject({
+      enabled: false,
+      defaultModelId: 'deepseek-product-settings',
     });
   });
 });

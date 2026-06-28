@@ -8,7 +8,7 @@ import type { ToolService } from '../tools/tool-service-port';
 import type { ArtifactServicePort, PlanArtifactServicePort } from '../artifacts';
 import type { MemoryService } from '../memory';
 import type { RunContextServicePort } from '../run/context/resources';
-import type { ProviderSettingsPort } from '../settings';
+import type { ProductSettingsPort, ProviderSettingsPort } from '../settings';
 import type { ProjectService } from '../workspace';
 
 export interface CodingAgentProductRuntime {
@@ -21,6 +21,7 @@ export interface CodingAgentProductRuntime {
   planArtifactService: PlanArtifactServicePort;
   memoryService: MemoryService;
   runContextService: RunContextServicePort;
+  settingsService: ProductSettingsPort;
   providerSettingsService: ProviderSettingsPort;
   projectService: ProjectService;
   dispose(): void;
