@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -4864,9 +4864,9 @@ describe('AgentRunService', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const toolContinuationLongRequestId = `ipc-${'d'.repeat(124)}`;
+    const toolResultsModelInputLongRequestId = `ipc-${'d'.repeat(124)}`;
     const result = await service.sendSessionMessage({
-      requestId: toolContinuationLongRequestId,
+      requestId: toolResultsModelInputLongRequestId,
       payload: {
         sessionId: 'session-1',
         providerId: 'deepseek',
@@ -6015,7 +6015,7 @@ describe('AgentRunService', () => {
     expect(chatEvents.at(-1)?.eventType).toBe('turn.completed');
   });
 
-  it('marks session message runs waiting and resumes live continuation after approval resolution', async () => {
+  it('marks session message runs waiting and resumes live model input after approval resolution', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const resumeInputs: unknown[] = [];
     const markToolResultsSubmittedToModelInput = vi.fn();
@@ -6382,7 +6382,7 @@ describe('AgentRunService', () => {
     expect(JSON.stringify(requests[1]?.inputContext.parts)).toContain('user_rejected');
   });
 
-  it('cancels a waiting approval run without resuming approval continuation', async () => {
+  it('cancels a waiting approval run without resuming approval model input', async () => {
     let toolRepository: ToolRepository | undefined;
     const resumeToolApproval = vi.fn(async () => ({
       toolResult: createToolResult(),

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   applyContextBudget,
   estimateModelInputContextTokens,
@@ -73,7 +73,7 @@ function runtimeFactPart(
   };
 }
 
-function toolContinuationPart(tokens: number, sourceId: string, toolCallId: string): ModelInputContextPartDraft {
+function toolResultModelInputPart(tokens: number, sourceId: string, toolCallId: string): ModelInputContextPartDraft {
   return {
     partId: `part:${sourceId}`,
     kind: 'tool_continuation',
@@ -506,15 +506,15 @@ describe('Context budget executor', () => {
 
   it('keeps tool result model input parts together as required context', () => {
     const result = applyContextBudget({
-      buildReason: 'tool_continuation',
+      buildReason: 'tool_results_model_input',
       policy: {
         modelContextWindow: 35,
         reservedOutputTokens: 5,
         keepRecentTokens: 10,
       },
       parts: [
-        toolContinuationPart(20, 'tool-use:1', 'tool:1'),
-        toolContinuationPart(20, 'tool-result:1', 'tool:1'),
+        toolResultModelInputPart(20, 'tool-use:1', 'tool:1'),
+        toolResultModelInputPart(20, 'tool-result:1', 'tool:1'),
         sessionHistoryPart(5, 'history:old', '2026-05-30T00:00:01.000Z'),
       ],
     });

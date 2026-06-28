@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { buildModelInputContext } from '@megumi/coding-agent/context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { ModelInputContextPartDraft } from '@megumi/coding-agent/context/context-budget';
@@ -119,7 +119,7 @@ describe('ModelInputContextBuilder', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'continuation',
+      buildReason: 'tool_results_model_input',
       builtAt,
       parts: [
         sessionPart(),
