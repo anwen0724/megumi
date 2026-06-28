@@ -23,6 +23,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { RuntimeEventRepository } from './runtime-event.repo';
 import { RunExecutionFactRepository } from './run-execution-fact.repo';
 import { ModelStepRepository, type ModelStepRecord } from './model-step.repo';
+import { SessionMessageRepository } from './session-message.repo';
 
 export type { ModelStepRecord } from './model-step.repo';
 
@@ -38,18 +39,6 @@ interface SessionRow {
   updated_at: string;
   archived_at: Nullable<string>;
   summary: Nullable<string>;
-  metadata_json: Nullable<string>;
-}
-
-interface SessionMessageRow {
-  message_id: string;
-  session_id: string;
-  run_id: Nullable<string>;
-  role: SessionMessage['role'];
-  content: string;
-  status: SessionMessage['status'];
-  created_at: string;
-  completed_at: Nullable<string>;
   metadata_json: Nullable<string>;
 }
 
@@ -89,11 +78,13 @@ export class SessionRunRepository {
   private readonly runtimeEvents: RuntimeEventRepository;
   private readonly runExecutionFacts: RunExecutionFactRepository;
   private readonly modelSteps: ModelStepRepository;
+  private readonly sessionMessages: SessionMessageRepository;
 
   constructor(private readonly database: MegumiDatabase) {
     this.runtimeEvents = new RuntimeEventRepository(database);
     this.runExecutionFacts = new RunExecutionFactRepository(database);
     this.modelSteps = new ModelStepRepository(database);
+    this.sessionMessages = new SessionMessageRepository(database);
   }
 
   saveSession(session: Session): Session {
@@ -255,34 +246,15 @@ export class SessionRunRepository {
   }
 
   saveMessage(message: SessionMessage): SessionMessage {
-    this.database.prepare(`
-      INSERT INTO session_messages (
-        message_id, session_id, run_id, role, content, status, created_at, completed_at, metadata_json
-      ) VALUES (
-        @message_id, @session_id, @run_id, @role, @content, @status, @created_at, @completed_at, @metadata_json
-      )
-      ON CONFLICT(message_id) DO UPDATE SET
-        run_id = excluded.run_id,
-        content = excluded.content,
-        status = excluded.status,
-        completed_at = excluded.completed_at,
-        metadata_json = excluded.metadata_json
-    `).run(toSessionMessageRow(message));
-
-    return message;
+    return this.sessionMessages.saveMessage(message);
   }
 
   getMessage(messageId: string): SessionMessage | undefined {
-    const row = this.database.prepare('SELECT * FROM session_messages WHERE message_id = ?').get(messageId) as
-      | SessionMessageRow
-      | undefined;
-    return row ? fromSessionMessageRow(row) : undefined;
+    return this.sessionMessages.getMessage(messageId);
   }
 
   listMessagesBySession(sessionId: string): SessionMessage[] {
-    return (this.database
-      .prepare('SELECT * FROM session_messages WHERE session_id = ? ORDER BY created_at ASC')
-      .all(sessionId) as SessionMessageRow[]).map(fromSessionMessageRow);
+    return this.sessionMessages.listMessagesBySession(sessionId);
   }
 
   saveRun(run: Run): Run {
@@ -542,34 +514,6 @@ function fromSessionCompactionRow(row: SessionCompactionRow): SessionCompactionE
     createdAt: row.created_at,
     metadata: row.metadata_json ? parseJson(row.metadata_json) : undefined,
   });
-}
-
-function toSessionMessageRow(message: SessionMessage): SessionMessageRow {
-  return {
-    message_id: message.messageId,
-    session_id: message.sessionId,
-    run_id: message.runId ?? null,
-    role: message.role,
-    content: message.content,
-    status: message.status,
-    created_at: message.createdAt,
-    completed_at: message.completedAt ?? null,
-    metadata_json: message.metadata ? stringifyJson(message.metadata) : null,
-  };
-}
-
-function fromSessionMessageRow(row: SessionMessageRow): SessionMessage {
-  return {
-    messageId: row.message_id,
-    sessionId: row.session_id,
-    ...(row.run_id ? { runId: row.run_id } : {}),
-    role: row.role,
-    content: row.content,
-    status: row.status,
-    createdAt: row.created_at,
-    ...(row.completed_at ? { completedAt: row.completed_at } : {}),
-    ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
-  };
 }
 
 function toRunRow(run: Run): RunRow {

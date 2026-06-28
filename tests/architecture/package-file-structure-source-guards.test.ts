@@ -208,4 +208,17 @@ describe('package and file structure source guards', () => {
     expect(sessionRunSource).not.toContain('INSERT INTO model_steps');
     expect(sessionRunSource).not.toContain('SELECT * FROM model_steps');
   });
+
+  it('keeps session message persistence in its owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-message.repo.ts');
+    const sessionRunSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
+      'utf8',
+    );
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(sessionRunSource).toContain('new SessionMessageRepository');
+    expect(sessionRunSource).not.toContain('INSERT INTO session_messages');
+    expect(sessionRunSource).not.toContain('SELECT * FROM session_messages');
+  });
 });
