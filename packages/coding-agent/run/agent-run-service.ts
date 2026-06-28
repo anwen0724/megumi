@@ -11,9 +11,8 @@ import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   PendingApprovalRegistry,
   closePendingApprovalGroup,
+  collectApprovalResumeRuntimeEvents,
   createApprovalResolvedRuntimeEvent,
-  createToolResultRuntimeEvent,
-  persistResumeRuntimeEvents,
   resolvePendingApproval,
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
@@ -1603,30 +1602,18 @@ export class AgentRunService implements AgentRunPort {
       || (resumeOutcome.pendingApprovals?.length ?? 0) > 0
       || resumeOutcome.continuationReady === false
     ) {
-      const resumeEvents = persistResumeRuntimeEvents({
+      const resumeEvents = collectApprovalResumeRuntimeEvents({
         request: continuation.request,
         stepId: continuation.step.stepId,
         lastSequence,
         outcome: resumeOutcome,
+        toolResults,
+        ids: this.ids,
       });
       lastSequence = resumeEvents.lastSequence;
       for (const event of resumeEvents.events) {
         this.appendRuntimeEvent(event, chatStreamAdapter);
         yield event;
-      }
-      for (const toolResult of toolResults) {
-        if (resumeEvents.toolResultIdsWithEvents.has(String(toolResult.toolResultId))) {
-          continue;
-        }
-        const toolResultEvent = createToolResultRuntimeEvent({
-          request: continuation.request,
-          stepId: continuation.step.stepId,
-          sequence: lastSequence += 1,
-          toolResult,
-          ids: this.ids,
-        });
-        this.appendRuntimeEvent(toolResultEvent, chatStreamAdapter);
-        yield toolResultEvent;
       }
       return;
     }
@@ -1648,31 +1635,18 @@ export class AgentRunService implements AgentRunPort {
     this.appendRuntimeEvent(resumedRun.event, chatStreamAdapter);
     yield resumedRun.event;
 
-    const resumeEvents = persistResumeRuntimeEvents({
+    const resumeEvents = collectApprovalResumeRuntimeEvents({
       request: continuation.request,
       stepId: continuation.step.stepId,
       lastSequence,
       outcome: resumeOutcome,
+      toolResults,
+      ids: this.ids,
     });
     lastSequence = resumeEvents.lastSequence;
     for (const event of resumeEvents.events) {
       this.appendRuntimeEvent(event, chatStreamAdapter);
       yield event;
-    }
-
-    for (const toolResult of toolResults) {
-      if (resumeEvents.toolResultIdsWithEvents.has(String(toolResult.toolResultId))) {
-        continue;
-      }
-      const toolResultEvent = createToolResultRuntimeEvent({
-        request: continuation.request,
-        stepId: continuation.step.stepId,
-        sequence: lastSequence += 1,
-        toolResult,
-        ids: this.ids,
-      });
-      this.appendRuntimeEvent(toolResultEvent, chatStreamAdapter);
-      yield toolResultEvent;
     }
 
     const resumedStep = this.runExecutionFactRepository.saveStep({

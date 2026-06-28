@@ -474,9 +474,12 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('private createToolResultRuntimeEvent');
     expect(agentRunServiceSource).not.toContain('function createToolResultSummary');
     expect(agentRunServiceSource).not.toContain("eventType: 'approval.resolved'");
+    expect(agentRunServiceSource).not.toContain('resumeEvents.toolResultIdsWithEvents');
+    expect(agentRunServiceSource).not.toContain('for (const toolResult of toolResults)');
     expect(approvalResumeEventsSource).toContain('export function persistResumeRuntimeEvents');
     expect(approvalResumeEventsSource).toContain('export function createToolResultRuntimeEvent');
     expect(approvalResumeEventsSource).toContain('export function createApprovalResolvedRuntimeEvent');
+    expect(approvalResumeEventsSource).toContain('export function collectApprovalResumeRuntimeEvents');
   });
 
   it('keeps approval resume registry mutation in the approval submodule', () => {

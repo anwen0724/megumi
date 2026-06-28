@@ -50,6 +50,43 @@ export function createApprovalResolvedRuntimeEvent(input: {
   }), input.request);
 }
 
+export function collectApprovalResumeRuntimeEvents(input: {
+  request: ModelStepRuntimeRequest;
+  stepId: RunStep['stepId'];
+  lastSequence: number;
+  outcome: ResumeToolApprovalOutcome;
+  toolResults: readonly ToolResult[];
+  ids: ApprovalResumeEventIds;
+}): {
+  events: RuntimeEvent[];
+  lastSequence: number;
+} {
+  const resumeEvents = persistResumeRuntimeEvents({
+    request: input.request,
+    stepId: input.stepId,
+    lastSequence: input.lastSequence,
+    outcome: input.outcome,
+  });
+  const events = [...resumeEvents.events];
+  let lastSequence = resumeEvents.lastSequence;
+
+  for (const toolResult of input.toolResults) {
+    if (resumeEvents.toolResultIdsWithEvents.has(String(toolResult.toolResultId))) {
+      continue;
+    }
+    const toolResultEvent = createToolResultRuntimeEvent({
+      request: input.request,
+      stepId: input.stepId,
+      sequence: lastSequence += 1,
+      toolResult,
+      ids: input.ids,
+    });
+    events.push(toolResultEvent);
+  }
+
+  return { events, lastSequence };
+}
+
 export function persistResumeRuntimeEvents(input: {
   request: ModelStepRuntimeRequest;
   stepId: RunStep['stepId'];
