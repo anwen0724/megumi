@@ -660,9 +660,11 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('private resolveSessionForMessage');
     expect(agentRunServiceSource).not.toContain('private appendSourceAndMoveLeaf');
     expect(agentRunServiceSource).not.toContain('private assertActiveBranchDraftMarker');
+    expect(agentRunServiceSource).not.toContain('private recordManualRerunAttemptForBranchDraft');
     expect(agentRunServiceSource).not.toContain('function sessionMessageSourceRef');
     expect(agentRunServiceSource).not.toContain('function sessionRunSourceRef');
     expect(agentRunServiceSource).toContain('assertSessionActiveBranchDraftMarker');
+    expect(agentRunServiceSource).toContain('this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft');
     expect(agentRunServiceSource).not.toContain('repository: this.runTerminalRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runRetryRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runCompletionRepository');

@@ -751,7 +751,7 @@ export class AgentRunService implements AgentRunPort {
       if (!branchDraftMarker) {
         throw new Error('Branch draft marker was not found.');
       }
-      manualRerunAuditEvent = this.recordManualRerunAttemptForBranchDraft({
+      manualRerunAuditEvent = this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft({
         requestId: input.requestId,
         sessionId: String(session.sessionId),
         runId: String(run.runId),
@@ -1392,18 +1392,6 @@ export class AgentRunService implements AgentRunPort {
       }
       yield eventWithRequest;
     }
-  }
-
-  private recordManualRerunAttemptForBranchDraft(input: {
-    requestId: string;
-    sessionId: string;
-    runId: string;
-    branchMarkerId: string;
-    marker: SessionBranchMarker;
-    createdAt: string;
-    runtimeContext?: RuntimeContext;
-  }): RuntimeEvent {
-    return this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft(input);
   }
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
