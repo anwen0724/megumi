@@ -1,5 +1,7 @@
 // Composes AgentRunService owner repository options from persistence repositories.
 import type { AgentRunServiceOptions } from '../run/run-contract';
+import type { RunCompletionHooksRepositoryPort } from '../run/completion';
+import type { RunRetryCoordinatorRepositoryPort, RunTerminalRepositoryPort } from '../run/lifecycle';
 import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
 import type { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
 import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
@@ -27,10 +29,11 @@ export type AgentRunRepositoryOptions = Pick<
   | 'modelStepRepository'
   | 'sessionContextRepository'
   | 'runtimeEventRepository'
-  | 'runCompletionRepository'
-  | 'runTerminalRepository'
-  | 'runRetryRepository'
->;
+> & {
+  runCompletionRepository: RunCompletionHooksRepositoryPort;
+  runTerminalRepository: RunTerminalRepositoryPort;
+  runRetryRepository: RunRetryCoordinatorRepositoryPort;
+};
 
 export function createAgentRunRepositoryOptions(
   input: AgentRunRepositoryOptionsCompositionInput,

@@ -6,11 +6,14 @@ import type {
   SessionRunContextService,
   AgentRunToolRuntimeFactory,
 } from '../run/run-contract';
+import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
 import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
+import { RunCompletionHooksCoordinator } from '../run/completion';
+import { RunRetryCoordinator, RunTerminalCoordinator } from '../run/lifecycle';
 
 export interface CreateDefaultAgentRunServiceOptions {
   contextService?: SessionRunContextService;
@@ -26,9 +29,25 @@ export function createDefaultAgentRunService(
   const permissionSnapshotRepository = persistence.permissionSnapshotRepository;
   const activePathRepository = persistence.activePathRepository;
   const toolRepository = persistence.toolRepository;
+  const ids = createDefaultAgentRunServiceIds();
+  const agentRunRepositoryOptions = createAgentRunRepositoryOptions(persistence);
 
   const service = new AgentRunService({
-    ...createAgentRunRepositoryOptions(persistence),
+    ...agentRunRepositoryOptions,
+    runCompletionHooks: new RunCompletionHooksCoordinator({
+      repository: agentRunRepositoryOptions.runCompletionRepository,
+      megumiHomePath: homePaths.homePath,
+    }),
+    runTerminalCoordinator: new RunTerminalCoordinator({
+      repository: agentRunRepositoryOptions.runTerminalRepository,
+      toolRepository,
+      ids,
+    }),
+    runRetryCoordinator: new RunRetryCoordinator({
+      repository: agentRunRepositoryOptions.runRetryRepository,
+      activePathRepository,
+      ids,
+    }),
     sessionCompactionRepository: persistence.sessionContextRepository,
     activePathRepository,
     toolRepository,
@@ -42,6 +61,7 @@ export function createDefaultAgentRunService(
     globalInstructionDirectoryProvider: {
       listGlobalInstructionDirs: () => [homePaths.homePath],
     },
+    ids,
   });
   service.cleanupInterruptedRunsOnStartup();
   return service;

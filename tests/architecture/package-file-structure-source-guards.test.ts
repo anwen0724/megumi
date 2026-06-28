@@ -415,18 +415,50 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(runContractSource).toContain('runCompletionRepository: RunCompletionHooksRepositoryPort;');
-    expect(runContractSource).toContain('runTerminalRepository: RunTerminalRepositoryPort;');
-    expect(runContractSource).toContain('runRetryRepository: RunRetryCoordinatorRepositoryPort;');
-    expect(agentRunServiceSource).toContain('this.runCompletionRepository = options.runCompletionRepository');
-    expect(agentRunServiceSource).toContain('this.runTerminalRepository = options.runTerminalRepository');
-    expect(agentRunServiceSource).toContain('this.runRetryRepository = options.runRetryRepository');
+    expect(runContractSource).not.toContain('runCompletionRepository: RunCompletionHooksRepositoryPort;');
+    expect(runContractSource).not.toContain('runTerminalRepository: RunTerminalRepositoryPort;');
+    expect(runContractSource).not.toContain('runRetryRepository: RunRetryCoordinatorRepositoryPort;');
+    expect(agentRunServiceSource).not.toContain('private readonly runCompletionRepository');
+    expect(agentRunServiceSource).not.toContain('private readonly runTerminalRepository');
+    expect(agentRunServiceSource).not.toContain('private readonly runRetryRepository');
+    expect(agentRunServiceSource).not.toContain('this.runCompletionRepository = options.runCompletionRepository');
+    expect(agentRunServiceSource).not.toContain('this.runTerminalRepository = options.runTerminalRepository');
+    expect(agentRunServiceSource).not.toContain('this.runRetryRepository = options.runRetryRepository');
     expect(agentRunServiceSource).not.toContain('this.runCompletionRepository = {');
     expect(agentRunServiceSource).not.toContain('this.runTerminalRepository = {');
     expect(agentRunServiceSource).not.toContain('this.runRetryRepository = {');
     expect(repositoryOptionsSource).toContain('runCompletionRepository');
     expect(repositoryOptionsSource).toContain('runTerminalRepository');
     expect(repositoryOptionsSource).toContain('runRetryRepository');
+  });
+
+  it('keeps AgentRunService coordinator construction in composition', () => {
+    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const sessionRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
+      'utf8',
+    );
+    const defaultAgentRunServiceSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/create-default-agent-run-service.ts'),
+      'utf8',
+    );
+
+    expect(runContractSource).toContain('runCompletionHooks: AgentRunCompletionHooksPort;');
+    expect(runContractSource).toContain('runTerminalCoordinator: AgentRunTerminalCoordinatorPort;');
+    expect(runContractSource).toContain('runRetryCoordinator: AgentRunRetryCoordinatorPort;');
+    expect(agentRunServiceSource).not.toContain('new RunCompletionHooksCoordinator');
+    expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');
+    expect(agentRunServiceSource).not.toContain('new RunRetryCoordinator');
+    expect(agentRunServiceSource).toContain('this.runCompletionHooks = options.runCompletionHooks');
+    expect(agentRunServiceSource).toContain('this.runTerminalCoordinator = options.runTerminalCoordinator');
+    expect(agentRunServiceSource).toContain('this.runRetryCoordinator = options.runRetryCoordinator');
+    expect(sessionRuntimeSource).toContain('new RunCompletionHooksCoordinator');
+    expect(sessionRuntimeSource).toContain('new RunTerminalCoordinator');
+    expect(sessionRuntimeSource).toContain('new RunRetryCoordinator');
+    expect(defaultAgentRunServiceSource).toContain('new RunCompletionHooksCoordinator');
+    expect(defaultAgentRunServiceSource).toContain('new RunTerminalCoordinator');
+    expect(defaultAgentRunServiceSource).toContain('new RunRetryCoordinator');
   });
 
   it('keeps AgentRunService internals on owner-named repository ports', () => {
@@ -438,9 +470,9 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).toContain('private readonly runRecordRepository: AgentRunRunRecordRepositoryPort');
     expect(agentRunServiceSource).toContain('private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort');
     expect(agentRunServiceSource).toContain('sessionRepository: this.sessionRepository');
-    expect(agentRunServiceSource).toContain('repository: this.runTerminalRepository');
-    expect(agentRunServiceSource).toContain('repository: this.runRetryRepository');
-    expect(agentRunServiceSource).toContain('repository: this.runCompletionRepository');
+    expect(agentRunServiceSource).not.toContain('repository: this.runTerminalRepository');
+    expect(agentRunServiceSource).not.toContain('repository: this.runRetryRepository');
+    expect(agentRunServiceSource).not.toContain('repository: this.runCompletionRepository');
   });
 
   it('wires agent run service through split repository owner ports in session runtime composition', () => {
@@ -457,7 +489,7 @@ describe('package and file structure source guards', () => {
     expect(sessionRuntimeSource).not.toContain('sessionRunRepository');
     expect(sessionRuntimeSource).toContain("import { createAgentRunRepositoryOptions } from './agent-run-repository-options'");
     expect(sessionRuntimeSource).not.toContain('function createAgentRunRepositoryOptions');
-    expect(sessionRuntimeSource).not.toContain('repository: agentRunRepository');
+    expect(sessionRuntimeSource).not.toContain('repository: agentRunRepository,');
     expect(sessionRuntimeSource).toContain('...agentRunRepositoryOptions');
     expect(runtimeSource).toContain('modelStepRepository: persistence.modelStepRepository');
     expect(runtimeSource).not.toContain('sessionRunRepository: persistence.sessionRunRepository');
@@ -469,7 +501,7 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('sessionRunRepository');
     expect(agentRunServiceSource).not.toContain('composeCodingAgentPersistence');
     expect(agentRunServiceSource).not.toContain('createDefaultAgentRunRepositoryPort');
-    expect(agentRunServiceSource).not.toContain('createDefaultAgentRunService');
+    expect(agentRunServiceSource).not.toContain('createDefaultAgentRunService(');
     expect(agentRunServiceSource).not.toContain('new PermissionSnapshotService');
     expect(agentRunServiceSource).not.toContain('new PlanArtifactService');
     expect(agentRunServiceSource).not.toContain('new ToolRegistrySnapshotService');

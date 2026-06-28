@@ -5,20 +5,9 @@ import {
   assertRunStatusTransition,
   canResumeApprovalFromRunStatus,
 } from './lifecycle/run-state-policy';
-import {
-  RunTerminalCoordinator,
-  type RunTerminalRepositoryPort,
-} from './lifecycle/run-terminal-coordinator';
-import {
-  RunRetryCoordinator,
-  type RunRetryCoordinatorRepositoryPort,
-} from './lifecycle/run-retry-coordinator';
-import {
-  RunCompletionHooksCoordinator,
-  type RunCompletionHooksRepositoryPort,
-} from './completion';
 import { runTurn } from './lifecycle/run-lifecycle';
 import type { RunHostBoundaryPort } from './lifecycle';
+import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   PendingApprovalRegistry,
   type PendingToolApprovalContinuation,
@@ -129,23 +118,22 @@ import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-import {
-  createWorkspaceChangeFooterProjectorService,
-  isWorkspaceChangeFooterProjectorPort,
-} from '@megumi/coding-agent/workspace';
 import type {
+  AgentRunCompletionHooksPort,
   AgentRunExecutionFactRepositoryPort,
   AgentRunMessageRepositoryPort,
   AgentRunModelStepProvider,
   AgentRunModelStepRepositoryPort,
   AgentRunPort,
   AgentRunRunRecordRepositoryPort,
+  AgentRunRetryCoordinatorPort,
   AgentRunServiceClock,
   AgentRunServiceIds,
   AgentRunServiceOptions,
   AgentRunRuntimeEventRepositoryPort,
   AgentRunSessionContextRepositoryPort,
   AgentRunSessionRepositoryPort,
+  AgentRunTerminalCoordinatorPort,
   AgentRunToolRuntimeFactory,
   SessionRunContextService,
   SessionRunEffectiveCwdProvider,
@@ -209,31 +197,6 @@ class EmptySessionActivePathRepository {
   }
 }
 
-function createDefaultIds(): AgentRunServiceIds {
-  return {
-    sessionId: () => `session:${crypto.randomUUID()}`,
-    runId: () => `run:${crypto.randomUUID()}`,
-    stepId: () => `step:${crypto.randomUUID()}`,
-    actionId: () => `action:${crypto.randomUUID()}`,
-    observationId: () => `observation:${crypto.randomUUID()}`,
-    checkpointId: () => `checkpoint:${crypto.randomUUID()}`,
-    resumeRequestId: () => `resume-request:${crypto.randomUUID()}`,
-    cancelRequestId: () => `cancel-request:${crypto.randomUUID()}`,
-    retryRequestId: () => `retry-request:${crypto.randomUUID()}`,
-    compactionId: () => `compaction:${crypto.randomUUID()}`,
-    retryAttemptId: () => `retry-attempt:${crypto.randomUUID()}`,
-    sourceEntryId: () => `source-entry:${crypto.randomUUID()}`,
-    branchMarkerId: () => `branch-marker:${crypto.randomUUID()}`,
-    eventId: () => `event:${crypto.randomUUID()}`,
-    messageId: () => `message:${crypto.randomUUID()}`,
-    debugId: () => `debug:${crypto.randomUUID()}`,
-    chatStreamEventId: () => `chat-stream-event:${crypto.randomUUID()}`,
-    chatStreamId: ({ runId }) => `chat-stream:${runId}:${crypto.randomUUID()}`,
-    chatTextId: () => `text:${crypto.randomUUID()}`,
-    chatThinkingId: () => `thinking:${crypto.randomUUID()}`,
-  };
-}
-
 export class AgentRunService implements AgentRunPort {
   private readonly sessionRepository: AgentRunSessionRepositoryPort;
   private readonly messageRepository: AgentRunMessageRepositoryPort;
@@ -242,9 +205,6 @@ export class AgentRunService implements AgentRunPort {
   private readonly modelStepRepository: AgentRunModelStepRepositoryPort;
   private readonly sessionContextRepository: AgentRunSessionContextRepositoryPort;
   private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
-  private readonly runCompletionRepository: RunCompletionHooksRepositoryPort;
-  private readonly runTerminalRepository: RunTerminalRepositoryPort;
-  private readonly runRetryRepository: RunRetryCoordinatorRepositoryPort;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
   private readonly permissionSnapshotService?: Pick<
@@ -279,10 +239,9 @@ export class AgentRunService implements AgentRunPort {
   private readonly chatStreamEventSink?: ChatStreamEventSink;
   private readonly clock: AgentRunServiceClock;
   private readonly ids: AgentRunServiceIds;
-  private readonly runTerminalCoordinator: RunTerminalCoordinator;
-  private readonly runRetryCoordinator: RunRetryCoordinator;
-  private readonly runCompletionHooks: RunCompletionHooksCoordinator;
-  private readonly workspaceChanges?: SessionRunWorkspaceChangeReadPort;
+  private readonly runTerminalCoordinator: AgentRunTerminalCoordinatorPort;
+  private readonly runRetryCoordinator: AgentRunRetryCoordinatorPort;
+  private readonly runCompletionHooks: AgentRunCompletionHooksPort;
   private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalContinuationGroup>({
     getRunId: (group) => group.request.runId,
   });
@@ -301,9 +260,9 @@ export class AgentRunService implements AgentRunPort {
     this.modelStepRepository = options.modelStepRepository;
     this.sessionContextRepository = options.sessionContextRepository;
     this.runtimeEventRepository = options.runtimeEventRepository;
-    this.runCompletionRepository = options.runCompletionRepository;
-    this.runTerminalRepository = options.runTerminalRepository;
-    this.runRetryRepository = options.runRetryRepository;
+    this.runCompletionHooks = options.runCompletionHooks;
+    this.runTerminalCoordinator = options.runTerminalCoordinator;
+    this.runRetryCoordinator = options.runRetryCoordinator;
     this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
     this.permissionSnapshotService = options.permissionSnapshotService;
@@ -338,30 +297,8 @@ export class AgentRunService implements AgentRunPort {
       });
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.sessionBranchService = options.sessionBranchService;
-    const workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(options.workspaceChanges)
-      ? createWorkspaceChangeFooterProjectorService({ workspaceChanges: options.workspaceChanges })
-      : undefined;
-    this.runCompletionHooks = new RunCompletionHooksCoordinator({
-      repository: this.runCompletionRepository,
-      ...(options.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
-      ...(this.megumiHomePath ? { megumiHomePath: this.megumiHomePath } : {}),
-      ...(options.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
-      ...(workspaceChangeFooterProjector ? { workspaceChangeFooterProjector } : {}),
-    });
     this.clock = options.clock ?? defaultClock;
-    this.ids = { ...createDefaultIds(), ...options.ids };
-    this.runTerminalCoordinator = new RunTerminalCoordinator({
-      repository: this.runTerminalRepository,
-      ...(this.toolRepository ? { toolRepository: this.toolRepository } : {}),
-      ids: this.ids,
-    });
-    this.runRetryCoordinator = new RunRetryCoordinator({
-      repository: this.runRetryRepository,
-      ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
-      ...(this.sessionBranchService ? { sessionBranchService: this.sessionBranchService } : {}),
-      ids: this.ids,
-    });
-    this.workspaceChanges = options.workspaceChanges;
+    this.ids = createDefaultAgentRunServiceIds(options.ids);
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
       ?? (options.modelStepProvider && options.sessionCompactionRepository
         ? new SessionCompactionOrchestrator({

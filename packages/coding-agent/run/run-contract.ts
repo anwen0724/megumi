@@ -72,15 +72,27 @@ import type {
 import type { ModelCallCompletionResult } from './model-call';
 import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
 import type {
-  RunRetryCoordinatorRepositoryPort,
-  RunTerminalRepositoryPort,
+  CancelActiveSessionMessageRunInput,
+  CancelActiveSessionMessageRunResult,
+  CleanupInterruptedRunsOnStartupInput,
+  CleanupInterruptedRunsOnStartupResult,
+  CreateManualRerunFromUserMessageInput,
+  CreateManualRerunFromUserMessageResult,
+  CreateManualRetryFromRunInput,
+  CreateManualRetryFromRunResult,
+  RecordManualRerunAttemptForBranchDraftInput,
 } from './lifecycle';
-import type { RunCompletionHooksRepositoryPort } from './completion';
+import type {
+  ScheduleRunCompletedMemoryCaptureInput,
+} from './completion';
 import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '../tools/tool-registry-snapshot';
-import type { ChatStreamEventSink } from '../projections/chat-stream';
+import type {
+  ChatStreamEventAdapter,
+  ChatStreamEventSink,
+} from '../projections/chat-stream';
 
 export interface AgentRunServiceClock {
   now(): string;
@@ -272,6 +284,26 @@ export interface AgentRunRuntimeEventRepositoryPort {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
 
+export interface AgentRunCompletionHooksPort {
+  scheduleRunCompletedMemoryCapture(input: ScheduleRunCompletedMemoryCaptureInput): void;
+  publishWorkspaceChangeFooter(input: {
+    runId: string;
+    createdAt: string;
+    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
+  }): void;
+}
+
+export interface AgentRunTerminalCoordinatorPort {
+  cancelActiveSessionMessageRun(input: CancelActiveSessionMessageRunInput): CancelActiveSessionMessageRunResult;
+  cleanupInterruptedRunsOnStartup(input: CleanupInterruptedRunsOnStartupInput): CleanupInterruptedRunsOnStartupResult;
+}
+
+export interface AgentRunRetryCoordinatorPort {
+  createManualRetryFromRun(input: CreateManualRetryFromRunInput): CreateManualRetryFromRunResult;
+  createManualRerunFromUserMessage(input: CreateManualRerunFromUserMessageInput): CreateManualRerunFromUserMessageResult;
+  recordManualRerunAttemptForBranchDraft(input: RecordManualRerunAttemptForBranchDraftInput): RuntimeEvent;
+}
+
 export interface AgentRunServiceOptions {
   sessionRepository: AgentRunSessionRepositoryPort;
   messageRepository: AgentRunMessageRepositoryPort;
@@ -280,9 +312,9 @@ export interface AgentRunServiceOptions {
   modelStepRepository: AgentRunModelStepRepositoryPort;
   sessionContextRepository: AgentRunSessionContextRepositoryPort;
   runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
-  runCompletionRepository: RunCompletionHooksRepositoryPort;
-  runTerminalRepository: RunTerminalRepositoryPort;
-  runRetryRepository: RunRetryCoordinatorRepositoryPort;
+  runCompletionHooks: AgentRunCompletionHooksPort;
+  runTerminalCoordinator: AgentRunTerminalCoordinatorPort;
+  runRetryCoordinator: AgentRunRetryCoordinatorPort;
   contextService?: SessionRunContextService;
   permissionSnapshotService?: Pick<
     PermissionSnapshotService,

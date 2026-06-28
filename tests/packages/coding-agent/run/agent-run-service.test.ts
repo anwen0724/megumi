@@ -49,6 +49,20 @@ import type {
   SessionCompactionOrchestrationResult,
 } from '@megumi/coding-agent/run/context';
 import { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
+import {
+  RunCompletionHooksCoordinator,
+  type RunCompletionHooksRepositoryPort,
+} from '@megumi/coding-agent/run/completion';
+import {
+  RunRetryCoordinator,
+  type RunRetryCoordinatorRepositoryPort,
+  RunTerminalCoordinator,
+  type RunTerminalRepositoryPort,
+} from '@megumi/coding-agent/run/lifecycle';
+import {
+  createWorkspaceChangeFooterProjectorService,
+  isWorkspaceChangeFooterProjectorPort,
+} from '@megumi/coding-agent/workspace';
 import type { ChatStreamEvent } from '@megumi/shared';
 import type { ModelInputContext, ModelStepRuntimeRequest, SessionInstructionSourceSnapshot } from '@megumi/shared/model';
 import type { ModelInputContextSourceKind } from '@megumi/shared/model';
@@ -78,10 +92,11 @@ type AgentRunServiceRepositoryOptions = Pick<
   | 'modelStepRepository'
   | 'sessionContextRepository'
   | 'runtimeEventRepository'
-  | 'runCompletionRepository'
-  | 'runTerminalRepository'
-  | 'runRetryRepository'
->;
+> & {
+  runCompletionRepository: RunCompletionHooksRepositoryPort;
+  runTerminalRepository: RunTerminalRepositoryPort;
+  runRetryRepository: RunRetryCoordinatorRepositoryPort;
+};
 type AgentRunServiceTestRepository =
   & AgentRunSessionRepositoryPort
   & AgentRunMessageRepositoryPort
@@ -97,8 +112,17 @@ type AgentRunServiceTestRepository =
     saveSessionCompaction(entry: SessionCompactionEntry): void;
   };
 type AgentRunServiceTestOptions =
-  & Omit<AgentRunServiceOptions, keyof AgentRunServiceRepositoryOptions>
-  & Partial<AgentRunServiceRepositoryOptions>
+  & Omit<
+    AgentRunServiceOptions,
+    keyof AgentRunServiceRepositoryOptions
+      | 'runCompletionHooks'
+      | 'runTerminalCoordinator'
+      | 'runRetryCoordinator'
+  >
+  & Partial<
+    AgentRunServiceRepositoryOptions
+      & Pick<AgentRunServiceOptions, 'runCompletionHooks' | 'runTerminalCoordinator' | 'runRetryCoordinator'>
+  >
   & { repository: AgentRunServiceTestRepository };
 
 function agentRunServiceRepositoryOptions(repository: AgentRunServiceTestRepository): AgentRunServiceRepositoryOptions {
@@ -155,9 +179,11 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
     sessionId: options.ids?.sessionId ?? (() => `session:${crypto.randomUUID()}`),
     branchMarkerId: options.ids?.branchMarkerId ?? (() => `branch-marker:${crypto.randomUUID()}`),
     sourceEntryId: options.ids?.sourceEntryId ?? (() => `source-entry:${crypto.randomUUID()}`),
+    retryAttemptId: options.ids?.retryAttemptId ?? (() => `retry-attempt:${crypto.randomUUID()}`),
     eventId: options.ids?.eventId ?? (() => `event:${crypto.randomUUID()}`),
     chatStreamEventId: options.ids?.chatStreamEventId ?? (() => `chat-stream-event:${crypto.randomUUID()}`),
   };
+  const repositoryOptions = agentRunServiceRepositoryOptions(repository);
   const sessionService = new SessionService({
     sessionRepository: repository,
     messageRepository: repository,
@@ -179,8 +205,33 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
         ...(options.chatStreamEventSink ? { chatStreamEventSink: options.chatStreamEventSink } : {}),
       })
     : undefined;
+  const workspaceChanges = options.workspaceChanges;
+  const workspaceChangeFooterProjector = workspaceChanges && isWorkspaceChangeFooterProjectorPort(workspaceChanges)
+    ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
+    : undefined;
+  const runCompletionHooks = options.runCompletionHooks ?? new RunCompletionHooksCoordinator({
+    repository: repositoryOptions.runCompletionRepository,
+    ...(options.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
+    ...(options.megumiHomePath ? { megumiHomePath: options.megumiHomePath } : {}),
+    ...(workspaceChanges ? { workspaceChanges } : {}),
+    ...(workspaceChangeFooterProjector ? { workspaceChangeFooterProjector } : {}),
+  });
+  const runTerminalCoordinator = options.runTerminalCoordinator ?? new RunTerminalCoordinator({
+    repository: repositoryOptions.runTerminalRepository,
+    ...(options.toolRepository ? { toolRepository: options.toolRepository } : {}),
+    ids,
+  });
+  const runRetryCoordinator = options.runRetryCoordinator ?? new RunRetryCoordinator({
+    repository: repositoryOptions.runRetryRepository,
+    ...(options.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
+    ...(sessionBranchService ? { sessionBranchService } : {}),
+    ids,
+  });
   const runService = new AgentRunService({
-    ...agentRunServiceRepositoryOptions(repository),
+    ...repositoryOptions,
+    runCompletionHooks,
+    runTerminalCoordinator,
+    runRetryCoordinator,
     ...options,
     ...(sessionBranchService ? { sessionBranchService } : {}),
   });

@@ -10,5 +10,6 @@ export * from './lifecycle';
 export * from './recovery';
 export * from './turn';
 export * from './runtime-input';
+export * from './agent-run-service-ids';
 export * from './run-contract';
 export { AgentRunService } from './agent-run-service';

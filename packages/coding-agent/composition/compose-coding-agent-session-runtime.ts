@@ -15,6 +15,7 @@ import type {
   AgentRunModelStepProvider,
   AgentRunToolRuntimeFactory,
 } from '../run/run-contract';
+import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
@@ -34,6 +35,12 @@ import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
 import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
+import { RunCompletionHooksCoordinator } from '../run/completion';
+import { RunRetryCoordinator, RunTerminalCoordinator } from '../run/lifecycle';
+import {
+  createWorkspaceChangeFooterProjectorService,
+  isWorkspaceChangeFooterProjectorPort,
+} from '../workspace';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -68,6 +75,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
   const agentRunRepositoryOptions = createAgentRunRepositoryOptions(options);
+  const agentRunIds = createDefaultAgentRunServiceIds();
   const runContextService = new RunContextService({
     contextRepository: options.runContextRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
@@ -116,8 +124,33 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     sessionCompactionRepository: options.sessionContextRepository,
     activePathRepository: options.activePathRepository,
   });
+  const workspaceChanges = options.workspaceChangeFooterProjector ?? options.workspaceChangeRepository;
+  const workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(workspaceChanges)
+    ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
+    : undefined;
+  const runCompletionHooks = new RunCompletionHooksCoordinator({
+    repository: agentRunRepositoryOptions.runCompletionRepository,
+    memoryCaptureService: options.memoryRuntime.captureService,
+    megumiHomePath: options.homePaths.homePath,
+    workspaceChanges,
+    ...(workspaceChangeFooterProjector ? { workspaceChangeFooterProjector } : {}),
+  });
+  const runTerminalCoordinator = new RunTerminalCoordinator({
+    repository: agentRunRepositoryOptions.runTerminalRepository,
+    toolRepository: options.toolRepository,
+    ids: agentRunIds,
+  });
+  const runRetryCoordinator = new RunRetryCoordinator({
+    repository: agentRunRepositoryOptions.runRetryRepository,
+    activePathRepository: options.activePathRepository,
+    sessionBranchService,
+    ids: agentRunIds,
+  });
   const agentRunService = new AgentRunService({
     ...agentRunRepositoryOptions,
+    runCompletionHooks,
+    runTerminalCoordinator,
+    runRetryCoordinator,
     sessionCompactionRepository: options.sessionContextRepository,
     activePathRepository: options.activePathRepository,
     sessionContextInputService,
@@ -130,13 +163,14 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     toolRuntimeFactory: options.toolRuntimeFactory,
     toolDefinitionProvider: options.toolRegistry,
     toolRepository: options.toolRepository,
-    workspaceChanges: options.workspaceChangeFooterProjector ?? options.workspaceChangeRepository,
+    workspaceChanges,
     chatStreamEventSink: options.chatStreamEventSink,
     memoryRecallService: options.memoryRuntime.recallService,
     memoryCaptureService: options.memoryRuntime.captureService,
     memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
     memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
     megumiHomePath: options.homePaths.homePath,
+    ids: agentRunIds,
   });
 
   return {
