@@ -43,6 +43,38 @@ function filesContaining(relativePath: string, predicate: (source: string) => bo
 }
 
 describe('coding agent run structure source guards', () => {
+  it('keeps non-run owner tests out of the run test tree', () => {
+    for (const removedTestPath of [
+      'tests/packages/coding-agent/run/events',
+      'tests/packages/coding-agent/run/instructions',
+      'tests/packages/coding-agent/run/resources',
+      'tests/packages/coding-agent/run/permissions',
+      'tests/packages/coding-agent/run/recovery',
+      'tests/packages/coding-agent/run/run-input-facts.test.ts',
+      'tests/packages/coding-agent/run/lifecycle/run-error.test.ts',
+      'tests/packages/coding-agent/run/lifecycle/run-state-policy.test.ts',
+      'tests/packages/coding-agent/run/lifecycle/run-approval-resume.test.ts',
+      'tests/packages/coding-agent/run/lifecycle/run-terminal-coordinator.test.ts',
+    ]) {
+      expect(exists(removedTestPath), removedTestPath).toBe(false);
+    }
+
+    for (const ownerTestPath of [
+      'tests/packages/coding-agent/events/runtime-event-factory.test.ts',
+      'tests/packages/coding-agent/context/instructions/agent-instruction-source.test.ts',
+      'tests/packages/coding-agent/context/resources/run-context-service.test.ts',
+      'tests/packages/coding-agent/permissions/permission-instruction.test.ts',
+      'tests/packages/coding-agent/state/recovery-observation-mapper.test.ts',
+      'tests/packages/coding-agent/state/run-error.test.ts',
+      'tests/packages/coding-agent/state/run-state-policy.test.ts',
+      'tests/packages/coding-agent/state/run-approval-resume.test.ts',
+      'tests/packages/coding-agent/state/run-terminal-coordinator.test.ts',
+      'tests/packages/coding-agent/input/run-input-facts.test.ts',
+    ]) {
+      expect(exists(ownerTestPath), ownerTestPath).toBe(true);
+    }
+  });
+
   it('keeps model call as the agent-loop model boundary without provider ownership', () => {
     expect(exists('packages/coding-agent/run/model-step')).toBe(false);
     expect(exists('packages/coding-agent/run/model-call')).toBe(false);
