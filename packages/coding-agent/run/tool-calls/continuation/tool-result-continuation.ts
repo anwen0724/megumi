@@ -60,6 +60,12 @@ export function buildContinuationToolResults(
         metadata: {
           callOrder: record.callOrder ?? 0,
           assistantMessageId: record.assistantMessageId ?? String(record.stepId),
+          observationTruncated: record.observation.truncated,
+          ...(record.observation.truncationReason ? { observationTruncationReason: record.observation.truncationReason } : {}),
+          ...(record.observation.rawResultRef ? { observationRawResultRef: record.observation.rawResultRef } : {}),
+          ...(record.observation.continuationHint ? { observationContinuationHint: record.observation.continuationHint } : {}),
+          observationByteLength: record.observation.byteLength,
+          ...(record.observation.tokenEstimate !== undefined ? { observationTokenEstimate: record.observation.tokenEstimate } : {}),
         },
       });
     });

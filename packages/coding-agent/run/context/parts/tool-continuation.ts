@@ -5,6 +5,8 @@ import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 
 import type { ModelInputContextPartDraft } from '../context-budget';
 
+const TOOL_RESULT_CONTINUATION_MAX_CHARS = 12_000;
+
 export interface ToolContinuationPartsInput {
   builtAt: string;
   toolCalls?: ToolCall[];
@@ -30,24 +32,28 @@ export function toolContinuationParts(input: ToolContinuationPartsInput): ModelI
     },
   }));
 
-  const toolResultParts = orderToolResultsForContinuation(input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => ({
-    partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
-    kind: 'tool_continuation',
-    text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}: ${toolResultSummary(toolResult)}.`,
-    toolCallId: String(toolResult.toolCallId),
-    ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
-    toolResultId: String(toolResult.toolResultId),
-    toolResultContent: toolResultContent(toolResult),
-    sourceRefs: [toolResultSourceRef(toolResult)],
-    priority: 85,
-    retentionGroupId: `tool-continuation:${toolResult.toolCallId}`,
-    metadata: {
-      kind: toolResult.kind,
-      redactionState: toolResult.redactionState,
-      ...(toolResult.observationId ? { observationId: toolResult.observationId } : {}),
-      ...(toolResult.metadata?.callOrder !== undefined ? { callOrder: toolResult.metadata.callOrder } : {}),
-    },
-  }));
+  const toolResultParts = orderToolResultsForContinuation(input.toolResults ?? []).map((toolResult, index): ModelInputContextPartDraft => {
+    const continuation = boundedToolResultContinuation(toolResult);
+    return {
+      partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
+      kind: 'tool_continuation',
+      text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}: ${continuation.summary}`,
+      toolCallId: String(toolResult.toolCallId),
+      ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
+      toolResultId: String(toolResult.toolResultId),
+      toolResultContent: continuation.content,
+      sourceRefs: [toolResultSourceRef(toolResult)],
+      priority: 85,
+      retentionGroupId: `tool-continuation:${toolResult.toolCallId}`,
+      metadata: {
+        kind: toolResult.kind,
+        redactionState: toolResult.redactionState,
+        ...(toolResult.observationId ? { observationId: toolResult.observationId } : {}),
+        ...(toolResult.metadata?.callOrder !== undefined ? { callOrder: toolResult.metadata.callOrder } : {}),
+        ...(continuation.truncated ? { contextEnvelopeTruncated: true } : {}),
+      },
+    };
+  });
 
   return [
     ...toolCallParts,
@@ -89,22 +95,6 @@ function toolResultSourceRef(toolResult: ToolResult): ModelInputContextSourceRef
   };
 }
 
-function toolResultSummary(toolResult: ToolResult): string {
-  if (toolResult.textContent && toolResult.textContent.trim().length > 0) {
-    return toolResult.textContent;
-  }
-  if (toolResult.denialReason && toolResult.denialReason.trim().length > 0) {
-    return toolResult.denialReason;
-  }
-  if (toolResult.error) {
-    return toolResult.error.message;
-  }
-  if (toolResult.structuredContent !== undefined) {
-    return stringifyJsonValue(toolResult.structuredContent);
-  }
-  return toolResult.kind;
-}
-
 function toolResultContent(toolResult: ToolResult): string {
   if (toolResult.textContent !== undefined) {
     return toolResult.textContent;
@@ -119,6 +109,82 @@ function toolResultContent(toolResult: ToolResult): string {
     return stringifyJsonValue(toolResult.structuredContent);
   }
   return toolResult.kind;
+}
+
+function boundedToolResultContinuation(toolResult: ToolResult): {
+  content: string;
+  summary: string;
+  truncated: boolean;
+} {
+  const content = toolResultContent(toolResult);
+  const hasObservationEnvelope = Boolean(
+    toolResult.metadata?.observationTruncated !== undefined
+    || toolResult.metadata?.observationRawResultRef
+    || toolResult.metadata?.observationContinuationHint
+    || toolResult.metadata?.observationByteLength !== undefined
+  );
+  const bounded = boundContinuationContent(content);
+
+  if (!hasObservationEnvelope && !bounded.truncated) {
+    return {
+      content,
+      summary: `${content}.`,
+      truncated: false,
+    };
+  }
+
+  const envelope = [
+    `Observation truncated: ${readBoolean(toolResult.metadata, 'observationTruncated') ? 'true' : 'false'}`,
+    ...(readString(toolResult.metadata, 'observationTruncationReason')
+      ? [`Truncation reason: ${readString(toolResult.metadata, 'observationTruncationReason')}`]
+      : []),
+    ...(readNumber(toolResult.metadata, 'observationByteLength') !== undefined
+      ? [`Original byte length: ${readNumber(toolResult.metadata, 'observationByteLength')}`]
+      : []),
+    ...(readNumber(toolResult.metadata, 'observationTokenEstimate') !== undefined
+      ? [`Original token estimate: ${readNumber(toolResult.metadata, 'observationTokenEstimate')}`]
+      : []),
+    ...(readString(toolResult.metadata, 'observationRawResultRef')
+      ? [`Raw result ref: ${readString(toolResult.metadata, 'observationRawResultRef')}`]
+      : []),
+    ...(readString(toolResult.metadata, 'observationContinuationHint')
+      ? [`Continuation hint: ${readString(toolResult.metadata, 'observationContinuationHint')}`]
+      : []),
+    'Content:',
+    bounded.content,
+    ...(bounded.truncated ? ['[Context notice] Tool result content was bounded before provider continuation.'] : []),
+  ].join('\n');
+
+  return {
+    content: envelope,
+    summary: envelope,
+    truncated: bounded.truncated,
+  };
+}
+
+function boundContinuationContent(content: string): { content: string; truncated: boolean } {
+  if (content.length <= TOOL_RESULT_CONTINUATION_MAX_CHARS) {
+    return { content, truncated: false };
+  }
+  return {
+    content: content.slice(0, TOOL_RESULT_CONTINUATION_MAX_CHARS),
+    truncated: true,
+  };
+}
+
+function readString(metadata: ToolResult['metadata'], key: string): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readNumber(metadata: ToolResult['metadata'], key: string): number | undefined {
+  const value = metadata?.[key];
+  return typeof value === 'number' ? value : undefined;
+}
+
+function readBoolean(metadata: ToolResult['metadata'], key: string): boolean | undefined {
+  const value = metadata?.[key];
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function stringifyJsonValue(value: JsonValue): string {
