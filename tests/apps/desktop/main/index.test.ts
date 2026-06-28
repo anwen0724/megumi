@@ -88,32 +88,6 @@ const mocks = vi.hoisted(() => {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
     })),
-    SessionRunRepository: vi.fn(function SessionRunRepository(
-      this: {
-        database?: unknown;
-        getRun?: unknown;
-        getSession?: unknown;
-        listRuntimeEventsByRun?: unknown;
-        appendRuntimeEvent?: unknown;
-      },
-      database: unknown,
-    ) {
-      this.database = database;
-      this.getRun = vi.fn(() => ({
-        runId: 'run_123',
-        sessionId: 'session_123',
-      }));
-      this.getSession = vi.fn(() => ({
-        sessionId: 'session_123',
-        title: 'Restore Session',
-        workspacePath: 'C:/work/project',
-        status: 'active',
-        createdAt: '2026-06-05T10:00:00.000Z',
-        updatedAt: '2026-06-05T10:00:00.000Z',
-      }));
-      this.listRuntimeEventsByRun = vi.fn(() => []);
-      this.appendRuntimeEvent = vi.fn();
-    }),
     PermissionSnapshotRepository: vi.fn(function PermissionSnapshotRepository(
       this: { database?: unknown },
       database: unknown,
@@ -211,7 +185,6 @@ const mocks = vi.hoisted(() => {
       const db = { databaseId: 'desktop-persistence-database' };
       return {
         database: db,
-        sessionRunRepository: new mocks.SessionRunRepository(db),
         activePathRepository: new mocks.SessionActivePathRepository(db),
         recoveryRepository: new mocks.RecoveryRepository(db),
         permissionSnapshotRepository: new mocks.PermissionSnapshotRepository(db),
@@ -519,7 +492,6 @@ describe('main runtime logger composition', () => {
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
-    mocks.SessionRunRepository.mockClear();
     mocks.PermissionSnapshotRepository.mockClear();
     mocks.PermissionSnapshotService.mockClear();
     mocks.SessionRunService.mockClear();

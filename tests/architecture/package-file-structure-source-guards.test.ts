@@ -175,106 +175,75 @@ describe('package and file structure source guards', () => {
 
   it('keeps runtime event persistence in its owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/runtime-event.repo.ts');
-    const sessionRunPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(readFileSync(sessionRunPath, 'utf8')).toContain('new RuntimeEventRepository');
-    expect(readFileSync(sessionRunPath, 'utf8')).not.toContain('INSERT INTO runtime_events');
+    expect(readFileSync(ownerPath, 'utf8')).toContain('INSERT INTO runtime_events');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
   });
 
   it('keeps run execution facts in their owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/run-execution-fact.repo.ts');
-    const sessionRunSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
-      'utf8',
-    );
+    const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(sessionRunSource).toContain('new RunExecutionFactRepository');
-    expect(sessionRunSource).not.toContain('INSERT INTO run_steps');
-    expect(sessionRunSource).not.toContain('INSERT INTO run_actions');
-    expect(sessionRunSource).not.toContain('INSERT INTO run_observations');
+    expect(ownerSource).toContain('INSERT INTO run_steps');
+    expect(ownerSource).toContain('INSERT INTO run_actions');
+    expect(ownerSource).toContain('INSERT INTO run_observations');
   });
 
   it('keeps model step persistence in its owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/model-step.repo.ts');
-    const sessionRunSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
-      'utf8',
-    );
+    const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(sessionRunSource).toContain('new ModelStepRepository');
-    expect(sessionRunSource).not.toContain('INSERT INTO model_steps');
-    expect(sessionRunSource).not.toContain('SELECT * FROM model_steps');
+    expect(ownerSource).toContain('INSERT INTO model_steps');
+    expect(ownerSource).toContain('SELECT * FROM model_steps');
   });
 
   it('keeps session message persistence in its owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-message.repo.ts');
-    const sessionRunSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
-      'utf8',
-    );
+    const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(sessionRunSource).toContain('new SessionMessageRepository');
-    expect(sessionRunSource).not.toContain('INSERT INTO session_messages');
-    expect(sessionRunSource).not.toContain('SELECT * FROM session_messages');
+    expect(ownerSource).toContain('INSERT INTO session_messages');
+    expect(ownerSource).toContain('SELECT * FROM session_messages');
   });
 
   it('keeps session records in their owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-record.repo.ts');
-    const sessionRunSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
-      'utf8',
-    );
+    const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(sessionRunSource).toContain('new SessionRecordRepository');
-    expect(sessionRunSource).not.toContain('INSERT INTO sessions');
-    expect(sessionRunSource).not.toContain('SELECT * FROM sessions');
+    expect(ownerSource).toContain('INSERT INTO sessions');
+    expect(ownerSource).toContain('SELECT * FROM sessions');
   });
 
   it('keeps run records in their owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/run-record.repo.ts');
-    const sessionRunSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
-      'utf8',
-    );
+    const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(sessionRunSource).toContain('new RunRecordRepository');
-    expect(sessionRunSource).not.toContain('INSERT INTO runs');
-    expect(sessionRunSource).not.toContain('SELECT * FROM runs');
+    expect(ownerSource).toContain('INSERT INTO runs');
+    expect(ownerSource).toContain('SELECT * FROM runs');
   });
 
   it('keeps session compaction persistence in its owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-compaction.repo.ts');
-    const sessionRunSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
-      'utf8',
-    );
+    const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(sessionRunSource).toContain('new SessionCompactionRepository');
-    expect(sessionRunSource).not.toContain('INSERT INTO session_compactions');
-    expect(sessionRunSource).not.toContain('SELECT * FROM session_compactions');
+    expect(ownerSource).toContain('INSERT INTO session_compactions');
+    expect(ownerSource).toContain('SELECT * FROM session_compactions');
   });
 
   it('keeps session context active-path transactions in their owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-context.repo.ts');
-    const sessionRunSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
-      'utf8',
-    );
+    const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(sessionRunSource).toContain('new SessionContextRepository');
-    expect(sessionRunSource).not.toContain('INSERT INTO session_source_entries');
-    expect(sessionRunSource).not.toContain('INSERT INTO session_active_leaves');
-    expect(sessionRunSource).not.toContain('private insertSessionSourceEntry');
-    expect(sessionRunSource).not.toContain('private upsertActiveLeaf');
-    expect(sessionRunSource).not.toContain('private getActiveLeafSourceEntryId');
+    expect(ownerSource).toContain('new SessionActivePathRepository');
+    expect(ownerSource).toContain('new SessionCompactionRepository');
+    expect(ownerSource).toContain('this.database.transaction');
   });
 
   it('wires session compaction orchestration through the session context repository port', () => {

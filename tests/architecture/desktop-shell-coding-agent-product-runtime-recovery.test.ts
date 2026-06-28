@@ -48,7 +48,9 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/schema/migrations.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/run-record.repo.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session-record.repo.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/tool.repo.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts'))).toBe(true);
@@ -112,6 +114,8 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
   it('keeps package-level tests proving Coding Agent can run without desktop imports', () => {
     expect(existsSync(join(root, 'tests/packages/coding-agent/product-runtime/product-runtime.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/run/agent-run-service.test.ts'))).toBe(true);
-    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(false);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/run-record.repo.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-record.repo.test.ts'))).toBe(true);
   });
 });

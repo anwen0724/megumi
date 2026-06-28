@@ -156,7 +156,9 @@ describe('package dependency boundaries', () => {
   it('keeps product persistence under coding-agent instead of desktop', () => {
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/migrations.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/run-record.repo.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session-record.repo.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });

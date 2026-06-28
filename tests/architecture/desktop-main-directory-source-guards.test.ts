@@ -140,7 +140,7 @@ describe('Desktop Main directory boundaries', () => {
 
     expect(source).toContain('better-sqlite3');
     expect(source).toContain('migrateDatabase');
-    expect(source).toContain('SessionRunRepository');
+    expect(source).not.toContain('SessionRunRepository');
     expect(source).toContain('WorkspaceChangeRepository');
     expect(source).not.toContain("from 'electron'");
     expect(source).not.toContain('@megumi/coding-agent');

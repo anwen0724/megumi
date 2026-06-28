@@ -14,7 +14,7 @@ import type {
 } from '@megumi/shared/recovery';
 import type { Run, Session } from '@megumi/shared/session';
 
-interface SessionRunSeedRepository {
+interface RecoverySeedRepository {
   getRun(runId: string): Run | undefined;
   saveRun(run: Run): Run;
   saveSession(session: Session): Session;
@@ -28,7 +28,7 @@ function createRepository(): RecoveryRepository {
 
 function createRepositories(): {
   recoveryRepository: RecoveryRepository;
-  sessionRunRepository: SessionRunSeedRepository;
+  seedRepository: RecoverySeedRepository;
 } {
   const database = createDatabase(':memory:');
   migrateDatabase(database);
@@ -36,7 +36,7 @@ function createRepositories(): {
   const sessionRecordRepository = new SessionRecordRepository(database);
   return {
     recoveryRepository: new RecoveryRepository(database),
-    sessionRunRepository: {
+    seedRepository: {
       getRun: (runId) => runRecordRepository.getRun(runId),
       saveRun: (run) => runRecordRepository.saveRun(run),
       saveSession: (session) => sessionRecordRepository.saveSession(session),
@@ -73,7 +73,7 @@ function checkpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
 }
 
 function seedSessionRun(
-  sessionRunRepository: SessionRunSeedRepository,
+  seedRepository: RecoverySeedRepository,
   input: {
     runId: string;
     sessionId?: string;
@@ -85,14 +85,14 @@ function seedSessionRun(
   },
 ): void {
   const sessionId = input.sessionId ?? 'session_123';
-  sessionRunRepository.saveSession({
+  seedRepository.saveSession({
     sessionId,
     title: input.sessionTitle ?? 'Recoverable session',
     status: 'active',
     createdAt: '2026-06-01T09:00:00.000Z',
     updatedAt: '2026-06-01T09:00:00.000Z',
   });
-  sessionRunRepository.saveRun({
+  seedRepository.saveRun({
     runId: input.runId,
     sessionId,
     mode: 'chat',
@@ -180,9 +180,9 @@ describe('RecoveryRepository', () => {
   });
 
   it('lists recoverable runs from persisted run state and latest checkpoint', () => {
-    const { recoveryRepository, sessionRunRepository } = createRepositories();
+    const { recoveryRepository, seedRepository } = createRepositories();
 
-    seedSessionRun(sessionRunRepository, {
+    seedSessionRun(seedRepository, {
       runId: 'run_waiting',
       sessionId: 'session_waiting',
       status: 'waiting_for_approval',
@@ -190,7 +190,7 @@ describe('RecoveryRepository', () => {
       goal: 'Approve shell command',
       createdAt: '2026-06-01T10:00:00.000Z',
     });
-    seedSessionRun(sessionRunRepository, {
+    seedSessionRun(seedRepository, {
       runId: 'run_failed',
       sessionId: 'session_failed',
       status: 'failed',
@@ -205,7 +205,7 @@ describe('RecoveryRepository', () => {
         source: 'provider',
       },
     });
-    seedSessionRun(sessionRunRepository, {
+    seedSessionRun(seedRepository, {
       runId: 'run_completed',
       sessionId: 'session_completed',
       status: 'completed',
@@ -247,14 +247,14 @@ describe('RecoveryRepository', () => {
   });
 
   it('does not list live running-like runs until they are marked interrupted', () => {
-    const { recoveryRepository, sessionRunRepository } = createRepositories();
+    const { recoveryRepository, seedRepository } = createRepositories();
 
     for (const [runId, status] of [
       ['run_queued', 'queued'],
       ['run_running', 'running'],
       ['run_cancelling', 'cancelling'],
     ] as const) {
-      seedSessionRun(sessionRunRepository, {
+      seedSessionRun(seedRepository, {
         runId,
         status,
         goal: `Live ${runId}`,
@@ -266,7 +266,7 @@ describe('RecoveryRepository', () => {
   });
 
   it('marks stale running-like runs as interrupted without changing waiting approval', () => {
-    const { recoveryRepository, sessionRunRepository } = createRepositories();
+    const { recoveryRepository, seedRepository } = createRepositories();
 
     for (const [runId, status] of [
       ['run_queued', 'queued'],
@@ -274,7 +274,7 @@ describe('RecoveryRepository', () => {
       ['run_cancelling', 'cancelling'],
       ['run_waiting', 'waiting_for_approval'],
     ] as const) {
-      seedSessionRun(sessionRunRepository, {
+      seedSessionRun(seedRepository, {
         runId,
         status,
         goal: `Goal for ${runId}`,
@@ -308,7 +308,7 @@ describe('RecoveryRepository', () => {
         reason: 'app_restarted',
       }),
     ]);
-    expect(sessionRunRepository.getRun('run_waiting')?.status).toBe('waiting_for_approval');
+    expect(seedRepository.getRun('run_waiting')?.status).toBe('waiting_for_approval');
     expect(recoveryRepository.listRecoverableRuns()).toEqual([
       expect.objectContaining({
         runId: 'run_queued',
