@@ -2,6 +2,7 @@
 export * from './connection';
 export * from './schema';
 export * from './repos/session-run.repo';
+export * from './repos/session-context.repo';
 export * from './repos/session-compaction.repo';
 export * from './repos/session-message.repo';
 export * from './repos/model-step.repo';

@@ -234,4 +234,20 @@ describe('package and file structure source guards', () => {
     expect(sessionRunSource).not.toContain('INSERT INTO session_compactions');
     expect(sessionRunSource).not.toContain('SELECT * FROM session_compactions');
   });
+
+  it('keeps session context active-path transactions in their owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-context.repo.ts');
+    const sessionRunSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
+      'utf8',
+    );
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(sessionRunSource).toContain('new SessionContextRepository');
+    expect(sessionRunSource).not.toContain('INSERT INTO session_source_entries');
+    expect(sessionRunSource).not.toContain('INSERT INTO session_active_leaves');
+    expect(sessionRunSource).not.toContain('private insertSessionSourceEntry');
+    expect(sessionRunSource).not.toContain('private upsertActiveLeaf');
+    expect(sessionRunSource).not.toContain('private getActiveLeafSourceEntryId');
+  });
 });

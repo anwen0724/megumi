@@ -8,12 +8,7 @@ import type {
   SessionMessage,
 } from '@megumi/shared/session';
 import type { SessionCompactionEntry } from '@megumi/shared/session';
-import {
-  SessionActiveLeafSchema,
-  SessionSourceEntrySchema,
-  type SessionActiveLeaf,
-  type SessionSourceEntry,
-} from '@megumi/shared/session';
+import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -22,6 +17,7 @@ import { RunExecutionFactRepository } from './run-execution-fact.repo';
 import { ModelStepRepository, type ModelStepRecord } from './model-step.repo';
 import { SessionMessageRepository } from './session-message.repo';
 import { SessionCompactionRepository } from './session-compaction.repo';
+import { SessionContextRepository } from './session-context.repo';
 
 export type { ModelStepRecord } from './model-step.repo';
 
@@ -66,6 +62,7 @@ export class SessionRunRepository {
   private readonly modelSteps: ModelStepRepository;
   private readonly sessionMessages: SessionMessageRepository;
   private readonly sessionCompactions: SessionCompactionRepository;
+  private readonly sessionContext: SessionContextRepository;
 
   constructor(private readonly database: MegumiDatabase) {
     this.runtimeEvents = new RuntimeEventRepository(database);
@@ -73,6 +70,7 @@ export class SessionRunRepository {
     this.modelSteps = new ModelStepRepository(database);
     this.sessionMessages = new SessionMessageRepository(database);
     this.sessionCompactions = new SessionCompactionRepository(database);
+    this.sessionContext = new SessionContextRepository(database);
   }
 
   saveSession(session: Session): Session {
@@ -124,36 +122,7 @@ export class SessionRunRepository {
     sourceEntry: SessionSourceEntry;
     activeLeafAdvanced: boolean;
   } {
-    const persist = this.database.transaction((
-      compaction: SessionCompactionEntry,
-      sourceEntry: SessionSourceEntry,
-      activeLeaf: SessionActiveLeaf,
-      expectedCurrentLeafSourceEntryId: string | undefined,
-    ) => {
-      this.saveSessionCompaction(compaction);
-      const parsedSourceEntry = this.insertSessionSourceEntry(sourceEntry);
-      const parsedActiveLeaf = SessionActiveLeafSchema.parse(activeLeaf);
-      const currentLeaf = this.getActiveLeafSourceEntryId(parsedActiveLeaf.sessionId);
-      const expectedLeaf = expectedCurrentLeafSourceEntryId ?? null;
-      let activeLeafAdvanced = false;
-
-      if (currentLeaf === expectedLeaf) {
-        this.upsertActiveLeaf(parsedActiveLeaf);
-        activeLeafAdvanced = true;
-      }
-
-      return {
-        sourceEntry: parsedSourceEntry,
-        activeLeafAdvanced,
-      };
-    });
-
-    return persist(
-      input.compaction,
-      input.sourceEntry,
-      input.activeLeaf,
-      input.expectedCurrentLeafSourceEntryId,
-    );
+    return this.sessionContext.saveSessionCompactionWithActivePath(input);
   }
 
   getSessionCompaction(compactionId: string): SessionCompactionEntry | null {
@@ -278,110 +247,6 @@ export class SessionRunRepository {
     return this.runtimeEvents.listRuntimeEventsByRun(runId);
   }
 
-  private insertSessionSourceEntry(entry: SessionSourceEntry): SessionSourceEntry {
-    const parsed = SessionSourceEntrySchema.parse(entry);
-    if (parsed.parentSourceEntryId) {
-      this.assertSourceEntryBelongsToSession(
-        parsed.sessionId,
-        parsed.parentSourceEntryId,
-        'parentSourceEntryId',
-      );
-    }
-
-    this.database.prepare(`
-      INSERT INTO session_source_entries (
-        source_entry_id,
-        session_id,
-        parent_source_entry_id,
-        source_kind,
-        source_id,
-        source_uri,
-        source_ref_json,
-        created_at,
-        metadata_json
-      ) VALUES (
-        @source_entry_id,
-        @session_id,
-        @parent_source_entry_id,
-        @source_kind,
-        @source_id,
-        @source_uri,
-        @source_ref_json,
-        @created_at,
-        @metadata_json
-      )
-    `).run({
-      source_entry_id: parsed.sourceEntryId,
-      session_id: parsed.sessionId,
-      parent_source_entry_id: parsed.parentSourceEntryId ?? null,
-      source_kind: parsed.sourceRef.sourceKind,
-      source_id: parsed.sourceRef.sourceId,
-      source_uri: parsed.sourceRef.sourceUri ?? null,
-      source_ref_json: stringifyJson(parsed.sourceRef),
-      created_at: parsed.createdAt,
-      metadata_json: parsed.metadata ? stringifyJson(parsed.metadata) : null,
-    });
-
-    return parsed;
-  }
-
-  private upsertActiveLeaf(activeLeaf: SessionActiveLeaf): SessionActiveLeaf {
-    const parsed = SessionActiveLeafSchema.parse(activeLeaf);
-    if (parsed.leafSourceEntryId) {
-      this.assertSourceEntryBelongsToSession(parsed.sessionId, parsed.leafSourceEntryId, 'leafSourceEntryId');
-    }
-
-    this.database.prepare(`
-      INSERT INTO session_active_leaves (
-        session_id,
-        leaf_source_entry_id,
-        updated_at,
-        reason,
-        metadata_json
-      ) VALUES (
-        @session_id,
-        @leaf_source_entry_id,
-        @updated_at,
-        @reason,
-        @metadata_json
-      )
-      ON CONFLICT(session_id) DO UPDATE SET
-        leaf_source_entry_id = excluded.leaf_source_entry_id,
-        updated_at = excluded.updated_at,
-        reason = excluded.reason,
-        metadata_json = excluded.metadata_json
-    `).run({
-      session_id: parsed.sessionId,
-      leaf_source_entry_id: parsed.leafSourceEntryId ?? null,
-      updated_at: parsed.updatedAt,
-      reason: parsed.reason,
-      metadata_json: parsed.metadata ? stringifyJson(parsed.metadata) : null,
-    });
-
-    return parsed;
-  }
-
-  private getActiveLeafSourceEntryId(sessionId: string): string | null {
-    const row = this.database
-      .prepare('SELECT leaf_source_entry_id FROM session_active_leaves WHERE session_id = ?')
-      .get(sessionId) as { leaf_source_entry_id: string | null } | undefined;
-
-    return row?.leaf_source_entry_id ?? null;
-  }
-
-  private assertSourceEntryBelongsToSession(
-    sessionId: string,
-    sourceEntryId: string,
-    fieldName: string,
-  ): void {
-    const row = this.database
-      .prepare('SELECT session_id FROM session_source_entries WHERE source_entry_id = ?')
-      .get(sourceEntryId) as { session_id: string } | undefined;
-
-    if (!row || row.session_id !== sessionId) {
-      throw new Error(`${fieldName} must belong to session ${sessionId}`);
-    }
-  }
 }
 
 function stringifyJson(value: unknown): string {

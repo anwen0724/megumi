@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { createDatabase } from '../persistence/connection';
 import { SessionRunRepository } from '../persistence/repos/session-run.repo';
+import { SessionContextRepository } from '../persistence/repos/session-context.repo';
 import { SessionCompactionRepository } from '../persistence/repos/session-compaction.repo';
 import { SessionMessageRepository } from '../persistence/repos/session-message.repo';
 import { ModelStepRepository } from '../persistence/repos/model-step.repo';
@@ -30,6 +31,7 @@ export function composeCodingAgentPersistence(input: ComposeCodingAgentPersisten
   return {
     database,
     sessionRunRepository: new SessionRunRepository(database),
+    sessionContextRepository: new SessionContextRepository(database),
     sessionCompactionRepository: new SessionCompactionRepository(database),
     sessionMessageRepository: new SessionMessageRepository(database),
     modelStepRepository: new ModelStepRepository(database),
