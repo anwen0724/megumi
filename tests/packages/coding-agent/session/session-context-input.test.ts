@@ -2,29 +2,69 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
 import { SessionActivePathRepository } from '@megumi/coding-agent/persistence/repos/session-active-path.repo';
+import { RunExecutionFactRepository } from '@megumi/coding-agent/persistence/repos/run-execution-fact.repo';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
+import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
+import { SessionCompactionRepository } from '@megumi/coding-agent/persistence/repos/session-compaction.repo';
+import { SessionMessageRepository } from '@megumi/coding-agent/persistence/repos/session-message.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import { SessionContextInputService } from '@megumi/coding-agent/session';
 import type { ModelInputContextSourceKind, ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { SessionMessage } from '@megumi/shared/session';
+import type { Run, RunStep, Session, SessionCompactionEntry, SessionMessage } from '@megumi/shared/session';
 
 let db: Database.Database | null = null;
 
+interface SessionContextInputTestRepository {
+  appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+  getMessage(messageId: string): SessionMessage | undefined;
+  getRun(runId: string): Run | undefined;
+  getSession(sessionId: string): Session | undefined;
+  getSessionCompaction(compactionId: string): SessionCompactionEntry | null;
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+  listStepsByRun(runId: string): RunStep[];
+  saveMessage(message: SessionMessage): SessionMessage;
+  saveRun(run: Run): Run;
+  saveSession(session: Session): Session;
+  saveSessionCompaction(entry: SessionCompactionEntry): void;
+  saveStep(step: RunStep): RunStep;
+}
+
 function createRepositories(): {
-  repository: SessionRunRepository;
+  repository: SessionContextInputTestRepository;
   activePathRepository: SessionActivePathRepository;
 } {
   db = new Database(':memory:');
   migrateDatabase(db);
+  const runExecutionFactRepository = new RunExecutionFactRepository(db);
+  const runRecordRepository = new RunRecordRepository(db);
+  const runtimeEventRepository = new RuntimeEventRepository(db);
+  const sessionCompactionRepository = new SessionCompactionRepository(db);
+  const sessionMessageRepository = new SessionMessageRepository(db);
+  const sessionRecordRepository = new SessionRecordRepository(db);
+
   return {
-    repository: new SessionRunRepository(db),
+    repository: {
+      appendRuntimeEvent: (event) => runtimeEventRepository.appendRuntimeEvent(event),
+      getMessage: (messageId) => sessionMessageRepository.getMessage(messageId),
+      getRun: (runId) => runRecordRepository.getRun(runId),
+      getSession: (sessionId) => sessionRecordRepository.getSession(sessionId),
+      getSessionCompaction: (compactionId) => sessionCompactionRepository.getSessionCompaction(compactionId),
+      listRuntimeEventsByRun: (runId) => runtimeEventRepository.listRuntimeEventsByRun(runId),
+      listStepsByRun: (runId) => runExecutionFactRepository.listStepsByRun(runId),
+      saveMessage: (message) => sessionMessageRepository.saveMessage(message),
+      saveRun: (run) => runRecordRepository.saveRun(run),
+      saveSession: (session) => sessionRecordRepository.saveSession(session),
+      saveSessionCompaction: (entry) => sessionCompactionRepository.saveSessionCompaction(entry),
+      saveStep: (step) => runExecutionFactRepository.saveStep(step),
+    },
     activePathRepository: new SessionActivePathRepository(db),
   };
 }
 
 function createSessionContextInputService(input: {
-  repository: SessionRunRepository;
+  repository: SessionContextInputTestRepository;
   activePathRepository: SessionActivePathRepository;
 }): SessionContextInputService {
   return new SessionContextInputService({
@@ -95,7 +135,7 @@ function appendActivePath(
 }
 
 function saveCompletedMessage(
-  repository: SessionRunRepository,
+  repository: SessionContextInputTestRepository,
   input: {
     messageId: string;
     sessionId?: string;
