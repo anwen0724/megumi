@@ -8,8 +8,7 @@ import {
 import { RunTerminalCoordinator } from './lifecycle/run-terminal-coordinator';
 import { RunCompletionHooksCoordinator } from './completion';
 import { runTurn } from './lifecycle/run-lifecycle';
-import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
-import type { ModelCallCompletionResult } from './model-call';
+import type { RunHostBoundaryPort } from './lifecycle';
 import {
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
@@ -22,15 +21,12 @@ import {
   SessionCompactionOrchestrator,
   type BuildModelCallInputFailure,
   type BuildModelCallInputInput,
-  type BuildModelCallInputResult,
   type CompactIfNeededInput,
-  type LoadInstructionSourcesInput,
   type ModelInputMemoryRecallSource,
   type SessionCompactionOrchestrationResult,
 } from './context';
 import {
   SessionContextInputService,
-  type BuildSessionContextInputFromRepositoryInput,
   type SessionBranchServicePort,
 } from '@megumi/coding-agent/session';
 import {
@@ -65,12 +61,9 @@ import type {
 } from '@megumi/shared/run';
 import { isProviderId, type ProviderId } from '@megumi/shared/provider';
 import type {
-  AgentInstructionSourceSnapshot,
   ModelInputContextBuildRequest,
   ModelInputContextSourceRef,
-  SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
-import type { SessionContextInput } from '@megumi/shared/session';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
 import type {
   SessionActivePath,
@@ -118,12 +111,6 @@ import {
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
-import type { MemoryCaptureSignal } from '@megumi/shared/memory';
-import type {
-  WorkspaceChangedFile,
-  WorkspaceChangeSet,
-  WorkspaceChangeSummary,
-} from '@megumi/shared/workspace';
 import {
   normalizeSessionMessageInputPreprocessing,
   type NormalizedSessionMessageInputPreprocessing,
@@ -138,159 +125,29 @@ import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
 } from '@megumi/coding-agent/workspace';
-
-export interface AgentRunServiceClock {
-  now(): string;
-}
-
-export interface AgentRunServiceIds extends RunIdFactory {
-  compactionId(): string;
-  retryAttemptId(): string;
-  sessionId(): string;
-  sourceEntryId(): string;
-  branchMarkerId(): string;
-  chatStreamEventId(): string;
-  chatStreamId(input: { runId: string }): string;
-  chatTextId(): string;
-  chatThinkingId(): string;
-}
-
-export interface SessionRunContextService {
-  createBaselineContext(input: {
-    runId: string;
-    goal: string;
-    workspaceId: string;
-    workspacePath: string;
-    modelCapabilitySummary: ModelCapabilitySummary;
-    contextBudgetPolicy: ContextBudgetPolicy;
-  }): RunContext;
-}
-
-export interface AgentRunModelStepProvider {
-  streamModelCall(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
-  completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult>;
-  cancelModelCall(requestId: string): boolean;
-}
-
-export interface AgentRunToolRuntimeFactory {
-  create(input: {
-    projectRoot: string;
-    permissionMode: PermissionMode;
-  }): Promise<ToolCallRunner & ToolApprovalResumePort>;
-}
-
-export interface SessionRunToolDefinitionProvider {
-  listDefinitions(input: {
-    runId: string;
-    permissionMode: PermissionMode;
-    providerCapabilitySummary?: {
-      supportsToolCall?: boolean;
-    };
-  }): ToolDefinition[];
-}
-
-export interface SessionRunProviderCapabilitySummaryProvider {
-  getProviderCapabilitySummary(input: {
-    providerId: string;
-    modelId: string;
-  }): { supportsToolCall?: boolean };
-}
-
-export interface SessionRunToolRegistrySnapshotService {
-  createRunSnapshot(input: RunToolRegistrySnapshotBuildInput): RunToolRegistrySnapshotBuildResult;
-}
-
-export interface SessionRunAgentInstructionSourceService {
-  loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
-}
-
-export interface SessionRunSessionContextInputService {
-  buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
-}
-
-export interface SessionRunModelCallInputBuildService {
-  buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
-}
-
-export interface SessionRunMemoryRecallInput {
-  enabled?: boolean;
-  homePath: string;
-  sessionId: string;
-  runId: string;
-  modelStepId?: string | null;
-  projectId?: string | null;
-  projectRoot?: string | null;
-  effectiveCwd?: string | null;
-  queryText: string;
-  providerId?: string | null;
-  modelId?: string | null;
-  maxResults?: number;
-  maxTokens?: number;
-  createdAt?: string;
-  toolSummaryMetadata?: JsonObject;
-}
-
-export interface SessionRunMemoryRecallService {
-  recallForNewUserInput(input: SessionRunMemoryRecallInput): Promise<{
-    memoryRecallSources: ModelInputMemoryRecallSource[];
-    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-  }>;
-}
-
-export interface SessionRunMemoryCaptureService {
-  evaluateRunCompletedCapture(input: {
-    homePath: string;
-    runId: string;
-    sessionId: string;
-    projectId?: string | null;
-    providerId?: ProviderId | null;
-    modelId?: string | null;
-    runStatus: 'completed';
-    userText: string;
-    assistantText?: string;
-    toolActivitySummary?: string;
-    signals?: MemoryCaptureSignal[];
-    memoryEnabled?: boolean;
-    hasProject?: boolean;
-  }): Promise<{ status: string; reason?: string; savedMemoryIds?: string[] }>;
-}
-
-export interface SessionRunMemorySettingsProvider {
-  isMemoryEnabled(): boolean;
-}
-
-export interface SessionRunMemoryMarkdownSyncService {
-  syncProjectMirrorOnProjectOpened(input: { homePath: string; projectId: string }): Promise<unknown>;
-}
-
-export interface SessionRunGlobalInstructionDirectoryProvider {
-  listGlobalInstructionDirs(input: { sessionId: string; runId: string; stepId: string }): string[];
-}
-
-export interface SessionRunSessionInstructionSourceProvider {
-  listSessionInstructionSources(input: {
-    sessionId: string;
-    runId: string;
-    stepId: string;
-    builtAt: string;
-  }): SessionInstructionSourceSnapshot[];
-}
-
-export interface SessionRunEffectiveCwdProvider {
-  getRunEffectiveCwd(input: { sessionId: string; runId: string; stepId: string }): string | undefined;
-}
-
-export interface SessionRunWorkspaceChangeReadPort {
-  listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
-  listChangeSetsByRun?(runId: string): WorkspaceChangeSet[];
-  getChangeSummary?(changeSetId: string): WorkspaceChangeSummary | undefined;
-  listChangedFilesByChangeSet?(changeSetId: string): WorkspaceChangedFile[];
-}
-
-export interface AgentRunServiceHomePaths {
-  homePath: string;
-  sqlitePath: string;
-}
+import type {
+  AgentRunModelStepProvider,
+  AgentRunPort,
+  AgentRunServiceClock,
+  AgentRunServiceHomePaths,
+  AgentRunServiceIds,
+  AgentRunServiceOptions,
+  AgentRunToolRuntimeFactory,
+  SessionRunAgentInstructionSourceService,
+  SessionRunContextService,
+  SessionRunEffectiveCwdProvider,
+  SessionRunGlobalInstructionDirectoryProvider,
+  SessionRunMemoryMarkdownSyncService,
+  SessionRunMemoryRecallService,
+  SessionRunMemorySettingsProvider,
+  SessionRunModelCallInputBuildService,
+  SessionRunProviderCapabilitySummaryProvider,
+  SessionRunSessionContextInputService,
+  SessionRunSessionInstructionSourceProvider,
+  SessionRunToolDefinitionProvider,
+  SessionRunToolRegistrySnapshotService,
+  SessionRunWorkspaceChangeReadPort,
+} from './run-contract';
 
 interface ApprovalContinuationGroup {
   groupId: string;
@@ -312,47 +169,6 @@ interface ApprovalContinuationGroup {
 interface SessionRunMemoryRecallSnapshot {
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-}
-
-export interface AgentRunServiceOptions {
-  repository: SessionRunRepository;
-  contextService?: SessionRunContextService;
-  permissionSnapshotService?: Pick<
-    PermissionSnapshotService,
-    | 'createPermissionSnapshot'
-    | 'linkAcceptedSourcePlan'
-  >;
-  planArtifactService?: PlanArtifactServicePort;
-  modelStepProvider?: AgentRunModelStepProvider;
-  toolRuntimeFactory?: AgentRunToolRuntimeFactory;
-  toolDefinitionProvider?: SessionRunToolDefinitionProvider;
-  toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
-  providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
-  toolRepository?: Pick<
-    ToolRepository,
-    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun' | 'markToolContinuationEmitted'
-  >;
-  agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
-  modelCallInputBuildService?: SessionRunModelCallInputBuildService;
-  memoryRecallService?: SessionRunMemoryRecallService;
-  memoryCaptureService?: SessionRunMemoryCaptureService;
-  memorySettingsProvider?: SessionRunMemorySettingsProvider;
-  memoryMarkdownSyncService?: SessionRunMemoryMarkdownSyncService;
-  megumiHomePath?: string;
-  globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
-  sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
-  runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
-  sessionContextInputService?: SessionRunSessionContextInputService;
-  sessionCompactionOrchestrator?: {
-    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
-  };
-  activePathRepository?: SessionActivePathRepository;
-  sessionBranchService?: SessionBranchServicePort;
-  workspaceChanges?: SessionRunWorkspaceChangeReadPort;
-  hostBoundary?: RunHostBoundaryPort;
-  chatStreamEventSink?: ChatStreamEventSink;
-  clock?: AgentRunServiceClock;
-  ids?: Partial<AgentRunServiceIds>;
 }
 
 const defaultClock: AgentRunServiceClock = {
@@ -403,20 +219,6 @@ function createDefaultIds(): AgentRunServiceIds {
     chatTextId: () => `text:${crypto.randomUUID()}`,
     chatThinkingId: () => `thinking:${crypto.randomUUID()}`,
   };
-}
-
-// Product-facing session/run surface consumed by UI shells (desktop IPC, future
-// web/cli). Shells code against this port, not the concrete AgentRunService.
-export interface AgentRunPort {
-  sendSessionMessage(input: {
-    requestId: string;
-    payload: SessionMessageSendPayload;
-    runtimeContext?: RuntimeContext;
-  }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
-  cancelSessionMessage(payload: SessionMessageCancelPayload): boolean;
-  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
-  getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined;
-  updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord;
 }
 
 export class AgentRunService implements AgentRunPort {

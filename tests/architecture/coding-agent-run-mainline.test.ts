@@ -84,9 +84,13 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps run-contract as the real run boundary instead of re-exporting implementation types', () => {
     const source = read('packages/coding-agent/run/run-contract.ts');
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
 
     expect(source).toContain('export interface AgentRunPort');
     expect(source).not.toContain("from './agent-run-service'");
+    expect(serviceSource).not.toContain('export interface AgentRunPort');
+    expect(serviceSource).not.toContain('export interface AgentRunServiceOptions');
+    expect(serviceSource).not.toContain('export interface AgentRunServiceIds');
   });
 
   it('keeps model call context materialization split into focused part builders', () => {

@@ -49,7 +49,10 @@ import type {
   ModelInputMemoryRecallSource,
   SessionCompactionOrchestrationResult,
 } from './context';
-import type { BuildSessionContextInputFromRepositoryInput } from '../session';
+import type {
+  BuildSessionContextInputFromRepositoryInput,
+  SessionBranchServicePort,
+} from '../session';
 import type {
   PendingToolApprovalContinuation,
   ResumeToolApprovalInput,
@@ -251,6 +254,7 @@ export interface AgentRunServiceOptions {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
   activePathRepository?: SessionActivePathRepository;
+  sessionBranchService?: SessionBranchServicePort;
   workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
