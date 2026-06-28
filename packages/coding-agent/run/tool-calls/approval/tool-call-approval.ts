@@ -1,6 +1,6 @@
 ﻿// Applies run permission policy to tool executions created by model tool calls.
 import { evaluatePermissionPolicy } from '../../../permissions/tool-policy';
-import { createRejectionObservation } from '../../../tools/observation-shaper';
+import { createRejectionObservation } from '../../../tools/observations';
 import { modelVisibleDefinitionForSnapshotEntry } from '../../../tools/registry';
 import type {
   PermissionDecision,

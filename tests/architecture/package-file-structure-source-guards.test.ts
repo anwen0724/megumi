@@ -151,4 +151,12 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);
   });
+
+  it('keeps tool observation shaping in the observations owner module', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/tools/observations/observation-shaper.ts');
+    const compatibilityPath = join(repoRoot, 'packages/coding-agent/tools/observation-shaper.ts');
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(readFileSync(compatibilityPath, 'utf8')).toContain("export * from './observations/observation-shaper'");
+  });
 });

@@ -3,7 +3,7 @@ import type { ToolExecutionRecord } from '@megumi/shared/tool';
 import {
   createObservationFromRawToolResult,
   createRejectionObservation,
-} from '@megumi/coding-agent/tools/observation-shaper';
+} from '@megumi/coding-agent/tools/observations';
 
 describe('ToolObservationShaper', () => {
   it('keeps small text untruncated', () => {

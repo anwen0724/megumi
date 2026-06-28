@@ -8,7 +8,7 @@ import {
 } from '@megumi/shared/runtime';
 import type { Run, RunStep } from '@megumi/shared/session';
 import type { ToolExecution } from '@megumi/shared/tool';
-import { createInterruptedExecutionObservation } from '@megumi/coding-agent/tools/observation-shaper';
+import { createInterruptedExecutionObservation } from '@megumi/coding-agent/tools/observations';
 import { createRunStatusChangedEvent } from '../events/runtime-event-factory';
 import { createTerminalRuntimeError } from './run-error';
 import {

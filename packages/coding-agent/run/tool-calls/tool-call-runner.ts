@@ -2,7 +2,7 @@
 // It delegates approval, execution, and continuation details to the matching tool-calls submodules.
 import {
   createRejectionObservation,
-} from '../../tools/observation-shaper';
+} from '../../tools/observations';
 import { resolveToolCallFromSnapshot } from '../../tools/registry';
 import { validateToolInput } from '../../tools/validation';
 import type {

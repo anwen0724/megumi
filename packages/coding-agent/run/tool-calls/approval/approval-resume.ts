@@ -1,5 +1,5 @@
 // Resumes a paused tool call after the user resolves an approval request.
-import { createRejectionObservation } from '../../../tools/observation-shaper';
+import { createRejectionObservation } from '../../../tools/observations';
 import type { ToolExecutionDecision } from '@megumi/shared/tool';
 import type { ResumeToolApprovalInput } from '../tool-call-contract';
 import type { ResolvedToolCallRunnerOptions, ToolApprovalResumeRunnerOutcome } from '../tool-call-runner';

@@ -3,7 +3,7 @@ import {
   createRawToolResultFromContent,
   normalizeToolError,
 } from '../../../tools/normalization';
-import { createObservationFromRawToolResult } from '../../../tools/observation-shaper';
+import { createObservationFromRawToolResult } from '../../../tools/observations';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RawToolResult, ToolExecutionRecord, ToolObservationBudgetProfile } from '@megumi/shared/tool';
 import type { CodingAgentToolExecutionRunOptions } from '../../../tools/tool-execution-host-port';
