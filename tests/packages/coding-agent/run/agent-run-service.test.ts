@@ -4,8 +4,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { ModelStepRepository } from '@megumi/coding-agent/persistence/repos/model-step.repo';
+import { RunExecutionFactRepository } from '@megumi/coding-agent/persistence/repos/run-execution-fact.repo';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
+import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
 import { SessionActivePathRepository } from '@megumi/coding-agent/persistence/repos/session-active-path.repo';
+import { SessionCompactionRepository } from '@megumi/coding-agent/persistence/repos/session-compaction.repo';
+import { SessionMessageRepository } from '@megumi/coding-agent/persistence/repos/session-message.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import { PermissionSnapshotRepository } from '@megumi/coding-agent/persistence/repos/permission-snapshot.repo';
 import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
 import { createExternalTestToolSourceExecutor } from '@megumi/coding-agent/tools/execution/external-test-tool-source-executor';
@@ -41,7 +47,7 @@ import type { ModelInputContext, ModelStepRuntimeRequest, SessionInstructionSour
 import type { ModelInputContextSourceKind } from '@megumi/shared/model';
 import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { RunContext } from '@megumi/shared/run';
-import type { RunAction } from '@megumi/shared/session';
+import type { RunAction, SessionCompactionEntry } from '@megumi/shared/session';
 import type { SessionSourceEntry } from '@megumi/shared/session';
 import type { ApprovalRequest, RawToolResult, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -59,7 +65,43 @@ type AgentRunServiceTestFacade = AgentRunService & SessionServicePort & SessionB
 type AgentRunServiceTestRepository = AgentRunServiceOptions['repository']
   & SessionServiceSessionRepository
   & SessionServiceMessageRepository
-  & SessionServiceRunRepository;
+  & SessionServiceRunRepository
+  & {
+    saveSessionCompaction(entry: SessionCompactionEntry): void;
+  };
+
+function createAgentRunTestRepository(database: Database.Database): AgentRunServiceTestRepository {
+  const modelStepRepository = new ModelStepRepository(database);
+  const runExecutionFactRepository = new RunExecutionFactRepository(database);
+  const runRecordRepository = new RunRecordRepository(database);
+  const runtimeEventRepository = new RuntimeEventRepository(database);
+  const sessionCompactionRepository = new SessionCompactionRepository(database);
+  const sessionMessageRepository = new SessionMessageRepository(database);
+  const sessionRecordRepository = new SessionRecordRepository(database);
+
+  return {
+    appendRuntimeEvent: (event) => runtimeEventRepository.appendRuntimeEvent(event),
+    getMessage: (messageId) => sessionMessageRepository.getMessage(messageId),
+    getModelStep: (modelStepId) => modelStepRepository.getModelStep(modelStepId),
+    getRun: (runId) => runRecordRepository.getRun(runId),
+    getSession: (sessionId) => sessionRecordRepository.getSession(sessionId),
+    getSessionCompaction: (compactionId) => sessionCompactionRepository.getSessionCompaction(compactionId),
+    listMessagesBySession: (sessionId) => sessionMessageRepository.listMessagesBySession(sessionId),
+    listRunsBySession: (sessionId) => runRecordRepository.listRunsBySession(sessionId),
+    listRunsByStatuses: (statuses) => runRecordRepository.listRunsByStatuses(statuses),
+    listRuntimeEventsByRun: (runId) => runtimeEventRepository.listRuntimeEventsByRun(runId),
+    listSessions: () => sessionRecordRepository.listSessions(),
+    listStepsByRun: (runId) => runExecutionFactRepository.listStepsByRun(runId),
+    saveAction: (action) => runExecutionFactRepository.saveAction(action),
+    saveMessage: (message) => sessionMessageRepository.saveMessage(message),
+    saveModelStep: (modelStep) => modelStepRepository.saveModelStep(modelStep),
+    saveObservation: (observation) => runExecutionFactRepository.saveObservation(observation),
+    saveRun: (run) => runRecordRepository.saveRun(run),
+    saveSession: (session) => sessionRecordRepository.saveSession(session),
+    saveSessionCompaction: (entry) => sessionCompactionRepository.saveSessionCompaction(entry),
+    saveStep: (step) => runExecutionFactRepository.saveStep(step),
+  };
+}
 
 function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunServiceTestFacade {
   const repository = options.repository as AgentRunServiceTestRepository;
@@ -149,7 +191,7 @@ function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile> = {}): Wo
 function createService() {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   return createAgentRunTestService({
     repository,
     clock: { now: () => '2026-05-15T00:00:00.000Z' },
@@ -168,7 +210,7 @@ function createService() {
 function createServiceWithContextRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   return createAgentRunTestService({
     repository,
     contextService: {
@@ -229,7 +271,7 @@ function createServiceWithContextRecorder(records: unknown[]) {
 function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   return createAgentRunTestService({
     repository,
     permissionSnapshotService: {
@@ -277,7 +319,7 @@ function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
 function createServiceWithFailingHostBoundary(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   return createAgentRunTestService({
     repository,
     permissionSnapshotService: {
@@ -359,7 +401,7 @@ function createServiceWithModelStepStream(
 }) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   const toolRepository = options?.createToolRepository?.(db);
   let callIndex = 0;
   const serviceOptions: AgentRunServiceOptions & { toolRepository?: ToolRepository } = {
@@ -594,7 +636,7 @@ function expectToolContinuationKind(
 function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   let messageIndex = 0;
   let sourceEntryIndex = 0;
@@ -770,7 +812,7 @@ function createServiceWithProviderStream(
 ) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   let callIndex = 0;
   let messageIndex = 0;
@@ -826,7 +868,7 @@ function createBranchServiceFixture(options: {
 } = {}) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   const timelineRepository = options.useTimelineProjector
     ? new TimelineMessageRepository(db)
@@ -880,7 +922,7 @@ function createBranchServiceFixture(options: {
 function createManualRetryFixture() {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   let sourceEntryIndex = 0;
   let branchMarkerIndex = 0;
@@ -984,7 +1026,7 @@ function createManualRetryFixture() {
 }
 
 function seedBranchHistory(
-  repository: SessionRunRepository,
+  repository: AgentRunServiceTestRepository,
   activePathRepo: SessionActivePathRepository,
 ) {
   repository.saveSession({
@@ -1117,7 +1159,7 @@ function createServiceWithChatStreamSink(
 ) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = new SessionRunRepository(db);
+  const repository = createAgentRunTestRepository(db);
   let callIndex = 0;
   return createAgentRunTestService({
     repository,
@@ -1197,7 +1239,7 @@ function createServiceWithChatStreamSinkAndRepository(
   }
   return {
     service,
-    repository: new SessionRunRepository(db),
+    repository: createAgentRunTestRepository(db),
   };
 }
 
@@ -2674,7 +2716,7 @@ describe('AgentRunService', () => {
       streamed.push(event);
     }
 
-    const repository = new SessionRunRepository(db!);
+    const repository = createAgentRunTestRepository(db!);
     expect(requests).toEqual([]);
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
@@ -2738,7 +2780,7 @@ describe('AgentRunService', () => {
       streamed.push(event);
     }
 
-    const repository = new SessionRunRepository(db!);
+    const repository = createAgentRunTestRepository(db!);
     expect(requests).toEqual([]);
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
@@ -3547,7 +3589,7 @@ describe('AgentRunService', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
     const service = createAgentRunTestService({
       repository,
@@ -3705,7 +3747,7 @@ describe('AgentRunService', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
     const service = createAgentRunTestService({
       repository,
@@ -4495,7 +4537,7 @@ describe('AgentRunService', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
     const service = createAgentRunTestService({
       repository,
@@ -4635,7 +4677,7 @@ describe('AgentRunService', () => {
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
@@ -4891,7 +4933,7 @@ describe('AgentRunService', () => {
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const toolRepository = new ToolRepository(db);
     const service = createAgentRunTestService({
       repository,
@@ -5070,7 +5112,7 @@ describe('AgentRunService', () => {
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
@@ -5866,7 +5908,7 @@ describe('AgentRunService', () => {
     const toolResult = createToolResult({ toolExecutionId: 'tool-execution-1' });
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
@@ -6353,7 +6395,7 @@ describe('AgentRunService', () => {
   it('cleans up active runs left from a previous runtime on startup', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const toolRepository = new ToolRepository(db);
     repository.saveSession({
       sessionId: 'session-1',
@@ -6505,7 +6547,7 @@ describe('AgentRunService', () => {
     ]);
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = new SessionRunRepository(db);
+    const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
       modelStepProvider: {
@@ -7634,7 +7676,7 @@ describe('AgentRunService', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const requests: ModelStepRuntimeRequest[] = [];
-    const sessionRepository = new SessionRunRepository(db);
+    const sessionRepository = createAgentRunTestRepository(db);
     const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
     const service = createAgentRunTestService({
       repository: sessionRepository,
@@ -7710,7 +7752,7 @@ describe('AgentRunService', () => {
   it('persists input preprocessing metadata on session message permission snapshots with the real repository', async () => {
     db = new Database(':memory:');
     migrateDatabase(db);
-    const sessionRepository = new SessionRunRepository(db);
+    const sessionRepository = createAgentRunTestRepository(db);
     const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
     const service = createAgentRunTestService({
       repository: sessionRepository,
