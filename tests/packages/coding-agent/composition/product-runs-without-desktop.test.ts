@@ -139,31 +139,20 @@ describe('coding-agent product runs without desktop', () => {
     runtime.settingsService.updateSettings({ memory: { enabled: true } });
     expect(runtime.settingsService.getMemorySettings()).toEqual({ enabled: true });
 
-    // create session
-    const session = runtime.sessionService.createSession({
-      title: 'Proof session',
+    // submit product input (drives session creation -> model step -> real tool
+    // execution -> terminal) through the shell-agnostic product runtime entry.
+    const result = await runtime.submitInput({
+      requestId: 'request-1',
+      sessionTitle: 'Proof session',
       workspaceId: projectId,
       workspacePath: workspace,
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      text: 'Create NOTES.md',
+      permissionMode: 'default',
       createdAt: '2026-06-24T00:00:00.000Z',
     });
-
-    // advance run (drives model step -> real tool execution -> terminal)
-    const result = await runtime.agentRunService.sendSessionMessage({
-      requestId: 'request-1',
-      payload: {
-        sessionId: String(session.sessionId),
-        providerId: 'deepseek',
-        modelId: 'deepseek-v4-flash',
-        context: { permissionMode: 'default' },
-        messages: [{
-          id: 'message-user-1',
-          role: 'user',
-          content: 'Create NOTES.md',
-          createdAt: '2026-06-24T00:00:00.000Z',
-        }],
-        createdAt: '2026-06-24T00:00:00.000Z',
-      },
-    });
+    const session = result.session;
 
     const runtimeEventTypes: string[] = [];
     for await (const event of result.events) {

@@ -1,7 +1,7 @@
 ﻿// Composes the complete Coding Agent product runtime without depending on any UI shell.
 import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService } from '../artifacts';
-import type { CodingAgentProductRuntime } from '../product-runtime';
+import { createCodingAgentProductRuntime, type CodingAgentProductRuntime } from '../product-runtime';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import { composeCodingAgentToolRegistry, composeCodingAgentToolRuntimeFactory, composeCodingAgentToolService } from './compose-coding-agent-tool-runtime';
 import { composeCodingAgentSessionRuntime, type CodingAgentHomePaths } from './compose-coding-agent-session-runtime';
@@ -136,7 +136,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
   });
 
-  return {
+  return createCodingAgentProductRuntime({
     sessionService: sessionRuntime.sessionService,
     sessionBranchService: sessionRuntime.sessionBranchService,
     agentRunService: sessionRuntime.agentRunService,
@@ -150,7 +150,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     providerSettingsService,
     projectService,
     dispose: () => persistence.database.close(),
-  };
+  });
 }
 
 function createAiClientForProviderRuntime(config: ProviderRuntimeConfig): AiClient {

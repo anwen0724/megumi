@@ -10,8 +10,35 @@ import type { MemoryService } from '../memory';
 import type { RunContextServicePort } from '../run/context/resources';
 import type { ProductSettingsPort, ProviderSettingsPort } from '../settings';
 import type { ProjectService } from '../workspace';
+import type { PermissionMode } from '@megumi/shared/permission';
+import type { ProviderId } from '@megumi/shared/provider';
+import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
+import type { Session } from '@megumi/shared/session';
+
+export interface ProductRuntimeSubmitInput {
+  requestId?: string;
+  sessionId?: string;
+  sessionTitle?: string;
+  workspaceId?: string;
+  workspacePath?: string;
+  providerId: ProviderId;
+  modelId: string;
+  text: string;
+  createdAt?: string;
+  permissionMode?: PermissionMode;
+  runtimeContext?: RuntimeContext;
+}
+
+export interface ProductRuntimeSubmitInputResult {
+  session: Session;
+  requestId: string;
+  userMessageId: string;
+  runId: string;
+  events: AsyncIterable<RuntimeEvent>;
+}
 
 export interface CodingAgentProductRuntime {
+  submitInput(input: ProductRuntimeSubmitInput): Promise<ProductRuntimeSubmitInputResult>;
   sessionService: SessionServicePort;
   sessionBranchService: SessionBranchServicePort;
   agentRunService: AgentRunPort;
@@ -25,4 +52,87 @@ export interface CodingAgentProductRuntime {
   providerSettingsService: ProviderSettingsPort;
   projectService: ProjectService;
   dispose(): void;
+}
+
+export type CodingAgentProductRuntimeServices = Omit<CodingAgentProductRuntime, 'submitInput'>;
+
+export function createCodingAgentProductRuntime(
+  services: CodingAgentProductRuntimeServices,
+): CodingAgentProductRuntime {
+  return {
+    submitInput: (input) => submitInput(services, input),
+    ...services,
+  };
+}
+
+async function submitInput(
+  runtime: CodingAgentProductRuntimeServices,
+  input: ProductRuntimeSubmitInput,
+): Promise<ProductRuntimeSubmitInputResult> {
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  const requestId = input.requestId ?? `product-submit:${crypto.randomUUID()}`;
+  const session = resolveOrCreateSession(runtime.sessionService, input, createdAt);
+  const userMessageLocalId = `message-local:${crypto.randomUUID()}`;
+  const context = input.permissionMode
+    ? { permissionMode: input.permissionMode }
+    : undefined;
+  const run = await runtime.agentRunService.sendSessionMessage({
+    requestId,
+    payload: {
+      sessionId: String(session.sessionId),
+      providerId: input.providerId,
+      modelId: input.modelId,
+      ...(context ? { context } : {}),
+      messages: [{
+        id: userMessageLocalId,
+        role: 'user',
+        content: input.text,
+        createdAt,
+      }],
+      createdAt,
+    },
+    ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+  });
+  const persistedUserMessage = runtime.sessionService.listMessagesBySession(String(session.sessionId))
+    .filter((message) => message.role === 'user' && message.content === input.text && message.createdAt === createdAt)
+    .at(-1);
+
+  if (!persistedUserMessage?.runId) {
+    throw new Error('Product submit input did not persist a user message run.');
+  }
+
+  return {
+    session,
+    requestId: run.data.requestId,
+    userMessageId: String(persistedUserMessage.messageId),
+    runId: String(persistedUserMessage.runId),
+    events: run.events,
+  };
+}
+
+function resolveOrCreateSession(
+  sessionService: SessionServicePort,
+  input: ProductRuntimeSubmitInput,
+  createdAt: string,
+): Session {
+  if (input.sessionId) {
+    const session = sessionService.listSessions()
+      .find((candidate) => String(candidate.sessionId) === input.sessionId);
+    if (!session) {
+      throw new Error(`Cannot submit input to missing session: ${input.sessionId}`);
+    }
+    return session;
+  }
+
+  return sessionService.createSession({
+    title: input.sessionTitle ?? titleFromInput(input.text),
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
+    createdAt,
+  });
+}
+
+function titleFromInput(text: string): string {
+  const title = text.trim().replace(/\s+/g, ' ').slice(0, 80);
+  return title.length > 0 ? title : 'New session';
 }

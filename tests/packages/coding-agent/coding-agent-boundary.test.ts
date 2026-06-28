@@ -108,6 +108,7 @@ describe('coding-agent package boundary', () => {
     const artifacts = sourceUnder('packages/coding-agent/artifacts');
     const workspace = sourceUnder('packages/coding-agent/workspace');
     const settings = sourceUnder('packages/coding-agent/settings');
+    const productRuntime = sourceUnder('packages/coding-agent/product-runtime');
     const instructions = sourceUnder('packages/coding-agent/run/context/instructions');
     const resources = sourceUnder('packages/coding-agent/run/context/resources');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
@@ -121,6 +122,7 @@ describe('coding-agent package boundary', () => {
     expect(workspace).toContain('class WorkspaceRestoreService');
     expect(settings).toContain('class ProviderSettingsService');
     expect(settings).toContain('class ProviderRuntimeService');
+    expect(productRuntime).toContain('submitInput');
     expect(instructions).toContain('class AgentInstructionSourceService');
     expect(resources).toContain('class RunContextService');
 

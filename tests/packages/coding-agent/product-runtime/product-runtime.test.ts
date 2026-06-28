@@ -60,6 +60,7 @@ describe('Coding Agent product runtime', () => {
     });
 
     expect(runtime.sessionService).toBeDefined();
+    expect(typeof runtime.submitInput).toBe('function');
     expect(runtime.sessionBranchService).toBeDefined();
     expect(runtime.agentRunService).toBeDefined();
     expect(runtime.recoveryService).toBeDefined();
