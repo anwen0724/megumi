@@ -12,7 +12,7 @@ import {
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { RunStep } from '@megumi/shared/session';
-import type { ToolCall, ToolResult } from '@megumi/shared/tool';
+import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import {
   type BuildModelCallInputInput,
   type BuildModelCallInputResult,
@@ -60,6 +60,88 @@ export interface RunModelToolLoopInput {
   buildNextModelInputContext: (
     input: ToolResultModelInputBuildInput
   ) => ModelInputContext | Promise<ModelInputContext>;
+}
+
+export interface ToolSetSnapshotProvider {
+  createRunSnapshot(input: {
+    runId: string;
+    sessionId: string;
+    projectId: string;
+    permissionMode: PermissionMode;
+    modelId: string;
+    createdAt: string;
+    providerCapabilitySummary?: { supportsToolCall?: boolean };
+  }): {
+    modelVisibleToolDefinitions: ToolDefinition[];
+    events: RuntimeEvent[];
+  };
+}
+
+export interface ToolSetRegistryProvider {
+  listDefinitions(input: {
+    runId: string;
+    permissionMode: PermissionMode;
+    providerCapabilitySummary?: { supportsToolCall?: boolean };
+  }): ToolDefinition[];
+}
+
+export interface PrepareToolSetInput {
+  runId: string;
+  sessionId: string;
+  projectId?: string;
+  projectRoot?: string;
+  permissionMode: PermissionMode;
+  modelId: string;
+  createdAt: string;
+  providerCapabilitySummary?: { supportsToolCall?: boolean };
+  startSequence: number;
+}
+
+export interface PrepareToolSetResult {
+  toolDefinitions?: ToolDefinition[];
+  events: RuntimeEvent[];
+}
+
+export interface ToolSetServiceOptions {
+  snapshotProvider?: ToolSetSnapshotProvider;
+  registryProvider?: ToolSetRegistryProvider;
+}
+
+export class ToolSetService {
+  constructor(private readonly options: ToolSetServiceOptions = {}) {}
+
+  prepareToolSet(
+    input: PrepareToolSetInput,
+  ): PrepareToolSetResult {
+    if (input.projectRoot && input.projectId && this.options.snapshotProvider) {
+      const snapshot = this.options.snapshotProvider.createRunSnapshot({
+        runId: input.runId,
+        sessionId: input.sessionId,
+        projectId: input.projectId,
+        permissionMode: input.permissionMode,
+        modelId: input.modelId,
+        createdAt: input.createdAt,
+        providerCapabilitySummary: input.providerCapabilitySummary,
+      });
+      return {
+        toolDefinitions: snapshot.modelVisibleToolDefinitions,
+        events: normalizeToolSetEventSequence(snapshot.events, input.startSequence),
+      };
+    }
+
+    if (input.projectRoot && this.options.registryProvider) {
+      return {
+        toolDefinitions: this.options.registryProvider.listDefinitions({
+          runId: input.runId,
+          permissionMode: input.permissionMode,
+          providerCapabilitySummary: input.providerCapabilitySummary,
+        }),
+        events: [],
+      };
+    }
+
+    return { events: [] };
+  }
 }
 
 export interface CodingAgentRunSourceOverrideProvider {
@@ -227,6 +309,13 @@ export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInpu
   });
 
   return { request, modelEvents, pendingApprovalResumes };
+}
+
+function normalizeToolSetEventSequence(events: RuntimeEvent[], startSequence: number): RuntimeEvent[] {
+  return events.map((event, index) => ({
+    ...event,
+    sequence: event.sequence > startSequence ? event.sequence : startSequence + index + 1,
+  }));
 }
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {

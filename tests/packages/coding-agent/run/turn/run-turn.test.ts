@@ -326,8 +326,8 @@ function createOptions(
     compactionOrchestrator: {
       compactIfNeeded: overrides.compactIfNeeded ?? (async () => ({ status: 'skipped', events: [] })),
     },
-    modelVisibleToolDefinitionService: {
-      prepareModelVisibleToolDefinitions() {
+    toolSetService: {
+      prepareToolSet() {
         return { events: [] };
       },
     },

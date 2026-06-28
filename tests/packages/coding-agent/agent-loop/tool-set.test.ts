@@ -1,32 +1,32 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
-  ModelVisibleToolDefinitionService,
-  type RunModelVisibleToolRegistrySnapshotProvider,
-  type RunModelVisibleToolRegistryProvider,
-} from '@megumi/coding-agent/tools';
+  ToolSetService,
+  type ToolSetRegistryProvider,
+  type ToolSetSnapshotProvider,
+} from '@megumi/coding-agent/agent-loop';
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ToolDefinition } from '@megumi/shared/tool';
 
-describe('ModelVisibleToolDefinitionService', () => {
-  it('uses the run snapshot owner when project identity is available and normalizes snapshot event sequence', () => {
+describe('ToolSetService', () => {
+  it('uses the run snapshot when project identity is available and normalizes snapshot event sequence', () => {
     const snapshotEvent = runtimeEvent('tool.registry.snapshot.created', 0);
-    const snapshotProvider: RunModelVisibleToolRegistrySnapshotProvider = {
+    const snapshotProvider: ToolSetSnapshotProvider = {
       createRunSnapshot: vi.fn(() => ({
         modelVisibleToolDefinitions: [toolDefinition('read_file')],
         events: [snapshotEvent],
       })),
     };
-    const registryProvider: RunModelVisibleToolRegistryProvider = {
+    const registryProvider: ToolSetRegistryProvider = {
       listDefinitions: vi.fn(() => [toolDefinition('fallback')]),
     };
-    const service = new ModelVisibleToolDefinitionService({
+    const service = new ToolSetService({
       snapshotProvider,
       registryProvider,
     });
 
-    const result = service.prepareModelVisibleToolDefinitions({
+    const result = service.prepareToolSet({
       runId: 'run-1',
       sessionId: 'session-1',
       projectId: 'project-1',
@@ -58,14 +58,14 @@ describe('ModelVisibleToolDefinitionService', () => {
   });
 
   it('falls back to the live registry only when there is a workspace root without project snapshot identity', () => {
-    const registryProvider: RunModelVisibleToolRegistryProvider = {
+    const registryProvider: ToolSetRegistryProvider = {
       listDefinitions: vi.fn(() => [toolDefinition('read_file')]),
     };
-    const service = new ModelVisibleToolDefinitionService({
+    const service = new ToolSetService({
       registryProvider,
     });
 
-    const result = service.prepareModelVisibleToolDefinitions({
+    const result = service.prepareToolSet({
       runId: 'run-1',
       sessionId: 'session-1',
       projectRoot: 'C:/repo',
@@ -87,15 +87,15 @@ describe('ModelVisibleToolDefinitionService', () => {
     });
   });
 
-  it('returns no model-visible tools when no workspace-backed tool surface exists', () => {
-    const registryProvider: RunModelVisibleToolRegistryProvider = {
+  it('returns no ToolSet when no workspace-backed registry exists', () => {
+    const registryProvider: ToolSetRegistryProvider = {
       listDefinitions: vi.fn(() => [toolDefinition('read_file')]),
     };
-    const service = new ModelVisibleToolDefinitionService({
+    const service = new ToolSetService({
       registryProvider,
     });
 
-    const result = service.prepareModelVisibleToolDefinitions({
+    const result = service.prepareToolSet({
       runId: 'run-1',
       sessionId: 'session-1',
       permissionMode: 'default',

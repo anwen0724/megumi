@@ -33,7 +33,10 @@ import {
   RunTurn,
   type RunTurnOptions,
 } from './turn';
-import { streamApprovalResumeModelLoop } from '../agent-loop';
+import {
+  streamApprovalResumeModelLoop,
+  ToolSetService,
+} from '../agent-loop';
 import {
   BUILT_IN_INPUT_COMMAND_REGISTRY,
 } from '@megumi/coding-agent/input/command';
@@ -112,7 +115,6 @@ import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-import { ModelVisibleToolDefinitionService } from '../tools';
 import type {
   AgentRunPostRunHooksPort,
   AgentRunExecutionFactRepositoryPort,
@@ -472,7 +474,7 @@ export class AgentRunService implements AgentRunPort {
     chatStreamAdapter?: ChatStreamEventAdapter,
   ): RunTurnOptions {
     const svc = this;
-    const modelVisibleToolDefinitionService = new ModelVisibleToolDefinitionService({
+    const toolSetService = new ToolSetService({
       ...(this.toolRegistrySnapshotService ? {
         snapshotProvider: {
           createRunSnapshot: (snapshotInput) => this.createToolRegistrySnapshotForCodingAgentRun({ ...snapshotInput }),
@@ -521,7 +523,7 @@ export class AgentRunService implements AgentRunPort {
       // === Optional / passthrough ports ===
       ...(this.contextService ? { contextService: this.contextService } : {}),
       ...(this.providerCapabilitySummaryProvider ? { providerCapabilitySummaryProvider: this.providerCapabilitySummaryProvider } : {}),
-      modelVisibleToolDefinitionService,
+      toolSetService,
       sessionContextInputService: this.sessionContextInputService,
       sourceOverrideProvider: {
         resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),

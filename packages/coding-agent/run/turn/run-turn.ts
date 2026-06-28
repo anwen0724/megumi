@@ -30,15 +30,13 @@ import type { ModelCallPort } from '../../agent-loop/model-call';
 import {
   streamCodingAgentModelToolLoop,
   type CodingAgentRunSourceOverrideProvider,
+  type PrepareToolSetInput,
+  type PrepareToolSetResult,
 } from '../../agent-loop';
 import type {
   PendingToolApprovalResume,
 } from '../../agent-loop/tool-call';
 import type { ToolCallRunnerService } from '../../agent-loop/tool-call';
-import type {
-  PrepareModelVisibleToolDefinitionsInput,
-  PrepareModelVisibleToolDefinitionsResult,
-} from '../../tools';
 
 export interface CodingAgentRunClock {
   now(): string;
@@ -164,10 +162,10 @@ export interface RunTurnOptions {
   initialModelInputPreparationService?: {
     prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
   };
-  modelVisibleToolDefinitionService: {
-    prepareModelVisibleToolDefinitions(
-      input: PrepareModelVisibleToolDefinitionsInput,
-    ): PrepareModelVisibleToolDefinitionsResult;
+  toolSetService: {
+    prepareToolSet(
+      input: PrepareToolSetInput,
+    ): PrepareToolSetResult;
   };
   runEventRecorder: CodingAgentRunEventRecorder;
 }
@@ -194,10 +192,10 @@ export class RunTurn {
   private readonly initialModelInputPreparationService: {
     prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
   };
-  private readonly modelVisibleToolDefinitionService: {
-    prepareModelVisibleToolDefinitions(
-      input: PrepareModelVisibleToolDefinitionsInput,
-    ): PrepareModelVisibleToolDefinitionsResult;
+  private readonly toolSetService: {
+    prepareToolSet(
+      input: PrepareToolSetInput,
+    ): PrepareToolSetResult;
   };
 
   constructor(private readonly options: RunTurnOptions) {
@@ -210,7 +208,7 @@ export class RunTurn {
         modelCallInputBuildService: options.modelCallInputBuildService,
         compactionOrchestrator: options.compactionOrchestrator,
       });
-    this.modelVisibleToolDefinitionService = options.modelVisibleToolDefinitionService;
+    this.toolSetService = options.toolSetService;
   }
 
   async *runSessionMessage(input: CodingAgentRunSessionMessageInput): AsyncIterable<RuntimeEvent> {
@@ -218,12 +216,12 @@ export class RunTurn {
     let runStartedAppended = false;
 
     try {
-      // Tools still own registry snapshot selection; context owns all model input preparation.
+      // Agent-loop owns ToolSet selection; context owns model input preparation.
       const providerCapabilitySummary = this.options.providerCapabilitySummaryProvider?.getProviderCapabilitySummary({
         providerId: String(input.providerId),
         modelId: input.modelId,
       }) ?? { supportsToolCall: true };
-      const toolDefinitions = this.modelVisibleToolDefinitionService.prepareModelVisibleToolDefinitions({
+      const toolSet = this.toolSetService.prepareToolSet({
         runId: String(input.run.runId),
         sessionId: String(input.session.sessionId),
         ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
@@ -252,7 +250,7 @@ export class RunTurn {
         ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
         createdAt: input.createdAt,
         ...(input.memoryEnabled !== undefined ? { memoryEnabled: input.memoryEnabled } : {}),
-        ...(toolDefinitions.toolDefinitions ? { toolDefinitions: toolDefinitions.toolDefinitions } : {}),
+        ...(toolSet.toolDefinitions ? { toolDefinitions: toolSet.toolDefinitions } : {}),
       });
       const memoryRecall = initialModelInputPreparation.memoryRecall;
 
@@ -306,7 +304,7 @@ export class RunTurn {
         runStartedAppended = true;
         yield ev;
       }
-      for (const event of toolDefinitions.events) {
+      for (const event of toolSet.events) {
         const ev = this.options.eventPort.append(event, requestMeta.requestId, requestMeta.runtimeContext);
         yield ev;
       }
