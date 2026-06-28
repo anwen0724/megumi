@@ -221,4 +221,17 @@ describe('package and file structure source guards', () => {
     expect(sessionRunSource).not.toContain('INSERT INTO session_messages');
     expect(sessionRunSource).not.toContain('SELECT * FROM session_messages');
   });
+
+  it('keeps session compaction persistence in its owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-compaction.repo.ts');
+    const sessionRunSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
+      'utf8',
+    );
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(sessionRunSource).toContain('new SessionCompactionRepository');
+    expect(sessionRunSource).not.toContain('INSERT INTO session_compactions');
+    expect(sessionRunSource).not.toContain('SELECT * FROM session_compactions');
+  });
 });
