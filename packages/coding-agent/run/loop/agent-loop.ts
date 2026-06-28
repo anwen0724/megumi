@@ -15,9 +15,10 @@ import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 import { runModelCall, type ModelCallPort } from '../../agent-loop/model-call';
 import { createTerminalRuntimeError } from '../../state';
 import type {
-  PendingToolApprovalContinuation,
+  PendingToolApprovalResume,
+  ToolResultModelInputBuildInput,
   ToolCallRunner,
-} from '../tool-calls/tool-call-contract';
+} from '../../agent-loop/tool-call';
 
 const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
 const MODEL_INPUT_CONTEXT_ID_MAX_LENGTH = 128;
@@ -44,19 +45,6 @@ export interface ModelToolLoopIds {
   nextModelStepId: () => string;
 }
 
-export interface ToolContinuationInputContextBuilderInput {
-  baseInputContext: ModelInputContext;
-  contextId: string;
-  sessionId: string;
-  runId: string;
-  stepId: string;
-  buildReason: string;
-  builtAt: string;
-  toolCalls: ToolCall[];
-  toolResults: ToolResult[];
-  providerStates: ModelStepProviderState[];
-}
-
 export interface RunModelToolLoopInput {
   request: ModelStepRuntimeRequest;
   modelCallPort: ModelCallPort;
@@ -65,14 +53,14 @@ export interface RunModelToolLoopInput {
   signal?: AbortSignal;
   maxModelSteps?: number;
   maxToolRounds?: number;
-  onPendingApproval?: (continuation: PendingToolApprovalContinuation) => void;
-  onToolContinuationEmitted?: (input: {
+  onPendingApproval?: (approvalResume: PendingToolApprovalResume) => void;
+  onToolResultsSubmittedToModelInput?: (input: {
     request: ModelStepRuntimeRequest;
     toolResults: readonly ToolResult[];
     emittedAt: string;
   }) => readonly RuntimeEvent[] | void | Promise<readonly RuntimeEvent[] | void>;
-  buildContinuationInputContext?: (
-    input: ToolContinuationInputContextBuilderInput
+  buildNextModelInputContext?: (
+    input: ToolResultModelInputBuildInput
   ) => ModelInputContext | Promise<ModelInputContext>;
 }
 
@@ -159,7 +147,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     const toolResults = outcome.toolResults ?? [];
     const runtimeEvents = outcome.runtimeEvents ?? [];
     const hasPendingApprovals = Boolean(outcome.pendingApprovals && outcome.pendingApprovals.length > 0);
-    const continuationReady = outcome.continuationReady ?? true;
+    const nextModelInputReady = outcome.nextModelInputReady ?? true;
     const normalizedRuntimeEvents: RuntimeEvent[] = [];
 
     for (const event of runtimeEvents) {
@@ -216,8 +204,8 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
 
     accumulatedToolResults = [...accumulatedToolResults, ...toolResults];
 
-    if (hasPendingApprovals || !continuationReady) {
-      const continuationRequest = await createContinuationRequest({
+    if (hasPendingApprovals || !nextModelInputReady) {
+      const nextModelRequest = await createNextModelCallRequest({
         request,
         stepId: request.stepId,
         ...(request.modelStepId ? { modelStepId: String(request.modelStepId) } : {}),
@@ -226,13 +214,13 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
         accumulatedToolCalls,
         accumulatedToolResults,
         accumulatedProviderStates,
-        buildContinuationInputContext: input.buildContinuationInputContext,
+        buildNextModelInputContext: input.buildNextModelInputContext,
       });
 
       for (const pendingApproval of outcome.pendingApprovals ?? []) {
         input.onPendingApproval?.({
           pendingApproval,
-          request: continuationRequest,
+          request: nextModelRequest,
           accumulatedToolCalls,
           accumulatedToolResults,
           accumulatedProviderStates,
@@ -283,18 +271,18 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     const nextModelStepId = input.ids.nextModelStepId();
     const nextCreatedAt = new Date().toISOString();
 
-    request = await createContinuationRequest({
+    request = await createNextModelCallRequest({
       request,
       stepId: nextStepId,
       modelStepId: nextModelStepId,
       createdAt: nextCreatedAt,
-      contextKind: 'continuation',
+      contextKind: 'tool-results',
       accumulatedToolCalls,
       accumulatedToolResults,
       accumulatedProviderStates,
-      buildContinuationInputContext: input.buildContinuationInputContext,
+      buildNextModelInputContext: input.buildNextModelInputContext,
     });
-    const emittedEvents = await input.onToolContinuationEmitted?.({
+    const emittedEvents = await input.onToolResultsSubmittedToModelInput?.({
       request,
       toolResults,
       emittedAt: nextCreatedAt,
@@ -337,17 +325,17 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
   });
 }
 
-async function createContinuationRequest(input: {
+async function createNextModelCallRequest(input: {
   request: ModelStepRuntimeRequest;
   stepId: string;
   modelStepId?: string;
   createdAt: string;
-  contextKind: 'approval' | 'continuation';
+  contextKind: 'approval' | 'tool-results';
   accumulatedToolCalls: ToolCall[];
   accumulatedToolResults: ToolResult[];
   accumulatedProviderStates: ModelStepProviderState[];
-  buildContinuationInputContext?: (
-    input: ToolContinuationInputContextBuilderInput
+  buildNextModelInputContext?: (
+    input: ToolResultModelInputBuildInput
   ) => ModelInputContext | Promise<ModelInputContext>;
 }): Promise<ModelStepRuntimeRequest> {
   const contextInput = {
@@ -370,9 +358,9 @@ async function createContinuationRequest(input: {
     ...input.request,
     stepId: input.stepId,
     ...(input.modelStepId ? { modelStepId: input.modelStepId } : {}),
-    inputContext: input.buildContinuationInputContext
-      ? await input.buildContinuationInputContext(contextInput)
-      : buildFallbackToolContinuationInputContext(contextInput),
+    inputContext: input.buildNextModelInputContext
+      ? await input.buildNextModelInputContext(contextInput)
+      : buildFallbackToolResultModelInputContext(contextInput),
     createdAt: input.createdAt,
   };
 }
@@ -413,9 +401,9 @@ function isModelStepProviderStateRecordedEvent(
   return RuntimeEventSchema.safeParse(event).success;
 }
 
-function buildFallbackToolContinuationInputContext(input: ToolContinuationInputContextBuilderInput): ModelInputContext {
+function buildFallbackToolResultModelInputContext(input: ToolResultModelInputBuildInput): ModelInputContext {
   const inheritedParts = input.baseInputContext.parts.filter((part) => part.kind !== 'tool_continuation');
-  const continuationParts = [
+  const nextModelInputParts = [
     ...input.toolCalls.map((toolCall, index): ModelInputContextPart => ({
       partId: `part:tool-call:${index + 1}:${toolCall.toolCallId}`,
       kind: 'tool_continuation',
@@ -491,7 +479,7 @@ function buildFallbackToolContinuationInputContext(input: ToolContinuationInputC
       budgetClass: 'continuation',
     })),
   ];
-  const parts = [...inheritedParts, ...continuationParts];
+  const parts = [...inheritedParts, ...nextModelInputParts];
   const partBudgets = parts.map((part): ModelInputContextPartBudget => ({
     partId: part.partId,
     tokenEstimate: estimateTextTokens(textForPart(part)),

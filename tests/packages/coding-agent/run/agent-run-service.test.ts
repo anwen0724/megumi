@@ -31,6 +31,7 @@ import {
   type AgentRunRuntimeEventRepositoryPort,
   type AgentRunSessionContextRepositoryPort,
   type AgentRunSessionRepositoryPort,
+  type AgentRunToolRepositoryPort,
   type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/coding-agent/run';
 import {
@@ -58,6 +59,7 @@ import {
   type RunRetryCoordinatorRepositoryPort,
   RunTerminalCoordinator,
   type RunTerminalRepositoryPort,
+  type RunTerminalToolRepositoryPort,
 } from '@megumi/coding-agent/run/lifecycle';
 import {
   createWorkspaceChangeFooterProjectorService,
@@ -123,6 +125,9 @@ type AgentRunServiceTestOptions =
     AgentRunServiceRepositoryOptions
       & Pick<AgentRunServiceOptions, 'runCompletionHooks' | 'runTerminalCoordinator' | 'runRetryCoordinator'>
   >
+  & {
+    terminalToolRepository?: RunTerminalToolRepositoryPort;
+  }
   & { repository: AgentRunServiceTestRepository };
 
 function agentRunServiceRepositoryOptions(repository: AgentRunServiceTestRepository): AgentRunServiceRepositoryOptions {
@@ -173,6 +178,14 @@ function createAgentRunTestRepository(database: Database.Database): AgentRunServ
   };
 }
 
+function createAgentRunToolRepositoryForTest(
+  toolRepository: ToolRepository,
+): AgentRunToolRepositoryPort {
+  return {
+    markToolResultsSubmittedToModelInput: (input) => toolRepository.markToolContinuationEmitted(input),
+  };
+}
+
 function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRunServiceTestFacade {
   const repository = options.repository as AgentRunServiceTestRepository;
   const ids = {
@@ -218,7 +231,7 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
   });
   const runTerminalCoordinator = options.runTerminalCoordinator ?? new RunTerminalCoordinator({
     repository: repositoryOptions.runTerminalRepository,
-    ...(options.toolRepository ? { toolRepository: options.toolRepository } : {}),
+    ...(options.terminalToolRepository ? { toolRepository: options.terminalToolRepository } : {}),
     ids,
   });
   const runRetryCoordinator = options.runRetryCoordinator ?? new RunRetryCoordinator({
@@ -502,7 +515,7 @@ function createServiceWithModelStepStream(
   const repository = createAgentRunTestRepository(db);
   const toolRepository = options?.createToolRepository?.(db);
   let callIndex = 0;
-  const serviceOptions: AgentRunServiceTestOptions & { toolRepository?: ToolRepository } = {
+  const serviceOptions: AgentRunServiceTestOptions = {
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
     ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
@@ -533,7 +546,10 @@ function createServiceWithModelStepStream(
     ...(options?.runEffectiveCwdProvider ? { runEffectiveCwdProvider: options.runEffectiveCwdProvider } : {}),
     ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
-    ...(toolRepository ? { toolRepository } : {}),
+    ...(toolRepository ? {
+      toolRepository: createAgentRunToolRepositoryForTest(toolRepository),
+      terminalToolRepository: toolRepository,
+    } : {}),
     modelStepProvider: {
       streamModelCall: async function* (request) {
         callIndex += 1;
@@ -5695,7 +5711,7 @@ describe('AgentRunService', () => {
             async resumeToolApproval() {
               return {
                 toolResult,
-                continuationReady: false,
+                nextModelInputReady: false,
                 runtimeEvents: [
                   ...approvalResumeRuntimeEvents(toolResult, 'success'),
                   {
@@ -6002,7 +6018,7 @@ describe('AgentRunService', () => {
   it('marks session message runs waiting and resumes live continuation after approval resolution', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const resumeInputs: unknown[] = [];
-    const markToolContinuationEmitted = vi.fn();
+    const markToolResultsSubmittedToModelInput = vi.fn();
     const toolResult = createToolResult({ toolExecutionId: 'tool-execution-1' });
     db = new Database(':memory:');
     migrateDatabase(db);
@@ -6098,10 +6114,7 @@ describe('AgentRunService', () => {
         },
       },
       toolRepository: {
-        cancelPendingApprovalRequestsByRun: vi.fn(() => []),
-        cancelPendingToolExecutionsByRun: vi.fn(() => []),
-        failRunningToolExecutionsByRun: vi.fn(() => []),
-        markToolContinuationEmitted,
+        markToolResultsSubmittedToModelInput,
       },
       clock: { now: () => '2026-05-17T00:00:04.000Z' },
       ids: {
@@ -6210,7 +6223,7 @@ describe('AgentRunService', () => {
         text: expect.stringContaining('Need to read package.json before answering.'),
       }),
     ]));
-    expect(markToolContinuationEmitted).toHaveBeenCalledWith({
+    expect(markToolResultsSubmittedToModelInput).toHaveBeenCalledWith({
       toolExecutionIds: ['tool-execution-1'],
       emittedAt: '2026-05-17T00:00:05.000Z',
     });
@@ -6569,7 +6582,8 @@ describe('AgentRunService', () => {
     });
     const service = createAgentRunTestService({
       repository,
-      toolRepository,
+      toolRepository: createAgentRunToolRepositoryForTest(toolRepository),
+      terminalToolRepository: toolRepository,
       clock: { now: () => '2026-06-14T00:01:00.000Z' },
       ids: {
         eventId: (() => {

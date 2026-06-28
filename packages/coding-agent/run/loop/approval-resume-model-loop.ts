@@ -9,8 +9,7 @@ import type {
   ModelInputMemoryRecallSource,
 } from '../../context';
 import type { ModelCallPort } from '../../agent-loop/model-call';
-import type { PendingToolApprovalContinuation } from '../tool-calls/tool-call-contract';
-import type { ToolCallRunnerService } from '../tool-calls';
+import type { PendingToolApprovalResume, ToolCallRunnerService } from '../../agent-loop/tool-call';
 import {
   streamCodingAgentModelToolLoop,
   type CodingAgentModelToolLoopStreamIds,
@@ -40,7 +39,7 @@ export interface ApprovalResumeModelLoopInput {
 export interface ApprovalResumeModelLoop {
   request: ModelStepRuntimeRequest;
   modelEvents: AsyncIterable<RuntimeEvent>;
-  pendingContinuations: PendingToolApprovalContinuation[];
+  pendingApprovalResumes: PendingToolApprovalResume[];
 }
 
 export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInput): ApprovalResumeModelLoop {
@@ -51,7 +50,7 @@ export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInpu
     inputContext: input.resumedInputContext,
     createdAt: input.decidedAt,
   };
-  const pendingContinuations: PendingToolApprovalContinuation[] = [];
+  const pendingApprovalResumes: PendingToolApprovalResume[] = [];
   const modelEvents = streamCodingAgentModelToolLoop({
     request,
     ports: {
@@ -59,9 +58,9 @@ export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInpu
       toolCallHandler: input.toolRuntime,
       modelCallInputBuildService: input.modelCallInputBuildService,
       sourceOverrideProvider: input.sourceOverrideProvider,
-      toolContinuationRecorder: {
-        markToolContinuationEmitted: ({ request, stepId, toolResults, emittedAt, sequence }) => {
-          const event = input.toolRuntime.markToolContinuationEmitted({
+      toolResultModelInputRecorder: {
+        markToolResultsSubmittedToModelInput: ({ request, stepId, toolResults, emittedAt, sequence }) => {
+          const event = input.toolRuntime.markToolResultsSubmittedToModelInput({
             request,
             stepId,
             toolResults,
@@ -79,10 +78,10 @@ export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInpu
       ...(input.memoryRecall?.memoryRecallSources ? { memoryRecallSources: input.memoryRecall.memoryRecallSources } : {}),
       ...(input.memoryRecall?.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecall.memoryRecallSeed } : {}),
     },
-    onPendingApproval: (pendingContinuation) => {
-      pendingContinuations.push(pendingContinuation);
+    onPendingApproval: (pendingApprovalResume) => {
+      pendingApprovalResumes.push(pendingApprovalResume);
     },
   });
 
-  return { request, modelEvents, pendingContinuations };
+  return { request, modelEvents, pendingApprovalResumes };
 }

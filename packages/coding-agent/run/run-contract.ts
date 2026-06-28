@@ -43,7 +43,6 @@ import type {
 
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { ModelStepRecord } from '../persistence/repos/model-step.repo';
-import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type {
   PermissionSnapshotService,
 } from '../permissions/permission-snapshot-service';
@@ -63,13 +62,13 @@ import type {
   SessionBranchServicePort,
 } from '../session';
 import type {
-  PendingToolApprovalContinuation,
+  PendingToolApprovalResume,
   ResumeToolApprovalInput,
   ResumeToolApprovalOutcome,
   ToolApprovalResumePort,
   ToolCallRunner,
-} from './tool-calls';
-import type { ToolCallRunnerService } from './tool-calls';
+} from '../agent-loop/tool-call';
+import type { ToolCallRunnerService } from '../agent-loop/tool-call';
 import type { ModelCallCompletionResult } from '../agent-loop/model-call';
 import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
 import type {
@@ -248,6 +247,13 @@ export interface AgentRunServiceHomePaths {
   sqlitePath: string;
 }
 
+export interface AgentRunToolRepositoryPort {
+  markToolResultsSubmittedToModelInput(input: {
+    toolExecutionIds: string[];
+    emittedAt: string;
+  }): void;
+}
+
 export interface AgentRunSessionRepositoryPort {
   saveSession(session: Session): Session;
   getSession(sessionId: string): Session | undefined;
@@ -328,10 +334,7 @@ export interface AgentRunServiceOptions {
   toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
   providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
-  toolRepository?: Pick<
-    ToolRepository,
-    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun' | 'markToolContinuationEmitted'
-  >;
+  toolRepository?: AgentRunToolRepositoryPort;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
   modelCallInputBuildService?: SessionRunModelCallInputBuildService;
   memoryRecallService?: SessionRunMemoryRecallService;
@@ -401,7 +404,7 @@ export interface AgentRunPort {
   updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord;
 }
 
-export interface ApprovalContinuationGroup {
+export interface ApprovalResumeGroup {
   groupId: string;
   request: ModelStepRuntimeRequest;
   run: Run;
@@ -410,7 +413,7 @@ export interface ApprovalContinuationGroup {
   projectRoot?: string;
   permissionMode?: PermissionMode;
   userMessageId: string;
-  pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
+  pendingByApprovalId: Map<string, PendingToolApprovalResume>;
   resolvedResults: ToolResult[];
   toolRuntime: ToolCallRunnerService;
   memoryRecallSources?: ModelInputMemoryRecallSource[];

@@ -1,5 +1,2 @@
-// Exposes approval helpers for run-time tool calls.
-export * from './tool-call-approval';
-export * from './approval-resume';
-export * from './approval-events';
-export * from './pending-approval-registry';
+// Compatibility export while tool-call ownership moves to packages/coding-agent/agent-loop/tool-call.
+export * from '../../../agent-loop/tool-call/approval';

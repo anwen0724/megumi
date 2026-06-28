@@ -1,3 +1,2 @@
-// Exposes tool execution lifecycle helpers used by the tool-call runner.
-export * from './tool-execution-window';
-export * from './tool-execution-record';
+// Compatibility export while tool-call ownership moves to packages/coding-agent/agent-loop/tool-call.
+export * from '../../../agent-loop/tool-call/execution';

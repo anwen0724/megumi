@@ -1,3 +1,2 @@
-// Exposes Coding Agent run-level tool call orchestration boundaries.
-export * from './tool-call-contract';
-export * from './tool-call-runner';
+// Compatibility export while tool-call ownership moves to packages/coding-agent/agent-loop/tool-call.
+export * from '../../agent-loop/tool-call';

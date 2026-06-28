@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { markToolContinuationEmitted } from '@megumi/coding-agent/run/tool-calls/continuation/tool-continuation-emitted';
+import { markToolResultsSubmittedToModelInput } from '@megumi/coding-agent/agent-loop/tool-call/model-input/tool-result-model-input-emitted';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ToolResult } from '@megumi/shared/tool';
 
@@ -34,11 +34,11 @@ function request(): ModelStepRuntimeRequest {
   } as unknown as ModelStepRuntimeRequest;
 }
 
-describe('tool continuation emitted event owner', () => {
-  it('marks unique tool executions and returns a continuation emitted runtime event', () => {
+describe('tool result model input emitted event owner', () => {
+  it('marks unique tool executions and returns a tool result model input runtime event', () => {
     const marked: Array<{ toolExecutionIds: string[]; emittedAt: string }> = [];
 
-    const event = markToolContinuationEmitted({
+    const event = markToolResultsSubmittedToModelInput({
       request: request(),
       stepId: 'step-2',
       sequence: 7,
@@ -49,7 +49,7 @@ describe('tool continuation emitted event owner', () => {
         toolResult('tool-result-3', 'tool-execution-2', 'assistant-message-1'),
       ],
       repository: {
-        markToolContinuationEmitted: (input) => {
+        markToolResultsSubmittedToModelInput: (input) => {
           marked.push(input);
         },
       },
@@ -85,14 +85,14 @@ describe('tool continuation emitted event owner', () => {
   it('returns undefined when no tool execution ids can be marked', () => {
     const marked: Array<{ toolExecutionIds: string[]; emittedAt: string }> = [];
 
-    const event = markToolContinuationEmitted({
+    const event = markToolResultsSubmittedToModelInput({
       request: request(),
       stepId: 'step-2',
       sequence: 7,
       emittedAt: '2026-06-14T00:00:10.000Z',
       toolResults: [toolResult('tool-result-1', undefined, undefined)],
       repository: {
-        markToolContinuationEmitted: (input) => {
+        markToolResultsSubmittedToModelInput: (input) => {
           marked.push(input);
         },
       },

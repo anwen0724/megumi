@@ -42,7 +42,7 @@ describe('ToolCallRunner source-order barrier', () => {
       'awaitingApproval',
       'queued',
     ]);
-    expect(outcome.continuationReady).toBe(false);
+    expect(outcome.nextModelInputReady).toBe(false);
   });
 
   it('runs a serial record alone between parallel windows', async () => {
@@ -183,10 +183,10 @@ describe('ToolCallRunner source-order barrier', () => {
       'succeeded',
     ]);
     expect(outcome?.toolResults.map((result) => result.toolCallId)).toEqual(['call:1', 'call:2']);
-    expect(outcome?.continuationReady).toBe(true);
+    expect(outcome?.nextModelInputReady).toBe(true);
   });
 
-  it('emits runtime events for decisions, observations, and continuation readiness', async () => {
+  it('emits runtime events for decisions, observations, and next model input readiness', async () => {
     const harness = createToolCallRunnerHarness({
       decisions: [allowParallel('read_file')],
     });

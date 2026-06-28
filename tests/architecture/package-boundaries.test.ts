@@ -271,11 +271,11 @@ describe('package dependency boundaries', () => {
 
   it('keeps ToolCallRunner behind the source-aware execution router', () => {
     const runnerSource = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
+      path.join(root, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'),
       'utf8',
     );
     const approvalSource = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/run/tool-calls/approval/tool-call-approval.ts'),
+      path.join(root, 'packages/coding-agent/agent-loop/tool-call/approval/tool-call-approval.ts'),
       'utf8',
     );
 
@@ -348,11 +348,11 @@ describe('package dependency boundaries', () => {
 
   it('keeps tool handling source-ordered without batch orchestration objects', () => {
     const runner = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
+      path.join(root, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'),
       'utf8',
     );
     const executionWindow = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/run/tool-calls/execution/tool-execution-window.ts'),
+      path.join(root, 'packages/coding-agent/agent-loop/tool-call/execution/tool-execution-window.ts'),
       'utf8',
     );
     const router = fs.readFileSync(

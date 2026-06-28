@@ -12,9 +12,9 @@ import {
 } from '@megumi/coding-agent/run';
 
 describe('coding-agent model/tool loop stream', () => {
-  it('calls the agent runtime through ports and builds continuation context in coding-agent', async () => {
+  it('calls the agent runtime through ports and builds next model input context in coding-agent', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const continuationBuilds: unknown[] = [];
+    const nextModelInputBuilds: unknown[] = [];
     const modelCallPort = {
       async *streamModelCall({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
         requests.push(request);
@@ -52,10 +52,10 @@ describe('coding-agent model/tool loop stream', () => {
       toolCallHandler: toolCallHandler as CodingAgentModelToolLoopStreamPorts['toolCallHandler'],
       modelCallInputBuildService: {
         async buildModelCallInput(input) {
-          continuationBuilds.push(input);
+          nextModelInputBuilds.push(input);
           return {
             buildRequest: {} as never,
-            inputContext: modelInputContext('continuation-context'),
+            inputContext: modelInputContext('next-model-input-context'),
             toolDefinitions: input.toolDefinitions ?? [],
             instructionSources: [],
             availableCapabilitySummary: 'Available tools: read_file.',
@@ -67,9 +67,9 @@ describe('coding-agent model/tool loop stream', () => {
           return {};
         },
       },
-      toolContinuationRecorder: {
-        markToolContinuationEmitted(input) {
-          return [toolContinuationEmitted(input.request, input.emittedAt)];
+      toolResultModelInputRecorder: {
+        markToolResultsSubmittedToModelInput(input) {
+          return [toolResultsSubmittedToModelInput(input.request, input.emittedAt)];
         },
       },
       ids: {
@@ -90,8 +90,8 @@ describe('coding-agent model/tool loop stream', () => {
     }));
 
     expect(requests).toHaveLength(2);
-    expect(requests[1]?.inputContext.contextId).toBe('continuation-context');
-    expect(continuationBuilds).toHaveLength(1);
+    expect(requests[1]?.inputContext.contextId).toBe('next-model-input-context');
+    expect(nextModelInputBuilds).toHaveLength(1);
     expect(events.map((event) => event.eventType)).toEqual([
       'model.step.started',
       'tool.call.created',
@@ -256,9 +256,9 @@ function toolCallCreated(request: ModelStepRuntimeRequest, sequence: number): Ru
   });
 }
 
-function toolContinuationEmitted(request: ModelStepRuntimeRequest, createdAt: string): RuntimeEvent {
+function toolResultsSubmittedToModelInput(request: ModelStepRuntimeRequest, createdAt: string): RuntimeEvent {
   return createRuntimeEvent({
-    eventId: 'event-tool-continuation',
+    eventId: 'event-tool-results-submitted-to-model-input',
     eventType: 'tool.continuation.emitted',
     runId: request.runId,
     sessionId: request.sessionId,

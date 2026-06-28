@@ -86,8 +86,8 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/model-call/model-call-runner.ts',
       'packages/coding-agent/run/model-call/model-call-contract.ts',
       'packages/coding-agent/run/model-call/model-call-stream.ts',
-      'packages/coding-agent/run/tool-calls/tool-call-runner.ts',
-      'packages/coding-agent/run/tool-calls/tool-call-contract.ts',
+      'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts',
+      'packages/coding-agent/agent-loop/tool-call/tool-call-contract.ts',
       'packages/coding-agent/run/lifecycle/run-lifecycle.ts',
       'packages/coding-agent/run/lifecycle/run-error.ts',
       'packages/coding-agent/permissions/tool-policy.ts',
@@ -117,7 +117,7 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/events/timeline-history-projector.ts',
       'packages/coding-agent/run/events/timeline-history-commit-projector.ts',
       'packages/coding-agent/run/tool-calls/execution/tool-execution-events.ts',
-      'packages/coding-agent/run/tool-calls/continuation/tool-error-result.ts',
+      'packages/coding-agent/agent-loop/tool-call/model-input/tool-error-result.ts',
     ]) {
       expect(exists(removedPath), removedPath).toBe(false);
     }
@@ -141,8 +141,8 @@ describe('coding agent run structure source guards', () => {
   });
 
   it('keeps tool call contracts and runner names aligned with tool-call-runner', () => {
-    const contractSource = read('packages/coding-agent/run/tool-calls/tool-call-contract.ts');
-    const runnerSource = read('packages/coding-agent/run/tool-calls/tool-call-runner.ts');
+    const contractSource = read('packages/coding-agent/agent-loop/tool-call/tool-call-contract.ts');
+    const runnerSource = read('packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts');
 
     for (const forbiddenToken of [
       'ToolCallHandler',
@@ -161,7 +161,7 @@ describe('coding agent run structure source guards', () => {
       'function runRecord',
       'function outcomeFromRecords',
       'function runtimeEventsFromRecords',
-      'function buildContinuationToolResults',
+      'function buildToolResultsForNextModelInput',
     ]) {
       expect(runnerSource).not.toContain(implementationToken);
     }

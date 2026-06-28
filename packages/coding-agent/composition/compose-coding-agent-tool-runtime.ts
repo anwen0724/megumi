@@ -2,7 +2,7 @@
 import fs from 'fs-extra';
 import { createBuiltInToolRegistry } from '../tools/built-ins';
 import type { ToolRegistry } from '../tools/registry';
-import { createToolCallRunner } from '../run/tool-calls';
+import { createToolCallRunner } from '../agent-loop/tool-call';
 import { ToolService } from '../tools/tool-service';
 import { WorkspaceChangeTrackerService } from '../workspace';
 import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
@@ -53,6 +53,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
           getApprovalRequest: (approvalRequestId) => input.toolRepository.getApprovalRequest(approvalRequestId),
           saveToolResult: (toolResult) => input.toolRepository.saveToolResult(toolResult),
           getToolRegistrySnapshotByRun: (runId) => input.toolRepository.getToolRegistrySnapshotByRun(runId),
+          markToolResultsSubmittedToModelInput: (request) => input.toolRepository.markToolContinuationEmitted(request),
           getRunSessionId(runId) {
             const run = input.runRepository.getRun(runId);
             return run ? String(run.sessionId) : undefined;

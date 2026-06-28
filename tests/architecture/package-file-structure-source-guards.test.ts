@@ -123,8 +123,14 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-event-adapter.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-step-provider-adapter.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/tool-call-contract.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts'))).toBe(true);
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-call-runner.ts'), 'utf8'))
       .toContain("export * from '../../agent-loop/model-call/model-call-runner'");
+    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'), 'utf8'))
+      .toContain("export * from '../../agent-loop/tool-call/tool-call-runner'");
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-factory.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-metadata.ts'))).toBe(true);
@@ -488,7 +494,7 @@ describe('package and file structure source guards', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeEventsPath = join(
       repoRoot,
-      'packages/coding-agent/run/tool-calls/approval/approval-resume-events.ts',
+      'packages/coding-agent/agent-loop/tool-call/approval/approval-resume-events.ts',
     );
 
     expect(existsSync(approvalResumeEventsPath)).toBe(true);
@@ -508,37 +514,37 @@ describe('package and file structure source guards', () => {
   it('keeps approval resume registry mutation in the approval submodule', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const pendingApprovalRegistrySource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/run/tool-calls/approval/pending-approval-registry.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts'),
       'utf8',
     );
 
-    expect(agentRunServiceSource).not.toContain('continuation.pendingByApprovalId.delete(input.approvalRequestId)');
+    expect(agentRunServiceSource).not.toContain('approvalResume.pendingByApprovalId.delete(input.approvalRequestId)');
     expect(agentRunServiceSource).not.toContain('this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId)');
-    expect(agentRunServiceSource).not.toContain('continuation.resolvedResults.push(...toolResults)');
-    expect(agentRunServiceSource).not.toContain('this.pendingApprovalRegistry.deleteGroup(continuation.groupId)');
+    expect(agentRunServiceSource).not.toContain('approvalResume.resolvedResults.push(...toolResults)');
+    expect(agentRunServiceSource).not.toContain('this.pendingApprovalRegistry.deleteGroup(approvalResume.groupId)');
     expect(pendingApprovalRegistrySource).toContain('export function resolvePendingApproval');
     expect(pendingApprovalRegistrySource).toContain('export function closePendingApprovalGroup');
   });
 
-  it('keeps tool continuation emitted event ownership in the continuation submodule', () => {
+  it('keeps tool result model input emission ownership in the model-input submodule', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
-    const toolContinuationEmittedPath = join(
+    const toolResultModelInputEmittedPath = join(
       repoRoot,
-      'packages/coding-agent/run/tool-calls/continuation/tool-continuation-emitted.ts',
+      'packages/coding-agent/agent-loop/tool-call/model-input/tool-result-model-input-emitted.ts',
     );
 
-    expect(existsSync(toolContinuationEmittedPath)).toBe(true);
-    const toolContinuationEmittedSource = readFileSync(toolContinuationEmittedPath, 'utf8');
+    expect(existsSync(toolResultModelInputEmittedPath)).toBe(true);
+    const toolResultModelInputEmittedSource = readFileSync(toolResultModelInputEmittedPath, 'utf8');
     expect(agentRunServiceSource).not.toContain('private markToolContinuationEmitted');
     expect(agentRunServiceSource).not.toContain('createToolContinuationEmittedEvent');
-    expect(toolContinuationEmittedSource).toContain('export function markToolContinuationEmitted');
+    expect(toolResultModelInputEmittedSource).toContain('export function markToolResultsSubmittedToModelInput');
   });
 
   it('keeps approval resume model input preparation in the approval submodule', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeModelInputPath = join(
       repoRoot,
-      'packages/coding-agent/run/tool-calls/approval/approval-resume-model-input.ts',
+      'packages/coding-agent/agent-loop/tool-call/approval/approval-resume-model-input.ts',
     );
 
     expect(existsSync(approvalResumeModelInputPath)).toBe(true);
@@ -551,26 +557,26 @@ describe('package and file structure source guards', () => {
 
   it('keeps approval resume internals behind ToolCallRunner public capabilities', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
-    const toolCallsIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/tool-calls/index.ts'), 'utf8');
+    const toolCallsIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/index.ts'), 'utf8');
     const toolCallRunnerSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'),
       'utf8',
     );
 
     expect(toolCallsIndexSource).not.toContain("export * from './approval/");
-    expect(toolCallsIndexSource).not.toContain("export * from './continuation/");
+    expect(toolCallsIndexSource).not.toContain("export * from './model-input/");
     expect(agentRunServiceSource).not.toContain('closePendingApprovalGroup,');
     expect(agentRunServiceSource).not.toContain('collectApprovalResumeRuntimeEvents,');
     expect(agentRunServiceSource).not.toContain('createApprovalResolvedRuntimeEvent,');
     expect(agentRunServiceSource).not.toContain('markToolContinuationEmitted,');
     expect(agentRunServiceSource).not.toContain('prepareApprovalResumeModelInput,');
     expect(agentRunServiceSource).not.toContain('resolvePendingApproval,');
-    expect(agentRunServiceSource).toContain('continuation.toolRuntime.resumeToolApproval(input)');
-    expect(agentRunServiceSource).toContain('continuation.toolRuntime.createApprovalResolvedRuntimeEvent');
-    expect(agentRunServiceSource).toContain('continuation.toolRuntime.prepareApprovalResumeModelInput');
+    expect(agentRunServiceSource).toContain('approvalResume.toolRuntime.resumeToolApproval(input)');
+    expect(agentRunServiceSource).toContain('approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent');
+    expect(agentRunServiceSource).toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
     expect(toolCallRunnerSource).toContain('createApprovalResolvedRuntimeEvent');
     expect(toolCallRunnerSource).toContain('prepareApprovalResumeModelInput');
-    expect(toolCallRunnerSource).toContain('markToolContinuationEmitted');
+    expect(toolCallRunnerSource).toContain('markToolResultsSubmittedToModelInput');
   });
 
   it('keeps approval resume model loop wiring in the loop module', () => {

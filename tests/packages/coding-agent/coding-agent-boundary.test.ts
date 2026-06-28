@@ -77,14 +77,15 @@ describe('coding-agent package boundary', () => {
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
     const codingAgentRun = sourceUnder('packages/coding-agent/run');
+    const codingAgentState = sourceUnder('packages/coding-agent/state');
     const codingAgentInput = sourceUnder('packages/coding-agent/input');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(codingAgentRun).toContain('class RunTurn');
     expect(codingAgentRun).toContain('class RunCompletionHooksCoordinator');
-    expect(codingAgentRun).toContain('class RunTerminalCoordinator');
+    expect(codingAgentState).toContain('class RunTerminalCoordinator');
     expect(codingAgentRun).toContain('runModelToolLoop');
-    expect(codingAgentRun).toContain('buildContinuationInputContext');
+    expect(codingAgentRun).toContain('buildNextModelInputContext');
     expect(codingAgentInput).toContain('createCodingAgentRunInputFacts');
     expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);
     expect(desktopServices).not.toContain('new RunTurn');
@@ -112,8 +113,8 @@ describe('coding-agent package boundary', () => {
     const workspace = sourceUnder('packages/coding-agent/workspace');
     const settings = sourceUnder('packages/coding-agent/settings');
     const productRuntime = sourceUnder('packages/coding-agent/product-runtime');
-    const instructions = sourceUnder('packages/coding-agent/run/context/instructions');
-    const resources = sourceUnder('packages/coding-agent/run/context/resources');
+    const instructions = sourceUnder('packages/coding-agent/context/instructions');
+    const resources = sourceUnder('packages/coding-agent/context/resources');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(memory).toContain('class MemoryRecallRuntimeService');
@@ -138,7 +139,7 @@ describe('coding-agent package boundary', () => {
 
   it('keeps session facts separate from model context materialization', () => {
     const session = sourceUnder('packages/coding-agent/session');
-    const runContextParts = sourceUnder('packages/coding-agent/run/context/parts');
+    const runContextParts = sourceUnder('packages/coding-agent/context/parts');
 
     expect(session).not.toContain('ModelInputContextPartDraft');
     expect(session).not.toContain('context-budget');
@@ -152,7 +153,7 @@ describe('coding-agent package boundary', () => {
 
   it('keeps tool orchestration and permission policy in coding-agent instead of desktop services', () => {
     const tools = sourceUnder('packages/coding-agent/tools');
-    const toolCalls = sourceUnder('packages/coding-agent/run/tool-calls');
+    const toolCalls = sourceUnder('packages/coding-agent/agent-loop/tool-call');
     const permissions = sourceUnder('packages/coding-agent/permissions');
     const desktopToolServices = sourceUnder('apps/desktop/src/main/services/tool');
 

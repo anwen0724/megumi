@@ -7,7 +7,7 @@ import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megu
 import { runModelToolLoop } from '@megumi/coding-agent/run';
 import type {
   PendingToolApproval,
-  PendingToolApprovalContinuation,
+  PendingToolApprovalResume,
 } from '@megumi/coding-agent/run/tool-calls';
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
@@ -403,7 +403,7 @@ describe('run model tool loop', () => {
     ]));
   });
 
-  it('uses continuation input-context builder before the next model step', async () => {
+  it('uses next model input context builder before the next model step', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     let callbackCallCount = 0;
     const events = await collect(runModelToolLoop({
@@ -454,7 +454,7 @@ describe('run model tool loop', () => {
         nextStepId: () => 'step-2',
         nextModelStepId: () => 'model-step-2',
       },
-      buildContinuationInputContext: async (input) => {
+      buildNextModelInputContext: async (input) => {
         callbackCallCount += 1;
         return buildModelCallInputContextFromSources({
           ...input,
@@ -486,7 +486,7 @@ describe('run model tool loop', () => {
 
   it('stops before requesting another model step when tool handling returns pending approvals', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const continuations: PendingToolApprovalContinuation[] = [];
+    const approvalResumes: PendingToolApprovalResume[] = [];
 
     const events = await collect(runModelToolLoop({
       request: createRequest(),
@@ -528,13 +528,13 @@ describe('run model tool loop', () => {
         nextStepId: () => 'step-2',
         nextModelStepId: () => 'model-step-2',
       },
-      onPendingApproval: (continuation) => {
-        continuations.push(continuation);
+      onPendingApproval: (approvalResume) => {
+        approvalResumes.push(approvalResume);
       },
     }));
 
     expect(requests).toHaveLength(1);
-    expect(continuations).toEqual([
+    expect(approvalResumes).toEqual([
       expect.objectContaining({
         pendingApproval: expect.objectContaining({
           approvalRequest: expect.objectContaining({
@@ -576,8 +576,8 @@ describe('run model tool loop', () => {
     ]);
   });
 
-  it('keeps pending approval continuation context ids within the shared id limit', async () => {
-    const continuations: PendingToolApprovalContinuation[] = [];
+  it('keeps pending approval resume context ids within the shared id limit', async () => {
+    const approvalResumes: PendingToolApprovalResume[] = [];
 
     await collect(runModelToolLoop({
       request: createRequest({
@@ -620,13 +620,13 @@ describe('run model tool loop', () => {
         nextStepId: () => 'step:22222222-2222-4333-8444-555555555555',
         nextModelStepId: () => 'model-step:22222222-2222-4333-8444-555555555555',
       },
-      onPendingApproval: (continuation) => {
-        continuations.push(continuation);
+      onPendingApproval: (approvalResume) => {
+        approvalResumes.push(approvalResume);
       },
     }));
 
-    expect(continuations[0]?.request.inputContext?.contextId.length).toBeLessThanOrEqual(128);
-    expect(continuations[0]?.request.inputContext?.contextId).toBe(
+    expect(approvalResumes[0]?.request.inputContext?.contextId.length).toBeLessThanOrEqual(128);
+    expect(approvalResumes[0]?.request.inputContext?.contextId).toBe(
       'model-input-context:step:11111111-2222-4333-8444-555555555555:approval',
     );
   });
@@ -845,7 +845,7 @@ describe('run model tool loop', () => {
     });
   });
 
-  it('does not continue to the provider when tool observations are not continuation-ready', async () => {
+  it('does not call the provider again when tool observations are not ready for the next model input', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const events = await collect(runModelToolLoop({
       request: createRequest(),
@@ -877,14 +877,14 @@ describe('run model tool loop', () => {
               metadata: { callOrder: 0 },
             })],
             pendingApprovals: [],
-            continuationReady: false,
+            nextModelInputReady: false,
           };
         },
       },
       ids: {
         nextEventId: () => `event-${Math.random().toString(36).slice(2)}`,
-        nextStepId: () => 'step-continuation',
-        nextModelStepId: () => 'model-step-continuation',
+        nextStepId: () => 'step-next-model-input',
+        nextModelStepId: () => 'model-step-next-model-input',
       },
     }));
 
@@ -954,7 +954,7 @@ describe('run model tool loop', () => {
     ]);
   });
 
-  it('builds fallback tool continuation context without context-management dependency', async () => {
+  it('builds fallback tool result model input context without context-management dependency', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
     await collect(runModelToolLoop({
@@ -1001,7 +1001,7 @@ describe('run model tool loop', () => {
     }));
 
     expect(requests).toHaveLength(2);
-    expect(requests[1]?.inputContext.contextId).toContain(':continuation');
+    expect(requests[1]?.inputContext.contextId).toContain(':tool-results');
     expect(requests[1]?.inputContext.parts.some((part) => part.kind === 'tool_continuation')).toBe(true);
   });
 

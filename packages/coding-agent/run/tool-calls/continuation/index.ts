@@ -1,3 +1,2 @@
-// Exposes continuation helpers for model calls after tool results are available.
-export * from './tool-result-continuation';
-export * from './tool-result-events';
+// Compatibility export while tool-call ownership moves to packages/coding-agent/agent-loop/tool-call.
+export * from '../../../agent-loop/tool-call/model-input';

@@ -11,13 +11,13 @@ import type {
 import { coalesceTextDeltaRuntimeEvents, modelCallInputBuildFailureToRuntimeError } from '../../events';
 import type { ModelCallPort } from '../../agent-loop/model-call';
 import type {
-  PendingToolApprovalContinuation,
+  PendingToolApprovalResume,
   ToolApprovalResumePort,
   ToolCallRunner,
-} from '../tool-calls/tool-call-contract';
+  ToolResultModelInputBuildInput,
+} from '../../agent-loop/tool-call';
 import {
   runModelToolLoop,
-  type ToolContinuationInputContextBuilderInput,
 } from './agent-loop';
 
 export interface CodingAgentRunSourceOverrideProvider {
@@ -32,8 +32,8 @@ export interface CodingAgentRunSourceOverrideProvider {
   >>;
 }
 
-export interface CodingAgentRunToolContinuationRecorder {
-  markToolContinuationEmitted(input: {
+export interface CodingAgentRunToolResultModelInputRecorder {
+  markToolResultsSubmittedToModelInput(input: {
     request: ModelStepRuntimeRequest;
     stepId: string;
     toolResults: readonly ToolResult[];
@@ -55,7 +55,7 @@ export interface CodingAgentModelToolLoopStreamPorts {
     buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
   };
   sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
-  toolContinuationRecorder?: CodingAgentRunToolContinuationRecorder;
+  toolResultModelInputRecorder?: CodingAgentRunToolResultModelInputRecorder;
   ids: CodingAgentModelToolLoopStreamIds;
 }
 
@@ -69,7 +69,7 @@ export interface CodingAgentModelToolLoopStreamInput {
     memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
   };
   signal?: AbortSignal;
-  onPendingApproval?: (continuation: PendingToolApprovalContinuation) => void;
+  onPendingApproval?: (approvalResume: PendingToolApprovalResume) => void;
 }
 
 export async function* streamCodingAgentModelToolLoop(
@@ -87,8 +87,8 @@ export async function* streamCodingAgentModelToolLoop(
         },
         signal: input.signal,
         onPendingApproval: input.onPendingApproval,
-        onToolContinuationEmitted: ({ request, toolResults, emittedAt }) => (
-          input.ports.toolContinuationRecorder?.markToolContinuationEmitted({
+        onToolResultsSubmittedToModelInput: ({ request, toolResults, emittedAt }) => (
+          input.ports.toolResultModelInputRecorder?.markToolResultsSubmittedToModelInput({
             request,
             stepId: request.stepId,
             toolResults,
@@ -96,7 +96,7 @@ export async function* streamCodingAgentModelToolLoop(
             sequence: 0,
           }) ?? []
         ),
-        buildContinuationInputContext: (contextInput) => buildContinuationInputContext({
+        buildNextModelInputContext: (contextInput) => buildNextModelInputContext({
           contextInput,
           request: input.request,
           projectRoot: input.projectRoot,
@@ -117,8 +117,8 @@ export async function* streamCodingAgentModelToolLoop(
   yield* coalesceTextDeltaRuntimeEvents(modelEvents);
 }
 
-async function buildContinuationInputContext(input: {
-  contextInput: ToolContinuationInputContextBuilderInput;
+async function buildNextModelInputContext(input: {
+  contextInput: ToolResultModelInputBuildInput;
   request: ModelStepRuntimeRequest;
   projectRoot?: string;
   permissionMode: PermissionMode;
@@ -128,7 +128,7 @@ async function buildContinuationInputContext(input: {
   };
   ports: CodingAgentModelToolLoopStreamPorts;
 }): Promise<ModelInputContext> {
-  const continuationInput = await input.ports.modelCallInputBuildService.buildModelCallInput({
+  const nextModelInput = await input.ports.modelCallInputBuildService.buildModelCallInput({
     baseInputContext: input.contextInput.baseInputContext,
     requestId: input.request.requestId,
     sessionId: input.contextInput.sessionId,
@@ -154,9 +154,9 @@ async function buildContinuationInputContext(input: {
     builtAt: input.contextInput.builtAt,
   });
 
-  if (continuationInput.failure) {
-    throw modelCallInputBuildFailureToRuntimeError(continuationInput.failure);
+  if (nextModelInput.failure) {
+    throw modelCallInputBuildFailureToRuntimeError(nextModelInput.failure);
   }
 
-  return continuationInput.inputContext;
+  return nextModelInput.inputContext;
 }

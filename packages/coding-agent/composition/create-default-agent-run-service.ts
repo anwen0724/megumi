@@ -15,6 +15,7 @@ import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { RunCompletionHooksCoordinator } from '../run/completion';
 import { RunTerminalCoordinator } from '../state';
 import { RunRetryCoordinator } from '../run/lifecycle';
+import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository-adapter';
 
 export interface CreateDefaultAgentRunServiceOptions {
   contextService?: SessionRunContextService;
@@ -51,7 +52,7 @@ export function createDefaultAgentRunService(
     }),
     sessionCompactionRepository: persistence.sessionContextRepository,
     activePathRepository,
-    toolRepository,
+    toolRepository: createAgentRunToolRepositoryAdapter(toolRepository),
     toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),
     permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
     planArtifactService: new PlanArtifactService({ repository: permissionSnapshotRepository }),

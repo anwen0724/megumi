@@ -29,9 +29,9 @@ import {
   type CodingAgentRunSourceOverrideProvider,
 } from '../loop/model-tool-loop-stream';
 import type {
-  PendingToolApprovalContinuation,
-} from '../tool-calls/tool-call-contract';
-import type { ToolCallRunnerService } from '../tool-calls';
+  PendingToolApprovalResume,
+} from '../../agent-loop/tool-call';
+import type { ToolCallRunnerService } from '../../agent-loop/tool-call';
 
 export interface CodingAgentRunClock {
   now(): string;
@@ -135,7 +135,7 @@ export interface CodingAgentRunEventRecorder {
   recordModelCallEvents(input: {
     request: ModelStepRuntimeRequest;
     modelEvents: AsyncIterable<RuntimeEvent>;
-    pendingContinuations: PendingToolApprovalContinuation[];
+    pendingApprovalResumes: PendingToolApprovalResume[];
     run: Run;
     step: RunStep;
     userMessageId: string;
@@ -458,7 +458,7 @@ export class RunTurn {
         return;
       }
 
-      const pendingContinuations: PendingToolApprovalContinuation[] = [];
+      const pendingApprovalResumes: PendingToolApprovalResume[] = [];
       const modelEvents = streamCodingAgentModelToolLoop({
         request: modelCallRequest,
         ports: {
@@ -467,9 +467,9 @@ export class RunTurn {
           modelCallInputBuildService: this.options.modelCallInputBuildService,
           sourceOverrideProvider: this.options.sourceOverrideProvider,
           ...(toolRuntime ? {
-            toolContinuationRecorder: {
-              markToolContinuationEmitted: (recorderInput) => {
-                const event = toolRuntime.markToolContinuationEmitted(recorderInput);
+            toolResultModelInputRecorder: {
+              markToolResultsSubmittedToModelInput: (recorderInput) => {
+                const event = toolRuntime.markToolResultsSubmittedToModelInput(recorderInput);
                 return event ? [event] : [];
               },
             },
@@ -485,14 +485,14 @@ export class RunTurn {
         permissionMode: input.permissionMode,
         memoryRecall,
         onPendingApproval: (pending) => {
-          pendingContinuations.push(pending);
+          pendingApprovalResumes.push(pending);
         },
       });
 
       yield* this.options.runEventRecorder.recordModelCallEvents({
         request: modelCallRequest,
         modelEvents,
-        pendingContinuations,
+        pendingApprovalResumes,
         run: input.run,
         step: input.step,
         userMessageId: String(input.userMessage.messageId),

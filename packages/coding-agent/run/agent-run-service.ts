@@ -12,10 +12,10 @@ import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   ensureToolCallRunnerService,
   PendingApprovalRegistry,
-  type PendingToolApprovalContinuation,
+  type PendingToolApprovalResume,
   type ResumeToolApprovalInput,
   type ToolCallRunnerService,
-} from './tool-calls';
+} from '../agent-loop/tool-call';
 import {
   ModelCallInputBuildService,
   SessionCompactionOrchestrator,
@@ -52,7 +52,6 @@ import {
   modelCallInputBuildFailureToRuntimeError,
 } from '../events';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   RunContext,
@@ -137,6 +136,7 @@ import type {
   AgentRunSessionContextRepositoryPort,
   AgentRunSessionRepositoryPort,
   AgentRunTerminalCoordinatorPort,
+  AgentRunToolRepositoryPort,
   AgentRunToolRuntimeFactory,
   SessionRunContextService,
   SessionRunEffectiveCwdProvider,
@@ -153,7 +153,7 @@ import type {
   SessionRunWorkspaceChangeReadPort,
 } from './run-contract';
 
-interface ApprovalContinuationGroup {
+interface ApprovalResumeGroup {
   groupId: string;
   request: ModelStepRuntimeRequest;
   run: Run;
@@ -162,7 +162,7 @@ interface ApprovalContinuationGroup {
   projectRoot?: string;
   permissionMode?: PermissionMode;
   userMessageId: string;
-  pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
+  pendingByApprovalId: Map<string, PendingToolApprovalResume>;
   resolvedResults: ToolResult[];
   toolRuntime: ToolCallRunnerService;
   memoryRecallSources?: ModelInputMemoryRecallSource[];
@@ -221,10 +221,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
   private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
-  private readonly toolRepository?: Pick<
-    ToolRepository,
-    'cancelPendingApprovalRequestsByRun' | 'cancelPendingToolExecutionsByRun' | 'failRunningToolExecutionsByRun' | 'markToolContinuationEmitted'
-  >;
+  private readonly toolRepository?: AgentRunToolRepositoryPort;
   private readonly modelCallInputBuildService: SessionRunModelCallInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
   private readonly memorySettingsProvider?: SessionRunMemorySettingsProvider;
@@ -245,7 +242,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly runTerminalCoordinator: AgentRunTerminalCoordinatorPort;
   private readonly runRetryCoordinator: AgentRunRetryCoordinatorPort;
   private readonly runCompletionHooks: AgentRunCompletionHooksPort;
-  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalContinuationGroup>({
+  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
   });
   private readonly activeSessionMessageRuns = new Map<string, {
@@ -544,7 +541,9 @@ export class AgentRunService implements AgentRunPort {
           create: async (factoryInput) => ensureToolCallRunnerService(
             await this.toolRuntimeFactory!.create(factoryInput),
             {
-              continuationRepository: this.toolRepository,
+              modelInputEmissionRepository: this.toolRepository
+                ? { markToolResultsSubmittedToModelInput: (request) => this.toolRepository?.markToolResultsSubmittedToModelInput(request) }
+                : undefined,
               ids: this.ids,
             },
           ),
@@ -882,17 +881,17 @@ export class AgentRunService implements AgentRunPort {
   }
 
   resumeApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined {
-    const continuation = this.pendingApprovalRegistry.getByApprovalId(input.approvalRequestId);
-    if (!continuation) {
+    const approvalResume = this.pendingApprovalRegistry.getByApprovalId(input.approvalRequestId);
+    if (!approvalResume) {
       return undefined;
     }
-    const persistedRun = this.runRecordRepository.getRun(continuation.request.runId) ?? continuation.run;
+    const persistedRun = this.runRecordRepository.getRun(approvalResume.request.runId) ?? approvalResume.run;
     if (!canResumeApprovalFromRunStatus(persistedRun.status)) {
-      this.cancelPendingApprovalGroupsByRun(continuation.request.runId);
+      this.cancelPendingApprovalGroupsByRun(approvalResume.request.runId);
       return undefined;
     }
 
-    return this.resumeApprovalContinuation(continuation, input);
+    return this.resumeToolApprovalRun(approvalResume, input);
   }
 
   cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] } {
@@ -1092,7 +1091,7 @@ export class AgentRunService implements AgentRunPort {
   private async *persistModelCallEvents(input: {
     request: ModelStepRuntimeRequest;
     modelEvents: AsyncIterable<RuntimeEvent>;
-    pendingContinuations: PendingToolApprovalContinuation[];
+    pendingApprovalResumes: PendingToolApprovalResume[];
     run: Run;
     step: RunStep;
     userMessageId: string;
@@ -1111,11 +1110,11 @@ export class AgentRunService implements AgentRunPort {
     let lastSequence = input.startSequence ?? 0;
     let terminalEvent: RuntimeEvent | undefined;
     let currentModelStep = input.step;
-    let registeredPendingGroup: ApprovalContinuationGroup | undefined;
+    let registeredPendingGroup: ApprovalResumeGroup | undefined;
     const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
 
-    const registerPendingApprovalGroup = (): ApprovalContinuationGroup | undefined => {
-      if (registeredPendingGroup || input.pendingContinuations.length === 0 || !toolRuntime) {
+    const registerPendingApprovalGroup = (): ApprovalResumeGroup | undefined => {
+      if (registeredPendingGroup || input.pendingApprovalResumes.length === 0 || !toolRuntime) {
         return registeredPendingGroup;
       }
 
@@ -1131,7 +1130,7 @@ export class AgentRunService implements AgentRunPort {
       });
       currentModelStep = waitingStep;
       const groupId = `${input.request.runId}:${input.request.stepId}:${this.ids.eventId()}`;
-      const group: ApprovalContinuationGroup = {
+      const group: ApprovalResumeGroup = {
         groupId,
         request: input.request,
         run: waitingRun,
@@ -1140,7 +1139,7 @@ export class AgentRunService implements AgentRunPort {
         ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
         ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
         userMessageId: input.userMessageId,
-        pendingByApprovalId: new Map(input.pendingContinuations.map((pending) => [
+        pendingByApprovalId: new Map(input.pendingApprovalResumes.map((pending) => [
           pending.pendingApproval.approvalRequest.approvalRequestId,
           pending,
         ])),
@@ -1230,7 +1229,7 @@ export class AgentRunService implements AgentRunPort {
       yield failedEvent;
     }
 
-    if (input.pendingContinuations.length > 0 && toolRuntime) {
+    if (input.pendingApprovalResumes.length > 0 && toolRuntime) {
       const waitingAt = this.clock.now();
       registerPendingApprovalGroup();
       const waitingEvent = withRequestMetadata(createRunStatusChangedEvent({
@@ -1550,26 +1549,26 @@ export class AgentRunService implements AgentRunPort {
     return this.planArtifactService;
   }
 
-  private async *resumeApprovalContinuation(
-    continuation: ApprovalContinuationGroup,
+  private async *resumeToolApprovalRun(
+    approvalResume: ApprovalResumeGroup,
     input: ResumeToolApprovalInput,
   ): AsyncIterable<RuntimeEvent> {
-    const pending = continuation.pendingByApprovalId.get(input.approvalRequestId);
+    const pending = approvalResume.pendingByApprovalId.get(input.approvalRequestId);
     if (!pending) {
       return;
     }
 
-    const resumeOutcome = await continuation.toolRuntime.resumeToolApproval(input);
+    const resumeOutcome = await approvalResume.toolRuntime.resumeToolApproval(input);
     if (!resumeOutcome) {
       return;
     }
     const toolResults = [...(resumeOutcome.toolResults ?? (resumeOutcome.toolResult ? [resumeOutcome.toolResult] : []))];
-    const chatStreamAdapter = continuation.chatStreamAdapter;
+    const chatStreamAdapter = approvalResume.chatStreamAdapter;
 
-    let lastSequence = nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(continuation.request.runId));
-    const resolvedPending = continuation.toolRuntime.resolvePendingApproval({
+    let lastSequence = nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(approvalResume.request.runId));
+    const resolvedPending = approvalResume.toolRuntime.resolvePendingApproval({
       registry: this.pendingApprovalRegistry,
-      group: continuation,
+      group: approvalResume,
       approvalRequestId: input.approvalRequestId,
       resolvedResults: toolResults,
     });
@@ -1577,9 +1576,9 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    const approvalResolvedEvent = continuation.toolRuntime.createApprovalResolvedRuntimeEvent({
-      request: continuation.request,
-      stepId: continuation.step.stepId,
+    const approvalResolvedEvent = approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent({
+      request: approvalResume.request,
+      stepId: approvalResume.step.stepId,
       sequence: lastSequence += 1,
       approvalRequestId: input.approvalRequestId,
       decision: input.decision,
@@ -1591,13 +1590,13 @@ export class AgentRunService implements AgentRunPort {
     yield approvalResolvedEvent;
 
     if (
-      continuation.pendingByApprovalId.size > 0
+      approvalResume.pendingByApprovalId.size > 0
       || (resumeOutcome.pendingApprovals?.length ?? 0) > 0
-      || resumeOutcome.continuationReady === false
+      || resumeOutcome.nextModelInputReady === false
     ) {
-      const resumeEvents = continuation.toolRuntime.collectApprovalResumeRuntimeEvents({
-        request: continuation.request,
-        stepId: continuation.step.stepId,
+      const resumeEvents = approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents({
+        request: approvalResume.request,
+        stepId: approvalResume.step.stepId,
         lastSequence,
         outcome: resumeOutcome,
         toolResults,
@@ -1611,13 +1610,13 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    continuation.toolRuntime.closePendingApprovalGroup({
+    approvalResume.toolRuntime.closePendingApprovalGroup({
       registry: this.pendingApprovalRegistry,
-      group: continuation,
+      group: approvalResume,
     });
     const resumedRun = resumeRunAfterApproval({
-      request: continuation.request,
-      fallbackRun: continuation.run,
+      request: approvalResume.request,
+      fallbackRun: approvalResume.run,
       repository: this.runRecordRepository,
       ids: this.ids,
       decidedAt: input.decidedAt,
@@ -1628,9 +1627,9 @@ export class AgentRunService implements AgentRunPort {
     this.appendRuntimeEvent(resumedRun.event, chatStreamAdapter);
     yield resumedRun.event;
 
-    const resumeEvents = continuation.toolRuntime.collectApprovalResumeRuntimeEvents({
-      request: continuation.request,
-      stepId: continuation.step.stepId,
+    const resumeEvents = approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents({
+      request: approvalResume.request,
+      stepId: approvalResume.step.stepId,
       lastSequence,
       outcome: resumeOutcome,
       toolResults,
@@ -1642,14 +1641,14 @@ export class AgentRunService implements AgentRunPort {
       yield event;
     }
 
-    const resumed = await continuation.toolRuntime.prepareApprovalResumeModelInput({
+    const resumed = await approvalResume.toolRuntime.prepareApprovalResumeModelInput({
       pending,
-      resolvedResults: continuation.resolvedResults,
+      resolvedResults: approvalResume.resolvedResults,
       decidedAt: input.decidedAt,
-      ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
-      ...(continuation.permissionMode ? { permissionMode: continuation.permissionMode } : {}),
-      ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
-      ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
+      ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
+      ...(approvalResume.permissionMode ? { permissionMode: approvalResume.permissionMode } : {}),
+      ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
+      ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
       repository: this.runExecutionFactRepository,
       modelCallInputBuildService: this.modelCallInputBuildService,
       sourceOverrideProvider: {
@@ -1673,23 +1672,23 @@ export class AgentRunService implements AgentRunPort {
       });
       return;
     }
-    const continuationEmittedEvent = continuation.toolRuntime.markToolContinuationEmitted({
+    const toolResultsSubmittedEvent = approvalResume.toolRuntime.markToolResultsSubmittedToModelInput({
       request: pending.request,
       stepId: resumedStep.stepId,
       toolResults: resumedToolResults,
       emittedAt: input.decidedAt,
       sequence: lastSequence += 1,
     });
-    if (continuationEmittedEvent) {
-      this.appendRuntimeEvent(continuationEmittedEvent, chatStreamAdapter);
-      yield continuationEmittedEvent;
+    if (toolResultsSubmittedEvent) {
+      this.appendRuntimeEvent(toolResultsSubmittedEvent, chatStreamAdapter);
+      yield toolResultsSubmittedEvent;
     }
     const resumedLoop = streamApprovalResumeModelLoop({
       pendingRequest: pending.request,
       resumedStep,
       resumedInputContext: resumedModelInput.inputContext,
       decidedAt: input.decidedAt,
-      toolRuntime: continuation.toolRuntime,
+      toolRuntime: approvalResume.toolRuntime,
       modelCallPort: {
         streamModelCall: ({ request }) => this.requireModelStepProvider().streamModelCall(request),
       },
@@ -1712,29 +1711,29 @@ export class AgentRunService implements AgentRunPort {
         },
         nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
       },
-      ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
-      permissionMode: continuation.permissionMode ?? 'default',
+      ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
+      permissionMode: approvalResume.permissionMode ?? 'default',
       memoryRecall: {
-        ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
-        ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
+        ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
+        ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
       },
     });
 
     yield* this.persistModelCallEvents({
       request: resumedLoop.request,
       modelEvents: resumedLoop.modelEvents,
-      pendingContinuations: resumedLoop.pendingContinuations,
+      pendingApprovalResumes: resumedLoop.pendingApprovalResumes,
       run: runningRun,
       step: resumedStep,
-      userMessageId: continuation.userMessageId,
+      userMessageId: approvalResume.userMessageId,
       startSequence: lastSequence,
-      toolRuntime: continuation.toolRuntime,
-      ...(continuation.projectId ? { projectId: continuation.projectId } : {}),
-      ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
+      toolRuntime: approvalResume.toolRuntime,
+      ...(approvalResume.projectId ? { projectId: approvalResume.projectId } : {}),
+      ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
       ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
-      ...(continuation.permissionMode ? { permissionMode: continuation.permissionMode } : {}),
-      ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
-      ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
+      ...(approvalResume.permissionMode ? { permissionMode: approvalResume.permissionMode } : {}),
+      ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
+      ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
     });
   }
 

@@ -42,6 +42,7 @@ import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
 } from '../workspace';
+import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository-adapter';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -163,7 +164,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     modelStepProvider: options.modelStepProviderService,
     toolRuntimeFactory: options.toolRuntimeFactory,
     toolDefinitionProvider: options.toolRegistry,
-    toolRepository: options.toolRepository,
+    toolRepository: createAgentRunToolRepositoryAdapter(options.toolRepository),
     workspaceChanges,
     chatStreamEventSink: options.chatStreamEventSink,
     memoryRecallService: options.memoryRuntime.recallService,

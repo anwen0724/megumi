@@ -21,7 +21,7 @@ describe('approval resume model loop owner', () => {
             toolResults: [],
             pendingApprovals: [],
             runtimeEvents: [],
-            continuationReady: true,
+            nextModelInputReady: true,
           };
         },
         async resumeToolApproval() {
@@ -36,7 +36,7 @@ describe('approval resume model loop owner', () => {
       },
       modelCallInputBuildService: {
         async buildModelCallInput() {
-          throw new Error('Continuation context should not be built for a terminal resumed model call.');
+          throw new Error('Next model input context should not be built for a terminal resumed model call.');
         },
       },
       sourceOverrideProvider: {
@@ -53,7 +53,7 @@ describe('approval resume model loop owner', () => {
 
     const events = await collect(modelEvents.modelEvents);
 
-    expect(modelEvents.pendingContinuations).toEqual([]);
+    expect(modelEvents.pendingApprovalResumes).toEqual([]);
     expect(events.map((event) => event.eventType)).toEqual(['model.step.started']);
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({

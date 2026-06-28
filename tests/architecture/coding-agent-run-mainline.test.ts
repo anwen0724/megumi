@@ -102,13 +102,13 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('retryAttemptSourceRef');
   });
 
-  it('keeps pending approval indexing in the tool-calls approval module', () => {
+  it('keeps pending approval indexing in the agent-loop tool-call approval module', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
-    const registrySource = read('packages/coding-agent/run/tool-calls/approval/pending-approval-registry.ts');
+    const registrySource = read('packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts');
 
     expect(registrySource).toContain('export class PendingApprovalRegistry');
     expect(serviceSource).toContain('PendingApprovalRegistry');
-    expect(serviceSource).not.toContain('new Map<string, ApprovalContinuationGroup>');
+    expect(serviceSource).not.toContain('new Map<string, ApprovalResumeGroup>');
   });
 
   it('keeps model call context materialization split into focused part builders', () => {

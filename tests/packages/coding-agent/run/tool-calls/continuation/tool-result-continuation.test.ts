@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { awaitingApprovalRecord, terminalSucceededRecord } from '../tool-call-runner.test-harness';
 import {
-  buildContinuationToolResults,
-  continuationReady,
-} from '@megumi/coding-agent/run/tool-calls/continuation';
+  buildToolResultsForNextModelInput,
+  nextModelInputReady,
+} from '@megumi/coding-agent/agent-loop/tool-call/model-input';
 import type { ToolResult } from '@megumi/shared/tool';
 
-describe('tool-result-continuation', () => {
+describe('tool-result model input', () => {
   it('requires every record to be terminal with an observation', () => {
-    expect(continuationReady([])).toBe(true);
-    expect(continuationReady([terminalSucceededRecord('call-1', 1)])).toBe(true);
-    expect(continuationReady([awaitingApprovalRecord('call-2', 2)])).toBe(false);
-    expect(continuationReady([{ ...terminalSucceededRecord('call-3', 3), observation: undefined }])).toBe(false);
+    expect(nextModelInputReady([])).toBe(true);
+    expect(nextModelInputReady([terminalSucceededRecord('call-1', 1)])).toBe(true);
+    expect(nextModelInputReady([awaitingApprovalRecord('call-2', 2)])).toBe(false);
+    expect(nextModelInputReady([{ ...terminalSucceededRecord('call-3', 3), observation: undefined }])).toBe(false);
   });
 
   it('carries bounded observation envelope metadata into saved tool results', () => {
@@ -20,7 +20,7 @@ describe('tool-result-continuation', () => {
     if (!record.observation) {
       throw new Error('Expected terminal succeeded harness record to include an observation.');
     }
-    const results = buildContinuationToolResults({
+    const results = buildToolResultsForNextModelInput({
       repository: {
         saveToolResult: (toolResult: ToolResult) => {
           saved.push(toolResult);
