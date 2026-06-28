@@ -404,6 +404,7 @@ describe('package and file structure source guards', () => {
   it('keeps run service contracts off the concrete session-run repository type', () => {
     const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const runIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/index.ts'), 'utf8');
     const retryCoordinatorSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'),
       'utf8',
@@ -420,6 +421,7 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).toContain('export interface AgentRunModelStepRepositoryPort');
     expect(runContractSource).toContain('export interface AgentRunRuntimeEventRepositoryPort');
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
+    expect(runIndexSource).not.toContain("export * from '../state'");
   });
 
   it('keeps AgentRunService options on owner-named repository ports', () => {
