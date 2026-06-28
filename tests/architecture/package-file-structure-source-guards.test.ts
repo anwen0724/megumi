@@ -441,4 +441,19 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('sessionRunRepository');
     expect(agentRunServiceSource).toContain('repository: createDefaultAgentRunRepositoryPort(persistence)');
   });
+
+  it('keeps the session-run facade out of public persistence composition', () => {
+    const persistenceCompositionSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'),
+      'utf8',
+    );
+    const persistenceIndexSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/index.ts'),
+      'utf8',
+    );
+
+    expect(persistenceCompositionSource).not.toContain('SessionRunRepository');
+    expect(persistenceCompositionSource).not.toContain('sessionRunRepository');
+    expect(persistenceIndexSource).not.toContain('session-run.repo');
+  });
 });

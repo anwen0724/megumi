@@ -1,31 +1,52 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase } from '@megumi/coding-agent/persistence';
-import { ProjectRepository, SessionRunRepository, RecoveryRepository, TimelineMessageRepository } from '@megumi/coding-agent/persistence';
+import {
+  ProjectRepository,
+  RecoveryRepository,
+  RunRecordRepository,
+  SessionMessageRepository,
+  SessionRecordRepository,
+  TimelineMessageRepository,
+} from '@megumi/coding-agent/persistence';
+import type { Run } from '@megumi/shared/session';
+
+interface SessionRunSeedRepositories {
+  messageRepository: SessionMessageRepository;
+  runRepository: RunRecordRepository;
+}
 
 function setup() {
   const db = createDatabase(':memory:');
   migrateDatabase(db);
   const project = new ProjectRepository(db).upsertFromRepoPath({ repoPath: '/repo', now: '2026-06-24T00:00:00.000Z' });
-  const sessionRepo = new SessionRunRepository(db);
-  sessionRepo.saveSession({
+  const sessionRepository = new SessionRecordRepository(db);
+  const messageRepository = new SessionMessageRepository(db);
+  const runRepository = new RunRecordRepository(db);
+  sessionRepository.saveSession({
     sessionId: 'session-1', title: 'S', workspaceId: project.projectId, workspacePath: '/repo',
     status: 'active', createdAt: '2026-06-24T00:00:00.000Z', updatedAt: '2026-06-24T00:00:00.000Z',
   });
-  return { db, project, sessionRepo, recovery: new RecoveryRepository(db), timeline: new TimelineMessageRepository(db) };
+  return {
+    db,
+    project,
+    seedRepositories: { messageRepository, runRepository },
+    recovery: new RecoveryRepository(db),
+    timeline: new TimelineMessageRepository(db),
+  };
 }
 
-function saveRun(sessionRepo: SessionRunRepository, runId: string, status: string, createdAt = '2026-06-24T00:00:00.000Z', triggerMessageId?: string) {
-  sessionRepo.saveRun({
+function saveRun(seedRepositories: SessionRunSeedRepositories, runId: string, status: Run['status'], createdAt = '2026-06-24T00:00:00.000Z', triggerMessageId?: string) {
+  seedRepositories.runRepository.saveRun({
     runId, sessionId: 'session-1', mode: 'default', goal: 'g',
-    status: status as never, createdAt, startedAt: createdAt,
+    status, createdAt, startedAt: createdAt,
     ...(triggerMessageId ? { triggerMessageId } : {}),
     ...(status === 'failed' || status === 'cancelled' ? { completedAt: '2026-06-24T00:00:01.000Z' } : {}),
   });
 }
 
-function saveUserMessage(sessionRepo: SessionRunRepository, runId: string, messageId: string, content: string) {
-  sessionRepo.saveMessage({
+function saveUserMessage(seedRepositories: SessionRunSeedRepositories, runId: string, messageId: string, content: string) {
+  seedRepositories.messageRepository.saveMessage({
     messageId, sessionId: 'session-1', runId, role: 'user', content,
     status: 'completed', createdAt: '2026-06-24T00:00:00.000Z', completedAt: '2026-06-24T00:00:00.000Z',
   });
@@ -33,9 +54,9 @@ function saveUserMessage(sessionRepo: SessionRunRepository, runId: string, messa
 
 describe('listRunsNeedingTimelineBackfill', () => {
   it('returns failed and cancelled runs with no timeline commit', () => {
-    const { sessionRepo, recovery, project } = setup();
-    saveRun(sessionRepo, 'run-failed', 'failed');
-    saveRun(sessionRepo, 'run-cancelled', 'cancelled');
+    const { seedRepositories, recovery, project } = setup();
+    saveRun(seedRepositories, 'run-failed', 'failed');
+    saveRun(seedRepositories, 'run-cancelled', 'cancelled');
 
     const result = recovery.listRunsNeedingTimelineBackfill();
     expect(result.map((r) => r.runId).sort()).toEqual(['run-cancelled', 'run-failed']);
@@ -46,9 +67,9 @@ describe('listRunsNeedingTimelineBackfill', () => {
   });
 
   it('includes the triggering user message content for the prompt above the failure', () => {
-    const { sessionRepo, recovery } = setup();
-    saveUserMessage(sessionRepo, 'run-with-prompt', 'message-user-1', '我爱你');
-    saveRun(sessionRepo, 'run-with-prompt', 'failed', '2026-06-24T00:00:00.000Z', 'message-user-1');
+    const { seedRepositories, recovery } = setup();
+    saveUserMessage(seedRepositories, 'run-with-prompt', 'message-user-1', '我爱你');
+    saveRun(seedRepositories, 'run-with-prompt', 'failed', '2026-06-24T00:00:00.000Z', 'message-user-1');
 
     const result = recovery.listRunsNeedingTimelineBackfill();
     const run = result.find((r) => r.runId === 'run-with-prompt');
@@ -57,16 +78,16 @@ describe('listRunsNeedingTimelineBackfill', () => {
   });
 
   it('leaves trigger message fields null when the run has no trigger message', () => {
-    const { sessionRepo, recovery } = setup();
-    saveRun(sessionRepo, 'run-no-trigger', 'failed');
+    const { seedRepositories, recovery } = setup();
+    saveRun(seedRepositories, 'run-no-trigger', 'failed');
     const run = recovery.listRunsNeedingTimelineBackfill().find((r) => r.runId === 'run-no-trigger');
     expect(run?.triggerMessageId).toBeNull();
     expect(run?.triggerMessageContent).toBeNull();
   });
 
   it('excludes runs that already have a committed timeline', () => {
-    const { sessionRepo, recovery, timeline, project } = setup();
-    saveRun(sessionRepo, 'run-committed', 'failed');
+    const { seedRepositories, recovery, timeline, project } = setup();
+    saveRun(seedRepositories, 'run-committed', 'failed');
     timeline.commitRunTimeline({
       projectId: project.projectId, sessionId: 'session-1', runId: 'run-committed',
       committedAt: '2026-06-24T00:00:01.000Z', messages: [],
@@ -76,14 +97,14 @@ describe('listRunsNeedingTimelineBackfill', () => {
   });
 
   it('excludes in-progress runs that were never interrupted', () => {
-    const { sessionRepo, recovery } = setup();
-    saveRun(sessionRepo, 'run-running', 'running');
+    const { seedRepositories, recovery } = setup();
+    saveRun(seedRepositories, 'run-running', 'running');
     expect(recovery.listRunsNeedingTimelineBackfill().map((r) => r.runId)).toEqual([]);
   });
 
   it('includes a running run once it is marked interrupted', () => {
-    const { sessionRepo, recovery } = setup();
-    saveRun(sessionRepo, 'run-running', 'running');
+    const { seedRepositories, recovery } = setup();
+    saveRun(seedRepositories, 'run-running', 'running');
     recovery.markInterruptedRuns({
       markedAt: '2026-06-25T00:00:00.000Z', reason: 'app_restarted',
       createMarkerId: (runId) => `interrupted:${runId}`,
@@ -94,8 +115,8 @@ describe('listRunsNeedingTimelineBackfill', () => {
   });
 
   it('excludes completed runs', () => {
-    const { sessionRepo, recovery } = setup();
-    saveRun(sessionRepo, 'run-done', 'completed');
+    const { seedRepositories, recovery } = setup();
+    saveRun(seedRepositories, 'run-done', 'completed');
     expect(recovery.listRunsNeedingTimelineBackfill().map((r) => r.runId)).toEqual([]);
   });
 });

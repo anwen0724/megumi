@@ -41,7 +41,10 @@ describe('Desktop Main shell composition', () => {
     expect(productComposition).toContain('composeCodingAgentSessionRuntime');
     expect(productComposition).toContain('new ProviderSettingsService');
     expect(persistenceComposition).toContain('migrateDatabase(database)');
-    expect(persistenceComposition).toContain('new SessionRunRepository(database)');
+    expect(persistenceComposition).toContain('new SessionRecordRepository(database)');
+    expect(persistenceComposition).toContain('new RunRecordRepository(database)');
+    expect(persistenceComposition).toContain('new RuntimeEventRepository(database)');
+    expect(persistenceComposition).not.toContain('new SessionRunRepository(database)');
     expect(sessionComposition).toContain('new AgentRunService');
     expect(sessionComposition).toContain('new PermissionSnapshotService');
     expect(toolComposition).toContain('createToolCallRunner');

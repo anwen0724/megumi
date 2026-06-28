@@ -12,7 +12,9 @@ import {
   createDatabase,
   migrateDatabase,
   ProjectRepository,
-  SessionRunRepository,
+  RunRecordRepository,
+  SessionMessageRepository,
+  SessionRecordRepository,
 } from '@megumi/coding-agent/persistence';
 import {
   mergeRawAppSettings,
@@ -39,18 +41,20 @@ function seedOrphanRun(home: string, runId: string, status: 'failed' | 'cancelle
   try {
     migrateDatabase(db);
     const project = new ProjectRepository(db).upsertFromRepoPath({ repoPath: home, now: '2026-06-24T00:00:00.000Z' });
-    const sessionRepo = new SessionRunRepository(db);
-    const session = sessionRepo.saveSession({
+    const sessionRepository = new SessionRecordRepository(db);
+    const messageRepository = new SessionMessageRepository(db);
+    const runRepository = new RunRecordRepository(db);
+    const session = sessionRepository.saveSession({
       sessionId: `session-${runId}`, title: 'Old session', workspaceId: project.projectId, workspacePath: home,
       status: 'active', createdAt: '2026-06-23T00:00:00.000Z', updatedAt: '2026-06-23T00:00:00.000Z',
     });
     const triggerMessageId = `message-user-${runId}`;
-    sessionRepo.saveMessage({
+    messageRepository.saveMessage({
       messageId: triggerMessageId, sessionId: String(session.sessionId), runId, role: 'user',
       content: '我爱你', status: 'completed',
       createdAt: '2026-06-23T00:57:50.000Z', completedAt: '2026-06-23T00:57:50.000Z',
     });
-    sessionRepo.saveRun({
+    runRepository.saveRun({
       runId, sessionId: String(session.sessionId), mode: 'default', goal: 'do a thing',
       triggerMessageId,
       status, createdAt: '2026-06-23T00:57:50.000Z', startedAt: '2026-06-23T00:57:50.000Z',
