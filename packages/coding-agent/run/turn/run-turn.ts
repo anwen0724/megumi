@@ -7,7 +7,7 @@ import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/perm
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { ToolDefinition } from '@megumi/shared/tool';
 import type { ParsedInput } from '@megumi/coding-agent/input';
 import type {
   BuildModelCallInputInput,
@@ -30,9 +30,8 @@ import {
 } from '../loop/model-tool-loop-stream';
 import type {
   PendingToolApprovalContinuation,
-  ToolApprovalResumePort,
-  ToolCallRunner,
 } from '../tool-calls/tool-call-contract';
+import type { ToolCallRunnerService } from '../tool-calls';
 
 export interface CodingAgentRunClock {
   now(): string;
@@ -127,7 +126,7 @@ export interface CodingAgentRunToolCallRunnerFactory {
   create(input: {
     projectRoot: string;
     permissionMode: PermissionMode;
-  }): Promise<ToolCallRunner & ToolApprovalResumePort>;
+  }): Promise<ToolCallRunnerService>;
 }
 
 export interface CodingAgentRunEventRecorder {
@@ -140,7 +139,7 @@ export interface CodingAgentRunEventRecorder {
     run: Run;
     step: RunStep;
     userMessageId: string;
-    toolRuntime?: ToolCallRunner & ToolApprovalResumePort;
+    toolRuntime?: ToolCallRunnerService;
     projectId?: string;
     projectRoot?: string;
     permissionMode?: PermissionMode;
@@ -149,13 +148,6 @@ export interface CodingAgentRunEventRecorder {
     startSequence?: number;
   }): AsyncIterable<RuntimeEvent>;
 
-  markToolContinuationEmitted?(input: {
-    request: ModelStepRuntimeRequest;
-    stepId: string;
-    toolResults: readonly ToolResult[];
-    emittedAt: string;
-    sequence: number;
-  }): readonly RuntimeEvent[] | undefined;
 }
 
 export interface RunTurnOptions {
@@ -446,7 +438,7 @@ export class RunTurn {
         createdAt: input.createdAt,
       };
 
-      let toolRuntime: (ToolCallRunner & ToolApprovalResumePort) | undefined;
+      let toolRuntime: ToolCallRunnerService | undefined;
       try {
         toolRuntime = input.session.workspacePath && this.options.toolCallRunnerFactory
           ? await this.options.toolCallRunnerFactory.create({
@@ -474,10 +466,12 @@ export class RunTurn {
           ...(toolRuntime ? { toolCallHandler: toolRuntime } : {}),
           modelCallInputBuildService: this.options.modelCallInputBuildService,
           sourceOverrideProvider: this.options.sourceOverrideProvider,
-          ...(this.options.runEventRecorder.markToolContinuationEmitted ? {
+          ...(toolRuntime ? {
             toolContinuationRecorder: {
-              markToolContinuationEmitted: (recorderInput) =>
-                this.options.runEventRecorder.markToolContinuationEmitted?.(recorderInput),
+              markToolContinuationEmitted: (recorderInput) => {
+                const event = toolRuntime.markToolContinuationEmitted(recorderInput);
+                return event ? [event] : [];
+              },
             },
           } : {}),
           ids: {

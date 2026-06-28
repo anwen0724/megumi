@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { markToolContinuationEmitted } from '@megumi/coding-agent/run';
+import { markToolContinuationEmitted } from '@megumi/coding-agent/run/tool-calls/continuation/tool-continuation-emitted';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ToolResult } from '@megumi/shared/tool';
 

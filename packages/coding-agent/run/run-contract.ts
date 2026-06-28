@@ -69,6 +69,7 @@ import type {
   ToolApprovalResumePort,
   ToolCallRunner,
 } from './tool-calls';
+import type { ToolCallRunnerService } from './tool-calls';
 import type { ModelCallCompletionResult } from './model-call';
 import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
 import type {
@@ -411,7 +412,7 @@ export interface ApprovalContinuationGroup {
   userMessageId: string;
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
-  toolRuntime: ToolCallRunner & ToolApprovalResumePort;
+  toolRuntime: ToolCallRunnerService;
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
 }

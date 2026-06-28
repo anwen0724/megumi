@@ -34,13 +34,26 @@ import {
   type ToolExecutionDecisionInput,
 } from '../../permissions/tool-execution-decision';
 import { resumeToolApproval } from './approval/approval-resume';
+import {
+  collectApprovalResumeRuntimeEvents,
+  createApprovalResolvedRuntimeEvent,
+} from './approval/approval-resume-events';
+import {
+  closePendingApprovalGroup,
+  PendingApprovalRegistry,
+  resolvePendingApproval,
+} from './approval/pending-approval-registry';
+import { prepareApprovalResumeModelInput } from './approval/approval-resume-model-input';
 import { applyDecisionsToCreated, inferredDefinitionFields } from './approval/tool-call-approval';
 import { advanceExecutionWindows } from './execution/tool-execution-window';
+import { markToolContinuationEmitted } from './continuation/tool-continuation-emitted';
 import { outcomeFromRecords } from './continuation/tool-result-continuation';
 import type {
   CodingAgentToolExecutionHostPort,
   CodingAgentToolExecutionRunOptions,
 } from '../../tools/tool-execution-host-port';
+
+export { PendingApprovalRegistry };
 
 export interface ToolCallRunnerOutcome extends ToolCallRunOutcome {
   assistantMessageId: string;
@@ -61,6 +74,14 @@ export interface ToolApprovalResumeRunnerOutcome extends ResumeToolApprovalOutco
 export interface ToolCallRunnerService extends ToolCallRunner, ToolApprovalResumePort {
   handleToolCalls(input: HandleToolCallsInput): Promise<ToolCallRunnerOutcome>;
   resumeToolApproval(input: ResumeToolApprovalInput): Promise<ToolApprovalResumeRunnerOutcome | undefined>;
+  resolvePendingApproval: typeof resolvePendingApproval;
+  closePendingApprovalGroup: typeof closePendingApprovalGroup;
+  createApprovalResolvedRuntimeEvent: typeof createApprovalResolvedRuntimeEvent;
+  collectApprovalResumeRuntimeEvents: typeof collectApprovalResumeRuntimeEvents;
+  prepareApprovalResumeModelInput: typeof prepareApprovalResumeModelInput;
+  markToolContinuationEmitted(
+    input: Omit<Parameters<typeof markToolContinuationEmitted>[0], 'repository' | 'ids'>,
+  ): ReturnType<typeof markToolContinuationEmitted>;
 }
 
 export interface ToolCallRepositoryPort {
@@ -83,6 +104,10 @@ export interface ToolCallRepositoryPort {
   saveToolResult(toolResult: ToolResult): ToolResult;
   getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined;
   getRunSessionId(runId: string): string | undefined;
+  markToolContinuationEmitted?(input: {
+    toolExecutionIds: string[];
+    emittedAt: string;
+  }): void;
 }
 
 export interface ToolCallRunnerOptions {
@@ -110,9 +135,50 @@ export interface ToolCallRunnerOptions {
 
 export interface ResolvedToolCallRunnerOptions extends ToolCallRunnerOptions {
   now: () => string;
-  ids: NonNullable<ToolCallRunnerOptions['ids']>;
+  ids: NonNullable<ToolCallRunnerOptions['ids']> & { eventId(): string };
   runtimeCapabilityPolicy: ToolExecutionDecisionInput['runtimeCapabilityPolicy'];
   decisionEvaluator: NonNullable<ToolCallRunnerOptions['decisionEvaluator']>;
+}
+
+type ToolContinuationEmittedRepository = NonNullable<Parameters<typeof markToolContinuationEmitted>[0]['repository']>;
+type ToolContinuationEmittedIds = Parameters<typeof markToolContinuationEmitted>[0]['ids'];
+
+export function ensureToolCallRunnerService(
+  runner: ToolCallRunner & ToolApprovalResumePort,
+  options: {
+    continuationRepository?: ToolContinuationEmittedRepository;
+    ids?: ToolContinuationEmittedIds;
+  } = {},
+): ToolCallRunnerService {
+  const maybeRunner = runner as Partial<ToolCallRunnerService>;
+  if (
+    maybeRunner.resolvePendingApproval
+    && maybeRunner.closePendingApprovalGroup
+    && maybeRunner.createApprovalResolvedRuntimeEvent
+    && maybeRunner.collectApprovalResumeRuntimeEvents
+    && maybeRunner.prepareApprovalResumeModelInput
+    && maybeRunner.markToolContinuationEmitted
+  ) {
+    return runner as ToolCallRunnerService;
+  }
+
+  return Object.assign(runner, {
+    resolvePendingApproval,
+    closePendingApprovalGroup,
+    createApprovalResolvedRuntimeEvent,
+    collectApprovalResumeRuntimeEvents,
+    prepareApprovalResumeModelInput,
+    markToolContinuationEmitted(input: Omit<Parameters<typeof markToolContinuationEmitted>[0], 'repository' | 'ids'>) {
+      if (!options.ids) {
+        return undefined;
+      }
+      return markToolContinuationEmitted({
+        ...input,
+        repository: options.continuationRepository,
+        ids: options.ids,
+      });
+    },
+  }) as unknown as ToolCallRunnerService;
 }
 
 export function createToolCallRunner(
@@ -138,7 +204,27 @@ export function createToolCallRunner(
     async resumeToolApproval(input) {
       return resumeToolApproval(resolved, input);
     },
+    resolvePendingApproval,
+    closePendingApprovalGroup,
+    createApprovalResolvedRuntimeEvent,
+    collectApprovalResumeRuntimeEvents,
+    prepareApprovalResumeModelInput,
+    markToolContinuationEmitted(input) {
+      return markToolContinuationEmitted({
+        ...input,
+        repository: continuationEmittedRepository(resolved.repository),
+        ids: resolved.ids,
+      });
+    },
   };
+}
+
+function continuationEmittedRepository(
+  repository: ToolCallRepositoryPort,
+): ToolContinuationEmittedRepository | undefined {
+  return repository.markToolContinuationEmitted
+    ? { markToolContinuationEmitted: (input) => repository.markToolContinuationEmitted?.(input) }
+    : undefined;
 }
 
 
@@ -336,17 +422,25 @@ function createRejectedRecord(
 }
 
 function resolveOptions(options: ToolCallRunnerOptions): ResolvedToolCallRunnerOptions {
+  const ids = options.ids
+    ? {
+        ...options.ids,
+        eventId: options.ids.eventId ?? (() => `runtime-event:${crypto.randomUUID()}`),
+      }
+    : {
+        toolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
+        toolResultId: () => `tool-result:${crypto.randomUUID()}`,
+        permissionDecisionId: () => `permission-decision:${crypto.randomUUID()}`,
+        approvalRequestId: () => `approval-request:${crypto.randomUUID()}`,
+        rawToolResultId: () => `raw-tool-result:${crypto.randomUUID()}`,
+        observationId: () => `tool-observation:${crypto.randomUUID()}`,
+        eventId: () => `runtime-event:${crypto.randomUUID()}`,
+      };
+
   return {
     ...options,
     now: options.now ?? (() => new Date().toISOString()),
-    ids: options.ids ?? {
-      toolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
-      toolResultId: () => `tool-result:${crypto.randomUUID()}`,
-      permissionDecisionId: () => `permission-decision:${crypto.randomUUID()}`,
-      approvalRequestId: () => `approval-request:${crypto.randomUUID()}`,
-      rawToolResultId: () => `raw-tool-result:${crypto.randomUUID()}`,
-      observationId: () => `tool-observation:${crypto.randomUUID()}`,
-    },
+    ids,
     runtimeCapabilityPolicy: options.runtimeCapabilityPolicy ?? {
       customToolsEnabled: true,
       processExecutionEnabled: true,

@@ -526,6 +526,30 @@ describe('package and file structure source guards', () => {
     expect(approvalResumeModelInputSource).toContain('export async function prepareApprovalResumeModelInput');
   });
 
+  it('keeps approval resume internals behind ToolCallRunner public capabilities', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const toolCallsIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/tool-calls/index.ts'), 'utf8');
+    const toolCallRunnerSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'),
+      'utf8',
+    );
+
+    expect(toolCallsIndexSource).not.toContain("export * from './approval/");
+    expect(toolCallsIndexSource).not.toContain("export * from './continuation/");
+    expect(agentRunServiceSource).not.toContain('closePendingApprovalGroup,');
+    expect(agentRunServiceSource).not.toContain('collectApprovalResumeRuntimeEvents,');
+    expect(agentRunServiceSource).not.toContain('createApprovalResolvedRuntimeEvent,');
+    expect(agentRunServiceSource).not.toContain('markToolContinuationEmitted,');
+    expect(agentRunServiceSource).not.toContain('prepareApprovalResumeModelInput,');
+    expect(agentRunServiceSource).not.toContain('resolvePendingApproval,');
+    expect(agentRunServiceSource).toContain('continuation.toolRuntime.resumeToolApproval(input)');
+    expect(agentRunServiceSource).toContain('continuation.toolRuntime.createApprovalResolvedRuntimeEvent');
+    expect(agentRunServiceSource).toContain('continuation.toolRuntime.prepareApprovalResumeModelInput');
+    expect(toolCallRunnerSource).toContain('createApprovalResolvedRuntimeEvent');
+    expect(toolCallRunnerSource).toContain('prepareApprovalResumeModelInput');
+    expect(toolCallRunnerSource).toContain('markToolContinuationEmitted');
+  });
+
   it('keeps approval resume run status restoration in lifecycle', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeLifecyclePath = join(

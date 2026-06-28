@@ -4,7 +4,7 @@ import {
   PendingApprovalRegistry,
   closePendingApprovalGroup,
   resolvePendingApproval,
-} from '@megumi/coding-agent/run/tool-calls';
+} from '@megumi/coding-agent/run/tool-calls/approval/pending-approval-registry';
 
 interface TestGroup {
   groupId: string;

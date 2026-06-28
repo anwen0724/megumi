@@ -9,17 +9,11 @@ import { runTurn } from './lifecycle/run-lifecycle';
 import { resumeRunAfterApproval, type RunHostBoundaryPort } from './lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
+  ensureToolCallRunnerService,
   PendingApprovalRegistry,
-  closePendingApprovalGroup,
-  collectApprovalResumeRuntimeEvents,
-  createApprovalResolvedRuntimeEvent,
-  markToolContinuationEmitted,
-  prepareApprovalResumeModelInput,
-  resolvePendingApproval,
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
-  type ToolApprovalResumePort,
-  type ToolCallRunner,
+  type ToolCallRunnerService,
 } from './tool-calls';
 import {
   ModelCallInputBuildService,
@@ -168,7 +162,7 @@ interface ApprovalContinuationGroup {
   userMessageId: string;
   pendingByApprovalId: Map<string, PendingToolApprovalContinuation>;
   resolvedResults: ToolResult[];
-  toolRuntime: ToolCallRunner & ToolApprovalResumePort;
+  toolRuntime: ToolCallRunnerService;
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
   chatStreamAdapter?: ChatStreamEventAdapter;
@@ -545,7 +539,13 @@ export class AgentRunService implements AgentRunPort {
       },
       ...(this.toolRuntimeFactory ? {
         toolCallRunnerFactory: {
-          create: (factoryInput) => this.toolRuntimeFactory!.create(factoryInput),
+          create: async (factoryInput) => ensureToolCallRunnerService(
+            await this.toolRuntimeFactory!.create(factoryInput),
+            {
+              continuationRepository: this.toolRepository,
+              ids: this.ids,
+            },
+          ),
         },
       } : {}),
       modelCallInputBuildService: this.modelCallInputBuildService,
@@ -561,18 +561,6 @@ export class AgentRunService implements AgentRunPort {
             startedAt: svc.clock.now(),
           });
           return step.stepId;
-        },
-        markToolContinuationEmitted: ({ request, stepId, toolResults, emittedAt, sequence }) => {
-          const event = markToolContinuationEmitted({
-            request,
-            stepId,
-            toolResults,
-            emittedAt,
-            sequence,
-            repository: svc.toolRepository,
-            ids: svc.ids,
-          });
-          return event ? [event] : [];
         },
         recordModelCallEvents: (recordInput) => svc.persistModelCallEvents({
           ...recordInput,
@@ -1106,7 +1094,7 @@ export class AgentRunService implements AgentRunPort {
     run: Run;
     step: RunStep;
     userMessageId: string;
-    toolRuntime?: ToolCallRunner & ToolApprovalResumePort;
+    toolRuntime?: ToolCallRunnerService;
     chatStreamAdapter?: ChatStreamEventAdapter;
     projectId?: string;
     projectRoot?: string;
@@ -1577,7 +1565,7 @@ export class AgentRunService implements AgentRunPort {
     const chatStreamAdapter = continuation.chatStreamAdapter;
 
     let lastSequence = nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(continuation.request.runId));
-    const resolvedPending = resolvePendingApproval({
+    const resolvedPending = continuation.toolRuntime.resolvePendingApproval({
       registry: this.pendingApprovalRegistry,
       group: continuation,
       approvalRequestId: input.approvalRequestId,
@@ -1587,7 +1575,7 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    const approvalResolvedEvent = createApprovalResolvedRuntimeEvent({
+    const approvalResolvedEvent = continuation.toolRuntime.createApprovalResolvedRuntimeEvent({
       request: continuation.request,
       stepId: continuation.step.stepId,
       sequence: lastSequence += 1,
@@ -1605,7 +1593,7 @@ export class AgentRunService implements AgentRunPort {
       || (resumeOutcome.pendingApprovals?.length ?? 0) > 0
       || resumeOutcome.continuationReady === false
     ) {
-      const resumeEvents = collectApprovalResumeRuntimeEvents({
+      const resumeEvents = continuation.toolRuntime.collectApprovalResumeRuntimeEvents({
         request: continuation.request,
         stepId: continuation.step.stepId,
         lastSequence,
@@ -1621,7 +1609,7 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    closePendingApprovalGroup({
+    continuation.toolRuntime.closePendingApprovalGroup({
       registry: this.pendingApprovalRegistry,
       group: continuation,
     });
@@ -1638,7 +1626,7 @@ export class AgentRunService implements AgentRunPort {
     this.appendRuntimeEvent(resumedRun.event, chatStreamAdapter);
     yield resumedRun.event;
 
-    const resumeEvents = collectApprovalResumeRuntimeEvents({
+    const resumeEvents = continuation.toolRuntime.collectApprovalResumeRuntimeEvents({
       request: continuation.request,
       stepId: continuation.step.stepId,
       lastSequence,
@@ -1652,7 +1640,7 @@ export class AgentRunService implements AgentRunPort {
       yield event;
     }
 
-    const resumed = await prepareApprovalResumeModelInput({
+    const resumed = await continuation.toolRuntime.prepareApprovalResumeModelInput({
       pending,
       resolvedResults: continuation.resolvedResults,
       decidedAt: input.decidedAt,
@@ -1683,14 +1671,12 @@ export class AgentRunService implements AgentRunPort {
       });
       return;
     }
-    const continuationEmittedEvent = markToolContinuationEmitted({
+    const continuationEmittedEvent = continuation.toolRuntime.markToolContinuationEmitted({
       request: pending.request,
       stepId: resumedStep.stepId,
       toolResults: resumedToolResults,
       emittedAt: input.decidedAt,
       sequence: lastSequence += 1,
-      repository: this.toolRepository,
-      ids: this.ids,
     });
     if (continuationEmittedEvent) {
       this.appendRuntimeEvent(continuationEmittedEvent, chatStreamAdapter);
@@ -1718,14 +1704,12 @@ export class AgentRunService implements AgentRunPort {
         },
         toolContinuationRecorder: {
           markToolContinuationEmitted: ({ request, stepId, toolResults, emittedAt, sequence }) => {
-            const event = markToolContinuationEmitted({
+            const event = continuation.toolRuntime.markToolContinuationEmitted({
               request,
               stepId,
               toolResults,
               emittedAt,
               sequence,
-              repository: this.toolRepository,
-              ids: this.ids,
             });
             return event ? [event] : [];
           },
