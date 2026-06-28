@@ -15,6 +15,7 @@ import {
   type ToolCallRunnerService,
 } from '../agent-loop/tool-call';
 import {
+  DEFAULT_CONTEXT_BUDGET_POLICY,
   ModelCallInputBuildService,
   SessionCompactionOrchestrator,
   type BuildModelCallInputInput,
@@ -174,12 +175,6 @@ const DEFAULT_MODEL_CAPABILITY_SUMMARY: ModelCapabilitySummary = {
   providerId: 'unknown',
   modelId: 'unknown',
   modelContextWindow: 8192,
-};
-
-const DEFAULT_CONTEXT_BUDGET_POLICY: ContextBudgetPolicy = {
-  modelContextWindow: 8192,
-  reservedOutputTokens: 1024,
-  keepRecentTokens: 7168,
 };
 
 class EmptySessionActivePathRepository {

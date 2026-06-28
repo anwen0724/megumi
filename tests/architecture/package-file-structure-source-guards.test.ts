@@ -691,10 +691,14 @@ describe('package and file structure source guards', () => {
     const runTurnSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const contextEffectiveCwdSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/effective-cwd.ts'), 'utf8');
+    const modelInputContextBuilderSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/model-input-context-builder.ts'), 'utf8');
 
     expect(runTurnSource).toContain('resolveMemoryRecallEffectiveCwd');
     expect(runTurnSource).not.toContain('function resolveRecallEffectiveCwd');
+    expect(runTurnSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
     expect(agentRunServiceSource).not.toContain('function resolveRecallEffectiveCwd');
+    expect(agentRunServiceSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
+    expect(modelInputContextBuilderSource).toContain('export const DEFAULT_CONTEXT_BUDGET_POLICY');
     expect(contextEffectiveCwdSource).toContain('export function resolveMemoryRecallEffectiveCwd');
   });
 

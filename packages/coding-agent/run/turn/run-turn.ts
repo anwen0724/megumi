@@ -9,7 +9,10 @@ import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolDefinition } from '@megumi/shared/tool';
 import type { ParsedInput } from '@megumi/coding-agent/input';
-import { resolveMemoryRecallEffectiveCwd } from '../../context';
+import {
+  DEFAULT_CONTEXT_BUDGET_POLICY,
+  resolveMemoryRecallEffectiveCwd,
+} from '../../context';
 import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
@@ -203,12 +206,6 @@ const DEFAULT_MODEL_CAPABILITY_SUMMARY: ModelCapabilitySummary = {
   providerId: 'unknown',
   modelId: 'unknown',
   modelContextWindow: 8192,
-};
-
-const DEFAULT_CONTEXT_BUDGET_POLICY: ContextBudgetPolicy = {
-  modelContextWindow: 8192,
-  reservedOutputTokens: 1024,
-  keepRecentTokens: 7168,
 };
 
 export class RunTurn {
