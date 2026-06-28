@@ -11,6 +11,7 @@ import { RunCompletionHooksCoordinator } from './completion';
 import { runTurn } from './lifecycle/run-lifecycle';
 import type { RunHostBoundaryPort } from './lifecycle';
 import {
+  PendingApprovalRegistry,
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
   type ResumeToolApprovalOutcome,
@@ -262,8 +263,9 @@ export class AgentRunService implements AgentRunPort {
   private readonly runRetryCoordinator: RunRetryCoordinator;
   private readonly runCompletionHooks: RunCompletionHooksCoordinator;
   private readonly workspaceChanges?: SessionRunWorkspaceChangeReadPort;
-  private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
-  private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
+  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalContinuationGroup>({
+    getRunId: (group) => group.request.runId,
+  });
   private readonly activeSessionMessageRuns = new Map<string, {
     runId: string;
     sessionId: string;
@@ -910,7 +912,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   resumeApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined {
-    const continuation = this.pendingApprovals.get(input.approvalRequestId);
+    const continuation = this.pendingApprovalRegistry.getByApprovalId(input.approvalRequestId);
     if (!continuation) {
       return undefined;
     }
@@ -1178,10 +1180,7 @@ export class AgentRunService implements AgentRunPort {
         ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
         ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
       };
-      this.pendingApprovalGroups.set(groupId, group);
-      for (const approvalRequestId of group.pendingByApprovalId.keys()) {
-        this.pendingApprovals.set(approvalRequestId, group);
-      }
+      this.pendingApprovalRegistry.register(group);
       registeredPendingGroup = group;
       return group;
     };
@@ -1546,15 +1545,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   private cancelPendingApprovalGroupsByRun(runId: string): void {
-    for (const [groupId, group] of this.pendingApprovalGroups.entries()) {
-      if (group.request.runId !== runId) {
-        continue;
-      }
-      for (const approvalRequestId of group.pendingByApprovalId.keys()) {
-        this.pendingApprovals.delete(approvalRequestId);
-      }
-      this.pendingApprovalGroups.delete(groupId);
-    }
+    this.pendingApprovalRegistry.cancelByRun(runId);
   }
 
   private requireModelStepProvider(): AgentRunModelStepProvider {
@@ -1607,7 +1598,7 @@ export class AgentRunService implements AgentRunPort {
 
     let lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(continuation.request.runId));
     continuation.pendingByApprovalId.delete(input.approvalRequestId);
-    this.pendingApprovals.delete(input.approvalRequestId);
+    this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId);
     continuation.resolvedResults.push(...toolResults);
 
     const approvalResolvedEvent = withRequestMetadata(createRuntimeEvent({
@@ -1665,7 +1656,7 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    this.pendingApprovalGroups.delete(continuation.groupId);
+    this.pendingApprovalRegistry.deleteGroup(continuation.groupId);
     const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
     assertRunStatusTransition(persistedRun.status, 'running');
     const runningRun = this.repository.saveRun({

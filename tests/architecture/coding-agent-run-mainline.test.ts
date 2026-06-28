@@ -102,6 +102,15 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('retryAttemptSourceRef');
   });
 
+  it('keeps pending approval indexing in the tool-calls approval module', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const registrySource = read('packages/coding-agent/run/tool-calls/approval/pending-approval-registry.ts');
+
+    expect(registrySource).toContain('export class PendingApprovalRegistry');
+    expect(serviceSource).toContain('PendingApprovalRegistry');
+    expect(serviceSource).not.toContain('new Map<string, ApprovalContinuationGroup>');
+  });
+
   it('keeps model call context materialization split into focused part builders', () => {
     for (const requiredPath of [
       'packages/coding-agent/run/context/parts/runtime-constraints.ts',

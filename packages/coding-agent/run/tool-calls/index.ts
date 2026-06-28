@@ -3,5 +3,6 @@ export * from './tool-call-contract';
 export * from './tool-call-runner';
 export * from './approval/tool-call-approval';
 export * from './approval/approval-resume';
+export * from './approval/pending-approval-registry';
 export * from './continuation/tool-result-continuation';
 export * from './continuation/tool-result-events';
