@@ -392,6 +392,20 @@ describe('package and file structure source guards', () => {
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
   });
 
+  it('keeps AgentRunService internals on owner-named repository ports', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+
+    expect(agentRunServiceSource).not.toContain('private readonly repository: AgentRunRepositoryPort');
+    expect(agentRunServiceSource).not.toContain('this.repository = options.repository');
+    expect(agentRunServiceSource).toContain('private readonly sessionRepository: AgentRunSessionRepositoryPort');
+    expect(agentRunServiceSource).toContain('private readonly runRecordRepository: AgentRunRunRecordRepositoryPort');
+    expect(agentRunServiceSource).toContain('private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort');
+    expect(agentRunServiceSource).toContain('sessionRepository: this.sessionRepository');
+    expect(agentRunServiceSource).toContain('repository: this.runTerminalRepository');
+    expect(agentRunServiceSource).toContain('repository: this.runRetryRepository');
+    expect(agentRunServiceSource).toContain('repository: this.runCompletionRepository');
+  });
+
   it('wires agent run service through split repository owner ports in session runtime composition', () => {
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),

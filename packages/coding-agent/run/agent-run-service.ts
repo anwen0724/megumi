@@ -125,12 +125,18 @@ import {
   isWorkspaceChangeFooterProjectorPort,
 } from '@megumi/coding-agent/workspace';
 import type {
+  AgentRunExecutionFactRepositoryPort,
+  AgentRunMessageRepositoryPort,
   AgentRunModelStepProvider,
+  AgentRunModelStepRepositoryPort,
   AgentRunPort,
-  AgentRunRepositoryPort,
+  AgentRunRunRecordRepositoryPort,
   AgentRunServiceClock,
   AgentRunServiceIds,
   AgentRunServiceOptions,
+  AgentRunRuntimeEventRepositoryPort,
+  AgentRunSessionContextRepositoryPort,
+  AgentRunSessionRepositoryPort,
   AgentRunToolRuntimeFactory,
   SessionRunContextService,
   SessionRunEffectiveCwdProvider,
@@ -220,7 +226,22 @@ function createDefaultIds(): AgentRunServiceIds {
 }
 
 export class AgentRunService implements AgentRunPort {
-  private readonly repository: AgentRunRepositoryPort;
+  private readonly sessionRepository: AgentRunSessionRepositoryPort;
+  private readonly messageRepository: AgentRunMessageRepositoryPort;
+  private readonly runRecordRepository: AgentRunRunRecordRepositoryPort;
+  private readonly runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;
+  private readonly modelStepRepository: AgentRunModelStepRepositoryPort;
+  private readonly sessionContextRepository: AgentRunSessionContextRepositoryPort;
+  private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
+  private readonly runCompletionRepository: AgentRunRunRecordRepositoryPort & AgentRunRuntimeEventRepositoryPort;
+  private readonly runTerminalRepository:
+    & AgentRunRunRecordRepositoryPort
+    & AgentRunExecutionFactRepositoryPort
+    & AgentRunRuntimeEventRepositoryPort;
+  private readonly runRetryRepository:
+    & AgentRunRunRecordRepositoryPort
+    & AgentRunMessageRepositoryPort
+    & AgentRunRuntimeEventRepositoryPort;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
   private readonly permissionSnapshotService?: Pick<
@@ -270,7 +291,17 @@ export class AgentRunService implements AgentRunPort {
   }>();
 
   constructor(options: AgentRunServiceOptions) {
-    this.repository = options.repository;
+    const repository = options.repository;
+    this.sessionRepository = repository;
+    this.messageRepository = repository;
+    this.runRecordRepository = repository;
+    this.runExecutionFactRepository = repository;
+    this.modelStepRepository = repository;
+    this.sessionContextRepository = repository;
+    this.runtimeEventRepository = repository;
+    this.runCompletionRepository = repository;
+    this.runTerminalRepository = repository;
+    this.runRetryRepository = repository;
     this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
     this.permissionSnapshotService = options.permissionSnapshotService;
@@ -290,12 +321,12 @@ export class AgentRunService implements AgentRunPort {
     this.runEffectiveCwdProvider = options.runEffectiveCwdProvider;
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
-        sessionRepository: this.repository,
-        messageRepository: this.repository,
-        runRepository: this.repository,
-        runExecutionFactRepository: this.repository,
-        runtimeEventRepository: this.repository,
-        sessionCompactionRepository: this.repository,
+        sessionRepository: this.sessionRepository,
+        messageRepository: this.messageRepository,
+        runRepository: this.runRecordRepository,
+        runExecutionFactRepository: this.runExecutionFactRepository,
+        runtimeEventRepository: this.runtimeEventRepository,
+        sessionCompactionRepository: this.sessionContextRepository,
         activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
       });
     this.modelCallInputBuildService = options.modelCallInputBuildService
@@ -309,7 +340,7 @@ export class AgentRunService implements AgentRunPort {
       ? createWorkspaceChangeFooterProjectorService({ workspaceChanges: options.workspaceChanges })
       : undefined;
     this.runCompletionHooks = new RunCompletionHooksCoordinator({
-      repository: this.repository,
+      repository: this.runCompletionRepository,
       ...(options.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
       ...(this.megumiHomePath ? { megumiHomePath: this.megumiHomePath } : {}),
       ...(options.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
@@ -318,12 +349,12 @@ export class AgentRunService implements AgentRunPort {
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.runTerminalCoordinator = new RunTerminalCoordinator({
-      repository: this.repository,
+      repository: this.runTerminalRepository,
       ...(this.toolRepository ? { toolRepository: this.toolRepository } : {}),
       ids: this.ids,
     });
     this.runRetryCoordinator = new RunRetryCoordinator({
-      repository: this.repository,
+      repository: this.runRetryRepository,
       ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
       ...(this.sessionBranchService ? { sessionBranchService: this.sessionBranchService } : {}),
       ids: this.ids,
@@ -513,7 +544,7 @@ export class AgentRunService implements AgentRunPort {
       eventPort: {
         append(event, requestId, runtimeContext) {
           const lastSeq = nextRuntimeSequence(
-            svc.repository.listRuntimeEventsByRun(event.runId ?? ''),
+            svc.runtimeEventRepository.listRuntimeEventsByRun(event.runId ?? ''),
           );
           const ev = withSessionMessageRequestMetadata(
             withSequenceAfter(event, lastSeq),
@@ -524,13 +555,13 @@ export class AgentRunService implements AgentRunPort {
         },
       },
       runStatePort: {
-        getRunStatus: (runId: string) => svc.repository.getRun(runId)?.status,
+        getRunStatus: (runId: string) => svc.runRecordRepository.getRun(runId)?.status,
       },
       failurePort: {
         async *failBeforeModelStep(failureInput) {
           const seq = Math.max(
             0,
-            nextRuntimeSequence(svc.repository.listRuntimeEventsByRun(String(failureInput.run.runId))),
+            nextRuntimeSequence(svc.runtimeEventRepository.listRuntimeEventsByRun(String(failureInput.run.runId))),
           );
           yield* svc.failRunBeforeModelStep({
             requestId: failureInput.requestId,
@@ -575,7 +606,7 @@ export class AgentRunService implements AgentRunPort {
       ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
       runEventRecorder: {
         createModelStep: ({ runId }) => {
-          const step = svc.repository.saveStep({
+          const step = svc.runExecutionFactRepository.saveStep({
             stepId: svc.ids.stepId(),
             runId,
             kind: 'model',
@@ -604,7 +635,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   async startRun(payload: RunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }> {
-    const session = this.repository.getSession(payload.sessionId);
+    const session = this.sessionRepository.getSession(payload.sessionId);
     const runId = this.ids.runId();
     const permissionModeState = getRunStartPermissionModeState(payload);
     const permissionSnapshot = this.permissionSnapshotService?.createPermissionSnapshot({
@@ -646,19 +677,19 @@ export class AgentRunService implements AgentRunPort {
       ...(initialContext ? { initialContext } : {}),
       lifecycle: {
         saveRun: (run) => {
-          this.repository.saveRun(run);
+          this.runRecordRepository.saveRun(run);
         },
         saveStep: (step) => {
-          this.repository.saveStep(step);
+          this.runExecutionFactRepository.saveStep(step);
         },
         saveAction: (action) => {
-          this.repository.saveAction(action);
+          this.runExecutionFactRepository.saveAction(action);
         },
         saveObservation: (observation) => {
-          this.repository.saveObservation(observation);
+          this.runExecutionFactRepository.saveObservation(observation);
         },
         appendEvent: (event) => {
-          this.repository.appendRuntimeEvent(event);
+          this.runtimeEventRepository.appendRuntimeEvent(event);
         },
       },
       hostBoundary: this.hostBoundary,
@@ -722,7 +753,7 @@ export class AgentRunService implements AgentRunPort {
       throw new Error('Session message send requires a user message.');
     }
 
-    const userMessage = this.repository.saveMessage({
+    const userMessage = this.messageRepository.saveMessage({
       messageId: this.ids.messageId(),
       sessionId: session.sessionId,
       runId,
@@ -756,7 +787,7 @@ export class AgentRunService implements AgentRunPort {
     }, {
       commandRegistry: BUILT_IN_INPUT_COMMAND_REGISTRY,
     });
-    const initialRun = this.repository.saveRun({
+    const initialRun = this.runRecordRepository.saveRun({
       runId,
       sessionId: session.sessionId,
       triggerMessageId: userMessage.messageId,
@@ -774,7 +805,7 @@ export class AgentRunService implements AgentRunPort {
       createdAt,
     });
     const run = permissionSnapshot
-      ? this.repository.saveRun({
+      ? this.runRecordRepository.saveRun({
           ...initialRun,
           permissionSnapshotRef: permissionSnapshot.permissionSnapshotId,
         })
@@ -799,7 +830,7 @@ export class AgentRunService implements AgentRunPort {
         runtimeContext: input.runtimeContext,
       });
     }
-    const step = this.repository.saveStep({
+    const step = this.runExecutionFactRepository.saveStep({
       stepId,
       runId,
       kind: 'model',
@@ -917,7 +948,7 @@ export class AgentRunService implements AgentRunPort {
     if (!continuation) {
       return undefined;
     }
-    const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
+    const persistedRun = this.runRecordRepository.getRun(continuation.request.runId) ?? continuation.run;
     if (!canResumeApprovalFromRunStatus(persistedRun.status)) {
       this.cancelPendingApprovalGroupsByRun(continuation.request.runId);
       return undefined;
@@ -971,7 +1002,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
-    return this.repository.listRuntimeEventsByRun(runId);
+    return this.runtimeEventRepository.listRuntimeEventsByRun(runId);
   }
 
   private async *trackActiveSessionMessageRun(
@@ -982,7 +1013,7 @@ export class AgentRunService implements AgentRunPort {
       yield* events;
     } finally {
       const activeRun = this.activeSessionMessageRuns.get(requestId);
-      const persistedRun = activeRun ? this.repository.getRun(activeRun.runId) : undefined;
+      const persistedRun = activeRun ? this.runRecordRepository.getRun(activeRun.runId) : undefined;
       if (persistedRun?.status !== 'waiting_for_approval') {
         this.activeSessionMessageRuns.delete(requestId);
       }
@@ -991,14 +1022,14 @@ export class AgentRunService implements AgentRunPort {
 
   private resolveSessionForMessage(payload: SessionMessageSendPayload): Session {
     if (payload.sessionId) {
-      const existing = this.repository.getSession(payload.sessionId);
+      const existing = this.sessionRepository.getSession(payload.sessionId);
       if (existing) {
         return existing;
       }
     }
 
     const createdAt = payload.createdAt;
-    return this.repository.saveSession({
+    return this.sessionRepository.saveSession({
       sessionId: payload.sessionId ?? this.ids.sessionId(),
       title: payload.context?.sessionTitle ?? 'New session',
       ...(payload.context?.workspaceId ? { workspaceId: payload.context.workspaceId } : {}),
@@ -1060,13 +1091,13 @@ export class AgentRunService implements AgentRunPort {
     chatStreamAdapter?: ChatStreamEventAdapter;
   }): AsyncIterable<RuntimeEvent> {
     let sequence = input.startSequence;
-    const failedRun = this.repository.saveRun({
+    const failedRun = this.runRecordRepository.saveRun({
       ...input.run,
       status: 'failed',
       completedAt: input.createdAt,
       error: input.error,
     });
-    const failedStep = this.repository.saveStep({
+    const failedStep = this.runExecutionFactRepository.saveStep({
       ...input.step,
       status: 'failed',
       completedAt: input.createdAt,
@@ -1150,13 +1181,13 @@ export class AgentRunService implements AgentRunPort {
         return registeredPendingGroup;
       }
 
-      const currentRun = this.repository.getRun(input.request.runId) ?? input.run;
+      const currentRun = this.runRecordRepository.getRun(input.request.runId) ?? input.run;
       assertRunStatusTransition(currentRun.status, 'waiting_for_approval');
-      const waitingRun = this.repository.saveRun({
+      const waitingRun = this.runRecordRepository.saveRun({
         ...currentRun,
         status: 'waiting_for_approval',
       });
-      const waitingStep = this.repository.saveStep({
+      const waitingStep = this.runExecutionFactRepository.saveStep({
         ...currentModelStep,
         status: 'waiting_for_approval',
       });
@@ -1191,12 +1222,12 @@ export class AgentRunService implements AgentRunPort {
     try {
       for await (const event of input.modelEvents) {
         registerPendingApprovalGroup();
-        lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(input.request.runId)));
+        lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(input.request.runId)));
         const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
         lastSequence = eventWithRequest.sequence;
         const eventStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
         if (!modelStepsById.has(eventStepId)) {
-          const persistedStep = this.repository.listStepsByRun(input.request.runId)
+          const persistedStep = this.runExecutionFactRepository.listStepsByRun(input.request.runId)
             .find((step) => step.stepId === eventStepId);
           if (persistedStep) {
             modelStepsById.set(persistedStep.stepId, persistedStep);
@@ -1241,10 +1272,10 @@ export class AgentRunService implements AgentRunPort {
         yield eventWithRequest;
       }
     } catch (error) {
-      if (this.repository.getRun(input.request.runId)?.status === 'cancelled') {
+      if (this.runRecordRepository.getRun(input.request.runId)?.status === 'cancelled') {
         return;
       }
-      lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.repository.listRuntimeEventsByRun(input.request.runId)));
+      lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(input.request.runId)));
       const failedEvent = withRequestMetadata({
         ...createRunFailedEvent({
           eventId: this.ids.eventId(),
@@ -1281,13 +1312,13 @@ export class AgentRunService implements AgentRunPort {
     const completedAt = this.clock.now();
     if (terminalEvent?.eventType === 'run.failed') {
       const error = getRunFailedError(terminalEvent.payload) ?? createFallbackRuntimeError('Run failed.');
-      const failedStep = this.repository.saveStep({
+      const failedStep = this.runExecutionFactRepository.saveStep({
         ...currentModelStep,
         status: 'failed',
         completedAt,
         error,
       });
-      this.repository.saveRun({
+      this.runRecordRepository.saveRun({
         ...input.run,
         status: 'failed',
         completedAt,
@@ -1331,12 +1362,12 @@ export class AgentRunService implements AgentRunPort {
     }
 
     if (terminalEvent?.eventType === 'run.cancelled') {
-      const cancelledStep = this.repository.saveStep({
+      const cancelledStep = this.runExecutionFactRepository.saveStep({
         ...currentModelStep,
         status: 'cancelled',
         completedAt,
       });
-      this.repository.saveRun({
+      this.runRecordRepository.saveRun({
         ...input.run,
         status: 'cancelled',
         cancelledAt: completedAt,
@@ -1373,7 +1404,7 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    const assistantMessage = this.repository.saveMessage({
+    const assistantMessage = this.messageRepository.saveMessage({
       messageId: this.ids.messageId(),
       sessionId: input.request.sessionId,
       runId: input.request.runId,
@@ -1389,12 +1420,12 @@ export class AgentRunService implements AgentRunPort {
       createdAt: completedAt,
     });
 
-    const completedStep = this.repository.saveStep({
+    const completedStep = this.runExecutionFactRepository.saveStep({
       ...currentModelStep,
       status: 'succeeded',
       completedAt,
     });
-    this.repository.saveRun({
+    this.runRecordRepository.saveRun({
       ...input.run,
       status: 'completed',
       completedAt,
@@ -1538,7 +1569,7 @@ export class AgentRunService implements AgentRunPort {
         chatStreamAdapter,
       });
     }
-    this.repository.appendRuntimeEvent(event);
+    this.runtimeEventRepository.appendRuntimeEvent(event);
     chatStreamAdapter?.handleRuntimeEvent?.(event);
     if (isRunTerminalRuntimeEvent(event)) {
       chatStreamAdapter?.dispose?.();
@@ -1597,7 +1628,7 @@ export class AgentRunService implements AgentRunPort {
     const toolResults = [...(resumeOutcome.toolResults ?? (resumeOutcome.toolResult ? [resumeOutcome.toolResult] : []))];
     const chatStreamAdapter = continuation.chatStreamAdapter;
 
-    let lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(continuation.request.runId));
+    let lastSequence = nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(continuation.request.runId));
     continuation.pendingByApprovalId.delete(input.approvalRequestId);
     this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId);
     continuation.resolvedResults.push(...toolResults);
@@ -1658,9 +1689,9 @@ export class AgentRunService implements AgentRunPort {
     }
 
     this.pendingApprovalRegistry.deleteGroup(continuation.groupId);
-    const persistedRun = this.repository.getRun(continuation.request.runId) ?? continuation.run;
+    const persistedRun = this.runRecordRepository.getRun(continuation.request.runId) ?? continuation.run;
     assertRunStatusTransition(persistedRun.status, 'running');
-    const runningRun = this.repository.saveRun({
+    const runningRun = this.runRecordRepository.saveRun({
       ...persistedRun,
       status: 'running',
     });
@@ -1703,7 +1734,7 @@ export class AgentRunService implements AgentRunPort {
       yield toolResultEvent;
     }
 
-    const resumedStep = this.repository.saveStep({
+    const resumedStep = this.runExecutionFactRepository.saveStep({
       stepId: this.ids.stepId(),
       runId: continuation.request.runId,
       kind: 'model',
@@ -1799,7 +1830,7 @@ export class AgentRunService implements AgentRunPort {
         ids: {
           nextEventId: this.ids.eventId,
           nextStepId: ({ runId }) => {
-            const step = this.repository.saveStep({
+            const step = this.runExecutionFactRepository.saveStep({
               stepId: this.ids.stepId(),
               runId,
               kind: 'model',
@@ -1973,8 +2004,8 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    const existing = this.repository.getModelStep(modelStepId);
-    this.repository.saveModelStep({
+    const existing = this.modelStepRepository.getModelStep(modelStepId);
+    this.modelStepRepository.saveModelStep({
       modelStepId,
       runId: request.runId,
       stepId: event.stepId ?? request.stepId ?? existing?.stepId ?? fallbackStepId,
@@ -2004,7 +2035,7 @@ export class AgentRunService implements AgentRunPort {
       return step;
     }
 
-    const completedStep = this.repository.saveStep({
+    const completedStep = this.runExecutionFactRepository.saveStep({
       ...step,
       status: 'succeeded',
       completedAt,
