@@ -10,19 +10,19 @@ import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from 
 import type { ToolDefinition } from '@megumi/shared/tool';
 import type { ParsedInput } from '@megumi/coding-agent/input';
 import {
-  DEFAULT_CONTEXT_BUDGET_POLICY,
-  resolveMemoryRecallEffectiveCwd,
+  AgentLoopInitialModelInputPreparationService,
 } from '../../context';
 import type {
+  AgentLoopInitialModelInputPreparation,
   BuildModelCallInputInput,
   BuildModelCallInputResult,
   CompactIfNeededInput,
   ModelInputMemoryRecallSource,
+  PrepareAgentLoopInitialModelInputInput,
   SessionCompactionOrchestrationResult,
 } from '../../context';
 import type { BuildSessionContextInputFromRepositoryInput } from '../../session';
 import { createRunFailedEvent, createRunStartedEvent } from '../../events';
-import { createCodingAgentRunInputFacts } from '../../input/facts';
 import {
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
@@ -181,6 +181,9 @@ export interface RunTurnOptions {
   compactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
+  initialModelInputPreparationService?: {
+    prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
+  };
   runEventRecorder: CodingAgentRunEventRecorder;
 }
 
@@ -202,86 +205,58 @@ export interface CodingAgentRunSessionMessageInput {
   memoryEnabled?: boolean;
 }
 
-const DEFAULT_MODEL_CAPABILITY_SUMMARY: ModelCapabilitySummary = {
-  providerId: 'unknown',
-  modelId: 'unknown',
-  modelContextWindow: 8192,
-};
-
 export class RunTurn {
-  constructor(private readonly options: RunTurnOptions) {}
+  private readonly initialModelInputPreparationService: {
+    prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
+  };
+
+  constructor(private readonly options: RunTurnOptions) {
+    this.initialModelInputPreparationService = options.initialModelInputPreparationService
+      ?? new AgentLoopInitialModelInputPreparationService({
+        contextService: options.contextService,
+        sessionContextInputService: options.sessionContextInputService,
+        sourceOverrideProvider: options.sourceOverrideProvider,
+        memoryRecallService: options.memoryRecallService,
+        modelCallInputBuildService: options.modelCallInputBuildService,
+        compactionOrchestrator: options.compactionOrchestrator,
+      });
+  }
 
   async *runSessionMessage(input: CodingAgentRunSessionMessageInput): AsyncIterable<RuntimeEvent> {
     const requestMeta = { requestId: input.requestId, runtimeContext: input.runtimeContext };
     let runStartedAppended = false;
 
     try {
-      // Build context / tool definitions / session context / memory before
-      // starting compaction so we can pass the result into the probe build.
-      const context = this.options.contextService?.createBaselineContext({
-        runId: String(input.run.runId),
-        goal: input.userMessage.content,
-        workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
-        workspacePath: input.session.workspacePath ?? '',
-        modelCapabilitySummary: DEFAULT_MODEL_CAPABILITY_SUMMARY,
-        contextBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
-      });
-      const budgetPolicy = context?.contextBudgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY;
+      // Tools still own registry snapshot selection; context owns all model input preparation.
       const providerCapabilitySummary = this.options.providerCapabilitySummaryProvider?.getProviderCapabilitySummary({
         providerId: String(input.providerId),
         modelId: input.modelId,
       }) ?? { supportsToolCall: true };
       const toolDefinitions = this.resolveToolDefinitions(input, providerCapabilitySummary, 0);
-      const sessionContext = this.options.sessionContextInputService.buildSessionContextInput({
-        sessionId: String(input.session.sessionId),
-        currentRunId: String(input.run.runId),
-        currentMessageId: String(input.userMessage.messageId),
-        builtAt: input.createdAt,
-      });
-      const modelInputSourceOverrides = this.options.sourceOverrideProvider.resolveModelInputSourceOverrides({
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        builtAt: input.createdAt,
-      });
-      const memoryRecall = await this.recallMemory(input, modelInputSourceOverrides.requestedCwd);
-      const runInputFacts = input.parsedInput ? createCodingAgentRunInputFacts(input.parsedInput) : undefined;
-
-      // Build compaction probe and start compaction asynchronously so that
-      // run.started is yielded while compaction may still be in-flight.
-      const compactionProbeModelInput = await this.options.modelCallInputBuildService.buildModelCallInput({
+      const initialModelInputPreparation = await this.initialModelInputPreparationService.prepare({
         requestId: input.requestId,
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        contextKind: 'compaction-probe',
-        providerId: String(input.providerId),
+        session: input.session,
+        run: input.run,
+        step: input.step,
+        userMessage: input.userMessage,
+        providerId: input.providerId,
         modelId: input.modelId,
-        modelContextWindow: budgetPolicy.modelContextWindow,
-        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-        ...modelInputSourceOverrides,
         permissionMode: input.permissionMode,
+        inputPreprocessing: input.inputPreprocessing,
+        ...(input.parsedInput ? { parsedInput: input.parsedInput } : {}),
         ...(input.permissionSnapshot ? {
           permissionSnapshot: input.permissionSnapshot,
           ...(input.permissionSnapshotRef ? { permissionSnapshotRef: input.permissionSnapshotRef } : {}),
         } : {}),
-        currentMessage: input.userMessage,
-        inputPreprocessing: input.inputPreprocessing,
-        sessionContext,
-        ...memoryRecall,
-        ...(runInputFacts ? { runInputFacts } : {}),
+        ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+        createdAt: input.createdAt,
+        ...(input.memoryEnabled !== undefined ? { memoryEnabled: input.memoryEnabled } : {}),
         ...(toolDefinitions.toolDefinitions ? { toolDefinitions: toolDefinitions.toolDefinitions } : {}),
-        budgetPolicy: {
-          modelContextWindow: Number.MAX_SAFE_INTEGER,
-          reservedOutputTokens: 0,
-          keepRecentTokens: Number.MAX_SAFE_INTEGER,
-        },
-        builtAt: input.createdAt,
       });
+      const memoryRecall = initialModelInputPreparation.memoryRecall;
 
       // If the probe already failed, yield run.started + the failure and return.
-      if (compactionProbeModelInput.failure) {
+      if (initialModelInputPreparation.compactionProbeModelInput.failure) {
         const runStarted = this.options.eventPort.append(
           createRunStartedEvent({
             eventId: this.options.ids.eventId(),
@@ -301,30 +276,17 @@ export class RunTurn {
           sessionId: String(input.session.sessionId),
           run: input.run,
           step: input.step,
-          error: modelCallInputBuildFailureToRuntimeError(compactionProbeModelInput.failure),
+          error: modelCallInputBuildFailureToRuntimeError(
+            initialModelInputPreparation.compactionProbeModelInput.failure,
+          ),
         });
         return;
       }
 
-      // Start compaction asynchronously so the caller can cancel the run
-      // while compaction is still in progress.
+      // Context has already built the compaction probe; start compaction
+      // before run.started so cancellation can happen while it is in-flight.
       const compactionPromise: Promise<SessionCompactionOrchestrationResult> =
-        this.options.compactionOrchestrator
-        ? this.options.compactionOrchestrator.compactIfNeeded({
-            requestId: input.requestId,
-            sessionId: String(input.session.sessionId),
-            runId: String(input.run.runId),
-            stepId: String(input.step.stepId),
-            providerId: input.providerId as ProviderId,
-            modelId: input.modelId,
-            runtimeContext: input.runtimeContext,
-            createdAt: input.createdAt,
-            sessionContext,
-            budgetProbeInputContext: compactionProbeModelInput.inputContext,
-            budgetPolicy,
-            startSequence: 1,
-          })
-        : Promise.resolve({ status: 'skipped' as const, events: [] });
+        initialModelInputPreparation.startCompaction();
 
       // Yield run.started and tool-registry events.  The caller can now
       // cancel the run while compaction is still in progress.
@@ -379,38 +341,7 @@ export class RunTurn {
       }
 
       // Build the initial model input and stream through the model executor.
-      const finalSessionContext = this.options.sessionContextInputService.buildSessionContextInput({
-        sessionId: String(input.session.sessionId),
-        currentRunId: String(input.run.runId),
-        currentMessageId: String(input.userMessage.messageId),
-        builtAt: input.createdAt,
-      });
-      const initialModelInput = await this.options.modelCallInputBuildService.buildModelCallInput({
-        requestId: input.requestId,
-        sessionId: String(input.session.sessionId),
-        runId: String(input.run.runId),
-        stepId: String(input.step.stepId),
-        contextKind: 'initial',
-        providerId: String(input.providerId),
-        modelId: input.modelId,
-        modelContextWindow: budgetPolicy.modelContextWindow,
-        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-        ...modelInputSourceOverrides,
-        permissionMode: input.permissionMode,
-        ...(input.permissionSnapshot ? {
-          permissionSnapshot: input.permissionSnapshot,
-          ...(input.permissionSnapshotRef ? { permissionSnapshotRef: input.permissionSnapshotRef } : {}),
-        } : {}),
-        currentMessage: input.userMessage,
-        inputPreprocessing: input.inputPreprocessing,
-        sessionContext: finalSessionContext,
-        ...memoryRecall,
-        ...(runInputFacts ? { runInputFacts } : {}),
-        ...(toolDefinitions.toolDefinitions ? { toolDefinitions: toolDefinitions.toolDefinitions } : {}),
-        budgetPolicy,
-        builtAt: input.createdAt,
-      });
+      const initialModelInput = await initialModelInputPreparation.buildInitialModelInput();
       if (initialModelInput.failure) {
         yield* this.options.failurePort.failBeforeModelStep({
           requestId: input.requestId,
@@ -570,35 +501,5 @@ export class RunTurn {
     }
 
     return { events: [] };
-  }
-
-  private async recallMemory(
-    input: CodingAgentRunSessionMessageInput,
-    requestedCwd: string | undefined,
-  ): Promise<{
-    memoryRecallSources?: ModelInputMemoryRecallSource[];
-    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-  }> {
-    if (!this.options.memoryRecallService) {
-      return {};
-    }
-
-    const effectiveCwd = resolveMemoryRecallEffectiveCwd({
-      projectRoot: input.session.workspacePath,
-      requestedCwd,
-    });
-    return this.options.memoryRecallService.recallForNewUserInput({
-      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
-      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
-      ...(effectiveCwd ? { effectiveCwd } : {}),
-      sessionId: String(input.session.sessionId),
-      runId: String(input.run.runId),
-      modelStepId: String(input.step.stepId),
-      queryText: input.inputPreprocessing.effectiveUserText,
-      providerId: String(input.providerId),
-      modelId: input.modelId,
-      enabled: input.memoryEnabled,
-      createdAt: input.createdAt,
-    });
   }
 }
