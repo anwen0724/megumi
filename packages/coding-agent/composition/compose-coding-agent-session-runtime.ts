@@ -98,7 +98,9 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     chatStreamEventId: () => `chat-stream-event:${crypto.randomUUID()}`,
   };
   const sessionBranchService = new SessionBranchService({
-    repository: options.sessionRunRepository,
+    sessionRepository: options.sessionRecordRepository,
+    messageRepository: options.sessionMessageRepository,
+    runtimeEventRepository: options.runtimeEventRepository,
     activePathRepository: options.activePathRepository,
     ids: branchIds,
     chatStreamEventSink: options.chatStreamEventSink,

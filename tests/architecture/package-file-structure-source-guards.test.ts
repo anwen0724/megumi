@@ -342,4 +342,28 @@ describe('package and file structure source guards', () => {
     expect(runtimeSource).toContain('sessionRecordRepository: persistence.sessionRecordRepository');
     expect(runtimeSource).toContain('runRecordRepository: persistence.runRecordRepository');
   });
+
+  it('wires session branch service through split repository ports', () => {
+    const sessionBranchServiceSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/session/session-branch-service.ts'),
+      'utf8',
+    );
+    const sessionRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
+      'utf8',
+    );
+    const runtimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
+      'utf8',
+    );
+
+    expect(sessionBranchServiceSource).not.toContain('SessionRunRepository');
+    expect(sessionBranchServiceSource).toContain('sessionRepository: SessionBranchSessionRepository');
+    expect(sessionBranchServiceSource).toContain('messageRepository: SessionBranchMessageRepository');
+    expect(sessionBranchServiceSource).toContain('runtimeEventRepository: SessionBranchRuntimeEventRepository');
+    expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRecordRepository');
+    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
+    expect(sessionRuntimeSource).toContain('runtimeEventRepository: options.runtimeEventRepository');
+    expect(runtimeSource).toContain('runtimeEventRepository: persistence.runtimeEventRepository');
+  });
 });

@@ -10,13 +10,12 @@ import {
   type RuntimeEvent,
 } from '@megumi/shared/runtime';
 import type {
+  Session,
   SessionBranchMarker,
   SessionMessage,
+  SessionActiveLeaf,
   SessionSourceEntry,
 } from '@megumi/shared/session';
-
-import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 
 export interface SessionBranchServiceIds {
   branchMarkerId(): string;
@@ -37,6 +36,35 @@ export interface SessionBranchDraftView {
 
 export interface SessionBranchChatStreamEventSink {
   publish(event: ReturnType<typeof createChatStreamEvent>): void;
+}
+
+export interface SessionBranchSessionRepository {
+  getSession(sessionId: string): Session | undefined;
+}
+
+export interface SessionBranchMessageRepository {
+  getMessage(messageId: string): SessionMessage | undefined;
+}
+
+export interface SessionBranchRuntimeEventRepository {
+  appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+}
+
+export interface SessionBranchActivePathRepository {
+  findActivePathEntryBySourceRef(
+    sessionId: string,
+    sourceRef: { sourceKind: 'session_message'; sourceId: string },
+  ): SessionSourceEntry | undefined;
+  getActiveLeaf(sessionId: string): SessionActiveLeaf | undefined;
+  recordBranchMarker(marker: SessionBranchMarker): SessionBranchMarker;
+  appendSourceEntryAndSetActiveLeaf(entry: SessionSourceEntry, activeLeaf: SessionActiveLeaf): SessionSourceEntry;
+  getBranchMarker(branchMarkerId: string): SessionBranchMarker | undefined;
+  getSourceEntryBySourceRef(
+    sessionId: string,
+    sourceRef: { sourceKind: 'branch_marker'; sourceId: string },
+  ): SessionSourceEntry | undefined;
+  listChildSourceEntries(parentSourceEntryId: string): SessionSourceEntry[];
+  setActiveLeaf(activeLeaf: SessionActiveLeaf): SessionActiveLeaf;
 }
 
 export interface SessionBranchServicePort {
@@ -76,20 +104,26 @@ export interface SessionBranchServicePort {
 }
 
 export interface SessionBranchServiceOptions {
-  repository: SessionRunRepository;
-  activePathRepository: SessionActivePathRepository;
+  sessionRepository: SessionBranchSessionRepository;
+  messageRepository: SessionBranchMessageRepository;
+  runtimeEventRepository: SessionBranchRuntimeEventRepository;
+  activePathRepository: SessionBranchActivePathRepository;
   ids: SessionBranchServiceIds;
   chatStreamEventSink?: SessionBranchChatStreamEventSink;
 }
 
 export class SessionBranchService implements SessionBranchServicePort {
-  private readonly repository: SessionRunRepository;
-  private readonly activePathRepository: SessionActivePathRepository;
+  private readonly sessionRepository: SessionBranchSessionRepository;
+  private readonly messageRepository: SessionBranchMessageRepository;
+  private readonly runtimeEventRepository: SessionBranchRuntimeEventRepository;
+  private readonly activePathRepository: SessionBranchActivePathRepository;
   private readonly ids: SessionBranchServiceIds;
   private readonly chatStreamEventSink?: SessionBranchChatStreamEventSink;
 
   constructor(options: SessionBranchServiceOptions) {
-    this.repository = options.repository;
+    this.sessionRepository = options.sessionRepository;
+    this.messageRepository = options.messageRepository;
+    this.runtimeEventRepository = options.runtimeEventRepository;
     this.activePathRepository = options.activePathRepository;
     this.ids = options.ids;
     this.chatStreamEventSink = options.chatStreamEventSink;
@@ -107,7 +141,7 @@ export class SessionBranchService implements SessionBranchServicePort {
     seedMessage: SessionMessage;
     events: RuntimeEvent[];
   } {
-    const seedMessage = this.repository.getMessage(input.messageId);
+    const seedMessage = this.messageRepository.getMessage(input.messageId);
     if (
       !seedMessage
       || String(seedMessage.sessionId) !== input.sessionId
@@ -191,7 +225,7 @@ export class SessionBranchService implements SessionBranchServicePort {
       }),
     ];
     for (const event of events) {
-      this.repository.appendRuntimeEvent(event);
+      this.runtimeEventRepository.appendRuntimeEvent(event);
     }
 
     return {
@@ -301,7 +335,7 @@ export class SessionBranchService implements SessionBranchServicePort {
       }),
     ];
     for (const event of events) {
-      this.repository.appendRuntimeEvent(event);
+      this.runtimeEventRepository.appendRuntimeEvent(event);
     }
     this.publishBranchSeparatorRemovalForDraft({
       sessionId: input.sessionId,
@@ -321,7 +355,7 @@ export class SessionBranchService implements SessionBranchServicePort {
       return;
     }
 
-    const session = this.repository.getSession(input.branchDraft.sessionId);
+    const session = this.sessionRepository.getSession(input.branchDraft.sessionId);
     this.chatStreamEventSink.publish(createChatStreamEvent({
       eventId: this.ids.chatStreamEventId(),
       eventType: 'branch.separator.created',
@@ -348,7 +382,7 @@ export class SessionBranchService implements SessionBranchServicePort {
       return;
     }
 
-    const session = this.repository.getSession(input.sessionId);
+    const session = this.sessionRepository.getSession(input.sessionId);
     this.chatStreamEventSink.publish(createChatStreamEvent({
       eventId: this.ids.chatStreamEventId(),
       eventType: 'branch.separator.removed',
@@ -365,7 +399,7 @@ export class SessionBranchService implements SessionBranchServicePort {
 
   private seedRunIdForBranchMarker(marker: SessionBranchMarker): string {
     if (marker.seedSourceRef?.sourceKind === 'session_message') {
-      return String(this.repository.getMessage(marker.seedSourceRef.sourceId)?.runId ?? marker.branchMarkerId);
+      return String(this.messageRepository.getMessage(marker.seedSourceRef.sourceId)?.runId ?? marker.branchMarkerId);
     }
     return marker.branchMarkerId;
   }
@@ -381,7 +415,10 @@ export function branchMarkerSourceRef(branchMarkerId: string, builtAt: string): 
 }
 
 export function appendSourceAndMoveLeaf(input: {
-  activePathRepository?: SessionActivePathRepository;
+  activePathRepository?: Pick<
+    SessionBranchActivePathRepository,
+    'appendSourceEntryAndSetActiveLeaf' | 'getActiveLeaf'
+  >;
   ids: Pick<SessionBranchServiceIds, 'sourceEntryId'>;
   sessionId: string;
   sourceRef: ModelInputContextSourceRef;

@@ -75,7 +75,9 @@ function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunSer
   });
   const sessionBranchService = options.activePathRepository
     ? new SessionBranchService({
-        repository: options.repository,
+        sessionRepository: options.repository,
+        messageRepository: options.repository,
+        runtimeEventRepository: options.repository,
         activePathRepository: options.activePathRepository,
         ids,
         ...(options.chatStreamEventSink ? { chatStreamEventSink: options.chatStreamEventSink } : {}),
