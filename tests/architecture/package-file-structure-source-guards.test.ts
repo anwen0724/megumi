@@ -550,6 +550,22 @@ describe('package and file structure source guards', () => {
     expect(toolCallRunnerSource).toContain('markToolContinuationEmitted');
   });
 
+  it('keeps approval resume model loop wiring in the loop module', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const approvalResumeModelLoopPath = join(
+      repoRoot,
+      'packages/coding-agent/run/loop/approval-resume-model-loop.ts',
+    );
+
+    expect(existsSync(approvalResumeModelLoopPath)).toBe(true);
+    const approvalResumeModelLoopSource = readFileSync(approvalResumeModelLoopPath, 'utf8');
+    expect(agentRunServiceSource).not.toContain('const resumedRequest: ModelStepRuntimeRequest');
+    expect(agentRunServiceSource).not.toContain('const resumedModelEvents = streamCodingAgentModelToolLoop({');
+    expect(agentRunServiceSource).toContain('streamApprovalResumeModelLoop({');
+    expect(approvalResumeModelLoopSource).toContain('export function streamApprovalResumeModelLoop');
+    expect(approvalResumeModelLoopSource).toContain('streamCodingAgentModelToolLoop({');
+  });
+
   it('keeps approval resume run status restoration in lifecycle', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeLifecyclePath = join(

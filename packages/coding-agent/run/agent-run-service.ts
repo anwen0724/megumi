@@ -32,7 +32,7 @@ import {
   RunTurn,
   type RunTurnOptions,
 } from './turn';
-import { streamCodingAgentModelToolLoop } from './loop';
+import { streamApprovalResumeModelLoop } from './loop';
 import {
   BUILT_IN_INPUT_COMMAND_REGISTRY,
 } from '@megumi/coding-agent/input/command';
@@ -1682,53 +1682,33 @@ export class AgentRunService implements AgentRunPort {
       this.appendRuntimeEvent(continuationEmittedEvent, chatStreamAdapter);
       yield continuationEmittedEvent;
     }
-    const resumedRequest: ModelStepRuntimeRequest = {
-      ...pending.request,
-      stepId: resumedStep.stepId,
-      modelStepId: `model-step:${crypto.randomUUID()}`,
-      inputContext: resumedModelInput.inputContext,
-      createdAt: input.decidedAt,
-    };
-
-    const pendingContinuations: PendingToolApprovalContinuation[] = [];
-    const resumedModelEvents = streamCodingAgentModelToolLoop({
-      request: resumedRequest,
-      ports: {
-        modelCallPort: {
-          streamModelCall: ({ request }) => this.requireModelStepProvider().streamModelCall(request),
+    const resumedLoop = streamApprovalResumeModelLoop({
+      pendingRequest: pending.request,
+      resumedStep,
+      resumedInputContext: resumedModelInput.inputContext,
+      decidedAt: input.decidedAt,
+      toolRuntime: continuation.toolRuntime,
+      modelCallPort: {
+        streamModelCall: ({ request }) => this.requireModelStepProvider().streamModelCall(request),
+      },
+      modelCallInputBuildService: this.modelCallInputBuildService,
+      sourceOverrideProvider: {
+        resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
+      },
+      ids: {
+        nextEventId: this.ids.eventId,
+        nextStepId: ({ runId }) => {
+          const step = this.runExecutionFactRepository.saveStep({
+            stepId: this.ids.stepId(),
+            runId,
+            kind: 'model',
+            status: 'running',
+            title: 'Model response',
+            startedAt: this.clock.now(),
+          });
+          return step.stepId;
         },
-        toolCallHandler: continuation.toolRuntime,
-        modelCallInputBuildService: this.modelCallInputBuildService,
-        sourceOverrideProvider: {
-          resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
-        },
-        toolContinuationRecorder: {
-          markToolContinuationEmitted: ({ request, stepId, toolResults, emittedAt, sequence }) => {
-            const event = continuation.toolRuntime.markToolContinuationEmitted({
-              request,
-              stepId,
-              toolResults,
-              emittedAt,
-              sequence,
-            });
-            return event ? [event] : [];
-          },
-        },
-        ids: {
-          nextEventId: this.ids.eventId,
-          nextStepId: ({ runId }) => {
-            const step = this.runExecutionFactRepository.saveStep({
-              stepId: this.ids.stepId(),
-              runId,
-              kind: 'model',
-              status: 'running',
-              title: 'Model response',
-              startedAt: this.clock.now(),
-            });
-            return step.stepId;
-          },
-          nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
-        },
+        nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
       },
       ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
       permissionMode: continuation.permissionMode ?? 'default',
@@ -1736,15 +1716,12 @@ export class AgentRunService implements AgentRunPort {
         ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
         ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
       },
-      onPendingApproval: (pendingContinuation) => {
-        pendingContinuations.push(pendingContinuation);
-      },
     });
 
     yield* this.persistModelCallEvents({
-      request: resumedRequest,
-      modelEvents: resumedModelEvents,
-      pendingContinuations,
+      request: resumedLoop.request,
+      modelEvents: resumedLoop.modelEvents,
+      pendingContinuations: resumedLoop.pendingContinuations,
       run: runningRun,
       step: resumedStep,
       userMessageId: continuation.userMessageId,
