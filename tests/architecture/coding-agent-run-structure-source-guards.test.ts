@@ -111,6 +111,7 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/loop/continuation-request.ts',
       'packages/coding-agent/run/lifecycle/run-state-store.ts',
       'packages/coding-agent/run/lifecycle/run-state-repository.ts',
+      'packages/coding-agent/run/permissions/index.ts',
       'packages/coding-agent/run/permissions/project-boundary-policy.ts',
       'packages/coding-agent/run/permissions/tool-policy.ts',
       'packages/coding-agent/run/loop/model-tool-loop.ts',

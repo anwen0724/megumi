@@ -163,7 +163,7 @@ describe('package dependency boundaries', () => {
     expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });
 
-  it('keeps packages/coding-agent tools and run permissions independent from legacy tools/security packages', () => {
+  it('keeps packages/coding-agent tools and permissions independent from legacy tools/security packages', () => {
     expect(
       findForbiddenReferences('packages/coding-agent/tools', [
         /@megumi\/tools(\/|['"]|$)/,
@@ -171,7 +171,7 @@ describe('package dependency boundaries', () => {
       ]),
     ).toEqual([]);
     expect(
-      findForbiddenReferences('packages/coding-agent/run/permissions', [
+      findForbiddenReferences('packages/coding-agent/permissions', [
         /@megumi\/tools(\/|['"]|$)/,
         /@megumi\/security(\/|['"]|$)/,
       ]),
