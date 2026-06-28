@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildMemoryExtractionPrompt,
+  MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA,
   parseMemoryExtractionOutput,
+  parseMemoryExtractionStructuredOutput,
 } from '@megumi/coding-agent/memory';
 
 describe('memory extraction prompt and parser', () => {
@@ -67,6 +69,43 @@ describe('memory extraction prompt and parser', () => {
     expect(parseMemoryExtractionOutput(JSON.stringify({
       candidates: [{ id: 'memory:1', scope: 'user', kind: 'fact', text: 'x', confidence: 0.5 }],
     }))).toMatchObject({
+      ok: false,
+      reason: 'forbidden_persistence_field',
+    });
+  });
+
+  it('parses structured extraction output without reparsing provider text', () => {
+    expect(MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA).toMatchObject({
+      type: 'object',
+      required: ['candidates'],
+    });
+
+    expect(parseMemoryExtractionStructuredOutput({
+      candidates: [{
+        scope: 'project',
+        kind: 'decision',
+        text: 'Use structured output for extraction.',
+        confidence: 0.9,
+      }],
+    })).toEqual({
+      ok: true,
+      candidates: [{
+        scope: 'project',
+        kind: 'decision',
+        text: 'Use structured output for extraction.',
+        confidence: 0.9,
+      }],
+    });
+
+    expect(parseMemoryExtractionStructuredOutput({
+      candidates: [{
+        memoryId: 'memory:provider-owned',
+        scope: 'project',
+        kind: 'decision',
+        text: 'Invalid owner field.',
+        confidence: 0.9,
+      }],
+    })).toMatchObject({
       ok: false,
       reason: 'forbidden_persistence_field',
     });

@@ -121,6 +121,72 @@ describe('ModelCallRunner', () => {
     });
   });
 
+  it('passes structured output targets and returns parsed structured completion values', async () => {
+    const structuredRequest: ModelStepRuntimeRequest = {
+      ...request,
+      structuredOutput: {
+        name: 'memory_extraction_candidates',
+        schema: {
+          type: 'object',
+          properties: { candidates: { type: 'array' } },
+          required: ['candidates'],
+          additionalProperties: false,
+        },
+      },
+    };
+    const runner = new ModelCallRunner({
+      resolver: resolver(() => config),
+      aiClientFactory: () => aiClient({
+        async complete(input) {
+          expect(input.structuredOutput).toEqual(structuredRequest.structuredOutput);
+          return {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: '{ "candidates": [] }' },
+            ],
+            stopReason: 'stop',
+          };
+        },
+      }),
+    });
+
+    await expect(runner.completeModelCall(structuredRequest)).resolves.toEqual({
+      ok: true,
+      text: '{ "candidates": [] }',
+      structuredOutput: { candidates: [] },
+      finishReason: 'stop',
+    });
+  });
+
+  it('fails structured completion when provider output is not JSON', async () => {
+    const structuredRequest: ModelStepRuntimeRequest = {
+      ...request,
+      structuredOutput: {
+        name: 'memory_extraction_candidates',
+        schema: { type: 'object' },
+      },
+    };
+    const runner = new ModelCallRunner({
+      resolver: resolver(() => config),
+      aiClientFactory: () => aiClient({
+        async complete() {
+          return {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'not json' }],
+          };
+        },
+      }),
+    });
+
+    await expect(runner.completeModelCall(structuredRequest)).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_protocol_violation',
+        source: 'provider',
+      },
+    });
+  });
+
   it('maps runtime resolution errors to failed stream events', async () => {
     const runner = new ModelCallRunner({
       resolver: {

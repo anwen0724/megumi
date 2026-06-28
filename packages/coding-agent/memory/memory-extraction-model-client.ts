@@ -1,6 +1,12 @@
 // Coding Agent memory extraction model client adapts extraction prompts to hidden model-step requests.
 // The provider sees a normal ModelStepRuntimeRequest; memory persistence stays in host services.
-import type { MemoryExtractionPrompt } from './extraction';
+import {
+  MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA,
+  MEMORY_EXTRACTION_STRUCTURED_OUTPUT_NAME,
+  parseMemoryExtractionStructuredOutput,
+  type MemoryExtractionOutput,
+  type MemoryExtractionPrompt,
+} from './extraction';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
@@ -34,7 +40,7 @@ export class MemoryExtractionModelClientService {
   constructor(private readonly options: MemoryExtractionModelClientServiceOptions) {}
 
   async extractMemoryCandidates(input: ExtractMemoryCandidatesInput): Promise<
-    | { ok: true; text: string }
+    | { ok: true; text: string; structuredOutput?: MemoryExtractionOutput }
     | { ok: false; reason: string }
   > {
     if (!input.providerId || !input.modelId) {
@@ -52,6 +58,16 @@ export class MemoryExtractionModelClientService {
         return { ok: false, reason: completion.error.code || completion.error.message || 'provider_failed' };
       }
       const completed = completion.text.trim();
+      if (completion.structuredOutput !== undefined) {
+        const parsedStructuredOutput = parseMemoryExtractionStructuredOutput(completion.structuredOutput);
+        if (!parsedStructuredOutput.ok) {
+          return { ok: false, reason: parsedStructuredOutput.reason };
+        }
+        const structuredOutput: MemoryExtractionOutput = {
+          candidates: parsedStructuredOutput.candidates,
+        };
+        return { ok: true, text: JSON.stringify(structuredOutput), structuredOutput };
+      }
       if (!completed) {
         return { ok: false, reason: 'empty_extraction_output' };
       }
@@ -81,6 +97,11 @@ export class MemoryExtractionModelClientService {
         prompt: input.prompt,
         builtAt: createdAt,
       }),
+      structuredOutput: {
+        name: MEMORY_EXTRACTION_STRUCTURED_OUTPUT_NAME,
+        schema: MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA,
+        strict: true,
+      },
       createdAt,
     };
   }

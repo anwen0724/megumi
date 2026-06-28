@@ -1,4 +1,5 @@
 import { type JsonObject } from '@megumi/shared/primitives/json';
+import { type JsonValue } from '@megumi/shared/primitives';
 import { type AiModel } from '../core/ai-model';
 import { type ModelContext } from '../context/model-context';
 import { type ToolSet } from '../tools/tool-set';
@@ -13,6 +14,7 @@ export interface AiCallRequest {
 
     temperature?: number;
     maxOutputTokens?: number;
+    structuredOutput?: AiStructuredOutputTarget;
 
     responseMode?: 'stream' | 'complete';
     transport?: 'sse' | 'websocket' | 'auto';
@@ -24,4 +26,14 @@ export interface AiCallRequest {
     credential?: ProviderCredential;
 
     metadata?: JsonObject;
+}
+
+export interface AiStructuredOutputTarget {
+    name: string;
+    schema: JsonObject;
+    strict?: boolean;
+}
+
+export interface AiStructuredOutputResult {
+    value: JsonValue;
 }

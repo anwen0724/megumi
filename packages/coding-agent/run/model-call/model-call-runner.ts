@@ -2,7 +2,7 @@
 import type { AssistantContentBlock } from '@megumi/ai';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { JsonObject } from '@megumi/shared/primitives';
-import { JsonObjectSchema } from '@megumi/shared/primitives/json';
+import { JsonObjectSchema, JsonValueSchema } from '@megumi/shared/primitives/json';
 import type { RunAction, RunObservation, RunStep } from '@megumi/shared/session';
 import {
   createRunCancelledEvent,
@@ -195,6 +195,7 @@ export class ModelCallRunner {
         model: aiInput.model,
         context: aiInput.context,
         toolSet: aiInput.toolSet,
+        structuredOutput: aiInput.structuredOutput,
         signal: controller.signal,
         credential: { type: 'api_key', value: config.apiKey },
       });
@@ -220,13 +221,36 @@ export class ModelCallRunner {
           toolName: block.name,
           argumentsText: block.argumentsText,
         }));
+      const text = message.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('');
+      const structuredOutputTarget = request.structuredOutput;
+      const structuredOutput = structuredOutputTarget
+        ? parseStructuredOutput(text)
+        : undefined;
+      if (structuredOutput && !structuredOutput.ok) {
+        return {
+          ok: false,
+          error: {
+            code: 'runtime_protocol_violation',
+            message: structuredOutput.message,
+            severity: 'error',
+            retryable: false,
+            source: 'provider',
+            details: {
+              providerId: request.providerId,
+              modelId: String(request.modelId),
+              structuredOutputName: structuredOutputTarget?.name ?? 'structured_output',
+            },
+          },
+        };
+      }
 
       return {
         ok: true,
-        text: message.content
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text)
-          .join(''),
+        text,
+        ...(structuredOutput?.ok ? { structuredOutput: structuredOutput.value } : {}),
         ...(message.stopReason ? { finishReason: message.stopReason } : {}),
         ...(message.usage ? {
           usage: {
@@ -272,6 +296,22 @@ export class ModelCallRunner {
 
 export function createModelCallRunner(input: ModelCallRunnerOptions): ModelCallRunner {
   return new ModelCallRunner(input);
+}
+
+function parseStructuredOutput(text: string):
+  | { ok: true; value: ReturnType<typeof JsonValueSchema.parse> }
+  | { ok: false; message: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    return { ok: false, message: 'Structured model output was not valid JSON.' };
+  }
+  const result = JsonValueSchema.safeParse(parsed);
+  if (!result.success) {
+    return { ok: false, message: 'Structured model output was not a valid JSON value.' };
+  }
+  return { ok: true, value: result.data };
 }
 
 function providerStatesFromThinkingBlocks(

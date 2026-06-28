@@ -1,5 +1,6 @@
 ﻿import type { ModelStepId, RunId } from '../primitives/ids';
 import type { ModelId } from '../model/contracts';
+import type { JsonObject } from '../primitives/json';
 import type { ModelInputContext } from '../model/input-context-contracts';
 import type { ProviderId } from '../provider/contracts';
 import type { RuntimeContext } from '../runtime/context';
@@ -27,6 +28,12 @@ export interface ModelStepProviderState {
   blocks: ProviderStateBlock[];
 }
 
+export interface ModelStructuredOutputTarget {
+  name: string;
+  schema: JsonObject;
+  strict?: boolean;
+}
+
 export interface ModelStepRuntimeRequest {
   requestId: string;
   sessionId: string;
@@ -37,6 +44,7 @@ export interface ModelStepRuntimeRequest {
   modelId: ModelId | string;
   inputContext: ModelInputContext;
   toolDefinitions?: ToolDefinition[];
+  structuredOutput?: ModelStructuredOutputTarget;
   runtimeContext?: RuntimeContext;
   createdAt: string;
 }

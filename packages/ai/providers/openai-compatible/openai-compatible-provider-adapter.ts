@@ -671,6 +671,18 @@ function buildOpenAICompatibleRequestBody(request: ProviderAdapterRequest) {
         ...(request.maxOutputTokens !== undefined
             ? { max_tokens: request.maxOutputTokens }
             : {}),
+        ...(request.structuredOutput
+            ? {
+                response_format: {
+                    type: 'json_schema' as const,
+                    json_schema: {
+                        name: request.structuredOutput.name,
+                        schema: request.structuredOutput.schema,
+                        strict: request.structuredOutput.strict ?? true,
+                    },
+                },
+            }
+            : {}),
         ...(request.metadata ? { metadata: request.metadata } : {}),
     };
 }

@@ -17,6 +17,7 @@ export async function* streamModelCall(input: {
     model: aiInput.model,
     context: aiInput.context,
     toolSet: aiInput.toolSet,
+    structuredOutput: aiInput.structuredOutput,
     signal: input.request.signal,
     credential: { type: 'api_key', value: input.request.config.apiKey },
   });

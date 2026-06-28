@@ -288,6 +288,35 @@ describe('MemoryRuntimeCaptureService', () => {
     expect(JSON.stringify(diagnostics.diagnostics)).toContain('{not-json');
   });
 
+  it('uses structured extraction output before falling back to text JSON parsing', async () => {
+    const extraction = new FakeExtractionClient();
+    extraction.result = {
+      ok: true,
+      text: '{not-json',
+      structuredOutput: {
+        candidates: [{
+          scope: 'project',
+          kind: 'decision',
+          text: 'Memory extraction uses provider structured output.',
+          confidence: 0.92,
+        }],
+      },
+    };
+    const { service, repository, exports } = createService(extraction);
+
+    const result = await service.evaluateRunCompletedCapture(baseInput());
+
+    expect(result.status).toBe('captured');
+    expect(repository.getMemory('memory:new:1')).toMatchObject({
+      scope: 'project',
+      projectId: 'project:1',
+      kind: 'decision',
+      content: 'Memory extraction uses provider structured output.',
+    });
+    expect(exports).toEqual([{ homePath, scope: 'project', projectId: 'project:1' }]);
+    expect(JSON.stringify(repository.audits)).not.toContain('invalid_json');
+  });
+
   it('records raw extraction output when schema validation fails', async () => {
     const extraction = new FakeExtractionClient();
     extraction.result = {

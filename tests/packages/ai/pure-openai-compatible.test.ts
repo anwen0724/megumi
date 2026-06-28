@@ -200,6 +200,56 @@ describe('pure OpenAI-compatible provider adapter', () => {
     ]);
   });
 
+  it('materializes structured output target into OpenAI-compatible response format', async () => {
+    const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{
+        message: { content: '{"candidates":[]}' },
+        finish_reason: 'stop',
+      }],
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    const aiClient = createOpenAICompatibleTestClient(fetch);
+
+    const message = await aiClient.complete(request({
+      toolSet: undefined,
+      structuredOutput: {
+        name: 'memory_extraction_candidates',
+        schema: {
+          type: 'object',
+          properties: { candidates: { type: 'array' } },
+          required: ['candidates'],
+          additionalProperties: false,
+        },
+      },
+    }));
+
+    const [, init] = fetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: 'gpt-5.5',
+      messages: [
+        { role: 'system', content: 'You are Megumi.' },
+        { role: 'user', content: 'Read package.json.' },
+      ],
+      stream: false,
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'memory_extraction_candidates',
+          schema: {
+            type: 'object',
+            properties: { candidates: { type: 'array' } },
+            required: ['candidates'],
+            additionalProperties: false,
+          },
+          strict: true,
+        },
+      },
+    });
+    expect(message.content).toEqual([{ type: 'text', text: '{"candidates":[]}' }]);
+  });
+
   it('returns provider errors as assistant stream error events without leaking credentials', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(
       '{"error":{"message":"bad sk-provider-secret-12345678"}}',

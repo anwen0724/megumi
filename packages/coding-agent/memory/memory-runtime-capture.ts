@@ -5,11 +5,13 @@ import {
   buildMemoryExtractionPrompt,
   evaluateMemoryCaptureTrigger,
   parseMemoryExtractionOutput,
+  parseMemoryExtractionStructuredOutput,
   resolveMemoryCandidate,
   validateMemoryCandidate,
 } from './index';
 import type {
   MemoryCaptureRunStatus,
+  MemoryExtractionOutput,
   ValidatedMemoryCandidate,
 } from './index';
 import type {
@@ -38,7 +40,7 @@ export interface MemoryExtractionModelClient {
     prompt: ReturnType<typeof buildMemoryExtractionPrompt>;
     signal?: AbortSignal;
   }): Promise<
-    | { ok: true; text: string }
+    | { ok: true; text: string; structuredOutput?: MemoryExtractionOutput }
     | { ok: false; reason: string }
   >;
 }
@@ -195,16 +197,18 @@ export class MemoryRuntimeCaptureService {
       await this.saveExtractionFailed(input, extraction.reason);
       return { status: 'degraded', reason: extraction.reason };
     }
-    if (!extraction.text.trim()) {
+    if (!extraction.structuredOutput && !extraction.text.trim()) {
       await this.saveExtractionFailed(input, 'empty_extraction_output');
       return { status: 'degraded', reason: 'empty_extraction_output' };
     }
 
-    const parsed = parseMemoryExtractionOutput(extraction.text);
+    const parsed = extraction.structuredOutput
+      ? parseMemoryExtractionStructuredOutput(extraction.structuredOutput)
+      : parseMemoryExtractionOutput(extraction.text);
     if (!parsed.ok) {
       await this.saveExtractionFailed(input, parsed.reason, {
         diagnostic: parsed.diagnostic,
-        rawOutput: extraction.text,
+        ...(extraction.structuredOutput ? {} : { rawOutput: extraction.text }),
       });
       return { status: 'degraded', reason: parsed.reason };
     }

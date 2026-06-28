@@ -2,6 +2,7 @@
 // It never calls a provider and never decides persistence.
 import { z } from 'zod';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
+import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
 
 const ExtractionEvidenceSchema = z.object({
   source: z.enum(['user_message', 'assistant_message', 'tool_result', 'source_file']),
@@ -22,6 +23,40 @@ const ExtractionOutputSchema = z.object({
 }).strict();
 
 export type MemoryExtractionCandidate = z.infer<typeof MemoryExtractionCandidateSchema>;
+export type MemoryExtractionOutput = z.infer<typeof ExtractionOutputSchema>;
+
+export const MEMORY_EXTRACTION_STRUCTURED_OUTPUT_NAME = 'memory_extraction_candidates';
+export const MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA: JsonObject = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    candidates: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          scope: { enum: ['user', 'project'] },
+          kind: { enum: ['preference', 'constraint', 'fact', 'decision'] },
+          text: { type: 'string', minLength: 1, maxLength: 4000 },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+          evidence: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              source: { enum: ['user_message', 'assistant_message', 'tool_result', 'source_file'] },
+              quote: { type: 'string', maxLength: 200 },
+              filePath: { type: 'string', minLength: 1 },
+            },
+            required: ['source'],
+          },
+        },
+        required: ['scope', 'kind', 'text', 'confidence'],
+      },
+    },
+  },
+  required: ['candidates'],
+};
 
 export interface MemoryExtractionPromptInput {
   userText: string;
@@ -77,6 +112,17 @@ export function parseMemoryExtractionOutput(raw: string): MemoryExtractionParseR
     return { ok: false, reason: 'forbidden_persistence_field', diagnostic: 'Extraction output included persistence-owned fields.' };
   }
   const result = ExtractionOutputSchema.safeParse(parsed);
+  if (!result.success) {
+    return { ok: false, reason: 'invalid_schema', diagnostic: result.error.issues.map((issue) => issue.message).join('; ') };
+  }
+  return { ok: true, candidates: result.data.candidates };
+}
+
+export function parseMemoryExtractionStructuredOutput(value: JsonValue): MemoryExtractionParseResult {
+  if (containsForbiddenField(value)) {
+    return { ok: false, reason: 'forbidden_persistence_field', diagnostic: 'Extraction output included persistence-owned fields.' };
+  }
+  const result = ExtractionOutputSchema.safeParse(value);
   if (!result.success) {
     return { ok: false, reason: 'invalid_schema', diagnostic: result.error.issues.map((issue) => issue.message).join('; ') };
   }

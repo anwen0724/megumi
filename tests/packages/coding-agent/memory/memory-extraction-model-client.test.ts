@@ -64,6 +64,10 @@ describe('MemoryExtractionModelClientService', () => {
       stepId: 'memory-extraction:run-1',
       providerId: 'deepseek',
       modelId: 'deepseek-v4-flash',
+      structuredOutput: {
+        name: 'memory_extraction_candidates',
+        strict: true,
+      },
       inputContext: {
         contextId: 'memory-extraction-context-1',
         sessionId: 'session-1',
@@ -89,6 +93,62 @@ describe('MemoryExtractionModelClientService', () => {
       }),
     ]);
     expect(JSON.stringify(request)).not.toContain('MemoryRepository');
+  });
+
+  it('returns validated structured extraction output when the model call provides it', async () => {
+    const provider = new FakeModelStepProvider({
+      ok: true,
+      text: '{ "ignored": true }',
+      structuredOutput: {
+        candidates: [{
+          scope: 'project',
+          kind: 'decision',
+          text: 'Use structured output for memory extraction.',
+          confidence: 0.9,
+        }],
+      },
+    });
+    const client = new MemoryExtractionModelClientService({
+      modelStepProvider: provider,
+      ids: {
+        requestId: () => 'memory-extraction-request-1',
+        contextId: () => 'memory-extraction-context-1',
+        traceId: () => 'memory-extraction-trace-1',
+      },
+      clock: { now: () => '2026-06-13T00:00:00.000Z' },
+    });
+
+    const result = await client.extractMemoryCandidates({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      prompt: {
+        system: 'Return strict JSON only.',
+        user: '{"signals":["confirmed_decision"]}',
+      },
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      text: JSON.stringify({
+        candidates: [{
+          scope: 'project',
+          kind: 'decision',
+          text: 'Use structured output for memory extraction.',
+          confidence: 0.9,
+        }],
+      }),
+      structuredOutput: {
+        candidates: [{
+          scope: 'project',
+          kind: 'decision',
+          text: 'Use structured output for memory extraction.',
+          confidence: 0.9,
+        }],
+      },
+    });
   });
 
   it('returns degraded reason when provider target is missing', async () => {

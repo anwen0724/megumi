@@ -1,7 +1,7 @@
 // Defines the Coding Agent model-call boundary over the provider-neutral AI client.
 import type { AiClient } from '@megumi/ai';
 import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { RunId } from '@megumi/shared/primitives';
+import type { JsonValue, RunId } from '@megumi/shared/primitives';
 import type { ProviderId, ProviderKind } from '@megumi/shared/provider';
 import type { ChatTokenUsagePayload, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 
@@ -56,6 +56,7 @@ export type ModelCallCompletionResult =
       ok: true;
       text: string;
       toolCalls?: ModelCallCompletionToolCall[];
+      structuredOutput?: JsonValue;
       providerStates?: ModelStepProviderState[];
       finishReason?: string;
       usage?: ChatTokenUsagePayload;

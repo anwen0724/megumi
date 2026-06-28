@@ -89,6 +89,17 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /MemoryRepository|better-sqlite3|memory-markdown-sync|memory-runtime-capture|packages\/ai\/providers|@megumi\/ai\/providers|openai-compatible/)).toEqual([]);
   });
 
+  it('uses structured model output for memory extraction before text JSON fallback', () => {
+    const extraction = read(join(root, 'packages', 'coding-agent', 'memory', 'extraction.ts'));
+    const client = read(join(root, 'packages', 'coding-agent', 'memory', 'memory-extraction-model-client.ts'));
+    const capture = read(join(root, 'packages', 'coding-agent', 'memory', 'memory-runtime-capture.ts'));
+
+    expect(extraction).toContain('MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA');
+    expect(client).toContain('structuredOutput:');
+    expect(client).toContain('parseMemoryExtractionStructuredOutput');
+    expect(capture).toContain('parseMemoryExtractionStructuredOutput(extraction.structuredOutput)');
+  });
+
   it('keeps renderer out of hidden model-input memory injection plumbing', () => {
     const files = productionFilesUnder('apps', 'desktop', 'src', 'renderer');
     expect(offenders(files, /ModelInputContext|memoryRecallSources|memoryRecallSeed|memory-recall-runtime\.service|memory-markdown-sync\.service/)).toEqual([]);
