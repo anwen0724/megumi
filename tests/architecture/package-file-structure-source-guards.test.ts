@@ -549,6 +549,14 @@ describe('package and file structure source guards', () => {
 
   it('keeps tool result model input emission ownership in the model-input submodule', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const agentRunToolRepositoryAdapterSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/agent-run-tool-repository-adapter.ts'),
+      'utf8',
+    );
+    const composeCodingAgentToolRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts'),
+      'utf8',
+    );
     const toolResultModelInputEmittedPath = join(
       repoRoot,
       'packages/coding-agent/agent-loop/tool-call/model-input/tool-result-model-input-emitted.ts',
@@ -558,6 +566,10 @@ describe('package and file structure source guards', () => {
     const toolResultModelInputEmittedSource = readFileSync(toolResultModelInputEmittedPath, 'utf8');
     expect(agentRunServiceSource).not.toContain('private markToolContinuationEmitted');
     expect(agentRunServiceSource).not.toContain('createToolContinuationEmittedEvent');
+    expect(agentRunToolRepositoryAdapterSource).not.toContain('markToolContinuationEmitted');
+    expect(composeCodingAgentToolRuntimeSource).not.toContain('markToolContinuationEmitted');
+    expect(agentRunToolRepositoryAdapterSource).toContain('markToolResultsSubmittedToModelInput');
+    expect(composeCodingAgentToolRuntimeSource).toContain('markToolResultsSubmittedToModelInput');
     expect(toolResultModelInputEmittedSource).toContain('export function markToolResultsSubmittedToModelInput');
   });
 

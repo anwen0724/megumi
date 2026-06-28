@@ -53,7 +53,8 @@ export function composeCodingAgentToolRuntimeFactory(input: {
           getApprovalRequest: (approvalRequestId) => input.toolRepository.getApprovalRequest(approvalRequestId),
           saveToolResult: (toolResult) => input.toolRepository.saveToolResult(toolResult),
           getToolRegistrySnapshotByRun: (runId) => input.toolRepository.getToolRegistrySnapshotByRun(runId),
-          markToolResultsSubmittedToModelInput: (request) => input.toolRepository.markToolContinuationEmitted(request),
+          markToolResultsSubmittedToModelInput: (request) =>
+            input.toolRepository.markToolResultsSubmittedToModelInput(request),
           getRunSessionId(runId) {
             const run = input.runRepository.getRun(runId);
             return run ? String(run.sessionId) : undefined;

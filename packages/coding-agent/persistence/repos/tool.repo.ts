@@ -390,7 +390,7 @@ export class ToolRepository {
     return row ? JSON.parse(row.tool_execution_json) as ToolExecution : undefined;
   }
 
-  markToolContinuationEmitted(input: {
+  markToolResultsSubmittedToModelInput(input: {
     toolExecutionIds: readonly string[];
     emittedAt: string;
   }): void {
@@ -411,6 +411,13 @@ export class ToolRepository {
       }
     });
     update(input.toolExecutionIds);
+  }
+
+  markToolContinuationEmitted(input: {
+    toolExecutionIds: readonly string[];
+    emittedAt: string;
+  }): void {
+    this.markToolResultsSubmittedToModelInput(input);
   }
 
   savePermissionDecision(decision: PermissionDecision): PermissionDecision {

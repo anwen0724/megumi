@@ -459,12 +459,12 @@ describe('ToolRepository', () => {
     expect(records.map((record) => record.callOrder)).toEqual([0, 1, 2]);
   });
 
-  it('marks continuation emitted without changing terminal execution outcome', () => {
+  it('marks tool results submitted to model input without changing terminal execution outcome', () => {
     const repo = createRepo();
     repo.saveToolCall(createToolCall());
     repo.saveToolExecution(createToolExecution({ status: 'failed', continuationEmitted: false }));
 
-    repo.markToolContinuationEmitted({
+    repo.markToolResultsSubmittedToModelInput({
       toolExecutionIds: ['tool-execution-1'],
       emittedAt: '2026-06-15T00:00:01.000Z',
     });
@@ -473,6 +473,21 @@ describe('ToolRepository', () => {
     expect(record?.status).toBe('failed');
     expect(record?.continuationEmitted).toBe(true);
     expect(record?.metadata?.continuationEmittedAt).toBe('2026-06-15T00:00:01.000Z');
+  });
+
+  it('keeps legacy continuation emitted marker as an alias', () => {
+    const repo = createRepo();
+    repo.saveToolCall(createToolCall());
+    repo.saveToolExecution(createToolExecution({ status: 'succeeded', continuationEmitted: false }));
+
+    repo.markToolContinuationEmitted({
+      toolExecutionIds: ['tool-execution-1'],
+      emittedAt: '2026-06-15T00:00:02.000Z',
+    });
+
+    const record = repo.getToolExecution('tool-execution-1');
+    expect(record?.continuationEmitted).toBe(true);
+    expect(record?.metadata?.continuationEmittedAt).toBe('2026-06-15T00:00:02.000Z');
   });
 
   it('lists and updates pending approval and tool execution facts by run', () => {

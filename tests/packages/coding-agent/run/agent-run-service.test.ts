@@ -182,7 +182,7 @@ function createAgentRunToolRepositoryForTest(
   toolRepository: ToolRepository,
 ): AgentRunToolRepositoryPort {
   return {
-    markToolResultsSubmittedToModelInput: (input) => toolRepository.markToolContinuationEmitted(input),
+    markToolResultsSubmittedToModelInput: (input) => toolRepository.markToolResultsSubmittedToModelInput(input),
   };
 }
 
