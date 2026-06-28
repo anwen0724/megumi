@@ -15,7 +15,6 @@ import type {
 } from '@megumi/shared/session';
 
 import type { SessionActivePathRepository } from '../../persistence/repos/session-active-path.repo';
-import type { SessionRunRepository } from '../../persistence/repos/session-run.repo';
 import type { SessionBranchServicePort } from '../../session';
 
 export interface RunRetryCoordinatorIds {
@@ -24,11 +23,15 @@ export interface RunRetryCoordinatorIds {
   sourceEntryId(): string;
 }
 
+export interface RunRetryCoordinatorRepositoryPort {
+  getRun(runId: string): Run | undefined;
+  getMessage(messageId: string): SessionMessage | undefined;
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+  appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+}
+
 export interface RunRetryCoordinatorOptions {
-  repository: Pick<
-    SessionRunRepository,
-    'getRun' | 'getMessage' | 'listRuntimeEventsByRun' | 'appendRuntimeEvent'
-  >;
+  repository: RunRetryCoordinatorRepositoryPort;
   activePathRepository?: Pick<
     SessionActivePathRepository,
     | 'getActiveLeaf'

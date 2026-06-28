@@ -53,7 +53,6 @@ import {
   createStepStatusChangedEvent,
 } from './events/runtime-event-factory';
 import { composeCodingAgentPersistence } from '../composition/compose-coding-agent-persistence';
-import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
@@ -130,6 +129,7 @@ import {
 import type {
   AgentRunModelStepProvider,
   AgentRunPort,
+  AgentRunRepositoryPort,
   AgentRunServiceClock,
   AgentRunServiceHomePaths,
   AgentRunServiceIds,
@@ -224,7 +224,7 @@ function createDefaultIds(): AgentRunServiceIds {
 }
 
 export class AgentRunService implements AgentRunPort {
-  private readonly repository: SessionRunRepository;
+  private readonly repository: AgentRunRepositoryPort;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
   private readonly permissionSnapshotService?: Pick<

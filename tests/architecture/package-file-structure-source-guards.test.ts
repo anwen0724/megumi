@@ -401,4 +401,19 @@ describe('package and file structure source guards', () => {
     expect(toolRuntimeSource).toContain('input.runRepository.getRun(runId)');
     expect(runtimeSource).toContain('runRepository: persistence.runRecordRepository');
   });
+
+  it('keeps run service contracts off the concrete session-run repository type', () => {
+    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const retryCoordinatorSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/run/lifecycle/run-retry-coordinator.ts'),
+      'utf8',
+    );
+
+    expect(runContractSource).not.toContain('SessionRunRepository');
+    expect(agentRunServiceSource).not.toContain('SessionRunRepository');
+    expect(retryCoordinatorSource).not.toContain('SessionRunRepository');
+    expect(runContractSource).toContain('export interface AgentRunRepositoryPort');
+    expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
+  });
 });

@@ -23,7 +23,15 @@ import type {
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RunContext, ModelCapabilitySummary } from '@megumi/shared/run';
 import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
-import type { Run, RunStep } from '@megumi/shared/session';
+import type {
+  Run,
+  RunAction,
+  RunObservation,
+  RunStep,
+  Session,
+  SessionCompactionEntry,
+  SessionMessage,
+} from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
@@ -34,7 +42,7 @@ import type {
 } from '@megumi/shared/workspace';
 
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
+import type { ModelStepRecord } from '../persistence/repos/model-step.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type {
   PermissionSnapshotService,
@@ -222,8 +230,27 @@ export interface AgentRunServiceHomePaths {
   sqlitePath: string;
 }
 
+export interface AgentRunRepositoryPort {
+  saveSession(session: Session): Session;
+  getSession(sessionId: string): Session | undefined;
+  saveMessage(message: SessionMessage): SessionMessage;
+  getMessage(messageId: string): SessionMessage | undefined;
+  saveRun(run: Run): Run;
+  getRun(runId: string): Run | undefined;
+  listRunsByStatuses(statuses: Run['status'][]): Run[];
+  saveStep(step: RunStep): RunStep;
+  listStepsByRun(runId: string): RunStep[];
+  saveAction(action: RunAction): RunAction;
+  saveObservation(observation: RunObservation): RunObservation;
+  saveModelStep(modelStep: ModelStepRecord): ModelStepRecord;
+  getModelStep(modelStepId: string): ModelStepRecord | undefined;
+  getSessionCompaction(compactionId: string): SessionCompactionEntry | null;
+  appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+}
+
 export interface AgentRunServiceOptions {
-  repository: SessionRunRepository;
+  repository: AgentRunRepositoryPort;
   contextService?: SessionRunContextService;
   permissionSnapshotService?: Pick<
     PermissionSnapshotService,

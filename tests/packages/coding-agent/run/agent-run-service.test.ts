@@ -25,6 +25,9 @@ import {
   SessionService,
   type SessionBranchServicePort,
   type SessionServicePort,
+  type SessionServiceMessageRepository,
+  type SessionServiceRunRepository,
+  type SessionServiceSessionRepository,
 } from '@megumi/coding-agent/session';
 import { TimelineHistoryCommitProjectorService } from '@megumi/coding-agent/projections/timeline';
 import type {
@@ -53,8 +56,13 @@ import type {
 let db: Database.Database | null = null;
 
 type AgentRunServiceTestFacade = AgentRunService & SessionServicePort & SessionBranchServicePort;
+type AgentRunServiceTestRepository = AgentRunServiceOptions['repository']
+  & SessionServiceSessionRepository
+  & SessionServiceMessageRepository
+  & SessionServiceRunRepository;
 
 function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunServiceTestFacade {
+  const repository = options.repository as AgentRunServiceTestRepository;
   const ids = {
     sessionId: options.ids?.sessionId ?? (() => `session:${crypto.randomUUID()}`),
     branchMarkerId: options.ids?.branchMarkerId ?? (() => `branch-marker:${crypto.randomUUID()}`),
@@ -63,9 +71,9 @@ function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunSer
     chatStreamEventId: options.ids?.chatStreamEventId ?? (() => `chat-stream-event:${crypto.randomUUID()}`),
   };
   const sessionService = new SessionService({
-    sessionRepository: options.repository,
-    messageRepository: options.repository,
-    runRepository: options.repository,
+    sessionRepository: repository,
+    messageRepository: repository,
+    runRepository: repository,
     ids,
     ...(options.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     ...(options.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
