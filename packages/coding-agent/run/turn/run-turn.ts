@@ -18,7 +18,7 @@ import type {
 } from '../context';
 import type { BuildSessionContextInputFromRepositoryInput } from '../../session';
 import { createRunFailedEvent, createRunStartedEvent } from '../events/runtime-event-factory';
-import { createCodingAgentRunInputFacts } from '../context/run-input-facts';
+import { createCodingAgentRunInputFacts } from '../../input/facts';
 import {
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,

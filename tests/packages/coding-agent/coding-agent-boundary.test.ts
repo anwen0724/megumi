@@ -40,6 +40,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/context/compaction/session-compaction-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/context/run-input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
@@ -73,12 +74,13 @@ describe('coding-agent package boundary', () => {
 
   it('keeps run orchestration in coding-agent instead of desktop session service', () => {
     const codingAgentRun = sourceUnder('packages/coding-agent/run');
+    const codingAgentInput = sourceUnder('packages/coding-agent/input');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(codingAgentRun).toContain('class RunTurn');
     expect(codingAgentRun).toContain('runModelToolLoop');
     expect(codingAgentRun).toContain('buildContinuationInputContext');
-    expect(codingAgentRun).toContain('createCodingAgentRunInputFacts');
+    expect(codingAgentInput).toContain('createCodingAgentRunInputFacts');
     expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);
     expect(desktopServices).not.toContain('new RunTurn');
     expect(desktopServices).not.toContain("contextKind: 'compaction-probe'");

@@ -21,7 +21,7 @@ import { resolveModelCallEffectiveCwd, type ModelCallEffectiveCwd } from './effe
 import {
   createRuntimeFactsForRunInput,
   type CodingAgentRunInputFacts,
-} from './run-input-facts';
+} from '../../input/facts';
 
 import type { LoadInstructionSourcesInput } from './instructions/agent-instruction-source';
 export type { LoadInstructionSourcesInput };
