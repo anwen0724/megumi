@@ -461,6 +461,22 @@ describe('package and file structure source guards', () => {
     expect(defaultAgentRunServiceSource).toContain('new RunRetryCoordinator');
   });
 
+  it('keeps approval resume event shaping in the approval submodule', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const approvalResumeEventsPath = join(
+      repoRoot,
+      'packages/coding-agent/run/tool-calls/approval/approval-resume-events.ts',
+    );
+
+    expect(existsSync(approvalResumeEventsPath)).toBe(true);
+    const approvalResumeEventsSource = readFileSync(approvalResumeEventsPath, 'utf8');
+    expect(agentRunServiceSource).not.toContain('private persistResumeRuntimeEvents');
+    expect(agentRunServiceSource).not.toContain('private createToolResultRuntimeEvent');
+    expect(agentRunServiceSource).not.toContain('function createToolResultSummary');
+    expect(approvalResumeEventsSource).toContain('export function persistResumeRuntimeEvents');
+    expect(approvalResumeEventsSource).toContain('export function createToolResultRuntimeEvent');
+  });
+
   it('keeps AgentRunService internals on owner-named repository ports', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
 

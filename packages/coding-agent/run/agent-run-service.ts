@@ -10,9 +10,10 @@ import type { RunHostBoundaryPort } from './lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   PendingApprovalRegistry,
+  createToolResultRuntimeEvent,
+  persistResumeRuntimeEvents,
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
-  type ResumeToolApprovalOutcome,
   type ToolApprovalResumePort,
   type ToolCallRunner,
 } from './tool-calls';
@@ -106,7 +107,6 @@ import {
   createToolRegistrySnapshotCreatedEvent,
   createToolRegistrySourcesEnsuredEvent,
   createToolContinuationEmittedEvent,
-  createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import {
@@ -118,6 +118,11 @@ import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
+import {
+  withRequestMetadata,
+  withSequenceAfter,
+  withSessionMessageRequestMetadata,
+} from './events/runtime-event-metadata';
 import type {
   AgentRunCompletionHooksPort,
   AgentRunExecutionFactRepositoryPort,
@@ -1600,7 +1605,7 @@ export class AgentRunService implements AgentRunPort {
       || (resumeOutcome.pendingApprovals?.length ?? 0) > 0
       || resumeOutcome.continuationReady === false
     ) {
-      const resumeEvents = this.persistResumeRuntimeEvents({
+      const resumeEvents = persistResumeRuntimeEvents({
         request: continuation.request,
         stepId: continuation.step.stepId,
         lastSequence,
@@ -1615,11 +1620,12 @@ export class AgentRunService implements AgentRunPort {
         if (resumeEvents.toolResultIdsWithEvents.has(String(toolResult.toolResultId))) {
           continue;
         }
-        const toolResultEvent = this.createToolResultRuntimeEvent({
+        const toolResultEvent = createToolResultRuntimeEvent({
           request: continuation.request,
           stepId: continuation.step.stepId,
           sequence: lastSequence += 1,
           toolResult,
+          ids: this.ids,
         });
         this.appendRuntimeEvent(toolResultEvent, chatStreamAdapter);
         yield toolResultEvent;
@@ -1647,7 +1653,7 @@ export class AgentRunService implements AgentRunPort {
     this.appendRuntimeEvent(runningEvent, chatStreamAdapter);
     yield runningEvent;
 
-    const resumeEvents = this.persistResumeRuntimeEvents({
+    const resumeEvents = persistResumeRuntimeEvents({
       request: continuation.request,
       stepId: continuation.step.stepId,
       lastSequence,
@@ -1663,11 +1669,12 @@ export class AgentRunService implements AgentRunPort {
       if (resumeEvents.toolResultIdsWithEvents.has(String(toolResult.toolResultId))) {
         continue;
       }
-      const toolResultEvent = this.createToolResultRuntimeEvent({
+      const toolResultEvent = createToolResultRuntimeEvent({
         request: continuation.request,
         stepId: continuation.step.stepId,
         sequence: lastSequence += 1,
         toolResult,
+        ids: this.ids,
       });
       this.appendRuntimeEvent(toolResultEvent, chatStreamAdapter);
       yield toolResultEvent;
@@ -1811,39 +1818,6 @@ export class AgentRunService implements AgentRunPort {
     });
   }
 
-  private persistResumeRuntimeEvents(input: {
-    request: ModelStepRuntimeRequest;
-    stepId: RunStep['stepId'];
-    lastSequence: number;
-    outcome: ResumeToolApprovalOutcome;
-  }): {
-    events: RuntimeEvent[];
-    lastSequence: number;
-    toolResultIdsWithEvents: Set<string>;
-  } {
-    let lastSequence = input.lastSequence;
-    const events: RuntimeEvent[] = [];
-    const toolResultIdsWithEvents = new Set<string>();
-
-    for (const event of input.outcome.runtimeEvents ?? []) {
-      const eventWithRequest = withSequenceAfter(withRequestMetadata({
-        ...event,
-        sessionId: event.sessionId ?? input.request.sessionId,
-        stepId: event.stepId ?? String(input.stepId),
-      }, input.request), lastSequence);
-      lastSequence = eventWithRequest.sequence;
-      if (eventWithRequest.eventType === 'tool.result.created') {
-        const toolResultId = getToolResultEventId(eventWithRequest.payload);
-        if (toolResultId) {
-          toolResultIdsWithEvents.add(toolResultId);
-        }
-      }
-      events.push(eventWithRequest);
-    }
-
-    return { events, lastSequence, toolResultIdsWithEvents };
-  }
-
   private markToolContinuationEmitted(input: {
     request: ModelStepRuntimeRequest;
     stepId: RunStep['stepId'];
@@ -1887,35 +1861,6 @@ export class AgentRunService implements AgentRunPort {
         assistantMessageId,
         toolExecutionIds,
         emittedAt: input.emittedAt,
-      },
-    }), input.request);
-  }
-
-  private createToolResultRuntimeEvent(input: {
-    request: ModelStepRuntimeRequest;
-    stepId: RunStep['stepId'];
-    sequence: number;
-    toolResult: ToolResult;
-  }): RuntimeEvent {
-    return withRequestMetadata(createToolResultCreatedEvent({
-      eventId: this.ids.eventId(),
-      eventType: 'tool.result.created',
-      runId: input.request.runId,
-      sessionId: input.request.sessionId,
-      stepId: String(input.stepId),
-      requestId: input.request.requestId,
-      runtimeContext: input.request.runtimeContext,
-      sequence: input.sequence,
-      createdAt: input.toolResult.createdAt,
-      source: 'tool',
-      visibility: 'system',
-      persist: 'required',
-      payload: {
-        toolResultId: String(input.toolResult.toolResultId),
-        toolCallId: String(input.toolResult.toolCallId),
-        ...(input.toolResult.toolExecutionId ? { toolExecutionId: String(input.toolResult.toolExecutionId) } : {}),
-        kind: input.toolResult.kind,
-        summary: createToolResultSummary(input.toolResult),
       },
     }), input.request);
   }
@@ -2096,14 +2041,6 @@ function getModelStepId(payload: RuntimeEvent['payload']): string | undefined {
   return typeof payload.modelStepId === 'string' ? payload.modelStepId : undefined;
 }
 
-function getToolResultEventId(payload: RuntimeEvent['payload']): string | undefined {
-  if (!isObjectRecord(payload)) {
-    return undefined;
-  }
-
-  return typeof payload.toolResultId === 'string' ? payload.toolResultId : undefined;
-}
-
 function createFallbackRuntimeError(message: string): RuntimeError {
   return {
     code: 'runtime_unknown',
@@ -2149,39 +2086,6 @@ function isRuntimeError(value: unknown): value is RuntimeError {
     && typeof value.source === 'string';
 }
 
-function withRequestMetadata(event: RuntimeEvent, request: ModelStepRuntimeRequest): RuntimeEvent {
-  return {
-    ...event,
-    requestId: event.requestId ?? request.requestId,
-    ...(event.context ? { context: event.context } : request.runtimeContext ? { context: request.runtimeContext } : {}),
-  };
-}
-
-function withSessionMessageRequestMetadata(
-  event: RuntimeEvent,
-  input: {
-    requestId: string;
-    runtimeContext?: RuntimeContext;
-  },
-): RuntimeEvent {
-  return {
-    ...event,
-    requestId: event.requestId ?? input.requestId,
-    ...(event.context ? { context: event.context } : input.runtimeContext ? { context: input.runtimeContext } : {}),
-  };
-}
-
-function withSequenceAfter(event: RuntimeEvent, lastSequence: number): RuntimeEvent {
-  if (event.sequence > lastSequence) {
-    return event;
-  }
-
-  return {
-    ...event,
-    sequence: lastSequence + 1,
-  };
-}
-
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -2225,24 +2129,4 @@ function resolveRecallEffectiveCwd(projectRoot: string | undefined, requestedCwd
     return requestedCwd;
   }
   return projectRoot ? path.join(projectRoot, requestedCwd) : requestedCwd;
-}
-
-function createToolResultSummary(toolResult: ToolResult): string {
-  if (toolResult.textContent && toolResult.textContent.length > 0) {
-    return toolResult.textContent;
-  }
-
-  if (toolResult.denialReason && toolResult.denialReason.length > 0) {
-    return toolResult.denialReason;
-  }
-
-  if (toolResult.error) {
-    return toolResult.error.message;
-  }
-
-  if (toolResult.structuredContent !== undefined) {
-    return JSON.stringify(toolResult.structuredContent);
-  }
-
-  return toolResult.kind;
 }
