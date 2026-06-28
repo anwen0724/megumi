@@ -36,7 +36,7 @@ import {
   registerWorkspaceFilesHandlers,
   type WorkspaceFilesHandlersService,
 } from './handlers/workspace-files.handler';
-import type { RecoveryService } from '@megumi/coding-agent/run';
+import type { RecoveryService } from '@megumi/coding-agent/state';
 import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../shell/electron-ipc-main-host';
 

@@ -7,7 +7,7 @@ import {
   createRetryObservation,
   isRecoveryObservation,
   toCheckpointCreatedPayload,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/state';
 
 describe('core run recovery helpers', () => {
   it('creates checkpoint observations without raw state content', () => {

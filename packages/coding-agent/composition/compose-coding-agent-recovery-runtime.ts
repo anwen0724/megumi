@@ -7,7 +7,7 @@ import { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo'
 import { SessionRecordRepository } from '../persistence/repos/session-record.repo';
 import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
-import { createRecoveryService, type RecoveryLogger } from '../run/recovery';
+import { createRecoveryService, type RecoveryLogger } from '../state';
 import { WorkspaceRestoreService } from '../workspace';
 import type { AgentRunService } from '../run/agent-run-service';
 

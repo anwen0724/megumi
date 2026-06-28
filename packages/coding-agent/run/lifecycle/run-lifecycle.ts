@@ -40,7 +40,7 @@ import {
   createCancelObservation,
   createCheckpointObservation,
   toCheckpointCreatedPayload,
-} from '../recovery/recovery-observation-mapper';
+} from '../../state';
 import {
   createDefaultRunIds,
   defaultRunClock,

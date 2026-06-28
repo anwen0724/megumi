@@ -153,8 +153,7 @@ describe('Desktop Main directory boundaries', () => {
   it('uses coding-agent owner imports instead of the legacy run barrel for desktop state and context helpers', () => {
     const source = sourceUnder('apps/desktop/src/main');
 
-    expect(source).not.toContain("normalizeRuntimeError } from '@megumi/coding-agent/run'");
-    expect(source).not.toContain('@megumi/coding-agent/run/context');
+    expect(source).not.toContain('@megumi/coding-agent/run');
     expect(source).toContain("normalizeRuntimeError } from '@megumi/coding-agent/state'");
     expect(source).toContain('@megumi/coding-agent/context');
   });

@@ -2,7 +2,7 @@
 // Every member is a product-owned port interface — this is the single shell-agnostic
 // contract that desktop, and future web/cli shells, code against.
 import type { AgentRunPort } from '../run/run-contract';
-import type { RecoveryService } from '../run/recovery';
+import type { RecoveryService } from '../state';
 import type { SessionBranchServicePort, SessionServicePort } from '../session';
 import type { ToolService } from '../tools/tool-service-port';
 import type { ArtifactServicePort, PlanArtifactServicePort } from '../artifacts';

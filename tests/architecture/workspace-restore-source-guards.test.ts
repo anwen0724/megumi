@@ -36,7 +36,7 @@ const restoreBoundaryAllowlist = new Set([
   'packages/coding-agent/composition/compose-tool-runtime.ts',
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/main/ipc/register-ipc-handlers.ts',
-  'packages/coding-agent/run/recovery/recovery-service.ts',
+  'packages/coding-agent/state/recovery-service.ts',
   'packages/coding-agent/run/agent-run-service.ts',
   'packages/coding-agent/workspace/workspace-change-tracker.ts',
   'packages/coding-agent/workspace/workspace-restore.ts',

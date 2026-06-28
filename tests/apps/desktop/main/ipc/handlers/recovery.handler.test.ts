@@ -2,7 +2,7 @@
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerRecoveryHandlers } from '@megumi/desktop/main/ipc/handlers/recovery.handler';
-import type { RecoveryService } from '@megumi/coding-agent/run/recovery';
+import type { RecoveryService } from '@megumi/coding-agent/state';
 
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },

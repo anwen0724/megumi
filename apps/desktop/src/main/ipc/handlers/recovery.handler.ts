@@ -19,7 +19,7 @@ import {
   WorkspaceRestorePayloadSchema,
   WorkspaceRestoreRequestSchema,
 } from '@megumi/shared/ipc';
-import type { RecoveryService } from '@megumi/coding-agent/run';
+import type { RecoveryService } from '@megumi/coding-agent/state';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';

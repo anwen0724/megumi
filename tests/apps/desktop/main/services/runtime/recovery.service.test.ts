@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
 
-import { createRecoveryService } from '@megumi/coding-agent/run/recovery';
+import { createRecoveryService } from '@megumi/coding-agent/state';
 import type { RecoveryRepository } from '@megumi/coding-agent/persistence/repos/recovery.repo';
 import type {
   CancelRequest,
