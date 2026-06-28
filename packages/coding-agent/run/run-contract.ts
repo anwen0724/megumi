@@ -230,24 +230,51 @@ export interface AgentRunServiceHomePaths {
   sqlitePath: string;
 }
 
-export interface AgentRunRepositoryPort {
+export interface AgentRunSessionRepositoryPort {
   saveSession(session: Session): Session;
   getSession(sessionId: string): Session | undefined;
+}
+
+export interface AgentRunMessageRepositoryPort {
   saveMessage(message: SessionMessage): SessionMessage;
   getMessage(messageId: string): SessionMessage | undefined;
+}
+
+export interface AgentRunRunRecordRepositoryPort {
   saveRun(run: Run): Run;
   getRun(runId: string): Run | undefined;
   listRunsByStatuses(statuses: Run['status'][]): Run[];
+}
+
+export interface AgentRunExecutionFactRepositoryPort {
   saveStep(step: RunStep): RunStep;
   listStepsByRun(runId: string): RunStep[];
   saveAction(action: RunAction): RunAction;
   saveObservation(observation: RunObservation): RunObservation;
+}
+
+export interface AgentRunModelStepRepositoryPort {
   saveModelStep(modelStep: ModelStepRecord): ModelStepRecord;
   getModelStep(modelStepId: string): ModelStepRecord | undefined;
+}
+
+export interface AgentRunSessionContextRepositoryPort {
   getSessionCompaction(compactionId: string): SessionCompactionEntry | null;
+}
+
+export interface AgentRunRuntimeEventRepositoryPort {
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
+
+export type AgentRunRepositoryPort =
+  & AgentRunSessionRepositoryPort
+  & AgentRunMessageRepositoryPort
+  & AgentRunRunRecordRepositoryPort
+  & AgentRunExecutionFactRepositoryPort
+  & AgentRunModelStepRepositoryPort
+  & AgentRunSessionContextRepositoryPort
+  & AgentRunRuntimeEventRepositoryPort;
 
 export interface AgentRunServiceOptions {
   repository: AgentRunRepositoryPort;

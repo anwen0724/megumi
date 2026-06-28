@@ -382,7 +382,13 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).not.toContain('SessionRunRepository');
     expect(agentRunServiceSource).not.toContain('SessionRunRepository');
     expect(retryCoordinatorSource).not.toContain('SessionRunRepository');
-    expect(runContractSource).toContain('export interface AgentRunRepositoryPort');
+    expect(runContractSource).not.toContain('export interface AgentRunRepositoryPort {');
+    expect(runContractSource).toContain('export interface AgentRunSessionRepositoryPort');
+    expect(runContractSource).toContain('export interface AgentRunRunRecordRepositoryPort');
+    expect(runContractSource).toContain('export interface AgentRunExecutionFactRepositoryPort');
+    expect(runContractSource).toContain('export interface AgentRunModelStepRepositoryPort');
+    expect(runContractSource).toContain('export interface AgentRunRuntimeEventRepositoryPort');
+    expect(runContractSource).toContain('export type AgentRunRepositoryPort =');
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
   });
 
