@@ -6,7 +6,7 @@ import {
 } from '@megumi/shared/runtime';
 import type { RunStep } from '@megumi/shared/session';
 import type { ToolResult } from '@megumi/shared/tool';
-import { withRequestMetadata } from '../../events/runtime-event-metadata';
+import { withRequestMetadata } from '../../../events';
 
 export interface ToolContinuationEmittedRepositoryPort {
   markToolContinuationEmitted(input: {

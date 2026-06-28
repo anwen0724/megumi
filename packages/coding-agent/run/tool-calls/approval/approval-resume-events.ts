@@ -11,7 +11,7 @@ import {
   getToolResultEventId,
   withRequestMetadata,
   withSequenceAfter,
-} from '../../events/runtime-event-metadata';
+} from '../../../events';
 import type { ResumeToolApprovalOutcome } from '../tool-call-contract';
 
 export interface ApprovalResumeEventIds {

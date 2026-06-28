@@ -4,9 +4,10 @@ import path from 'node:path';
 import {
   assertRunStatusTransition,
   canResumeApprovalFromRunStatus,
-} from './lifecycle/run-state-policy';
+  resumeRunAfterApproval,
+} from '../state';
 import { runTurn } from './lifecycle/run-lifecycle';
-import { resumeRunAfterApproval, type RunHostBoundaryPort } from './lifecycle';
+import type { RunHostBoundaryPort } from './lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   ensureToolCallRunnerService,
@@ -18,7 +19,6 @@ import {
 import {
   ModelCallInputBuildService,
   SessionCompactionOrchestrator,
-  type BuildModelCallInputFailure,
   type BuildModelCallInputInput,
   type CompactIfNeededInput,
   type ModelInputMemoryRecallSource,
@@ -48,7 +48,9 @@ import {
   createStepCompletedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
-} from './events/runtime-event-factory';
+  createRuntimeErrorFromUnknown,
+  modelCallInputBuildFailureToRuntimeError,
+} from '../events';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
@@ -118,7 +120,7 @@ import {
   withRequestMetadata,
   withSequenceAfter,
   withSessionMessageRequestMetadata,
-} from './events/runtime-event-metadata';
+} from '../events';
 import type {
   AgentRunCompletionHooksPort,
   AgentRunExecutionFactRepositoryPort,
@@ -1219,7 +1221,7 @@ export class AgentRunService implements AgentRunPort {
           runId: input.request.runId,
           sequence: lastSequence += 1,
           createdAt: this.clock.now(),
-          error: createRuntimeErrorFromUnknown(error),
+          error: createRuntimeErrorFromUnknown(error, 'Session message run failed.'),
         }),
         stepId: currentModelStep.stepId,
       }, input.request);
@@ -1916,32 +1918,6 @@ function createFallbackRuntimeError(message: string): RuntimeError {
   return {
     code: 'runtime_unknown',
     message,
-    severity: 'error',
-    retryable: false,
-    source: 'core',
-  };
-}
-
-function modelCallInputBuildFailureToRuntimeError(failure: BuildModelCallInputFailure): RuntimeError {
-  return {
-    code: 'context_budget_exceeded',
-    message: failure.message,
-    severity: 'error',
-    retryable: failure.retryable,
-    source: 'main',
-  };
-}
-
-function createRuntimeErrorFromUnknown(error: unknown): RuntimeError {
-  if (isRuntimeError(error)) {
-    return error;
-  }
-
-  return {
-    code: 'runtime_unknown',
-    message: error instanceof Error && error.message
-      ? error.message
-      : 'Session message run failed.',
     severity: 'error',
     retryable: false,
     source: 'core',

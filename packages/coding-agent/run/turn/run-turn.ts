@@ -17,12 +17,12 @@ import type {
   SessionCompactionOrchestrationResult,
 } from '../context';
 import type { BuildSessionContextInputFromRepositoryInput } from '../../session';
-import { createRunFailedEvent, createRunStartedEvent } from '../events/runtime-event-factory';
+import { createRunFailedEvent, createRunStartedEvent } from '../../events';
 import { createCodingAgentRunInputFacts } from '../../input/facts';
 import {
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
-} from '../events/runtime-event-utils';
+} from '../../events';
 import type { ModelCallPort } from '../model-call/model-call-contract';
 import {
   streamCodingAgentModelToolLoop,

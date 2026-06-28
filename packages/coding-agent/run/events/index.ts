@@ -1,3 +1,2 @@
-// Exposes runtime event factories and helpers for Coding Agent runs.
-export * from './runtime-event-factory';
-export * from './runtime-event-utils';
+// Compatibility export while runtime event ownership moves to packages/coding-agent/events.
+export * from '../../events';

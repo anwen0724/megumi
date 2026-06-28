@@ -9,7 +9,7 @@ import type {
 import type { PermissionModeState } from '@megumi/shared/permission';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from './run-error';
+import { normalizeRuntimeError } from '../../state';
 import {
   createContextUpdateInputPreview,
   toContextPatchAppliedPayload,
@@ -35,7 +35,7 @@ import {
   createStepCreatedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
-} from '../events/runtime-event-factory';
+} from '../../events';
 import {
   createCancelObservation,
   createCheckpointObservation,

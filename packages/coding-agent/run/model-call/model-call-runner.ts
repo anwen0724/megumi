@@ -12,7 +12,7 @@ import {
   type RuntimeEvent,
 } from '@megumi/shared/runtime';
 import { ProviderRuntimeResolutionError } from '../../settings';
-import { normalizeRuntimeError } from '../lifecycle/run-error';
+import { normalizeRuntimeError } from '../../state';
 import { mapModelCallToAiInput } from './model-call-request-mapper';
 import { streamModelCall } from './model-call-stream';
 import type {

@@ -1,8 +1,5 @@
-// Exposes Coding Agent run lifecycle primitives and state policies.
+// Exposes legacy run lifecycle primitives plus top-level state ownership.
 export * from './run-lifecycle';
-export * from './run-state-policy';
-export * from './run-error';
 export * from './run-types';
-export * from './run-terminal-coordinator';
 export * from './run-retry-coordinator';
-export * from './run-approval-resume';
+export * from '../../state';

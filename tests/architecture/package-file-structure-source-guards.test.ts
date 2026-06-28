@@ -116,14 +116,24 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/input-command'))).toBe(false);
   });
 
-  it('keeps agent loop runtime inside packages/coding-agent/run', () => {
+  it('keeps agent loop runtime inside packages/coding-agent while state and events are top-level owners', () => {
     expect(existsSync(join(repoRoot, 'packages/agent'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/loop/agent-loop.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-event-adapter.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-step-provider-adapter.ts'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/events/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-factory.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-metadata.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-utils.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/state/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-state-policy.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-approval-resume.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'))).toBe(true);
+    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'), 'utf8'))
+      .toContain("export * from '../../events/runtime-event-factory'");
+    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'), 'utf8'))
+      .toContain("export * from '../../state/run-state-policy'");
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);
@@ -566,20 +576,26 @@ describe('package and file structure source guards', () => {
     expect(approvalResumeModelLoopSource).toContain('streamCodingAgentModelToolLoop({');
   });
 
-  it('keeps approval resume run status restoration in lifecycle', () => {
+  it('keeps approval resume run status restoration in top-level state owner', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
-    const approvalResumeLifecyclePath = join(
+    const approvalResumeStatePath = join(
+      repoRoot,
+      'packages/coding-agent/state/run-approval-resume.ts',
+    );
+    const approvalResumeCompatibilityPath = join(
       repoRoot,
       'packages/coding-agent/run/lifecycle/run-approval-resume.ts',
     );
 
-    expect(existsSync(approvalResumeLifecyclePath)).toBe(true);
-    const approvalResumeLifecycleSource = readFileSync(approvalResumeLifecyclePath, 'utf8');
+    expect(existsSync(approvalResumeStatePath)).toBe(true);
+    expect(readFileSync(approvalResumeCompatibilityPath, 'utf8'))
+      .toContain("export * from '../../state/run-approval-resume'");
+    const approvalResumeStateSource = readFileSync(approvalResumeStatePath, 'utf8');
     expect(agentRunServiceSource).not.toContain("assertRunStatusTransition(persistedRun.status, 'running')");
     expect(agentRunServiceSource).not.toContain("from: 'waiting_for_approval',\n      to: 'running'");
-    expect(approvalResumeLifecycleSource).toContain('export function resumeRunAfterApproval');
-    expect(approvalResumeLifecycleSource).toContain("from: 'waiting_for_approval'");
-    expect(approvalResumeLifecycleSource).toContain("to: 'running'");
+    expect(approvalResumeStateSource).toContain('export function resumeRunAfterApproval');
+    expect(approvalResumeStateSource).toContain("from: 'waiting_for_approval'");
+    expect(approvalResumeStateSource).toContain("to: 'running'");
   });
 
   it('keeps AgentRunService internals on owner-named repository ports', () => {

@@ -8,7 +8,7 @@ import type {
   BuildModelCallInputResult,
   ModelInputMemoryRecallSource,
 } from '../context';
-import { coalesceTextDeltaRuntimeEvents, modelCallInputBuildFailureToRuntimeError } from '../events/runtime-event-utils';
+import { coalesceTextDeltaRuntimeEvents, modelCallInputBuildFailureToRuntimeError } from '../../events';
 import type { ModelCallPort } from '../model-call/model-call-contract';
 import type {
   PendingToolApprovalContinuation,
