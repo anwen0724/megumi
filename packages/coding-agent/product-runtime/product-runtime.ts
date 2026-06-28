@@ -1,7 +1,7 @@
 // Defines the complete Coding Agent product runtime exposed to UI shells and non-desktop entries.
 // Every member is a product-owned port interface — this is the single shell-agnostic
 // contract that desktop, and future web/cli shells, code against.
-import type { AgentRunPort } from '../run/run-contract';
+import type { AgentRunPort } from './agent-run-port';
 import type { RecoveryService } from '../state';
 import type { SessionBranchServicePort, SessionServicePort } from '../session';
 import type { ToolService } from '../tools/tool-service-port';

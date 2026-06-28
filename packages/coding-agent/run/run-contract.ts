@@ -1,14 +1,8 @@
 ﻿// Defines the product run service contract consumed by runtime composition and UI shells.
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
-  PlanStatusUpdatePayload,
-  RunStartPayload,
-  SessionMessageCancelPayload,
-  SessionMessageSendData,
-  SessionMessageSendPayload,
   SessionTimelineListData,
 } from '@megumi/shared/ipc';
-import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContextBuildRequest,
@@ -17,12 +11,9 @@ import type {
 } from '@megumi/shared/model';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode } from '@megumi/shared/permission';
-import type {
-  ImplementationPlanArtifactRecord,
-} from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RunContext, ModelCapabilitySummary } from '@megumi/shared/run';
-import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   Run,
   RunAction,
@@ -48,7 +39,6 @@ import type {
 } from '../permissions/permission-snapshot-service';
 import type { PlanArtifactServicePort } from '../artifacts';
 import type {
-  BuildModelCallInputFailure,
   BuildModelCallInputInput,
   BuildModelCallInputResult,
   CompactIfNeededInput,
@@ -63,8 +53,6 @@ import type {
 } from '../session';
 import type {
   PendingToolApprovalResume,
-  ResumeToolApprovalInput,
-  ResumeToolApprovalOutcome,
   ToolApprovalResumePort,
   ToolCallRunner,
 } from '../agent-loop/tool-call';
@@ -363,45 +351,6 @@ export interface AgentRunServiceOptions {
   };
   clock?: AgentRunServiceClock;
   ids?: Partial<AgentRunServiceIds>;
-}
-
-export interface AgentRunPort {
-  startRun(payload: RunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }>;
-  sendSessionMessage(input: {
-    requestId: string;
-    payload: SessionMessageSendPayload;
-    runtimeContext?: RuntimeContext;
-  }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
-  cancelSessionMessage(payload: SessionMessageCancelPayload): boolean;
-  resumeApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined;
-  createManualRetryFromRun(input: {
-    requestId: string;
-    runId: string;
-    createdAt: string;
-    runtimeContext?: RuntimeContext;
-  }): {
-    retryAttempt: unknown;
-    retryAttemptSourceEntry: unknown;
-    events: RuntimeEvent[];
-  };
-  createManualRerunFromUserMessage(input: {
-    requestId: string;
-    sessionId: string;
-    messageId: string;
-    createdAt: string;
-    runtimeContext?: RuntimeContext;
-  }): {
-    branchMarker: unknown;
-    branchMarkerSourceEntry: unknown;
-    seedMessage: unknown;
-    retryAttempt: unknown;
-    retryAttemptSourceEntry: unknown;
-    events: RuntimeEvent[];
-  };
-  cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] };
-  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
-  getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined;
-  updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord;
 }
 
 export interface ApprovalResumeGroup {

@@ -147,6 +147,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/compaction/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/instructions/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/resources/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/product-runtime/agent-run-port.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/session/session-turn-preparation.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts'))).toBe(true);
@@ -156,6 +157,8 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(false);
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'), 'utf8'))
       .toContain('export class ModelCallInputBuildService');
+    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8'))
+      .not.toContain('export interface AgentRunPort');
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);

@@ -38,6 +38,7 @@ import {
 import {
   BUILT_IN_INPUT_COMMAND_REGISTRY,
 } from '@megumi/coding-agent/input/command';
+import type { AgentRunPort } from '../product-runtime';
 import {
   parseRawInput,
   normalizeSessionMessageInputPreprocessing,
@@ -119,7 +120,6 @@ import type {
   AgentRunMessageRepositoryPort,
   AgentRunModelStepProvider,
   AgentRunModelStepRepositoryPort,
-  AgentRunPort,
   AgentRunRunRecordRepositoryPort,
   AgentRunRetryCoordinatorPort,
   AgentRunServiceClock,
