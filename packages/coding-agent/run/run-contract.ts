@@ -57,7 +57,7 @@ import type {
   ModelInputMemoryRecallSource,
   SessionCompactionOrchestratorRepository,
   SessionCompactionOrchestrationResult,
-} from './context';
+} from '../context';
 import type {
   BuildSessionContextInputFromRepositoryInput,
   SessionBranchServicePort,

@@ -7,7 +7,7 @@ import type { SessionBranchServicePort, SessionServicePort } from '../session';
 import type { ToolService } from '../tools/tool-service-port';
 import type { ArtifactServicePort, PlanArtifactServicePort } from '../artifacts';
 import type { MemoryService } from '../memory';
-import type { RunContextServicePort } from '../run/context/resources';
+import type { RunContextServicePort } from '../context/resources';
 import type { ProductSettingsPort, ProviderSettingsPort } from '../settings';
 import type { ProjectService } from '../workspace';
 import type { PermissionMode } from '@megumi/shared/permission';

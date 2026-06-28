@@ -130,10 +130,20 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-state-policy.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-approval-resume.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/model-call-context.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/model-input-context-builder.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/parts/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/compaction/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/instructions/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/resources/index.ts'))).toBe(true);
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'), 'utf8'))
       .toContain("export * from '../../events/runtime-event-factory'");
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'), 'utf8'))
       .toContain("export * from '../../state/run-state-policy'");
+    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/context/model-call-input-builder.ts'), 'utf8'))
+      .toContain("export * from '../../context/model-call-input-builder'");
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);

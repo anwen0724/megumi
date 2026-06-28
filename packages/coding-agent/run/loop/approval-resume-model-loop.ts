@@ -7,7 +7,7 @@ import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
   ModelInputMemoryRecallSource,
-} from '../context';
+} from '../../context';
 import type { ModelCallPort } from '../model-call/model-call-contract';
 import type { PendingToolApprovalContinuation } from '../tool-calls/tool-call-contract';
 import type { ToolCallRunnerService } from '../tool-calls';

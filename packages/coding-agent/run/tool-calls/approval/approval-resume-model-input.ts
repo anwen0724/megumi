@@ -6,7 +6,7 @@ import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
   ModelInputMemoryRecallSource,
-} from '../../context';
+} from '../../../context';
 import type { PendingToolApprovalContinuation } from '../tool-call-contract';
 
 export interface ApprovalResumeModelInputRepositoryPort {

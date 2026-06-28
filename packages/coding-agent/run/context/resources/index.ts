@@ -1,2 +1,2 @@
-// Public exports for Coding Agent resource and run context services.
-export * from './run-context-service';
+// Compatibility export while model context ownership moves to packages/coding-agent/context.
+export * from '../../../context/resources';

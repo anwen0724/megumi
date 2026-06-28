@@ -4,6 +4,7 @@ export * from './session';
 export * from './run';
 export * from './events';
 export * from './state';
+export * from './context';
 export * from './tools';
 export * from './permissions';
 export * from './memory';

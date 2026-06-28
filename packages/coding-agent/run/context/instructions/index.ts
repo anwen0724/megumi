@@ -1,2 +1,2 @@
-// Public exports for Coding Agent instruction source product rules.
-export * from './agent-instruction-source';
+// Compatibility export while model context ownership moves to packages/coding-agent/context.
+export * from '../../../context/instructions';

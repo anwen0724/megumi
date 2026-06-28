@@ -23,7 +23,7 @@ import {
   type CompactIfNeededInput,
   type ModelInputMemoryRecallSource,
   type SessionCompactionOrchestrationResult,
-} from './context';
+} from '../context';
 import {
   SessionContextInputService,
   type SessionBranchServicePort,

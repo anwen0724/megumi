@@ -1,2 +1,2 @@
-// Compatibility re-export while input facts ownership moves to packages/coding-agent/input/facts.
-export * from '../../input/facts';
+// Compatibility export while model context ownership moves to packages/coding-agent/context.
+export * from '../../context/run-input-facts';

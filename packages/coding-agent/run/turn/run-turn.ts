@@ -15,7 +15,7 @@ import type {
   CompactIfNeededInput,
   ModelInputMemoryRecallSource,
   SessionCompactionOrchestrationResult,
-} from '../context';
+} from '../../context';
 import type { BuildSessionContextInputFromRepositoryInput } from '../../session';
 import { createRunFailedEvent, createRunStartedEvent } from '../../events';
 import { createCodingAgentRunInputFacts } from '../../input/facts';
