@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { createDatabase } from '../persistence/connection';
 import { SessionRunRepository } from '../persistence/repos/session-run.repo';
+import { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo';
 import { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import { RecoveryRepository } from '../persistence/repos/recovery.repo';
 import { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
@@ -25,6 +26,7 @@ export function composeCodingAgentPersistence(input: ComposeCodingAgentPersisten
   return {
     database,
     sessionRunRepository: new SessionRunRepository(database),
+    runtimeEventRepository: new RuntimeEventRepository(database),
     activePathRepository: new SessionActivePathRepository(database),
     recoveryRepository: new RecoveryRepository(database),
     permissionSnapshotRepository: new PermissionSnapshotRepository(database),

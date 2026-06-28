@@ -172,4 +172,13 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/registry/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/registry.ts'))).toBe(false);
   });
+
+  it('keeps runtime event persistence in its owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/runtime-event.repo.ts');
+    const sessionRunPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts');
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(readFileSync(sessionRunPath, 'utf8')).toContain('new RuntimeEventRepository');
+    expect(readFileSync(sessionRunPath, 'utf8')).not.toContain('INSERT INTO runtime_events');
+  });
 });
