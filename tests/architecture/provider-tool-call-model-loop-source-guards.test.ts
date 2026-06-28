@@ -168,6 +168,17 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('get' + 'ActiveLeaf(');
   });
 
+  it('delegates next model input construction to the context owner', () => {
+    const source = read('packages/coding-agent/agent-loop/agent-loop.ts');
+
+    expect(source).toContain('buildModelCallInputContextFromSources');
+    expect(source).not.toContain('function buildFallbackToolResultModelInputContext');
+    expect(source).not.toContain('ModelInputContextPart');
+    expect(source).not.toContain('ModelInputContextPartBudget');
+    expect(source).not.toContain('function createProviderStateSummary');
+    expect(source).not.toContain('function createToolResultSummary');
+  });
+
   it('keeps provider adapters away from workspace restore persistence and safety decisions', () => {
     const source = sourceUnder('packages/ai');
     const forbidden = [

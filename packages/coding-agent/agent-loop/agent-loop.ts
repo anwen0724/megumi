@@ -1,7 +1,5 @@
 import type {
   ModelInputContext,
-  ModelInputContextPart,
-  ModelInputContextPartBudget,
   ModelStepProviderState,
   ModelStepRuntimeRequest,
 } from '@megumi/shared/model';
@@ -12,6 +10,10 @@ import {
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
+import {
+  buildModelCallInputContextFromSources,
+  createModelCallInputContextId,
+} from '../context';
 import { runModelCall, type ModelCallPort } from './model-call';
 import { createTerminalRuntimeError } from '../state';
 import type {
@@ -19,25 +21,6 @@ import type {
   ToolResultModelInputBuildInput,
   ToolCallRunner,
 } from './tool-call';
-
-const MODEL_INPUT_CONTEXT_ID_PREFIX = 'model-input-context:';
-const MODEL_INPUT_CONTEXT_ID_MAX_LENGTH = 128;
-const FALLBACK_CONTEXT_WINDOW = 128_000;
-const FALLBACK_RESERVED_OUTPUT_TOKENS = 4_096;
-
-function createAgentLoopModelInputContextId(input: { stepId: string; contextKind: string }): string {
-  const suffix = `:${input.contextKind}`;
-  const contextId = `${MODEL_INPUT_CONTEXT_ID_PREFIX}${input.stepId}${suffix}`;
-
-  if (contextId.length <= MODEL_INPUT_CONTEXT_ID_MAX_LENGTH) {
-    return contextId;
-  }
-
-  const availableStepIdLength = MODEL_INPUT_CONTEXT_ID_MAX_LENGTH
-    - MODEL_INPUT_CONTEXT_ID_PREFIX.length
-    - suffix.length;
-  return `${MODEL_INPUT_CONTEXT_ID_PREFIX}${input.stepId.slice(0, Math.max(1, availableStepIdLength))}${suffix}`;
-}
 
 export interface ModelToolLoopIds {
   nextEventId: () => string;
@@ -197,7 +180,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
           toolCallId: String(toolResult.toolCallId),
           ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
           kind: toolResult.kind,
-          summary: createToolResultSummary(toolResult),
+          summary: toolResultEventSummary(toolResult),
         },
       }));
     }
@@ -339,7 +322,7 @@ async function createNextModelCallRequest(input: {
   ) => ModelInputContext | Promise<ModelInputContext>;
 }): Promise<ModelStepRuntimeRequest> {
   const contextInput = {
-    contextId: createAgentLoopModelInputContextId({
+    contextId: createModelCallInputContextId({
       stepId: input.stepId,
       contextKind: input.contextKind,
     }),
@@ -360,7 +343,7 @@ async function createNextModelCallRequest(input: {
     ...(input.modelStepId ? { modelStepId: input.modelStepId } : {}),
     inputContext: input.buildNextModelInputContext
       ? await input.buildNextModelInputContext(contextInput)
-      : buildFallbackToolResultModelInputContext(contextInput),
+      : buildModelCallInputContextFromSources(contextInput),
     createdAt: input.createdAt,
   };
 }
@@ -401,153 +384,7 @@ function isModelStepProviderStateRecordedEvent(
   return RuntimeEventSchema.safeParse(event).success;
 }
 
-function buildFallbackToolResultModelInputContext(input: ToolResultModelInputBuildInput): ModelInputContext {
-  const inheritedParts = input.baseInputContext.parts.filter((part) => part.kind !== 'tool_continuation');
-  const nextModelInputParts = [
-    ...input.toolCalls.map((toolCall, index): ModelInputContextPart => ({
-      partId: `part:tool-call:${index + 1}:${toolCall.toolCallId}`,
-      kind: 'tool_continuation',
-      text: `Tool call ${toolCall.toolCallId} requested ${toolCall.toolName}. Input preview: ${toolCall.inputPreview.summary}.`,
-      toolCallId: String(toolCall.toolCallId),
-      providerToolCallId: toolCall.providerToolCallId,
-      modelStepId: String(toolCall.modelStepId),
-      toolName: toolCall.toolName,
-      toolInput: toolCall.input,
-      sourceRefs: [{
-        sourceId: `tool-call:${toolCall.toolCallId}`,
-        sourceKind: 'tool_call',
-        sourceUri: `tool-call://${toolCall.toolCallId}`,
-        loadedAt: toolCall.createdAt ?? input.builtAt,
-        metadata: {
-          toolName: toolCall.toolName,
-          status: toolCall.status,
-        },
-      }],
-      priority: 80,
-      budgetStatus: 'included_full',
-      budgetClass: 'continuation',
-      metadata: {
-        toolName: toolCall.toolName,
-        status: toolCall.status,
-      },
-    })),
-    ...input.toolResults.map((toolResult, index): ModelInputContextPart => ({
-      partId: `part:tool-result:${index + 1}:${toolResult.toolResultId}`,
-      kind: 'tool_continuation',
-      text: `Tool result ${toolResult.toolResultId} for ${toolResult.toolCallId}: ${createToolResultSummary(toolResult)}.`,
-      toolCallId: String(toolResult.toolCallId),
-      ...(toolResult.toolExecutionId ? { toolExecutionId: String(toolResult.toolExecutionId) } : {}),
-      toolResultId: String(toolResult.toolResultId),
-      toolResultContent: createToolResultSummary(toolResult),
-      sourceRefs: [{
-        sourceId: `tool-result:${toolResult.toolResultId}`,
-        sourceKind: 'tool_result',
-        sourceUri: `tool-result://${toolResult.toolResultId}`,
-        loadedAt: toolResult.createdAt,
-        metadata: {
-          kind: toolResult.kind,
-          redactionState: toolResult.redactionState,
-        },
-      }],
-      priority: 85,
-      budgetStatus: 'included_full',
-      budgetClass: 'continuation',
-      metadata: {
-        kind: toolResult.kind,
-        redactionState: toolResult.redactionState,
-      },
-    })),
-    ...input.providerStates.map((providerState, index): ModelInputContextPart => ({
-      partId: `part:provider-state:${index + 1}:${providerState.modelStepId}`,
-      kind: 'tool_continuation',
-      text: createProviderStateSummary(providerState),
-      modelStepId: String(providerState.modelStepId),
-      providerStateIds: [`${providerState.modelStepId}:${index}`],
-      providerStateText: createProviderStateSummary(providerState),
-      sourceRefs: [{
-        sourceId: `provider-state:${providerState.modelStepId}:${index}`,
-        sourceKind: 'provider_state',
-        sourceUri: `provider-state://${providerState.modelStepId}/${index}`,
-        loadedAt: input.builtAt,
-        metadata: {
-          providerId: providerState.providerId,
-          modelId: providerState.modelId,
-        },
-      }],
-      priority: 75,
-      budgetStatus: 'included_full',
-      budgetClass: 'continuation',
-    })),
-  ];
-  const parts = [...inheritedParts, ...nextModelInputParts];
-  const partBudgets = parts.map((part): ModelInputContextPartBudget => ({
-    partId: part.partId,
-    tokenEstimate: estimateTextTokens(textForPart(part)),
-    budgetStatus: part.budgetStatus,
-  }));
-  const inputTokenEstimate = partBudgets.reduce((total, partBudget) => total + partBudget.tokenEstimate, 0);
-  const modelContextWindow = input.baseInputContext.budget.modelContextWindow || FALLBACK_CONTEXT_WINDOW;
-  const reservedOutputTokens = input.baseInputContext.budget.reservedOutputTokens || FALLBACK_RESERVED_OUTPUT_TOKENS;
-
-  return {
-    contextId: input.contextId,
-    sessionId: input.sessionId,
-    runId: input.runId,
-    stepId: input.stepId,
-    builtAt: input.builtAt,
-    parts,
-    budget: {
-      modelContextWindow,
-      reservedOutputTokens,
-      availableInputTokens: Math.max(0, modelContextWindow - reservedOutputTokens),
-      keepRecentTokens: input.baseInputContext.budget.keepRecentTokens,
-      inputTokenEstimate,
-      partBudgets,
-    },
-    trace: {
-      buildReason: input.buildReason,
-      selectedSources: parts.flatMap((part) =>
-        part.sourceRefs.map((sourceRef) => ({
-          sourceId: sourceRef.sourceId,
-          sourceKind: sourceRef.sourceKind,
-          reason: part.kind === 'tool_continuation' ? 'tool_continuation' : 'base_context',
-          partId: part.partId,
-          ...(part.budgetClass ? { budgetClass: part.budgetClass } : {}),
-        })),
-      ),
-      excludedSources: [],
-      metadata: {
-        fallbackBuilder: 'agent-loop',
-      },
-    },
-  };
-}
-
-function textForPart(part: ModelInputContextPart): string {
-  return 'text' in part ? part.text : '';
-}
-
-function estimateTextTokens(text: string): number {
-  return Math.max(1, Math.ceil(text.length / 4));
-}
-
-function createProviderStateSummary(providerState: ModelStepProviderState): string {
-  const blocks = providerState.blocks.map((block) => {
-    switch (block.type) {
-      case 'reasoning_content':
-      case 'thinking':
-        return block.text;
-      case 'redacted_thinking':
-        return '[redacted thinking omitted]';
-    }
-  }).filter(Boolean);
-
-  return blocks.length > 0
-    ? blocks.join('\n')
-    : `Provider state recorded for ${providerState.modelStepId}.`;
-}
-
-function createToolResultSummary(toolResult: ToolResult): string {
+function toolResultEventSummary(toolResult: ToolResult): string {
   if (toolResult.textContent && toolResult.textContent.length > 0) {
     return toolResult.textContent;
   }
