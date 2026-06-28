@@ -99,7 +99,7 @@ describe('session run foundation source guards', () => {
     const runtimeErrorContractFiles = [
       join(ROOT, 'packages/shared/runtime/errors.ts'),
       join(ROOT, 'packages/shared/ipc/errors.ts'),
-      join(ROOT, 'packages/coding-agent/run/lifecycle/run-error.ts'),
+      join(ROOT, 'packages/coding-agent/state/run-error.ts'),
     ];
 
     const offenders = runtimeErrorContractFiles

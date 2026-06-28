@@ -45,7 +45,7 @@ describe('recovery foundation source guards', () => {
     const runtimeContractFiles = [
       'packages/shared/runtime/errors.ts',
       'packages/shared/ipc/errors.ts',
-      'packages/coding-agent/run/lifecycle/run-error.ts',
+      'packages/coding-agent/state/run-error.ts',
     ];
 
     expect(offenders(/\brecoverable\b/, runtimeContractFiles)).toEqual([]);

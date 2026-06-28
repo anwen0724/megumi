@@ -150,8 +150,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/instructions/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/resources/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'))).toBe(false);
-    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'), 'utf8'))
-      .toContain("export * from '../../state/run-state-policy'");
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(false);
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/context/model-call-input-builder.ts'), 'utf8'))
       .toContain("export * from '../../context/model-call-input-builder'");
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
@@ -642,14 +641,9 @@ describe('package and file structure source guards', () => {
       repoRoot,
       'packages/coding-agent/state/run-approval-resume.ts',
     );
-    const approvalResumeCompatibilityPath = join(
-      repoRoot,
-      'packages/coding-agent/run/lifecycle/run-approval-resume.ts',
-    );
 
     expect(existsSync(approvalResumeStatePath)).toBe(true);
-    expect(readFileSync(approvalResumeCompatibilityPath, 'utf8'))
-      .toContain("export * from '../../state/run-approval-resume'");
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-approval-resume.ts'))).toBe(false);
     const approvalResumeStateSource = readFileSync(approvalResumeStatePath, 'utf8');
     expect(agentRunServiceSource).not.toContain("assertRunStatusTransition(persistedRun.status, 'running')");
     expect(agentRunServiceSource).not.toContain("from: 'waiting_for_approval',\n      to: 'running'");

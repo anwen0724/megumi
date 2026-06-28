@@ -42,7 +42,8 @@ describe('agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-event-adapter.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-contract.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/provider-adapter.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/state/run-state-policy.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(false);
   });
 
   it('does not keep Agent Runtime under packages/core', () => {
