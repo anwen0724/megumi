@@ -60,6 +60,10 @@ export interface BuildSessionContextInputFromRepositoryInput {
   maxRuntimeFacts?: number;
 }
 
+export interface SessionContextInputBuildPort {
+  buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
+}
+
 export interface SessionContextInputServiceOptions {
   sessionRepository: SessionContextInputSessionRepository;
   messageRepository: SessionContextInputMessageRepository;

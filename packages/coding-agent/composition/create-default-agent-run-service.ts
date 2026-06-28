@@ -2,9 +2,11 @@
 import { AgentRunService } from '../run/agent-run-service';
 import type {
   AgentRunServiceHomePaths,
-  SessionRunAgentInstructionSourceService,
-  SessionRunContextService,
 } from '../run/run-contract';
+import type {
+  AgentInstructionSourcePort,
+  RunBaselineContextPort,
+} from '../context';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
@@ -17,9 +19,9 @@ import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository-adapter';
 
 export interface CreateDefaultAgentRunServiceOptions {
-  contextService?: SessionRunContextService;
+  contextService?: RunBaselineContextPort;
   toolRuntimeFactory?: ToolRuntimeFactory;
-  agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
+  agentInstructionSourceService?: AgentInstructionSourcePort;
 }
 
 export function createDefaultAgentRunService(

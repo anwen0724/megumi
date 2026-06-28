@@ -22,9 +22,9 @@ import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/to
 import { TimelineMessageRepository } from '@megumi/coding-agent/persistence/repos/timeline-message.repo';
 import {
   AgentRunService,
-  type SessionRunContextService,
   type AgentRunServiceOptions,
 } from '@megumi/coding-agent/run';
+import type { RunBaselineContextPort } from '@megumi/coding-agent/context';
 import type { WorkspaceChangeReadPort } from '@megumi/coding-agent/workspace';
 import type {
   AgentRunExecutionFactRepositoryPort,
@@ -488,7 +488,7 @@ function createServiceWithFailingHostBoundary(records: unknown[]) {
 function createServiceWithModelStepStream(
   events: RuntimeEvent[] | ((request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[]),
   options?: {
-  contextService?: SessionRunContextService;
+  contextService?: RunBaselineContextPort;
   permissionSnapshotService?: AgentRunServiceOptions['permissionSnapshotService'];
   toolRuntimeFactory?: AgentRunServiceOptions['toolRuntimeFactory'];
   toolDefinitionProvider?: AgentRunServiceOptions['toolDefinitionProvider'];

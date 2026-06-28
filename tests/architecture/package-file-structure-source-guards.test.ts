@@ -527,6 +527,22 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/tools/tool-registry-snapshot.ts'),
       'utf8',
     );
+    const runContextServiceSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/context/resources/run-context-service.ts'),
+      'utf8',
+    );
+    const agentInstructionSourceSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/context/instructions/agent-instruction-source.ts'),
+      'utf8',
+    );
+    const modelCallInputBuilderSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'),
+      'utf8',
+    );
+    const sessionContextInputSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/session/session-context-input.ts'),
+      'utf8',
+    );
 
     expect(runContractSource).not.toContain('export interface AgentRunPostRunHooksPort');
     expect(runContractSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
@@ -535,6 +551,10 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).not.toContain('export interface SessionRunToolDefinitionProvider');
     expect(runContractSource).not.toContain('export interface SessionRunProviderCapabilitySummaryProvider');
     expect(runContractSource).not.toContain('export interface SessionRunToolRegistrySnapshotService');
+    expect(runContractSource).not.toContain('export interface SessionRunContextService');
+    expect(runContractSource).not.toContain('export interface SessionRunAgentInstructionSourceService');
+    expect(runContractSource).not.toContain('export interface SessionRunSessionContextInputService');
+    expect(runContractSource).not.toContain('export interface SessionRunModelCallInputBuildService');
     expect(runContractSource).toContain('postRunHooks: PostRunHooksPort;');
     expect(runContractSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
     expect(runContractSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
@@ -542,6 +562,10 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).toContain('toolDefinitionProvider?: ToolSetRegistryProvider;');
     expect(runContractSource).toContain('providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;');
     expect(runContractSource).toContain('toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;');
+    expect(runContractSource).toContain('contextService?: RunBaselineContextPort;');
+    expect(runContractSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
+    expect(runContractSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
+    expect(runContractSource).toContain('sessionContextInputService?: SessionContextInputBuildPort;');
     expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
     expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
     expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');
@@ -550,6 +574,10 @@ describe('package and file structure source guards', () => {
     expect(agentLoopSource).toContain('export interface ToolSetRegistryProvider');
     expect(agentLoopSource).toContain('export interface ToolSetCapabilityProvider');
     expect(toolRegistrySnapshotSource).toContain('export interface ToolRegistrySnapshotServicePort');
+    expect(runContextServiceSource).toContain('export interface RunBaselineContextPort');
+    expect(agentInstructionSourceSource).toContain('export interface AgentInstructionSourcePort');
+    expect(modelCallInputBuilderSource).toContain('export interface ModelCallInputBuildPort');
+    expect(sessionContextInputSource).toContain('export interface SessionContextInputBuildPort');
     expect(agentRunServiceSource).not.toContain('new RunCompletionHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new PostRunHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');

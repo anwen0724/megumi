@@ -1,10 +1,8 @@
 ﻿// Defines the product run service contract consumed by runtime composition and UI shells.
-import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   SessionTimelineListData,
 } from '@megumi/shared/ipc';
 import type {
-  AgentInstructionSourceSnapshot,
   ModelInputContextBuildRequest,
   ModelStepRuntimeRequest,
   SessionInstructionSourceSnapshot,
@@ -12,9 +10,7 @@ import type {
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
-import type { RunContext, ModelCapabilitySummary } from '@megumi/shared/run';
 import type { Run, RunStep } from '@megumi/shared/session';
-import type { SessionContextInput } from '@megumi/shared/session';
 import type { ToolResult } from '@megumi/shared/tool';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 
@@ -34,17 +30,17 @@ import type {
 } from '../permissions/permission-snapshot-service';
 import type { PlanArtifactServicePort } from '../artifacts';
 import type {
-  BuildModelCallInputInput,
-  BuildModelCallInputResult,
   CompactIfNeededInput,
-  LoadInstructionSourcesInput,
+  AgentInstructionSourcePort,
+  ModelCallInputBuildPort,
   ModelInputMemoryRecallSource,
+  RunBaselineContextPort,
   SessionCompactionOrchestratorRepository,
   SessionCompactionOrchestrationResult,
 } from '../context';
 import type {
-  BuildSessionContextInputFromRepositoryInput,
   SessionBranchServicePort,
+  SessionContextInputBuildPort,
 } from '../session';
 import type {
   PendingToolApprovalResume,
@@ -86,29 +82,6 @@ export interface AgentRunServiceIds extends RunIdFactory {
   chatStreamId(input: { runId: string }): string;
   chatTextId(): string;
   chatThinkingId(): string;
-}
-
-export interface SessionRunContextService {
-  createBaselineContext(input: {
-    runId: string;
-    goal: string;
-    workspaceId: string;
-    workspacePath: string;
-    modelCapabilitySummary: ModelCapabilitySummary;
-    contextBudgetPolicy: ContextBudgetPolicy;
-  }): RunContext;
-}
-
-export interface SessionRunAgentInstructionSourceService {
-  loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
-}
-
-export interface SessionRunSessionContextInputService {
-  buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
-}
-
-export interface SessionRunModelCallInputBuildService {
-  buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
 }
 
 export interface SessionRunMemoryRecallInput {
@@ -195,7 +168,7 @@ export interface AgentRunServiceOptions {
   postRunHooks: PostRunHooksPort;
   runTerminalCoordinator: RunTerminalCoordinatorPort;
   runRetryCoordinator: RunRetryCoordinatorPort;
-  contextService?: SessionRunContextService;
+  contextService?: RunBaselineContextPort;
   permissionSnapshotService?: Pick<
     PermissionSnapshotService,
     | 'createPermissionSnapshot'
@@ -208,8 +181,8 @@ export interface AgentRunServiceOptions {
   toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
   providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
   toolRepository?: AgentRunToolRepositoryPort;
-  agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
-  modelCallInputBuildService?: SessionRunModelCallInputBuildService;
+  agentInstructionSourceService?: AgentInstructionSourcePort;
+  modelCallInputBuildService?: ModelCallInputBuildPort;
   memoryRecallService?: SessionRunMemoryRecallService;
   memoryCaptureService?: SessionRunMemoryCaptureService;
   memorySettingsProvider?: SessionRunMemorySettingsProvider;
@@ -218,7 +191,7 @@ export interface AgentRunServiceOptions {
   globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
   runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
-  sessionContextInputService?: SessionRunSessionContextInputService;
+  sessionContextInputService?: SessionContextInputBuildPort;
   sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };

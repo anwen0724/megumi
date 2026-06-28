@@ -26,6 +26,10 @@ export interface LoadInstructionSourcesInput {
   loadedAt: string;
 }
 
+export interface AgentInstructionSourcePort {
+  loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
+}
+
 interface InstructionCandidate {
   sourceKind: 'global_instruction' | 'project_instruction';
   directoryPath: string;

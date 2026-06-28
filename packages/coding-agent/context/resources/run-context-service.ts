@@ -37,6 +37,10 @@ export interface CreateBaselineContextInput {
   contextBudgetPolicy: ContextBudgetPolicy;
 }
 
+export interface RunBaselineContextPort {
+  createBaselineContext(input: CreateBaselineContextInput): RunContext;
+}
+
 export interface ListWorkspaceSourcesInput {
   runId: string;
   workspaceId: string;

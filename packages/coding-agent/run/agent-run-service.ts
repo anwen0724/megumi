@@ -22,7 +22,9 @@ import {
   SessionCompactionOrchestrator,
   type BuildModelCallInputInput,
   type CompactIfNeededInput,
+  type ModelCallInputBuildPort,
   type ModelInputMemoryRecallSource,
+  type RunBaselineContextPort,
   type SessionCompactionOrchestrationResult,
 } from '../context';
 import {
@@ -30,6 +32,7 @@ import {
   SessionContextInputService,
   SessionTurnPreparationService,
   type SessionBranchServicePort,
+  type SessionContextInputBuildPort,
 } from '@megumi/coding-agent/session';
 import {
   AgentLoop,
@@ -74,7 +77,6 @@ import type {
   AgentRunSessionRepositoryPort,
   AgentRunToolRepositoryPort,
 } from '../persistence';
-import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type {
   RunContext,
   ModelCapabilitySummary,
@@ -136,14 +138,11 @@ import type {
   AgentRunServiceClock,
   AgentRunServiceIds,
   AgentRunServiceOptions,
-  SessionRunContextService,
   SessionRunEffectiveCwdProvider,
   SessionRunGlobalInstructionDirectoryProvider,
   SessionRunMemoryMarkdownSyncService,
   SessionRunMemoryRecallService,
   SessionRunMemorySettingsProvider,
-  SessionRunModelCallInputBuildService,
-  SessionRunSessionContextInputService,
   SessionRunSessionInstructionSourceProvider,
 } from './run-contract';
 
@@ -198,7 +197,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
   private readonly runtimeEventLog: RuntimeEventLog;
   private readonly activePathRepository?: SessionActivePathRepository;
-  private readonly contextService?: SessionRunContextService;
+  private readonly contextService?: RunBaselineContextPort;
   private readonly permissionSnapshotService?: Pick<
     PermissionSnapshotService,
     | 'createPermissionSnapshot'
@@ -211,7 +210,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
   private readonly providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
   private readonly toolRepository?: AgentRunToolRepositoryPort;
-  private readonly modelCallInputBuildService: SessionRunModelCallInputBuildService;
+  private readonly modelCallInputBuildService: ModelCallInputBuildPort;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
   private readonly memorySettingsProvider?: SessionRunMemorySettingsProvider;
   private readonly memoryMarkdownSyncService?: SessionRunMemoryMarkdownSyncService;
@@ -219,7 +218,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
   private readonly runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
-  private readonly sessionContextInputService: SessionRunSessionContextInputService;
+  private readonly sessionContextInputService: SessionContextInputBuildPort;
   private readonly sessionTurnPreparationService: SessionTurnPreparationService;
   private readonly sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;

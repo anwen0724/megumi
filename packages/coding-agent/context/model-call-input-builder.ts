@@ -83,6 +83,10 @@ export interface BuildModelCallInputResult {
   failure?: BuildModelCallInputFailure;
 }
 
+export interface ModelCallInputBuildPort {
+  buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
+}
+
 export interface BuildModelCallInputFailure {
   code: 'context_required_over_budget';
   message: string;
