@@ -2,6 +2,7 @@
 export * from './connection';
 export * from './schema';
 export * from './repos/session-run.repo';
+export * from './repos/run-execution-fact.repo';
 export * from './repos/runtime-event.repo';
 export * from './repos/session-active-path.repo';
 export * from './repos/run-context.repo';

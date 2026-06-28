@@ -181,4 +181,18 @@ describe('package and file structure source guards', () => {
     expect(readFileSync(sessionRunPath, 'utf8')).toContain('new RuntimeEventRepository');
     expect(readFileSync(sessionRunPath, 'utf8')).not.toContain('INSERT INTO runtime_events');
   });
+
+  it('keeps run execution facts in their owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/run-execution-fact.repo.ts');
+    const sessionRunSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
+      'utf8',
+    );
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(sessionRunSource).toContain('new RunExecutionFactRepository');
+    expect(sessionRunSource).not.toContain('INSERT INTO run_steps');
+    expect(sessionRunSource).not.toContain('INSERT INTO run_actions');
+    expect(sessionRunSource).not.toContain('INSERT INTO run_observations');
+  });
 });
