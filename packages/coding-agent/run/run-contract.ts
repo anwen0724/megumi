@@ -13,7 +13,6 @@ import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RunContext, ModelCapabilitySummary } from '@megumi/shared/run';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
@@ -60,25 +59,17 @@ import type { ToolCallRunnerService } from '../agent-loop/tool-call';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { RunHostBoundaryPort, RunIdFactory } from '../state/lifecycle';
 import type {
-  CancelActiveSessionMessageRunInput,
-  CancelActiveSessionMessageRunResult,
-  CleanupInterruptedRunsOnStartupInput,
-  CleanupInterruptedRunsOnStartupResult,
-  CreateManualRerunFromUserMessageInput,
-  CreateManualRerunFromUserMessageResult,
-  CreateManualRetryFromRunInput,
-  CreateManualRetryFromRunResult,
-  RecordManualRerunAttemptForBranchDraftInput,
+  RunRetryCoordinatorPort,
+  RunTerminalCoordinatorPort,
 } from '../state';
 import type {
-  ScheduleRunCompletedMemoryCaptureInput,
+  PostRunHooksPort,
 } from '../hooks';
 import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '../tools/tool-registry-snapshot';
 import type {
-  ChatStreamEventAdapter,
   ChatStreamEventSink,
 } from '../projections/chat-stream';
 
@@ -222,26 +213,6 @@ export interface AgentRunServiceHomePaths {
   sqlitePath: string;
 }
 
-export interface AgentRunPostRunHooksPort {
-  scheduleRunCompletedMemoryCapture(input: ScheduleRunCompletedMemoryCaptureInput): void;
-  publishWorkspaceChangeFooter(input: {
-    runId: string;
-    createdAt: string;
-    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
-  }): void;
-}
-
-export interface AgentRunTerminalCoordinatorPort {
-  cancelActiveSessionMessageRun(input: CancelActiveSessionMessageRunInput): CancelActiveSessionMessageRunResult;
-  cleanupInterruptedRunsOnStartup(input: CleanupInterruptedRunsOnStartupInput): CleanupInterruptedRunsOnStartupResult;
-}
-
-export interface AgentRunRetryCoordinatorPort {
-  createManualRetryFromRun(input: CreateManualRetryFromRunInput): CreateManualRetryFromRunResult;
-  createManualRerunFromUserMessage(input: CreateManualRerunFromUserMessageInput): CreateManualRerunFromUserMessageResult;
-  recordManualRerunAttemptForBranchDraft(input: RecordManualRerunAttemptForBranchDraftInput): RuntimeEvent;
-}
-
 export interface AgentRunServiceOptions {
   sessionRepository: AgentRunSessionRepositoryPort;
   messageRepository: AgentRunMessageRepositoryPort;
@@ -250,9 +221,9 @@ export interface AgentRunServiceOptions {
   modelStepRepository: AgentRunModelStepRepositoryPort;
   sessionContextRepository: AgentRunSessionContextRepositoryPort;
   runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
-  postRunHooks: AgentRunPostRunHooksPort;
-  runTerminalCoordinator: AgentRunTerminalCoordinatorPort;
-  runRetryCoordinator: AgentRunRetryCoordinatorPort;
+  postRunHooks: PostRunHooksPort;
+  runTerminalCoordinator: RunTerminalCoordinatorPort;
+  runRetryCoordinator: RunRetryCoordinatorPort;
   contextService?: SessionRunContextService;
   permissionSnapshotService?: Pick<
     PermissionSnapshotService,

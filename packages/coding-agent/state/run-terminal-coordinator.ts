@@ -81,6 +81,11 @@ export interface CleanupInterruptedRunsOnStartupResult {
   cleanedRunIds: string[];
 }
 
+export interface RunTerminalCoordinatorPort {
+  cancelActiveSessionMessageRun(input: CancelActiveSessionMessageRunInput): CancelActiveSessionMessageRunResult;
+  cleanupInterruptedRunsOnStartup(input: CleanupInterruptedRunsOnStartupInput): CleanupInterruptedRunsOnStartupResult;
+}
+
 export class RunTerminalCoordinator {
   private readonly repository: RunTerminalRepositoryPort;
   private readonly eventLog: RuntimeEventLog;

@@ -4,6 +4,8 @@ import {
   assertRunStatusTransition,
   canResumeApprovalFromRunStatus,
   resumeRunAfterApproval,
+  type RunRetryCoordinatorPort,
+  type RunTerminalCoordinatorPort,
 } from '../state';
 import { runTurn, type RunHostBoundaryPort } from '../state/lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
@@ -122,17 +124,15 @@ import {
 } from '@megumi/shared/runtime';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import type { PermissionSnapshotService } from '../permissions';
+import type { PostRunHooksPort } from '../hooks';
 import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import type {
-  AgentRunPostRunHooksPort,
-  AgentRunRetryCoordinatorPort,
   AgentRunServiceClock,
   AgentRunServiceIds,
   AgentRunServiceOptions,
-  AgentRunTerminalCoordinatorPort,
   SessionRunContextService,
   SessionRunEffectiveCwdProvider,
   SessionRunGlobalInstructionDirectoryProvider,
@@ -230,9 +230,9 @@ export class AgentRunService implements AgentRunPort {
   private readonly chatStreamEventSink?: ChatStreamEventSink;
   private readonly clock: AgentRunServiceClock;
   private readonly ids: AgentRunServiceIds;
-  private readonly runTerminalCoordinator: AgentRunTerminalCoordinatorPort;
-  private readonly runRetryCoordinator: AgentRunRetryCoordinatorPort;
-  private readonly postRunHooks: AgentRunPostRunHooksPort;
+  private readonly runTerminalCoordinator: RunTerminalCoordinatorPort;
+  private readonly runRetryCoordinator: RunRetryCoordinatorPort;
+  private readonly postRunHooks: PostRunHooksPort;
   private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
   });

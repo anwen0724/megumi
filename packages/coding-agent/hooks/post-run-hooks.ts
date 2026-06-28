@@ -54,6 +54,15 @@ export interface ScheduleRunCompletedMemoryCaptureInput {
   memoryEnabled?: boolean;
 }
 
+export interface PostRunHooksPort {
+  scheduleRunCompletedMemoryCapture(input: ScheduleRunCompletedMemoryCaptureInput): void;
+  publishWorkspaceChangeFooter(input: {
+    runId: string;
+    createdAt: string;
+    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
+  }): void;
+}
+
 export class PostRunHooksCoordinator {
   private readonly repository: PostRunHooksRepositoryPort;
   private readonly memoryCaptureService?: PostRunHooksMemoryCaptureService;

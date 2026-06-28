@@ -85,6 +85,12 @@ export interface RecordManualRerunAttemptForBranchDraftInput {
   runtimeContext?: RuntimeContext;
 }
 
+export interface RunRetryCoordinatorPort {
+  createManualRetryFromRun(input: CreateManualRetryFromRunInput): CreateManualRetryFromRunResult;
+  createManualRerunFromUserMessage(input: CreateManualRerunFromUserMessageInput): CreateManualRerunFromUserMessageResult;
+  recordManualRerunAttemptForBranchDraft(input: RecordManualRerunAttemptForBranchDraftInput): RuntimeEvent;
+}
+
 export class RunRetryCoordinator {
   private readonly repository: RunRetryCoordinatorOptions['repository'];
   private readonly eventLog: RuntimeEventLog;

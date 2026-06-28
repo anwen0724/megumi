@@ -508,10 +508,25 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/composition/create-default-agent-run-service.ts'),
       'utf8',
     );
+    const postRunHooksSource = readFileSync(join(repoRoot, 'packages/coding-agent/hooks/post-run-hooks.ts'), 'utf8');
+    const runTerminalCoordinatorSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'),
+      'utf8',
+    );
+    const runRetryCoordinatorSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'),
+      'utf8',
+    );
 
-    expect(runContractSource).toContain('postRunHooks: AgentRunPostRunHooksPort;');
-    expect(runContractSource).toContain('runTerminalCoordinator: AgentRunTerminalCoordinatorPort;');
-    expect(runContractSource).toContain('runRetryCoordinator: AgentRunRetryCoordinatorPort;');
+    expect(runContractSource).not.toContain('export interface AgentRunPostRunHooksPort');
+    expect(runContractSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
+    expect(runContractSource).not.toContain('export interface AgentRunRetryCoordinatorPort');
+    expect(runContractSource).toContain('postRunHooks: PostRunHooksPort;');
+    expect(runContractSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
+    expect(runContractSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
+    expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
+    expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
+    expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');
     expect(agentRunServiceSource).not.toContain('new RunCompletionHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new PostRunHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');
