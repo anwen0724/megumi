@@ -1,22 +1,24 @@
 ﻿import { describe, expect, it } from 'vitest';
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
 import { ArtifactRepository } from '@megumi/coding-agent/persistence/repos/artifact.repo';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');
   migrateDatabase(database);
-  const lifecycle = new SessionRunRepository(database);
-  lifecycle.saveSession({
+  const sessionRepository = new SessionRecordRepository(database);
+  const runRepository = new RunRecordRepository(database);
+  sessionRepository.saveSession({
     sessionId: 'session:1',
     title: 'Session',
     status: 'active',
     createdAt: '2026-05-16T00:00:00.000Z',
     updatedAt: '2026-05-16T00:00:00.000Z',
   });
-  lifecycle.saveRun({
+  runRepository.saveRun({
     runId: 'run:1',
     sessionId: 'session:1',
     mode: 'plan',

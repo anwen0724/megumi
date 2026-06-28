@@ -3,32 +3,45 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
 import { SessionActivePathRepository } from '@megumi/coding-agent/persistence/repos/session-active-path.repo';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type {
+  Run,
+  Session,
   SessionRetryAttempt,
   SessionSourceEntry,
 } from '@megumi/shared/session';
 
 let db: Database.Database | null = null;
 
+interface SessionRunSeedRepository {
+  saveSession(session: Session): Session;
+  saveRun(run: Run): Run;
+}
+
 function createRepositories(): {
   activePathRepo: SessionActivePathRepository;
-  sessionRunRepo: SessionRunRepository;
+  sessionRunRepo: SessionRunSeedRepository;
   database: Database.Database;
 } {
   db = createDatabase(':memory:');
   migrateDatabase(db);
+  const runRecordRepository = new RunRecordRepository(db);
+  const sessionRecordRepository = new SessionRecordRepository(db);
   return {
     activePathRepo: new SessionActivePathRepository(db),
-    sessionRunRepo: new SessionRunRepository(db),
+    sessionRunRepo: {
+      saveSession: (session) => sessionRecordRepository.saveSession(session),
+      saveRun: (run) => runRecordRepository.saveRun(run),
+    },
     database: db,
   };
 }
 
-function seedSession(sessionRunRepo: SessionRunRepository): void {
+function seedSession(sessionRunRepo: SessionRunSeedRepository): void {
   sessionRunRepo.saveSession({
     sessionId: 'session-1',
     title: 'Active path',
@@ -38,7 +51,7 @@ function seedSession(sessionRunRepo: SessionRunRepository): void {
   });
 }
 
-function seedSecondSession(sessionRunRepo: SessionRunRepository): void {
+function seedSecondSession(sessionRunRepo: SessionRunSeedRepository): void {
   sessionRunRepo.saveSession({
     sessionId: 'session-2',
     title: 'Other active path',
@@ -76,7 +89,7 @@ function sourceEntry(
   };
 }
 
-function seedRun(sessionRunRepo: SessionRunRepository, runId = 'run-1', sessionId = 'session-1'): void {
+function seedRun(sessionRunRepo: SessionRunSeedRepository, runId = 'run-1', sessionId = 'session-1'): void {
   sessionRunRepo.saveRun({
     runId,
     sessionId,

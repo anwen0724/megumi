@@ -2,18 +2,20 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
 import { RunContextRepository } from '@megumi/coding-agent/persistence/repos/run-context.repo';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 
 let db: Database.Database | null = null;
 
 function createRepos() {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const lifecycle = new SessionRunRepository(db);
+  const runRepository = new RunRecordRepository(db);
+  const sessionRepository = new SessionRecordRepository(db);
   const context = new RunContextRepository(db);
 
-  lifecycle.saveSession({
+  sessionRepository.saveSession({
     sessionId: 'session-1',
     title: 'Context persistence',
     workspaceId: 'workspace-1',
@@ -22,7 +24,7 @@ function createRepos() {
     createdAt: '2026-05-15T00:00:00.000Z',
     updatedAt: '2026-05-15T00:00:00.000Z',
   });
-  lifecycle.saveRun({
+  runRepository.saveRun({
     runId: 'run-1',
     sessionId: 'session-1',
     mode: 'chat',
@@ -31,7 +33,7 @@ function createRepos() {
     createdAt: '2026-05-15T00:00:01.000Z',
   });
 
-  return { lifecycle, context };
+  return { context };
 }
 
 afterEach(() => {

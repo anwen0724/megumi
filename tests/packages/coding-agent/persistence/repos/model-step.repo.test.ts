@@ -3,19 +3,25 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import { ModelStepRepository, type ModelStepRecord } from '@megumi/coding-agent/persistence/repos/model-step.repo';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { RunExecutionFactRepository } from '@megumi/coding-agent/persistence/repos/run-execution-fact.repo';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 
 let db: Database.Database | null = null;
 
 function createRepositories(): {
   modelStepRepository: ModelStepRepository;
-  sessionRunRepository: SessionRunRepository;
+  runExecutionFactRepository: RunExecutionFactRepository;
+  runRecordRepository: RunRecordRepository;
+  sessionRecordRepository: SessionRecordRepository;
 } {
   db = new Database(':memory:');
   migrateDatabase(db);
   return {
     modelStepRepository: new ModelStepRepository(db),
-    sessionRunRepository: new SessionRunRepository(db),
+    runExecutionFactRepository: new RunExecutionFactRepository(db),
+    runRecordRepository: new RunRecordRepository(db),
+    sessionRecordRepository: new SessionRecordRepository(db),
   };
 }
 
@@ -26,15 +32,20 @@ afterEach(() => {
 
 describe('ModelStepRepository', () => {
   it('saves, updates, and reads model step records', () => {
-    const { modelStepRepository, sessionRunRepository } = createRepositories();
-    sessionRunRepository.saveSession({
+    const {
+      modelStepRepository,
+      runExecutionFactRepository,
+      runRecordRepository,
+      sessionRecordRepository,
+    } = createRepositories();
+    sessionRecordRepository.saveSession({
       sessionId: 'session-1',
       title: 'Lifecycle',
       status: 'active',
       createdAt: '2026-05-15T00:00:00.000Z',
       updatedAt: '2026-05-15T00:00:00.000Z',
     });
-    sessionRunRepository.saveRun({
+    runRecordRepository.saveRun({
       runId: 'run-1',
       sessionId: 'session-1',
       mode: 'chat',
@@ -42,7 +53,7 @@ describe('ModelStepRepository', () => {
       status: 'running',
       createdAt: '2026-05-15T00:00:01.000Z',
     });
-    sessionRunRepository.saveStep({
+    runExecutionFactRepository.saveStep({
       stepId: 'step-1',
       runId: 'run-1',
       kind: 'model',

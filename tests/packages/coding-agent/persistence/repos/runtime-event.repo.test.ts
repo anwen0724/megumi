@@ -2,21 +2,24 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
 import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 let db: Database.Database | null = null;
 
 function createRepositories(): {
+  runRecordRepository: RunRecordRepository;
   runtimeEventRepository: RuntimeEventRepository;
-  sessionRunRepository: SessionRunRepository;
+  sessionRecordRepository: SessionRecordRepository;
 } {
   db = new Database(':memory:');
   migrateDatabase(db);
   return {
+    runRecordRepository: new RunRecordRepository(db),
     runtimeEventRepository: new RuntimeEventRepository(db),
-    sessionRunRepository: new SessionRunRepository(db),
+    sessionRecordRepository: new SessionRecordRepository(db),
   };
 }
 
@@ -27,15 +30,15 @@ afterEach(() => {
 
 describe('RuntimeEventRepository', () => {
   it('appends runtime events, lists them by run sequence, and rejects duplicate run sequences', () => {
-    const { runtimeEventRepository, sessionRunRepository } = createRepositories();
-    sessionRunRepository.saveSession({
+    const { runRecordRepository, runtimeEventRepository, sessionRecordRepository } = createRepositories();
+    sessionRecordRepository.saveSession({
       sessionId: 'session-1',
       title: 'Lifecycle',
       status: 'active',
       createdAt: '2026-05-15T00:00:00.000Z',
       updatedAt: '2026-05-15T00:00:00.000Z',
     });
-    sessionRunRepository.saveRun({
+    runRecordRepository.saveRun({
       runId: 'run-1',
       sessionId: 'session-1',
       mode: 'chat',

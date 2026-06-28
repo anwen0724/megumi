@@ -4,22 +4,29 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import { SessionActivePathRepository } from '@megumi/coding-agent/persistence/repos/session-active-path.repo';
 import { SessionContextRepository } from '@megumi/coding-agent/persistence/repos/session-context.repo';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
-import type { SessionCompactionEntry } from '@megumi/shared/session';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
+import type { Session, SessionCompactionEntry } from '@megumi/shared/session';
 
 let db: Database.Database | null = null;
+
+interface SessionSeedRepository {
+  saveSession(session: Session): Session;
+}
 
 function createRepositories(): {
   activePathRepository: SessionActivePathRepository;
   sessionContextRepository: SessionContextRepository;
-  sessionRunRepository: SessionRunRepository;
+  sessionRepository: SessionSeedRepository;
 } {
   db = new Database(':memory:');
   migrateDatabase(db);
+  const sessionRecordRepository = new SessionRecordRepository(db);
   return {
     activePathRepository: new SessionActivePathRepository(db),
     sessionContextRepository: new SessionContextRepository(db),
-    sessionRunRepository: new SessionRunRepository(db),
+    sessionRepository: {
+      saveSession: (session) => sessionRecordRepository.saveSession(session),
+    },
   };
 }
 
@@ -30,8 +37,8 @@ afterEach(() => {
 
 describe('SessionContextRepository', () => {
   it('atomically saves a compaction source entry and advances the active leaf when expected leaf matches', () => {
-    const { activePathRepository, sessionContextRepository, sessionRunRepository } = createRepositories();
-    sessionRunRepository.saveSession({
+    const { activePathRepository, sessionContextRepository, sessionRepository } = createRepositories();
+    sessionRepository.saveSession({
       sessionId: 'session-1',
       title: 'Session',
       status: 'active',
@@ -105,8 +112,8 @@ describe('SessionContextRepository', () => {
   });
 
   it('rolls back the compaction when source attribution fails', () => {
-    const { activePathRepository, sessionContextRepository, sessionRunRepository } = createRepositories();
-    sessionRunRepository.saveSession({
+    const { activePathRepository, sessionContextRepository, sessionRepository } = createRepositories();
+    sessionRepository.saveSession({
       sessionId: 'session-1',
       title: 'Session',
       status: 'active',

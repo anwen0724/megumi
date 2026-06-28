@@ -3,19 +3,19 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import { SessionMessageRepository } from '@megumi/coding-agent/persistence/repos/session-message.repo';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 
 let db: Database.Database | null = null;
 
 function createRepositories(): {
   sessionMessageRepository: SessionMessageRepository;
-  sessionRunRepository: SessionRunRepository;
+  sessionRecordRepository: SessionRecordRepository;
 } {
   db = new Database(':memory:');
   migrateDatabase(db);
   return {
     sessionMessageRepository: new SessionMessageRepository(db),
-    sessionRunRepository: new SessionRunRepository(db),
+    sessionRecordRepository: new SessionRecordRepository(db),
   };
 }
 
@@ -26,8 +26,8 @@ afterEach(() => {
 
 describe('SessionMessageRepository', () => {
   it('saves, updates, gets, and lists session messages in creation order', () => {
-    const { sessionMessageRepository, sessionRunRepository } = createRepositories();
-    sessionRunRepository.saveSession({
+    const { sessionMessageRepository, sessionRecordRepository } = createRepositories();
+    sessionRecordRepository.saveSession({
       sessionId: 'session-1',
       title: 'Session',
       status: 'active',

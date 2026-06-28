@@ -3,20 +3,20 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import { SessionCompactionRepository } from '@megumi/coding-agent/persistence/repos/session-compaction.repo';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import type { SessionCompactionEntry } from '@megumi/shared/session';
 
 let db: Database.Database | null = null;
 
 function createRepositories(): {
   sessionCompactionRepository: SessionCompactionRepository;
-  sessionRunRepository: SessionRunRepository;
+  sessionRecordRepository: SessionRecordRepository;
 } {
   db = new Database(':memory:');
   migrateDatabase(db);
   return {
     sessionCompactionRepository: new SessionCompactionRepository(db),
-    sessionRunRepository: new SessionRunRepository(db),
+    sessionRecordRepository: new SessionRecordRepository(db),
   };
 }
 
@@ -27,8 +27,8 @@ afterEach(() => {
 
 describe('SessionCompactionRepository', () => {
   it('saves, updates, gets, and lists session compactions by recency', () => {
-    const { sessionCompactionRepository, sessionRunRepository } = createRepositories();
-    sessionRunRepository.saveSession({
+    const { sessionCompactionRepository, sessionRecordRepository } = createRepositories();
+    sessionRecordRepository.saveSession({
       sessionId: 'session-1',
       title: 'Compaction session',
       status: 'active',
