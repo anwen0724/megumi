@@ -147,6 +147,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/compaction/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/instructions/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/resources/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/session/session-turn-preparation.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/context'))).toBe(false);
@@ -654,7 +655,12 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).toContain('private readonly sessionRepository: AgentRunSessionRepositoryPort');
     expect(agentRunServiceSource).toContain('private readonly runRecordRepository: AgentRunRunRecordRepositoryPort');
     expect(agentRunServiceSource).toContain('private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort');
+    expect(agentRunServiceSource).toContain('private readonly sessionTurnPreparationService: SessionTurnPreparationService');
     expect(agentRunServiceSource).toContain('sessionRepository: this.sessionRepository');
+    expect(agentRunServiceSource).not.toContain('private resolveSessionForMessage');
+    expect(agentRunServiceSource).not.toContain('private appendSourceAndMoveLeaf');
+    expect(agentRunServiceSource).not.toContain('function sessionMessageSourceRef');
+    expect(agentRunServiceSource).not.toContain('function sessionRunSourceRef');
     expect(agentRunServiceSource).not.toContain('repository: this.runTerminalRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runRetryRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runCompletionRepository');

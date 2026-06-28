@@ -25,6 +25,7 @@ import {
 } from '../context';
 import {
   SessionContextInputService,
+  SessionTurnPreparationService,
   type SessionBranchServicePort,
 } from '@megumi/coding-agent/session';
 import {
@@ -60,10 +61,7 @@ import type {
   ModelCapabilitySummary,
 } from '@megumi/shared/run';
 import { isProviderId, type ProviderId } from '@megumi/shared/provider';
-import type {
-  ModelInputContextBuildRequest,
-  ModelInputContextSourceRef,
-} from '@megumi/shared/model';
+import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
 import type {
   SessionActivePath,
@@ -225,6 +223,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
   private readonly runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
   private readonly sessionContextInputService: SessionRunSessionContextInputService;
+  private readonly sessionTurnPreparationService: SessionTurnPreparationService;
   private readonly sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
@@ -275,6 +274,8 @@ export class AgentRunService implements AgentRunPort {
     this.globalInstructionDirectoryProvider = options.globalInstructionDirectoryProvider;
     this.sessionInstructionSourceProvider = options.sessionInstructionSourceProvider;
     this.runEffectiveCwdProvider = options.runEffectiveCwdProvider;
+    this.clock = options.clock ?? defaultClock;
+    this.ids = createDefaultAgentRunServiceIds(options.ids);
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
         sessionRepository: this.sessionRepository,
@@ -285,6 +286,12 @@ export class AgentRunService implements AgentRunPort {
         sessionCompactionRepository: this.sessionContextRepository,
         activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
       });
+    this.sessionTurnPreparationService = new SessionTurnPreparationService({
+      sessionRepository: this.sessionRepository,
+      messageRepository: this.messageRepository,
+      ids: this.ids,
+      ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
+    });
     this.modelCallInputBuildService = options.modelCallInputBuildService
       ?? new ModelCallInputBuildService({
         instructionSourceService: options.agentInstructionSourceService,
@@ -292,8 +299,6 @@ export class AgentRunService implements AgentRunPort {
       });
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.sessionBranchService = options.sessionBranchService;
-    this.clock = options.clock ?? defaultClock;
-    this.ids = createDefaultAgentRunServiceIds(options.ids);
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
       ?? (options.modelStepProvider && options.sessionCompactionRepository
         ? new SessionCompactionOrchestrator({
@@ -661,15 +666,17 @@ export class AgentRunService implements AgentRunPort {
       });
     }
 
-    const session = this.resolveSessionForMessage(input.payload);
     const runId = this.ids.runId();
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
     const currentUserMessage = currentUserChatMessage(input.payload);
+    if (!currentUserMessage) {
+      throw new Error('Session message send requires a user message.');
+    }
     // Renderer preprocessing is treated as transport metadata here; this
     // runtime normalization is the trust boundary before persistence and model input.
     const normalizedInput: NormalizedSessionMessageInputPreprocessing = normalizeSessionMessageInputPreprocessing({
-      rawText: currentUserMessage?.content ?? '',
+      rawText: currentUserMessage.content,
       requestedPermissionMode: input.payload.context?.permissionMode,
       requestedPermissionSource: input.payload.context?.permissionSource,
       preprocessing: input.payload.context?.preprocessing,
@@ -679,25 +686,17 @@ export class AgentRunService implements AgentRunPort {
     const permissionSource = normalizedInput.permissionSource;
     const mode = permissionMode;
     const inputMetadata = normalizedInput.metadata;
-    if (!currentUserMessage) {
-      throw new Error('Session message send requires a user message.');
-    }
-
-    const userMessage = this.messageRepository.saveMessage({
-      messageId: this.ids.messageId(),
-      sessionId: session.sessionId,
+    const preparedTurn = this.sessionTurnPreparationService.prepareUserInputTurn({
+      ...(input.payload.sessionId ? { sessionId: input.payload.sessionId } : {}),
+      ...(input.payload.context?.sessionTitle ? { sessionTitle: input.payload.context.sessionTitle } : {}),
+      ...(input.payload.context?.workspaceId ? { workspaceId: input.payload.context.workspaceId } : {}),
+      ...(input.payload.context?.workspacePath ? { workspacePath: input.payload.context.workspacePath } : {}),
       runId,
-      role: 'user',
       content: currentUserMessage.content,
-      status: 'completed',
-      createdAt: currentUserMessage.createdAt,
-      completedAt: currentUserMessage.createdAt,
+      messageCreatedAt: currentUserMessage.createdAt,
+      createdAt,
     });
-    this.appendSourceAndMoveLeaf({
-      sessionId: String(session.sessionId),
-      sourceRef: sessionMessageSourceRef(String(userMessage.messageId), currentUserMessage.createdAt),
-      createdAt: currentUserMessage.createdAt,
-    });
+    const { session, userMessage } = preparedTurn;
     const rawInputId = `raw-input:${runId}:${userMessage.messageId}`;
     const parsedInput = parseRawInput({
       id: rawInputId,
@@ -740,9 +739,9 @@ export class AgentRunService implements AgentRunPort {
           permissionSnapshotRef: permissionSnapshot.permissionSnapshotId,
         })
       : initialRun;
-    this.appendSourceAndMoveLeaf({
+    this.sessionTurnPreparationService.recordSessionRunSource({
       sessionId: String(session.sessionId),
-      sourceRef: sessionRunSourceRef(String(run.runId), createdAt),
+      runId: String(run.runId),
       createdAt,
     });
     let manualRerunAuditEvent: RuntimeEvent | undefined;
@@ -948,26 +947,6 @@ export class AgentRunService implements AgentRunPort {
         this.activeSessionMessageRuns.delete(requestId);
       }
     }
-  }
-
-  private resolveSessionForMessage(payload: SessionMessageSendPayload): Session {
-    if (payload.sessionId) {
-      const existing = this.sessionRepository.getSession(payload.sessionId);
-      if (existing) {
-        return existing;
-      }
-    }
-
-    const createdAt = payload.createdAt;
-    return this.sessionRepository.saveSession({
-      sessionId: payload.sessionId ?? this.ids.sessionId(),
-      title: payload.context?.sessionTitle ?? 'New session',
-      ...(payload.context?.workspaceId ? { workspaceId: payload.context.workspaceId } : {}),
-      ...(payload.context?.workspacePath ? { workspacePath: payload.context.workspacePath } : {}),
-      status: 'active',
-      createdAt,
-      updatedAt: createdAt,
-    });
   }
 
   private async *runInitialSessionMessageModelStep(input: {
@@ -1336,20 +1315,11 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    const assistantMessage = this.messageRepository.saveMessage({
-      messageId: this.ids.messageId(),
+    this.sessionTurnPreparationService.commitAssistantReply({
       sessionId: input.request.sessionId,
       runId: input.request.runId,
-      role: 'assistant',
       content: assistantContent,
-      status: 'completed',
-      createdAt: completedAt,
       completedAt,
-    });
-    this.appendSourceAndMoveLeaf({
-      sessionId: input.request.sessionId,
-      sourceRef: sessionMessageSourceRef(String(assistantMessage.messageId), completedAt),
-      createdAt: completedAt,
     });
 
     const completedStep = this.runExecutionFactRepository.saveStep({
@@ -1462,35 +1432,6 @@ export class AgentRunService implements AgentRunPort {
     }
 
     return marker;
-  }
-
-  private appendSourceAndMoveLeaf(input: {
-    sessionId: string;
-    sourceRef: ModelInputContextSourceRef;
-    createdAt: string;
-    reason?: 'source_appended' | 'branch_marker';
-    metadata?: JsonObject;
-  }): SessionSourceEntry | undefined {
-    if (!this.activePathRepository) {
-      return undefined;
-    }
-
-    const parentSourceEntryId = this.activePathRepository.getActiveLeaf(input.sessionId)?.leafSourceEntryId ?? undefined;
-    const sourceEntryId = this.ids.sourceEntryId();
-    return this.activePathRepository.appendSourceEntryAndSetActiveLeaf({
-      sourceEntryId,
-      sessionId: input.sessionId,
-      ...(parentSourceEntryId ? { parentSourceEntryId } : {}),
-      sourceRef: input.sourceRef,
-      createdAt: input.createdAt,
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-    }, {
-      sessionId: input.sessionId,
-      leafSourceEntryId: sourceEntryId,
-      updatedAt: input.createdAt,
-      reason: input.reason ?? 'source_appended',
-      ...(input.metadata ? { metadata: input.metadata } : {}),
-    });
   }
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
@@ -1811,24 +1752,6 @@ function defaultHostBoundary(
       receivedAt: clock.now(),
       summary: 'Session run run completed without tool execution.',
     }),
-  };
-}
-
-function sessionMessageSourceRef(messageId: string, builtAt: string): ModelInputContextSourceRef {
-  return {
-    sourceKind: 'session_message',
-    sourceId: messageId,
-    sourceUri: `session-message://${messageId}`,
-    loadedAt: builtAt,
-  };
-}
-
-function sessionRunSourceRef(runId: string, builtAt: string): ModelInputContextSourceRef {
-  return {
-    sourceKind: 'session_run',
-    sourceId: runId,
-    sourceUri: `session-run://${runId}`,
-    loadedAt: builtAt,
   };
 }
 
