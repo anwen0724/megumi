@@ -3,7 +3,8 @@
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import { RecoveryRepository } from '@megumi/coding-agent/persistence/repos/recovery.repo';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import type {
   CancelRequest,
   Checkpoint,
@@ -11,6 +12,13 @@ import type {
   RetryRequest,
   CheckpointRestoreRecord,
 } from '@megumi/shared/recovery';
+import type { Run, Session } from '@megumi/shared/session';
+
+interface SessionRunSeedRepository {
+  getRun(runId: string): Run | undefined;
+  saveRun(run: Run): Run;
+  saveSession(session: Session): Session;
+}
 
 function createRepository(): RecoveryRepository {
   const database = createDatabase(':memory:');
@@ -20,13 +28,19 @@ function createRepository(): RecoveryRepository {
 
 function createRepositories(): {
   recoveryRepository: RecoveryRepository;
-  sessionRunRepository: SessionRunRepository;
+  sessionRunRepository: SessionRunSeedRepository;
 } {
   const database = createDatabase(':memory:');
   migrateDatabase(database);
+  const runRecordRepository = new RunRecordRepository(database);
+  const sessionRecordRepository = new SessionRecordRepository(database);
   return {
     recoveryRepository: new RecoveryRepository(database),
-    sessionRunRepository: new SessionRunRepository(database),
+    sessionRunRepository: {
+      getRun: (runId) => runRecordRepository.getRun(runId),
+      saveRun: (run) => runRecordRepository.saveRun(run),
+      saveSession: (session) => sessionRecordRepository.saveSession(session),
+    },
   };
 }
 
@@ -59,15 +73,15 @@ function checkpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
 }
 
 function seedSessionRun(
-  sessionRunRepository: SessionRunRepository,
+  sessionRunRepository: SessionRunSeedRepository,
   input: {
     runId: string;
     sessionId?: string;
     sessionTitle?: string;
-    status: Parameters<SessionRunRepository['saveRun']>[0]['status'];
+    status: Run['status'];
     goal?: string;
     createdAt?: string;
-    error?: Parameters<SessionRunRepository['saveRun']>[0]['error'];
+    error?: Run['error'];
   },
 ): void {
   const sessionId = input.sessionId ?? 'session_123';

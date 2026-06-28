@@ -2,13 +2,23 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { SessionRunRepository } from '@megumi/coding-agent/persistence/repos/session-run.repo';
+import { ModelStepRepository, type ModelStepRecord } from '@megumi/coding-agent/persistence/repos/model-step.repo';
+import { RunExecutionFactRepository } from '@megumi/coding-agent/persistence/repos/run-execution-fact.repo';
+import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
+import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
+import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
-import { RunTerminalCoordinator } from '@megumi/coding-agent/run';
+import { RunTerminalCoordinator, type RunTerminalRepositoryPort } from '@megumi/coding-agent/run';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { Run, RunStep, Session } from '@megumi/shared/session';
 import type { ApprovalRequest, ToolCall, ToolExecution } from '@megumi/shared/tool';
 
 let db: Database.Database | undefined;
+
+interface RunTerminalTestRepository extends RunTerminalRepositoryPort {
+  saveModelStep(modelStep: ModelStepRecord): ModelStepRecord;
+  saveSession(session: Session): Session;
+}
 
 afterEach(() => {
   db?.close();
@@ -18,14 +28,30 @@ afterEach(() => {
 function createRepositories() {
   db = new Database(':memory:');
   migrateDatabase(db);
+  const modelStepRepository = new ModelStepRepository(db);
+  const runExecutionFactRepository = new RunExecutionFactRepository(db);
+  const runRecordRepository = new RunRecordRepository(db);
+  const runtimeEventRepository = new RuntimeEventRepository(db);
+  const sessionRecordRepository = new SessionRecordRepository(db);
+
   return {
-    repository: new SessionRunRepository(db),
+    repository: {
+      appendRuntimeEvent: (event: RuntimeEvent) => runtimeEventRepository.appendRuntimeEvent(event),
+      getRun: (runId: string) => runRecordRepository.getRun(runId),
+      listRuntimeEventsByRun: (runId: string) => runtimeEventRepository.listRuntimeEventsByRun(runId),
+      listRunsByStatuses: (statuses: Run['status'][]) => runRecordRepository.listRunsByStatuses(statuses),
+      listStepsByRun: (runId: string) => runExecutionFactRepository.listStepsByRun(runId),
+      saveModelStep: (modelStep: ModelStepRecord) => modelStepRepository.saveModelStep(modelStep),
+      saveRun: (run: Run) => runRecordRepository.saveRun(run),
+      saveSession: (session: Session) => sessionRecordRepository.saveSession(session),
+      saveStep: (step: RunStep) => runExecutionFactRepository.saveStep(step),
+    } satisfies RunTerminalTestRepository,
     toolRepository: new ToolRepository(db),
   };
 }
 
 function createCoordinator(input: {
-  repository: SessionRunRepository;
+  repository: RunTerminalTestRepository;
   toolRepository?: ToolRepository;
 }) {
   let eventIndex = 0;
@@ -40,7 +66,7 @@ function createCoordinator(input: {
   });
 }
 
-function saveSession(repository: SessionRunRepository): void {
+function saveSession(repository: RunTerminalTestRepository): void {
   repository.saveSession({
     sessionId: 'session-1',
     title: 'Lifecycle',
@@ -50,7 +76,10 @@ function saveSession(repository: SessionRunRepository): void {
   });
 }
 
-function saveRunningRun(repository: SessionRunRepository, status: 'queued' | 'running' | 'waiting_for_approval' | 'cancelling' | 'completed' = 'running'): void {
+function saveRunningRun(
+  repository: RunTerminalTestRepository,
+  status: 'queued' | 'running' | 'waiting_for_approval' | 'cancelling' | 'completed' = 'running',
+): void {
   saveSession(repository);
   repository.saveRun({
     runId: 'run-1',
