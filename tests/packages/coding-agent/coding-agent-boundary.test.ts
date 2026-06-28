@@ -43,7 +43,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/context/parts/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/context/run-input-facts.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/run-input-facts.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/hooks/post-run-hooks.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/completion/run-completion-hooks.ts'))).toBe(false);
