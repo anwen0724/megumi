@@ -383,13 +383,28 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('SessionRunRepository');
     expect(retryCoordinatorSource).not.toContain('SessionRunRepository');
     expect(runContractSource).not.toContain('export interface AgentRunRepositoryPort {');
+    expect(runContractSource).not.toContain('export type AgentRunRepositoryPort =');
     expect(runContractSource).toContain('export interface AgentRunSessionRepositoryPort');
     expect(runContractSource).toContain('export interface AgentRunRunRecordRepositoryPort');
     expect(runContractSource).toContain('export interface AgentRunExecutionFactRepositoryPort');
     expect(runContractSource).toContain('export interface AgentRunModelStepRepositoryPort');
     expect(runContractSource).toContain('export interface AgentRunRuntimeEventRepositoryPort');
-    expect(runContractSource).toContain('export type AgentRunRepositoryPort =');
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
+  });
+
+  it('keeps AgentRunService options on owner-named repository ports', () => {
+    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+
+    expect(runContractSource).not.toContain('repository: AgentRunRepositoryPort;');
+    expect(runContractSource).toContain('sessionRepository: AgentRunSessionRepositoryPort;');
+    expect(runContractSource).toContain('messageRepository: AgentRunMessageRepositoryPort;');
+    expect(runContractSource).toContain('runRecordRepository: AgentRunRunRecordRepositoryPort;');
+    expect(runContractSource).toContain('runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;');
+    expect(runContractSource).toContain('modelStepRepository: AgentRunModelStepRepositoryPort;');
+    expect(runContractSource).toContain('sessionContextRepository: AgentRunSessionContextRepositoryPort;');
+    expect(runContractSource).toContain('runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;');
+    expect(agentRunServiceSource).not.toContain('const repository = options.repository');
   });
 
   it('keeps AgentRunService internals on owner-named repository ports', () => {
@@ -418,9 +433,10 @@ describe('package and file structure source guards', () => {
 
     expect(sessionRuntimeSource).not.toContain('SessionRunRepository');
     expect(sessionRuntimeSource).not.toContain('sessionRunRepository');
-    expect(sessionRuntimeSource).toContain("import { createAgentRunRepositoryPort } from './agent-run-repository-port'");
-    expect(sessionRuntimeSource).not.toContain('function createAgentRunRepositoryPort');
-    expect(sessionRuntimeSource).toContain('repository: agentRunRepository');
+    expect(sessionRuntimeSource).toContain("import { createAgentRunRepositoryOptions } from './agent-run-repository-options'");
+    expect(sessionRuntimeSource).not.toContain('function createAgentRunRepositoryOptions');
+    expect(sessionRuntimeSource).not.toContain('repository: agentRunRepository');
+    expect(sessionRuntimeSource).toContain('...agentRunRepositoryOptions');
     expect(runtimeSource).toContain('modelStepRepository: persistence.modelStepRepository');
     expect(runtimeSource).not.toContain('sessionRunRepository: persistence.sessionRunRepository');
   });

@@ -33,7 +33,7 @@ import type { ToolRegistry } from '../tools/registry';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
-import { createAgentRunRepositoryPort } from './agent-run-repository-port';
+import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -67,7 +67,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
-  const agentRunRepository = createAgentRunRepositoryPort(options);
+  const agentRunRepositoryOptions = createAgentRunRepositoryOptions(options);
   const runContextService = new RunContextService({
     contextRepository: options.runContextRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
@@ -117,7 +117,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     activePathRepository: options.activePathRepository,
   });
   const agentRunService = new AgentRunService({
-    repository: agentRunRepository,
+    ...agentRunRepositoryOptions,
     sessionCompactionRepository: options.sessionContextRepository,
     activePathRepository: options.activePathRepository,
     sessionContextInputService,

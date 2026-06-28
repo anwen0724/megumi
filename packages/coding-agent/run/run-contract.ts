@@ -267,17 +267,14 @@ export interface AgentRunRuntimeEventRepositoryPort {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
 
-export type AgentRunRepositoryPort =
-  & AgentRunSessionRepositoryPort
-  & AgentRunMessageRepositoryPort
-  & AgentRunRunRecordRepositoryPort
-  & AgentRunExecutionFactRepositoryPort
-  & AgentRunModelStepRepositoryPort
-  & AgentRunSessionContextRepositoryPort
-  & AgentRunRuntimeEventRepositoryPort;
-
 export interface AgentRunServiceOptions {
-  repository: AgentRunRepositoryPort;
+  sessionRepository: AgentRunSessionRepositoryPort;
+  messageRepository: AgentRunMessageRepositoryPort;
+  runRecordRepository: AgentRunRunRecordRepositoryPort;
+  runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;
+  modelStepRepository: AgentRunModelStepRepositoryPort;
+  sessionContextRepository: AgentRunSessionContextRepositoryPort;
+  runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
   contextService?: SessionRunContextService;
   permissionSnapshotService?: Pick<
     PermissionSnapshotService,

@@ -7,7 +7,7 @@ import type {
   AgentRunToolRuntimeFactory,
 } from '../run/run-contract';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
-import { createAgentRunRepositoryPort } from './agent-run-repository-port';
+import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
 import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
@@ -28,7 +28,7 @@ export function createDefaultAgentRunService(
   const toolRepository = persistence.toolRepository;
 
   const service = new AgentRunService({
-    repository: createAgentRunRepositoryPort(persistence),
+    ...createAgentRunRepositoryOptions(persistence),
     sessionCompactionRepository: persistence.sessionContextRepository,
     activePathRepository,
     toolRepository,

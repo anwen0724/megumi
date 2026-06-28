@@ -5,9 +5,18 @@ import {
   assertRunStatusTransition,
   canResumeApprovalFromRunStatus,
 } from './lifecycle/run-state-policy';
-import { RunTerminalCoordinator } from './lifecycle/run-terminal-coordinator';
-import { RunRetryCoordinator } from './lifecycle/run-retry-coordinator';
-import { RunCompletionHooksCoordinator } from './completion';
+import {
+  RunTerminalCoordinator,
+  type RunTerminalRepositoryPort,
+} from './lifecycle/run-terminal-coordinator';
+import {
+  RunRetryCoordinator,
+  type RunRetryCoordinatorRepositoryPort,
+} from './lifecycle/run-retry-coordinator';
+import {
+  RunCompletionHooksCoordinator,
+  type RunCompletionHooksRepositoryPort,
+} from './completion';
 import { runTurn } from './lifecycle/run-lifecycle';
 import type { RunHostBoundaryPort } from './lifecycle';
 import {
@@ -233,15 +242,9 @@ export class AgentRunService implements AgentRunPort {
   private readonly modelStepRepository: AgentRunModelStepRepositoryPort;
   private readonly sessionContextRepository: AgentRunSessionContextRepositoryPort;
   private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
-  private readonly runCompletionRepository: AgentRunRunRecordRepositoryPort & AgentRunRuntimeEventRepositoryPort;
-  private readonly runTerminalRepository:
-    & AgentRunRunRecordRepositoryPort
-    & AgentRunExecutionFactRepositoryPort
-    & AgentRunRuntimeEventRepositoryPort;
-  private readonly runRetryRepository:
-    & AgentRunRunRecordRepositoryPort
-    & AgentRunMessageRepositoryPort
-    & AgentRunRuntimeEventRepositoryPort;
+  private readonly runCompletionRepository: RunCompletionHooksRepositoryPort;
+  private readonly runTerminalRepository: RunTerminalRepositoryPort;
+  private readonly runRetryRepository: RunRetryCoordinatorRepositoryPort;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
   private readonly permissionSnapshotService?: Pick<
@@ -291,17 +294,31 @@ export class AgentRunService implements AgentRunPort {
   }>();
 
   constructor(options: AgentRunServiceOptions) {
-    const repository = options.repository;
-    this.sessionRepository = repository;
-    this.messageRepository = repository;
-    this.runRecordRepository = repository;
-    this.runExecutionFactRepository = repository;
-    this.modelStepRepository = repository;
-    this.sessionContextRepository = repository;
-    this.runtimeEventRepository = repository;
-    this.runCompletionRepository = repository;
-    this.runTerminalRepository = repository;
-    this.runRetryRepository = repository;
+    this.sessionRepository = options.sessionRepository;
+    this.messageRepository = options.messageRepository;
+    this.runRecordRepository = options.runRecordRepository;
+    this.runExecutionFactRepository = options.runExecutionFactRepository;
+    this.modelStepRepository = options.modelStepRepository;
+    this.sessionContextRepository = options.sessionContextRepository;
+    this.runtimeEventRepository = options.runtimeEventRepository;
+    this.runCompletionRepository = {
+      listRuntimeEventsByRun: options.runtimeEventRepository.listRuntimeEventsByRun.bind(options.runtimeEventRepository),
+    };
+    this.runTerminalRepository = {
+      getRun: options.runRecordRepository.getRun.bind(options.runRecordRepository),
+      saveRun: options.runRecordRepository.saveRun.bind(options.runRecordRepository),
+      listRunsByStatuses: options.runRecordRepository.listRunsByStatuses.bind(options.runRecordRepository),
+      saveStep: options.runExecutionFactRepository.saveStep.bind(options.runExecutionFactRepository),
+      listStepsByRun: options.runExecutionFactRepository.listStepsByRun.bind(options.runExecutionFactRepository),
+      appendRuntimeEvent: options.runtimeEventRepository.appendRuntimeEvent.bind(options.runtimeEventRepository),
+      listRuntimeEventsByRun: options.runtimeEventRepository.listRuntimeEventsByRun.bind(options.runtimeEventRepository),
+    };
+    this.runRetryRepository = {
+      getRun: options.runRecordRepository.getRun.bind(options.runRecordRepository),
+      getMessage: options.messageRepository.getMessage.bind(options.messageRepository),
+      appendRuntimeEvent: options.runtimeEventRepository.appendRuntimeEvent.bind(options.runtimeEventRepository),
+      listRuntimeEventsByRun: options.runtimeEventRepository.listRuntimeEventsByRun.bind(options.runtimeEventRepository),
+    };
     this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
     this.permissionSnapshotService = options.permissionSnapshotService;

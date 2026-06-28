@@ -22,8 +22,15 @@ import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/to
 import { TimelineMessageRepository } from '@megumi/coding-agent/persistence/repos/timeline-message.repo';
 import {
   AgentRunService,
+  type AgentRunExecutionFactRepositoryPort,
+  type AgentRunMessageRepositoryPort,
+  type AgentRunModelStepRepositoryPort,
+  type AgentRunRunRecordRepositoryPort,
   type SessionRunContextService,
   type AgentRunServiceOptions,
+  type AgentRunRuntimeEventRepositoryPort,
+  type AgentRunSessionContextRepositoryPort,
+  type AgentRunSessionRepositoryPort,
   type SessionRunWorkspaceChangeReadPort,
 } from '@megumi/coding-agent/run';
 import {
@@ -62,13 +69,46 @@ import type {
 let db: Database.Database | null = null;
 
 type AgentRunServiceTestFacade = AgentRunService & SessionServicePort & SessionBranchServicePort;
-type AgentRunServiceTestRepository = AgentRunServiceOptions['repository']
+type AgentRunServiceRepositoryOptions = Pick<
+  AgentRunServiceOptions,
+  | 'sessionRepository'
+  | 'messageRepository'
+  | 'runRecordRepository'
+  | 'runExecutionFactRepository'
+  | 'modelStepRepository'
+  | 'sessionContextRepository'
+  | 'runtimeEventRepository'
+>;
+type AgentRunServiceTestRepository =
+  & AgentRunSessionRepositoryPort
+  & AgentRunMessageRepositoryPort
+  & AgentRunRunRecordRepositoryPort
+  & AgentRunExecutionFactRepositoryPort
+  & AgentRunModelStepRepositoryPort
+  & AgentRunSessionContextRepositoryPort
+  & AgentRunRuntimeEventRepositoryPort
   & SessionServiceSessionRepository
   & SessionServiceMessageRepository
   & SessionServiceRunRepository
   & {
     saveSessionCompaction(entry: SessionCompactionEntry): void;
   };
+type AgentRunServiceTestOptions =
+  & Omit<AgentRunServiceOptions, keyof AgentRunServiceRepositoryOptions>
+  & Partial<AgentRunServiceRepositoryOptions>
+  & { repository: AgentRunServiceTestRepository };
+
+function agentRunServiceRepositoryOptions(repository: AgentRunServiceTestRepository): AgentRunServiceRepositoryOptions {
+  return {
+    sessionRepository: repository,
+    messageRepository: repository,
+    runRecordRepository: repository,
+    runExecutionFactRepository: repository,
+    modelStepRepository: repository,
+    sessionContextRepository: repository,
+    runtimeEventRepository: repository,
+  };
+}
 
 function createAgentRunTestRepository(database: Database.Database): AgentRunServiceTestRepository {
   const modelStepRepository = new ModelStepRepository(database);
@@ -103,7 +143,7 @@ function createAgentRunTestRepository(database: Database.Database): AgentRunServ
   };
 }
 
-function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunServiceTestFacade {
+function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRunServiceTestFacade {
   const repository = options.repository as AgentRunServiceTestRepository;
   const ids = {
     sessionId: options.ids?.sessionId ?? (() => `session:${crypto.randomUUID()}`),
@@ -134,6 +174,7 @@ function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunSer
       })
     : undefined;
   const runService = new AgentRunService({
+    ...agentRunServiceRepositoryOptions(repository),
     ...options,
     ...(sessionBranchService ? { sessionBranchService } : {}),
   });
@@ -404,7 +445,7 @@ function createServiceWithModelStepStream(
   const repository = createAgentRunTestRepository(db);
   const toolRepository = options?.createToolRepository?.(db);
   let callIndex = 0;
-  const serviceOptions: AgentRunServiceOptions & { toolRepository?: ToolRepository } = {
+  const serviceOptions: AgentRunServiceTestOptions & { toolRepository?: ToolRepository } = {
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
     ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
