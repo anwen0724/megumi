@@ -51,6 +51,7 @@ import {
   createStepStatusChangedEvent,
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
+  RuntimeEventLog,
 } from '../events';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
@@ -112,11 +113,6 @@ import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-import {
-  withRequestMetadata,
-  withSequenceAfter,
-  withSessionMessageRequestMetadata,
-} from '../events';
 import type {
   AgentRunPostRunHooksPort,
   AgentRunExecutionFactRepositoryPort,
@@ -205,6 +201,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly modelStepRepository: AgentRunModelStepRepositoryPort;
   private readonly sessionContextRepository: AgentRunSessionContextRepositoryPort;
   private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
+  private readonly runtimeEventLog: RuntimeEventLog;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: SessionRunContextService;
   private readonly permissionSnapshotService?: Pick<
@@ -257,6 +254,7 @@ export class AgentRunService implements AgentRunPort {
     this.modelStepRepository = options.modelStepRepository;
     this.sessionContextRepository = options.sessionContextRepository;
     this.runtimeEventRepository = options.runtimeEventRepository;
+    this.runtimeEventLog = new RuntimeEventLog(options.runtimeEventRepository);
     this.postRunHooks = options.postRunHooks;
     this.runTerminalCoordinator = options.runTerminalCoordinator;
     this.runRetryCoordinator = options.runRetryCoordinator;
@@ -479,15 +477,13 @@ export class AgentRunService implements AgentRunPort {
       // === Required ports ===
       eventPort: {
         append(event, requestId, runtimeContext) {
-          const lastSeq = nextRuntimeSequence(
-            svc.runtimeEventRepository.listRuntimeEventsByRun(event.runId ?? ''),
-          );
-          const ev = withSessionMessageRequestMetadata(
-            withSequenceAfter(event, lastSeq),
-            { requestId, runtimeContext },
-          );
-          svc.appendRuntimeEvent(ev, chatStreamAdapter);
-          return ev;
+          return svc.runtimeEventLog.appendWithRuntimeRequest(event, {
+            requestId,
+            ...(runtimeContext ? { runtimeContext } : {}),
+          }, {
+            ...(chatStreamAdapter ? { streamSink: chatStreamAdapter } : {}),
+            onTerminalEvent: (terminalEvent) => svc.publishRunTerminalEventHooks(terminalEvent, chatStreamAdapter),
+          });
         },
       },
       runStatePort: {
@@ -497,7 +493,7 @@ export class AgentRunService implements AgentRunPort {
         async *failBeforeModelStep(failureInput) {
           const seq = Math.max(
             0,
-            nextRuntimeSequence(svc.runtimeEventRepository.listRuntimeEventsByRun(String(failureInput.run.runId))),
+            svc.runtimeEventLog.lastSequenceForRun(String(failureInput.run.runId)),
           );
           yield* svc.failRunBeforeModelStep({
             requestId: failureInput.requestId,
@@ -623,7 +619,7 @@ export class AgentRunService implements AgentRunPort {
           this.runExecutionFactRepository.saveObservation(observation);
         },
         appendEvent: (event) => {
-          this.runtimeEventRepository.appendRuntimeEvent(event);
+          this.runtimeEventLog.append(event);
         },
       },
       hostBoundary: this.hostBoundary,
@@ -1076,9 +1072,9 @@ export class AgentRunService implements AgentRunPort {
         to: 'failed',
       }),
     ]) {
-      const eventWithRequest = withSessionMessageRequestMetadata(event, {
+      const eventWithRequest = this.runtimeEventLog.withRuntimeRequestMetadata(event, {
         requestId: input.requestId,
-        runtimeContext: input.runtimeContext,
+        ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
       });
       this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
       yield eventWithRequest;
@@ -1156,8 +1152,10 @@ export class AgentRunService implements AgentRunPort {
     try {
       for await (const event of input.modelEvents) {
         registerPendingApprovalGroup();
-        lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(input.request.runId)));
-        const eventWithRequest = withSequenceAfter(withRequestMetadata(event, input.request), lastSequence);
+        lastSequence = Math.max(lastSequence, this.runtimeEventLog.lastSequenceForRun(input.request.runId));
+        const eventWithRequest = this.runtimeEventLog.normalizeWithModelRequest(event, input.request, {
+          afterSequence: lastSequence,
+        });
         lastSequence = eventWithRequest.sequence;
         const eventStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
         if (!modelStepsById.has(eventStepId)) {
@@ -1209,8 +1207,8 @@ export class AgentRunService implements AgentRunPort {
       if (this.runRecordRepository.getRun(input.request.runId)?.status === 'cancelled') {
         return;
       }
-      lastSequence = Math.max(lastSequence, nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(input.request.runId)));
-      const failedEvent = withRequestMetadata({
+      lastSequence = Math.max(lastSequence, this.runtimeEventLog.lastSequenceForRun(input.request.runId));
+      const failedEvent = this.runtimeEventLog.withModelRequestMetadata({
         ...createRunFailedEvent({
           eventId: this.ids.eventId(),
           sessionId: input.request.sessionId,
@@ -1229,7 +1227,7 @@ export class AgentRunService implements AgentRunPort {
     if (input.pendingApprovalResumes.length > 0 && toolRuntime) {
       const waitingAt = this.clock.now();
       registerPendingApprovalGroup();
-      const waitingEvent = withRequestMetadata(createRunStatusChangedEvent({
+      const waitingEvent = this.runtimeEventLog.withModelRequestMetadata(createRunStatusChangedEvent({
         eventId: this.ids.eventId(),
         sessionId: input.request.sessionId,
         runId: input.request.runId,
@@ -1288,7 +1286,7 @@ export class AgentRunService implements AgentRunPort {
           to: 'failed',
         }),
       ]) {
-        const eventWithRequest = withRequestMetadata(event, input.request);
+        const eventWithRequest = this.runtimeEventLog.withModelRequestMetadata(event, input.request);
         this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
         yield eventWithRequest;
       }
@@ -1327,7 +1325,7 @@ export class AgentRunService implements AgentRunPort {
           to: 'cancelled',
         }),
       ]) {
-        const eventWithRequest = withRequestMetadata(event, input.request);
+        const eventWithRequest = this.runtimeEventLog.withModelRequestMetadata(event, input.request);
         this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
         yield eventWithRequest;
       }
@@ -1401,7 +1399,7 @@ export class AgentRunService implements AgentRunPort {
         createdAt: completedAt,
       }),
     ]) {
-      const eventWithRequest = withRequestMetadata(event, input.request);
+      const eventWithRequest = this.runtimeEventLog.withModelRequestMetadata(event, input.request);
       this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
       if (eventWithRequest.eventType === 'run.completed') {
         this.postRunHooks.scheduleRunCompletedMemoryCapture({
@@ -1496,18 +1494,18 @@ export class AgentRunService implements AgentRunPort {
   }
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
-    if (isRunTerminalRuntimeEvent(event)) {
-      this.postRunHooks.publishWorkspaceChangeFooter({
-        runId: String(event.runId),
-        createdAt: event.createdAt,
-        chatStreamAdapter,
-      });
-    }
-    this.runtimeEventRepository.appendRuntimeEvent(event);
-    chatStreamAdapter?.handleRuntimeEvent?.(event);
-    if (isRunTerminalRuntimeEvent(event)) {
-      chatStreamAdapter?.dispose?.();
-    }
+    this.runtimeEventLog.append(event, {
+      ...(chatStreamAdapter ? { streamSink: chatStreamAdapter } : {}),
+      onTerminalEvent: (terminalEvent) => this.publishRunTerminalEventHooks(terminalEvent, chatStreamAdapter),
+    });
+  }
+
+  private publishRunTerminalEventHooks(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
+    this.postRunHooks.publishWorkspaceChangeFooter({
+      runId: String(event.runId),
+      createdAt: event.createdAt,
+      chatStreamAdapter,
+    });
   }
 
   private cancelPendingApprovalGroupsByRun(runId: string): void {
@@ -1562,7 +1560,7 @@ export class AgentRunService implements AgentRunPort {
     const toolResults = [...(resumeOutcome.toolResults ?? (resumeOutcome.toolResult ? [resumeOutcome.toolResult] : []))];
     const chatStreamAdapter = approvalResume.chatStreamAdapter;
 
-    let lastSequence = nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(approvalResume.request.runId));
+    let lastSequence = this.runtimeEventLog.lastSequenceForRun(approvalResume.request.runId);
     const resolvedPending = approvalResume.toolRuntime.resolvePendingApproval({
       registry: this.pendingApprovalRegistry,
       group: approvalResume,
@@ -1888,12 +1886,6 @@ function isToolCallModelStepCompletion(payload: RuntimeEvent['payload']): boolea
   return payload.finishReason === 'tool_calls';
 }
 
-function isRunTerminalRuntimeEvent(event: RuntimeEvent): boolean {
-  return event.eventType === 'run.completed'
-    || event.eventType === 'run.failed'
-    || event.eventType === 'run.cancelled';
-}
-
 function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | undefined {
   if (!isObjectRecord(payload)) {
     return undefined;
@@ -1958,10 +1950,6 @@ function createPermissionModeState(
     permissionMode,
     source,
   };
-}
-
-function nextRuntimeSequence(events: RuntimeEvent[]): number {
-  return events.reduce((max, event) => Math.max(max, event.sequence), 0);
 }
 
 function resolveRecallEffectiveCwd(projectRoot: string | undefined, requestedCwd: string | undefined): string | undefined {

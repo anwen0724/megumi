@@ -9,7 +9,7 @@ import {
 import type { Run, RunStep } from '@megumi/shared/session';
 import type { ToolExecution } from '@megumi/shared/tool';
 import { createInterruptedExecutionObservation } from '@megumi/coding-agent/tools/observations';
-import { createRunStatusChangedEvent } from '../events';
+import { createRunStatusChangedEvent, RuntimeEventLog } from '../events';
 import { createTerminalRuntimeError } from './run-error';
 import {
   assertRunStatusTransition,
@@ -83,11 +83,13 @@ export interface CleanupInterruptedRunsOnStartupResult {
 
 export class RunTerminalCoordinator {
   private readonly repository: RunTerminalRepositoryPort;
+  private readonly eventLog: RuntimeEventLog;
   private readonly toolRepository?: RunTerminalToolRepositoryPort;
   private readonly ids: RunTerminalCoordinatorIds;
 
   constructor(options: RunTerminalCoordinatorOptions) {
     this.repository = options.repository;
+    this.eventLog = new RuntimeEventLog(options.repository);
     this.toolRepository = options.toolRepository;
     this.ids = options.ids;
   }
@@ -102,9 +104,9 @@ export class RunTerminalCoordinator {
     }
 
     const appendEvent = input.appendEvent ?? ((event: RuntimeEvent) => {
-      this.repository.appendRuntimeEvent(event);
+      this.eventLog.append(event);
     });
-    const lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(input.activeRun.runId));
+    const lastSequence = this.eventLog.lastSequenceForRun(input.activeRun.runId);
     const runningStep = this.repository.listStepsByRun(input.activeRun.runId)
       .reverse()
       .find((step) => ['running', 'waiting_for_approval'].includes(step.status));
@@ -202,13 +204,13 @@ export class RunTerminalCoordinator {
     ]);
     const cleanedRunIds: string[] = [];
     const appendEvent = input.appendEvent ?? ((event: RuntimeEvent) => {
-      this.repository.appendRuntimeEvent(event);
+      this.eventLog.append(event);
     });
 
     for (const run of activeRuns) {
       const runId = String(run.runId);
       const sessionId = String(run.sessionId);
-      const lastSequence = nextRuntimeSequence(this.repository.listRuntimeEventsByRun(runId));
+      const lastSequence = this.eventLog.lastSequenceForRun(runId);
       const error = createStartupCleanupError(run);
 
       this.toolRepository?.cancelPendingApprovalRequestsByRun({
@@ -275,8 +277,4 @@ function createStartupCleanupError(run: Run): RuntimeError {
       startupCleanup: true,
     },
   });
-}
-
-function nextRuntimeSequence(events: RuntimeEvent[]): number {
-  return events.reduce((max, event) => Math.max(max, event.sequence), 0);
 }

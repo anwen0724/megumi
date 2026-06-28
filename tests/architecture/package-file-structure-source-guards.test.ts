@@ -132,6 +132,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-factory.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-log.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-metadata.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-utils.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/index.ts'))).toBe(true);
@@ -657,6 +658,23 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('repository: this.runTerminalRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runRetryRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runCompletionRepository');
+  });
+
+  it('keeps runtime event sequence and request metadata normalization in the events owner', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const terminalCoordinatorSource = readFileSync(join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'), 'utf8');
+    const retryCoordinatorSource = readFileSync(join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'), 'utf8');
+    const eventLogSource = readFileSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-log.ts'), 'utf8');
+
+    expect(agentRunServiceSource).toContain('private readonly runtimeEventLog: RuntimeEventLog');
+    expect(agentRunServiceSource).not.toContain('withRequestMetadata(');
+    expect(agentRunServiceSource).not.toContain('withSequenceAfter(');
+    expect(agentRunServiceSource).not.toContain('withSessionMessageRequestMetadata(');
+    expect(agentRunServiceSource).not.toContain('function nextRuntimeSequence');
+    expect(terminalCoordinatorSource).not.toContain('function nextRuntimeSequence');
+    expect(retryCoordinatorSource).not.toContain('function nextRuntimeSequence');
+    expect(eventLogSource).toContain('export class RuntimeEventLog');
+    expect(eventLogSource).toContain('export class RuntimeEventSequenceCursor');
   });
 
   it('wires agent run service through split repository owner ports in session runtime composition', () => {

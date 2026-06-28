@@ -16,6 +16,7 @@ import type {
 
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { SessionBranchServicePort } from '../session';
+import { RuntimeEventLog } from '../events';
 
 export interface RunRetryCoordinatorIds {
   eventId(): string;
@@ -86,12 +87,14 @@ export interface RecordManualRerunAttemptForBranchDraftInput {
 
 export class RunRetryCoordinator {
   private readonly repository: RunRetryCoordinatorOptions['repository'];
+  private readonly eventLog: RuntimeEventLog;
   private readonly activePathRepository?: RunRetryCoordinatorOptions['activePathRepository'];
   private readonly sessionBranchService?: SessionBranchServicePort;
   private readonly ids: RunRetryCoordinatorIds;
 
   constructor(options: RunRetryCoordinatorOptions) {
     this.repository = options.repository;
+    this.eventLog = new RuntimeEventLog(options.repository);
     this.activePathRepository = options.activePathRepository;
     this.sessionBranchService = options.sessionBranchService;
     this.ids = options.ids;
@@ -137,6 +140,7 @@ export class RunRetryCoordinator {
       },
     });
 
+    const sequence = this.eventLog.createSequenceCursor({ runId: String(run.runId) });
     const events = [
       createRuntimeEvent({
         eventId: this.ids.eventId(),
@@ -145,7 +149,7 @@ export class RunRetryCoordinator {
         sessionId: run.sessionId,
         requestId: input.requestId,
         ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
-        sequence: 1,
+        sequence: sequence.next(),
         createdAt: input.createdAt,
         source: 'main',
         visibility: 'system',
@@ -164,7 +168,7 @@ export class RunRetryCoordinator {
         sessionId: run.sessionId,
         requestId: input.requestId,
         ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
-        sequence: 2,
+        sequence: sequence.next(),
         createdAt: input.createdAt,
         source: 'main',
         visibility: 'system',
@@ -176,7 +180,7 @@ export class RunRetryCoordinator {
       }),
     ];
     for (const event of events) {
-      this.repository.appendRuntimeEvent(event);
+      this.eventLog.append(event);
     }
 
     return { retryAttempt, retryAttemptSourceEntry, events };
@@ -253,7 +257,7 @@ export class RunRetryCoordinator {
       sessionId: input.sessionId,
       requestId: input.requestId,
       ...(input.runtimeContext ? { context: input.runtimeContext } : {}),
-      sequence: nextRuntimeSequence(this.repository.listRuntimeEventsByRun(runId)),
+      sequence: this.eventLog.nextSequenceForRun(runId),
       createdAt: input.createdAt,
       source: 'main',
       visibility: 'system',
@@ -326,8 +330,4 @@ function manualRetryReasonForRunStatus(status: Run['status']): SessionRetryAttem
     return 'cancelled';
   }
   return 'interrupted';
-}
-
-function nextRuntimeSequence(events: RuntimeEvent[]): number {
-  return events.reduce((max, event) => Math.max(max, event.sequence), 0) + 1;
 }
