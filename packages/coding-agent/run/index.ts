@@ -5,6 +5,7 @@ export * from './events';
 export * from './model-call';
 export * from './loop';
 export * from './tool-calls';
+export * from './completion';
 export * from './lifecycle';
 export * from './recovery';
 export * from './turn';

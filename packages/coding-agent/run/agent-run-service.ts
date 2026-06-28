@@ -6,6 +6,7 @@ import {
   canResumeApprovalFromRunStatus,
 } from './lifecycle/run-state-policy';
 import { RunTerminalCoordinator } from './lifecycle/run-terminal-coordinator';
+import { RunCompletionHooksCoordinator } from './completion';
 import { runTurn } from './lifecycle/run-lifecycle';
 import type { RunHostBoundaryPort, RunIdFactory } from './lifecycle';
 import type { ModelCallCompletionResult } from './model-call';
@@ -136,7 +137,6 @@ import {
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
-  type WorkspaceChangeFooterProjectorService,
 } from '@megumi/coding-agent/workspace';
 
 export interface AgentRunServiceClock {
@@ -440,7 +440,6 @@ export class AgentRunService implements AgentRunPort {
   >;
   private readonly modelCallInputBuildService: SessionRunModelCallInputBuildService;
   private readonly memoryRecallService?: SessionRunMemoryRecallService;
-  private readonly memoryCaptureService?: SessionRunMemoryCaptureService;
   private readonly memorySettingsProvider?: SessionRunMemorySettingsProvider;
   private readonly memoryMarkdownSyncService?: SessionRunMemoryMarkdownSyncService;
   private readonly megumiHomePath?: string;
@@ -454,10 +453,10 @@ export class AgentRunService implements AgentRunPort {
   private readonly sessionBranchService?: SessionBranchServicePort;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly chatStreamEventSink?: ChatStreamEventSink;
-  private readonly workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
   private readonly clock: AgentRunServiceClock;
   private readonly ids: AgentRunServiceIds;
   private readonly runTerminalCoordinator: RunTerminalCoordinator;
+  private readonly runCompletionHooks: RunCompletionHooksCoordinator;
   private readonly workspaceChanges?: SessionRunWorkspaceChangeReadPort;
   private readonly pendingApprovals = new Map<string, ApprovalContinuationGroup>();
   private readonly pendingApprovalGroups = new Map<string, ApprovalContinuationGroup>();
@@ -481,7 +480,6 @@ export class AgentRunService implements AgentRunPort {
     this.providerCapabilitySummaryProvider = options.providerCapabilitySummaryProvider;
     this.toolRepository = options.toolRepository;
     this.memoryRecallService = options.memoryRecallService;
-    this.memoryCaptureService = options.memoryCaptureService;
     this.memorySettingsProvider = options.memorySettingsProvider;
     this.memoryMarkdownSyncService = options.memoryMarkdownSyncService;
     this.megumiHomePath = options.megumiHomePath;
@@ -500,9 +498,16 @@ export class AgentRunService implements AgentRunPort {
       });
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.sessionBranchService = options.sessionBranchService;
-    this.workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(options.workspaceChanges)
+    const workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(options.workspaceChanges)
       ? createWorkspaceChangeFooterProjectorService({ workspaceChanges: options.workspaceChanges })
       : undefined;
+    this.runCompletionHooks = new RunCompletionHooksCoordinator({
+      repository: this.repository,
+      ...(options.memoryCaptureService ? { memoryCaptureService: options.memoryCaptureService } : {}),
+      ...(this.megumiHomePath ? { megumiHomePath: this.megumiHomePath } : {}),
+      ...(options.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
+      ...(workspaceChangeFooterProjector ? { workspaceChangeFooterProjector } : {}),
+    });
     this.clock = options.clock ?? defaultClock;
     this.ids = { ...createDefaultIds(), ...options.ids };
     this.runTerminalCoordinator = new RunTerminalCoordinator({
@@ -1351,86 +1356,6 @@ export class AgentRunService implements AgentRunPort {
     });
   }
 
-  private scheduleRunCompletedMemoryCapture(input: {
-    runId: string;
-    sessionId: string;
-    projectId?: string | null;
-    providerId?: string | null;
-    modelId?: string | null;
-    userText: string;
-    assistantText: string;
-    hasProject: boolean;
-    memoryEnabled?: boolean;
-  }): void {
-    if (!this.memoryCaptureService || !this.megumiHomePath) {
-      return;
-    }
-
-    // Capture is a hidden post-completion hook. It must never write transcript
-    // messages or alter the already completed user-visible run stream.
-    const activity = this.createMemoryCaptureActivitySummary(input.runId);
-    void this.memoryCaptureService.evaluateRunCompletedCapture({
-      homePath: this.megumiHomePath,
-      runId: input.runId,
-      sessionId: input.sessionId,
-      ...(input.projectId ? { projectId: input.projectId } : {}),
-      ...(input.providerId && isProviderId(input.providerId) ? { providerId: input.providerId } : {}),
-      ...(input.modelId ? { modelId: input.modelId } : {}),
-      runStatus: 'completed',
-      userText: input.userText,
-      assistantText: input.assistantText,
-      ...(activity.summary ? { toolActivitySummary: activity.summary } : {}),
-      ...(activity.signals.length > 0 ? { signals: activity.signals } : {}),
-      ...(typeof input.memoryEnabled === 'boolean' ? { memoryEnabled: input.memoryEnabled } : {}),
-      hasProject: input.hasProject,
-    }).catch(() => {
-      // Memory capture is best-effort. Runtime diagnostics are handled inside
-      // the memory service when available; session-run must not fail here.
-    });
-  }
-
-  private createMemoryCaptureActivitySummary(runId: string): { signals: MemoryCaptureSignal[]; summary?: string } {
-    const summaryParts: string[] = [];
-    const signals = new Set<MemoryCaptureSignal>();
-    const sourceFiles = this.listSourceOfTruthChangedFiles(runId);
-    if (sourceFiles.length > 0) {
-      signals.add('source_of_truth_doc_changed');
-      summaryParts.push(`Source-of-truth files changed: ${sourceFiles.slice(0, 5).join(', ')}`);
-    }
-
-    const toolSummaries = this.repository.listRuntimeEventsByRun(runId)
-      .filter((event) => event.eventType === 'tool.result.created')
-      .map((event) => {
-        if (!isObjectRecord(event.payload) || typeof event.payload.summary !== 'string') {
-          return undefined;
-        }
-        return clipMemoryRuntimeSummary(event.payload.summary);
-      })
-      .filter((summary): summary is string => Boolean(summary));
-    if (toolSummaries.length > 0) {
-      summaryParts.push(`Tool results observed: ${toolSummaries.slice(0, 5).join(' | ')}`);
-    }
-
-    const summary = clipMemoryRuntimeSummary(summaryParts.join('\n'), 1200);
-    return {
-      signals: [...signals],
-      ...(summary ? { summary } : {}),
-    };
-  }
-
-  private listSourceOfTruthChangedFiles(runId: string): string[] {
-    if (!this.workspaceChanges) {
-      return [];
-    }
-    try {
-      return this.workspaceChanges.listChangedFilesByRun(runId)
-        .map((file) => file.projectPath)
-        .filter((projectPath) => isSourceOfTruthMemoryPath(projectPath));
-    } catch {
-      return [];
-    }
-  }
-
   private async *failRunBeforeModelStep(input: {
     requestId: string;
     runtimeContext?: RuntimeContext;
@@ -1825,7 +1750,7 @@ export class AgentRunService implements AgentRunPort {
       const eventWithRequest = withRequestMetadata(event, input.request);
       this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
       if (eventWithRequest.eventType === 'run.completed') {
-        this.scheduleRunCompletedMemoryCapture({
+        this.runCompletionHooks.scheduleRunCompletedMemoryCapture({
           runId: String(input.request.runId),
           sessionId: String(input.request.sessionId),
           ...(input.projectId ? { projectId: input.projectId } : {}),
@@ -1962,7 +1887,7 @@ export class AgentRunService implements AgentRunPort {
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
     if (isRunTerminalRuntimeEvent(event)) {
-      this.publishWorkspaceChangeFooter({
+      this.runCompletionHooks.publishWorkspaceChangeFooter({
         runId: String(event.runId),
         createdAt: event.createdAt,
         chatStreamAdapter,
@@ -1985,23 +1910,6 @@ export class AgentRunService implements AgentRunPort {
       }
       this.pendingApprovalGroups.delete(groupId);
     }
-  }
-
-  private publishWorkspaceChangeFooter(input: {
-    runId: string;
-    createdAt: string;
-    chatStreamAdapter?: ChatStreamEventAdapter;
-  }): void {
-    if (!input.chatStreamAdapter || !this.workspaceChangeFooterProjector) {
-      return;
-    }
-
-    const footer = this.workspaceChangeFooterProjector.projectRunFooter(input.runId);
-    if (!footer) {
-      return;
-    }
-
-    input.chatStreamAdapter.publishWorkspaceChangeFooter?.(footer, input.createdAt);
   }
 
   private requireModelStepProvider(): AgentRunModelStepProvider {
@@ -2696,26 +2604,6 @@ function withSequenceAfter(event: RuntimeEvent, lastSequence: number): RuntimeEv
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isSourceOfTruthMemoryPath(projectPath: string): boolean {
-  const normalized = projectPath.replace(/\\/g, '/').toLowerCase();
-  return normalized === 'agents.md'
-    || normalized === 'readme.md'
-    || normalized.startsWith('.local-docs/specs/')
-    || normalized.startsWith('.local-docs/architecture/')
-    || normalized.startsWith('.local-docs/decisions/');
-}
-
-function clipMemoryRuntimeSummary(value: string, maxLength = 240): string {
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return '';
-  }
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
 function toModelVisiblePermissionSnapshot(
