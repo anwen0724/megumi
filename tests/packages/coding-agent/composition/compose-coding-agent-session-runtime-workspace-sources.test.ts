@@ -39,9 +39,9 @@ describe('composed session runtime workspace sources', () => {
         runtimeLogger: { warn: () => undefined },
         artifactRepository: persistence.artifactRepository,
         permissionSnapshotRepository: persistence.permissionSnapshotRepository,
+        modelStepRepository: persistence.modelStepRepository,
         runRecordRepository: persistence.runRecordRepository,
         sessionRecordRepository: persistence.sessionRecordRepository,
-        sessionRunRepository: persistence.sessionRunRepository,
         sessionContextRepository: persistence.sessionContextRepository,
         sessionMessageRepository: persistence.sessionMessageRepository,
         runExecutionFactRepository: persistence.runExecutionFactRepository,
@@ -61,7 +61,7 @@ describe('composed session runtime workspace sources', () => {
         runContextRepository: persistence.runContextRepository,
       });
 
-      const session = persistence.sessionRunRepository.saveSession({
+      const session = persistence.sessionRecordRepository.saveSession({
         sessionId: 'session-1',
         title: 'Session',
         workspaceId: 'workspace-1',
@@ -70,7 +70,7 @@ describe('composed session runtime workspace sources', () => {
         createdAt: '2026-06-24T00:00:00.000Z',
         updatedAt: '2026-06-24T00:00:00.000Z',
       });
-      persistence.sessionRunRepository.saveRun({
+      persistence.runRecordRepository.saveRun({
         runId: 'run-1',
         sessionId: String(session.sessionId),
         mode: 'default',

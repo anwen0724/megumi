@@ -13,10 +13,12 @@ import {
 } from '../session';
 import type {
   AgentRunModelStepProvider,
+  AgentRunRepositoryPort,
   AgentRunToolRuntimeFactory,
 } from '../run/run-contract';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
+import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
 import type { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
 import type { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
 import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
@@ -25,7 +27,6 @@ import type { SessionActivePathRepository } from '../persistence/repos/session-a
 import type { SessionContextRepository } from '../persistence/repos/session-context.repo';
 import type { SessionMessageRepository } from '../persistence/repos/session-message.repo';
 import type { SessionRecordRepository } from '../persistence/repos/session-record.repo';
-import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
@@ -45,9 +46,9 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   runtimeLogger: RuntimeLogger;
   artifactRepository: ArtifactRepository;
   permissionSnapshotRepository: PermissionSnapshotRepository;
+  modelStepRepository: ModelStepRepository;
   runRecordRepository: RunRecordRepository;
   sessionRecordRepository: SessionRecordRepository;
-  sessionRunRepository: SessionRunRepository;
   sessionContextRepository: SessionContextRepository;
   sessionMessageRepository: SessionMessageRepository;
   runExecutionFactRepository: RunExecutionFactRepository;
@@ -65,7 +66,29 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentRunService>[0]['workspaceChanges'];
 }
 
+function createAgentRunRepositoryPort(options: ComposeCodingAgentSessionRuntimeOptions): AgentRunRepositoryPort {
+  return {
+    saveSession: (session) => options.sessionRecordRepository.saveSession(session),
+    getSession: (sessionId) => options.sessionRecordRepository.getSession(sessionId),
+    saveMessage: (message) => options.sessionMessageRepository.saveMessage(message),
+    getMessage: (messageId) => options.sessionMessageRepository.getMessage(messageId),
+    saveRun: (run) => options.runRecordRepository.saveRun(run),
+    getRun: (runId) => options.runRecordRepository.getRun(runId),
+    listRunsByStatuses: (statuses) => options.runRecordRepository.listRunsByStatuses(statuses),
+    saveStep: (step) => options.runExecutionFactRepository.saveStep(step),
+    listStepsByRun: (runId) => options.runExecutionFactRepository.listStepsByRun(runId),
+    saveAction: (action) => options.runExecutionFactRepository.saveAction(action),
+    saveObservation: (observation) => options.runExecutionFactRepository.saveObservation(observation),
+    saveModelStep: (modelStep) => options.modelStepRepository.saveModelStep(modelStep),
+    getModelStep: (modelStepId) => options.modelStepRepository.getModelStep(modelStepId),
+    getSessionCompaction: (compactionId) => options.sessionContextRepository.getSessionCompaction(compactionId),
+    appendRuntimeEvent: (event) => options.runtimeEventRepository.appendRuntimeEvent(event),
+    listRuntimeEventsByRun: (runId) => options.runtimeEventRepository.listRuntimeEventsByRun(runId),
+  };
+}
+
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
+  const agentRunRepository = createAgentRunRepositoryPort(options);
   const runContextService = new RunContextService({
     contextRepository: options.runContextRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
@@ -115,7 +138,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     activePathRepository: options.activePathRepository,
   });
   const agentRunService = new AgentRunService({
-    repository: options.sessionRunRepository,
+    repository: agentRunRepository,
     sessionCompactionRepository: options.sessionContextRepository,
     activePathRepository: options.activePathRepository,
     sessionContextInputService,

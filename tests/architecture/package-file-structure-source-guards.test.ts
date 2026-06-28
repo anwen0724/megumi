@@ -416,4 +416,22 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).toContain('export interface AgentRunRepositoryPort');
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
   });
+
+  it('wires agent run service through split repository owner ports in session runtime composition', () => {
+    const sessionRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
+      'utf8',
+    );
+    const runtimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
+      'utf8',
+    );
+
+    expect(sessionRuntimeSource).not.toContain('SessionRunRepository');
+    expect(sessionRuntimeSource).not.toContain('sessionRunRepository');
+    expect(sessionRuntimeSource).toContain('function createAgentRunRepositoryPort');
+    expect(sessionRuntimeSource).toContain('repository: agentRunRepository');
+    expect(runtimeSource).toContain('modelStepRepository: persistence.modelStepRepository');
+    expect(runtimeSource).not.toContain('sessionRunRepository: persistence.sessionRunRepository');
+  });
 });
