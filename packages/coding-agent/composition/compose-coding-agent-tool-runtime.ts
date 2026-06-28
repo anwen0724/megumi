@@ -5,7 +5,7 @@ import type { ToolRegistry } from '../tools/registry';
 import { createToolCallRunner } from '../run/tool-calls';
 import { ToolService } from '../tools/tool-service';
 import { WorkspaceChangeTrackerService } from '../workspace';
-import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
+import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import type { AgentRunToolRuntimeFactory } from '../run/run-contract';
@@ -22,7 +22,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
   toolRepository: ToolRepository;
   toolRegistry: ToolRegistry;
   workspaceChangeRepository: WorkspaceChangeRepository;
-  sessionRunRepository: SessionRunRepository;
+  runRepository: RunRecordRepository;
   permissionSettingsProvider: PermissionSettingsProvider;
 }): AgentRunToolRuntimeFactory {
   return {
@@ -54,7 +54,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
           saveToolResult: (toolResult) => input.toolRepository.saveToolResult(toolResult),
           getToolRegistrySnapshotByRun: (runId) => input.toolRepository.getToolRegistrySnapshotByRun(runId),
           getRunSessionId(runId) {
-            const run = input.sessionRunRepository.getRun(runId);
+            const run = input.runRepository.getRun(runId);
             return run ? String(run.sessionId) : undefined;
           },
         },

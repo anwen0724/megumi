@@ -385,4 +385,20 @@ describe('package and file structure source guards', () => {
     expect(runtimeSource).toContain('sessionRepository: persistence.sessionRecordRepository');
     expect(runtimeSource).toContain('runtimeEventRepository: persistence.runtimeEventRepository');
   });
+
+  it('wires tool runtime through the run record port', () => {
+    const toolRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts'),
+      'utf8',
+    );
+    const runtimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
+      'utf8',
+    );
+
+    expect(toolRuntimeSource).not.toContain('SessionRunRepository');
+    expect(toolRuntimeSource).toContain('runRepository: RunRecordRepository');
+    expect(toolRuntimeSource).toContain('input.runRepository.getRun(runId)');
+    expect(runtimeSource).toContain('runRepository: persistence.runRecordRepository');
+  });
 });

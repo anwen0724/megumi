@@ -81,7 +81,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     toolRepository: persistence.toolRepository,
     toolRegistry,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
-    sessionRunRepository: persistence.sessionRunRepository,
+    runRepository: persistence.runRecordRepository,
     permissionSettingsProvider: options.permissionSettingsProvider ?? settingsService,
   });
   // Persist committed timeline history in the product, forwarding events to any
