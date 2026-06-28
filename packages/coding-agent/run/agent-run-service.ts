@@ -294,7 +294,12 @@ export class AgentRunService implements AgentRunPort {
     this.runEffectiveCwdProvider = options.runEffectiveCwdProvider;
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
-        repository: this.repository,
+        sessionRepository: this.repository,
+        messageRepository: this.repository,
+        runRepository: this.repository,
+        runExecutionFactRepository: this.repository,
+        runtimeEventRepository: this.repository,
+        sessionCompactionRepository: this.repository,
         activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
       });
     this.modelCallInputBuildService = options.modelCallInputBuildService

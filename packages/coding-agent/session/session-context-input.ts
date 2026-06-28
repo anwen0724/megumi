@@ -23,12 +23,27 @@ import type {
   SessionSummaryEntry,
 } from '@megumi/shared/session';
 
-export interface SessionContextInputRepository {
+export interface SessionContextInputSessionRepository {
   getSession(sessionId: string): Session | undefined;
+}
+
+export interface SessionContextInputMessageRepository {
   getMessage(messageId: string): SessionMessage | undefined;
+}
+
+export interface SessionContextInputRunRepository {
   getRun(runId: string): Run | undefined;
+}
+
+export interface SessionContextInputRunExecutionFactRepository {
   listStepsByRun(runId: string): RunStep[];
+}
+
+export interface SessionContextInputRuntimeEventRepository {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+}
+
+export interface SessionContextInputCompactionRepository {
   getSessionCompaction(compactionId: string): SessionCompactionEntry | null;
 }
 
@@ -46,7 +61,12 @@ export interface BuildSessionContextInputFromRepositoryInput {
 }
 
 export interface SessionContextInputServiceOptions {
-  repository: SessionContextInputRepository;
+  sessionRepository: SessionContextInputSessionRepository;
+  messageRepository: SessionContextInputMessageRepository;
+  runRepository: SessionContextInputRunRepository;
+  runExecutionFactRepository: SessionContextInputRunExecutionFactRepository;
+  runtimeEventRepository: SessionContextInputRuntimeEventRepository;
+  sessionCompactionRepository: SessionContextInputCompactionRepository;
   activePathRepository: SessionContextInputActivePathRepository;
 }
 
@@ -61,16 +81,16 @@ export class SessionContextInputService {
   buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput {
     const maxHistoryEntries = input.maxHistoryEntries ?? DEFAULT_MAX_HISTORY_ENTRIES;
     const maxRuntimeFacts = input.maxRuntimeFacts ?? DEFAULT_MAX_RUNTIME_FACTS;
-    const session = this.options.repository.getSession(input.sessionId);
+    const session = this.options.sessionRepository.getSession(input.sessionId);
     const activePath = this.options.activePathRepository.getActivePath(input.sessionId);
     const activePathEntries = activePath.entries;
     const latestCompletedCompaction = latestCompletedCompactionFromActivePath({
-      repository: this.options.repository,
+      compactionRepository: this.options.sessionCompactionRepository,
       activePath,
     });
     const completedHistoryEntries = activePathEntries
       .filter((entry) => entry.sourceRef.sourceKind === 'session_message')
-      .map((entry) => this.options.repository.getMessage(entry.sourceRef.sourceId))
+      .map((entry) => this.options.messageRepository.getMessage(entry.sourceRef.sourceId))
       .filter((message): message is SessionMessage => !!message)
       .filter((message) => message.messageId !== input.currentMessageId)
       .filter((message) => !input.currentRunId || String(message.runId) !== input.currentRunId)
@@ -89,11 +109,12 @@ export class SessionContextInputService {
       : [];
     const allRuntimeFacts = activePathEntries
       .filter((entry) => entry.sourceRef.sourceKind === 'session_run')
-      .map((entry) => this.options.repository.getRun(entry.sourceRef.sourceId))
+      .map((entry) => this.options.runRepository.getRun(entry.sourceRef.sourceId))
       .filter((run): run is Run => !!run)
       .filter((run) => run.runId !== input.currentRunId)
       .flatMap((run) => runtimeFactsForRun({
-        repository: this.options.repository,
+        runExecutionFactRepository: this.options.runExecutionFactRepository,
+        runtimeEventRepository: this.options.runtimeEventRepository,
         run,
         builtAt: input.builtAt,
       }));
@@ -206,7 +227,7 @@ function compactionSummaryEntry(compaction: SessionCompactionEntry, builtAt: str
 }
 
 function latestCompletedCompactionFromActivePath(input: {
-  repository: SessionContextInputRepository;
+  compactionRepository: SessionContextInputCompactionRepository;
   activePath: SessionActivePath;
 }): SessionCompactionEntry | null {
   for (const entry of [...input.activePath.entries].reverse()) {
@@ -214,7 +235,7 @@ function latestCompletedCompactionFromActivePath(input: {
       continue;
     }
 
-    const compaction = input.repository.getSessionCompaction(entry.sourceRef.sourceId);
+    const compaction = input.compactionRepository.getSessionCompaction(entry.sourceRef.sourceId);
     if (compaction?.status === 'completed') {
       return compaction;
     }
@@ -269,13 +290,14 @@ function sourceRefsMatch(left: ModelInputContextSourceRef, right: ModelInputCont
 }
 
 function runtimeFactsForRun(input: {
-  repository: SessionContextInputRepository;
+  runExecutionFactRepository: SessionContextInputRunExecutionFactRepository;
+  runtimeEventRepository: SessionContextInputRuntimeEventRepository;
   run: Run;
   builtAt: string;
 }): SessionRuntimeFact[] {
   const facts: SessionRuntimeFact[] = [];
 
-  for (const event of input.repository.listRuntimeEventsByRun(String(input.run.runId))) {
+  for (const event of input.runtimeEventRepository.listRuntimeEventsByRun(String(input.run.runId))) {
     const fact = runtimeFactForEvent(event, input.builtAt);
     if (fact) {
       facts.push(fact);
@@ -310,7 +332,7 @@ function runtimeFactsForRun(input: {
     }));
   }
 
-  for (const step of input.repository.listStepsByRun(String(input.run.runId))) {
+  for (const step of input.runExecutionFactRepository.listStepsByRun(String(input.run.runId))) {
     if (step.status === 'failed') {
       facts.push(runtimeFact({
         id: `session-step:${step.stepId}:step-failed`,

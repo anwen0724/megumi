@@ -23,6 +23,21 @@ function createRepositories(): {
   };
 }
 
+function createSessionContextInputService(input: {
+  repository: SessionRunRepository;
+  activePathRepository: SessionActivePathRepository;
+}): SessionContextInputService {
+  return new SessionContextInputService({
+    sessionRepository: input.repository,
+    messageRepository: input.repository,
+    runRepository: input.repository,
+    runExecutionFactRepository: input.repository,
+    runtimeEventRepository: input.repository,
+    sessionCompactionRepository: input.repository,
+    activePathRepository: input.activePathRepository,
+  });
+}
+
 afterEach(() => {
   db?.close();
   db = null;
@@ -280,7 +295,7 @@ describe('SessionContextInputService', () => {
       { sourceEntryId: 'source-entry-message-current-run-assistant', sourceKind: 'session_message', sourceId: 'message-current-run-assistant', createdAt: '2026-05-28T00:00:06.000Z' },
     ]);
 
-    const input = new SessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
+    const input = createSessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
       sessionId: 'session-1',
       currentRunId: 'run-current',
       currentMessageId: 'message-current',
@@ -355,7 +370,7 @@ describe('SessionContextInputService', () => {
     }
     appendActivePath(activePathRepository, 'session-1', activeEntries);
 
-    const input = new SessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
+    const input = createSessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
       sessionId: 'session-1',
       builtAt: '2026-05-28T00:01:00.000Z',
       maxHistoryEntries: 2,
@@ -450,7 +465,7 @@ describe('SessionContextInputService', () => {
       { sourceEntryId: 'source-entry-run-current-path', sourceKind: 'session_run', sourceId: 'run-current-path', createdAt: '2026-05-31T08:03:30.000Z' },
     ]);
 
-    const input = new SessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
+    const input = createSessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
       sessionId: 'session-1',
       builtAt: '2026-05-31T08:11:00.000Z',
       maxHistoryEntries: 12,
@@ -514,7 +529,7 @@ describe('SessionContextInputService', () => {
       { sourceEntryId: 'source-entry-message-3', sourceKind: 'session_message', sourceId: 'message-3', createdAt: '2026-05-31T09:03:00.000Z' },
     ]);
 
-    const input = new SessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
+    const input = createSessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
       sessionId: 'session-1',
       builtAt: '2026-05-31T09:06:00.000Z',
       maxHistoryEntries: 12,
@@ -584,7 +599,7 @@ describe('SessionContextInputService', () => {
       ...activeEntries.slice(3),
     ]);
 
-    const input = new SessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
+    const input = createSessionContextInputService({ repository, activePathRepository }).buildSessionContextInput({
       sessionId: 'session-1',
       builtAt: '2026-05-31T10:02:00.000Z',
       maxHistoryEntries: 10,

@@ -8,6 +8,7 @@ import {
 } from '../run/agent-run-service';
 import {
   SessionBranchService,
+  SessionContextInputService,
   SessionService,
 } from '../session';
 import type {
@@ -17,8 +18,11 @@ import type {
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
+import type { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
+import type { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { SessionContextRepository } from '../persistence/repos/session-context.repo';
+import type { SessionMessageRepository } from '../persistence/repos/session-message.repo';
 import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
@@ -41,6 +45,9 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   permissionSnapshotRepository: PermissionSnapshotRepository;
   sessionRunRepository: SessionRunRepository;
   sessionContextRepository: SessionContextRepository;
+  sessionMessageRepository: SessionMessageRepository;
+  runExecutionFactRepository: RunExecutionFactRepository;
+  runtimeEventRepository: RuntimeEventRepository;
   activePathRepository: SessionActivePathRepository;
   toolRepository: ToolRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
@@ -90,10 +97,20 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     ids: branchIds,
     chatStreamEventSink: options.chatStreamEventSink,
   });
+  const sessionContextInputService = new SessionContextInputService({
+    sessionRepository: options.sessionRunRepository,
+    messageRepository: options.sessionMessageRepository,
+    runRepository: options.sessionRunRepository,
+    runExecutionFactRepository: options.runExecutionFactRepository,
+    runtimeEventRepository: options.runtimeEventRepository,
+    sessionCompactionRepository: options.sessionContextRepository,
+    activePathRepository: options.activePathRepository,
+  });
   const agentRunService = new AgentRunService({
     repository: options.sessionRunRepository,
     sessionCompactionRepository: options.sessionContextRepository,
     activePathRepository: options.activePathRepository,
+    sessionContextInputService,
     sessionBranchService,
     permissionSnapshotService,
     planArtifactService,

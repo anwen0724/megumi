@@ -271,4 +271,27 @@ describe('package and file structure source guards', () => {
     expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionContextRepository');
     expect(runtimeSource).toContain('sessionContextRepository: persistence.sessionContextRepository');
   });
+
+  it('wires session context input through split repository ports', () => {
+    const sessionContextInputSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/session/session-context-input.ts'),
+      'utf8',
+    );
+    const sessionRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
+      'utf8',
+    );
+    const runtimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
+      'utf8',
+    );
+
+    expect(sessionContextInputSource).toContain('messageRepository: SessionContextInputMessageRepository');
+    expect(sessionContextInputSource).toContain('sessionCompactionRepository: SessionContextInputCompactionRepository');
+    expect(sessionContextInputSource).not.toContain('repository: SessionContextInputRepository;');
+    expect(sessionRuntimeSource).toContain('new SessionContextInputService');
+    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
+    expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionContextRepository');
+    expect(runtimeSource).toContain('sessionMessageRepository: persistence.sessionMessageRepository');
+  });
 });
