@@ -42,7 +42,8 @@ describe('run context and model input boundaries', () => {
 
   it('keeps main as the RunContext to ModelStep input build adapter', () => {
     const contextManagement = read('packages/coding-agent/context/model-call-context.ts');
-    const sessionRun = read('packages/coding-agent/run/agent-run-service.ts');
+    const agentRunService = read('packages/coding-agent/run/agent-run-service.ts');
+    const agentLoop = read('packages/coding-agent/agent-loop/agent-loop.ts');
 
     expect(contextManagement).toContain('runtimeConstraints?: ModelStepRuntimeConstraintInput[]');
     expect(contextManagement).toMatch(/\bpermissionSnapshot\?:/);
@@ -50,12 +51,12 @@ describe('run context and model input boundaries', () => {
     expect(contextManagement).not.toMatch(/\bmodeSnapshot\?:/);
     expect(contextManagement).not.toMatch(/\bmodeSnapshotRef\?:/);
     expect(contextManagement).not.toMatch(/workflow-command-contracts/);
-    expect(sessionRun).toContain('ModelCallInputBuildService');
-    expect(sessionRun).toContain('modelCallInputBuildService');
-    // contextBudgetPolicy resolution moved to RunTurn in packages/coding-agent/run.
-    expect(sessionRun).toContain('RunTurn');
-    const codingAgentRun = read('packages/coding-agent/run/turn/run-turn.ts');
-    expect(codingAgentRun).toMatch(/contextBudgetPolicy/);
+    expect(agentRunService).toContain('ModelCallInputBuildService');
+    expect(agentRunService).toContain('modelCallInputBuildService');
+    expect(agentRunService).toContain('new AgentLoop');
+    expect(agentRunService).not.toContain('RunTurn');
+    expect(agentLoop).toContain('class AgentLoop');
+    expect(agentLoop).toMatch(/contextBudgetPolicy/);
   });
 
   it('keeps input preprocessing materialization in coding-agent context and out of provider adapters', () => {

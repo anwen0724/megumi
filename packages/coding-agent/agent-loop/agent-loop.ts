@@ -1,28 +1,42 @@
+// Owns the Coding Agent model/tool execution loop for one user input.
+import type { ContextBudgetPolicy } from '@megumi/shared/context';
+import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type {
   ModelInputContext,
   ModelInputContextBuildRequest,
   ModelStepProviderState,
   ModelStepRuntimeRequest,
 } from '@megumi/shared/model';
-import type { PermissionMode } from '@megumi/shared/permission';
-import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime';
+import type { ModelCapabilitySummary } from '@megumi/shared/run';
+import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
+import type { ProviderId } from '@megumi/shared/provider';
+import type { RuntimeContext, RuntimeError, RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import {
   createRunFailedEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
-import type { RunStep } from '@megumi/shared/session';
+import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { ParsedInput } from '../input';
 import {
+  AgentLoopInitialModelInputPreparationService,
+  type AgentLoopInitialModelInputPreparation,
   type BuildModelCallInputInput,
   type BuildModelCallInputResult,
+  type CompactIfNeededInput,
   createModelCallInputContextId,
   type ModelInputMemoryRecallSource,
+  type PrepareAgentLoopInitialModelInputInput,
+  type SessionCompactionOrchestrationResult,
 } from '../context';
 import {
   coalesceTextDeltaRuntimeEvents,
+  createRunStartedEvent,
+  createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
 } from '../events';
+import type { BuildSessionContextInputFromRepositoryInput } from '../session';
 import { runModelCall, type ModelCallPort } from './model-call';
 import { createTerminalRuntimeError } from '../state';
 import type {
@@ -206,6 +220,384 @@ export interface CodingAgentRunToolResultModelInputRecorder {
     emittedAt: string;
     sequence: number;
   }): readonly RuntimeEvent[] | undefined;
+}
+
+export interface AgentLoopClock {
+  now(): string;
+}
+
+export interface AgentLoopIds {
+  eventId(): string;
+}
+
+export interface AgentLoopEventPort {
+  append(
+    event: RuntimeEvent,
+    requestId: string,
+    runtimeContext?: RuntimeContext,
+  ): RuntimeEvent;
+}
+
+export interface AgentLoopStatePort {
+  getRunStatus(runId: string): string | undefined;
+}
+
+export interface AgentLoopFailurePort {
+  failBeforeModelStep(input: {
+    requestId: string;
+    runtimeContext?: RuntimeContext;
+    sessionId: string;
+    run: Run;
+    step: RunStep;
+    error: RuntimeError;
+  }): AsyncIterable<RuntimeEvent>;
+}
+
+export interface AgentLoopContextService {
+  createBaselineContext(input: {
+    runId: string;
+    goal: string;
+    workspaceId: string;
+    workspacePath: string;
+    modelCapabilitySummary: ModelCapabilitySummary;
+    contextBudgetPolicy: ContextBudgetPolicy;
+  }): { contextBudgetPolicy?: ContextBudgetPolicy } | undefined;
+}
+
+export interface AgentLoopSessionContextInputService {
+  buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
+}
+
+export interface AgentLoopMemoryRecallService {
+  recallForNewUserInput(input: {
+    projectId?: string;
+    projectRoot?: string;
+    effectiveCwd?: string;
+    sessionId: string;
+    runId: string;
+    modelStepId: string;
+    queryText: string;
+    providerId?: string;
+    modelId?: string;
+    enabled?: boolean;
+    createdAt: string;
+  }): Promise<{
+    memoryRecallSources?: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+  }>;
+}
+
+export interface AgentLoopEventRecorder {
+  createModelStep?(input: { runId: string }): string;
+
+  recordModelCallEvents(input: {
+    request: ModelStepRuntimeRequest;
+    modelEvents: AsyncIterable<RuntimeEvent>;
+    pendingApprovalResumes: PendingToolApprovalResume[];
+    run: Run;
+    step: RunStep;
+    userMessageId: string;
+    toolRuntime?: ToolCallRunnerService;
+    projectId?: string;
+    projectRoot?: string;
+    permissionMode?: PermissionMode;
+    memoryRecallSources?: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+    startSequence?: number;
+  }): AsyncIterable<RuntimeEvent>;
+}
+
+export interface AgentLoopOptions {
+  clock: AgentLoopClock;
+  ids: AgentLoopIds;
+  eventPort: AgentLoopEventPort;
+  statePort: AgentLoopStatePort;
+  failurePort: AgentLoopFailurePort;
+  contextService?: AgentLoopContextService;
+  sessionContextInputService: AgentLoopSessionContextInputService;
+  sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
+  memoryRecallService?: AgentLoopMemoryRecallService;
+  modelCallPort: ModelCallPort;
+  toolCallRunnerFactory?: ToolRunnerFactory;
+  modelCallInputBuildService: {
+    buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
+  };
+  compactionOrchestrator?: {
+    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
+  };
+  initialModelInputPreparationService?: {
+    prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
+  };
+  toolSetService: {
+    prepareToolSet(input: PrepareToolSetInput): PrepareToolSetResult;
+  };
+  eventRecorder: AgentLoopEventRecorder;
+}
+
+export interface AgentLoopInput {
+  requestId: string;
+  session: Session;
+  run: Run;
+  step: RunStep;
+  userMessage: SessionMessage;
+  providerId: ProviderId | string;
+  modelId: string;
+  permissionMode: PermissionMode;
+  inputPreprocessing: InputPreprocessingResult;
+  parsedInput?: ParsedInput;
+  permissionSnapshot?: PermissionModeSnapshot;
+  permissionSnapshotRef?: string;
+  runtimeContext?: RuntimeContext;
+  createdAt: string;
+  memoryEnabled?: boolean;
+}
+
+export class AgentLoop {
+  private readonly initialModelInputPreparationService: {
+    prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
+  };
+  private readonly toolSetService: {
+    prepareToolSet(input: PrepareToolSetInput): PrepareToolSetResult;
+  };
+
+  constructor(private readonly options: AgentLoopOptions) {
+    this.initialModelInputPreparationService = options.initialModelInputPreparationService
+      ?? new AgentLoopInitialModelInputPreparationService({
+        contextService: options.contextService,
+        sessionContextInputService: options.sessionContextInputService,
+        sourceOverrideProvider: options.sourceOverrideProvider,
+        memoryRecallService: options.memoryRecallService,
+        modelCallInputBuildService: options.modelCallInputBuildService,
+        compactionOrchestrator: options.compactionOrchestrator,
+      });
+    this.toolSetService = options.toolSetService;
+  }
+
+  async *run(input: AgentLoopInput): AsyncIterable<RuntimeEvent> {
+    const requestMeta = { requestId: input.requestId, runtimeContext: input.runtimeContext };
+    let runStartedAppended = false;
+
+    try {
+      const toolSet = this.toolSetService.prepareToolSet({
+        runId: String(input.run.runId),
+        sessionId: String(input.session.sessionId),
+        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        permissionMode: input.permissionMode,
+        providerId: String(input.providerId),
+        modelId: input.modelId,
+        createdAt: input.createdAt,
+        startSequence: 0,
+      });
+      const initialModelInputPreparation = await this.initialModelInputPreparationService.prepare({
+        requestId: input.requestId,
+        session: input.session,
+        run: input.run,
+        step: input.step,
+        userMessage: input.userMessage,
+        providerId: input.providerId,
+        modelId: input.modelId,
+        permissionMode: input.permissionMode,
+        inputPreprocessing: input.inputPreprocessing,
+        ...(input.parsedInput ? { parsedInput: input.parsedInput } : {}),
+        ...(input.permissionSnapshot ? {
+          permissionSnapshot: input.permissionSnapshot,
+          ...(input.permissionSnapshotRef ? { permissionSnapshotRef: input.permissionSnapshotRef } : {}),
+        } : {}),
+        ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+        createdAt: input.createdAt,
+        ...(input.memoryEnabled !== undefined ? { memoryEnabled: input.memoryEnabled } : {}),
+        ...(toolSet.toolDefinitions ? { toolDefinitions: toolSet.toolDefinitions } : {}),
+      });
+      const memoryRecall = initialModelInputPreparation.memoryRecall;
+
+      if (initialModelInputPreparation.compactionProbeModelInput.failure) {
+        const runStarted = this.options.eventPort.append(
+          createRunStartedEvent({
+            eventId: this.options.ids.eventId(),
+            sessionId: String(input.session.sessionId),
+            runId: String(input.run.runId),
+            sequence: 1,
+            createdAt: input.createdAt,
+          }),
+          requestMeta.requestId,
+          requestMeta.runtimeContext,
+        );
+        runStartedAppended = true;
+        yield runStarted;
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: modelCallInputBuildFailureToRuntimeError(
+            initialModelInputPreparation.compactionProbeModelInput.failure,
+          ),
+        });
+        return;
+      }
+
+      const compactionPromise = initialModelInputPreparation.startCompaction();
+
+      {
+        const event = this.options.eventPort.append(
+          createRunStartedEvent({
+            eventId: this.options.ids.eventId(),
+            sessionId: String(input.session.sessionId),
+            runId: String(input.run.runId),
+            sequence: 1,
+            createdAt: input.createdAt,
+          }),
+          requestMeta.requestId,
+          requestMeta.runtimeContext,
+        );
+        runStartedAppended = true;
+        yield event;
+      }
+      for (const event of toolSet.events) {
+        yield this.options.eventPort.append(event, requestMeta.requestId, requestMeta.runtimeContext);
+      }
+
+      const compaction = await compactionPromise;
+      for (const event of compaction.events) {
+        yield this.options.eventPort.append(event, requestMeta.requestId, requestMeta.runtimeContext);
+      }
+
+      const currentRunStatus = this.options.statePort.getRunStatus(String(input.run.runId));
+      if (currentRunStatus === 'cancelling' || currentRunStatus === 'cancelled') {
+        return;
+      }
+
+      if (compaction.status === 'failed') {
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: compaction.failure,
+        });
+        return;
+      }
+
+      const initialModelInput = await initialModelInputPreparation.buildInitialModelInput();
+      if (initialModelInput.failure) {
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: modelCallInputBuildFailureToRuntimeError(initialModelInput.failure),
+        });
+        return;
+      }
+
+      const modelCallRequest: ModelStepRuntimeRequest = {
+        requestId: input.requestId,
+        sessionId: input.session.sessionId,
+        runId: input.run.runId,
+        stepId: input.step.stepId,
+        providerId: input.providerId as ProviderId,
+        modelId: input.modelId,
+        inputContext: initialModelInput.inputContext,
+        ...(initialModelInput.toolDefinitions.length > 0 ? { toolDefinitions: initialModelInput.toolDefinitions } : {}),
+        runtimeContext: input.runtimeContext,
+        createdAt: input.createdAt,
+      };
+
+      let toolRuntime: ToolCallRunnerService | undefined;
+      try {
+        toolRuntime = await prepareToolRunner({
+          ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+          permissionMode: input.permissionMode,
+          ...(this.options.toolCallRunnerFactory ? { factory: this.options.toolCallRunnerFactory } : {}),
+        });
+      } catch (error) {
+        yield* this.options.failurePort.failBeforeModelStep({
+          requestId: input.requestId,
+          runtimeContext: input.runtimeContext,
+          sessionId: String(input.session.sessionId),
+          run: input.run,
+          step: input.step,
+          error: createRuntimeErrorFromUnknown(error),
+        });
+        return;
+      }
+
+      const pendingApprovalResumes: PendingToolApprovalResume[] = [];
+      const modelEvents = streamCodingAgentModelToolLoop({
+        request: modelCallRequest,
+        ports: {
+          modelCallPort: this.options.modelCallPort,
+          ...(toolRuntime ? { toolCallHandler: toolRuntime } : {}),
+          modelCallInputBuildService: this.options.modelCallInputBuildService,
+          sourceOverrideProvider: this.options.sourceOverrideProvider,
+          ...(toolRuntime ? {
+            toolResultModelInputRecorder: {
+              markToolResultsSubmittedToModelInput: (recorderInput) => {
+                const event = toolRuntime.markToolResultsSubmittedToModelInput(recorderInput);
+                return event ? [event] : [];
+              },
+            },
+          } : {}),
+          ids: {
+            nextEventId: this.options.ids.eventId,
+            nextStepId: ({ runId }) => this.options.eventRecorder.createModelStep?.({ runId })
+              ?? `${runId}:step:${crypto.randomUUID()}`,
+            nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
+          },
+        },
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        permissionMode: input.permissionMode,
+        memoryRecall,
+        onPendingApproval: (pending) => {
+          pendingApprovalResumes.push(pending);
+        },
+      });
+
+      yield* this.options.eventRecorder.recordModelCallEvents({
+        request: modelCallRequest,
+        modelEvents,
+        pendingApprovalResumes,
+        run: input.run,
+        step: input.step,
+        userMessageId: String(input.userMessage.messageId),
+        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        permissionMode: input.permissionMode,
+        ...(memoryRecall.memoryRecallSources ? { memoryRecallSources: memoryRecall.memoryRecallSources } : {}),
+        ...(memoryRecall.memoryRecallSeed ? { memoryRecallSeed: memoryRecall.memoryRecallSeed } : {}),
+        startSequence: 1,
+        ...(toolRuntime ? { toolRuntime } : {}),
+      });
+    } catch (error) {
+      if (!runStartedAppended) {
+        const runStarted = this.options.eventPort.append(
+          createRunStartedEvent({
+            eventId: this.options.ids.eventId(),
+            sessionId: String(input.session.sessionId),
+            runId: String(input.run.runId),
+            sequence: 1,
+            createdAt: input.createdAt,
+          }),
+          requestMeta.requestId,
+          requestMeta.runtimeContext,
+        );
+        runStartedAppended = true;
+        yield runStarted;
+      }
+      yield* this.options.failurePort.failBeforeModelStep({
+        requestId: input.requestId,
+        runtimeContext: input.runtimeContext,
+        sessionId: String(input.session.sessionId),
+        run: input.run,
+        step: input.step,
+        error: createRuntimeErrorFromUnknown(error),
+      });
+    }
+  }
 }
 
 export interface CodingAgentModelToolLoopStreamIds {

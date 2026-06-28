@@ -1,16 +1,16 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  RunTurn,
-  type RunTurnOptions,
-} from '@megumi/coding-agent/run';
+  AgentLoop,
+  type AgentLoopOptions,
+} from '@megumi/coding-agent/agent-loop';
 import type { BuildModelCallInputInput, BuildModelCallInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/context';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 
-describe('RunTurn', () => {
+describe('AgentLoop', () => {
   it('builds compaction probe, runs compaction, builds initial input, and streams through agent runtime', async () => {
     const order: string[] = [];
     const buildInputs: BuildModelCallInputInput[] = [];
@@ -32,9 +32,9 @@ describe('RunTurn', () => {
         yield modelStepCompleted(request, 2);
       },
     }, order);
-    const orchestrator = new RunTurn(options);
+    const loop = new AgentLoop(options);
 
-    const events = await collect(orchestrator.runSessionMessage({
+    const events = await collect(loop.run({
       requestId: 'request-1',
       session,
       run,
@@ -65,14 +65,14 @@ describe('RunTurn', () => {
 
   it('adds ParsedInput command facts to both compaction probe and initial model input builds', async () => {
     const buildInputs: BuildModelCallInputInput[] = [];
-    const orchestrator = new RunTurn(createOptions({
+    const loop = new AgentLoop(createOptions({
       async buildModelCallInput(input) {
         buildInputs.push(input);
         return successfulModelStepInputBuild(input);
       },
     }));
 
-    await collect(orchestrator.runSessionMessage({
+    await collect(loop.run({
       requestId: 'request-1',
       session,
       run,
@@ -122,7 +122,7 @@ describe('RunTurn', () => {
 
   it('fails before provider streaming when compaction probe input build fails', async () => {
     const modelRequests: ModelStepRuntimeRequest[] = [];
-    const orchestrator = new RunTurn(createOptions({
+    const loop = new AgentLoop(createOptions({
       async buildModelCallInput(input) {
         if (input.contextKind === 'compaction-probe') {
           return {
@@ -141,7 +141,7 @@ describe('RunTurn', () => {
       },
     }));
 
-    const events = await collect(orchestrator.runSessionMessage({
+    const events = await collect(loop.run({
       requestId: 'request-1',
       session,
       run,
@@ -175,7 +175,7 @@ describe('RunTurn', () => {
   it('does not append run.started twice when the initial model input build throws', async () => {
     const order: string[] = [];
     const buildInputs: BuildModelCallInputInput[] = [];
-    const orchestrator = new RunTurn(createOptions({
+    const loop = new AgentLoop(createOptions({
       async buildModelCallInput(input) {
         buildInputs.push(input);
         if (input.contextKind === 'initial') {
@@ -185,7 +185,7 @@ describe('RunTurn', () => {
       },
     }, order));
 
-    const events = await collect(orchestrator.runSessionMessage({
+    const events = await collect(loop.run({
       requestId: 'request-1',
       session,
       run,
@@ -260,7 +260,7 @@ function createOptions(
     streamModelCall(input: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent>;
   }> = {},
   order: string[] = [],
-): RunTurnOptions {
+): AgentLoopOptions {
   return {
     clock: { now: () => '2026-06-21T00:00:01.000Z' },
     ids: {
@@ -272,7 +272,7 @@ function createOptions(
         return event;
       },
     },
-    runStatePort: {
+    statePort: {
       getRunStatus(_runId) { return undefined; },
     },
     failurePort: {
@@ -338,7 +338,7 @@ function createOptions(
         yield modelStepCompleted(request, 2);
       }),
     },
-    runEventRecorder: {
+    eventRecorder: {
       async *recordModelCallEvents(input) {
         for await (const event of input.modelEvents) {
           yield event;

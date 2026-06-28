@@ -113,7 +113,6 @@ describe('coding agent run structure source guards', () => {
     for (const requiredPath of [
       'packages/coding-agent/run/agent-run-service.ts',
       'packages/coding-agent/run/run-contract.ts',
-      'packages/coding-agent/run/turn/run-turn.ts',
       'packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts',
       'packages/coding-agent/agent-loop/agent-loop.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
@@ -139,6 +138,7 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/runtime-input.ts',
       'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
       'packages/coding-agent/run/tool-calls/tool-call-loop.ts',
+      'packages/coding-agent/run/turn/run-turn.ts',
       'packages/coding-agent/run/turn/turn-contract.ts',
       'packages/coding-agent/run/turn/turn-failure.ts',
       'packages/coding-agent/run/turn/turn-events.ts',

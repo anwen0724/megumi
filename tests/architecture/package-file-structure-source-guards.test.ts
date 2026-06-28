@@ -156,7 +156,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(false);
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'), 'utf8'))
       .toContain('export class ModelCallInputBuildService');
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/context-management'))).toBe(false);
@@ -615,17 +615,16 @@ describe('package and file structure source guards', () => {
 
   it('keeps approval resume model loop wiring in the top-level agent-loop owner', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
-    const runTurnSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/loop'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/approval-resume-model-loop.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-tool-loop-stream.ts'))).toBe(false);
     expect(agentRunServiceSource).not.toContain('const resumedRequest: ModelStepRuntimeRequest');
     expect(agentRunServiceSource).not.toContain('const resumedModelEvents = streamCodingAgentModelToolLoop({');
     expect(agentRunServiceSource).toContain("from '../agent-loop'");
     expect(agentRunServiceSource).toContain('streamApprovalResumeModelLoop({');
-    expect(runTurnSource).toContain("from '../../agent-loop'");
     expect(agentLoopSource).toContain('export function streamApprovalResumeModelLoop');
     expect(agentLoopSource).toContain('export async function* streamCodingAgentModelToolLoop');
   });
@@ -688,8 +687,8 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps memory recall cwd resolution in the context owner', () => {
-    const runTurnSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const initialModelInputPreparationSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/context/initial-model-input-preparation.ts'),
       'utf8',
@@ -697,9 +696,9 @@ describe('package and file structure source guards', () => {
     const contextEffectiveCwdSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/effective-cwd.ts'), 'utf8');
     const modelInputContextBuilderSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/model-input-context-builder.ts'), 'utf8');
 
-    expect(runTurnSource).not.toContain('resolveMemoryRecallEffectiveCwd');
-    expect(runTurnSource).not.toContain('function resolveRecallEffectiveCwd');
-    expect(runTurnSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
+    expect(agentLoopSource).not.toContain('resolveMemoryRecallEffectiveCwd');
+    expect(agentLoopSource).not.toContain('function resolveRecallEffectiveCwd');
+    expect(agentLoopSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
     expect(agentRunServiceSource).not.toContain('function resolveRecallEffectiveCwd');
     expect(agentRunServiceSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
     expect(initialModelInputPreparationSource).toContain('resolveMemoryRecallEffectiveCwd');
@@ -709,23 +708,16 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps ToolSet selection in the agent loop owner', () => {
-    const runTurnSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const toolsDefinitionsPath = join(repoRoot, 'packages/coding-agent/tools/definitions/model-visible-tool-definitions.ts');
 
-    expect(runTurnSource).toContain('prepareToolSet');
-    expect(runTurnSource).not.toContain('private resolveToolDefinitions');
-    expect(runTurnSource).not.toContain('.createRunSnapshot({');
-    expect(runTurnSource).not.toContain('.listDefinitions({');
-    expect(runTurnSource).not.toContain('toolRegistrySnapshotProvider');
-    expect(runTurnSource).not.toContain('toolDefinitionProvider');
-    expect(runTurnSource).not.toContain('createRunSnapshot(input:');
-    expect(runTurnSource).not.toContain('listDefinitions(input:');
-    expect(runTurnSource).not.toContain('providerCapabilitySummaryProvider');
-    expect(runTurnSource).not.toContain('getProviderCapabilitySummary');
-    expect(runTurnSource).toContain('prepareToolRunner');
-    expect(runTurnSource).not.toContain('toolCallRunnerFactory.create');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn'))).toBe(false);
+    expect(agentRunServiceSource).not.toContain('prepareToolSet({');
+    expect(agentRunServiceSource).not.toContain('prepareToolRunner({');
+    expect(agentRunServiceSource).not.toContain('toolCallRunnerFactory.create');
     expect(agentLoopSource).toContain('export class ToolSetService');
+    expect(agentLoopSource).toContain('export class AgentLoop');
     expect(agentLoopSource).toContain('prepareToolSet');
     expect(agentLoopSource).toContain('export async function prepareToolRunner');
     expect(agentLoopSource).toContain('getProviderCapabilitySummary');

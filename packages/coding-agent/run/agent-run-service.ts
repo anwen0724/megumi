@@ -30,10 +30,8 @@ import {
   type SessionBranchServicePort,
 } from '@megumi/coding-agent/session';
 import {
-  RunTurn,
-  type RunTurnOptions,
-} from './turn';
-import {
+  AgentLoop,
+  type AgentLoopOptions,
   streamApprovalResumeModelLoop,
   ToolSetService,
 } from '../agent-loop';
@@ -470,9 +468,9 @@ export class AgentRunService implements AgentRunPort {
     return { modelVisibleToolDefinitions: registrySnapshotResult.modelVisibleToolDefinitions, events };
   }
 
-  private createRunTurnOptions(
+  private createAgentLoopOptions(
     chatStreamAdapter?: ChatStreamEventAdapter,
-  ): RunTurnOptions {
+  ): AgentLoopOptions {
     const svc = this;
     const toolSetService = new ToolSetService({
       ...(this.toolRegistrySnapshotService ? {
@@ -499,7 +497,7 @@ export class AgentRunService implements AgentRunPort {
           });
         },
       },
-      runStatePort: {
+      statePort: {
         getRunStatus: (runId: string) => svc.runRecordRepository.getRun(runId)?.status,
       },
       failurePort: {
@@ -551,7 +549,7 @@ export class AgentRunService implements AgentRunPort {
       } : {}),
       modelCallInputBuildService: this.modelCallInputBuildService,
       ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
-      runEventRecorder: {
+      eventRecorder: {
         createModelStep: ({ runId }) => {
           const step = svc.runExecutionFactRepository.saveStep({
             stepId: svc.ids.stepId(),
@@ -967,10 +965,10 @@ export class AgentRunService implements AgentRunPort {
     chatStreamAdapter?: ChatStreamEventAdapter;
     parsedInput?: ParsedInput;
   }): AsyncIterable<RuntimeEvent> {
-    const orchestrator = new RunTurn(
-      this.createRunTurnOptions(input.chatStreamAdapter),
+    const loop = new AgentLoop(
+      this.createAgentLoopOptions(input.chatStreamAdapter),
     );
-    yield* orchestrator.runSessionMessage({
+    yield* loop.run({
       requestId: input.requestId,
       session: input.session,
       run: input.run,
