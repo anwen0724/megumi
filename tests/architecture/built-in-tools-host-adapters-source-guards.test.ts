@@ -57,8 +57,8 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps Host execution behind PermissionPolicy', () => {
-    const approval = read('packages/coding-agent/run/tool-calls/approval/tool-call-approval.ts');
-    const executionRecord = read('packages/coding-agent/run/tool-calls/execution/tool-execution-record.ts');
+    const approval = read('packages/coding-agent/agent-loop/tool-call/approval/tool-call-approval.ts');
+    const executionRecord = read('packages/coding-agent/agent-loop/tool-call/execution/tool-execution-record.ts');
     const applyDecision = functionSection(approval, 'applyDecision', 'permissionDecisionForRecord');
     const runRecord = functionSection(executionRecord, 'runToolExecutionRecord', 'budgetProfileForRecord');
 
@@ -70,7 +70,7 @@ describe('built-in tools and host adapters source guards', () => {
   });
 
   it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
-    const approvalResume = read('packages/coding-agent/run/tool-calls/approval/approval-resume.ts');
+    const approvalResume = read('packages/coding-agent/agent-loop/tool-call/approval/approval-resume.ts');
     const resumeToolApproval = functionSection(approvalResume, 'resumeToolApproval', 'rejectApprovedRecord');
     const getApprovalIndex = resumeToolApproval.indexOf('repository.getApprovalRequest');
     const getToolExecutionIndex = resumeToolApproval.indexOf('repository.getToolExecution(approval.toolExecutionId)');
@@ -96,7 +96,7 @@ describe('built-in tools and host adapters source guards', () => {
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {
     const combined = [
       ...listSourceFiles('packages/coding-agent/tools/built-ins'),
-      'packages/coding-agent/run/tool-calls/tool-call-runner.ts',
+      'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts',
       'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
       'packages/coding-agent/tools/execution/tool-execution-router.ts',
       ...listSourceFiles('packages/coding-agent/tools/execution/tool-executors'),

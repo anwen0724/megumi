@@ -130,8 +130,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/tool-call-contract.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(false);
-    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'), 'utf8'))
-      .toContain("export * from '../../agent-loop/tool-call/tool-call-runner'");
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-factory.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-metadata.ts'))).toBe(true);
