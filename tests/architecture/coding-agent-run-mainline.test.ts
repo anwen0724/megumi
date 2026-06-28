@@ -44,7 +44,7 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps model-call independent from loop and tool-call internals', () => {
-    const offenders = filesContaining('packages/coding-agent/run/model-call', (source) => {
+    const offenders = filesContaining('packages/coding-agent/agent-loop/model-call', (source) => {
       return /from ['"][^'"]*(\.\.\/loop|\.\.\/tool-calls\/(approval|execution|model-input))/.test(source);
     });
 

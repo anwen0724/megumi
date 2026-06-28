@@ -43,19 +43,20 @@ function filesContaining(relativePath: string, predicate: (source: string) => bo
 }
 
 describe('coding agent run structure source guards', () => {
-  it('keeps model call as the run model boundary without provider ownership', () => {
+  it('keeps model call as the agent-loop model boundary without provider ownership', () => {
     expect(exists('packages/coding-agent/run/model-step')).toBe(false);
-    expect(exists('packages/coding-agent/run/model-call')).toBe(true);
+    expect(exists('packages/coding-agent/run/model-call')).toBe(false);
+    expect(exists('packages/coding-agent/agent-loop/model-call')).toBe(true);
 
     for (const forbiddenFile of [
       'provider-adapter.ts',
       'provider-registry.ts',
       'provider-service.ts',
     ]) {
-      expect(exists(`packages/coding-agent/run/model-call/${forbiddenFile}`)).toBe(false);
+      expect(exists(`packages/coding-agent/agent-loop/model-call/${forbiddenFile}`)).toBe(false);
     }
 
-    const modelCallSource = combinedSource('packages/coding-agent/run/model-call');
+    const modelCallSource = combinedSource('packages/coding-agent/agent-loop/model-call');
     for (const forbiddenImport of [
       '@megumi/ai/providers/openai',
       '@megumi/ai/providers/deepseek',
@@ -83,9 +84,9 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/turn/run-turn.ts',
       'packages/coding-agent/agent-loop/agent-loop.ts',
       'packages/coding-agent/run/loop/model-tool-loop-stream.ts',
-      'packages/coding-agent/run/model-call/model-call-runner.ts',
-      'packages/coding-agent/run/model-call/model-call-contract.ts',
-      'packages/coding-agent/run/model-call/model-call-stream.ts',
+      'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
+      'packages/coding-agent/agent-loop/model-call/model-call-contract.ts',
+      'packages/coding-agent/agent-loop/model-call/model-call-stream.ts',
       'packages/coding-agent/run/loop/agent-loop.ts',
       'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts',
       'packages/coding-agent/agent-loop/tool-call/tool-call-contract.ts',
@@ -115,6 +116,12 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/lifecycle/run-approval-resume.ts',
       'packages/coding-agent/run/lifecycle/run-state-policy.ts',
       'packages/coding-agent/run/lifecycle/run-terminal-coordinator.ts',
+      'packages/coding-agent/run/model-call/index.ts',
+      'packages/coding-agent/run/model-call/model-call-contract.ts',
+      'packages/coding-agent/run/model-call/model-call-request-mapper.ts',
+      'packages/coding-agent/run/model-call/model-call-runner.ts',
+      'packages/coding-agent/run/model-call/model-call-stream.ts',
+      'packages/coding-agent/run/model-call/model-event-adapter.ts',
       'packages/coding-agent/run/permissions/index.ts',
       'packages/coding-agent/run/permissions/project-boundary-policy.ts',
       'packages/coding-agent/run/permissions/tool-policy.ts',
@@ -141,7 +148,7 @@ describe('coding agent run structure source guards', () => {
   });
 
   it('does not keep legacy model-step or provider-service names inside model-call', () => {
-    const modelCallSource = combinedSource('packages/coding-agent/run/model-call');
+    const modelCallSource = combinedSource('packages/coding-agent/agent-loop/model-call');
 
     for (const forbiddenToken of [
       'ModelStepProviderService',
