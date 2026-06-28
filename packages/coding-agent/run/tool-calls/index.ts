@@ -4,6 +4,7 @@ export * from './tool-call-runner';
 export * from './approval/tool-call-approval';
 export * from './approval/approval-resume';
 export * from './approval/approval-resume-events';
+export * from './approval/approval-resume-model-input';
 export * from './approval/pending-approval-registry';
 export * from './continuation/tool-result-continuation';
 export * from './continuation/tool-result-events';

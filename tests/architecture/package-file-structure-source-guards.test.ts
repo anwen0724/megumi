@@ -511,6 +511,21 @@ describe('package and file structure source guards', () => {
     expect(toolContinuationEmittedSource).toContain('export function markToolContinuationEmitted');
   });
 
+  it('keeps approval resume model input preparation in the approval submodule', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const approvalResumeModelInputPath = join(
+      repoRoot,
+      'packages/coding-agent/run/tool-calls/approval/approval-resume-model-input.ts',
+    );
+
+    expect(existsSync(approvalResumeModelInputPath)).toBe(true);
+    const approvalResumeModelInputSource = readFileSync(approvalResumeModelInputPath, 'utf8');
+    expect(agentRunServiceSource).not.toContain("contextKind: 'approval-resume'");
+    expect(agentRunServiceSource).not.toContain('pending.accumulatedToolResults');
+    expect(agentRunServiceSource).not.toContain('pending.accumulatedProviderStates');
+    expect(approvalResumeModelInputSource).toContain('export async function prepareApprovalResumeModelInput');
+  });
+
   it('keeps approval resume run status restoration in lifecycle', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeLifecyclePath = join(

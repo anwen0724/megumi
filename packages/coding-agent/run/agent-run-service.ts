@@ -14,6 +14,7 @@ import {
   collectApprovalResumeRuntimeEvents,
   createApprovalResolvedRuntimeEvent,
   markToolContinuationEmitted,
+  prepareApprovalResumeModelInput,
   resolvePendingApproval,
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
@@ -1651,43 +1652,24 @@ export class AgentRunService implements AgentRunPort {
       yield event;
     }
 
-    const resumedStep = this.runExecutionFactRepository.saveStep({
-      stepId: this.ids.stepId(),
-      runId: continuation.request.runId,
-      kind: 'model',
-      status: 'running',
-      title: 'Model response',
-      startedAt: input.decidedAt,
-    });
-    const resumedToolResults = [
-      ...pending.accumulatedToolResults,
-      ...continuation.resolvedResults,
-    ];
-    const resumedModelInput = await this.modelCallInputBuildService.buildModelCallInput({
-      baseInputContext: pending.request.inputContext,
-      requestId: pending.request.requestId,
-      sessionId: pending.request.sessionId,
-      runId: String(pending.request.runId),
-      stepId: String(resumedStep.stepId),
-      contextKind: 'approval-resume',
-      providerId: pending.request.providerId,
-      modelId: String(pending.request.modelId),
+    const resumed = await prepareApprovalResumeModelInput({
+      pending,
+      resolvedResults: continuation.resolvedResults,
+      decidedAt: input.decidedAt,
       ...(continuation.projectRoot ? { projectRoot: continuation.projectRoot } : {}),
-      ...this.modelInputRuntimeSourceOverrides({
-        sessionId: pending.request.sessionId,
-        runId: String(pending.request.runId),
-        stepId: String(resumedStep.stepId),
-        builtAt: input.decidedAt,
-      }),
-      permissionMode: continuation.permissionMode ?? 'default',
-      toolDefinitions: pending.request.toolDefinitions ?? [],
-      toolCalls: pending.accumulatedToolCalls,
-      toolResults: resumedToolResults,
-      providerStates: pending.accumulatedProviderStates,
+      ...(continuation.permissionMode ? { permissionMode: continuation.permissionMode } : {}),
       ...(continuation.memoryRecallSources ? { memoryRecallSources: continuation.memoryRecallSources } : {}),
       ...(continuation.memoryRecallSeed ? { memoryRecallSeed: continuation.memoryRecallSeed } : {}),
-      builtAt: input.decidedAt,
+      repository: this.runExecutionFactRepository,
+      modelCallInputBuildService: this.modelCallInputBuildService,
+      sourceOverrideProvider: {
+        resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
+      },
+      ids: this.ids,
     });
+    const resumedStep = resumed.step;
+    const resumedToolResults = resumed.toolResults;
+    const resumedModelInput = resumed.modelInput;
     if (resumedModelInput.failure) {
       yield* this.failRunBeforeModelStep({
         requestId: pending.request.requestId,
