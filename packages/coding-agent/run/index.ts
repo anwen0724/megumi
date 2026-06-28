@@ -11,5 +11,4 @@ export * from './recovery';
 export * from './turn';
 export * from './runtime-input';
 export * from './run-contract';
-export { AgentRunService, createDefaultAgentRunService } from './agent-run-service';
-export type { CreateDefaultAgentRunServiceOptions } from './agent-run-service';
+export { AgentRunService } from './agent-run-service';

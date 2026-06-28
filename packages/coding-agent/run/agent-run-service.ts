@@ -52,7 +52,6 @@ import {
   createStepFailedEvent,
   createStepStatusChangedEvent,
 } from './events/runtime-event-factory';
-import { composeCodingAgentPersistence } from '../composition/compose-coding-agent-persistence';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
@@ -98,7 +97,7 @@ import type {
   PermissionModeState,
   PermissionSnapshotRecord,
 } from '@megumi/shared/permission';
-import { PlanArtifactService, type PlanArtifactServicePort } from '../artifacts';
+import type { PlanArtifactServicePort } from '../artifacts';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -116,11 +115,10 @@ import {
   normalizeSessionMessageInputPreprocessing,
   type NormalizedSessionMessageInputPreprocessing,
 } from './runtime-input';
-import { PermissionSnapshotService } from '../permissions';
-import {
-  ToolRegistrySnapshotService,
-  type RunToolRegistrySnapshotBuildInput,
-  type RunToolRegistrySnapshotBuildResult,
+import type { PermissionSnapshotService } from '../permissions';
+import type {
+  RunToolRegistrySnapshotBuildInput,
+  RunToolRegistrySnapshotBuildResult,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import {
   createWorkspaceChangeFooterProjectorService,
@@ -131,11 +129,9 @@ import type {
   AgentRunPort,
   AgentRunRepositoryPort,
   AgentRunServiceClock,
-  AgentRunServiceHomePaths,
   AgentRunServiceIds,
   AgentRunServiceOptions,
   AgentRunToolRuntimeFactory,
-  SessionRunAgentInstructionSourceService,
   SessionRunContextService,
   SessionRunEffectiveCwdProvider,
   SessionRunGlobalInstructionDirectoryProvider,
@@ -2279,62 +2275,4 @@ function createToolResultSummary(toolResult: ToolResult): string {
   }
 
   return toolResult.kind;
-}
-
-export interface CreateDefaultAgentRunServiceOptions {
-  contextService?: SessionRunContextService;
-  toolRuntimeFactory?: AgentRunToolRuntimeFactory;
-  agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
-}
-
-function createDefaultAgentRunRepositoryPort(
-  persistence: ReturnType<typeof composeCodingAgentPersistence>,
-): AgentRunRepositoryPort {
-  return {
-    saveSession: (session) => persistence.sessionRecordRepository.saveSession(session),
-    getSession: (sessionId) => persistence.sessionRecordRepository.getSession(sessionId),
-    saveMessage: (message) => persistence.sessionMessageRepository.saveMessage(message),
-    getMessage: (messageId) => persistence.sessionMessageRepository.getMessage(messageId),
-    saveRun: (run) => persistence.runRecordRepository.saveRun(run),
-    getRun: (runId) => persistence.runRecordRepository.getRun(runId),
-    listRunsByStatuses: (statuses) => persistence.runRecordRepository.listRunsByStatuses(statuses),
-    saveStep: (step) => persistence.runExecutionFactRepository.saveStep(step),
-    listStepsByRun: (runId) => persistence.runExecutionFactRepository.listStepsByRun(runId),
-    saveAction: (action) => persistence.runExecutionFactRepository.saveAction(action),
-    saveObservation: (observation) => persistence.runExecutionFactRepository.saveObservation(observation),
-    saveModelStep: (modelStep) => persistence.modelStepRepository.saveModelStep(modelStep),
-    getModelStep: (modelStepId) => persistence.modelStepRepository.getModelStep(modelStepId),
-    getSessionCompaction: (compactionId) => persistence.sessionContextRepository.getSessionCompaction(compactionId),
-    appendRuntimeEvent: (event) => persistence.runtimeEventRepository.appendRuntimeEvent(event),
-    listRuntimeEventsByRun: (runId) => persistence.runtimeEventRepository.listRuntimeEventsByRun(runId),
-  };
-}
-
-export function createDefaultAgentRunService(
-  homePaths: AgentRunServiceHomePaths,
-  options: CreateDefaultAgentRunServiceOptions = {},
-): AgentRunService {
-  const persistence = composeCodingAgentPersistence({ sqlitePath: homePaths.sqlitePath });
-  const permissionSnapshotRepository = persistence.permissionSnapshotRepository;
-  const activePathRepository = persistence.activePathRepository;
-  const toolRepository = persistence.toolRepository;
-
-  const service = new AgentRunService({
-    repository: createDefaultAgentRunRepositoryPort(persistence),
-    sessionCompactionRepository: persistence.sessionContextRepository,
-    activePathRepository,
-    toolRepository,
-    toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),
-    permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
-    planArtifactService: new PlanArtifactService({ repository: permissionSnapshotRepository }),
-    ...(options.contextService ? { contextService: options.contextService } : {}),
-    ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
-    ...(options.agentInstructionSourceService ? { agentInstructionSourceService: options.agentInstructionSourceService } : {}),
-    megumiHomePath: homePaths.homePath,
-    globalInstructionDirectoryProvider: {
-      listGlobalInstructionDirs: () => [homePaths.homePath],
-    },
-  });
-  service.cleanupInterruptedRunsOnStartup();
-  return service;
 }

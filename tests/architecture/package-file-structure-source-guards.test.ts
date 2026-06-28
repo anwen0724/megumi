@@ -398,17 +398,23 @@ describe('package and file structure source guards', () => {
 
     expect(sessionRuntimeSource).not.toContain('SessionRunRepository');
     expect(sessionRuntimeSource).not.toContain('sessionRunRepository');
-    expect(sessionRuntimeSource).toContain('function createAgentRunRepositoryPort');
+    expect(sessionRuntimeSource).toContain("import { createAgentRunRepositoryPort } from './agent-run-repository-port'");
+    expect(sessionRuntimeSource).not.toContain('function createAgentRunRepositoryPort');
     expect(sessionRuntimeSource).toContain('repository: agentRunRepository');
     expect(runtimeSource).toContain('modelStepRepository: persistence.modelStepRepository');
     expect(runtimeSource).not.toContain('sessionRunRepository: persistence.sessionRunRepository');
   });
 
-  it('keeps the standalone default agent run service off the session-run repository facade', () => {
+  it('keeps default AgentRunService persistence composition outside the run service owner', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
 
     expect(agentRunServiceSource).not.toContain('sessionRunRepository');
-    expect(agentRunServiceSource).toContain('repository: createDefaultAgentRunRepositoryPort(persistence)');
+    expect(agentRunServiceSource).not.toContain('composeCodingAgentPersistence');
+    expect(agentRunServiceSource).not.toContain('createDefaultAgentRunRepositoryPort');
+    expect(agentRunServiceSource).not.toContain('createDefaultAgentRunService');
+    expect(agentRunServiceSource).not.toContain('new PermissionSnapshotService');
+    expect(agentRunServiceSource).not.toContain('new PlanArtifactService');
+    expect(agentRunServiceSource).not.toContain('new ToolRegistrySnapshotService');
   });
 
   it('keeps the session-run facade out of public persistence composition', () => {

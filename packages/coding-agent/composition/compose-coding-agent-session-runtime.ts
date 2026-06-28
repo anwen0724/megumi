@@ -13,7 +13,6 @@ import {
 } from '../session';
 import type {
   AgentRunModelStepProvider,
-  AgentRunRepositoryPort,
   AgentRunToolRuntimeFactory,
 } from '../run/run-contract';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
@@ -34,6 +33,7 @@ import type { ToolRegistry } from '../tools/registry';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
+import { createAgentRunRepositoryPort } from './agent-run-repository-port';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -64,27 +64,6 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   runContextRepository: RunContextRepository;
   chatStreamEventSink?: ConstructorParameters<typeof AgentRunService>[0]['chatStreamEventSink'];
   workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentRunService>[0]['workspaceChanges'];
-}
-
-function createAgentRunRepositoryPort(options: ComposeCodingAgentSessionRuntimeOptions): AgentRunRepositoryPort {
-  return {
-    saveSession: (session) => options.sessionRecordRepository.saveSession(session),
-    getSession: (sessionId) => options.sessionRecordRepository.getSession(sessionId),
-    saveMessage: (message) => options.sessionMessageRepository.saveMessage(message),
-    getMessage: (messageId) => options.sessionMessageRepository.getMessage(messageId),
-    saveRun: (run) => options.runRecordRepository.saveRun(run),
-    getRun: (runId) => options.runRecordRepository.getRun(runId),
-    listRunsByStatuses: (statuses) => options.runRecordRepository.listRunsByStatuses(statuses),
-    saveStep: (step) => options.runExecutionFactRepository.saveStep(step),
-    listStepsByRun: (runId) => options.runExecutionFactRepository.listStepsByRun(runId),
-    saveAction: (action) => options.runExecutionFactRepository.saveAction(action),
-    saveObservation: (observation) => options.runExecutionFactRepository.saveObservation(observation),
-    saveModelStep: (modelStep) => options.modelStepRepository.saveModelStep(modelStep),
-    getModelStep: (modelStepId) => options.modelStepRepository.getModelStep(modelStepId),
-    getSessionCompaction: (compactionId) => options.sessionContextRepository.getSessionCompaction(compactionId),
-    appendRuntimeEvent: (event) => options.runtimeEventRepository.appendRuntimeEvent(event),
-    listRuntimeEventsByRun: (runId) => options.runtimeEventRepository.listRuntimeEventsByRun(runId),
-  };
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
