@@ -8,7 +8,7 @@ import { composeCodingAgentSessionRuntime, type CodingAgentHomePaths } from './c
 import { composeCodingAgentMemory } from './compose-coding-agent-memory';
 import { composeCodingAgentRecoveryRuntime } from './compose-coding-agent-recovery-runtime';
 import type { RuntimeLogger } from '../product-runtime';
-import type { AgentRunModelStepProvider } from '../run/run-contract';
+import type { ModelCallProvider } from '../agent-loop/model-call';
 import {
   createAiClient,
   createAnthropicProviderAdapter,
@@ -40,7 +40,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   runtimeLogger: RuntimeLogger;
   // Optional override for tests / alternative entries. When omitted, the product
   // builds a real OpenAI-compatible model step provider so it runs standalone.
-  modelStepProviderService?: AgentRunModelStepProvider;
+  modelStepProviderService?: ModelCallProvider;
   appSettingsProvider?: ProviderSettingsProductSettingsPort;
   memorySettingsProvider?: MemorySettingsProvider;
   permissionSettingsProvider?: PermissionSettingsProvider;

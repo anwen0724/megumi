@@ -35,6 +35,8 @@ import {
   streamApprovalResumeModelLoop,
   ToolSetService,
 } from '../agent-loop';
+import type { ModelCallProvider } from '../agent-loop/model-call';
+import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import {
   BUILT_IN_INPUT_COMMAND_REGISTRY,
 } from '@megumi/coding-agent/input/command';
@@ -126,13 +128,11 @@ import type {
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import type {
   AgentRunPostRunHooksPort,
-  AgentRunModelStepProvider,
   AgentRunRetryCoordinatorPort,
   AgentRunServiceClock,
   AgentRunServiceIds,
   AgentRunServiceOptions,
   AgentRunTerminalCoordinatorPort,
-  AgentRunToolRuntimeFactory,
   SessionRunContextService,
   SessionRunEffectiveCwdProvider,
   SessionRunGlobalInstructionDirectoryProvider,
@@ -206,8 +206,8 @@ export class AgentRunService implements AgentRunPort {
     | 'linkAcceptedSourcePlan'
   >;
   private readonly planArtifactService?: PlanArtifactServicePort;
-  private readonly modelStepProvider?: AgentRunModelStepProvider;
-  private readonly toolRuntimeFactory?: AgentRunToolRuntimeFactory;
+  private readonly modelStepProvider?: ModelCallProvider;
+  private readonly toolRuntimeFactory?: ToolRuntimeFactory;
   private readonly toolDefinitionProvider?: SessionRunToolDefinitionProvider;
   private readonly toolRegistrySnapshotService?: SessionRunToolRegistrySnapshotService;
   private readonly providerCapabilitySummaryProvider?: SessionRunProviderCapabilitySummaryProvider;
@@ -1414,7 +1414,7 @@ export class AgentRunService implements AgentRunPort {
     this.pendingApprovalRegistry.cancelByRun(runId);
   }
 
-  private requireModelStepProvider(): AgentRunModelStepProvider {
+  private requireModelStepProvider(): ModelCallProvider {
     if (!this.modelStepProvider) {
       throw new Error('Model step provider service is not configured.');
     }

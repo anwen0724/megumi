@@ -11,10 +11,8 @@ import {
   SessionContextInputService,
   SessionService,
 } from '../session';
-import type {
-  AgentRunModelStepProvider,
-  AgentRunToolRuntimeFactory,
-} from '../run/run-contract';
+import type { ModelCallProvider } from '../agent-loop/model-call';
+import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
@@ -66,8 +64,8 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   workspaceChangeRepository: WorkspaceChangeRepository;
   timelineMessageRepository: TimelineMessageRepository;
   toolRegistry: ToolRegistry;
-  modelStepProviderService: AgentRunModelStepProvider;
-  toolRuntimeFactory: AgentRunToolRuntimeFactory;
+  modelStepProviderService: ModelCallProvider;
+  toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
   runContextRepository: RunContextRepository;
   chatStreamEventSink?: ConstructorParameters<typeof AgentRunService>[0]['chatStreamEventSink'];

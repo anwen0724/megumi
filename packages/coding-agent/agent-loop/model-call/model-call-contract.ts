@@ -51,6 +51,12 @@ export interface ModelCallPort {
   streamModelCall(input: ModelCallPortStreamInput): AsyncIterable<RuntimeEvent>;
 }
 
+export interface ModelCallProvider {
+  streamModelCall(request: ModelStepRuntimeRequest): AsyncIterable<RuntimeEvent>;
+  completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult>;
+  cancelModelCall(requestId: string): boolean;
+}
+
 export type ModelCallCompletionResult =
   | {
       ok: true;

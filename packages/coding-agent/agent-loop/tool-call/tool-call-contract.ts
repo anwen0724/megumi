@@ -1,5 +1,6 @@
 // Defines the narrow tool-call lifecycle contract consumed by the agent loop.
 import type { ModelInputContext, ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { PermissionMode } from '@megumi/shared/permission';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
 
@@ -25,6 +26,13 @@ export interface HandleToolCallsInput {
 
 export interface ToolCallRunner {
   handleToolCalls(input: HandleToolCallsInput): Promise<ToolCallRunOutcome>;
+}
+
+export interface ToolRuntimeFactory {
+  create(input: {
+    projectRoot: string;
+    permissionMode: PermissionMode;
+  }): Promise<ToolCallRunner & ToolApprovalResumePort>;
 }
 
 export interface ResumeToolApprovalInput {

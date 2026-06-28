@@ -8,7 +8,7 @@ import { WorkspaceChangeTrackerService } from '../workspace';
 import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
-import type { AgentRunToolRuntimeFactory } from '../run/run-contract';
+import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createBuiltInToolSourceExecutor } from '../tools/execution/built-in-tool-source-executor';
 import { createExternalTestToolSourceExecutor } from '../tools/execution/external-test-tool-source-executor';
 import { createToolExecutionRouter } from '../tools/execution/tool-execution-router';
@@ -24,7 +24,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
   workspaceChangeRepository: WorkspaceChangeRepository;
   runRepository: RunRecordRepository;
   permissionSettingsProvider: PermissionSettingsProvider;
-}): AgentRunToolRuntimeFactory {
+}): ToolRuntimeFactory {
   return {
     async create({ projectRoot, permissionMode }) {
       const workspaceChangeTracker = new WorkspaceChangeTrackerService({

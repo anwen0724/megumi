@@ -453,6 +453,24 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('const repository = options.repository');
   });
 
+  it('keeps model-call and tool runtime contracts in the agent-loop owner', () => {
+    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const modelCallContractSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-contract.ts'),
+      'utf8',
+    );
+    const toolCallContractSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/tool-call-contract.ts'),
+      'utf8',
+    );
+
+    expect(runContractSource).not.toContain('export interface AgentRunModelStepProvider');
+    expect(runContractSource).not.toContain('export type AgentRunModelCallProvider');
+    expect(runContractSource).not.toContain('export interface AgentRunToolRuntimeFactory');
+    expect(modelCallContractSource).toContain('export interface ModelCallProvider');
+    expect(toolCallContractSource).toContain('export interface ToolRuntimeFactory');
+  });
+
   it('keeps AgentRunService coordinator repository adapters in composition', () => {
     const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');

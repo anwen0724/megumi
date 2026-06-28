@@ -4,8 +4,8 @@ import type {
   AgentRunServiceHomePaths,
   SessionRunAgentInstructionSourceService,
   SessionRunContextService,
-  AgentRunToolRuntimeFactory,
 } from '../run/run-contract';
+import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
@@ -18,7 +18,7 @@ import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository
 
 export interface CreateDefaultAgentRunServiceOptions {
   contextService?: SessionRunContextService;
-  toolRuntimeFactory?: AgentRunToolRuntimeFactory;
+  toolRuntimeFactory?: ToolRuntimeFactory;
   agentInstructionSourceService?: SessionRunAgentInstructionSourceService;
 }
 

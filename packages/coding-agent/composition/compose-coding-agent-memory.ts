@@ -9,7 +9,7 @@ import {
 import { MemoryDiagnosticWriter } from '../adapters/local/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from '../adapters/local/memory/memory-markdown-sync.service';
 import { createNodeMemoryRuntimeFileSystem } from '../adapters/local/memory/memory-runtime-file-system';
-import type { AgentRunModelStepProvider } from '../run/run-contract';
+import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { RuntimeLogger } from '../product-runtime';
 
 export interface MemorySettingsProvider {
@@ -18,7 +18,7 @@ export interface MemorySettingsProvider {
 
 export interface ComposeCodingAgentMemoryOptions {
   repository: MemoryRepository;
-  modelStepProvider: AgentRunModelStepProvider;
+  modelStepProvider: ModelCallProvider;
   memorySettingsProvider: MemorySettingsProvider;
   runtimeLogger: RuntimeLogger;
   megumiHomePath: string;
