@@ -105,13 +105,6 @@ export interface CodingAgentRunMemoryRecallService {
   }>;
 }
 
-export interface CodingAgentRunProviderCapabilitySummaryProvider {
-  getProviderCapabilitySummary(input: {
-    providerId: string;
-    modelId: string;
-  }): { supportsToolCall?: boolean };
-}
-
 export interface CodingAgentRunToolCallRunnerFactory {
   create(input: {
     projectRoot: string;
@@ -147,7 +140,6 @@ export interface RunTurnOptions {
   runStatePort: CodingAgentRunStatePort;
   failurePort: CodingAgentRunFailurePort;
   contextService?: CodingAgentRunContextService;
-  providerCapabilitySummaryProvider?: CodingAgentRunProviderCapabilitySummaryProvider;
   sessionContextInputService: CodingAgentRunSessionContextInputService;
   sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
   memoryRecallService?: CodingAgentRunMemoryRecallService;
@@ -217,19 +209,15 @@ export class RunTurn {
 
     try {
       // Agent-loop owns ToolSet selection; context owns model input preparation.
-      const providerCapabilitySummary = this.options.providerCapabilitySummaryProvider?.getProviderCapabilitySummary({
-        providerId: String(input.providerId),
-        modelId: input.modelId,
-      }) ?? { supportsToolCall: true };
       const toolSet = this.toolSetService.prepareToolSet({
         runId: String(input.run.runId),
         sessionId: String(input.session.sessionId),
         ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
         ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
         permissionMode: input.permissionMode,
+        providerId: String(input.providerId),
         modelId: input.modelId,
         createdAt: input.createdAt,
-        providerCapabilitySummary,
         startSequence: 0,
       });
       const initialModelInputPreparation = await this.initialModelInputPreparationService.prepare({

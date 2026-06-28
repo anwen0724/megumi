@@ -32,6 +32,7 @@ describe('ToolSetService', () => {
       projectId: 'project-1',
       projectRoot: 'C:/repo',
       permissionMode: 'default',
+      providerId: 'openai',
       modelId: 'gpt-test',
       createdAt,
       providerCapabilitySummary: { supportsToolCall: true },
@@ -57,6 +58,37 @@ describe('ToolSetService', () => {
     ]);
   });
 
+  it('resolves provider capability before preparing the ToolSet', () => {
+    const snapshotProvider: ToolSetSnapshotProvider = {
+      createRunSnapshot: vi.fn(() => ({
+        modelVisibleToolDefinitions: [],
+        events: [],
+      })),
+    };
+    const service = new ToolSetService({
+      snapshotProvider,
+      capabilityProvider: {
+        getProviderCapabilitySummary: vi.fn(() => ({ supportsToolCall: false })),
+      },
+    });
+
+    service.prepareToolSet({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      projectRoot: 'C:/repo',
+      permissionMode: 'default',
+      providerId: 'openai',
+      modelId: 'gpt-test',
+      createdAt,
+      startSequence: 0,
+    });
+
+    expect(snapshotProvider.createRunSnapshot).toHaveBeenCalledWith(expect.objectContaining({
+      providerCapabilitySummary: { supportsToolCall: false },
+    }));
+  });
+
   it('falls back to the live registry only when there is a workspace root without project snapshot identity', () => {
     const registryProvider: ToolSetRegistryProvider = {
       listDefinitions: vi.fn(() => [toolDefinition('read_file')]),
@@ -70,6 +102,7 @@ describe('ToolSetService', () => {
       sessionId: 'session-1',
       projectRoot: 'C:/repo',
       permissionMode: 'plan',
+      providerId: 'openai',
       modelId: 'gpt-test',
       createdAt,
       providerCapabilitySummary: { supportsToolCall: false },
@@ -99,6 +132,7 @@ describe('ToolSetService', () => {
       runId: 'run-1',
       sessionId: 'session-1',
       permissionMode: 'default',
+      providerId: 'openai',
       modelId: 'gpt-test',
       createdAt,
       providerCapabilitySummary: { supportsToolCall: true },

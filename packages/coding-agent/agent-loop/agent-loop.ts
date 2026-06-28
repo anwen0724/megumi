@@ -85,12 +85,20 @@ export interface ToolSetRegistryProvider {
   }): ToolDefinition[];
 }
 
+export interface ToolSetCapabilityProvider {
+  getProviderCapabilitySummary(input: {
+    providerId: string;
+    modelId: string;
+  }): { supportsToolCall?: boolean };
+}
+
 export interface PrepareToolSetInput {
   runId: string;
   sessionId: string;
   projectId?: string;
   projectRoot?: string;
   permissionMode: PermissionMode;
+  providerId: string;
   modelId: string;
   createdAt: string;
   providerCapabilitySummary?: { supportsToolCall?: boolean };
@@ -105,6 +113,7 @@ export interface PrepareToolSetResult {
 export interface ToolSetServiceOptions {
   snapshotProvider?: ToolSetSnapshotProvider;
   registryProvider?: ToolSetRegistryProvider;
+  capabilityProvider?: ToolSetCapabilityProvider;
 }
 
 export class ToolSetService {
@@ -113,6 +122,13 @@ export class ToolSetService {
   prepareToolSet(
     input: PrepareToolSetInput,
   ): PrepareToolSetResult {
+    const providerCapabilitySummary = input.providerCapabilitySummary
+      ?? this.options.capabilityProvider?.getProviderCapabilitySummary({
+        providerId: input.providerId,
+        modelId: input.modelId,
+      })
+      ?? { supportsToolCall: true };
+
     if (input.projectRoot && input.projectId && this.options.snapshotProvider) {
       const snapshot = this.options.snapshotProvider.createRunSnapshot({
         runId: input.runId,
@@ -121,7 +137,7 @@ export class ToolSetService {
         permissionMode: input.permissionMode,
         modelId: input.modelId,
         createdAt: input.createdAt,
-        providerCapabilitySummary: input.providerCapabilitySummary,
+        providerCapabilitySummary,
       });
       return {
         toolDefinitions: snapshot.modelVisibleToolDefinitions,
@@ -134,7 +150,7 @@ export class ToolSetService {
         toolDefinitions: this.options.registryProvider.listDefinitions({
           runId: input.runId,
           permissionMode: input.permissionMode,
-          providerCapabilitySummary: input.providerCapabilitySummary,
+          providerCapabilitySummary,
         }),
         events: [],
       };

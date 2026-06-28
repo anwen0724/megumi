@@ -481,6 +481,7 @@ export class AgentRunService implements AgentRunPort {
         },
       } : {}),
       ...(this.toolDefinitionProvider ? { registryProvider: this.toolDefinitionProvider } : {}),
+      ...(this.providerCapabilitySummaryProvider ? { capabilityProvider: this.providerCapabilitySummaryProvider } : {}),
     });
 
     return {
@@ -522,7 +523,6 @@ export class AgentRunService implements AgentRunPort {
       },
       // === Optional / passthrough ports ===
       ...(this.contextService ? { contextService: this.contextService } : {}),
-      ...(this.providerCapabilitySummaryProvider ? { providerCapabilitySummaryProvider: this.providerCapabilitySummaryProvider } : {}),
       toolSetService,
       sessionContextInputService: this.sessionContextInputService,
       sourceOverrideProvider: {
