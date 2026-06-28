@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { prepareApprovalResumeModelInput } from '@megumi/coding-agent/run/tool-calls/approval/approval-resume-model-input';
-import type { BuildModelCallInputInput, BuildModelCallInputResult } from '@megumi/coding-agent/run/context';
+import { prepareApprovalResumeModelInput } from '@megumi/coding-agent/agent-loop/tool-call/approval/approval-resume-model-input';
+import type { BuildModelCallInputInput, BuildModelCallInputResult } from '@megumi/coding-agent/context';
 import type { ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RunStep } from '@megumi/shared/session';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';

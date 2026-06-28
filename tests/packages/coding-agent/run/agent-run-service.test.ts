@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,7 @@ import { PermissionSnapshotRepository } from '@megumi/coding-agent/persistence/r
 import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
 import { createExternalTestToolSourceExecutor } from '@megumi/coding-agent/tools/execution/external-test-tool-source-executor';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-import { createToolCallRunner } from '@megumi/coding-agent/run/tool-calls';
+import { createToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
 import { createToolExecutionRouter } from '@megumi/coding-agent/tools/execution/tool-execution-router';
 import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/tool-execution-router';
 import { TimelineMessageRepository } from '@megumi/coding-agent/persistence/repos/timeline-message.repo';

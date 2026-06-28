@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectApprovalResumeRuntimeEvents,
   createApprovalResolvedRuntimeEvent,
-} from '@megumi/coding-agent/run/tool-calls/approval/approval-resume-events';
+} from '@megumi/coding-agent/agent-loop/tool-call/approval/approval-resume-events';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ToolResult } from '@megumi/shared/tool';

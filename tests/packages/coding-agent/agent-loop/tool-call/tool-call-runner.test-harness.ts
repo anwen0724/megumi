@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { createToolCallRunner } from '@megumi/coding-agent/run/tool-calls';
+import { createToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   ApprovalRequest,

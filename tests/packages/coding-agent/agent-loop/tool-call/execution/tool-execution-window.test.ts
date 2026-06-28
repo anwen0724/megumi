@@ -6,7 +6,7 @@ import {
   createdRecord,
   terminalSucceededRecord,
 } from '../tool-call-runner.test-harness';
-import { nextExecutableWindow } from '@megumi/coding-agent/run/tool-calls/execution';
+import { nextExecutableWindow } from '@megumi/coding-agent/agent-loop/tool-call/execution';
 
 describe('tool-execution-window', () => {
   it('runs consecutive parallel queued records before a serial barrier', () => {

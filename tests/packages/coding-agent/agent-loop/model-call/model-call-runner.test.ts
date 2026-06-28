@@ -1,6 +1,6 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/context';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createModelMessageObservation,
@@ -8,7 +8,7 @@ import {
   isModelMessageAction,
   isModelStep,
   runModelCall,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/agent-loop/model-call';
 
 describe('run model step foundation', () => {
   it('describes model step input without provider execution', () => {

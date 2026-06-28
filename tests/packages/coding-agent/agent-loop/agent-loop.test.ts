@@ -1,6 +1,6 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/context/model-call-context';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
@@ -9,7 +9,7 @@ import type {
   PendingToolApproval,
   PendingToolApprovalResume,
   ToolResultModelInputBuildInput,
-} from '@megumi/coding-agent/run/tool-calls';
+} from '@megumi/coding-agent/agent-loop/tool-call';
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   const output: T[] = [];

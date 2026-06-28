@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { AssistantEventStream, type AiClient } from '@megumi/ai';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { ModelCallRuntimeResolverPort, ProviderRuntimeConfig } from '@megumi/coding-agent/run';
-import { ModelCallRunner } from '@megumi/coding-agent/run/model-call';
+import type { ModelCallRuntimeResolverPort, ProviderRuntimeConfig } from '@megumi/coding-agent/agent-loop/model-call';
+import { ModelCallRunner } from '@megumi/coding-agent/agent-loop/model-call';
 import { ProviderRuntimeResolutionError } from '@megumi/coding-agent/settings';
 
 const runtimeContext = {
