@@ -5,3 +5,4 @@ export * from './run-error';
 export * from './run-types';
 export * from './run-terminal-coordinator';
 export * from './run-retry-coordinator';
+export * from './run-approval-resume';

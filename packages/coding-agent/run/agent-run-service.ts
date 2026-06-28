@@ -6,7 +6,7 @@ import {
   canResumeApprovalFromRunStatus,
 } from './lifecycle/run-state-policy';
 import { runTurn } from './lifecycle/run-lifecycle';
-import type { RunHostBoundaryPort } from './lifecycle';
+import { resumeRunAfterApproval, type RunHostBoundaryPort } from './lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   PendingApprovalRegistry,
@@ -1634,24 +1634,18 @@ export class AgentRunService implements AgentRunPort {
     }
 
     this.pendingApprovalRegistry.deleteGroup(continuation.groupId);
-    const persistedRun = this.runRecordRepository.getRun(continuation.request.runId) ?? continuation.run;
-    assertRunStatusTransition(persistedRun.status, 'running');
-    const runningRun = this.runRecordRepository.saveRun({
-      ...persistedRun,
-      status: 'running',
+    const resumedRun = resumeRunAfterApproval({
+      request: continuation.request,
+      fallbackRun: continuation.run,
+      repository: this.runRecordRepository,
+      ids: this.ids,
+      decidedAt: input.decidedAt,
+      lastSequence,
     });
-
-    const runningEvent = withRequestMetadata(createRunStatusChangedEvent({
-      eventId: this.ids.eventId(),
-      sessionId: continuation.request.sessionId,
-      runId: continuation.request.runId,
-      sequence: lastSequence += 1,
-      createdAt: input.decidedAt,
-      from: 'waiting_for_approval',
-      to: 'running',
-    }), continuation.request);
-    this.appendRuntimeEvent(runningEvent, chatStreamAdapter);
-    yield runningEvent;
+    const runningRun = resumedRun.run;
+    lastSequence = resumedRun.lastSequence;
+    this.appendRuntimeEvent(resumedRun.event, chatStreamAdapter);
+    yield resumedRun.event;
 
     const resumeEvents = persistResumeRuntimeEvents({
       request: continuation.request,
