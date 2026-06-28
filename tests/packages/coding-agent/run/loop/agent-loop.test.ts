@@ -1,13 +1,14 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
+import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
-import { runModelToolLoop } from '@megumi/coding-agent/agent-loop';
+import { runModelToolLoop, type RunModelToolLoopInput } from '@megumi/coding-agent/agent-loop';
 import type {
   PendingToolApproval,
   PendingToolApprovalResume,
+  ToolResultModelInputBuildInput,
 } from '@megumi/coding-agent/run/tool-calls';
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
@@ -48,6 +49,21 @@ function createRequest(overrides: Partial<ModelStepRuntimeRequest> = {}): ModelS
     createdAt: '2026-05-17T00:00:00.000Z',
     ...overrides,
   };
+}
+
+type TestRunModelToolLoopInput =
+  Omit<RunModelToolLoopInput, 'buildNextModelInputContext'>
+  & Partial<Pick<RunModelToolLoopInput, 'buildNextModelInputContext'>>;
+
+function buildTestNextModelInputContext(input: ToolResultModelInputBuildInput): ModelInputContext {
+  return buildModelCallInputContextFromSources(input);
+}
+
+function runTestModelToolLoop(input: TestRunModelToolLoopInput): AsyncIterable<RuntimeEvent> {
+  return runModelToolLoop({
+    buildNextModelInputContext: buildTestNextModelInputContext,
+    ...input,
+  });
 }
 
 function toolCallCreatedEvent(input: {
@@ -222,7 +238,7 @@ describe('run model tool loop', () => {
   it('feeds tool results into the next model step after handling tool calls', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(input) {
@@ -335,7 +351,7 @@ describe('run model tool loop', () => {
   it('feeds provider state into the next model step after tool handling', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
-    await collect(runModelToolLoop({
+    await collect(runTestModelToolLoop({
       request: createRequest({
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
@@ -406,7 +422,7 @@ describe('run model tool loop', () => {
   it('uses next model input context builder before the next model step', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     let callbackCallCount = 0;
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall({ request }) {
@@ -488,7 +504,7 @@ describe('run model tool loop', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     const approvalResumes: PendingToolApprovalResume[] = [];
 
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(input) {
@@ -579,7 +595,7 @@ describe('run model tool loop', () => {
   it('keeps pending approval resume context ids within the shared id limit', async () => {
     const approvalResumes: PendingToolApprovalResume[] = [];
 
-    await collect(runModelToolLoop({
+    await collect(runTestModelToolLoop({
       request: createRequest({
         requestId: 'request:11111111-2222-4333-8444-555555555555',
         stepId: 'step:11111111-2222-4333-8444-555555555555',
@@ -634,7 +650,7 @@ describe('run model tool loop', () => {
   it('emits completed tool results before stopping for pending approvals', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(input) {
@@ -718,7 +734,7 @@ describe('run model tool loop', () => {
       },
     };
 
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall() {
@@ -746,7 +762,7 @@ describe('run model tool loop', () => {
 
   it('continues after an invalid tool call ToolResult instead of failing the run', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(input) {
@@ -803,7 +819,7 @@ describe('run model tool loop', () => {
   });
 
   it('fails with terminal reason when tool results are empty after tool calls', async () => {
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(input) {
@@ -847,7 +863,7 @@ describe('run model tool loop', () => {
 
   it('does not call the provider again when tool observations are not ready for the next model input', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(request) {
@@ -894,7 +910,7 @@ describe('run model tool loop', () => {
   });
 
   it('preserves tool result ordering for multiple tool calls in the conservative 19.01 path', async () => {
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(input) {
@@ -954,10 +970,10 @@ describe('run model tool loop', () => {
     ]);
   });
 
-  it('builds fallback tool result model input context without context-management dependency', async () => {
+  it('uses the injected context owner builder for tool result model input', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
 
-    await collect(runModelToolLoop({
+    await collect(runTestModelToolLoop({
       request: createRequest(),
       modelCallPort: {
         async *streamModelCall(input) {
@@ -1006,7 +1022,7 @@ describe('run model tool loop', () => {
   });
 
   it('emits run failed instead of throwing when model step limit is exhausted', async () => {
-    const events = await collect(runModelToolLoop({
+    const events = await collect(runTestModelToolLoop({
       request: createRequest(),
       maxModelSteps: 1,
       modelCallPort: {

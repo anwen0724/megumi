@@ -171,7 +171,9 @@ describe('provider tool call model loop source guards', () => {
   it('delegates next model input construction to the context owner', () => {
     const source = read('packages/coding-agent/agent-loop/agent-loop.ts');
 
-    expect(source).toContain('buildModelCallInputContextFromSources');
+    expect(source).not.toContain('buildModelCallInputContextFromSources');
+    expect(source).toContain('buildNextModelInputContext: (contextInput) => buildNextModelInputContext({');
+    expect(source).toContain('modelCallInputBuildService.buildModelCallInput({');
     expect(source).not.toContain('function buildFallbackToolResultModelInputContext');
     expect(source).not.toContain('ModelInputContextPart');
     expect(source).not.toContain('ModelInputContextPartBudget');

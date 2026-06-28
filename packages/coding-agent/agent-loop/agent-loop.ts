@@ -16,7 +16,6 @@ import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 import {
   type BuildModelCallInputInput,
   type BuildModelCallInputResult,
-  buildModelCallInputContextFromSources,
   createModelCallInputContextId,
   type ModelInputMemoryRecallSource,
 } from '../context';
@@ -54,7 +53,7 @@ export interface RunModelToolLoopInput {
     toolResults: readonly ToolResult[];
     emittedAt: string;
   }) => readonly RuntimeEvent[] | void | Promise<readonly RuntimeEvent[] | void>;
-  buildNextModelInputContext?: (
+  buildNextModelInputContext: (
     input: ToolResultModelInputBuildInput
   ) => ModelInputContext | Promise<ModelInputContext>;
 }
@@ -540,7 +539,7 @@ async function createNextModelCallRequest(input: {
   accumulatedToolCalls: ToolCall[];
   accumulatedToolResults: ToolResult[];
   accumulatedProviderStates: ModelStepProviderState[];
-  buildNextModelInputContext?: (
+  buildNextModelInputContext: (
     input: ToolResultModelInputBuildInput
   ) => ModelInputContext | Promise<ModelInputContext>;
 }): Promise<ModelStepRuntimeRequest> {
@@ -564,9 +563,7 @@ async function createNextModelCallRequest(input: {
     ...input.request,
     stepId: input.stepId,
     ...(input.modelStepId ? { modelStepId: input.modelStepId } : {}),
-    inputContext: input.buildNextModelInputContext
-      ? await input.buildNextModelInputContext(contextInput)
-      : buildModelCallInputContextFromSources(contextInput),
+    inputContext: await input.buildNextModelInputContext(contextInput),
     createdAt: input.createdAt,
   };
 }
