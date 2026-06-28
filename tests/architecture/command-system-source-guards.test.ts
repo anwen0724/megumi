@@ -122,7 +122,7 @@ describe('Command system source guards', () => {
   });
 
   it('keeps required input preprocessing boundary comments in production code', () => {
-    expect(source('packages/coding-agent/run/runtime-input.ts'))
+    expect(source('packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts'))
       .toContain('before session runs trust it');
     expect(source('packages/coding-agent/context/model-call-context.ts'))
       .toContain('never parses raw slash commands');

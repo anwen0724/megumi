@@ -38,7 +38,9 @@ import {
 } from '@megumi/coding-agent/input/command';
 import {
   parseRawInput,
+  normalizeSessionMessageInputPreprocessing,
   type ParsedInput,
+  type NormalizedSessionMessageInputPreprocessing,
 } from '@megumi/coding-agent/input';
 import {
   createRunCompletedEvent,
@@ -106,10 +108,6 @@ import {
   createToolRegistrySourcesEnsuredEvent,
 } from '@megumi/shared/runtime';
 import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
-import {
-  normalizeSessionMessageInputPreprocessing,
-  type NormalizedSessionMessageInputPreprocessing,
-} from './runtime-input';
 import type { PermissionSnapshotService } from '../permissions';
 import type {
   RunToolRegistrySnapshotBuildInput,

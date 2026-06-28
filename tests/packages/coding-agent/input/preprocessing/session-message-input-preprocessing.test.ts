@@ -1,10 +1,10 @@
 ﻿// Verifies Desktop Main trusted input preprocessing normalization before session runs are created.
 import { describe, expect, it } from 'vitest';
-import { normalizeSessionMessageInputPreprocessing } from '@megumi/coding-agent/run';
+import { normalizeSessionMessageInputPreprocessing } from '@megumi/coding-agent/input';
 
 const createdAt = '2026-06-12T00:00:00.000Z';
 
-describe('runtime input service', () => {
+describe('session message input preprocessing', () => {
   it('normalizes review preprocessing to plan permission with intent-default source', () => {
     const result = normalizeSessionMessageInputPreprocessing({
       rawText: '/review 当前改动',
