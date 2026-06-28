@@ -222,6 +222,19 @@ describe('package and file structure source guards', () => {
     expect(sessionRunSource).not.toContain('SELECT * FROM session_messages');
   });
 
+  it('keeps session records in their owner repository', () => {
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-record.repo.ts');
+    const sessionRunSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'),
+      'utf8',
+    );
+
+    expect(existsSync(ownerPath)).toBe(true);
+    expect(sessionRunSource).toContain('new SessionRecordRepository');
+    expect(sessionRunSource).not.toContain('INSERT INTO sessions');
+    expect(sessionRunSource).not.toContain('SELECT * FROM sessions');
+  });
+
   it('keeps session compaction persistence in its owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-compaction.repo.ts');
     const sessionRunSource = readFileSync(
@@ -293,5 +306,25 @@ describe('package and file structure source guards', () => {
     expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
     expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionContextRepository');
     expect(runtimeSource).toContain('sessionMessageRepository: persistence.sessionMessageRepository');
+  });
+
+  it('wires session service through split repository ports', () => {
+    const sessionServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/session/session-service.ts'), 'utf8');
+    const sessionRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
+      'utf8',
+    );
+    const runtimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
+      'utf8',
+    );
+
+    expect(sessionServiceSource).not.toContain("SessionRunRepository");
+    expect(sessionServiceSource).toContain('sessionRepository: SessionServiceSessionRepository');
+    expect(sessionServiceSource).toContain('messageRepository: SessionServiceMessageRepository');
+    expect(sessionServiceSource).toContain('runRepository: SessionServiceRunRepository');
+    expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRecordRepository');
+    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
+    expect(runtimeSource).toContain('sessionRecordRepository: persistence.sessionRecordRepository');
   });
 });

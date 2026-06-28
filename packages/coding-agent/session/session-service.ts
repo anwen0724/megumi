@@ -1,12 +1,16 @@
 // Owns Coding Agent session lifecycle and session-scoped read models outside the run loop.
-import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
-import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type {
   SessionCreatePayload,
   SessionTimelineListData,
   SessionTimelineListPayload,
 } from '@megumi/shared/ipc';
-import type { Session, SessionMessage, Run } from '@megumi/shared/session';
+import type {
+  Run,
+  Session,
+  SessionActiveLeaf,
+  SessionMessage,
+  SessionSourceEntry,
+} from '@megumi/shared/session';
 import type { TimelineMessage } from '@megumi/shared/timeline';
 
 export interface SessionServiceIds {
@@ -28,6 +32,28 @@ export interface SessionTimelineMessageRepository {
   }): SessionTimelineListData;
 }
 
+export interface SessionServiceSessionRepository {
+  saveSession(session: Session): Session;
+  listSessions(): Session[];
+}
+
+export interface SessionServiceMessageRepository {
+  listMessagesBySession(sessionId: string): SessionMessage[];
+}
+
+export interface SessionServiceRunRepository {
+  listRunsBySession(sessionId: string): Run[];
+}
+
+export interface SessionServiceActivePathRepository {
+  getSourceEntryBySourceRef(
+    sessionId: string,
+    sourceRef: { sourceKind: 'branch_marker'; sourceId: string },
+  ): SessionSourceEntry | undefined;
+  getActiveLeaf(sessionId: string): SessionActiveLeaf | undefined;
+  listChildSourceEntries(parentSourceEntryId: string): SessionSourceEntry[];
+}
+
 export interface SessionServicePort {
   createSession(payload: SessionCreatePayload): Session;
   listSessions(): Session[];
@@ -37,9 +63,11 @@ export interface SessionServicePort {
 }
 
 export interface SessionServiceOptions {
-  repository: SessionRunRepository;
+  sessionRepository: SessionServiceSessionRepository;
+  messageRepository: SessionServiceMessageRepository;
+  runRepository: SessionServiceRunRepository;
   ids: SessionServiceIds;
-  activePathRepository?: SessionActivePathRepository;
+  activePathRepository?: SessionServiceActivePathRepository;
   timelineMessageRepository?: SessionTimelineMessageRepository;
   memorySettingsProvider?: SessionMemorySettingsProvider;
   memoryMarkdownSyncService?: SessionMemoryMarkdownSyncService;
@@ -47,16 +75,20 @@ export interface SessionServiceOptions {
 }
 
 export class SessionService implements SessionServicePort {
-  private readonly repository: SessionRunRepository;
+  private readonly sessionRepository: SessionServiceSessionRepository;
+  private readonly messageRepository: SessionServiceMessageRepository;
+  private readonly runRepository: SessionServiceRunRepository;
   private readonly ids: SessionServiceIds;
-  private readonly activePathRepository?: SessionActivePathRepository;
+  private readonly activePathRepository?: SessionServiceActivePathRepository;
   private readonly timelineMessageRepository?: SessionTimelineMessageRepository;
   private readonly memorySettingsProvider?: SessionMemorySettingsProvider;
   private readonly memoryMarkdownSyncService?: SessionMemoryMarkdownSyncService;
   private readonly megumiHomePath?: string;
 
   constructor(options: SessionServiceOptions) {
-    this.repository = options.repository;
+    this.sessionRepository = options.sessionRepository;
+    this.messageRepository = options.messageRepository;
+    this.runRepository = options.runRepository;
     this.ids = options.ids;
     this.activePathRepository = options.activePathRepository;
     this.timelineMessageRepository = options.timelineMessageRepository;
@@ -66,7 +98,7 @@ export class SessionService implements SessionServicePort {
   }
 
   createSession(payload: SessionCreatePayload): Session {
-    const session = this.repository.saveSession({
+    const session = this.sessionRepository.saveSession({
       sessionId: this.ids.sessionId(),
       title: payload.title,
       ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),
@@ -80,11 +112,11 @@ export class SessionService implements SessionServicePort {
   }
 
   listSessions(): Session[] {
-    return this.repository.listSessions();
+    return this.sessionRepository.listSessions();
   }
 
   listMessagesBySession(sessionId: string): SessionMessage[] {
-    return this.repository.listMessagesBySession(sessionId);
+    return this.messageRepository.listMessagesBySession(sessionId);
   }
 
   listTimelineMessagesBySession(input: SessionTimelineListPayload): SessionTimelineListData {
@@ -100,7 +132,7 @@ export class SessionService implements SessionServicePort {
   }
 
   listRunsBySession(sessionId: string): Run[] {
-    return this.repository.listRunsBySession(sessionId);
+    return this.runRepository.listRunsBySession(sessionId);
   }
 
   private scheduleProjectMemoryMirrorSync(session: Session): void {

@@ -23,6 +23,7 @@ import type { RuntimeEventRepository } from '../persistence/repos/runtime-event.
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { SessionContextRepository } from '../persistence/repos/session-context.repo';
 import type { SessionMessageRepository } from '../persistence/repos/session-message.repo';
+import type { SessionRecordRepository } from '../persistence/repos/session-record.repo';
 import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
@@ -43,6 +44,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   runtimeLogger: RuntimeLogger;
   artifactRepository: ArtifactRepository;
   permissionSnapshotRepository: PermissionSnapshotRepository;
+  sessionRecordRepository: SessionRecordRepository;
   sessionRunRepository: SessionRunRepository;
   sessionContextRepository: SessionContextRepository;
   sessionMessageRepository: SessionMessageRepository;
@@ -77,7 +79,9 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     planArtifactCompatibility,
   });
   const sessionService = new SessionService({
-    repository: options.sessionRunRepository,
+    sessionRepository: options.sessionRecordRepository,
+    messageRepository: options.sessionMessageRepository,
+    runRepository: options.sessionRunRepository,
     ids: { sessionId: () => `session:${crypto.randomUUID()}` },
     activePathRepository: options.activePathRepository,
     timelineMessageRepository: options.timelineMessageRepository,

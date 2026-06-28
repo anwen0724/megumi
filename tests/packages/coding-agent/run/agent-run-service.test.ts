@@ -63,7 +63,9 @@ function createAgentRunTestService(options: AgentRunServiceOptions): AgentRunSer
     chatStreamEventId: options.ids?.chatStreamEventId ?? (() => `chat-stream-event:${crypto.randomUUID()}`),
   };
   const sessionService = new SessionService({
-    repository: options.repository,
+    sessionRepository: options.repository,
+    messageRepository: options.repository,
+    runRepository: options.repository,
     ids,
     ...(options.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     ...(options.timelineMessageRepository ? { timelineMessageRepository: options.timelineMessageRepository } : {}),
