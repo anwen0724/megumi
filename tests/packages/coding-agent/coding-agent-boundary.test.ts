@@ -49,7 +49,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/completion/run-completion-hooks.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/run/lifecycle/run-terminal-coordinator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-stream.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/events/runtime-event-utils.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/events/runtime-event-utils.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
@@ -80,6 +80,7 @@ describe('coding-agent package boundary', () => {
     const codingAgentRun = sourceUnder('packages/coding-agent/run');
     const codingAgentLoop = sourceUnder('packages/coding-agent/agent-loop');
     const codingAgentState = sourceUnder('packages/coding-agent/state');
+    const codingAgentContext = sourceUnder('packages/coding-agent/context');
     const codingAgentInput = sourceUnder('packages/coding-agent/input');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
@@ -87,7 +88,8 @@ describe('coding-agent package boundary', () => {
     expect(codingAgentRun).not.toContain('class RunCompletionHooksCoordinator');
     expect(codingAgentState).toContain('class RunTerminalCoordinator');
     expect(codingAgentLoop).toContain('runModelToolLoop');
-    expect(codingAgentRun).toContain('buildNextModelInputContext');
+    expect(codingAgentRun).toContain('buildModelCallInput');
+    expect(codingAgentContext).toContain('class ModelCallInputBuildService');
     expect(codingAgentInput).toContain('createCodingAgentRunInputFacts');
     expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);
     expect(desktopServices).not.toContain('new RunTurn');

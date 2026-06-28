@@ -149,8 +149,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/compaction/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/instructions/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/resources/index.ts'))).toBe(true);
-    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'), 'utf8'))
-      .toContain("export * from '../../events/runtime-event-factory'");
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/events/runtime-event-factory.ts'))).toBe(false);
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'), 'utf8'))
       .toContain("export * from '../../state/run-state-policy'");
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/context/model-call-input-builder.ts'), 'utf8'))
