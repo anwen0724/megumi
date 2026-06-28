@@ -10,6 +10,7 @@ import { resumeRunAfterApproval, type RunHostBoundaryPort } from './lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   PendingApprovalRegistry,
+  createApprovalResolvedRuntimeEvent,
   createToolResultRuntimeEvent,
   persistResumeRuntimeEvents,
   type PendingToolApprovalContinuation,
@@ -101,7 +102,6 @@ import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
-  createRuntimeEvent,
   createToolRegistryEntryResolvedEvent,
   createToolRegistryModelVisibleToolsDerivedEvent,
   createToolRegistrySnapshotCreatedEvent,
@@ -1577,26 +1577,16 @@ export class AgentRunService implements AgentRunPort {
     this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId);
     continuation.resolvedResults.push(...toolResults);
 
-    const approvalResolvedEvent = withRequestMetadata(createRuntimeEvent({
-      eventId: this.ids.eventId(),
-      eventType: 'approval.resolved',
-      runId: continuation.request.runId,
-      sessionId: continuation.request.sessionId,
+    const approvalResolvedEvent = createApprovalResolvedRuntimeEvent({
+      request: continuation.request,
       stepId: continuation.step.stepId,
-      requestId: continuation.request.requestId,
-      runtimeContext: continuation.request.runtimeContext,
       sequence: lastSequence += 1,
-      createdAt: input.decidedAt,
-      source: 'approval',
-      visibility: 'user',
-      persist: 'required',
-      payload: {
-        approvalRequestId: input.approvalRequestId,
-        decision: input.decision,
-        scope: pending.pendingApproval.approvalRequest.requestedScope,
-        decidedAt: input.decidedAt,
-      },
-    }), continuation.request);
+      approvalRequestId: input.approvalRequestId,
+      decision: input.decision,
+      scope: pending.pendingApproval.approvalRequest.requestedScope,
+      decidedAt: input.decidedAt,
+      ids: this.ids,
+    });
     this.appendRuntimeEvent(approvalResolvedEvent, chatStreamAdapter);
     yield approvalResolvedEvent;
 

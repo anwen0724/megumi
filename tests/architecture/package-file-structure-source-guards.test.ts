@@ -473,8 +473,10 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('private persistResumeRuntimeEvents');
     expect(agentRunServiceSource).not.toContain('private createToolResultRuntimeEvent');
     expect(agentRunServiceSource).not.toContain('function createToolResultSummary');
+    expect(agentRunServiceSource).not.toContain("eventType: 'approval.resolved'");
     expect(approvalResumeEventsSource).toContain('export function persistResumeRuntimeEvents');
     expect(approvalResumeEventsSource).toContain('export function createToolResultRuntimeEvent');
+    expect(approvalResumeEventsSource).toContain('export function createApprovalResolvedRuntimeEvent');
   });
 
   it('keeps approval resume run status restoration in lifecycle', () => {

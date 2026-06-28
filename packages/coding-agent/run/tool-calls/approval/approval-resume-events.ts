@@ -1,11 +1,12 @@
 // Builds runtime events emitted while resuming paused tool approvals.
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import {
+  createRuntimeEvent,
   createToolResultCreatedEvent,
   type RuntimeEvent,
 } from '@megumi/shared/runtime';
 import type { RunStep } from '@megumi/shared/session';
-import type { ToolResult } from '@megumi/shared/tool';
+import type { ApprovalScope, ToolResult } from '@megumi/shared/tool';
 import {
   getToolResultEventId,
   withRequestMetadata,
@@ -15,6 +16,38 @@ import type { ResumeToolApprovalOutcome } from '../tool-call-contract';
 
 export interface ApprovalResumeEventIds {
   eventId(): string;
+}
+
+export function createApprovalResolvedRuntimeEvent(input: {
+  request: ModelStepRuntimeRequest;
+  stepId: RunStep['stepId'];
+  sequence: number;
+  approvalRequestId: string;
+  decision: 'approved' | 'denied';
+  scope: ApprovalScope;
+  decidedAt: string;
+  ids: ApprovalResumeEventIds;
+}): RuntimeEvent {
+  return withRequestMetadata(createRuntimeEvent({
+    eventId: input.ids.eventId(),
+    eventType: 'approval.resolved',
+    runId: input.request.runId,
+    sessionId: input.request.sessionId,
+    stepId: String(input.stepId),
+    requestId: input.request.requestId,
+    runtimeContext: input.request.runtimeContext,
+    sequence: input.sequence,
+    createdAt: input.decidedAt,
+    source: 'approval',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      approvalRequestId: input.approvalRequestId,
+      decision: input.decision,
+      scope: input.scope,
+      decidedAt: input.decidedAt,
+    },
+  }), input.request);
 }
 
 export function persistResumeRuntimeEvents(input: {
