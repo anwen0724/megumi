@@ -68,8 +68,7 @@ describe('session run foundation source guards', () => {
   it('keeps agent runtime implementation under coding-agent agent-loop', () => {
     expect(existsSync(join(ROOT, 'packages/agent'))).toBe(false);
     expect(existsSync(join(ROOT, 'packages/coding-agent/agent-loop/agent-loop.ts'))).toBe(true);
-    expect(readFileSync(join(ROOT, 'packages/coding-agent/run/loop/agent-loop.ts'), 'utf8'))
-      .toContain("export * from '../../agent-loop/agent-loop'");
+    expect(existsSync(join(ROOT, 'packages/coding-agent/run/loop'))).toBe(false);
     expect(existsSync(join(ROOT, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(ROOT, 'packages/core/run-runtime'))).toBe(false);
   });

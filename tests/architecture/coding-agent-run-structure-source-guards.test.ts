@@ -77,17 +77,16 @@ describe('coding agent run structure source guards', () => {
     }
   });
 
-  it('keeps the run entry, turn, loop, tool call, and lifecycle file names explicit', () => {
+  it('keeps the run entry, turn, agent loop, tool call, and lifecycle file names explicit', () => {
     for (const requiredPath of [
       'packages/coding-agent/run/agent-run-service.ts',
       'packages/coding-agent/run/run-contract.ts',
       'packages/coding-agent/run/turn/run-turn.ts',
       'packages/coding-agent/agent-loop/agent-loop.ts',
-      'packages/coding-agent/run/loop/model-tool-loop-stream.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-contract.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-stream.ts',
-      'packages/coding-agent/run/loop/agent-loop.ts',
+      'packages/coding-agent/agent-loop/loop-limits.ts',
       'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts',
       'packages/coding-agent/agent-loop/tool-call/tool-call-contract.ts',
       'packages/coding-agent/run/lifecycle/run-lifecycle.ts',
@@ -145,6 +144,11 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/run/recovery/index.ts',
       'packages/coding-agent/run/recovery/recovery-service.ts',
       'packages/coding-agent/run/recovery/recovery-observation-mapper.ts',
+      'packages/coding-agent/run/loop/index.ts',
+      'packages/coding-agent/run/loop/agent-loop.ts',
+      'packages/coding-agent/run/loop/model-tool-loop-stream.ts',
+      'packages/coding-agent/run/loop/approval-resume-model-loop.ts',
+      'packages/coding-agent/run/loop/loop-limits.ts',
       'packages/coding-agent/run/loop/model-tool-loop.ts',
       'packages/coding-agent/run/events/chat-stream-event-adapter.ts',
       'packages/coding-agent/run/events/timeline-history-projector.ts',
@@ -215,9 +219,9 @@ describe('coding agent run structure source guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps loop dependent only on the tool call contract boundary', () => {
-    const offenders = filesContaining('packages/coding-agent/run/loop', (source) => {
-      return /from ['"][^'"]*tool-calls\/(approval|execution|model-input)/.test(source);
+  it('keeps the agent loop dependent only on the tool call public boundary', () => {
+    const offenders = filesContaining('packages/coding-agent/agent-loop/agent-loop.ts', (source) => {
+      return /from ['"][^'"]*tool-call\/(approval|execution|model-input)/.test(source);
     });
 
     expect(offenders).toEqual([]);

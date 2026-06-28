@@ -96,8 +96,7 @@ describe('run context workspace grounding source guards', () => {
       ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),
-    ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)))
-      .filter((file) => projectPath(file) !== 'packages/coding-agent/run/loop/agent-loop.ts');
+    ].filter((file) => /run-context|context\.handler|context.service|agent-runtime/.test(projectPath(file)));
 
     const forbiddenPatterns = [
       /tool registry/i,

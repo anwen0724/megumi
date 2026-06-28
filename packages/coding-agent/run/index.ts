@@ -3,7 +3,6 @@
 // run barrel while direct run/lifecycle ownership is retired.
 export * from '../state';
 export * from './context';
-export * from './loop';
 export * from './lifecycle';
 export * from './turn';
 export * from './runtime-input';

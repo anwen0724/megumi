@@ -98,7 +98,7 @@ describe('context budget and model input chain boundaries', () => {
       sourceUnder('apps/desktop/src/renderer'),
       sourceUnder('apps/desktop/src/main'),
       sourceUnder('packages/coding-agent/agent-loop/model-call'),
-      sourceUnder('packages/coding-agent/run/loop'),
+      sourceUnder('packages/coding-agent/agent-loop'),
     ].join('\n');
 
     expect(source).not.toContain('apply' + 'ContextBudget');

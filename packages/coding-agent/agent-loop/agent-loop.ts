@@ -32,6 +32,10 @@ import type {
   ToolResultModelInputBuildInput,
   ToolCallRunner,
 } from './tool-call';
+import {
+  DEFAULT_MAX_MODEL_STEPS,
+  DEFAULT_MAX_TOOL_ROUNDS,
+} from './loop-limits';
 
 export interface ModelToolLoopIds {
   nextEventId: () => string;
@@ -226,8 +230,8 @@ export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInpu
 }
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {
-  const maxModelSteps = input.maxModelSteps ?? 8;
-  const maxToolRounds = input.maxToolRounds ?? maxModelSteps;
+  const maxModelSteps = input.maxModelSteps ?? DEFAULT_MAX_MODEL_STEPS;
+  const maxToolRounds = input.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   let request = input.request;
   let sequenceOffset = 0;
   let toolRoundCount = 0;
