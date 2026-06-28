@@ -7,7 +7,7 @@ import {
   canTransitionRunStatus,
   isActiveRunStatus,
   isTerminalRunStatus,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/state';
 import type { Run } from '@megumi/shared/session';
 
 function run(overrides: Partial<Run> = {}): Run {

@@ -51,7 +51,7 @@ import {
 import {
   createPermissionModeRuntimeInstruction,
   resolvePermissionModeState,
-} from '../permissions/permission-instruction';
+} from '../../permissions/permission-instruction';
 
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   const clock = input.clock ?? defaultRunClock;

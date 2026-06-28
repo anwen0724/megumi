@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createPermissionModeRuntimeInstruction,
   resolvePermissionModeState,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/permissions';
 
 describe('core permission mode helpers', () => {
   it('resolves permission mode state from explicit permission mode', () => {

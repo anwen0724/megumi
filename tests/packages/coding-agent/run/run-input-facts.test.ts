@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createCodingAgentRunInputFacts,
   createRuntimeFactsForRunInput,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/input';
 import type { ParsedInput } from '@megumi/coding-agent/input';
 
 describe('coding-agent run input facts', () => {

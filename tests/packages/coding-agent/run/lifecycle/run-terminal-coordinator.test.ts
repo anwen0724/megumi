@@ -8,7 +8,7 @@ import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-
 import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
 import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
 import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
-import { RunTerminalCoordinator, type RunTerminalRepositoryPort } from '@megumi/coding-agent/run';
+import { RunTerminalCoordinator, type RunTerminalRepositoryPort } from '@megumi/coding-agent/state';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session } from '@megumi/shared/session';
 import type { ApprovalRequest, ToolCall, ToolExecution } from '@megumi/shared/tool';

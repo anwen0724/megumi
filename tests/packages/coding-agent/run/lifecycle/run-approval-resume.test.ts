@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { resumeRunAfterApproval, type RunApprovalResumeRepositoryPort } from '@megumi/coding-agent/run';
+import { resumeRunAfterApproval, type RunApprovalResumeRepositoryPort } from '@megumi/coding-agent/state';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { Run } from '@megumi/shared/session';
 

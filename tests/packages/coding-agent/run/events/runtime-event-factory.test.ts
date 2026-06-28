@@ -5,7 +5,7 @@ import {
   createRunCancelRequestedEvent,
   createRunRetryRequestedEvent,
   createRunResumeRequestedEvent,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/events';
 
 describe('core recovery runtime events', () => {
   it('creates recovery events with core source and required persistence', () => {

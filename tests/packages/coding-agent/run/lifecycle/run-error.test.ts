@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   RuntimeException,
   normalizeRuntimeError,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/state';
 import {
   assertRuntime,
   throwRuntimeError,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/state';
 
 describe('runtime exception foundation', () => {
   const runtimeError = {

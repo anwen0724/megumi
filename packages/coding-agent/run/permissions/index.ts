@@ -1,2 +1,2 @@
-// Exposes run-private permission instructions used while constructing runtime context.
-export * from './permission-instruction';
+// Compatibility export while permission instruction ownership lives in top-level permissions.
+export * from '../../permissions/permission-instruction';
