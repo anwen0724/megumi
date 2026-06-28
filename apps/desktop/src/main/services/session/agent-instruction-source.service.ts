@@ -7,7 +7,7 @@ import {
   AGENT_INSTRUCTION_SOURCE_HARD_CAP_BYTES,
   type AgentInstructionSourceServiceOptions,
   type LoadInstructionSourcesInput,
-} from '@megumi/coding-agent/run/context/instructions';
+} from '@megumi/coding-agent/context/instructions';
 
 export {
   AgentInstructionSourceService,

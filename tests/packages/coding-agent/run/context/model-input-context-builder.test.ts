@@ -1,7 +1,7 @@
-﻿import { describe, expect, it } from 'vitest';
-import { buildModelInputContext } from '@megumi/coding-agent/run/context';
+import { describe, expect, it } from 'vitest';
+import { buildModelInputContext } from '@megumi/coding-agent/context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
-import type { ModelInputContextPartDraft } from '@megumi/coding-agent/run/context/context-budget';
+import type { ModelInputContextPartDraft } from '@megumi/coding-agent/context/context-budget';
 
 const builtAt = '2026-05-27T00:00:00.000Z';
 type CurrentTurnDraft = Extract<ModelInputContextPartDraft, { kind: 'current_turn' }>;
@@ -251,4 +251,3 @@ describe('ModelInputContextBuilder', () => {
     });
   });
 });
-

@@ -1,9 +1,9 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   applyContextBudget,
   estimateModelInputContextTokens,
   type ModelInputContextPartDraft,
-} from '@megumi/coding-agent/run/context';
+} from '@megumi/coding-agent/context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 
 const builtAt = '2026-05-30T00:00:00.000Z';
@@ -532,4 +532,3 @@ describe('Context budget executor', () => {
     ]);
   });
 });
-

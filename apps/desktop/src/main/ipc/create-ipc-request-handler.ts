@@ -16,7 +16,7 @@ import {
   createRuntimeDebugId,
   createRuntimeTraceId,
 } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '@megumi/coding-agent/run';
+import { normalizeRuntimeError } from '@megumi/coding-agent/state';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import {
   redactRuntimeDetails,

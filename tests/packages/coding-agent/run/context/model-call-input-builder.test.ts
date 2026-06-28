@@ -1,6 +1,6 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ModelCallInputBuildService } from '@megumi/coding-agent/run/context';
+import { ModelCallInputBuildService } from '@megumi/coding-agent/context';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,

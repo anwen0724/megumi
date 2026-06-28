@@ -1,15 +1,15 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { SessionCompactionEntry } from '@megumi/shared/session';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionActiveLeaf, SessionSourceEntry } from '@megumi/shared/session';
-import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/run/context/model-call-context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/context/model-call-context';
 import {
   SessionCompactionOrchestrator,
   type SessionCompactionOrchestratorRepository,
-} from '@megumi/coding-agent/run/context';
+} from '@megumi/coding-agent/context';
 
 const builtAt = '2026-05-31T12:00:00.000Z';
 const budgetPolicy: ContextBudgetPolicy = {

@@ -1,10 +1,10 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   RunContextService,
   type RunContextRepositoryPort,
   type WorkspaceSourceProviderPort,
-} from '@megumi/coding-agent/run/context/resources';
+} from '@megumi/coding-agent/context/resources';
 import type { RunContext, RunContextSource } from '@megumi/shared/run';
 
 function createInMemoryRepository(): RunContextRepositoryPort {

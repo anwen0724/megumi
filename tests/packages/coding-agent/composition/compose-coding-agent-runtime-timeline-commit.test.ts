@@ -16,7 +16,7 @@ import {
 } from '@megumi/shared/settings';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
 // Seeds a real project row in the same SQLite file the runtime will open, mirroring

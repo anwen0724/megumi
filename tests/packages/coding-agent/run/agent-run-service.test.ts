@@ -48,7 +48,7 @@ import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
   SessionCompactionOrchestrationResult,
-} from '@megumi/coding-agent/run/context';
+} from '@megumi/coding-agent/context';
 import { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
 import {
   PostRunHooksCoordinator,

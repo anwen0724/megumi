@@ -4,7 +4,7 @@ import {
   RunTurn,
   type RunTurnOptions,
 } from '@megumi/coding-agent/run';
-import type { BuildModelCallInputInput, BuildModelCallInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/run/context';
+import type { BuildModelCallInputInput, BuildModelCallInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/context';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';

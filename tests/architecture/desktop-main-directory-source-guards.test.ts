@@ -150,6 +150,15 @@ describe('Desktop Main directory boundaries', () => {
     expect(source).not.toContain('src/renderer');
   });
 
+  it('uses coding-agent owner imports instead of the legacy run barrel for desktop state and context helpers', () => {
+    const source = sourceUnder('apps/desktop/src/main');
+
+    expect(source).not.toContain("normalizeRuntimeError } from '@megumi/coding-agent/run'");
+    expect(source).not.toContain('@megumi/coding-agent/run/context');
+    expect(source).toContain("normalizeRuntimeError } from '@megumi/coding-agent/state'");
+    expect(source).toContain('@megumi/coding-agent/context');
+  });
+
   it('keeps IPC handlers from constructing services or importing Electron directly', () => {
     const files = walk(join(root, 'apps', 'desktop', 'src', 'main', 'ipc', 'handlers'));
     const violations = files.flatMap((file) => {

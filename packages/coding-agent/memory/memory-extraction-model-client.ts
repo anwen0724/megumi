@@ -7,7 +7,7 @@ import {
   type MemoryExtractionOutput,
   type MemoryExtractionPrompt,
 } from './extraction';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId } from '@megumi/shared/provider';

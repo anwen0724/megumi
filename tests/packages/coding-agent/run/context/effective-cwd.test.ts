@@ -1,7 +1,7 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveModelCallEffectiveCwd } from '@megumi/coding-agent/run/context';
+import { resolveModelCallEffectiveCwd } from '@megumi/coding-agent/context';
 
 describe('resolveModelCallEffectiveCwd', () => {
   it('defaults to the project root when no requested cwd is provided', () => {

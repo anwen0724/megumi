@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   AgentInstructionSourceService,
   AGENT_INSTRUCTION_SOURCE_HARD_CAP_BYTES,
-} from '@megumi/coding-agent/run/context/instructions';
+} from '@megumi/coding-agent/context/instructions';
 
 const loadedAt = '2026-05-28T00:00:00.000Z';
 const tempDirs: string[] = [];
@@ -238,4 +238,3 @@ describe('AgentInstructionSourceService', () => {
     }]);
   });
 });
-

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toolResultModelInputParts } from '@megumi/coding-agent/run/context';
+import { toolResultModelInputParts } from '@megumi/coding-agent/context';
 import type { ToolResult } from '@megumi/shared/tool';
 
 function toolResult(overrides: Partial<ToolResult> = {}): ToolResult {

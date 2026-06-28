@@ -8,7 +8,7 @@ import type {
   ProviderSettings,
 } from '@megumi/shared/provider';
 import { DEFAULT_PROVIDER_SETTINGS } from '@megumi/shared/provider';
-import type { ProviderRuntimeConfig } from '@megumi/coding-agent/run';
+import type { ProviderRuntimeConfig } from '@megumi/coding-agent/agent-loop/model-call';
 
 export interface ProviderRuntimeSettingsPort {
   getProviderSettings(providerId: ProviderId): Promise<ProviderSettings>;

@@ -13,7 +13,7 @@ import { ProjectRepository, createDatabase, migrateDatabase } from '@megumi/codi
 import type { AppSettingsRaw } from '@megumi/shared/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/run';
+import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
 
 function productSettingsStorage(initial: AppSettingsRaw = {}) {

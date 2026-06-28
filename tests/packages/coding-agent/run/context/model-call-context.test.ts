@@ -1,11 +1,11 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildModelCallInputContextFromBuildRequest,
   buildModelCallInputContextFromSources,
   createModelCallInputContextId,
-} from '@megumi/coding-agent/run/context';
+} from '@megumi/coding-agent/context';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { SessionMessage } from '@megumi/shared/session';
 import type {
