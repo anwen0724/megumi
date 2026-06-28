@@ -112,6 +112,7 @@ import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
+import { ModelVisibleToolDefinitionService } from '../tools';
 import type {
   AgentRunPostRunHooksPort,
   AgentRunExecutionFactRepositoryPort,
@@ -471,6 +472,15 @@ export class AgentRunService implements AgentRunPort {
     chatStreamAdapter?: ChatStreamEventAdapter,
   ): RunTurnOptions {
     const svc = this;
+    const modelVisibleToolDefinitionService = new ModelVisibleToolDefinitionService({
+      ...(this.toolRegistrySnapshotService ? {
+        snapshotProvider: {
+          createRunSnapshot: (snapshotInput) => this.createToolRegistrySnapshotForCodingAgentRun({ ...snapshotInput }),
+        },
+      } : {}),
+      ...(this.toolDefinitionProvider ? { registryProvider: this.toolDefinitionProvider } : {}),
+    });
+
     return {
       clock: this.clock,
       ids: { eventId: this.ids.eventId },
@@ -511,12 +521,7 @@ export class AgentRunService implements AgentRunPort {
       // === Optional / passthrough ports ===
       ...(this.contextService ? { contextService: this.contextService } : {}),
       ...(this.providerCapabilitySummaryProvider ? { providerCapabilitySummaryProvider: this.providerCapabilitySummaryProvider } : {}),
-      ...(this.toolRegistrySnapshotService ? {
-        toolRegistrySnapshotProvider: {
-          createRunSnapshot: (snapshotInput) => this.createToolRegistrySnapshotForCodingAgentRun({ ...snapshotInput }),
-        },
-      } : {}),
-      ...(this.toolDefinitionProvider ? { toolDefinitionProvider: this.toolDefinitionProvider } : {}),
+      modelVisibleToolDefinitionService,
       sessionContextInputService: this.sessionContextInputService,
       sourceOverrideProvider: {
         resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),

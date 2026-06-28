@@ -7,7 +7,6 @@ import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/perm
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolDefinition } from '@megumi/shared/tool';
 import type { ParsedInput } from '@megumi/coding-agent/input';
 import {
   AgentLoopInitialModelInputPreparationService,
@@ -36,6 +35,10 @@ import type {
   PendingToolApprovalResume,
 } from '../../agent-loop/tool-call';
 import type { ToolCallRunnerService } from '../../agent-loop/tool-call';
+import type {
+  PrepareModelVisibleToolDefinitionsInput,
+  PrepareModelVisibleToolDefinitionsResult,
+} from '../../tools';
 
 export interface CodingAgentRunClock {
   now(): string;
@@ -111,21 +114,6 @@ export interface CodingAgentRunProviderCapabilitySummaryProvider {
   }): { supportsToolCall?: boolean };
 }
 
-export interface CodingAgentRunToolRegistrySnapshotProvider {
-  createRunSnapshot(input: {
-    runId: string;
-    sessionId: string;
-    projectId: string;
-    permissionMode: PermissionMode;
-    modelId: string;
-    createdAt: string;
-    providerCapabilitySummary?: { supportsToolCall?: boolean };
-  }): {
-    modelVisibleToolDefinitions: ToolDefinition[];
-    events: RuntimeEvent[];
-  };
-}
-
 export interface CodingAgentRunToolCallRunnerFactory {
   create(input: {
     projectRoot: string;
@@ -162,14 +150,6 @@ export interface RunTurnOptions {
   failurePort: CodingAgentRunFailurePort;
   contextService?: CodingAgentRunContextService;
   providerCapabilitySummaryProvider?: CodingAgentRunProviderCapabilitySummaryProvider;
-  toolRegistrySnapshotProvider?: CodingAgentRunToolRegistrySnapshotProvider;
-  toolDefinitionProvider?: {
-    listDefinitions(input: {
-      runId: string;
-      permissionMode: PermissionMode;
-      providerCapabilitySummary?: { supportsToolCall?: boolean };
-    }): ToolDefinition[];
-  };
   sessionContextInputService: CodingAgentRunSessionContextInputService;
   sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
   memoryRecallService?: CodingAgentRunMemoryRecallService;
@@ -183,6 +163,11 @@ export interface RunTurnOptions {
   };
   initialModelInputPreparationService?: {
     prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
+  };
+  modelVisibleToolDefinitionService: {
+    prepareModelVisibleToolDefinitions(
+      input: PrepareModelVisibleToolDefinitionsInput,
+    ): PrepareModelVisibleToolDefinitionsResult;
   };
   runEventRecorder: CodingAgentRunEventRecorder;
 }
@@ -209,6 +194,11 @@ export class RunTurn {
   private readonly initialModelInputPreparationService: {
     prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
   };
+  private readonly modelVisibleToolDefinitionService: {
+    prepareModelVisibleToolDefinitions(
+      input: PrepareModelVisibleToolDefinitionsInput,
+    ): PrepareModelVisibleToolDefinitionsResult;
+  };
 
   constructor(private readonly options: RunTurnOptions) {
     this.initialModelInputPreparationService = options.initialModelInputPreparationService
@@ -220,6 +210,7 @@ export class RunTurn {
         modelCallInputBuildService: options.modelCallInputBuildService,
         compactionOrchestrator: options.compactionOrchestrator,
       });
+    this.modelVisibleToolDefinitionService = options.modelVisibleToolDefinitionService;
   }
 
   async *runSessionMessage(input: CodingAgentRunSessionMessageInput): AsyncIterable<RuntimeEvent> {
@@ -232,7 +223,17 @@ export class RunTurn {
         providerId: String(input.providerId),
         modelId: input.modelId,
       }) ?? { supportsToolCall: true };
-      const toolDefinitions = this.resolveToolDefinitions(input, providerCapabilitySummary, 0);
+      const toolDefinitions = this.modelVisibleToolDefinitionService.prepareModelVisibleToolDefinitions({
+        runId: String(input.run.runId),
+        sessionId: String(input.session.sessionId),
+        ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+        ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+        permissionMode: input.permissionMode,
+        modelId: input.modelId,
+        createdAt: input.createdAt,
+        providerCapabilitySummary,
+        startSequence: 0,
+      });
       const initialModelInputPreparation = await this.initialModelInputPreparationService.prepare({
         requestId: input.requestId,
         session: input.session,
@@ -462,44 +463,4 @@ export class RunTurn {
     }
   }
 
-  private resolveToolDefinitions(
-    input: CodingAgentRunSessionMessageInput,
-    providerCapabilitySummary: { supportsToolCall?: boolean },
-    startSequence: number,
-  ): {
-    toolDefinitions?: ToolDefinition[];
-    events: RuntimeEvent[];
-  } {
-    if (input.session.workspacePath && input.session.workspaceId && this.options.toolRegistrySnapshotProvider) {
-      const snapshot = this.options.toolRegistrySnapshotProvider.createRunSnapshot({
-        runId: String(input.run.runId),
-        sessionId: String(input.session.sessionId),
-        projectId: String(input.session.workspaceId),
-        permissionMode: input.permissionMode,
-        modelId: input.modelId,
-        createdAt: input.createdAt,
-        providerCapabilitySummary,
-      });
-      return {
-        toolDefinitions: snapshot.modelVisibleToolDefinitions,
-        events: snapshot.events.map((event, index) => ({
-          ...event,
-          sequence: event.sequence > startSequence ? event.sequence : startSequence + index + 1,
-        })),
-      };
-    }
-
-    if (input.session.workspacePath && this.options.toolDefinitionProvider) {
-      return {
-        toolDefinitions: this.options.toolDefinitionProvider.listDefinitions({
-          runId: String(input.run.runId),
-          permissionMode: input.permissionMode,
-          providerCapabilitySummary,
-        }),
-        events: [],
-      };
-    }
-
-    return { events: [] };
-  }
 }

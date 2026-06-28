@@ -708,6 +708,27 @@ describe('package and file structure source guards', () => {
     expect(contextEffectiveCwdSource).toContain('export function resolveMemoryRecallEffectiveCwd');
   });
 
+  it('keeps model-visible tool definition selection in the tools owner', () => {
+    const runTurnSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'), 'utf8');
+    const toolsDefinitionSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/tools/definitions/model-visible-tool-definitions.ts'),
+      'utf8',
+    );
+
+    expect(runTurnSource).toContain('prepareModelVisibleToolDefinitions');
+    expect(runTurnSource).not.toContain('private resolveToolDefinitions');
+    expect(runTurnSource).not.toContain('.createRunSnapshot({');
+    expect(runTurnSource).not.toContain('.listDefinitions({');
+    expect(runTurnSource).not.toContain('toolRegistrySnapshotProvider');
+    expect(runTurnSource).not.toContain('toolDefinitionProvider');
+    expect(runTurnSource).not.toContain('createRunSnapshot(input:');
+    expect(runTurnSource).not.toContain('listDefinitions(input:');
+    expect(toolsDefinitionSource).toContain('export class ModelVisibleToolDefinitionService');
+    expect(toolsDefinitionSource).toContain('prepareModelVisibleToolDefinitions');
+    expect(toolsDefinitionSource).toContain('createRunSnapshot');
+    expect(toolsDefinitionSource).toContain('listDefinitions');
+  });
+
   it('wires agent run service through split repository owner ports in session runtime composition', () => {
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),

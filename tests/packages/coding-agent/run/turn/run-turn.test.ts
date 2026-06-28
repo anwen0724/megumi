@@ -326,6 +326,11 @@ function createOptions(
     compactionOrchestrator: {
       compactIfNeeded: overrides.compactIfNeeded ?? (async () => ({ status: 'skipped', events: [] })),
     },
+    modelVisibleToolDefinitionService: {
+      prepareModelVisibleToolDefinitions() {
+        return { events: [] };
+      },
+    },
     modelCallPort: {
       streamModelCall: overrides.streamModelCall ?? (async function* ({ request }) {
         order.push('model');

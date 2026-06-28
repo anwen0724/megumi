@@ -7,6 +7,7 @@ export * from './observation-shaper';
 export * from './observations';
 export * from './executor-port';
 export * from './built-ins';
+export * from './definitions';
 export * from './sources';
 export * from './execution';
 export * from './tool-registry-snapshot';
