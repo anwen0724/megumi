@@ -7,7 +7,6 @@ export * from './model-call';
 export * from './loop';
 export * from './tool-calls';
 export * from './lifecycle';
-export * from './recovery';
 export * from './turn';
 export * from './runtime-input';
 export * from './agent-run-service-ids';
