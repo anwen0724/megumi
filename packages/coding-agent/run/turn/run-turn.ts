@@ -27,7 +27,7 @@ import type { ModelCallPort } from '../../agent-loop/model-call';
 import {
   streamCodingAgentModelToolLoop,
   type CodingAgentRunSourceOverrideProvider,
-} from '../loop/model-tool-loop-stream';
+} from '../../agent-loop';
 import type {
   PendingToolApprovalResume,
 } from '../../agent-loop/tool-call';

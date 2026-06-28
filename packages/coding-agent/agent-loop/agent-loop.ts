@@ -1,23 +1,35 @@
 import type {
   ModelInputContext,
+  ModelInputContextBuildRequest,
   ModelStepProviderState,
   ModelStepRuntimeRequest,
 } from '@megumi/shared/model';
+import type { PermissionMode } from '@megumi/shared/permission';
 import type { RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import {
   createRunFailedEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
+import type { RunStep } from '@megumi/shared/session';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 import {
+  type BuildModelCallInputInput,
+  type BuildModelCallInputResult,
   buildModelCallInputContextFromSources,
   createModelCallInputContextId,
+  type ModelInputMemoryRecallSource,
 } from '../context';
+import {
+  coalesceTextDeltaRuntimeEvents,
+  modelCallInputBuildFailureToRuntimeError,
+} from '../events';
 import { runModelCall, type ModelCallPort } from './model-call';
 import { createTerminalRuntimeError } from '../state';
 import type {
   PendingToolApprovalResume,
+  ToolApprovalResumePort,
+  ToolCallRunnerService,
   ToolResultModelInputBuildInput,
   ToolCallRunner,
 } from './tool-call';
@@ -45,6 +57,173 @@ export interface RunModelToolLoopInput {
   buildNextModelInputContext?: (
     input: ToolResultModelInputBuildInput
   ) => ModelInputContext | Promise<ModelInputContext>;
+}
+
+export interface CodingAgentRunSourceOverrideProvider {
+  resolveModelInputSourceOverrides(input: {
+    sessionId: string;
+    runId: string;
+    stepId: string;
+    builtAt: string;
+  }): Partial<Pick<
+    BuildModelCallInputInput,
+    'globalInstructionDirs' | 'sessionInstructionSources' | 'requestedCwd'
+  >>;
+}
+
+export interface CodingAgentRunToolResultModelInputRecorder {
+  markToolResultsSubmittedToModelInput(input: {
+    request: ModelStepRuntimeRequest;
+    stepId: string;
+    toolResults: readonly ToolResult[];
+    emittedAt: string;
+    sequence: number;
+  }): readonly RuntimeEvent[] | undefined;
+}
+
+export interface CodingAgentModelToolLoopStreamIds {
+  nextEventId(): string;
+  nextStepId(input: { runId: string }): string;
+  nextModelStepId(): string;
+}
+
+export interface CodingAgentModelToolLoopStreamPorts {
+  modelCallPort: ModelCallPort;
+  toolCallHandler?: ToolCallRunner & ToolApprovalResumePort;
+  modelCallInputBuildService: {
+    buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
+  };
+  sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
+  toolResultModelInputRecorder?: CodingAgentRunToolResultModelInputRecorder;
+  ids: CodingAgentModelToolLoopStreamIds;
+}
+
+export interface CodingAgentModelToolLoopStreamInput {
+  request: ModelStepRuntimeRequest;
+  ports: CodingAgentModelToolLoopStreamPorts;
+  projectRoot?: string;
+  permissionMode?: PermissionMode;
+  memoryRecall?: {
+    memoryRecallSources?: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+  };
+  signal?: AbortSignal;
+  onPendingApproval?: (approvalResume: PendingToolApprovalResume) => void;
+}
+
+export async function* streamCodingAgentModelToolLoop(
+  input: CodingAgentModelToolLoopStreamInput,
+): AsyncIterable<RuntimeEvent> {
+  const modelEvents = input.ports.toolCallHandler
+    ? runModelToolLoop({
+        request: input.request,
+        modelCallPort: input.ports.modelCallPort,
+        toolCallHandler: input.ports.toolCallHandler,
+        ids: {
+          nextEventId: input.ports.ids.nextEventId,
+          nextStepId: () => input.ports.ids.nextStepId({ runId: input.request.runId }),
+          nextModelStepId: input.ports.ids.nextModelStepId,
+        },
+        signal: input.signal,
+        onPendingApproval: input.onPendingApproval,
+        onToolResultsSubmittedToModelInput: ({ request, toolResults, emittedAt }) => (
+          input.ports.toolResultModelInputRecorder?.markToolResultsSubmittedToModelInput({
+            request,
+            stepId: request.stepId,
+            toolResults,
+            emittedAt,
+            sequence: 0,
+          }) ?? []
+        ),
+        buildNextModelInputContext: (contextInput) => buildNextModelInputContext({
+          contextInput,
+          request: input.request,
+          projectRoot: input.projectRoot,
+          permissionMode: input.permissionMode ?? 'default',
+          memoryRecall: input.memoryRecall,
+          ports: input.ports,
+        }),
+      })
+    : input.ports.modelCallPort.streamModelCall({
+        request: input.request,
+        runId: input.request.runId,
+        stepId: input.request.stepId,
+        nextSequence: () => 1,
+        eventIdFactory: input.ports.ids.nextEventId,
+        signal: input.signal,
+      });
+
+  yield* coalesceTextDeltaRuntimeEvents(modelEvents);
+}
+
+export interface ApprovalResumeModelLoopInput {
+  pendingRequest: ModelStepRuntimeRequest;
+  resumedStep: RunStep;
+  resumedInputContext: ModelInputContext;
+  decidedAt: string;
+  toolRuntime: ToolCallRunnerService;
+  modelCallPort: ModelCallPort;
+  modelCallInputBuildService: {
+    buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
+  };
+  sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
+  ids: CodingAgentModelToolLoopStreamIds;
+  projectRoot?: string;
+  permissionMode?: PermissionMode;
+  memoryRecall?: {
+    memoryRecallSources?: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+  };
+}
+
+export interface ApprovalResumeModelLoop {
+  request: ModelStepRuntimeRequest;
+  modelEvents: AsyncIterable<RuntimeEvent>;
+  pendingApprovalResumes: PendingToolApprovalResume[];
+}
+
+export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInput): ApprovalResumeModelLoop {
+  const request: ModelStepRuntimeRequest = {
+    ...input.pendingRequest,
+    stepId: input.resumedStep.stepId,
+    modelStepId: input.ids.nextModelStepId(),
+    inputContext: input.resumedInputContext,
+    createdAt: input.decidedAt,
+  };
+  const pendingApprovalResumes: PendingToolApprovalResume[] = [];
+  const modelEvents = streamCodingAgentModelToolLoop({
+    request,
+    ports: {
+      modelCallPort: input.modelCallPort,
+      toolCallHandler: input.toolRuntime,
+      modelCallInputBuildService: input.modelCallInputBuildService,
+      sourceOverrideProvider: input.sourceOverrideProvider,
+      toolResultModelInputRecorder: {
+        markToolResultsSubmittedToModelInput: ({ request, stepId, toolResults, emittedAt, sequence }) => {
+          const event = input.toolRuntime.markToolResultsSubmittedToModelInput({
+            request,
+            stepId,
+            toolResults,
+            emittedAt,
+            sequence,
+          });
+          return event ? [event] : [];
+        },
+      },
+      ids: input.ids,
+    },
+    ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+    permissionMode: input.permissionMode ?? 'default',
+    memoryRecall: {
+      ...(input.memoryRecall?.memoryRecallSources ? { memoryRecallSources: input.memoryRecall.memoryRecallSources } : {}),
+      ...(input.memoryRecall?.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecall.memoryRecallSeed } : {}),
+    },
+    onPendingApproval: (pendingApprovalResume) => {
+      pendingApprovalResumes.push(pendingApprovalResume);
+    },
+  });
+
+  return { request, modelEvents, pendingApprovalResumes };
 }
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {
@@ -306,6 +485,50 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
       details: { maxModelSteps },
     }),
   });
+}
+
+async function buildNextModelInputContext(input: {
+  contextInput: ToolResultModelInputBuildInput;
+  request: ModelStepRuntimeRequest;
+  projectRoot?: string;
+  permissionMode: PermissionMode;
+  memoryRecall?: {
+    memoryRecallSources?: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+  };
+  ports: CodingAgentModelToolLoopStreamPorts;
+}): Promise<ModelInputContext> {
+  const nextModelInput = await input.ports.modelCallInputBuildService.buildModelCallInput({
+    baseInputContext: input.contextInput.baseInputContext,
+    requestId: input.request.requestId,
+    sessionId: input.contextInput.sessionId,
+    runId: input.contextInput.runId,
+    stepId: input.contextInput.stepId,
+    contextKind: 'tool-results',
+    providerId: input.request.providerId,
+    modelId: String(input.request.modelId),
+    ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+    ...input.ports.sourceOverrideProvider.resolveModelInputSourceOverrides({
+      sessionId: input.contextInput.sessionId,
+      runId: input.contextInput.runId,
+      stepId: input.contextInput.stepId,
+      builtAt: input.contextInput.builtAt,
+    }),
+    permissionMode: input.permissionMode,
+    toolDefinitions: input.request.toolDefinitions ?? [],
+    toolCalls: input.contextInput.toolCalls,
+    toolResults: input.contextInput.toolResults,
+    providerStates: input.contextInput.providerStates,
+    ...(input.memoryRecall?.memoryRecallSources ? { memoryRecallSources: input.memoryRecall.memoryRecallSources } : {}),
+    ...(input.memoryRecall?.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecall.memoryRecallSeed } : {}),
+    builtAt: input.contextInput.builtAt,
+  });
+
+  if (nextModelInput.failure) {
+    throw modelCallInputBuildFailureToRuntimeError(nextModelInput.failure);
+  }
+
+  return nextModelInput.inputContext;
 }
 
 async function createNextModelCallRequest(input: {

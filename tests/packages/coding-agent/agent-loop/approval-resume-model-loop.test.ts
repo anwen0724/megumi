@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RunStep } from '@megumi/shared/session';
-import { ensureToolCallRunnerService } from '@megumi/coding-agent/run/tool-calls';
-import { streamApprovalResumeModelLoop } from '@megumi/coding-agent/run/loop';
+import {
+  ensureToolCallRunnerService,
+  streamApprovalResumeModelLoop,
+} from '@megumi/coding-agent/agent-loop';
 
 describe('approval resume model loop owner', () => {
   it('creates a resumed request and streams the resumed model/tool loop', async () => {

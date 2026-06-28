@@ -600,20 +600,33 @@ describe('package and file structure source guards', () => {
     expect(toolCallRunnerSource).toContain('markToolResultsSubmittedToModelInput');
   });
 
-  it('keeps approval resume model loop wiring in the loop module', () => {
+  it('keeps approval resume model loop wiring in the top-level agent-loop owner', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const runTurnSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'), 'utf8');
+    const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const approvalResumeModelLoopPath = join(
       repoRoot,
       'packages/coding-agent/run/loop/approval-resume-model-loop.ts',
     );
+    const modelToolLoopStreamPath = join(
+      repoRoot,
+      'packages/coding-agent/run/loop/model-tool-loop-stream.ts',
+    );
 
     expect(existsSync(approvalResumeModelLoopPath)).toBe(true);
     const approvalResumeModelLoopSource = readFileSync(approvalResumeModelLoopPath, 'utf8');
+    const modelToolLoopStreamSource = readFileSync(modelToolLoopStreamPath, 'utf8');
     expect(agentRunServiceSource).not.toContain('const resumedRequest: ModelStepRuntimeRequest');
     expect(agentRunServiceSource).not.toContain('const resumedModelEvents = streamCodingAgentModelToolLoop({');
+    expect(agentRunServiceSource).toContain("from '../agent-loop'");
     expect(agentRunServiceSource).toContain('streamApprovalResumeModelLoop({');
-    expect(approvalResumeModelLoopSource).toContain('export function streamApprovalResumeModelLoop');
-    expect(approvalResumeModelLoopSource).toContain('streamCodingAgentModelToolLoop({');
+    expect(runTurnSource).toContain("from '../../agent-loop'");
+    expect(agentLoopSource).toContain('export function streamApprovalResumeModelLoop');
+    expect(agentLoopSource).toContain('export async function* streamCodingAgentModelToolLoop');
+    expect(approvalResumeModelLoopSource).not.toContain('export function streamApprovalResumeModelLoop');
+    expect(approvalResumeModelLoopSource).toContain("export * from '../../agent-loop';");
+    expect(modelToolLoopStreamSource).not.toContain('export async function* streamCodingAgentModelToolLoop');
+    expect(modelToolLoopStreamSource).toContain("export * from '../../agent-loop';");
   });
 
   it('keeps approval resume run status restoration in top-level state owner', () => {

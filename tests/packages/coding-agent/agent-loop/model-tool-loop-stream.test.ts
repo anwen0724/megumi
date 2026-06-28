@@ -5,11 +5,11 @@ import {
   type RuntimeEvent,
 } from '@megumi/shared/runtime';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { ToolCallRunner } from '@megumi/coding-agent/run/tool-calls';
+import type { ToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
 import {
   streamCodingAgentModelToolLoop,
   type CodingAgentModelToolLoopStreamPorts,
-} from '@megumi/coding-agent/run';
+} from '@megumi/coding-agent/agent-loop';
 
 describe('coding-agent model/tool loop stream', () => {
   it('calls the agent runtime through ports and builds next model input context in coding-agent', async () => {

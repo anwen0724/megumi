@@ -32,7 +32,7 @@ import {
   RunTurn,
   type RunTurnOptions,
 } from './turn';
-import { streamApprovalResumeModelLoop } from './loop';
+import { streamApprovalResumeModelLoop } from '../agent-loop';
 import {
   BUILT_IN_INPUT_COMMAND_REGISTRY,
 } from '@megumi/coding-agent/input/command';
