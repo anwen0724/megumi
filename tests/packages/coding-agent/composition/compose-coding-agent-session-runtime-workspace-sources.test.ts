@@ -40,6 +40,7 @@ describe('composed session runtime workspace sources', () => {
         artifactRepository: persistence.artifactRepository,
         permissionSnapshotRepository: persistence.permissionSnapshotRepository,
         sessionRunRepository: persistence.sessionRunRepository,
+        sessionContextRepository: persistence.sessionContextRepository,
         activePathRepository: persistence.activePathRepository,
         toolRepository: persistence.toolRepository,
         workspaceChangeRepository: persistence.workspaceChangeRepository,

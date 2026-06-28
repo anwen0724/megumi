@@ -18,6 +18,7 @@ import type { RunContextRepository } from '../persistence/repos/run-context.repo
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
+import type { SessionContextRepository } from '../persistence/repos/session-context.repo';
 import type { SessionRunRepository } from '../persistence/repos/session-run.repo';
 import type { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
 import type { ToolRepository } from '../persistence/repos/tool.repo';
@@ -39,6 +40,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   artifactRepository: ArtifactRepository;
   permissionSnapshotRepository: PermissionSnapshotRepository;
   sessionRunRepository: SessionRunRepository;
+  sessionContextRepository: SessionContextRepository;
   activePathRepository: SessionActivePathRepository;
   toolRepository: ToolRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
@@ -90,6 +92,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   });
   const agentRunService = new AgentRunService({
     repository: options.sessionRunRepository,
+    sessionCompactionRepository: options.sessionContextRepository,
     activePathRepository: options.activePathRepository,
     sessionBranchService,
     permissionSnapshotService,

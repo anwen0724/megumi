@@ -47,6 +47,7 @@ import type {
   CompactIfNeededInput,
   LoadInstructionSourcesInput,
   ModelInputMemoryRecallSource,
+  SessionCompactionOrchestratorRepository,
   SessionCompactionOrchestrationResult,
 } from './context';
 import type {
@@ -253,6 +254,7 @@ export interface AgentRunServiceOptions {
   sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
+  sessionCompactionRepository?: SessionCompactionOrchestratorRepository;
   activePathRepository?: SessionActivePathRepository;
   sessionBranchService?: SessionBranchServicePort;
   workspaceChanges?: SessionRunWorkspaceChangeReadPort;

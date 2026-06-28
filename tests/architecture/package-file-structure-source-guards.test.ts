@@ -250,4 +250,25 @@ describe('package and file structure source guards', () => {
     expect(sessionRunSource).not.toContain('private upsertActiveLeaf');
     expect(sessionRunSource).not.toContain('private getActiveLeafSourceEntryId');
   });
+
+  it('wires session compaction orchestration through the session context repository port', () => {
+    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const sessionRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
+      'utf8',
+    );
+    const runtimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
+      'utf8',
+    );
+    const normalizedAgentRunServiceSource = agentRunServiceSource.replaceAll('\r\n', '\n');
+
+    expect(runContractSource).toContain('sessionCompactionRepository?: SessionCompactionOrchestratorRepository');
+    expect(agentRunServiceSource).toContain('repository: options.sessionCompactionRepository');
+    expect(normalizedAgentRunServiceSource).not.toContain('repository: this.repository,\n            modelStepProvider: options.modelStepProvider');
+    expect(sessionRuntimeSource).toContain('sessionContextRepository: SessionContextRepository');
+    expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionContextRepository');
+    expect(runtimeSource).toContain('sessionContextRepository: persistence.sessionContextRepository');
+  });
 });

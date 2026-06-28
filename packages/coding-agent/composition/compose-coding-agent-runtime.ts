@@ -98,6 +98,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     artifactRepository: persistence.artifactRepository,
     permissionSnapshotRepository: persistence.permissionSnapshotRepository,
     sessionRunRepository: persistence.sessionRunRepository,
+    sessionContextRepository: persistence.sessionContextRepository,
     activePathRepository: persistence.activePathRepository,
     toolRepository: persistence.toolRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,

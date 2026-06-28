@@ -329,9 +329,9 @@ export class AgentRunService implements AgentRunPort {
     });
     this.workspaceChanges = options.workspaceChanges;
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
-      ?? (options.modelStepProvider
+      ?? (options.modelStepProvider && options.sessionCompactionRepository
         ? new SessionCompactionOrchestrator({
-            repository: this.repository,
+            repository: options.sessionCompactionRepository,
             modelStepProvider: options.modelStepProvider,
             clock: this.clock,
             ids: {
@@ -2293,6 +2293,7 @@ export function createDefaultAgentRunService(
 
   const service = new AgentRunService({
     repository: persistence.sessionRunRepository,
+    sessionCompactionRepository: persistence.sessionContextRepository,
     activePathRepository,
     toolRepository,
     toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),
