@@ -39,7 +39,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/context/model-call-input-builder.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/context/compaction/session-compaction-orchestrator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/run/context/parts/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/run/context/run-input-facts.ts'))).toBe(true);
@@ -131,6 +132,16 @@ describe('coding-agent package boundary', () => {
     expect(desktopServices).not.toContain('class ArtifactService');
     expect(desktopServices).not.toContain('class WorkspaceChangeTrackerService');
     expect(desktopServices).not.toContain('class WorkspaceRestoreService');
+  });
+
+  it('keeps session facts separate from model context materialization', () => {
+    const session = sourceUnder('packages/coding-agent/session');
+    const runContextParts = sourceUnder('packages/coding-agent/run/context/parts');
+
+    expect(session).not.toContain('ModelInputContextPartDraft');
+    expect(session).not.toContain('context-budget');
+    expect(session).not.toContain('buildSessionContextParts');
+    expect(runContextParts).toContain('buildSessionContextParts');
   });
 
   it('does not keep a top-level packages/agent package', () => {

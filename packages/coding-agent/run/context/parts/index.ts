@@ -5,4 +5,5 @@ export * from './memory';
 export * from './provider-state';
 export * from './runtime-constraints';
 export * from './session';
+export * from './session-context';
 export * from './tool-continuation';

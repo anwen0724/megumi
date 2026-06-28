@@ -16,8 +16,8 @@ import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 
 import type { ModelInputContextPartDraft } from './context-budget';
 import { buildModelInputContext } from './model-input-context-builder';
-import { buildSessionContextParts } from '../../session/session-context';
 import {
+  buildSessionContextParts,
   currentTurnPart,
   draftFromFinalPart,
   inputPreprocessingInstructionParts,

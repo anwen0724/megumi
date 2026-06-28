@@ -63,7 +63,7 @@ describe('context budget and model input chain boundaries', () => {
   it('keeps final budget decisions inside the context budget executor', () => {
     const sourceBuilders = [
       read('packages/coding-agent/run/context/model-call-context.ts'),
-      read('packages/coding-agent/session/session-context.ts'),
+      read('packages/coding-agent/run/context/parts/session-context.ts'),
     ].join('\n');
     const budgetExecutor = read('packages/coding-agent/run/context/context-budget.ts');
 

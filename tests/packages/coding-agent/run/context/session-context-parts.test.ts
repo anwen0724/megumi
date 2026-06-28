@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { buildSessionContextParts } from '@megumi/coding-agent/session/session-context';
+import { buildSessionContextParts } from '@megumi/coding-agent/run/context';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { SessionContextInput, SessionHistoryEntryStatus } from '@megumi/shared/session';
 
