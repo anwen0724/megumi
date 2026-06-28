@@ -10,9 +10,11 @@ import { resumeRunAfterApproval, type RunHostBoundaryPort } from './lifecycle';
 import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
 import {
   PendingApprovalRegistry,
+  closePendingApprovalGroup,
   createApprovalResolvedRuntimeEvent,
   createToolResultRuntimeEvent,
   persistResumeRuntimeEvents,
+  resolvePendingApproval,
   type PendingToolApprovalContinuation,
   type ResumeToolApprovalInput,
   type ToolApprovalResumePort,
@@ -1573,9 +1575,15 @@ export class AgentRunService implements AgentRunPort {
     const chatStreamAdapter = continuation.chatStreamAdapter;
 
     let lastSequence = nextRuntimeSequence(this.runtimeEventRepository.listRuntimeEventsByRun(continuation.request.runId));
-    continuation.pendingByApprovalId.delete(input.approvalRequestId);
-    this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId);
-    continuation.resolvedResults.push(...toolResults);
+    const resolvedPending = resolvePendingApproval({
+      registry: this.pendingApprovalRegistry,
+      group: continuation,
+      approvalRequestId: input.approvalRequestId,
+      resolvedResults: toolResults,
+    });
+    if (!resolvedPending) {
+      return;
+    }
 
     const approvalResolvedEvent = createApprovalResolvedRuntimeEvent({
       request: continuation.request,
@@ -1623,7 +1631,10 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    this.pendingApprovalRegistry.deleteGroup(continuation.groupId);
+    closePendingApprovalGroup({
+      registry: this.pendingApprovalRegistry,
+      group: continuation,
+    });
     const resumedRun = resumeRunAfterApproval({
       request: continuation.request,
       fallbackRun: continuation.run,

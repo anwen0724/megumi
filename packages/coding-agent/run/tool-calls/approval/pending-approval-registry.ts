@@ -52,3 +52,36 @@ export class PendingApprovalRegistry<TGroup extends PendingApprovalRegistryGroup
     }
   }
 }
+
+export interface PendingApprovalResolutionGroup<TPending, TResult> extends PendingApprovalRegistryGroup {
+  pendingByApprovalId: Map<string, TPending>;
+  resolvedResults: TResult[];
+}
+
+export function resolvePendingApproval<TPending, TResult, TGroup extends PendingApprovalResolutionGroup<TPending, TResult>>(
+  input: {
+    registry: Pick<PendingApprovalRegistry<TGroup>, 'deleteApproval'>;
+    group: TGroup;
+    approvalRequestId: string;
+    resolvedResults: readonly TResult[];
+  },
+): TPending | undefined {
+  const pending = input.group.pendingByApprovalId.get(input.approvalRequestId);
+  if (!pending) {
+    return undefined;
+  }
+
+  input.group.pendingByApprovalId.delete(input.approvalRequestId);
+  input.registry.deleteApproval(input.approvalRequestId);
+  input.group.resolvedResults.push(...input.resolvedResults);
+  return pending;
+}
+
+export function closePendingApprovalGroup<TGroup extends PendingApprovalRegistryGroup>(
+  input: {
+    registry: Pick<PendingApprovalRegistry<TGroup>, 'deleteGroup'>;
+    group: TGroup;
+  },
+): void {
+  input.registry.deleteGroup(input.group.groupId);
+}

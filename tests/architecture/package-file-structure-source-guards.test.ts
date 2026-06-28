@@ -479,6 +479,21 @@ describe('package and file structure source guards', () => {
     expect(approvalResumeEventsSource).toContain('export function createApprovalResolvedRuntimeEvent');
   });
 
+  it('keeps approval resume registry mutation in the approval submodule', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const pendingApprovalRegistrySource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/run/tool-calls/approval/pending-approval-registry.ts'),
+      'utf8',
+    );
+
+    expect(agentRunServiceSource).not.toContain('continuation.pendingByApprovalId.delete(input.approvalRequestId)');
+    expect(agentRunServiceSource).not.toContain('this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId)');
+    expect(agentRunServiceSource).not.toContain('continuation.resolvedResults.push(...toolResults)');
+    expect(agentRunServiceSource).not.toContain('this.pendingApprovalRegistry.deleteGroup(continuation.groupId)');
+    expect(pendingApprovalRegistrySource).toContain('export function resolvePendingApproval');
+    expect(pendingApprovalRegistrySource).toContain('export function closePendingApprovalGroup');
+  });
+
   it('keeps approval resume run status restoration in lifecycle', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeLifecyclePath = join(
