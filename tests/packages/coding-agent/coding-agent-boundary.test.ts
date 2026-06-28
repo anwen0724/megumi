@@ -57,7 +57,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-registry-snapshot.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/registry.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/registry/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/built-ins/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-policy.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-execution-decision.ts'))).toBe(true);

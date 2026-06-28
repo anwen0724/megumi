@@ -167,4 +167,9 @@ describe('package and file structure source guards', () => {
     expect(existsSync(ownerPath)).toBe(true);
     expect(readFileSync(compatibilityPath, 'utf8')).toContain("export * from './schemas/tool-input-validation'");
   });
+
+  it('keeps tool registry resolution in the registry owner module', () => {
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/registry/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/registry.ts'))).toBe(false);
+  });
 });
