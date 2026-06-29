@@ -49,7 +49,7 @@ import {
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import type { AgentRunPort } from '../product-runtime';
-import { SubmitInputOperation } from '../product-runtime';
+import { SessionRunControlOperation, SubmitInputOperation } from '../product-runtime';
 import {
   type ParsedInput,
   type SessionMessageInputMessage,
@@ -255,8 +255,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly clock: AgentRunServiceClock;
   private readonly ids: AgentRunServiceIds;
-  private readonly runTerminalCoordinator: RunTerminalCoordinatorPort;
-  private readonly runRetryCoordinator: RunRetryCoordinatorPort;
+  private readonly sessionRunControlOperation: SessionRunControlOperation;
   private readonly postRunHooks: PostRunHooksPort;
   private readonly pendingApprovalRegistry = new PendingApprovalRegistry<AgentRunApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
@@ -277,8 +276,6 @@ export class AgentRunService implements AgentRunPort {
       eventLog: this.runtimeEventLog,
       terminalHooks: this.postRunHooks,
     });
-    this.runTerminalCoordinator = options.runTerminalCoordinator;
-    this.runRetryCoordinator = options.runRetryCoordinator;
     this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
     this.permissionSnapshotService = options.permissionSnapshotService;
@@ -321,10 +318,20 @@ export class AgentRunService implements AgentRunPort {
       stepRepository: this.runExecutionFactRepository,
       permissionSnapshotService: this.permissionSnapshotService,
       sessionBranchService: options.sessionBranchService,
-      runRetryCoordinator: this.runRetryCoordinator,
+      runRetryCoordinator: options.runRetryCoordinator,
       chatStreamEventSink: options.chatStreamEventSink,
       appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
       runAgentLoop: (operationInput) => this.runSessionMessageAgentLoop(operationInput),
+    });
+    this.sessionRunControlOperation = new SessionRunControlOperation({
+      clock: this.clock,
+      ids: this.ids,
+      activeRuns: this.activeSessionMessageRuns,
+      terminalCoordinator: options.runTerminalCoordinator,
+      retryCoordinator: options.runRetryCoordinator,
+      modelCallProvider: this.modelCallProvider,
+      cancelPendingApprovalGroupsByRun: (runId) => this.cancelPendingApprovalGroupsByRun(runId),
+      appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
     });
     this.modelCallInputBuildService = options.modelCallInputBuildService
       ?? new ModelCallInputBuildService({
@@ -526,7 +533,7 @@ export class AgentRunService implements AgentRunPort {
     retryAttemptSourceEntry: SessionSourceEntry;
     events: RuntimeEvent[];
   } {
-    return this.runRetryCoordinator.createManualRetryFromRun(input);
+    return this.sessionRunControlOperation.createManualRetryFromRun(input);
   }
 
   createManualRerunFromUserMessage(input: {
@@ -543,31 +550,11 @@ export class AgentRunService implements AgentRunPort {
     retryAttemptSourceEntry: SessionSourceEntry;
     events: RuntimeEvent[];
   } {
-    return this.runRetryCoordinator.createManualRerunFromUserMessage(input);
+    return this.sessionRunControlOperation.createManualRerunFromUserMessage(input);
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
-    const providerCancelled = this.modelCallProvider?.cancelModelCall(payload.targetRequestId) ?? false;
-    const activeRun = this.activeSessionMessageRuns.get(payload.targetRequestId);
-
-    if (!activeRun) {
-      return providerCancelled;
-    }
-
-    const result = this.runTerminalCoordinator.cancelActiveSessionMessageRun({
-      activeRun,
-      targetRequestId: payload.targetRequestId,
-      cancelRequestId: this.ids.cancelRequestId(),
-      cancelledAt: this.clock.now(),
-      providerCancelled,
-      cancelPendingApprovalGroupsByRun: (runId) => this.cancelPendingApprovalGroupsByRun(runId),
-      appendEvent: (event) => this.appendRuntimeEvent(event, activeRun.projection),
-    });
-
-    if (result.shouldForgetActiveRun) {
-      this.activeSessionMessageRuns.forget(payload.targetRequestId);
-    }
-    return result.handled ? true : providerCancelled;
+    return this.sessionRunControlOperation.cancelSessionMessage(payload);
   }
 
   resumeApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined {
@@ -585,9 +572,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] } {
-    return this.runTerminalCoordinator.cleanupInterruptedRunsOnStartup({
-      cleanupAt: this.clock.now(),
-    });
+    return this.sessionRunControlOperation.cleanupInterruptedRunsOnStartup();
   }
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {

@@ -611,8 +611,10 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunRetryCoordinator');
     expect(agentRunServiceSource).toContain('this.postRunHooks = options.postRunHooks');
-    expect(agentRunServiceSource).toContain('this.runTerminalCoordinator = options.runTerminalCoordinator');
-    expect(agentRunServiceSource).toContain('this.runRetryCoordinator = options.runRetryCoordinator');
+    expect(agentRunServiceSource).not.toContain('private readonly runTerminalCoordinator');
+    expect(agentRunServiceSource).not.toContain('private readonly runRetryCoordinator');
+    expect(agentRunServiceSource).toContain('terminalCoordinator: options.runTerminalCoordinator');
+    expect(agentRunServiceSource).toContain('retryCoordinator: options.runRetryCoordinator');
     expect(sessionRuntimeSource).toContain("from '../hooks'");
     expect(sessionRuntimeSource).toContain("from '../state'");
     expect(sessionRuntimeSource).toContain('new PostRunHooksCoordinator');
@@ -852,6 +854,27 @@ describe('package and file structure source guards', () => {
     expect(submitInputOperationSource).toContain('createRunPermissionSnapshot({');
     expect(submitInputOperationSource).toContain('createSessionMessageChatStreamAdapter({');
     expect(submitInputOperationSource).toContain('startAgentLoopRun({');
+  });
+
+  it('keeps session run control product operation out of the transitional AgentRunService facade', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const sessionRunControlOperationSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/product-runtime/session-run-control-operation.ts'),
+      'utf8',
+    );
+
+    expect(agentRunServiceSource).toContain('this.sessionRunControlOperation.cancelSessionMessage(payload)');
+    expect(agentRunServiceSource).toContain('this.sessionRunControlOperation.createManualRetryFromRun(input)');
+    expect(agentRunServiceSource).toContain('this.sessionRunControlOperation.createManualRerunFromUserMessage(input)');
+    expect(agentRunServiceSource).toContain('this.sessionRunControlOperation.cleanupInterruptedRunsOnStartup()');
+    expect(agentRunServiceSource).not.toContain('this.activeSessionMessageRuns.get(payload.targetRequestId)');
+    expect(agentRunServiceSource).not.toContain('this.runTerminalCoordinator.cancelActiveSessionMessageRun({');
+    expect(agentRunServiceSource).not.toContain('this.runTerminalCoordinator.cleanupInterruptedRunsOnStartup({');
+    expect(agentRunServiceSource).not.toContain('this.runRetryCoordinator.createManualRetryFromRun(input)');
+    expect(agentRunServiceSource).not.toContain('this.runRetryCoordinator.createManualRerunFromUserMessage(input)');
+    expect(sessionRunControlOperationSource).toContain('export class SessionRunControlOperation');
+    expect(sessionRunControlOperationSource).toContain('cancelActiveSessionMessageRun({');
+    expect(sessionRunControlOperationSource).toContain('cleanupInterruptedRunsOnStartup({');
   });
 
   it('keeps runtime event sequence and request metadata normalization in the events owner', () => {
