@@ -157,8 +157,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(false);
     expect(readFileSync(join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'), 'utf8'))
       .toContain('export class ModelCallInputBuildService');
-    expect(readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8'))
-      .not.toContain('export interface AgentRunPort');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/core'))).toBe(false);
@@ -282,7 +281,6 @@ describe('package and file structure source guards', () => {
   });
 
   it('wires session compaction orchestration through the session context repository port', () => {
-    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
@@ -294,7 +292,7 @@ describe('package and file structure source guards', () => {
     );
     const normalizedAgentRunServiceSource = agentRunServiceSource.replaceAll('\r\n', '\n');
 
-    expect(runContractSource).toContain('sessionCompactionRepository?: SessionCompactionOrchestratorRepository');
+    expect(agentRunServiceSource).toContain('sessionCompactionRepository?: SessionCompactionOrchestratorRepository');
     expect(agentRunServiceSource).toContain('repository: options.sessionCompactionRepository');
     expect(normalizedAgentRunServiceSource).not.toContain('repository: this.repository,\n            modelStepProvider: options.modelStepProvider');
     expect(sessionRuntimeSource).toContain('sessionContextRepository: SessionContextRepository');
@@ -407,7 +405,6 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps run service contracts off the concrete session-run repository type', () => {
-    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const persistencePortsSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/persistence/agent-run-repository-ports.ts'),
       'utf8',
@@ -419,16 +416,9 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(runContractSource).not.toContain('SessionRunRepository');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'))).toBe(false);
     expect(agentRunServiceSource).not.toContain('SessionRunRepository');
     expect(retryCoordinatorSource).not.toContain('SessionRunRepository');
-    expect(runContractSource).not.toContain('export interface AgentRunRepositoryPort {');
-    expect(runContractSource).not.toContain('export type AgentRunRepositoryPort =');
-    expect(runContractSource).not.toContain('export interface AgentRunSessionRepositoryPort');
-    expect(runContractSource).not.toContain('export interface AgentRunRunRecordRepositoryPort');
-    expect(runContractSource).not.toContain('export interface AgentRunExecutionFactRepositoryPort');
-    expect(runContractSource).not.toContain('export interface AgentRunModelStepRepositoryPort');
-    expect(runContractSource).not.toContain('export interface AgentRunRuntimeEventRepositoryPort');
     expect(persistencePortsSource).toContain('export interface AgentRunSessionRepositoryPort');
     expect(persistencePortsSource).toContain('export interface AgentRunRunRecordRepositoryPort');
     expect(persistencePortsSource).toContain('export interface AgentRunExecutionFactRepositoryPort');
@@ -439,22 +429,21 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps AgentRunService options on owner-named repository ports', () => {
-    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
 
-    expect(runContractSource).not.toContain('repository: AgentRunRepositoryPort;');
-    expect(runContractSource).toContain('sessionRepository: AgentRunSessionRepositoryPort;');
-    expect(runContractSource).toContain('messageRepository: AgentRunMessageRepositoryPort;');
-    expect(runContractSource).toContain('runRecordRepository: AgentRunRunRecordRepositoryPort;');
-    expect(runContractSource).toContain('runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;');
-    expect(runContractSource).toContain('modelStepRepository: AgentRunModelStepRepositoryPort;');
-    expect(runContractSource).toContain('sessionContextRepository: AgentRunSessionContextRepositoryPort;');
-    expect(runContractSource).toContain('runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;');
+    expect(agentRunServiceSource).not.toContain('repository: AgentRunRepositoryPort;');
+    expect(agentRunServiceSource).toContain('sessionRepository: AgentRunSessionRepositoryPort;');
+    expect(agentRunServiceSource).toContain('messageRepository: AgentRunMessageRepositoryPort;');
+    expect(agentRunServiceSource).toContain('runRecordRepository: AgentRunRunRecordRepositoryPort;');
+    expect(agentRunServiceSource).toContain('runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;');
+    expect(agentRunServiceSource).toContain('modelStepRepository: AgentRunModelStepRepositoryPort;');
+    expect(agentRunServiceSource).toContain('sessionContextRepository: AgentRunSessionContextRepositoryPort;');
+    expect(agentRunServiceSource).toContain('runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;');
     expect(agentRunServiceSource).not.toContain('const repository = options.repository');
   });
 
   it('keeps model-call and tool runtime contracts in the agent-loop owner', () => {
-    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const modelCallContractSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-contract.ts'),
       'utf8',
@@ -464,25 +453,20 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(runContractSource).not.toContain('export interface AgentRunModelStepProvider');
-    expect(runContractSource).not.toContain('export type AgentRunModelCallProvider');
-    expect(runContractSource).not.toContain('export interface AgentRunToolRuntimeFactory');
+    expect(agentRunServiceSource).not.toContain('export interface AgentRunModelStepProvider');
+    expect(agentRunServiceSource).not.toContain('export type AgentRunModelCallProvider');
+    expect(agentRunServiceSource).not.toContain('export interface AgentRunToolRuntimeFactory');
     expect(modelCallContractSource).toContain('export interface ModelCallProvider');
     expect(toolCallContractSource).toContain('export interface ToolRuntimeFactory');
   });
 
   it('keeps AgentRunService coordinator repository adapters in composition', () => {
-    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const repositoryOptionsSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/agent-run-repository-options.ts'),
       'utf8',
     );
 
-    expect(runContractSource).not.toContain('runCompletionRepository');
-    expect(runContractSource).not.toContain('RunCompletionHooksRepositoryPort');
-    expect(runContractSource).not.toContain('runTerminalRepository: RunTerminalRepositoryPort;');
-    expect(runContractSource).not.toContain('runRetryRepository: RunRetryCoordinatorRepositoryPort;');
     expect(agentRunServiceSource).not.toContain('private readonly runCompletionRepository');
     expect(agentRunServiceSource).not.toContain('private readonly runTerminalRepository');
     expect(agentRunServiceSource).not.toContain('private readonly runRetryRepository');
@@ -498,7 +482,6 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps AgentRunService coordinator construction in composition', () => {
-    const runContractSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'), 'utf8');
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
@@ -563,44 +546,44 @@ describe('package and file structure source guards', () => {
     const productSettingsSource = readFileSync(join(repoRoot, 'packages/coding-agent/settings/product-settings.ts'), 'utf8');
     const sessionServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/session/session-service.ts'), 'utf8');
 
-    expect(runContractSource).not.toContain('export interface AgentRunPostRunHooksPort');
-    expect(runContractSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
-    expect(runContractSource).not.toContain('export interface AgentRunRetryCoordinatorPort');
-    expect(runContractSource).not.toContain('export interface SessionRunWorkspaceChangeReadPort');
-    expect(runContractSource).not.toContain('export interface SessionRunToolDefinitionProvider');
-    expect(runContractSource).not.toContain('export interface SessionRunProviderCapabilitySummaryProvider');
-    expect(runContractSource).not.toContain('export interface SessionRunToolRegistrySnapshotService');
-    expect(runContractSource).not.toContain('export interface SessionRunContextService');
-    expect(runContractSource).not.toContain('export interface SessionRunAgentInstructionSourceService');
-    expect(runContractSource).not.toContain('export interface SessionRunSessionContextInputService');
-    expect(runContractSource).not.toContain('export interface SessionRunModelCallInputBuildService');
-    expect(runContractSource).not.toContain('export interface SessionRunGlobalInstructionDirectoryProvider');
-    expect(runContractSource).not.toContain('export interface SessionRunSessionInstructionSourceProvider');
-    expect(runContractSource).not.toContain('export interface SessionRunEffectiveCwdProvider');
-    expect(runContractSource).not.toContain('export interface SessionRunMemoryRecallService');
-    expect(runContractSource).not.toContain('export interface SessionRunMemoryCaptureService');
-    expect(runContractSource).not.toContain('export interface SessionRunMemorySettingsProvider');
-    expect(runContractSource).not.toContain('export interface SessionRunMemoryMarkdownSyncService');
-    expect(runContractSource).not.toContain('export interface AgentRunServiceHomePaths');
-    expect(runContractSource).not.toContain('export interface ApprovalResumeGroup');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/run/run-contract.ts'))).toBe(false);
+    expect(agentRunServiceSource).not.toContain('export interface AgentRunPostRunHooksPort');
+    expect(agentRunServiceSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
+    expect(agentRunServiceSource).not.toContain('export interface AgentRunRetryCoordinatorPort');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunWorkspaceChangeReadPort');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunToolDefinitionProvider');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunProviderCapabilitySummaryProvider');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunToolRegistrySnapshotService');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunContextService');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunAgentInstructionSourceService');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunSessionContextInputService');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunModelCallInputBuildService');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunGlobalInstructionDirectoryProvider');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunSessionInstructionSourceProvider');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunEffectiveCwdProvider');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunMemoryRecallService');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunMemoryCaptureService');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunMemorySettingsProvider');
+    expect(agentRunServiceSource).not.toContain('export interface SessionRunMemoryMarkdownSyncService');
+    expect(agentRunServiceSource).not.toContain('export interface AgentRunServiceHomePaths');
     expect(sessionServiceSource).not.toContain('export interface SessionMemorySettingsProvider');
     expect(sessionServiceSource).not.toContain('export interface SessionMemoryMarkdownSyncService');
-    expect(runContractSource).toContain('postRunHooks: PostRunHooksPort;');
-    expect(runContractSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
-    expect(runContractSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
-    expect(runContractSource).toContain('workspaceChanges?: WorkspaceChangeReadPort;');
-    expect(runContractSource).toContain('toolDefinitionProvider?: ToolSetRegistryProvider;');
-    expect(runContractSource).toContain('providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;');
-    expect(runContractSource).toContain('toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;');
-    expect(runContractSource).toContain('contextService?: RunBaselineContextPort;');
-    expect(runContractSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
-    expect(runContractSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
-    expect(runContractSource).toContain('modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;');
-    expect(runContractSource).toContain('sessionContextInputService?: SessionContextInputBuildPort;');
-    expect(runContractSource).toContain('memoryRecallService?: MemoryRecallPort;');
-    expect(runContractSource).not.toContain('memoryCaptureService?:');
-    expect(runContractSource).toContain('memorySettingsProvider?: MemorySettingsPort;');
-    expect(runContractSource).toContain('memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;');
+    expect(agentRunServiceSource).toContain('postRunHooks: PostRunHooksPort;');
+    expect(agentRunServiceSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
+    expect(agentRunServiceSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
+    expect(agentRunServiceSource).toContain('workspaceChanges?: WorkspaceChangeReadPort;');
+    expect(agentRunServiceSource).toContain('toolDefinitionProvider?: ToolSetRegistryProvider;');
+    expect(agentRunServiceSource).toContain('providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;');
+    expect(agentRunServiceSource).toContain('toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;');
+    expect(agentRunServiceSource).toContain('contextService?: RunBaselineContextPort;');
+    expect(agentRunServiceSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
+    expect(agentRunServiceSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
+    expect(agentRunServiceSource).toContain('modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;');
+    expect(agentRunServiceSource).toContain('sessionContextInputService?: SessionContextInputBuildPort;');
+    expect(agentRunServiceSource).toContain('memoryRecallService?: MemoryRecallPort;');
+    expect(agentRunServiceSource).not.toContain('memoryCaptureService?:');
+    expect(agentRunServiceSource).toContain('memorySettingsProvider?: MemorySettingsPort;');
+    expect(agentRunServiceSource).toContain('memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;');
     expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
     expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
     expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');

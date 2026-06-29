@@ -1,7 +1,15 @@
 // Composes AgentRunService owner repository options from persistence repositories.
-import type { AgentRunServiceOptions } from '../run/run-contract';
 import type { PostRunHooksRepositoryPort } from '../hooks';
 import type { RunRetryCoordinatorRepositoryPort, RunTerminalRepositoryPort } from '../state';
+import type {
+  AgentRunExecutionFactRepositoryPort,
+  AgentRunMessageRepositoryPort,
+  AgentRunModelStepRepositoryPort,
+  AgentRunRunRecordRepositoryPort,
+  AgentRunRuntimeEventRepositoryPort,
+  AgentRunSessionContextRepositoryPort,
+  AgentRunSessionRepositoryPort,
+} from '../persistence';
 import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
 import type { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
 import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
@@ -20,20 +28,18 @@ export interface AgentRunRepositoryOptionsCompositionInput {
   sessionRecordRepository: SessionRecordRepository;
 }
 
-export type AgentRunRepositoryOptions = Pick<
-  AgentRunServiceOptions,
-  | 'sessionRepository'
-  | 'messageRepository'
-  | 'runRecordRepository'
-  | 'runExecutionFactRepository'
-  | 'modelStepRepository'
-  | 'sessionContextRepository'
-  | 'runtimeEventRepository'
-> & {
+export interface AgentRunRepositoryOptions {
+  sessionRepository: AgentRunSessionRepositoryPort;
+  messageRepository: AgentRunMessageRepositoryPort;
+  runRecordRepository: AgentRunRunRecordRepositoryPort;
+  runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;
+  modelStepRepository: AgentRunModelStepRepositoryPort;
+  sessionContextRepository: AgentRunSessionContextRepositoryPort;
+  runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
   postRunHooksRepository: PostRunHooksRepositoryPort;
   runTerminalRepository: RunTerminalRepositoryPort;
   runRetryRepository: RunRetryCoordinatorRepositoryPort;
-};
+}
 
 export function createAgentRunRepositoryOptions(
   input: AgentRunRepositoryOptionsCompositionInput,

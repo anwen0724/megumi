@@ -22,7 +22,6 @@ import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/to
 import { TimelineMessageRepository } from '@megumi/coding-agent/persistence/repos/timeline-message.repo';
 import {
   AgentRunService,
-  type AgentRunServiceOptions,
 } from '@megumi/coding-agent/run';
 import {
   ModelInputSourceOverrideService,
@@ -122,6 +121,7 @@ type AgentRunServiceTestRepository =
   & {
     saveSessionCompaction(entry: SessionCompactionEntry): void;
   };
+type AgentRunServiceOptions = ConstructorParameters<typeof AgentRunService>[0];
 type AgentRunServiceTestOptions =
   & Omit<
     AgentRunServiceOptions,

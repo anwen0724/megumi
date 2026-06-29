@@ -1,5 +1,17 @@
 // Provides default id factories shared by AgentRunService and composition wiring.
-import type { AgentRunServiceIds } from './run-contract';
+import type { RunIdFactory } from '../state/lifecycle';
+
+export interface AgentRunServiceIds extends RunIdFactory {
+  compactionId(): string;
+  retryAttemptId(): string;
+  sessionId(): string;
+  sourceEntryId(): string;
+  branchMarkerId(): string;
+  chatStreamEventId(): string;
+  chatStreamId(input: { runId: string }): string;
+  chatTextId(): string;
+  chatThinkingId(): string;
+}
 
 export function createDefaultAgentRunServiceIds(
   overrides: Partial<AgentRunServiceIds> = {},

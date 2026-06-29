@@ -8,7 +8,7 @@ import {
   type RunTerminalCoordinatorPort,
 } from '../state';
 import { runTurn, type RunHostBoundaryPort } from '../state/lifecycle';
-import { createDefaultAgentRunServiceIds } from './agent-run-service-ids';
+import { createDefaultAgentRunServiceIds, type AgentRunServiceIds } from './agent-run-service-ids';
 import {
   ensureToolCallRunnerService,
   PendingApprovalRegistry,
@@ -21,11 +21,13 @@ import {
   ModelCallInputBuildService,
   ModelInputSourceOverrideService,
   SessionCompactionOrchestrator,
+  type AgentInstructionSourcePort,
   type AgentLoopInitialModelInputSourceOverrideProvider,
   type CompactIfNeededInput,
   type ModelCallInputBuildPort,
   type ModelInputMemoryRecallSource,
   type RunBaselineContextPort,
+  type SessionCompactionOrchestratorRepository,
   type SessionCompactionOrchestrationResult,
 } from '../context';
 import {
@@ -102,6 +104,7 @@ import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   RunStartPayload,
   PlanStatusUpdatePayload,
+  SessionTimelineListData,
   SessionMessageCancelPayload,
   SessionMessageSendData,
   SessionMessageSendPayload,
@@ -135,16 +138,66 @@ import type {
   MemoryRecallPort,
 } from '../memory';
 import type { MemorySettingsPort } from '../settings';
+import type { WorkspaceChangeReadPort } from '../workspace';
 import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
   ToolRegistrySnapshotServicePort,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-import type {
-  AgentRunServiceClock,
-  AgentRunServiceIds,
-  AgentRunServiceOptions,
-} from './run-contract';
+interface AgentRunServiceClock {
+  now(): string;
+}
+
+interface AgentRunServiceOptions {
+  sessionRepository: AgentRunSessionRepositoryPort;
+  messageRepository: AgentRunMessageRepositoryPort;
+  runRecordRepository: AgentRunRunRecordRepositoryPort;
+  runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;
+  modelStepRepository: AgentRunModelStepRepositoryPort;
+  sessionContextRepository: AgentRunSessionContextRepositoryPort;
+  runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
+  postRunHooks: PostRunHooksPort;
+  runTerminalCoordinator: RunTerminalCoordinatorPort;
+  runRetryCoordinator: RunRetryCoordinatorPort;
+  contextService?: RunBaselineContextPort;
+  permissionSnapshotService?: Pick<
+    PermissionSnapshotService,
+    | 'createPermissionSnapshot'
+    | 'linkAcceptedSourcePlan'
+  >;
+  planArtifactService?: PlanArtifactServicePort;
+  modelStepProvider?: ModelCallProvider;
+  toolRuntimeFactory?: ToolRuntimeFactory;
+  toolDefinitionProvider?: ToolSetRegistryProvider;
+  toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
+  providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
+  toolRepository?: AgentRunToolRepositoryPort;
+  agentInstructionSourceService?: AgentInstructionSourcePort;
+  modelCallInputBuildService?: ModelCallInputBuildPort;
+  memoryRecallService?: MemoryRecallPort;
+  memorySettingsProvider?: MemorySettingsPort;
+  memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
+  megumiHomePath?: string;
+  modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;
+  sessionContextInputService?: SessionContextInputBuildPort;
+  sessionCompactionOrchestrator?: {
+    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
+  };
+  sessionCompactionRepository?: SessionCompactionOrchestratorRepository;
+  activePathRepository?: SessionActivePathRepository;
+  sessionBranchService?: SessionBranchServicePort;
+  workspaceChanges?: WorkspaceChangeReadPort;
+  hostBoundary?: RunHostBoundaryPort;
+  chatStreamEventSink?: ChatStreamEventSink;
+  timelineMessageRepository?: {
+    listCommittedMessagesBySession(input: {
+      projectId: string;
+      sessionId: string;
+    }): SessionTimelineListData;
+  };
+  clock?: AgentRunServiceClock;
+  ids?: Partial<AgentRunServiceIds>;
+}
 
 interface ApprovalResumeGroup {
   groupId: string;

@@ -112,7 +112,6 @@ describe('coding agent run structure source guards', () => {
   it('keeps the run entry, turn, agent loop, tool call, and lifecycle file names explicit', () => {
     for (const requiredPath of [
       'packages/coding-agent/run/agent-run-service.ts',
-      'packages/coding-agent/run/run-contract.ts',
       'packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts',
       'packages/coding-agent/agent-loop/agent-loop.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
@@ -134,6 +133,7 @@ describe('coding agent run structure source guards', () => {
 
     for (const removedPath of [
       'packages/coding-agent/run/session-run-service.ts',
+      'packages/coding-agent/run/run-contract.ts',
       'packages/coding-agent/run/run-orchestrator.ts',
       'packages/coding-agent/run/runtime-input.ts',
       'packages/coding-agent/run/tool-calls/tool-call-handler.ts',
