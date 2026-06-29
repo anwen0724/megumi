@@ -7,7 +7,7 @@ import type {
 } from '../context';
 import { ModelInputSourceOverrideService } from '../context';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
+import { createAgentRunCompositionIds } from './agent-run-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
 import { PermissionSnapshotService } from '../permissions';
@@ -36,7 +36,7 @@ export function createDefaultAgentRunService(
   const permissionSnapshotRepository = persistence.permissionSnapshotRepository;
   const activePathRepository = persistence.activePathRepository;
   const toolRepository = persistence.toolRepository;
-  const ids = createDefaultAgentRunServiceIds();
+  const ids = createAgentRunCompositionIds();
   const agentRunRepositoryOptions = createAgentRunRepositoryOptions(persistence);
 
   const service = new AgentRunService({

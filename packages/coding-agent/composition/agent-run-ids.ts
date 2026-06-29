@@ -1,7 +1,7 @@
-// Provides default id factories shared by AgentRunService and composition wiring.
+// Provides transitional id factories for wiring the current AgentRunService composition.
 import type { RunIdFactory } from '../state/lifecycle';
 
-export interface AgentRunServiceIds extends RunIdFactory {
+export interface AgentRunCompositionIds extends RunIdFactory {
   compactionId(): string;
   retryAttemptId(): string;
   sessionId(): string;
@@ -13,9 +13,9 @@ export interface AgentRunServiceIds extends RunIdFactory {
   chatThinkingId(): string;
 }
 
-export function createDefaultAgentRunServiceIds(
-  overrides: Partial<AgentRunServiceIds> = {},
-): AgentRunServiceIds {
+export function createAgentRunCompositionIds(
+  overrides: Partial<AgentRunCompositionIds> = {},
+): AgentRunCompositionIds {
   return {
     sessionId: () => `session:${crypto.randomUUID()}`,
     runId: () => `run:${crypto.randomUUID()}`,

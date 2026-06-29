@@ -13,7 +13,7 @@ import {
 } from '../session';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
+import { createAgentRunCompositionIds } from './agent-run-ids';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
@@ -74,7 +74,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
   const agentRunRepositoryOptions = createAgentRunRepositoryOptions(options);
-  const agentRunIds = createDefaultAgentRunServiceIds();
+  const agentRunIds = createAgentRunCompositionIds();
   const runContextService = new RunContextService({
     contextRepository: options.runContextRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
