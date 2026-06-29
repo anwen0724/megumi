@@ -2,8 +2,10 @@
 // product persistence, permissions, context construction, tools, and model execution.
 import {
   assertRunStatusTransition,
+  attachRunPermissionSnapshot,
   canResumeApprovalFromRunStatus,
   resumeRunAfterApproval,
+  startAgentLoopRun,
   type RunRetryCoordinatorPort,
   type RunTerminalCoordinatorPort,
 } from '../state';
@@ -695,15 +697,22 @@ export class AgentRunService implements AgentRunPort {
     }, {
       commandRegistry: BUILT_IN_INPUT_COMMAND_REGISTRY,
     });
-    const initialRun = this.runRecordRepository.saveRun({
+    const started = startAgentLoopRun({
       runId,
+      stepId,
       sessionId: session.sessionId,
       triggerMessageId: userMessage.messageId,
       mode,
       goal: userMessage.content,
-      status: 'running',
       createdAt,
-      startedAt: createdAt,
+      lifecycle: {
+        saveRun: (runRecord) => {
+          this.runRecordRepository.saveRun(runRecord);
+        },
+        saveStep: (stepRecord) => {
+          this.runExecutionFactRepository.saveStep(stepRecord);
+        },
+      },
     });
     const permissionSnapshot = this.permissionSnapshotService?.createPermissionSnapshot({
       runId,
@@ -713,11 +722,17 @@ export class AgentRunService implements AgentRunPort {
       createdAt,
     });
     const run = permissionSnapshot
-      ? this.runRecordRepository.saveRun({
-          ...initialRun,
+      ? attachRunPermissionSnapshot({
+          run: started.run,
           permissionSnapshotRef: permissionSnapshot.permissionSnapshotId,
+          lifecycle: {
+            saveRun: (runRecord) => {
+              this.runRecordRepository.saveRun(runRecord);
+            },
+          },
         })
-      : initialRun;
+      : started.run;
+    const step = started.step;
     this.sessionTurnPreparationService.recordSessionRunSource({
       sessionId: String(session.sessionId),
       runId: String(run.runId),
@@ -738,14 +753,6 @@ export class AgentRunService implements AgentRunPort {
         runtimeContext: input.runtimeContext,
       });
     }
-    const step = this.runExecutionFactRepository.saveStep({
-      stepId,
-      runId,
-      kind: 'model',
-      status: 'running',
-      title: 'Model response',
-      startedAt: createdAt,
-    });
     const chatStreamAdapter = this.chatStreamEventSink
       ? createChatStreamEventAdapter({
           sink: this.chatStreamEventSink,

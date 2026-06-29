@@ -1,5 +1,4 @@
-﻿// Runs legacy action-style run lifecycle operations and emits runtime events.
-// Main chat turns are owned by turn/run-turn.ts.
+﻿// Owns run lifecycle mutations for action-style runs and agent loop startup.
 import type {
   RunAction,
   RunObservation,
@@ -42,9 +41,12 @@ import {
   toCheckpointCreatedPayload,
 } from '../recovery-observation-mapper';
 import {
+  type AttachRunPermissionSnapshotInput,
   createDefaultRunIds,
   defaultRunClock,
   type RunIdFactory,
+  type StartAgentLoopRunInput,
+  type StartAgentLoopRunResult,
   type RunTurnInput,
   type RunTurnResult,
 } from './run-types';
@@ -52,6 +54,42 @@ import {
   createPermissionModeRuntimeInstruction,
   resolvePermissionModeState,
 } from '../../permissions/permission-instruction';
+
+export function startAgentLoopRun(input: StartAgentLoopRunInput): StartAgentLoopRunResult {
+  const run: Run = {
+    runId: input.runId,
+    sessionId: input.sessionId,
+    triggerMessageId: input.triggerMessageId,
+    mode: input.mode,
+    goal: input.goal,
+    status: 'running',
+    createdAt: input.createdAt,
+    startedAt: input.createdAt,
+    ...(input.permissionSnapshotRef ? { permissionSnapshotRef: input.permissionSnapshotRef } : {}),
+  };
+  const step: RunStep = {
+    stepId: input.stepId,
+    runId: input.runId,
+    kind: 'model',
+    status: 'running',
+    title: 'Model response',
+    startedAt: input.createdAt,
+  };
+
+  input.lifecycle.saveRun(run);
+  input.lifecycle.saveStep(step);
+  return { run, step };
+}
+
+export function attachRunPermissionSnapshot(input: AttachRunPermissionSnapshotInput): Run {
+  const run = {
+    ...input.run,
+    permissionSnapshotRef: input.permissionSnapshotRef,
+  };
+
+  input.lifecycle.saveRun(run);
+  return run;
+}
 
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {
   const clock = input.clock ?? defaultRunClock;

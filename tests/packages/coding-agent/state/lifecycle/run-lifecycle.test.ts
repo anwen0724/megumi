@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runTurn } from '@megumi/coding-agent/state';
+import { attachRunPermissionSnapshot, runTurn, startAgentLoopRun } from '@megumi/coding-agent/state';
 import { createRunCreatedEvent } from '@megumi/coding-agent/events';
 import type { RunLifecycleSink } from '@megumi/coding-agent/state';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -45,6 +45,70 @@ const ids = {
 };
 
 describe('run runtime lifecycle events', () => {
+  it('starts an agent loop run with its initial model step through the state owner', () => {
+    const { sink } = createSink();
+
+    const result = startAgentLoopRun({
+      runId: 'run-1',
+      stepId: 'step-1',
+      sessionId: 'session-1',
+      triggerMessageId: 'message-1',
+      mode: 'default',
+      goal: 'Answer the user',
+      permissionSnapshotRef: 'permission-snapshot-1',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      lifecycle: sink,
+    });
+
+    expect(result.run).toMatchObject({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      triggerMessageId: 'message-1',
+      mode: 'default',
+      goal: 'Answer the user',
+      status: 'running',
+      permissionSnapshotRef: 'permission-snapshot-1',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      startedAt: '2026-05-15T00:00:00.000Z',
+    });
+    expect(result.step).toMatchObject({
+      stepId: 'step-1',
+      runId: 'run-1',
+      kind: 'model',
+      status: 'running',
+      title: 'Model response',
+      startedAt: '2026-05-15T00:00:00.000Z',
+    });
+    expect(sink.saveRun).toHaveBeenCalledWith(result.run);
+    expect(sink.saveStep).toHaveBeenCalledWith(result.step);
+  });
+
+  it('attaches a permission snapshot ref to an already started run through the state owner', () => {
+    const { sink } = createSink();
+    const run = {
+      runId: 'run-1',
+      sessionId: 'session-1',
+      triggerMessageId: 'message-1',
+      mode: 'default',
+      goal: 'Answer the user',
+      status: 'running',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      startedAt: '2026-05-15T00:00:00.000Z',
+    } as const;
+
+    const updated = attachRunPermissionSnapshot({
+      run,
+      permissionSnapshotRef: 'permission-snapshot-1',
+      lifecycle: sink,
+    });
+
+    expect(updated).toEqual({
+      ...run,
+      permissionSnapshotRef: 'permission-snapshot-1',
+    });
+    expect(sink.saveRun).toHaveBeenCalledWith(updated);
+  });
+
   it('creates run.created events with stable lifecycle payloads', () => {
     expect(createRunCreatedEvent({
       eventId: 'event-1',

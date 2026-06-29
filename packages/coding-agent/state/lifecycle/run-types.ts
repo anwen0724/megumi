@@ -86,6 +86,29 @@ export interface RunTurnInput {
   ids?: Partial<RunIdFactory>;
 }
 
+export interface StartAgentLoopRunInput {
+  runId: string;
+  stepId: string;
+  sessionId: string;
+  triggerMessageId: string;
+  mode: string;
+  goal: string;
+  permissionSnapshotRef?: string;
+  createdAt: string;
+  lifecycle: Pick<RunLifecycleSink, 'saveRun' | 'saveStep'>;
+}
+
+export interface StartAgentLoopRunResult {
+  run: Run;
+  step: RunStep;
+}
+
+export interface AttachRunPermissionSnapshotInput {
+  run: Run;
+  permissionSnapshotRef: string;
+  lifecycle: Pick<RunLifecycleSink, 'saveRun'>;
+}
+
 export interface RunTurnResult {
   run: Run;
   step: RunStep;

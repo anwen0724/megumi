@@ -104,6 +104,16 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('retryAttemptSourceRef');
   });
 
+  it('keeps initial agent loop run startup in the state lifecycle owner', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');
+
+    expect(stateLifecycleSource).toContain('export function startAgentLoopRun');
+    expect(serviceSource).toContain('startAgentLoopRun({');
+    expect(serviceSource).not.toContain('const initialRun = this.runRecordRepository.saveRun');
+    expect(serviceSource).not.toContain('const step = this.runExecutionFactRepository.saveStep({\n      stepId,\n      runId,');
+  });
+
   it('keeps pending approval indexing in the agent-loop tool-call approval module', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const registrySource = read('packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts');
