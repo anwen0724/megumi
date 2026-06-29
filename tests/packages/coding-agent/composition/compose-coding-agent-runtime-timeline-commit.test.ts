@@ -1,4 +1,4 @@
-// Verifies the product runtime persists committed timeline history by default
+﻿// Verifies the product runtime persists committed timeline history by default
 // (without any caller-provided chat stream sink), and forwards events downstream
 // when a sink is supplied. This proves timeline-history commit is product behavior,
 // not desktop behavior.
@@ -125,7 +125,7 @@ describe('Coding Agent product runtime timeline history commit', () => {
         settingsPath: path.join(temporaryHome, 'settings.json'),
       },
       runtimeLogger: { warn: () => undefined },
-      modelStepProviderService: answeringModelStepProvider(),
+      modelCallProviderService: answeringModelStepProvider(),
       appSettingsProvider: appSettingsProvider(),
       memorySettingsProvider: { isMemoryEnabled: () => false },
       permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
@@ -149,7 +149,7 @@ describe('Coding Agent product runtime timeline history commit', () => {
         settingsPath: path.join(temporaryHome, 'settings.json'),
       },
       runtimeLogger: { warn: () => undefined },
-      modelStepProviderService: answeringModelStepProvider(),
+      modelCallProviderService: answeringModelStepProvider(),
       appSettingsProvider: appSettingsProvider(),
       memorySettingsProvider: { isMemoryEnabled: () => false },
       permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 // Verifies the composed product runtime exposes a project service that works
 // without any UI shell injecting a directory picker (defaults to a no-op picker
 // that cancels), proving project lifecycle is product behavior.
@@ -43,7 +43,7 @@ describe('composed runtime project service', () => {
     runtime = composeCodingAgentRuntime({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
-      modelStepProviderService: {
+      modelCallProviderService: {
         streamModelCall: async function* () {},
         completeModelCall: async () => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
@@ -62,7 +62,7 @@ describe('composed runtime project service', () => {
     runtime = composeCodingAgentRuntime({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
-      modelStepProviderService: {
+      modelCallProviderService: {
         streamModelCall: async function* () {},
         completeModelCall: async () => ({ ok: true, text: '' }),
         cancelModelCall: () => false,

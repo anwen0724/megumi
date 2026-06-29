@@ -294,7 +294,7 @@ describe('package and file structure source guards', () => {
 
     expect(agentRunServiceSource).toContain('sessionCompactionRepository?: SessionCompactionOrchestratorRepository');
     expect(agentRunServiceSource).toContain('repository: options.sessionCompactionRepository');
-    expect(normalizedAgentRunServiceSource).not.toContain('repository: this.repository,\n            modelStepProvider: options.modelStepProvider');
+    expect(normalizedAgentRunServiceSource).not.toContain('repository: this.repository,\n            modelCallProvider: options.modelCallProvider');
     expect(sessionRuntimeSource).toContain('sessionContextRepository: SessionContextRepository');
     expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionContextRepository');
     expect(runtimeSource).toContain('sessionContextRepository: persistence.sessionContextRepository');

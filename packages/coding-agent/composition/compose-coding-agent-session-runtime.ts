@@ -64,7 +64,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   workspaceChangeRepository: WorkspaceChangeRepository;
   timelineMessageRepository: TimelineMessageRepository;
   toolRegistry: ToolRegistry;
-  modelStepProviderService: ModelCallProvider;
+  modelCallProviderService: ModelCallProvider;
   toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
   runContextRepository: RunContextRepository;
@@ -158,7 +158,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     planArtifactService,
     toolRegistrySnapshotService: new ToolRegistrySnapshotService(options.toolRepository),
     contextService: runContextService,
-    modelStepProvider: options.modelStepProviderService,
+    modelCallProvider: options.modelCallProviderService,
     toolRuntimeFactory: options.toolRuntimeFactory,
     toolDefinitionProvider: options.toolRegistry,
     toolRepository: createAgentRunToolRepositoryAdapter(options.toolRepository),

@@ -1,4 +1,4 @@
-// Verifies the product runtime builds a real model step provider by default,
+﻿// Verifies the product runtime builds a real model step provider by default,
 // so it can call models standalone without a UI shell supplying one.
 // @vitest-environment node
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -39,7 +39,7 @@ describe('Coding Agent product runtime default model step provider', () => {
       runtimeLogger: {
         warn: () => undefined,
       },
-      // No modelStepProviderService: the product must build its own.
+      // No modelCallProviderService: the product must build its own.
       appSettingsProvider: {
         getResolvedSettings: () => resolveAppSettings(rawSettings),
         updateSettings(patch) {

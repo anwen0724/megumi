@@ -163,7 +163,7 @@ interface AgentRunServiceOptions {
   contextService?: RunBaselineContextPort;
   permissionSnapshotService?: RunPermissionSnapshotServicePort;
   planArtifactService?: PlanArtifactServicePort;
-  modelStepProvider?: ModelCallProvider;
+  modelCallProvider?: ModelCallProvider;
   toolRuntimeFactory?: ToolRuntimeFactory;
   toolDefinitionProvider?: ToolSetRegistryProvider;
   toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
@@ -266,7 +266,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly contextService?: RunBaselineContextPort;
   private readonly permissionSnapshotService?: RunPermissionSnapshotServicePort;
   private readonly planArtifactService?: PlanArtifactServicePort;
-  private readonly modelStepProvider?: ModelCallProvider;
+  private readonly modelCallProvider?: ModelCallProvider;
   private readonly toolRuntimeFactory?: ToolRuntimeFactory;
   private readonly toolDefinitionProvider?: ToolSetRegistryProvider;
   private readonly toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
@@ -312,7 +312,7 @@ export class AgentRunService implements AgentRunPort {
     this.contextService = options.contextService;
     this.permissionSnapshotService = options.permissionSnapshotService;
     this.planArtifactService = options.planArtifactService;
-    this.modelStepProvider = options.modelStepProvider;
+    this.modelCallProvider = options.modelCallProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.toolRegistrySnapshotService = options.toolRegistrySnapshotService;
@@ -349,10 +349,10 @@ export class AgentRunService implements AgentRunPort {
     this.chatStreamEventSink = options.chatStreamEventSink;
     this.sessionBranchService = options.sessionBranchService;
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
-      ?? (options.modelStepProvider && options.sessionCompactionRepository
+      ?? (options.modelCallProvider && options.sessionCompactionRepository
         ? new SessionCompactionOrchestrator({
             repository: options.sessionCompactionRepository,
-            modelStepProvider: options.modelStepProvider,
+            modelStepProvider: options.modelCallProvider,
             clock: this.clock,
             ids: {
               compactionId: this.ids.compactionId,
@@ -440,7 +440,7 @@ export class AgentRunService implements AgentRunPort {
       sourceOverrideProvider: this.modelInputSourceOverrideProvider,
       ...(memoryRecallService ? { memoryRecallService } : {}),
       modelCallPort: {
-        streamModelCall: ({ request }) => this.requireModelStepProvider().streamModelCall(request),
+        streamModelCall: ({ request }) => this.requireModelCallProvider().streamModelCall(request),
       },
       ...(this.toolRuntimeFactory ? {
         toolCallRunnerFactory: {
@@ -682,7 +682,7 @@ export class AgentRunService implements AgentRunPort {
       data: { requestId: input.requestId },
       events: this.activeSessionMessageRuns.track({
         requestId: input.requestId,
-        events: this.runInitialSessionMessageModelStep({
+        events: this.runSessionMessageAgentLoop({
           requestId: input.requestId,
           payload: input.payload,
           runtimeContext: input.runtimeContext,
@@ -733,7 +733,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
-    const providerCancelled = this.modelStepProvider?.cancelModelCall(payload.targetRequestId) ?? false;
+    const providerCancelled = this.modelCallProvider?.cancelModelCall(payload.targetRequestId) ?? false;
     const activeRun = this.activeSessionMessageRuns.get(payload.targetRequestId);
 
     if (!activeRun) {
@@ -780,7 +780,7 @@ export class AgentRunService implements AgentRunPort {
     return this.runtimeEventRepository.listRuntimeEventsByRun(runId);
   }
 
-  private async *runInitialSessionMessageModelStep(input: {
+  private async *runSessionMessageAgentLoop(input: {
     requestId: string;
     payload: SessionMessageSendPayload;
     runtimeContext?: RuntimeContext;
@@ -1126,12 +1126,12 @@ export class AgentRunService implements AgentRunPort {
     this.pendingApprovalRegistry.cancelByRun(runId);
   }
 
-  private requireModelStepProvider(): ModelCallProvider {
-    if (!this.modelStepProvider) {
-      throw new Error('Model step provider service is not configured.');
+  private requireModelCallProvider(): ModelCallProvider {
+    if (!this.modelCallProvider) {
+      throw new Error('Model call provider service is not configured.');
     }
 
-    return this.modelStepProvider;
+    return this.modelCallProvider;
   }
 
   private requireActivePathRepository(): SessionActivePathRepository {
@@ -1293,7 +1293,7 @@ export class AgentRunService implements AgentRunPort {
       decidedAt: input.decidedAt,
       toolRuntime: approvalResume.toolRuntime,
       modelCallPort: {
-        streamModelCall: ({ request }) => this.requireModelStepProvider().streamModelCall(request),
+        streamModelCall: ({ request }) => this.requireModelCallProvider().streamModelCall(request),
       },
       modelCallInputBuildService: this.modelCallInputBuildService,
       sourceOverrideProvider: this.modelInputSourceOverrideProvider,

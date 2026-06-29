@@ -39,8 +39,8 @@ export interface ComposeCodingAgentRuntimeOptions {
   homePaths: CodingAgentHomePaths;
   runtimeLogger: RuntimeLogger;
   // Optional override for tests / alternative entries. When omitted, the product
-  // builds a real OpenAI-compatible model step provider so it runs standalone.
-  modelStepProviderService?: ModelCallProvider;
+  // builds a real OpenAI-compatible model call provider so it runs standalone.
+  modelCallProviderService?: ModelCallProvider;
   appSettingsProvider?: ProviderSettingsProductSettingsPort;
   memorySettingsProvider?: MemorySettingsPort;
   permissionSettingsProvider?: PermissionSettingsProvider;
@@ -63,14 +63,14 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     settings: options.appSettingsProvider ?? settingsService,
     env: process.env,
   });
-  const modelStepProviderService = options.modelStepProviderService
+  const modelCallProviderService = options.modelCallProviderService
     ?? createModelCallRunner({
       resolver: new ProviderRuntimeService({ settings: providerSettingsService, env: process.env }),
       aiClientFactory: ({ config }) => createAiClientForProviderRuntime(config),
     });
   const memory = composeCodingAgentMemory({
     repository: persistence.memoryRepository,
-    modelStepProvider: modelStepProviderService,
+    modelStepProvider: modelCallProviderService,
     memorySettingsProvider: options.memorySettingsProvider ?? {
       isMemoryEnabled: () => settingsService.getMemorySettings().enabled,
     },
@@ -109,7 +109,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     workspaceChangeRepository: persistence.workspaceChangeRepository,
     timelineMessageRepository: persistence.timelineMessageRepository,
     toolRegistry,
-    modelStepProviderService,
+    modelCallProviderService,
     toolRuntimeFactory,
     memoryRuntime: memory.memoryRuntime,
     runContextRepository: persistence.runContextRepository,

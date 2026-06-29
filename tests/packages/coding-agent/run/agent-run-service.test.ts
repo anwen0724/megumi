@@ -603,7 +603,7 @@ function createServiceWithModelStepStream(
       toolRepository: createAgentRunToolRepositoryForTest(toolRepository),
       terminalToolRepository: toolRepository,
     } : {}),
-    modelStepProvider: {
+    modelCallProvider: {
       streamModelCall: async function* (request) {
         callIndex += 1;
         options?.onRequest?.(request);
@@ -811,7 +811,7 @@ function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   const service = createAgentRunTestService({
     repository,
     activePathRepository: activePathRepo,
-    modelStepProvider: {
+    modelCallProvider: {
       streamModelCall: async function* () {
         yield* events;
       },
@@ -987,7 +987,7 @@ function createServiceWithProviderStream(
   const service = createAgentRunTestService({
     repository,
     activePathRepository: activePathRepo,
-    modelStepProvider: {
+    modelCallProvider: {
       streamModelCall: async function* (request) {
         callIndex += 1;
         yield* events(request, callIndex);
@@ -1333,7 +1333,7 @@ function createServiceWithChatStreamSink(
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
     ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
-    modelStepProvider: {
+    modelCallProvider: {
       streamModelCall: async function* (request) {
         callIndex += 1;
         yield* (typeof events === 'function' ? events(request, callIndex) : events);
@@ -3801,7 +3801,7 @@ describe('AgentRunService', () => {
           return { status: 'completed', events: [], compaction: repository.getSessionCompaction('compaction-1')! };
         },
       },
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
@@ -3975,7 +3975,7 @@ describe('AgentRunService', () => {
           };
         },
       },
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
@@ -4709,7 +4709,7 @@ describe('AgentRunService', () => {
     const service = createAgentRunTestService({
       repository,
       activePathRepository: activePathRepo,
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
           yield assistantOutputCompletedEvent(1);
@@ -4847,7 +4847,7 @@ describe('AgentRunService', () => {
     const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
 
@@ -5104,7 +5104,7 @@ describe('AgentRunService', () => {
     const toolRepository = new ToolRepository(db);
     const service = createAgentRunTestService({
       repository,
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
 
@@ -5282,7 +5282,7 @@ describe('AgentRunService', () => {
     const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
 
@@ -6078,7 +6078,7 @@ describe('AgentRunService', () => {
     const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
           if (requests.length === 1) {
@@ -6715,7 +6715,7 @@ describe('AgentRunService', () => {
     const repository = createAgentRunTestRepository(db);
     const service = createAgentRunTestService({
       repository,
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
           if (requests.length === 1) {
@@ -7851,7 +7851,7 @@ describe('AgentRunService', () => {
           permissionSnapshotId: () => 'permission-snapshot:real-repo',
         },
       }),
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* (request) {
           requests.push(request);
         },
@@ -7927,7 +7927,7 @@ describe('AgentRunService', () => {
           permissionSnapshotId: () => 'permission-snapshot:workflow-real-repo',
         },
       }),
-      modelStepProvider: {
+      modelCallProvider: {
         streamModelCall: async function* () {
           // No provider events are needed for snapshot persistence.
         },

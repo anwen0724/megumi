@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 // PROOF that packages/coding-agent is a complete product runnable WITHOUT apps/desktop.
 // Uses the fully composed product runtime against a real SQLite file and a real temp
 // workspace, with NO desktop/electron import anywhere. Drives: create session ->
@@ -130,7 +130,7 @@ describe('coding-agent product runs without desktop', () => {
     runtime = composeCodingAgentRuntime({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
-      modelStepProviderService: toolCallingModelStepProvider('NOTES.md'),
+      modelCallProviderService: toolCallingModelStepProvider('NOTES.md'),
       settingsStorage: productSettingsStorage(),
       chatStreamEventSink: { publish: (event) => chatStreamEvents.push(event) },
     });
@@ -185,7 +185,7 @@ describe('coding-agent product runs without desktop', () => {
     runtime = composeCodingAgentRuntime({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
-      modelStepProviderService: toolCallingModelStepProvider('UNUSED.md'),
+      modelCallProviderService: toolCallingModelStepProvider('UNUSED.md'),
       settingsStorage: productSettingsStorage(),
     });
 

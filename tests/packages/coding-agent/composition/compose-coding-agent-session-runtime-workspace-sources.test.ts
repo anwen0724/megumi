@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 // Verifies the composed session runtime wires a default workspace source provider
 // so runContextService.listWorkspaceSources returns real files without any UI shell
 // injecting a provider (the latent empty-sourcesList gap).
@@ -51,7 +51,7 @@ describe('composed session runtime workspace sources', () => {
         workspaceChangeRepository: persistence.workspaceChangeRepository,
         timelineMessageRepository: persistence.timelineMessageRepository,
         toolRegistry: composeCodingAgentToolRegistry(),
-        modelStepProviderService: {
+        modelCallProviderService: {
           streamModelCall: async function* () {},
           completeModelCall: async () => ({ ok: true, text: '' }),
           cancelModelCall: () => false,

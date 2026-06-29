@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 // Proves the product backfills a visible timeline history message for terminal runs
 // (failed / cancelled / interrupted) that never committed timeline — so any UI shell
 // renders them inline instead of showing an anchorless recovery action. Runs entirely
@@ -71,7 +71,7 @@ function composeRuntime(home: string): CodingAgentProductRuntime {
   return composeCodingAgentRuntime({
     homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
     runtimeLogger: { warn: () => undefined },
-    modelStepProviderService: {
+    modelCallProviderService: {
       streamModelCall: async function* () {},
       completeModelCall: async () => ({ ok: true, text: '' }),
       cancelModelCall: () => false,

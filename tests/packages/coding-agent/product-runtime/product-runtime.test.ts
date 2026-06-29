@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,7 +39,7 @@ describe('Coding Agent product runtime', () => {
       runtimeLogger: {
         warn: () => undefined,
       },
-      modelStepProviderService: {
+      modelCallProviderService: {
         streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
         completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
