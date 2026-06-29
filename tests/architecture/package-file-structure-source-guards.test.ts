@@ -726,6 +726,7 @@ describe('package and file structure source guards', () => {
 
   it('keeps approval resume internals behind ToolCallRunner public capabilities', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const toolCallsIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/index.ts'), 'utf8');
     const toolCallRunnerSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'),
@@ -739,9 +740,12 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('createApprovalResolvedRuntimeEvent,');
     expect(agentRunServiceSource).not.toContain('prepareApprovalResumeModelInput,');
     expect(agentRunServiceSource).not.toContain('resolvePendingApproval,');
-    expect(agentRunServiceSource).toContain('approvalResume.toolRuntime.resumeToolApproval(input)');
-    expect(agentRunServiceSource).toContain('approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent');
-    expect(agentRunServiceSource).toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.resumeToolApproval(input)');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
+    expect(agentLoopSource).toContain('approvalResume.toolRuntime.resumeToolApproval');
+    expect(agentLoopSource).toContain('approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent');
+    expect(agentLoopSource).toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
     expect(toolCallRunnerSource).toContain('createApprovalResolvedRuntimeEvent');
     expect(toolCallRunnerSource).toContain('prepareApprovalResumeModelInput');
     expect(toolCallRunnerSource).toContain('markToolResultsSubmittedToModelInput');
@@ -757,9 +761,15 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-tool-loop-stream.ts'))).toBe(false);
     expect(agentRunServiceSource).not.toContain('const resumedRequest: ModelStepRuntimeRequest');
     expect(agentRunServiceSource).not.toContain('const resumedModelEvents = streamCodingAgentModelToolLoop({');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.resolvePendingApproval');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.closePendingApprovalGroup');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
+    expect(agentRunServiceSource).not.toContain('approvalResume.toolRuntime.markToolResultsSubmittedToModelInput');
     expect(agentRunServiceSource).toContain("from '../agent-loop'");
-    expect(agentRunServiceSource).toContain('streamApprovalResumeModelLoop({');
+    expect(agentRunServiceSource).toContain('resumeToolApprovalAgentLoop({');
     expect(agentLoopSource).toContain('export function streamApprovalResumeModelLoop');
+    expect(agentLoopSource).toContain('export async function* resumeToolApprovalAgentLoop');
     expect(agentLoopSource).toContain('export async function* streamCodingAgentModelToolLoop');
   });
 

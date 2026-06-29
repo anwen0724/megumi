@@ -8,7 +8,6 @@ import {
   completeAgentLoopModelCall,
   failAgentLoopBeforeModelCall,
   failAgentLoopModelCall,
-  resumeRunAfterApproval,
   startAgentLoopRun,
   succeedAgentLoopModelCall,
   type RunRetryCoordinatorPort,
@@ -51,8 +50,8 @@ import {
 import {
   AgentLoop,
   createToolSetSnapshotProvider,
+  resumeToolApprovalAgentLoop,
   type AgentLoopOptions,
-  streamApprovalResumeModelLoop,
   ToolSetService,
   type ToolSetCapabilityProvider,
   type ToolSetRegistryProvider,
@@ -70,7 +69,6 @@ import {
   createRunFailedEvent,
   createRunStatusChangedEvent,
   createRuntimeErrorFromUnknown,
-  modelCallInputBuildFailureToRuntimeError,
   RuntimeEventLog,
   RuntimeEventPublisher,
 } from '../events';
@@ -1108,152 +1106,14 @@ export class AgentRunService implements AgentRunPort {
     approvalResume: AgentRunApprovalResumeGroup,
     input: ResumeToolApprovalInput,
   ): AsyncIterable<RuntimeEvent> {
-    const pending = approvalResume.pendingByApprovalId.get(input.approvalRequestId);
-    if (!pending) {
-      return;
-    }
-
-    const resumeOutcome = await approvalResume.toolRuntime.resumeToolApproval(input);
-    if (!resumeOutcome) {
-      return;
-    }
-    const toolResults = [...(resumeOutcome.toolResults ?? (resumeOutcome.toolResult ? [resumeOutcome.toolResult] : []))];
-    const chatStreamAdapter = approvalResume.projection;
-
-    let lastSequence = this.runtimeEventLog.lastSequenceForRun(approvalResume.request.runId);
-    const resolvedPending = approvalResume.toolRuntime.resolvePendingApproval({
+    yield* resumeToolApprovalAgentLoop({
+      approvalResume,
+      resumeInput: input,
       registry: this.pendingApprovalRegistry,
-      group: approvalResume,
-      approvalRequestId: input.approvalRequestId,
-      resolvedResults: toolResults,
-    });
-    if (!resolvedPending) {
-      return;
-    }
-
-    const approvalResolvedEvent = approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent({
-      request: approvalResume.request,
-      stepId: approvalResume.step.stepId,
-      sequence: lastSequence += 1,
-      approvalRequestId: input.approvalRequestId,
-      decision: input.decision,
-      scope: pending.pendingApproval.approvalRequest.requestedScope,
-      decidedAt: input.decidedAt,
-      ids: this.ids,
-    });
-    this.appendRuntimeEvent(approvalResolvedEvent, chatStreamAdapter);
-    yield approvalResolvedEvent;
-
-    if (
-      approvalResume.pendingByApprovalId.size > 0
-      || (resumeOutcome.pendingApprovals?.length ?? 0) > 0
-      || resumeOutcome.nextModelInputReady === false
-    ) {
-      const resumeEvents = approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents({
-        request: approvalResume.request,
-        stepId: approvalResume.step.stepId,
-        lastSequence,
-        outcome: resumeOutcome,
-        toolResults,
-        ids: this.ids,
-      });
-      lastSequence = resumeEvents.lastSequence;
-      for (const event of resumeEvents.events) {
-        this.appendRuntimeEvent(event, chatStreamAdapter);
-        yield event;
-      }
-      return;
-    }
-
-    approvalResume.toolRuntime.closePendingApprovalGroup({
-      registry: this.pendingApprovalRegistry,
-      group: approvalResume,
-    });
-    const resumedRun = resumeRunAfterApproval({
-      request: approvalResume.request,
-      fallbackRun: approvalResume.run,
-      repository: this.runRecordRepository,
-      ids: this.ids,
-      decidedAt: input.decidedAt,
-      lastSequence,
-    });
-    const runningRun = resumedRun.run;
-    lastSequence = resumedRun.lastSequence;
-    this.appendRuntimeEvent(resumedRun.event, chatStreamAdapter);
-    yield resumedRun.event;
-
-    const resumeEvents = approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents({
-      request: approvalResume.request,
-      stepId: approvalResume.step.stepId,
-      lastSequence,
-      outcome: resumeOutcome,
-      toolResults,
-      ids: this.ids,
-    });
-    lastSequence = resumeEvents.lastSequence;
-    for (const event of resumeEvents.events) {
-      this.appendRuntimeEvent(event, chatStreamAdapter);
-      yield event;
-    }
-
-    const resumed = await approvalResume.toolRuntime.prepareApprovalResumeModelInput({
-      pending,
-      resolvedResults: approvalResume.resolvedResults,
-      decidedAt: input.decidedAt,
-      ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
-      ...(approvalResume.permissionMode ? { permissionMode: approvalResume.permissionMode } : {}),
-      ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
-      ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
-      repository: this.runExecutionFactRepository,
-      modelCallInputBuildService: this.modelCallInputBuildService,
-      sourceOverrideProvider: this.modelInputSourceOverrideProvider,
-      ids: this.ids,
-    });
-    const resumedStep = resumed.step;
-    const resumedToolResults = resumed.toolResults;
-    const resumedModelInput = resumed.modelInput;
-    if (resumedModelInput.failure) {
-      const failed = failAgentLoopBeforeModelCall({
-        requestId: pending.request.requestId,
-        sessionId: pending.request.sessionId,
-        run: runningRun,
-        step: resumedStep,
-        error: modelCallInputBuildFailureToRuntimeError(resumedModelInput.failure),
-        startSequence: lastSequence,
-        failedAt: input.decidedAt,
-        ids: this.ids,
-        lifecycle: {
-          saveRun: (run) => {
-            this.runRecordRepository.saveRun(run);
-          },
-          saveStep: (step) => {
-            this.runExecutionFactRepository.saveStep(step);
-          },
-        },
-      });
-      for (const event of failed.events) {
-        this.appendRuntimeEvent(event, chatStreamAdapter);
-        yield event;
-      }
-      return;
-    }
-    const toolResultsSubmittedEvent = approvalResume.toolRuntime.markToolResultsSubmittedToModelInput({
-      request: pending.request,
-      stepId: resumedStep.stepId,
-      toolResults: resumedToolResults,
-      emittedAt: input.decidedAt,
-      sequence: lastSequence += 1,
-    });
-    if (toolResultsSubmittedEvent) {
-      this.appendRuntimeEvent(toolResultsSubmittedEvent, chatStreamAdapter);
-      yield toolResultsSubmittedEvent;
-    }
-    const resumedLoop = streamApprovalResumeModelLoop({
-      pendingRequest: pending.request,
-      resumedStep,
-      resumedInputContext: resumedModelInput.inputContext,
-      decidedAt: input.decidedAt,
-      toolRuntime: approvalResume.toolRuntime,
+      lastSequenceForRun: (runId) => this.runtimeEventLog.lastSequenceForRun(runId),
+      appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
+      runRepository: this.runRecordRepository,
+      stepRepository: this.runExecutionFactRepository,
       modelCallPort: {
         streamModelCall: ({ request }) => this.requireModelCallProvider().streamModelCall(request),
       },
@@ -1261,6 +1121,8 @@ export class AgentRunService implements AgentRunPort {
       sourceOverrideProvider: this.modelInputSourceOverrideProvider,
       ids: {
         nextEventId: this.ids.eventId,
+        eventId: this.ids.eventId,
+        stepId: this.ids.stepId,
         nextStepId: ({ runId }) => {
           const step = this.runExecutionFactRepository.saveStep({
             stepId: this.ids.stepId(),
@@ -1274,29 +1136,11 @@ export class AgentRunService implements AgentRunPort {
         },
         nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
       },
-      ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
-      permissionMode: approvalResume.permissionMode ?? 'default',
-      memoryRecall: {
-        ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
-        ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
-      },
-    });
-
-    yield* this.persistModelCallEvents({
-      request: resumedLoop.request,
-      modelEvents: resumedLoop.modelEvents,
-      pendingApprovalResumes: resumedLoop.pendingApprovalResumes,
-      run: runningRun,
-      step: resumedStep,
-      userMessageId: approvalResume.userMessageId,
-      startSequence: lastSequence,
-      toolRuntime: approvalResume.toolRuntime,
-      ...(approvalResume.projectId ? { projectId: approvalResume.projectId } : {}),
-      ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
-      ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
-      ...(approvalResume.permissionMode ? { permissionMode: approvalResume.permissionMode } : {}),
-      ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
-      ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
+      clock: this.clock,
+      recordModelCallEvents: (recordInput) => this.persistModelCallEvents({
+        ...recordInput,
+        ...(approvalResume.projection ? { chatStreamAdapter: approvalResume.projection } : {}),
+      }),
     });
   }
 

@@ -46,14 +46,21 @@ import type {
   ToolRegistrySnapshotServicePort,
 } from '../tools/tool-registry-snapshot';
 import { runModelCall, type ModelCallPort } from './model-call';
-import { createTerminalRuntimeError } from '../state';
+import {
+  createTerminalRuntimeError,
+  failAgentLoopBeforeModelCall,
+  resumeRunAfterApproval,
+} from '../state';
 import type {
   PendingToolApprovalResume,
+  ResumeToolApprovalInput,
   ToolApprovalResumePort,
   ToolCallRunnerService,
   ToolResultModelInputBuildInput,
   ToolCallRunner,
 } from './tool-call';
+import type { ApprovalResumeGroup } from './tool-call/approval/approval-resume-group';
+import type { PendingApprovalRegistry } from './tool-call/approval/pending-approval-registry';
 import {
   DEFAULT_MAX_MODEL_STEPS,
   DEFAULT_MAX_TOOL_ROUNDS,
@@ -851,6 +858,229 @@ export function streamApprovalResumeModelLoop(input: ApprovalResumeModelLoopInpu
   });
 
   return { request, modelEvents, pendingApprovalResumes };
+}
+
+export interface ToolApprovalResumeAgentLoopInput<TProjection = unknown> {
+  approvalResume: ApprovalResumeGroup<TProjection>;
+  resumeInput: ResumeToolApprovalInput;
+  registry: PendingApprovalRegistry<ApprovalResumeGroup<TProjection>>;
+  lastSequenceForRun(runId: string): number;
+  appendEvent(event: RuntimeEvent, projection?: TProjection): void;
+  runRepository: {
+    getRun(runId: string): Run | undefined;
+    saveRun(run: Run): Run;
+  };
+  stepRepository: {
+    saveStep(step: RunStep): RunStep;
+  };
+  modelCallPort: ModelCallPort;
+  modelCallInputBuildService: {
+    buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
+  };
+  sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
+  ids: CodingAgentModelToolLoopStreamIds & {
+    eventId(): string;
+    stepId(): string;
+  };
+  clock: AgentLoopClock;
+  recordModelCallEvents: NonNullable<AgentLoopEventRecorder['recordModelCallEvents']>;
+}
+
+export async function* resumeToolApprovalAgentLoop<TProjection>(
+  input: ToolApprovalResumeAgentLoopInput<TProjection>,
+): AsyncIterable<RuntimeEvent> {
+  // Approval resume continues the same agent loop after a tool decision.
+  // The tool-call owner resumes execution, while state/context/events owner ports
+  // keep lifecycle, model input construction, and event persistence out of this algorithm.
+  const approvalResume = input.approvalResume;
+  const pending = approvalResume.pendingByApprovalId.get(input.resumeInput.approvalRequestId);
+  if (!pending) {
+    return;
+  }
+
+  const resumeOutcome = await approvalResume.toolRuntime.resumeToolApproval(input.resumeInput);
+  if (!resumeOutcome) {
+    return;
+  }
+  const toolResults = [...(resumeOutcome.toolResults ?? (resumeOutcome.toolResult ? [resumeOutcome.toolResult] : []))];
+  const projection = approvalResume.projection;
+
+  let lastSequence = input.lastSequenceForRun(approvalResume.request.runId);
+  const resolvedPending = approvalResume.toolRuntime.resolvePendingApproval({
+    registry: input.registry,
+    group: approvalResume,
+    approvalRequestId: input.resumeInput.approvalRequestId,
+    resolvedResults: toolResults,
+  });
+  if (!resolvedPending) {
+    return;
+  }
+
+  const approvalResolvedEvent = approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent({
+    request: approvalResume.request,
+    stepId: approvalResume.step.stepId,
+    sequence: lastSequence += 1,
+    approvalRequestId: input.resumeInput.approvalRequestId,
+    decision: input.resumeInput.decision,
+    scope: pending.pendingApproval.approvalRequest.requestedScope,
+    decidedAt: input.resumeInput.decidedAt,
+    ids: input.ids,
+  });
+  input.appendEvent(approvalResolvedEvent, projection);
+  yield approvalResolvedEvent;
+
+  if (
+    approvalResume.pendingByApprovalId.size > 0
+    || (resumeOutcome.pendingApprovals?.length ?? 0) > 0
+    || resumeOutcome.nextModelInputReady === false
+  ) {
+    const resumeEvents = approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents({
+      request: approvalResume.request,
+      stepId: approvalResume.step.stepId,
+      lastSequence,
+      outcome: resumeOutcome,
+      toolResults,
+      ids: input.ids,
+    });
+    for (const event of resumeEvents.events) {
+      input.appendEvent(event, projection);
+      yield event;
+    }
+    return;
+  }
+
+  approvalResume.toolRuntime.closePendingApprovalGroup({
+    registry: input.registry,
+    group: approvalResume,
+  });
+  const resumedRun = resumeRunAfterApproval({
+    request: approvalResume.request,
+    fallbackRun: approvalResume.run,
+    repository: input.runRepository,
+    ids: input.ids,
+    decidedAt: input.resumeInput.decidedAt,
+    lastSequence,
+  });
+  const runningRun = resumedRun.run;
+  lastSequence = resumedRun.lastSequence;
+  input.appendEvent(resumedRun.event, projection);
+  yield resumedRun.event;
+
+  const resumeEvents = approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents({
+    request: approvalResume.request,
+    stepId: approvalResume.step.stepId,
+    lastSequence,
+    outcome: resumeOutcome,
+    toolResults,
+    ids: input.ids,
+  });
+  lastSequence = resumeEvents.lastSequence;
+  for (const event of resumeEvents.events) {
+    input.appendEvent(event, projection);
+    yield event;
+  }
+
+  const resumed = await approvalResume.toolRuntime.prepareApprovalResumeModelInput({
+    pending,
+    resolvedResults: approvalResume.resolvedResults,
+    decidedAt: input.resumeInput.decidedAt,
+    ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
+    ...(approvalResume.permissionMode ? { permissionMode: approvalResume.permissionMode } : {}),
+    ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
+    ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
+    repository: input.stepRepository,
+    modelCallInputBuildService: input.modelCallInputBuildService,
+    sourceOverrideProvider: input.sourceOverrideProvider,
+    ids: input.ids,
+  });
+  const resumedStep = resumed.step;
+  const resumedToolResults = resumed.toolResults;
+  const resumedModelInput = resumed.modelInput;
+  if (resumedModelInput.failure) {
+    const failed = failAgentLoopBeforeModelCall({
+      requestId: pending.request.requestId,
+      sessionId: pending.request.sessionId,
+      run: runningRun,
+      step: resumedStep,
+      error: modelCallInputBuildFailureToRuntimeError(resumedModelInput.failure),
+      startSequence: lastSequence,
+      failedAt: input.resumeInput.decidedAt,
+      ids: input.ids,
+      lifecycle: {
+        saveRun: (run) => {
+          input.runRepository.saveRun(run);
+        },
+        saveStep: (step) => {
+          input.stepRepository.saveStep(step);
+        },
+      },
+    });
+    for (const event of failed.events) {
+      input.appendEvent(event, projection);
+      yield event;
+    }
+    return;
+  }
+
+  const toolResultsSubmittedEvent = approvalResume.toolRuntime.markToolResultsSubmittedToModelInput({
+    request: pending.request,
+    stepId: resumedStep.stepId,
+    toolResults: resumedToolResults,
+    emittedAt: input.resumeInput.decidedAt,
+    sequence: lastSequence += 1,
+  });
+  if (toolResultsSubmittedEvent) {
+    input.appendEvent(toolResultsSubmittedEvent, projection);
+    yield toolResultsSubmittedEvent;
+  }
+
+  const resumedLoop = streamApprovalResumeModelLoop({
+    pendingRequest: pending.request,
+    resumedStep,
+    resumedInputContext: resumedModelInput.inputContext,
+    decidedAt: input.resumeInput.decidedAt,
+    toolRuntime: approvalResume.toolRuntime,
+    modelCallPort: input.modelCallPort,
+    modelCallInputBuildService: input.modelCallInputBuildService,
+    sourceOverrideProvider: input.sourceOverrideProvider,
+    ids: {
+      nextEventId: input.ids.nextEventId,
+      nextStepId: ({ runId }) => {
+        const step = input.stepRepository.saveStep({
+          stepId: input.ids.stepId(),
+          runId,
+          kind: 'model',
+          status: 'running',
+          title: 'Model response',
+          startedAt: input.clock.now(),
+        });
+        return step.stepId;
+      },
+      nextModelStepId: input.ids.nextModelStepId,
+    },
+    ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
+    permissionMode: approvalResume.permissionMode ?? 'default',
+    memoryRecall: {
+      ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
+      ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
+    },
+  });
+
+  yield* input.recordModelCallEvents({
+    request: resumedLoop.request,
+    modelEvents: resumedLoop.modelEvents,
+    pendingApprovalResumes: resumedLoop.pendingApprovalResumes,
+    run: runningRun,
+    step: resumedStep,
+    userMessageId: approvalResume.userMessageId,
+    startSequence: lastSequence,
+    toolRuntime: approvalResume.toolRuntime,
+    ...(approvalResume.projectId ? { projectId: approvalResume.projectId } : {}),
+    ...(approvalResume.projectRoot ? { projectRoot: approvalResume.projectRoot } : {}),
+    ...(approvalResume.permissionMode ? { permissionMode: approvalResume.permissionMode } : {}),
+    ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
+    ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
+  });
 }
 
 function normalizeToolSetEventSequence(events: RuntimeEvent[], startSequence: number): RuntimeEvent[] {
