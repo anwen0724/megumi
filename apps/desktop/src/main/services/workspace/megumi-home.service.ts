@@ -147,7 +147,16 @@ export function createMegumiSettingsSchema(): Record<string, unknown> {
     type: 'object',
     additionalProperties: false,
     properties: {
+      language: { enum: ['zh-CN', 'en-US'] },
       theme: { type: 'string' },
+      setup: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          completed: { type: 'boolean' },
+          completedAt: { type: 'string' },
+        },
+      },
       memory: {
         type: 'object',
         additionalProperties: false,
@@ -202,6 +211,7 @@ export function createMegumiHomeReadme(): string {
     'Safe to edit:',
     '',
     '- `settings.json` for app preferences, provider configuration, model defaults, permissions, and intentional plaintext API keys.',
+    '- `language` and `setup` fields in `settings.json` store the first-run setup status and language preference.',
     '',
     'Managed by Megumi:',
     '',

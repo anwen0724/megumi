@@ -121,6 +121,8 @@ describe('Megumi Home foundation', () => {
       type: 'object',
     });
     expect(fileSystem.textFiles.get(paths.readmePath)).toContain('settings.json');
+    expect(fileSystem.textFiles.get(paths.readmePath)).toContain('setup');
+    expect(fileSystem.textFiles.get(paths.readmePath)).toContain('language');
   });
 
   it('does not overwrite existing user-managed settings or README files', async () => {
@@ -153,6 +155,17 @@ describe('Megumi Home foundation', () => {
 
     expect(schema).toMatchObject({
       properties: {
+        language: {
+          enum: ['zh-CN', 'en-US'],
+        },
+        setup: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            completed: { type: 'boolean' },
+            completedAt: { type: 'string' },
+          },
+        },
         providers: {
           properties: {
             deepseek: {
