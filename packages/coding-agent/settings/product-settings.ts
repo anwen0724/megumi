@@ -24,6 +24,17 @@ export interface MemorySettingsPort {
   isMemoryEnabled(): boolean;
 }
 
+export function resolveMemoryEnabled(provider?: MemorySettingsPort): boolean {
+  if (!provider) {
+    return false;
+  }
+  try {
+    return provider.isMemoryEnabled();
+  } catch {
+    return false;
+  }
+}
+
 export interface ProductSettingsPort {
   getRawSettings(): AppSettingsRaw;
   getResolvedSettings(): AppSettingsResolved;

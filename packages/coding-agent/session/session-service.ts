@@ -13,7 +13,7 @@ import type {
 } from '@megumi/shared/session';
 import type { TimelineMessage } from '@megumi/shared/timeline';
 import type { MemoryProjectMirrorSyncPort } from '../memory';
-import type { MemorySettingsPort } from '../settings';
+import { resolveMemoryEnabled, type MemorySettingsPort } from '../settings';
 
 export interface SessionServiceIds {
   sessionId(): string;
@@ -133,7 +133,7 @@ export class SessionService implements SessionServicePort {
     if (!this.megumiHomePath || !this.memoryMarkdownSyncService || !session.workspaceId) {
       return;
     }
-    if (!this.resolveMemoryEnabled()) {
+    if (!resolveMemoryEnabled(this.memorySettingsProvider)) {
       return;
     }
 
@@ -143,17 +143,6 @@ export class SessionService implements SessionServicePort {
     }).catch(() => {
       // Memory Markdown sync is best-effort and must not block session creation.
     });
-  }
-
-  private resolveMemoryEnabled(): boolean {
-    if (!this.memorySettingsProvider) {
-      return false;
-    }
-    try {
-      return this.memorySettingsProvider.isMemoryEnabled();
-    } catch {
-      return false;
-    }
   }
 
   private shouldHydrateTimelineMessage(message: TimelineMessage): boolean {

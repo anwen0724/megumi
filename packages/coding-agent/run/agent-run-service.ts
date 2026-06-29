@@ -126,7 +126,7 @@ import type {
   MemoryProjectMirrorSyncPort,
   MemoryRecallPort,
 } from '../memory';
-import type { MemorySettingsPort } from '../settings';
+import { resolveMemoryEnabled, type MemorySettingsPort } from '../settings';
 import type { WorkspaceChangeReadPort } from '../workspace';
 import type {
   ToolRegistrySnapshotServicePort,
@@ -366,18 +366,6 @@ export class AgentRunService implements AgentRunPort {
         : undefined);
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
   }
-
-  private resolveMemoryEnabled(): boolean {
-    if (!this.memorySettingsProvider) {
-      return false;
-    }
-    try {
-      return this.memorySettingsProvider.isMemoryEnabled();
-    } catch {
-      return false;
-    }
-  }
-
 
   private createAgentLoopOptions(
     chatStreamAdapter?: ChatStreamEventAdapter,
@@ -840,7 +828,7 @@ export class AgentRunService implements AgentRunPort {
       } : {}),
       ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
       createdAt: input.payload.createdAt,
-      memoryEnabled: this.resolveMemoryEnabled(),
+      memoryEnabled: resolveMemoryEnabled(this.memorySettingsProvider),
     });
   }
 
@@ -1105,7 +1093,7 @@ export class AgentRunService implements AgentRunPort {
             .trim(),
           assistantText: assistantContent,
           hasProject: Boolean(input.projectRoot),
-          memoryEnabled: this.resolveMemoryEnabled(),
+          memoryEnabled: resolveMemoryEnabled(this.memorySettingsProvider),
         });
       }
       yield event;

@@ -188,6 +188,18 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('private async recallMemoryForNewUserInput');
   });
 
+  it('keeps memory enabled resolution in the settings owner', () => {
+    const runServiceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const sessionServiceSource = read('packages/coding-agent/session/session-service.ts');
+    const settingsSource = read('packages/coding-agent/settings/product-settings.ts');
+
+    expect(settingsSource).toContain('export function resolveMemoryEnabled');
+    expect(runServiceSource).toContain('resolveMemoryEnabled(this.memorySettingsProvider)');
+    expect(sessionServiceSource).toContain('resolveMemoryEnabled(this.memorySettingsProvider)');
+    expect(runServiceSource).not.toContain('private resolveMemoryEnabled');
+    expect(sessionServiceSource).not.toContain('private resolveMemoryEnabled');
+  });
+
   it('keeps pending approval indexing in the agent-loop tool-call approval module', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const registrySource = read('packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts');

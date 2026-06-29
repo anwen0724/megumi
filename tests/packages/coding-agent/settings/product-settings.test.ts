@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { ProductSettingsService } from '@megumi/coding-agent/settings';
+import { ProductSettingsService, resolveMemoryEnabled } from '@megumi/coding-agent/settings';
 import type { AppSettingsRaw } from '@megumi/shared/settings';
 
 class MemorySettingsStorage {
@@ -54,6 +54,17 @@ describe('ProductSettingsService', () => {
     service.updateSettings({ memory: { enabled: true } });
 
     expect(service.getMemorySettings()).toEqual({ enabled: true });
+  });
+
+  it('resolves memory enabled through the settings owner with safe defaults', () => {
+    expect(resolveMemoryEnabled()).toBe(false);
+    expect(resolveMemoryEnabled({ isMemoryEnabled: () => true })).toBe(true);
+    expect(resolveMemoryEnabled({ isMemoryEnabled: () => false })).toBe(false);
+    expect(resolveMemoryEnabled({
+      isMemoryEnabled: () => {
+        throw new Error('settings unavailable');
+      },
+    })).toBe(false);
   });
 
   it('projects permission settings as merged user-scope rules for product policy', async () => {
