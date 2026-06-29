@@ -786,7 +786,9 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('private recordManualRerunAttemptForBranchDraft');
     expect(agentRunServiceSource).not.toContain('function sessionMessageSourceRef');
     expect(agentRunServiceSource).not.toContain('function sessionRunSourceRef');
-    expect(agentRunServiceSource).toContain('assertSessionActiveBranchDraftMarker');
+    expect(agentRunServiceSource).not.toContain('assertActiveBranchDraftMarker as assertSessionActiveBranchDraftMarker');
+    expect(agentRunServiceSource).not.toContain('activePathRepository: this.requireActivePathRepository()');
+    expect(agentRunServiceSource).toContain('this.requireSessionBranchService().assertActiveBranchDraftMarker');
     expect(agentRunServiceSource).toContain('this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft');
     expect(agentRunServiceSource).not.toContain('repository: this.runTerminalRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runRetryRepository');

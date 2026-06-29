@@ -40,7 +40,6 @@ import {
   type SessionCompactionOrchestrationResult,
 } from '../context';
 import {
-  assertActiveBranchDraftMarker as assertSessionActiveBranchDraftMarker,
   SessionContextInputService,
   SessionMessageService,
   type SessionBranchServicePort,
@@ -554,8 +553,7 @@ export class AgentRunService implements AgentRunPort {
       if (!input.payload.sessionId) {
         throw new Error('Branch draft requires an existing session.');
       }
-      branchDraftMarker = assertSessionActiveBranchDraftMarker({
-        activePathRepository: this.requireActivePathRepository(),
+      branchDraftMarker = this.requireSessionBranchService().assertActiveBranchDraftMarker({
         sessionId: input.payload.sessionId,
         branchMarkerId: input.payload.branchDraft.branchMarkerId,
       });
@@ -1134,12 +1132,12 @@ export class AgentRunService implements AgentRunPort {
     return this.modelCallProvider;
   }
 
-  private requireActivePathRepository(): SessionActivePathRepository {
-    if (!this.activePathRepository) {
-      throw new Error('Active path repository is not configured.');
+  private requireSessionBranchService(): SessionBranchServicePort {
+    if (!this.sessionBranchService) {
+      throw new Error('Session branch service is not configured.');
     }
 
-    return this.activePathRepository;
+    return this.sessionBranchService;
   }
 
   private async *resumeToolApprovalRun(
