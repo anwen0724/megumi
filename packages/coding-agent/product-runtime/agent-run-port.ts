@@ -1,14 +1,10 @@
 // Defines the run operations exposed through the Coding Agent product runtime.
 import type {
-  PlanStatusUpdatePayload,
   RunStartPayload,
   SessionMessageCancelPayload,
   SessionMessageSendData,
   SessionMessageSendPayload,
 } from '@megumi/shared/ipc';
-import type {
-  ImplementationPlanArtifactRecord,
-} from '@megumi/shared/permission';
 import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run } from '@megumi/shared/session';
 import type { ResumeToolApprovalInput } from '../agent-loop/tool-call';
@@ -48,6 +44,4 @@ export interface AgentRunPort {
   };
   cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] };
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
-  getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined;
-  updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord;
 }

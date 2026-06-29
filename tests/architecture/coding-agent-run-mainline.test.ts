@@ -95,6 +95,21 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('export interface AgentRunServiceIds');
   });
 
+  it('keeps plan artifact read and update operations out of the run port', () => {
+    const productRunPort = read('packages/coding-agent/product-runtime/agent-run-port.ts');
+    const productRuntime = read('packages/coding-agent/product-runtime/product-runtime.ts');
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const planArtifactService = read('packages/coding-agent/artifacts/plan-artifact-service.ts');
+
+    expect(productRuntime).toContain('planArtifactService: PlanArtifactServicePort');
+    expect(planArtifactService).toContain('getPlanByRun(runId: string)');
+    expect(planArtifactService).toContain('updatePlanStatus(input: PlanStatusUpdatePayload)');
+    expect(productRunPort).not.toContain('getPlanByRun(');
+    expect(productRunPort).not.toContain('updatePlanStatus(');
+    expect(serviceSource).not.toContain('getPlanByRun(runId: string)');
+    expect(serviceSource).not.toContain('updatePlanStatus(input: PlanStatusUpdatePayload)');
+  });
+
   it('keeps manual retry and rerun lifecycle rules out of AgentRunService', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const retrySource = read('packages/coding-agent/state/run-retry-coordinator.ts');

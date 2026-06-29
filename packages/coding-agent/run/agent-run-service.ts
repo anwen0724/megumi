@@ -102,7 +102,6 @@ import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   RunStartPayload,
-  PlanStatusUpdatePayload,
   SessionTimelineListData,
   SessionMessageCancelPayload,
   SessionMessageSendData,
@@ -115,7 +114,6 @@ import {
 } from '../projections/chat-stream';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
-  ImplementationPlanArtifactRecord,
   PermissionModeState,
   PermissionSnapshotRecord,
 } from '@megumi/shared/permission';
@@ -612,14 +610,6 @@ export class AgentRunService implements AgentRunPort {
     }
 
     return { run: result.run, events: result.events };
-  }
-
-  getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined {
-    return this.requirePlanArtifactService().getPlanByRun(runId);
-  }
-
-  updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord {
-    return this.requirePlanArtifactService().updatePlanStatus(input);
   }
 
   async sendSessionMessage(input: {
@@ -1373,14 +1363,6 @@ export class AgentRunService implements AgentRunPort {
     }
 
     return this.permissionSnapshotService;
-  }
-
-  private requirePlanArtifactService(): PlanArtifactServicePort {
-    if (!this.planArtifactService) {
-      throw new Error('Plan artifact service is not configured.');
-    }
-
-    return this.planArtifactService;
   }
 
   private async *resumeToolApprovalRun(
