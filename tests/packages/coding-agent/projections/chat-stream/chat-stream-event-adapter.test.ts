@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createChatStreamEventAdapter,
+  createSessionMessageChatStreamAdapter,
   type ChatStreamEventSink,
 } from '@megumi/coding-agent/projections/chat-stream';
 import { ChatStreamEventSchema, type ChatStreamEvent } from '@megumi/shared';
@@ -74,6 +75,63 @@ function runtimeEvent(event: Partial<RuntimeEvent> & Pick<RuntimeEvent, 'eventTy
 }
 
 describe('createChatStreamEventAdapter', () => {
+  it('creates a main stream adapter for session message turns', () => {
+    const { events, sink } = collectSink();
+    const subject = createSessionMessageChatStreamAdapter({
+      sink,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      userMessageId: 'message-user-1',
+      clientMessageId: 'message-local-user',
+      userMessageText: 'Hello from session',
+      createdAt: '2026-05-24T00:00:00.000Z',
+      now: () => '2026-05-24T00:00:00.050Z',
+      ids: {
+        eventId: () => 'chat-stream-event-1',
+        textId: () => 'text-1',
+        thinkingId: () => 'thinking-1',
+        streamId: ({ runId }) => `chat-stream:${runId}:1`,
+      },
+    });
+
+    subject?.startTurn();
+
+    expect(events.map((event) => event.eventType)).toEqual([
+      'turn.started',
+      'user.message.committed',
+    ]);
+    expect(events[0]).toMatchObject({
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'chat-stream:run-1:1',
+      streamKind: 'main',
+    });
+    expect(events[1]).toMatchObject({
+      text: 'Hello from session',
+      clientMessageId: 'message-local-user',
+      messageId: 'message-user-1',
+    });
+  });
+
+  it('does not create a session message stream adapter without a sink', () => {
+    expect(createSessionMessageChatStreamAdapter({
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      userMessageId: 'message-user-1',
+      userMessageText: 'Hello',
+      createdAt: '2026-05-24T00:00:00.000Z',
+      ids: {
+        eventId: () => 'chat-stream-event-1',
+        textId: () => 'text-1',
+        thinkingId: () => 'thinking-1',
+        streamId: ({ runId }) => `chat-stream:${runId}:1`,
+      },
+    })).toBeUndefined();
+  });
+
   it('publishes turn and user message events on start', () => {
     const { events } = collectSink();
     const subject = adapter(events);

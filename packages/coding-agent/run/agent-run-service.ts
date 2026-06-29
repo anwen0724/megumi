@@ -104,7 +104,7 @@ import type {
   SessionMessageSendPayload,
 } from '@megumi/shared/ipc';
 import {
-  createChatStreamEventAdapter,
+  createSessionMessageChatStreamAdapter,
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
 } from '../projections/chat-stream';
@@ -700,26 +700,23 @@ export class AgentRunService implements AgentRunPort {
         runtimeContext: input.runtimeContext,
       });
     }
-    const chatStreamAdapter = this.chatStreamEventSink
-      ? createChatStreamEventAdapter({
-          sink: this.chatStreamEventSink,
-          projectId: String(session.workspaceId ?? session.sessionId),
-          sessionId: String(session.sessionId),
-          runId: String(runId),
-          streamId: this.ids.chatStreamId({ runId: String(runId) }),
-          streamKind: 'main',
-          userMessageId: String(userMessage.messageId),
-          clientMessageId: String(currentUserMessage.id),
-          userMessageText: userMessage.content,
-          createdAt,
-          now: () => this.clock.now(),
-          ids: {
-            eventId: this.ids.chatStreamEventId,
-            textId: this.ids.chatTextId,
-            thinkingId: this.ids.chatThinkingId,
-          },
-        })
-      : undefined;
+    const chatStreamAdapter = createSessionMessageChatStreamAdapter({
+      ...(this.chatStreamEventSink ? { sink: this.chatStreamEventSink } : {}),
+      projectId: String(session.workspaceId ?? session.sessionId),
+      sessionId: String(session.sessionId),
+      runId: String(runId),
+      userMessageId: String(userMessage.messageId),
+      clientMessageId: String(currentUserMessage.id),
+      userMessageText: userMessage.content,
+      createdAt,
+      now: () => this.clock.now(),
+      ids: {
+        eventId: this.ids.chatStreamEventId,
+        textId: this.ids.chatTextId,
+        thinkingId: this.ids.chatThinkingId,
+        streamId: this.ids.chatStreamId,
+      },
+    });
     chatStreamAdapter?.startTurn?.();
     if (manualRerunAuditEvent) {
       this.appendRuntimeEvent(manualRerunAuditEvent, chatStreamAdapter);

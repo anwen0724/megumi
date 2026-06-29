@@ -137,6 +137,16 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('function getRunStartPermissionModeState');
   });
 
+  it('keeps session message chat stream adapter creation in projections', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const chatStreamSource = read('packages/coding-agent/projections/chat-stream/chat-stream-event-adapter.ts');
+
+    expect(chatStreamSource).toContain('export function createSessionMessageChatStreamAdapter');
+    expect(serviceSource).toContain('createSessionMessageChatStreamAdapter({');
+    expect(serviceSource).not.toContain('createChatStreamEventAdapter({');
+    expect(serviceSource).not.toContain("streamKind: 'main'");
+  });
+
   it('keeps manual retry and rerun lifecycle rules out of AgentRunService', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const retrySource = read('packages/coding-agent/state/run-retry-coordinator.ts');

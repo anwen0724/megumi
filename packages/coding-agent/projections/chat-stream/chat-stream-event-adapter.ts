@@ -34,6 +34,23 @@ export interface ChatStreamEventAdapterOptions {
   ids: ChatStreamEventAdapterIds;
 }
 
+export interface SessionMessageChatStreamAdapterIds extends ChatStreamEventAdapterIds {
+  streamId(input: { runId: string }): string;
+}
+
+export interface SessionMessageChatStreamAdapterInput {
+  sink?: ChatStreamEventSink;
+  projectId: string;
+  sessionId: string;
+  runId: string;
+  userMessageId: string;
+  clientMessageId?: string;
+  userMessageText: string;
+  createdAt: string;
+  now?: () => string;
+  ids: SessionMessageChatStreamAdapterIds;
+}
+
 export interface ChatStreamEventAdapter {
   startTurn(): void;
   publishWorkspaceChangeFooter(footer: WorkspaceChangeFooterFact, createdAt: string): void;
@@ -86,6 +103,33 @@ interface PendingToolTerminalState {
 
 export function createChatStreamEventAdapter(options: ChatStreamEventAdapterOptions): ChatStreamEventAdapter {
   return new ChatStreamEventAdapterImpl(options);
+}
+
+export function createSessionMessageChatStreamAdapter(
+  input: SessionMessageChatStreamAdapterInput,
+): ChatStreamEventAdapter | undefined {
+  if (!input.sink) {
+    return undefined;
+  }
+
+  return createChatStreamEventAdapter({
+    sink: input.sink,
+    projectId: input.projectId,
+    sessionId: input.sessionId,
+    runId: input.runId,
+    streamId: input.ids.streamId({ runId: input.runId }),
+    streamKind: 'main',
+    userMessageId: input.userMessageId,
+    ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+    userMessageText: input.userMessageText,
+    createdAt: input.createdAt,
+    ...(input.now ? { now: input.now } : {}),
+    ids: {
+      eventId: input.ids.eventId,
+      textId: input.ids.textId,
+      thinkingId: input.ids.thinkingId,
+    },
+  });
 }
 
 class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
