@@ -3,3 +3,4 @@ export * from './tool-call-approval';
 export * from './approval-resume';
 export * from './approval-events';
 export * from './pending-approval-registry';
+export * from './approval-resume-group';

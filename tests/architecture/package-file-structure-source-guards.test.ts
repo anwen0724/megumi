@@ -667,13 +667,22 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts'),
       'utf8',
     );
+    const approvalResumeGroupSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/approval/approval-resume-group.ts'),
+      'utf8',
+    );
 
     expect(agentRunServiceSource).not.toContain('approvalResume.pendingByApprovalId.delete(input.approvalRequestId)');
     expect(agentRunServiceSource).not.toContain('this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId)');
     expect(agentRunServiceSource).not.toContain('approvalResume.resolvedResults.push(...toolResults)');
     expect(agentRunServiceSource).not.toContain('this.pendingApprovalRegistry.deleteGroup(approvalResume.groupId)');
+    expect(agentRunServiceSource).not.toContain('const group: AgentRunApprovalResumeGroup');
+    expect(agentRunServiceSource).not.toContain('pendingByApprovalId: new Map(input.pendingApprovalResumes');
+    expect(agentRunServiceSource).not.toContain('waitForAgentLoopApproval({');
     expect(pendingApprovalRegistrySource).toContain('export function resolvePendingApproval');
     expect(pendingApprovalRegistrySource).toContain('export function closePendingApprovalGroup');
+    expect(approvalResumeGroupSource).toContain('export function registerApprovalResumeGroup');
+    expect(approvalResumeGroupSource).toContain('waitForAgentLoopApproval');
   });
 
   it('keeps tool result model input emission ownership in the model-input submodule', () => {

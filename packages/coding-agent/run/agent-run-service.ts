@@ -11,7 +11,6 @@ import {
   resumeRunAfterApproval,
   startAgentLoopRun,
   succeedAgentLoopModelCall,
-  waitForAgentLoopApproval,
   type RunRetryCoordinatorPort,
   type RunTerminalCoordinatorPort,
 } from '../state';
@@ -23,6 +22,10 @@ import {
   type ResumeToolApprovalInput,
   type ToolCallRunnerService,
 } from '../agent-loop/tool-call';
+import {
+  registerApprovalResumeGroup,
+  type ApprovalResumeGroup,
+} from '../agent-loop/tool-call/approval/approval-resume-group';
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
   createBaselineContextForSession,
@@ -117,7 +120,6 @@ import type { PlanArtifactServicePort } from '../artifacts';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ToolResult } from '@megumi/shared/tool';
 import {
   createRunPermissionSnapshot,
   toModelPermissionSnapshot,
@@ -195,22 +197,7 @@ interface AgentRunServiceOptions {
   ids?: Partial<AgentRunServiceIds>;
 }
 
-interface ApprovalResumeGroup {
-  groupId: string;
-  request: ModelStepRuntimeRequest;
-  run: Run;
-  step: RunStep;
-  projectId?: string;
-  projectRoot?: string;
-  permissionMode?: PermissionMode;
-  userMessageId: string;
-  pendingByApprovalId: Map<string, PendingToolApprovalResume>;
-  resolvedResults: ToolResult[];
-  toolRuntime: ToolCallRunnerService;
-  memoryRecallSources?: ModelInputMemoryRecallSource[];
-  memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-  chatStreamAdapter?: ChatStreamEventAdapter;
-}
+type AgentRunApprovalResumeGroup = ApprovalResumeGroup<ChatStreamEventAdapter>;
 
 const defaultClock: AgentRunServiceClock = {
   now: () => new Date().toISOString(),
@@ -290,7 +277,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly runTerminalCoordinator: RunTerminalCoordinatorPort;
   private readonly runRetryCoordinator: RunRetryCoordinatorPort;
   private readonly postRunHooks: PostRunHooksPort;
-  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalResumeGroup>({
+  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<AgentRunApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
   });
   private readonly activeSessionMessageRuns = new ActiveSessionMessageRunTracker<ChatStreamEventAdapter>();
@@ -839,52 +826,37 @@ export class AgentRunService implements AgentRunPort {
     let lastSequence = input.startSequence ?? 0;
     let terminalEvent: RuntimeEvent | undefined;
     let currentModelStep = input.step;
-    let registeredPendingGroup: ApprovalResumeGroup | undefined;
+    let registeredPendingGroup: AgentRunApprovalResumeGroup | undefined;
     const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
 
-    const registerPendingApprovalGroup = (): ApprovalResumeGroup | undefined => {
-      if (registeredPendingGroup || input.pendingApprovalResumes.length === 0 || !toolRuntime) {
-        return registeredPendingGroup;
-      }
-
-      const waiting = waitForAgentLoopApproval({
-        run: this.runRecordRepository.getRun(input.request.runId) ?? input.run,
-        step: currentModelStep,
-        lifecycle: {
-          saveRun: (run) => {
-            this.runRecordRepository.saveRun(run);
-          },
-          saveStep: (step) => {
-            this.runExecutionFactRepository.saveStep(step);
-          },
-        },
-      });
-      const waitingRun = waiting.run;
-      const waitingStep = waiting.step;
-      currentModelStep = waitingStep;
-      const groupId = `${input.request.runId}:${input.request.stepId}:${this.ids.eventId()}`;
-      const group: ApprovalResumeGroup = {
-        groupId,
+    const registerPendingApprovalGroup = (): AgentRunApprovalResumeGroup | undefined => {
+      const registered = registerApprovalResumeGroup({
+        registry: this.pendingApprovalRegistry,
+        ...(registeredPendingGroup ? { registeredGroup: registeredPendingGroup } : {}),
         request: input.request,
-        run: waitingRun,
-        step: waitingStep,
+        run: input.run,
+        step: currentModelStep,
+        pendingApprovalResumes: input.pendingApprovalResumes,
+        ...(toolRuntime ? { toolRuntime } : {}),
         ...(input.projectId ? { projectId: input.projectId } : {}),
         ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
         ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
         userMessageId: input.userMessageId,
-        pendingByApprovalId: new Map(input.pendingApprovalResumes.map((pending) => [
-          pending.pendingApproval.approvalRequest.approvalRequestId,
-          pending,
-        ])),
-        resolvedResults: [],
-        toolRuntime,
         ...(input.memoryRecallSources ? { memoryRecallSources: input.memoryRecallSources } : {}),
         ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
-        ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
-      };
-      this.pendingApprovalRegistry.register(group);
-      registeredPendingGroup = group;
-      return group;
+        ...(input.chatStreamAdapter ? { projection: input.chatStreamAdapter } : {}),
+        ids: {
+          groupId: ({ request }) => `${request.runId}:${request.stepId}:${this.ids.eventId()}`,
+        },
+        lifecycle: {
+          getRun: (runId) => this.runRecordRepository.getRun(runId),
+          saveRun: (run) => this.runRecordRepository.saveRun(run),
+          saveStep: (step) => this.runExecutionFactRepository.saveStep(step),
+        },
+      });
+      currentModelStep = registered.step;
+      registeredPendingGroup = registered.group;
+      return registeredPendingGroup;
     };
 
     const toolRuntime = input.toolRuntime;
@@ -1141,7 +1113,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   private async *resumeToolApprovalRun(
-    approvalResume: ApprovalResumeGroup,
+    approvalResume: AgentRunApprovalResumeGroup,
     input: ResumeToolApprovalInput,
   ): AsyncIterable<RuntimeEvent> {
     const pending = approvalResume.pendingByApprovalId.get(input.approvalRequestId);
@@ -1154,7 +1126,7 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
     const toolResults = [...(resumeOutcome.toolResults ?? (resumeOutcome.toolResult ? [resumeOutcome.toolResult] : []))];
-    const chatStreamAdapter = approvalResume.chatStreamAdapter;
+    const chatStreamAdapter = approvalResume.projection;
 
     let lastSequence = this.runtimeEventLog.lastSequenceForRun(approvalResume.request.runId);
     const resolvedPending = approvalResume.toolRuntime.resolvePendingApproval({
