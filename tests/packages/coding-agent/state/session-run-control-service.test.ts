@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { ActiveSessionMessageRunTracker, type RunRetryCoordinatorPort } from '@megumi/coding-agent/state';
 import type { ChatStreamEventAdapter } from '@megumi/coding-agent/projections/chat-stream';
-import { SessionRunControlOperation } from '@megumi/coding-agent/product-runtime';
+import { SessionRunControlService } from '@megumi/coding-agent/state/session-run-control-service';
 
-describe('SessionRunControlOperation', () => {
+describe('SessionRunControlService', () => {
   it('coordinates cancel retry rerun and startup cleanup through state owner ports', () => {
     const activeRuns = new ActiveSessionMessageRunTracker<ChatStreamEventAdapter>();
     const projection = { name: 'projection' } as unknown as ChatStreamEventAdapter;
@@ -33,7 +33,7 @@ describe('SessionRunControlOperation', () => {
       stepId: 'step-1',
       projection,
     });
-    const operation = new SessionRunControlOperation({
+    const operation = new SessionRunControlService({
       clock: { now: () => '2026-06-29T12:00:00.000Z' },
       ids: { cancelRequestId: () => 'cancel-request-1' },
       activeRuns,

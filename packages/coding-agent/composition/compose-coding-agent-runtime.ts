@@ -1,13 +1,21 @@
-// Composes the complete Coding Agent product runtime without depending on any UI shell.
+// Composes the complete Coding Agent host interface without depending on any UI shell.
 import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService } from '../artifacts';
-import { createCodingAgentProductRuntime, type CodingAgentProductRuntime } from '../product-runtime';
+import { createCodingAgentHostInterface, type CodingAgentHostInterface } from '../host-interface';
+import { createArtifactController } from '../host-interface/artifacts/artifact-controller';
+import { createPlanController } from '../host-interface/artifacts/plan-controller';
+import { createApprovalController } from '../host-interface/permissions/approval-controller';
+import { createProviderController } from '../host-interface/settings/provider-controller';
+import { createSettingsController } from '../host-interface/settings/settings-controller';
+import { createSessionBranchController } from '../host-interface/session/branch-controller';
+import { createSessionController } from '../host-interface/session/session-controller';
+import { createWorkspaceController } from '../host-interface/workspace/workspace-controller';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import { composeCodingAgentToolRegistry, composeCodingAgentToolRuntimeFactory, composeCodingAgentToolService } from './compose-coding-agent-tool-runtime';
 import { composeCodingAgentSessionRuntime, type CodingAgentHomePaths } from './compose-coding-agent-session-runtime';
 import { composeCodingAgentMemory } from './compose-coding-agent-memory';
 import { composeCodingAgentRecoveryRuntime } from './compose-coding-agent-recovery-runtime';
-import type { RuntimeLogger } from '../product-runtime';
+import type { RuntimeLogger } from '../host-interface/runtime-logger';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import {
   createAiClient,
@@ -53,7 +61,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   settingsStorage?: ProductSettingsStoragePort;
 }
 
-export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentProductRuntime {
+export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentHostInterface {
   const persistence = composeCodingAgentPersistence({ sqlitePath: options.homePaths.sqlitePath });
   const toolRegistry = composeCodingAgentToolRegistry();
   const settingsService = new ProductSettingsService({
@@ -119,7 +127,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const toolService = composeCodingAgentToolService({
     toolRegistry,
     toolRepository: persistence.toolRepository,
-    resumeApproval: (request) => sessionRuntime.agentLoopOperation.resumeApproval(request),
+    resumeApproval: (request) => sessionRuntime.inputProcessingService.resumeToolApproval(request),
   });
   const artifactContentStore = new ArtifactContentStore({
     artifactRoot: `${options.homePaths.homePath}/artifacts`,
@@ -135,7 +143,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     runtimeEventRepository: persistence.runtimeEventRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
     timelineMessageRepository: persistence.timelineMessageRepository,
-    agentLoopOperation: sessionRuntime.agentLoopOperation,
     logger: options.runtimeLogger,
   });
   const projectService = createProjectService({
@@ -144,19 +151,28 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
   });
 
-  return createCodingAgentProductRuntime({
-    sessionService: sessionRuntime.sessionService,
-    sessionBranchService: sessionRuntime.sessionBranchService,
-    agentLoopOperation: sessionRuntime.agentLoopOperation,
-    recoveryService,
-    toolService,
-    artifactService,
-    planArtifactService: sessionRuntime.planArtifactService,
-    memoryService: memory.memoryService,
-    runContextService: sessionRuntime.runContextService,
-    settingsService,
-    providerSettingsService,
-    projectService,
+  const settings = createSettingsController(settingsService);
+  const artifacts = createArtifactController(artifactService);
+
+  return createCodingAgentHostInterface({
+    input: sessionRuntime.inputService,
+    workspace: createWorkspaceController({
+      projectService,
+      recoveryService,
+    }),
+    session: {
+      ...createSessionController(sessionRuntime.sessionService),
+      ...createSessionBranchController(sessionRuntime.sessionBranchService),
+    },
+    settings: {
+      ...settings,
+      provider: createProviderController(providerSettingsService),
+    },
+    permissions: createApprovalController(toolService),
+    artifacts: {
+      ...artifacts,
+      plan: createPlanController(sessionRuntime.planArtifactService),
+    },
     dispose: () => persistence.database.close(),
   });
 }
@@ -203,4 +219,10 @@ function createVolatileProductSettingsStorage(): ProductSettingsStoragePort {
       rawSettings = next;
     },
   };
+}
+
+export function composeCodingAgentHostInterface(
+  options: ComposeCodingAgentRuntimeOptions,
+): CodingAgentHostInterface {
+  return composeCodingAgentRuntime(options);
 }

@@ -1,4 +1,4 @@
-// Owns Coding Agent product settings resolution and projections used by product runtime composition.
+// Owns Coding Agent product settings resolution and projections used by host interface composition.
 import {
   mergePermissionSettingsScopes,
   type MergedPermissionSettings,

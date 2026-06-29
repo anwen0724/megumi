@@ -14,5 +14,5 @@ export * from './workspace';
 export * from './settings';
 export * from './persistence';
 export * from './projections';
-export * from './product-runtime';
+export * from './host-interface';
 export * from './composition';

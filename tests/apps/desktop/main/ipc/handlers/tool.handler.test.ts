@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerToolHandlers } from '@megumi/desktop/main/ipc/handlers/tool.handler';
@@ -13,50 +13,31 @@ describe('registerToolHandlers', () => {
     vi.clearAllMocks();
   });
 
-  it('registers primary tool/approval IPC channels and deprecated agent bridges', () => {
+  it('registers only approval IPC as a permissions host operation', () => {
     registerToolHandlers({
-      listDefinitions: () => [],
-      getToolExecution: () => undefined,
-      resolveApproval: (payload) => ({
-        approval: {
-          approvalRecordId: 'approval-record-1',
-          approvalRequestId: payload.approvalRequestId,
-          toolCallId: 'tool-call-1',
-          toolExecutionId: 'tool-execution-1',
-          runId: 'run-1',
-          stepId: 'step-1',
-          decision: payload.decision,
-          scope: payload.scope,
-          decidedBy: 'user',
-          decidedAt: payload.decidedAt,
+      resolve: (payload) => ({
+        data: {
+          approval: {
+            approvalRecordId: 'approval-record-1',
+            approvalRequestId: payload.approvalRequestId,
+            toolCallId: 'tool-call-1',
+            toolExecutionId: 'tool-execution-1',
+            runId: 'run-1',
+            stepId: 'step-1',
+            decision: payload.decision,
+            scope: payload.scope,
+            decidedBy: 'user',
+            decidedAt: payload.decidedAt,
+          },
         },
       }),
     });
 
     expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.tool.definitionsList,
-      expect.any(Function),
-    );
-    expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.tool.executionGet,
-      expect.any(Function),
-    );
-    expect(ipcMain.handle).toHaveBeenCalledWith(
       IPC_CHANNELS.approval.resolve,
       expect.any(Function),
     );
-    expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.tool.definitionsList,
-      expect.any(Function),
-    );
-    expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.tool.executionGet,
-      expect.any(Function),
-    );
-    expect(ipcMain.handle).toHaveBeenCalledWith(
-      IPC_CHANNELS.approval.resolve,
-      expect.any(Function),
-    );
+    expect(ipcMain.handle).toHaveBeenCalledTimes(1);
   });
 
   it('forwards approval resume runtime events while returning only approval data', async () => {
@@ -81,20 +62,20 @@ describe('registerToolHandlers', () => {
       },
     };
     registerToolHandlers({
-      listDefinitions: () => [],
-      getToolExecution: () => undefined,
-      resolveApproval: (payload) => ({
-        approval: {
-          approvalRecordId: 'approval-record-1',
-          approvalRequestId: payload.approvalRequestId,
-          toolCallId: 'tool-call-1',
-          toolExecutionId: 'tool-execution-1',
-          runId: 'run-1',
-          stepId: 'step-1',
-          decision: payload.decision,
-          scope: payload.scope,
-          decidedBy: 'user',
-          decidedAt: payload.decidedAt,
+      resolve: (payload) => ({
+        data: {
+          approval: {
+            approvalRecordId: 'approval-record-1',
+            approvalRequestId: payload.approvalRequestId,
+            toolCallId: 'tool-call-1',
+            toolExecutionId: 'tool-execution-1',
+            runId: 'run-1',
+            stepId: 'step-1',
+            decision: payload.decision,
+            scope: payload.scope,
+            decidedBy: 'user',
+            decidedAt: payload.decidedAt,
+          },
         },
         events: async function* () {
           yield runtimeEvent;
@@ -141,4 +122,3 @@ describe('registerToolHandlers', () => {
     });
   });
 });
-

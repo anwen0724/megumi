@@ -5,6 +5,7 @@ export * from './run-error';
 export * from './run-state-policy';
 export * from './run-terminal-coordinator';
 export * from './run-retry-coordinator';
+export * from './session-run-control-service';
 export * from './lifecycle';
 export * from './recovery-service';
 export * from './recovery-observation-mapper';

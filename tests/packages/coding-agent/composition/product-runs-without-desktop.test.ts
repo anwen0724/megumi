@@ -1,6 +1,6 @@
 ﻿// @vitest-environment node
 // PROOF that packages/coding-agent is a complete product runnable WITHOUT apps/desktop.
-// Uses the fully composed product runtime against a real SQLite file and a real temp
+// Uses the fully composed host interface against a real SQLite file and a real temp
 // workspace, with NO desktop/electron import anywhere. Drives: create session ->
 // advance run -> execute a real built-in tool (read_file over the real workspace) ->
 // persist timeline history -> emit events -> survive a runtime "restart" (reopen the DB).
@@ -14,7 +14,7 @@ import type { AppSettingsRaw } from '@megumi/shared/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
-import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
+import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 function productSettingsStorage(initial: AppSettingsRaw = {}) {
   let rawSettings: AppSettingsRaw = initial;
@@ -107,7 +107,7 @@ function seedProject(home: string, repoPath: string): string {
 describe('coding-agent product runs without desktop', () => {
   let home: string | undefined;
   let workspace: string | undefined;
-  let runtime: CodingAgentProductRuntime | undefined;
+  let runtime: CodingAgentHostInterface | undefined;
 
   afterEach(async () => {
     runtime?.dispose();
@@ -135,13 +135,13 @@ describe('coding-agent product runs without desktop', () => {
       chatStreamEventSink: { publish: (event) => chatStreamEvents.push(event) },
     });
 
-    expect(runtime.settingsService.getResolvedSettings().memory.enabled).toBe(false);
-    runtime.settingsService.updateSettings({ memory: { enabled: true } });
-    expect(runtime.settingsService.getMemorySettings()).toEqual({ enabled: true });
+    expect(runtime.settings.get().settings.memory.enabled).toBe(false);
+    runtime.settings.update({ memory: { enabled: true } });
+    expect(runtime.settings.get().settings.memory).toEqual({ enabled: true });
 
     // submit product input (drives session creation -> model step -> real tool
-    // execution -> terminal) through the shell-agnostic product runtime entry.
-    const result = await runtime.submitInput({
+    // execution -> terminal) through the shell-agnostic host interface entry.
+    const result = await runtime.input.send({
       requestId: 'request-1',
       sessionTitle: 'Proof session',
       workspaceId: projectId,
@@ -173,7 +173,7 @@ describe('coding-agent product runs without desktop', () => {
     expect(runtimeEventTypes.some((type) => type.startsWith('tool.execution.'))).toBe(true);
 
     // persists history: timeline rows committed
-    const committed = runtime.sessionService.listTimelineMessagesBySession({
+    const committed = runtime.session.listTimeline({
       projectId,
       sessionId: String(session.sessionId),
     });
@@ -189,14 +189,14 @@ describe('coding-agent product runs without desktop', () => {
       settingsStorage: productSettingsStorage(),
     });
 
-    const afterRestart = runtime.sessionService.listTimelineMessagesBySession({
+    const afterRestart = runtime.session.listTimeline({
       projectId,
       sessionId: String(session.sessionId),
     });
     expect(afterRestart.messages.length).toBe(committed.messages.length);
     expect(afterRestart.messages.some((message) => message.role === 'assistant')).toBe(true);
 
-    const restartedSessions = runtime.sessionService.listSessions();
+    const restartedSessions = runtime.session.list().sessions;
     expect(restartedSessions.some((s) => String(s.sessionId) === String(session.sessionId))).toBe(true);
   }, 30000);
 });

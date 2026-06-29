@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderPublicStatus } from '@megumi/shared/provider';
 
@@ -25,6 +25,16 @@ function createRequest(channel: string, payload: Record<string, unknown>, reques
   };
 }
 
+function createProviderService(overrides: Record<string, unknown> = {}) {
+  return {
+    list: vi.fn(),
+    update: vi.fn(),
+    setApiKey: vi.fn(),
+    deleteApiKey: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe('registerProviderHandlers', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -35,13 +45,7 @@ describe('registerProviderHandlers', () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
 
-    registerProviderHandlers({
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn(),
-      updateProviderSettings: vi.fn(),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
-    });
+    registerProviderHandlers(createProviderService());
 
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.provider.list, expect.any(Function));
     expect(handle).toHaveBeenCalledWith(IPC_CHANNELS.provider.update, expect.any(Function));
@@ -64,13 +68,9 @@ describe('registerProviderHandlers', () => {
         envOverrideActive: false,
       },
     ];
-    const service = {
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn().mockResolvedValue(statuses),
-      updateProviderSettings: vi.fn(),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
-    };
+    const service = createProviderService({
+      list: vi.fn().mockResolvedValue({ providers: statuses }),
+    });
 
     registerProviderHandlers(service);
 
@@ -95,18 +95,14 @@ describe('registerProviderHandlers', () => {
     const { AppSettingsParseError } = await import('@megumi/desktop/main/services/settings/app-settings.service');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const settingsPath = 'C:/Users/anwen/.megumi/settings.json';
-    const service = {
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn().mockRejectedValue(
+    const service = createProviderService({
+      list: vi.fn().mockRejectedValue(
         new AppSettingsParseError(
           "Megumi settings could not be read: Expected ',' after object property",
           settingsPath,
         ),
       ),
-      updateProviderSettings: vi.fn(),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
-    };
+    });
 
     registerProviderHandlers(service);
 
@@ -139,13 +135,7 @@ describe('registerProviderHandlers', () => {
   it('rejects invalid update requests before calling the service', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
-    const service = {
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn(),
-      updateProviderSettings: vi.fn(),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
-    };
+    const service = createProviderService();
 
     registerProviderHandlers(service);
 
@@ -155,7 +145,7 @@ describe('registerProviderHandlers', () => {
       enabled: false,
     }));
 
-    expect(service.updateProviderSettings).not.toHaveBeenCalled();
+    expect(service.update).not.toHaveBeenCalled();
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('ipc_invalid_request');
   });
@@ -163,13 +153,9 @@ describe('registerProviderHandlers', () => {
   it('updates provider settings through the service', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
-    const service = {
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn(),
-      updateProviderSettings: vi.fn().mockResolvedValue({ providerId: 'deepseek' }),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
-    };
+    const service = createProviderService({
+      update: vi.fn().mockResolvedValue({}),
+    });
 
     registerProviderHandlers(service);
 
@@ -187,7 +173,8 @@ describe('registerProviderHandlers', () => {
       },
     });
 
-    expect(service.updateProviderSettings).toHaveBeenCalledWith('deepseek', {
+    expect(service.update).toHaveBeenCalledWith({
+      providerId: 'deepseek',
       enabled: false,
       baseUrl: 'https://proxy.local',
       defaultModelId: 'deepseek-v4-pro',
@@ -197,13 +184,9 @@ describe('registerProviderHandlers', () => {
   it('returns a safe update error instead of rejecting', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
-    const service = {
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn(),
-      updateProviderSettings: vi.fn().mockRejectedValue(new Error('Provider settings write failed.')),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
-    };
+    const service = createProviderService({
+      update: vi.fn().mockRejectedValue(new Error('Provider settings write failed.')),
+    });
 
     registerProviderHandlers(service);
 
@@ -229,13 +212,10 @@ describe('registerProviderHandlers', () => {
   it('sets and deletes API keys without returning plaintext', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
-    const service = {
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn(),
-      updateProviderSettings: vi.fn(),
-      setProviderApiKey: vi.fn().mockResolvedValue({ providerId: 'openai' }),
-      deleteProviderApiKey: vi.fn().mockResolvedValue({ providerId: 'openai' }),
-    };
+    const service = createProviderService({
+      setApiKey: vi.fn().mockResolvedValue({}),
+      deleteApiKey: vi.fn().mockResolvedValue({}),
+    });
 
     registerProviderHandlers(service);
 
@@ -262,7 +242,10 @@ describe('registerProviderHandlers', () => {
       },
     });
 
-    expect(service.setProviderApiKey).toHaveBeenCalledWith('openai', 'test-api-key-fixture');
+    expect(service.setApiKey).toHaveBeenCalledWith({
+      providerId: 'openai',
+      apiKey: 'test-api-key-fixture',
+    });
     const repeatedResult = await setHandler({}, createRequest(IPC_CHANNELS.provider.setApiKey, {
       providerId: 'openai',
       apiKey: 'test-api-key-fixture',
@@ -270,5 +253,3 @@ describe('registerProviderHandlers', () => {
     expect(JSON.stringify(repeatedResult)).not.toContain('test-api-key-fixture');
   });
 });
-
-

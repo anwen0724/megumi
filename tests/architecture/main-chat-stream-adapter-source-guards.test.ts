@@ -21,8 +21,8 @@ describe('main chat stream adapter source guards', () => {
     expect(adapter).not.toContain('ipcRenderer');
   });
 
-  it('does not replace AgentLoopOperation runtime event stream with ChatStreamEvent', () => {
-    const source = read('packages/coding-agent/product-runtime/agent-loop-operation.ts');
+  it('does not replace InputProcessingService runtime event stream with ChatStreamEvent', () => {
+    const source = read('packages/coding-agent/input/input-service.ts');
 
     expect(source).toContain('events: AsyncIterable<RuntimeEvent>');
     expect(source).toContain('chatStreamEventSink');
@@ -32,7 +32,7 @@ describe('main chat stream adapter source guards', () => {
   it('does not introduce assistant answer event naming in runtime adapter path', () => {
     for (const file of [
       'packages/coding-agent/projections/chat-stream/chat-stream-event-adapter.ts',
-      'packages/coding-agent/product-runtime/agent-loop-operation.ts',
+      'packages/coding-agent/input/input-service.ts',
       'packages/ai/providers/openai-compatible/openai-compatible-provider-adapter.ts',
     ]) {
       expect(read(file)).not.toContain('assistant.answer.');

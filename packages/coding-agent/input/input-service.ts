@@ -1,18 +1,63 @@
-// Coordinates session-scoped product operations that start and control agent-loop execution.
+// Handles user input entering a Coding Agent session, including message persistence and agent-loop invocation.
+import type { InputPreprocessingResult } from '@megumi/shared/input';
+import type {
+  SessionMessageSendData,
+  SessionMessageSendPayload,
+} from '@megumi/shared/ipc';
+import type { PermissionMode, PermissionModeState, PermissionSnapshotRecord } from '@megumi/shared/permission';
+import type { ProviderId } from '@megumi/shared/provider';
+import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
+import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
+import type { ParsedInput } from './parsed-input';
 import {
-  ActiveSessionMessageRunTracker,
+  parseSessionMessageRawInput,
+  prepareSessionMessageInput,
+  type SessionMessageInputMessage,
+} from './session-message';
+import {
+  createRunPermissionSnapshot,
+  type RunPermissionSnapshotServicePort,
+} from '../permissions';
+import {
   canResumeApprovalFromRunStatus,
   failAgentLoopBeforeModelCall,
-  type RunRetryCoordinatorPort,
   type RunTerminalCoordinatorPort,
+  attachRunPermissionSnapshot,
+  startAgentLoopRun,
+  ActiveSessionMessageRunTracker,
+  type RunRetryCoordinatorPort,
 } from '../state';
 import { runTurn, type RunHostBoundaryPort, type RunIdFactory } from '../state/lifecycle';
+import {
+  SessionContextInputService,
+  SessionMessageService,
+  type SessionBranchServicePort,
+  type SessionContextInputBuildPort,
+  type SessionServicePort,
+} from '../session';
+import {
+  createSessionMessageChatStreamAdapter,
+  type ChatStreamEventAdapter,
+  type ChatStreamEventSink,
+} from '../projections/chat-stream';
 import {
   type ApprovalResumeGroup,
   ensureToolCallRunnerService,
   PendingApprovalRegistry,
   type ResumeToolApprovalInput,
 } from '../agent-loop/tool-call';
+import {
+  AgentLoop,
+  createAgentLoopEventRecorder,
+  createToolSetSnapshotProvider,
+  resumeToolApprovalAgentLoop,
+  type AgentLoopOptions,
+  ToolSetService,
+  type ToolSetCapabilityProvider,
+  type ToolSetRegistryProvider,
+} from '../agent-loop';
+import type { ModelCallProvider } from '../agent-loop/model-call';
+import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
   createBaselineContextForSession,
@@ -30,31 +75,6 @@ import {
   type SessionCompactionOrchestrationResult,
 } from '../context';
 import {
-  SessionContextInputService,
-  SessionMessageService,
-  type SessionBranchServicePort,
-  type SessionContextInputBuildPort,
-} from '@megumi/coding-agent/session';
-import {
-  AgentLoop,
-  createAgentLoopEventRecorder,
-  createToolSetSnapshotProvider,
-  resumeToolApprovalAgentLoop,
-  type AgentLoopOptions,
-  ToolSetService,
-  type ToolSetCapabilityProvider,
-  type ToolSetRegistryProvider,
-} from '../agent-loop';
-import type { ModelCallProvider } from '../agent-loop/model-call';
-import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import type { AgentLoopOperationPort } from './agent-loop-operation-port';
-import { SessionRunControlOperation } from './session-run-control-operation';
-import { SubmitInputOperation } from './submit-input-operation';
-import {
-  type ParsedInput,
-  type SessionMessageInputMessage,
-} from '@megumi/coding-agent/input';
-import {
   RuntimeEventLog,
   RuntimeEventPublisher,
 } from '../events';
@@ -70,42 +90,17 @@ import type {
   AgentRunSessionRepositoryPort,
   AgentRunToolRepositoryPort,
 } from '../persistence';
-import type { ProviderId } from '@megumi/shared/provider';
-import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
 import type {
   SessionActivePath,
   SessionBranchMarker,
   SessionRetryAttempt,
   SessionSourceEntry,
 } from '@megumi/shared/session';
-import {
-  type PermissionMode,
-} from '@megumi/shared/permission';
-import type { InputPreprocessingResult } from '@megumi/shared/input';
-import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   RunStartPayload,
   SessionTimelineListData,
-  SessionMessageCancelPayload,
-  SessionMessageSendData,
-  SessionMessageSendPayload,
 } from '@megumi/shared/ipc';
-import {
-  type ChatStreamEventAdapter,
-  type ChatStreamEventSink,
-} from '../projections/chat-stream';
-import type {
-  PermissionModeState,
-  PermissionSnapshotRecord,
-} from '@megumi/shared/permission';
 import type { PlanArtifactServicePort } from '../artifacts';
-import type { RuntimeContext } from '@megumi/shared/runtime';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
-import {
-  createRunPermissionSnapshot,
-  toModelPermissionSnapshot,
-  type RunPermissionSnapshotServicePort,
-} from '../permissions';
 import type { PostRunHooksPort } from '../hooks';
 import type {
   MemoryProjectMirrorSyncPort,
@@ -113,13 +108,479 @@ import type {
 } from '../memory';
 import { resolveMemoryEnabled, type MemorySettingsPort } from '../settings';
 import type { WorkspaceChangeReadPort } from '../workspace';
-import type {
-  ToolRegistrySnapshotServicePort,
-} from '@megumi/coding-agent/tools/tool-registry-snapshot';
-interface AgentLoopOperationClock {
+import type { ToolRegistrySnapshotServicePort } from '../tools/tool-registry-snapshot';
+import { SessionRunControlService } from '../state/session-run-control-service';
+import { toModelPermissionSnapshot } from '../permissions';
+
+export interface InputSendRequest {
+  requestId?: string;
+  sessionId?: string;
+  sessionTitle?: string;
+  workspaceId?: string;
+  workspaceLabel?: string;
+  workspacePath?: string;
+  providerId: ProviderId;
+  modelId: string;
+  text: string;
+  clientMessageId?: string;
+  createdAt?: string;
+  permissionMode?: PermissionMode;
+  permissionSource?: PermissionModeState['source'];
+  preprocessing?: InputPreprocessingResult;
+  branchDraft?: SessionMessageSendPayload['branchDraft'];
+  runtimeContext?: RuntimeContext;
+}
+
+export interface InputSendResult {
+  session: Session;
+  requestId: string;
+  userMessageId: string;
+  runId: string;
+  events: AsyncIterable<RuntimeEvent>;
+}
+
+export interface InputCancelRequest {
+  targetRequestId: string;
+}
+
+export interface InputService {
+  send(input: InputSendRequest): Promise<InputSendResult>;
+  cancel(input: InputCancelRequest): boolean;
+}
+
+export interface InputServiceIds {
+  requestId(): string;
+  clientMessageId(): string;
+}
+
+export interface UserInputHandlerPort {
+  handle(input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+  }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
+  cancel(input: InputCancelRequest): boolean;
+}
+
+export interface CreateInputServiceOptions {
+  session: Pick<SessionServicePort, 'createSession' | 'listMessagesBySession' | 'listSessions'>;
+  userInput: UserInputHandlerPort;
+  ids?: Partial<InputServiceIds>;
+}
+
+export interface UserInputHandlerClock {
   now(): string;
 }
-interface AgentLoopOperationIds extends RunIdFactory {
+
+export interface UserInputHandlerIds {
+  runId(): string;
+  stepId(): string;
+  chatStreamEventId(): string;
+  chatStreamId(input: { runId: string }): string;
+  chatTextId(): string;
+  chatThinkingId(): string;
+}
+
+export interface UserInputRunRepository {
+  getRun(runId: string): Run | undefined;
+  saveRun(run: Run): Run;
+}
+
+export interface UserInputStepRepository {
+  saveStep(step: RunStep): RunStep;
+}
+
+export interface RunUserInputAgentLoopInput {
+  requestId: string;
+  payload: SessionMessageSendPayload;
+  runtimeContext?: RuntimeContext;
+  session: Session;
+  run: Run;
+  step: RunStep;
+  userMessage: SessionMessage;
+  currentUserMessage: SessionMessageInputMessage;
+  permissionMode: PermissionMode;
+  inputPreprocessing: InputPreprocessingResult;
+  permissionSnapshot?: PermissionSnapshotRecord;
+  chatStreamAdapter?: ChatStreamEventAdapter;
+  parsedInput?: ParsedInput;
+}
+
+export interface CreateUserInputHandlerOptions {
+  clock: UserInputHandlerClock;
+  ids: UserInputHandlerIds;
+  sessionMessages: SessionMessageService;
+  activeRuns: ActiveSessionMessageRunTracker<ChatStreamEventAdapter>;
+  runRepository: UserInputRunRepository;
+  stepRepository: UserInputStepRepository;
+  permissionSnapshotService?: RunPermissionSnapshotServicePort;
+  sessionBranchService?: SessionBranchServicePort;
+  runRetryCoordinator: Pick<RunRetryCoordinatorPort, 'recordManualRerunAttemptForBranchDraft'>;
+  chatStreamEventSink?: ChatStreamEventSink;
+  appendEvent(event: RuntimeEvent, projection?: ChatStreamEventAdapter): void;
+  runAgentLoop(input: RunUserInputAgentLoopInput): AsyncIterable<RuntimeEvent>;
+  cancelActiveInput(input: InputCancelRequest): boolean;
+}
+
+const defaultIds: InputServiceIds = {
+  requestId: () => `input:${crypto.randomUUID()}`,
+  clientMessageId: () => `message-local:${crypto.randomUUID()}`,
+};
+
+export function createInputService(options: CreateInputServiceOptions): InputService {
+  const ids = { ...defaultIds, ...options.ids };
+
+  return {
+    send: (input) => handleUserInput(input, options, ids),
+    cancel: (input) => cancelUserInput(input, options),
+  };
+}
+
+export function createUserInputHandler(options: CreateUserInputHandlerOptions): UserInputHandlerPort {
+  return {
+    handle: (input) => submitUserInputToAgentLoop(input, options),
+    cancel: (input) => options.cancelActiveInput(input),
+  };
+}
+
+async function handleUserInput(
+  input: InputSendRequest,
+  options: CreateInputServiceOptions,
+  ids: InputServiceIds,
+): Promise<InputSendResult> {
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  const requestId = input.requestId ?? ids.requestId();
+  const session = resolveOrCreateInputSession(options.session, input, createdAt);
+  const payload = createSessionMessageSendPayload(input, {
+    sessionId: String(session.sessionId),
+    clientMessageId: input.clientMessageId ?? ids.clientMessageId(),
+    createdAt,
+  });
+  const result = await options.userInput.handle({
+    requestId,
+    payload,
+    ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+  });
+  const persistedUserMessage = findPersistedUserMessage(
+    options.session.listMessagesBySession(String(session.sessionId)),
+    input.text,
+    createdAt,
+  );
+
+  if (!persistedUserMessage?.runId) {
+    throw new Error('Input service did not persist a user message run.');
+  }
+
+  return {
+    session,
+    requestId: result.data.requestId,
+    userMessageId: String(persistedUserMessage.messageId),
+    runId: String(persistedUserMessage.runId),
+    events: result.events,
+  };
+}
+
+function cancelUserInput(
+  input: InputCancelRequest,
+  options: CreateInputServiceOptions,
+): boolean {
+  return options.userInput.cancel(input);
+}
+
+// Converts host-facing input parameters into the session message payload consumed by the internal input handler.
+function createSessionMessageSendPayload(
+  input: InputSendRequest,
+  payloadInput: {
+    sessionId: string;
+    clientMessageId: string;
+    createdAt: string;
+  },
+): SessionMessageSendPayload {
+  const context = createSessionMessageContext(input);
+  return {
+    sessionId: payloadInput.sessionId,
+    providerId: input.providerId,
+    modelId: input.modelId,
+    message: {
+      id: payloadInput.clientMessageId,
+      content: input.text,
+      createdAt: payloadInput.createdAt,
+    },
+    ...(Object.keys(context).length > 0 ? { context } : {}),
+    ...(input.branchDraft ? { branchDraft: input.branchDraft } : {}),
+    createdAt: payloadInput.createdAt,
+  };
+}
+
+function createSessionMessageContext(input: InputSendRequest): NonNullable<SessionMessageSendPayload['context']> {
+  return {
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    ...(input.workspaceLabel ? { workspaceLabel: input.workspaceLabel } : {}),
+    ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
+    ...(input.sessionTitle ? { sessionTitle: input.sessionTitle } : {}),
+    ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
+    ...(input.permissionSource ? { permissionSource: input.permissionSource } : {}),
+    ...(input.preprocessing ? { preprocessing: input.preprocessing } : {}),
+  };
+}
+
+function findPersistedUserMessage(
+  messages: SessionMessage[],
+  content: string,
+  createdAt: string,
+): SessionMessage | undefined {
+  return messages
+    .filter((message) => message.role === 'user' && message.content === content && message.createdAt === createdAt)
+    .at(-1);
+}
+
+function resolveOrCreateInputSession(
+  sessionService: Pick<SessionServicePort, 'createSession' | 'listSessions'>,
+  input: InputSendRequest,
+  createdAt: string,
+): Session {
+  if (input.sessionId) {
+    const session = sessionService.listSessions()
+      .find((candidate) => String(candidate.sessionId) === input.sessionId);
+    if (!session) {
+      throw new Error(`Cannot send input to missing session: ${input.sessionId}`);
+    }
+    return session;
+  }
+
+  return sessionService.createSession({
+    title: input.sessionTitle ?? titleFromInput(input.text),
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
+    createdAt,
+  });
+}
+
+function titleFromInput(text: string): string {
+  const title = text.trim().replace(/\s+/g, ' ').slice(0, 80);
+  return title.length > 0 ? title : 'New session';
+}
+
+async function submitUserInputToAgentLoop(
+  input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+  },
+  options: CreateUserInputHandlerOptions,
+): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }> {
+  const branchDraftMarker = resolveBranchDraftMarker(input.payload, options);
+  const runId = options.ids.runId();
+  const stepId = options.ids.stepId();
+  const createdAt = input.payload.createdAt;
+
+  // runtime normalization is the trust boundary before persistence and model-visible context building.
+  const sessionMessageInput = prepareSessionMessageInput({ payload: input.payload });
+  const currentUserMessage = sessionMessageInput.currentUserMessage;
+  const preparedMessage = options.sessionMessages.prepareUserMessage({
+    ...(input.payload.sessionId ? { sessionId: input.payload.sessionId } : {}),
+    ...(input.payload.context?.sessionTitle ? { sessionTitle: input.payload.context.sessionTitle } : {}),
+    ...(input.payload.context?.workspaceId ? { workspaceId: input.payload.context.workspaceId } : {}),
+    ...(input.payload.context?.workspacePath ? { workspacePath: input.payload.context.workspacePath } : {}),
+    runId,
+    content: currentUserMessage.content,
+    messageCreatedAt: currentUserMessage.createdAt,
+    createdAt,
+  });
+  const { session, userMessage } = preparedMessage;
+  const parsedInput = parseSessionMessageRawInput({
+    requestId: input.requestId,
+    runId,
+    sessionId: String(session.sessionId),
+    message: {
+      ...currentUserMessage,
+      id: String(userMessage.messageId),
+    },
+    createdAt,
+  });
+
+  // The input handler starts the run record, while state owns the legal lifecycle transition details.
+  const started = startAgentLoopRun({
+    runId,
+    stepId,
+    sessionId: session.sessionId,
+    triggerMessageId: userMessage.messageId,
+    mode: sessionMessageInput.permissionMode,
+    goal: userMessage.content,
+    createdAt,
+    lifecycle: {
+      saveRun: (runRecord) => {
+        options.runRepository.saveRun(runRecord);
+      },
+      saveStep: (stepRecord) => {
+        options.stepRepository.saveStep(stepRecord);
+      },
+    },
+  });
+  const permissionSnapshot = createRunPermissionSnapshot({
+    service: options.permissionSnapshotService,
+    runId,
+    permissionMode: sessionMessageInput.permissionMode,
+    permissionSource: sessionMessageInput.permissionSource,
+    ...(sessionMessageInput.metadata ? { metadata: sessionMessageInput.metadata } : {}),
+    createdAt,
+  });
+  const run = permissionSnapshot
+    ? attachRunPermissionSnapshot({
+        run: started.run,
+        permissionSnapshotRef: permissionSnapshot.permissionSnapshotRef,
+        lifecycle: {
+          saveRun: (runRecord) => {
+            options.runRepository.saveRun(runRecord);
+          },
+        },
+      })
+    : started.run;
+  const step = started.step;
+  options.sessionMessages.recordSessionRunSource({
+    sessionId: String(session.sessionId),
+    runId: String(run.runId),
+    createdAt,
+  });
+
+  const chatStreamAdapter = createChatStreamAdapterForUserInput({
+    input,
+    options,
+    session,
+    userMessage,
+    currentUserMessage,
+    runId,
+    createdAt,
+  });
+  chatStreamAdapter?.startTurn?.();
+  appendManualRerunAuditEvent({
+    input,
+    options,
+    branchDraftMarker,
+    session,
+    run,
+    createdAt,
+    chatStreamAdapter,
+  });
+
+  // Active input tracking is registered around the async agent-loop stream so cancellation can target this request.
+  options.activeRuns.register(input.requestId, {
+    runId,
+    sessionId: session.sessionId,
+    stepId,
+    ...(chatStreamAdapter ? { projection: chatStreamAdapter } : {}),
+  });
+
+  return {
+    data: { requestId: input.requestId },
+    events: options.activeRuns.track({
+      requestId: input.requestId,
+      events: options.runAgentLoop({
+        requestId: input.requestId,
+        payload: input.payload,
+        ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+        session,
+        run,
+        step,
+        userMessage,
+        currentUserMessage,
+        permissionMode: sessionMessageInput.permissionMode,
+        inputPreprocessing: sessionMessageInput.inputPreprocessing,
+        ...(permissionSnapshot ? { permissionSnapshot: permissionSnapshot.record } : {}),
+        ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
+        parsedInput,
+      }),
+      getRunStatus: (runIdToCheck) => options.runRepository.getRun(runIdToCheck)?.status,
+    }),
+  };
+}
+
+function resolveBranchDraftMarker(
+  payload: SessionMessageSendPayload,
+  options: CreateUserInputHandlerOptions,
+): ReturnType<SessionBranchServicePort['assertActiveBranchDraftMarker']> | undefined {
+  if (!payload.branchDraft) {
+    return undefined;
+  }
+  if (!payload.sessionId) {
+    throw new Error('Branch draft requires an existing session.');
+  }
+  if (!options.sessionBranchService) {
+    throw new Error('Session branch service is not configured.');
+  }
+  return options.sessionBranchService.assertActiveBranchDraftMarker({
+    sessionId: payload.sessionId,
+    branchMarkerId: payload.branchDraft.branchMarkerId,
+  });
+}
+
+function createChatStreamAdapterForUserInput(input: {
+  input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+  };
+  options: CreateUserInputHandlerOptions;
+  session: Session;
+  userMessage: SessionMessage;
+  currentUserMessage: SessionMessageInputMessage;
+  runId: string;
+  createdAt: string;
+}): ChatStreamEventAdapter | undefined {
+  return createSessionMessageChatStreamAdapter({
+    ...(input.options.chatStreamEventSink ? { sink: input.options.chatStreamEventSink } : {}),
+    projectId: String(input.session.workspaceId ?? input.session.sessionId),
+    sessionId: String(input.session.sessionId),
+    runId: String(input.runId),
+    userMessageId: String(input.userMessage.messageId),
+    clientMessageId: String(input.currentUserMessage.id),
+    userMessageText: input.userMessage.content,
+    createdAt: input.createdAt,
+    now: () => input.options.clock.now(),
+    ids: {
+      eventId: input.options.ids.chatStreamEventId,
+      textId: input.options.ids.chatTextId,
+      thinkingId: input.options.ids.chatThinkingId,
+      streamId: input.options.ids.chatStreamId,
+    },
+  });
+}
+
+function appendManualRerunAuditEvent(input: {
+  input: {
+    requestId: string;
+    payload: SessionMessageSendPayload;
+    runtimeContext?: RuntimeContext;
+  };
+  options: CreateUserInputHandlerOptions;
+  branchDraftMarker: ReturnType<SessionBranchServicePort['assertActiveBranchDraftMarker']> | undefined;
+  session: Session;
+  run: Run;
+  createdAt: string;
+  chatStreamAdapter?: ChatStreamEventAdapter;
+}): void {
+  if (input.input.payload.branchDraft?.intent !== 'rerun') {
+    return;
+  }
+  if (!input.branchDraftMarker) {
+    throw new Error('Branch draft marker was not found.');
+  }
+  const manualRerunAuditEvent = input.options.runRetryCoordinator.recordManualRerunAttemptForBranchDraft({
+    requestId: input.input.requestId,
+    sessionId: String(input.session.sessionId),
+    runId: String(input.run.runId),
+    branchMarkerId: input.input.payload.branchDraft.branchMarkerId,
+    marker: input.branchDraftMarker,
+    createdAt: input.createdAt,
+    ...(input.input.runtimeContext ? { runtimeContext: input.input.runtimeContext } : {}),
+  });
+  input.options.appendEvent(manualRerunAuditEvent, input.chatStreamAdapter);
+}
+
+
+export interface InputProcessingClock {
+  now(): string;
+}
+export interface InputProcessingIds extends RunIdFactory {
   compactionId(): string;
   retryAttemptId(): string;
   sessionId(): string;
@@ -131,7 +592,7 @@ interface AgentLoopOperationIds extends RunIdFactory {
   chatThinkingId(): string;
 }
 
-interface AgentLoopOperationOptions {
+export interface InputProcessingServiceOptions {
   sessionRepository: AgentRunSessionRepositoryPort;
   messageRepository: AgentRunMessageRepositoryPort;
   runRecordRepository: AgentRunRunRecordRepositoryPort;
@@ -174,19 +635,19 @@ interface AgentLoopOperationOptions {
       sessionId: string;
     }): SessionTimelineListData;
   };
-  clock?: AgentLoopOperationClock;
-  ids?: Partial<AgentLoopOperationIds>;
+  clock?: InputProcessingClock;
+  ids?: Partial<InputProcessingIds>;
 }
 
-type AgentLoopApprovalResumeGroup = ApprovalResumeGroup<ChatStreamEventAdapter>;
+type InputApprovalResumeGroup = ApprovalResumeGroup<ChatStreamEventAdapter>;
 
-const defaultClock: AgentLoopOperationClock = {
+const defaultClock: InputProcessingClock = {
   now: () => new Date().toISOString(),
 };
 
-function createDefaultAgentLoopOperationIds(
-  overrides: Partial<AgentLoopOperationIds> = {},
-): AgentLoopOperationIds {
+function createDefaultInputProcessingIds(
+  overrides: Partial<InputProcessingIds> = {},
+): InputProcessingIds {
   return {
     sessionId: () => `session:${crypto.randomUUID()}`,
     runId: () => `run:${crypto.randomUUID()}`,
@@ -220,7 +681,7 @@ class EmptySessionActivePathRepository {
   }
 }
 
-export class AgentLoopOperation implements AgentLoopOperationPort {
+export class InputProcessingService {
   private readonly sessionRepository: AgentRunSessionRepositoryPort;
   private readonly messageRepository: AgentRunMessageRepositoryPort;
   private readonly runRecordRepository: AgentRunRunRecordRepositoryPort;
@@ -248,21 +709,21 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
   private readonly modelInputSourceOverrideProvider: AgentLoopInitialModelInputSourceOverrideProvider;
   private readonly sessionContextInputService: SessionContextInputBuildPort;
   private readonly sessionMessageService: SessionMessageService;
-  private readonly submitInputOperation: SubmitInputOperation;
+  private readonly userInputHandler: UserInputHandlerPort;
   private readonly sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
   private readonly hostBoundary: RunHostBoundaryPort;
-  private readonly clock: AgentLoopOperationClock;
-  private readonly ids: AgentLoopOperationIds;
-  private readonly sessionRunControlOperation: SessionRunControlOperation;
+  private readonly clock: InputProcessingClock;
+  private readonly ids: InputProcessingIds;
+  private readonly sessionRunControlService: SessionRunControlService;
   private readonly postRunHooks: PostRunHooksPort;
-  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<AgentLoopApprovalResumeGroup>({
+  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<InputApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
   });
   private readonly activeSessionMessageRuns = new ActiveSessionMessageRunTracker<ChatStreamEventAdapter>();
 
-  constructor(options: AgentLoopOperationOptions) {
+  constructor(options: InputProcessingServiceOptions) {
     this.sessionRepository = options.sessionRepository;
     this.messageRepository = options.messageRepository;
     this.runRecordRepository = options.runRecordRepository;
@@ -292,7 +753,7 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
     this.megumiHomePath = options.megumiHomePath;
     this.modelInputSourceOverrideProvider = options.modelInputSourceOverrideProvider ?? new ModelInputSourceOverrideService();
     this.clock = options.clock ?? defaultClock;
-    this.ids = createDefaultAgentLoopOperationIds(options.ids);
+    this.ids = createDefaultInputProcessingIds(options.ids);
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
         sessionRepository: this.sessionRepository,
@@ -309,7 +770,17 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
       ids: this.ids,
       ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
     });
-    this.submitInputOperation = new SubmitInputOperation({
+    this.sessionRunControlService = new SessionRunControlService({
+      clock: this.clock,
+      ids: this.ids,
+      activeRuns: this.activeSessionMessageRuns,
+      terminalCoordinator: options.runTerminalCoordinator,
+      retryCoordinator: options.runRetryCoordinator,
+      modelCallProvider: this.modelCallProvider,
+      cancelPendingApprovalGroupsByRun: (runId) => this.cancelPendingApprovalGroupsByRun(runId),
+      appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
+    });
+    this.userInputHandler = createUserInputHandler({
       clock: this.clock,
       ids: this.ids,
       sessionMessages: this.sessionMessageService,
@@ -321,17 +792,8 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
       runRetryCoordinator: options.runRetryCoordinator,
       chatStreamEventSink: options.chatStreamEventSink,
       appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
-      runAgentLoop: (operationInput) => this.runSessionMessageAgentLoop(operationInput),
-    });
-    this.sessionRunControlOperation = new SessionRunControlOperation({
-      clock: this.clock,
-      ids: this.ids,
-      activeRuns: this.activeSessionMessageRuns,
-      terminalCoordinator: options.runTerminalCoordinator,
-      retryCoordinator: options.runRetryCoordinator,
-      modelCallProvider: this.modelCallProvider,
-      cancelPendingApprovalGroupsByRun: (runId) => this.cancelPendingApprovalGroupsByRun(runId),
-      appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
+      runAgentLoop: (operationInput) => this.runAgentLoopForUserInput(operationInput),
+      cancelActiveInput: (input) => this.sessionRunControlService.cancelSessionMessage(input),
     });
     this.modelCallInputBuildService = options.modelCallInputBuildService
       ?? new ModelCallInputBuildService({
@@ -515,12 +977,12 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
     return { run: result.run, events: result.events };
   }
 
-  async sendSessionMessage(input: {
+  async handle(input: {
     requestId: string;
     payload: SessionMessageSendPayload;
     runtimeContext?: RuntimeContext;
   }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }> {
-    return this.submitInputOperation.send(input);
+    return this.userInputHandler.handle(input);
   }
 
   createManualRetryFromRun(input: {
@@ -533,7 +995,7 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
     retryAttemptSourceEntry: SessionSourceEntry;
     events: RuntimeEvent[];
   } {
-    return this.sessionRunControlOperation.createManualRetryFromRun(input);
+    return this.sessionRunControlService.createManualRetryFromRun(input);
   }
 
   createManualRerunFromUserMessage(input: {
@@ -550,14 +1012,14 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
     retryAttemptSourceEntry: SessionSourceEntry;
     events: RuntimeEvent[];
   } {
-    return this.sessionRunControlOperation.createManualRerunFromUserMessage(input);
+    return this.sessionRunControlService.createManualRerunFromUserMessage(input);
   }
 
-  cancelSessionMessage(payload: SessionMessageCancelPayload): boolean {
-    return this.sessionRunControlOperation.cancelSessionMessage(payload);
+  cancel(input: InputCancelRequest): boolean {
+    return this.sessionRunControlService.cancelSessionMessage(input);
   }
 
-  resumeApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined {
+  resumeToolApproval(input: ResumeToolApprovalInput): AsyncIterable<RuntimeEvent> | undefined {
     const approvalResume = this.pendingApprovalRegistry.getByApprovalId(input.approvalRequestId);
     if (!approvalResume) {
       return undefined;
@@ -571,8 +1033,8 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
     return this.resumeToolApprovalRun(approvalResume, input);
   }
 
-  cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] } {
-    return this.sessionRunControlOperation.cleanupInterruptedRunsOnStartup();
+  cleanupInterruptedInputsOnStartup(): { cleanedRunIds: string[] } {
+    return this.sessionRunControlService.cleanupInterruptedRunsOnStartup();
   }
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
@@ -625,21 +1087,7 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
     });
   }
 
-  private async *runSessionMessageAgentLoop(input: {
-    requestId: string;
-    payload: SessionMessageSendPayload;
-    runtimeContext?: RuntimeContext;
-    session: Session;
-    run: Run;
-    step: RunStep;
-    userMessage: SessionMessage;
-    currentUserMessage: SessionMessageInputMessage;
-    permissionMode: PermissionMode;
-    inputPreprocessing: InputPreprocessingResult;
-    permissionSnapshot?: PermissionSnapshotRecord;
-    chatStreamAdapter?: ChatStreamEventAdapter;
-    parsedInput?: ParsedInput;
-  }): AsyncIterable<RuntimeEvent> {
+  private async *runAgentLoopForUserInput(input: RunUserInputAgentLoopInput): AsyncIterable<RuntimeEvent> {
     const loop = new AgentLoop(
       this.createAgentLoopOptions(input.chatStreamAdapter),
     );
@@ -681,7 +1129,7 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
   }
 
   private async *resumeToolApprovalRun(
-    approvalResume: AgentLoopApprovalResumeGroup,
+    approvalResume: InputApprovalResumeGroup,
     input: ResumeToolApprovalInput,
   ): AsyncIterable<RuntimeEvent> {
     yield* resumeToolApprovalAgentLoop({
@@ -722,8 +1170,8 @@ export class AgentLoopOperation implements AgentLoopOperationPort {
 }
 
 function defaultHostBoundary(
-  clock: AgentLoopOperationClock,
-  ids: AgentLoopOperationIds,
+  clock: InputProcessingClock,
+  ids: InputProcessingIds,
 ): RunHostBoundaryPort {
   return {
     handleAction: (action) => ({
@@ -734,7 +1182,8 @@ function defaultHostBoundary(
       source: 'runtime',
       kind: 'message_emitted',
       receivedAt: clock.now(),
-      summary: 'Session run run completed without tool execution.',
+      summary: 'User input completed without tool execution.',
     }),
   };
 }
+

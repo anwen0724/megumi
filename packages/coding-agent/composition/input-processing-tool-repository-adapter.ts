@@ -1,8 +1,8 @@
-// Adapts tool persistence to AgentLoopOperation's product-level tool-result model-input port.
+// Adapts tool persistence to the input processing service's tool-result model-input port.
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { AgentRunToolRepositoryPort } from '../persistence';
 
-export function createAgentLoopOperationToolRepositoryAdapter(
+export function createInputProcessingToolRepositoryAdapter(
   toolRepository: ToolRepository,
 ): AgentRunToolRepositoryPort {
   return {
@@ -10,3 +10,4 @@ export function createAgentLoopOperationToolRepositoryAdapter(
       toolRepository.markToolResultsSubmittedToModelInput(input),
   };
 }
+

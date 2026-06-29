@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { registerPlanHandlers } from '@megumi/desktop/main/ipc/handlers/plan.handler';
 
@@ -16,8 +16,8 @@ describe('registerPlanHandlers', () => {
   it('registers primary plan IPC channels and deprecated agent bridges', async () => {
     const { ipcMain } = await import('electron');
     const service = {
-      getPlanByRun: vi.fn(),
-      updatePlanStatus: vi.fn(),
+      getByRun: vi.fn(),
+      updateStatus: vi.fn(),
     };
 
     registerPlanHandlers(service);
@@ -40,4 +40,3 @@ describe('registerPlanHandlers', () => {
     );
   });
 });
-

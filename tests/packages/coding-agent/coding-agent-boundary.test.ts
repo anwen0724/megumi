@@ -43,7 +43,9 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/context/parts/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/index.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/product-runtime/agent-loop-operation.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/agent-loop-operation.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/agent-loop-operation-port.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/context/run-input-facts.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/turn/run-turn.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/hooks/post-run-hooks.ts'))).toBe(true);
@@ -53,11 +55,11 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-call/model-call-stream.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/model-call/model-call-stream.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/events/runtime-event-utils.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/host-interface/host-interface.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/product-runtime/runtime-logger.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/host-interface/runtime-logger.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/tool-calls/tool-call-runner.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(false);
@@ -80,15 +82,17 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/context/resources/run-context-service.ts'))).toBe(true);
   });
 
-  it('keeps agent-loop operation orchestration in coding-agent product runtime instead of desktop session service', () => {
-    const productRuntime = sourceUnder('packages/coding-agent/product-runtime');
+  it('keeps user input orchestration in coding-agent input service instead of desktop session service', () => {
+    const inputService = sourceUnder('packages/coding-agent/input');
     const codingAgentLoop = sourceUnder('packages/coding-agent/agent-loop');
     const codingAgentState = sourceUnder('packages/coding-agent/state');
     const codingAgentContext = sourceUnder('packages/coding-agent/context');
     const codingAgentInput = sourceUnder('packages/coding-agent/input');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
-    expect(productRuntime).toContain('class AgentLoopOperation');
+    expect(inputService).toContain('class InputProcessingService');
+    expect(inputService).toContain('handleUserInput');
+    expect(inputService).toContain('submitUserInputToAgentLoop');
     expect(codingAgentState).toContain('class RunTerminalCoordinator');
     expect(codingAgentLoop).toContain('class AgentLoop');
     expect(codingAgentLoop).toContain('runModelToolLoop');
@@ -120,7 +124,8 @@ describe('coding-agent package boundary', () => {
     const artifacts = sourceUnder('packages/coding-agent/artifacts');
     const workspace = sourceUnder('packages/coding-agent/workspace');
     const settings = sourceUnder('packages/coding-agent/settings');
-    const productRuntime = sourceUnder('packages/coding-agent/product-runtime');
+    const hostInterface = sourceUnder('packages/coding-agent/host-interface');
+    const inputService = sourceUnder('packages/coding-agent/input');
     const instructions = sourceUnder('packages/coding-agent/context/instructions');
     const resources = sourceUnder('packages/coding-agent/context/resources');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
@@ -134,7 +139,8 @@ describe('coding-agent package boundary', () => {
     expect(workspace).toContain('class WorkspaceRestoreService');
     expect(settings).toContain('class ProviderSettingsService');
     expect(settings).toContain('class ProviderRuntimeService');
-    expect(productRuntime).toContain('submitInput');
+    expect(hostInterface).toContain('input: InputController');
+    expect(inputService).toContain('createInputService');
     expect(instructions).toContain('class AgentInstructionSourceService');
     expect(resources).toContain('class RunContextService');
 

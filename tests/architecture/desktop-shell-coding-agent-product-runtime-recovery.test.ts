@@ -41,9 +41,9 @@ function topLevelDirectories(relativeDirectory: string): string[] {
     .sort();
 }
 
-describe('desktop shell and coding-agent product runtime recovery', () => {
-  it('places product runtime, composition, persistence, and local adapters under packages/coding-agent', () => {
-    expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
+describe('desktop shell and coding-agent host interface recovery', () => {
+  it('places host interface, composition, persistence, and local adapters under packages/coding-agent', () => {
+    expect(existsSync(join(root, 'packages/coding-agent/host-interface/host-interface.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
@@ -65,7 +65,7 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
 
   it('keeps desktop main services as UI shell facades only', () => {
     // Desktop services only host real Electron/shell adapter logic. Pure pass-through
-    // facades were removed (handlers code against product runtime ports directly), so
+    // facades were removed (handlers code against host interface ports directly), so
     // the directory set is asserted as a SUBSET of allowed shell-adapter homes rather
     // than an exact list — a dir legitimately disappears when it has no shell logic
     // left (e.g. provider/ after its facade was deleted).
@@ -81,7 +81,7 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
     expect(actual.filter((name) => !allowedServiceDirectories.has(name))).toEqual([]);
 
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
-    expect(desktopServices).not.toContain('class AgentLoopOperation');
+    expect(desktopServices).not.toContain('class InputProcessingService');
     expect(desktopServices).not.toContain('createToolOrchestratorService');
     expect(desktopServices).not.toContain('new SessionRunRepository');
     expect(desktopServices).not.toContain('migrateDatabase');
@@ -112,8 +112,8 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
   });
 
   it('keeps package-level tests proving Coding Agent can run without desktop imports', () => {
-    expect(existsSync(join(root, 'tests/packages/coding-agent/product-runtime/product-runtime.test.ts'))).toBe(true);
-    expect(existsSync(join(root, 'tests/packages/coding-agent/product-runtime/agent-loop-operation.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/host-interface/host-interface.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/input/input-processing-service.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(false);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/run-record.repo.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-record.repo.test.ts'))).toBe(true);

@@ -120,8 +120,8 @@ const forbiddenSessionContextInputServiceCalls = [
 ];
 
 describe('session context source guards', () => {
-  it('keeps old timeline/modelContext projection out of AgentLoopOperation model input path', () => {
-    const source = read('packages/coding-agent/product-runtime/agent-loop-operation.ts');
+  it('keeps old timeline/modelContext projection out of InputProcessingService model input path', () => {
+    const source = read('packages/coding-agent/input/input-service.ts');
 
     for (const forbidden of forbiddenSessionRunNames) {
       expect(source).not.toContain(forbidden);

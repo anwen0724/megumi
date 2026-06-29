@@ -109,10 +109,10 @@ describe('coding agent run structure source guards', () => {
     }
   });
 
-  it('keeps the agent-loop operation, input preprocessing, agent loop, tool call, and lifecycle file names explicit', () => {
+  it('keeps the input runtime service, input preprocessing, agent loop, tool call, and lifecycle file names explicit', () => {
     for (const requiredPath of [
-      'packages/coding-agent/product-runtime/agent-loop-operation.ts',
-      'packages/coding-agent/composition/agent-loop-operation-ids.ts',
+      'packages/coding-agent/input/input-service.ts',
+      'packages/coding-agent/composition/input-processing-ids.ts',
       'packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts',
       'packages/coding-agent/agent-loop/agent-loop.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
@@ -134,7 +134,7 @@ describe('coding agent run structure source guards', () => {
 
     for (const removedPath of [
       'packages/coding-agent/obsolete-run/session-run-service.ts',
-      'packages/coding-agent/obsolete-run/agent-loop-operation-ids.ts',
+      'packages/coding-agent/obsolete-run/input-processing-ids.ts',
       'packages/coding-agent/obsolete-run/run-contract.ts',
       'packages/coding-agent/obsolete-run/run-orchestrator.ts',
       'packages/coding-agent/obsolete-run/runtime-input.ts',

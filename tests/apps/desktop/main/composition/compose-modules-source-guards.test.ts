@@ -15,23 +15,26 @@ describe('Desktop Main shell composition', () => {
     expect(existsSync(join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });
 
-  it('connects the Electron UI shell to the Coding Agent product runtime', () => {
+  it('connects the Electron UI shell through the Coding Agent host interface', () => {
     const desktopComposition = source('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
-    expect(desktopComposition).toContain('composeCodingAgentRuntime');
-    expect(desktopComposition).toContain('providerService: codingAgentRuntime.providerSettingsService');
-    expect(desktopComposition).toContain('sessionHandlers: { sessionService, sessionBranchService, productRuntime: codingAgentRuntime }');
-    expect(desktopComposition).toContain('runHandlers: { sessionService, productRuntime: codingAgentRuntime }');
-    expect(desktopComposition).not.toContain('const agentLoopOperation = codingAgentRuntime.agentLoopOperation');
-    expect(desktopComposition).toContain('runContextService: codingAgentRuntime.runContextService');
-    expect(desktopComposition).toContain('toolService: codingAgentRuntime.toolService');
+    expect(desktopComposition).toContain('composeCodingAgentHostInterface');
+    expect(desktopComposition).toContain('providerService: codingAgentHost.settings.provider');
+    expect(desktopComposition).toContain('settingsService: codingAgentHost.settings');
+    expect(desktopComposition).toContain('sessionHandlers: { host: codingAgentHost }');
+    expect(desktopComposition).toContain('permissionsService: codingAgentHost.permissions');
+    expect(desktopComposition).toContain('projectService: codingAgentHost.workspace');
+    expect(desktopComposition).not.toContain('runHandlers:');
+    expect(desktopComposition).not.toContain('runContextService:');
+    expect(desktopComposition).not.toContain('toolService:');
+    expect(desktopComposition).not.toContain('recoveryService:');
     expect(desktopComposition).not.toContain('new SessionRunService');
     expect(desktopComposition).not.toContain('new ProviderRuntimeService');
     expect(desktopComposition).not.toContain('new WorkspaceRestoreService');
     expect(desktopComposition).not.toContain('migrateDatabase');
   });
 
-  it('keeps product runtime composition under packages/coding-agent', () => {
+  it('keeps Coding Agent product composition under packages/coding-agent', () => {
     const productComposition = source('packages/coding-agent/composition/compose-coding-agent-runtime.ts');
     const persistenceComposition = source('packages/coding-agent/composition/compose-coding-agent-persistence.ts');
     const sessionComposition = source('packages/coding-agent/composition/compose-coding-agent-session-runtime.ts');
@@ -46,7 +49,8 @@ describe('Desktop Main shell composition', () => {
     expect(persistenceComposition).toContain('new RunRecordRepository(database)');
     expect(persistenceComposition).toContain('new RuntimeEventRepository(database)');
     expect(persistenceComposition).not.toContain('new SessionRunRepository(database)');
-    expect(sessionComposition).toContain('new AgentLoopOperation');
+    expect(sessionComposition).toContain('new InputProcessingService');
+    expect(sessionComposition).toContain('createInputService');
     expect(sessionComposition).toContain('new PermissionSnapshotService');
     expect(toolComposition).toContain('createToolCallRunner');
     expect(toolComposition).toContain('createToolExecutionRouter');

@@ -11,11 +11,11 @@ import {
   type AppSettingsRaw,
 } from '@megumi/shared/settings';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
-import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
+import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
-describe('Coding Agent product runtime', () => {
+describe('Coding Agent host interface runtime', () => {
   let temporaryHome: string | undefined;
-  let runtime: CodingAgentProductRuntime | undefined;
+  let runtime: CodingAgentHostInterface | undefined;
 
   afterEach(async () => {
     runtime?.dispose();
@@ -27,7 +27,7 @@ describe('Coding Agent product runtime', () => {
   });
 
   it('composes product services without importing or constructing desktop shell modules', async () => {
-    temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-product-runtime-'));
+    temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-interface-'));
     let rawSettings: AppSettingsRaw = {};
 
     runtime = composeCodingAgentRuntime({
@@ -59,22 +59,24 @@ describe('Coding Agent product runtime', () => {
       },
     });
 
-    expect(runtime.sessionService).toBeDefined();
-    expect(typeof runtime.submitInput).toBe('function');
-    expect(typeof runtime.sendSessionMessage).toBe('function');
-    expect(typeof runtime.cancelSessionMessage).toBe('function');
-    expect(typeof runtime.listRuntimeEventsByRun).toBe('function');
-    expect(runtime.sessionBranchService).toBeDefined();
-    expect(runtime.recoveryService).toBeDefined();
-    expect(runtime.artifactService).toBeDefined();
-    expect(runtime.memoryService).toBeDefined();
-    expect(runtime.runContextService).toBeDefined();
-    expect(runtime.providerSettingsService).toBeDefined();
-    expect(runtime.toolService.listTools().length).toBeGreaterThan(0);
-    await expect(runtime.providerSettingsService.listProviderStatuses()).resolves.toEqual(
-      expect.arrayContaining([
+    expect(runtime.session).toBeDefined();
+    expect(typeof runtime.input.send).toBe('function');
+    expect(typeof runtime.input.cancel).toBe('function');
+    expect(runtime.session.createDraft).toBeDefined();
+    expect(runtime.session.cancelDraft).toBeDefined();
+    expect(runtime.artifacts).toBeDefined();
+    expect(runtime.workspace).toBeDefined();
+    expect(runtime.settings.provider).toBeDefined();
+    const hostRecord = runtime as unknown as Record<string, unknown>;
+    expect(hostRecord.execution).toBeUndefined();
+    expect(hostRecord.recovery).toBeUndefined();
+    expect(hostRecord.context).toBeUndefined();
+    expect(hostRecord.tools).toBeUndefined();
+    expect(hostRecord.branch).toBeUndefined();
+    await expect(runtime.settings.provider.list()).resolves.toEqual({
+      providers: expect.arrayContaining([
         expect.objectContaining({ providerId: 'openai' }),
       ]),
-    );
+    });
   });
 });

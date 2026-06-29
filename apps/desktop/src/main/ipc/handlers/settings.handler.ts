@@ -6,15 +6,12 @@ import {
   SettingsGetRequestSchema,
   SettingsUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
+import type { HostSettingsController } from '@megumi/coding-agent/host-interface';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 
-export interface SettingsHandlersService {
-  getResolvedSettings(): AppSettingsResolved;
-  updateSettings(patch: AppSettingsRaw): AppSettingsResolved;
-}
+export type SettingsHandlersService = Pick<HostSettingsController, 'get' | 'update'>;
 
 export interface RegisterSettingsHandlersOptions {
   ipcMain: DesktopIpcMain;
@@ -29,7 +26,7 @@ export function registerSettingsHandlers(options: RegisterSettingsHandlersOption
     channel: IPC_CHANNELS.settings.get,
     requestSchema: SettingsGetRequestSchema,
     logger,
-    handle: () => ({ settings: settingsService.getResolvedSettings() }),
+    handle: () => settingsService.get(),
     mapError: mapSettingsIpcError,
   }));
 
@@ -37,7 +34,7 @@ export function registerSettingsHandlers(options: RegisterSettingsHandlersOption
     channel: IPC_CHANNELS.settings.update,
     requestSchema: SettingsUpdateRequestSchema,
     logger,
-    handle: (request) => ({ settings: settingsService.updateSettings(request.payload) }),
+    handle: (request) => settingsService.update(request.payload),
     mapError: mapSettingsIpcError,
   }));
 }

@@ -21,8 +21,8 @@ describe('registerSettingsHandlers', () => {
   it('registers settings get and update handlers', () => {
     const ipcMain = { handle: vi.fn() };
     const service = {
-      getResolvedSettings: vi.fn(() => DEFAULT_APP_SETTINGS),
-      updateSettings: vi.fn(() => DEFAULT_APP_SETTINGS),
+      get: vi.fn(() => ({ settings: DEFAULT_APP_SETTINGS })),
+      update: vi.fn(() => ({ settings: DEFAULT_APP_SETTINGS })),
     };
 
     registerSettingsHandlers({ ipcMain: ipcMain as any, settingsService: service });
@@ -46,8 +46,8 @@ describe('registerSettingsHandlers', () => {
       },
     };
     const service = {
-      getResolvedSettings: vi.fn(() => DEFAULT_APP_SETTINGS),
-      updateSettings: vi.fn(() => updated),
+      get: vi.fn(() => ({ settings: DEFAULT_APP_SETTINGS })),
+      update: vi.fn(() => ({ settings: updated })),
     };
 
     registerSettingsHandlers({ ipcMain: ipcMain as any, settingsService: service });
@@ -56,7 +56,7 @@ describe('registerSettingsHandlers', () => {
       {} as any,
       createRequest(IPC_CHANNELS.settings.get, {}, 'request:settings:get'),
     );
-    expect(service.getResolvedSettings).toHaveBeenCalledWith();
+    expect(service.get).toHaveBeenCalledWith();
     expect(getResult).toMatchObject({
       ok: true,
       data: {
@@ -74,7 +74,7 @@ describe('registerSettingsHandlers', () => {
       {} as any,
       createRequest(IPC_CHANNELS.settings.update, patch, 'request:settings:update'),
     );
-    expect(service.updateSettings).toHaveBeenCalledWith(patch);
+    expect(service.update).toHaveBeenCalledWith(patch);
     expect(updateResult).toMatchObject({
       ok: true,
       data: {

@@ -126,7 +126,7 @@ describe('Command system source guards', () => {
       .toContain('before session runs trust it');
     expect(source('packages/coding-agent/context/model-call-context.ts'))
       .toContain('never parses raw slash commands');
-    expect(source('packages/coding-agent/product-runtime/submit-input-operation.ts'))
+    expect(source('packages/coding-agent/input/input-service.ts'))
       .toContain('runtime normalization is the trust boundary');
     expect(source('packages/shared/ipc/schemas.ts'))
       .toContain('runtime services own trusted normalization');
@@ -149,7 +149,7 @@ describe('Command system source guards', () => {
 
   it('keeps main runtime free of raw slash command parsing', () => {
     expect(offenders([
-      'packages/coding-agent/product-runtime/agent-loop-operation.ts',
+      'packages/coding-agent/input/input-service.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
       'packages/coding-agent/settings/provider-runtime.ts',
     ], [
@@ -159,11 +159,11 @@ describe('Command system source guards', () => {
       /\/review\b/,
     ])).toEqual([]);
     const sessionMessageInput = readFileSync(join(repoRoot, 'packages/coding-agent/input/session-message.ts'), 'utf8');
-    const agentLoopOperation = readFileSync(join(repoRoot, 'packages/coding-agent/product-runtime/agent-loop-operation.ts'), 'utf8');
+    const InputProcessingService = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
     expect(sessionMessageInput).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
-    expect(agentLoopOperation).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
-    expect(agentLoopOperation).not.toContain('parseSlashCommand');
-    expect(agentLoopOperation).not.toContain('dispatchCommandText');
+    expect(InputProcessingService).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(InputProcessingService).not.toContain('parseSlashCommand');
+    expect(InputProcessingService).not.toContain('dispatchCommandText');
   });
 
   it('keeps context management free of raw slash command parsing', () => {

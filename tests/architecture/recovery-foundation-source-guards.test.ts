@@ -8,7 +8,6 @@ const recoveryProductionFiles = [
   'packages/shared/recovery/contracts.ts',
   'packages/coding-agent/state/recovery-observation-mapper.ts',
   'packages/coding-agent/state/recovery-service.ts',
-  'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/renderer/entities/recovery/store.ts',
 ];
 

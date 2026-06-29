@@ -6,28 +6,18 @@ import {
   type SettingsHandlersService,
 } from './handlers/settings.handler';
 import { registerSessionHandlers, type SessionHandlersServices } from './handlers/session.handler';
-import { registerRunHandlers, type RunHandlersServices } from './handlers/run.handler';
-import {
-  registerRunContextHandlers,
-  type RunContextHandlersService,
-} from './handlers/run-context.handler';
 import {
   registerPlanHandlers,
   type PlanHandlersService,
 } from './handlers/plan.handler';
 import {
   registerToolHandlers,
-  type ToolHandlersService,
+  type PermissionHandlersService,
 } from './handlers/tool.handler';
-import { registerRecoveryHandlers } from './handlers/recovery.handler';
 import {
   registerArtifactHandlers,
   type ArtifactHandlersService,
 } from './handlers/artifact.handler';
-import {
-  registerMemoryHandlers,
-  type MemoryHandlersService,
-} from './handlers/memory.handler';
 import {
   registerProjectHandlers,
   type ProjectHandlersService,
@@ -36,7 +26,6 @@ import {
   registerWorkspaceFilesHandlers,
   type WorkspaceFilesHandlersService,
 } from './handlers/workspace-files.handler';
-import type { RecoveryService } from '@megumi/coding-agent/state';
 import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../shell/electron-ipc-main-host';
 
@@ -46,13 +35,9 @@ export interface RegisterAllHandlersOptions {
   providerService?: ProviderHandlersService;
   settingsService?: SettingsHandlersService;
   sessionHandlers?: SessionHandlersServices;
-  runHandlers?: RunHandlersServices;
-  runContextService?: RunContextHandlersService;
   planService?: PlanHandlersService;
-  toolService?: ToolHandlersService;
-  recoveryService?: RecoveryService;
+  permissionsService?: PermissionHandlersService;
   artifactService?: ArtifactHandlersService;
-  memoryService?: MemoryHandlersService;
   projectService?: ProjectHandlersService;
   workspaceFilesService?: WorkspaceFilesHandlersService;
 }
@@ -78,36 +63,16 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
     registerSessionHandlers(options.sessionHandlers, { logger: options.logger, ipcMain });
   }
 
-  if (options.runHandlers) {
-    registerRunHandlers(options.runHandlers, { logger: options.logger, ipcMain });
-  }
-
-  if (options.runContextService) {
-    registerRunContextHandlers(options.runContextService, { logger: options.logger, ipcMain });
-  }
-
   if (options.planService) {
     registerPlanHandlers(options.planService, { logger: options.logger, ipcMain });
   }
 
-  if (options.toolService) {
-    registerToolHandlers(options.toolService, { logger: options.logger, ipcMain });
-  }
-
-  if (options.recoveryService) {
-    registerRecoveryHandlers(options.recoveryService, { logger: options.logger, ipcMain });
+  if (options.permissionsService) {
+    registerToolHandlers(options.permissionsService, { logger: options.logger, ipcMain });
   }
 
   if (options.artifactService) {
     registerArtifactHandlers(options.artifactService, { logger: options.logger, ipcMain });
-  }
-
-  if (options.memoryService) {
-    registerMemoryHandlers({
-      ipcMain,
-      memoryService: options.memoryService,
-      logger: options.logger,
-    });
   }
 
   if (options.projectService) {

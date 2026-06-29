@@ -1,7 +1,7 @@
-// Forwards product chat stream events to the current Electron renderer window.
+﻿// Forwards product chat stream events to the current Electron renderer window.
 // Holds a mutable window ref so composition can build the broadcaster before the
 // window exists; createWindow attaches it via setWindow. Publishing is a no-op
-// while no live window is attached, so the product runtime never blocks on UI.
+// while no live window is attached, so the host interface never blocks on UI.
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { forwardChatStreamEvent } from '../ipc/chat-stream-event-forwarder';
 import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';

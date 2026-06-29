@@ -3,6 +3,16 @@ export * from './ids';
 export * from './raw-input';
 export * from './parsed-input';
 export * from './normalizer';
+export {
+  createInputService,
+} from './input-service';
+export type {
+  InputCancelRequest,
+  InputSendRequest,
+  InputSendResult,
+  InputService,
+  InputServiceIds,
+} from './input-service';
 export * from './session-message';
 export * from './facts';
 export * from './preprocessing';

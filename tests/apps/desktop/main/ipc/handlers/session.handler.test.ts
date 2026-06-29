@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionMessage } from '@megumi/shared/session';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -54,7 +54,7 @@ function createSessionServiceMock(overrides: Record<string, unknown> = {}) {
     listSessions: vi.fn(),
     listMessagesBySession: vi.fn(),
     listTimelineMessagesBySession: vi.fn(),
-    sendSessionMessage: vi.fn(),
+    sendInput: vi.fn(),
     cancelSessionMessage: vi.fn(),
     createBranchDraft: vi.fn(),
     cancelBranchDraft: vi.fn(),
@@ -62,10 +62,21 @@ function createSessionServiceMock(overrides: Record<string, unknown> = {}) {
   };
   return {
     ...flat,
-    sessionService: flat,
-    productRuntime: flat,
-    sessionBranchService: flat,
-  };
+    host: {
+      session: {
+        create: (payload: unknown) => ({ session: flat.createSession(payload) }),
+        list: () => ({ sessions: flat.listSessions() }),
+        listMessages: (sessionId: string) => ({ messages: flat.listMessagesBySession(sessionId) }),
+        listTimeline: flat.listTimelineMessagesBySession,
+        createDraft: flat.createBranchDraft,
+        cancelDraft: flat.cancelBranchDraft,
+      },
+      input: {
+        send: flat.sendInput,
+        cancel: flat.cancelSessionMessage,
+      },
+    },
+  } as any;
 }
 
 describe('registerSessionHandlers', () => {
@@ -189,8 +200,11 @@ describe('registerSessionHandlers', () => {
       payload: { delta: 'Hello' },
     } satisfies RuntimeEvent;
     const service = createSessionServiceMock({
-      sendSessionMessage: vi.fn(async () => ({
-        data: { requestId: 'ipc-session-message-send-1' },
+      sendInput: vi.fn(async () => ({
+        requestId: 'ipc-session-message-send-1',
+        session: { sessionId: 'session-1' },
+        userMessageId: 'message-1',
+        runId: 'run-1',
         events: async function* () {
           yield runtimeEvent;
         }(),
@@ -217,17 +231,18 @@ describe('registerSessionHandlers', () => {
     await vi.waitFor(() => {
       expect(eventSender.send).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, runtimeEvent);
     });
-    expect(service.sendSessionMessage).toHaveBeenCalledWith({
+    expect(service.sendInput).toHaveBeenCalledWith({
       requestId: 'ipc-session-message-send-1',
-      payload: createSessionMessageSendPayload(),
-      runtimeContext: {
+      sessionId: 'session-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      text: 'Hello',
+      clientMessageId: 'message-1',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      runtimeContext: expect.objectContaining({
         requestId: 'ipc-session-message-send-1',
-        traceId: 'trace-ipc-session-message-send-1',
-        debugId: 'debug-ipc-session-message-send-1',
         operationName: 'session.message.send',
-        source: 'renderer',
-        createdAt: '2026-05-17T00:00:00.000Z',
-      },
+      }),
     });
   });
 
@@ -296,4 +311,3 @@ describe('registerSessionHandlers', () => {
     expect(cancelResult.data.cancelled).toBe(true);
   });
 });
-

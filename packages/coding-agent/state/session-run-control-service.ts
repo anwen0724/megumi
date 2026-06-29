@@ -1,4 +1,4 @@
-// Coordinates product-level control operations for existing session runs.
+// Coordinates product-level control requests for existing session runs.
 import type { SessionMessageCancelPayload } from '@megumi/shared/ipc';
 import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
 import type { ModelCallProvider } from '../agent-loop/model-call';
@@ -7,19 +7,19 @@ import {
   ActiveSessionMessageRunTracker,
   type RunRetryCoordinatorPort,
   type RunTerminalCoordinatorPort,
-} from '../state';
+} from './index';
 
-export interface SessionRunControlOperationClock {
+export interface SessionRunControlServiceClock {
   now(): string;
 }
 
-export interface SessionRunControlOperationIds {
+export interface SessionRunControlServiceIds {
   cancelRequestId(): string;
 }
 
-export interface SessionRunControlOperationOptions {
-  clock: SessionRunControlOperationClock;
-  ids: SessionRunControlOperationIds;
+export interface SessionRunControlServiceOptions {
+  clock: SessionRunControlServiceClock;
+  ids: SessionRunControlServiceIds;
   activeRuns: ActiveSessionMessageRunTracker<ChatStreamEventAdapter>;
   terminalCoordinator: RunTerminalCoordinatorPort;
   retryCoordinator: Pick<
@@ -31,9 +31,9 @@ export interface SessionRunControlOperationOptions {
   appendEvent(event: RuntimeEvent, projection?: ChatStreamEventAdapter): void;
 }
 
-export class SessionRunControlOperation {
-  private readonly clock: SessionRunControlOperationClock;
-  private readonly ids: SessionRunControlOperationIds;
+export class SessionRunControlService {
+  private readonly clock: SessionRunControlServiceClock;
+  private readonly ids: SessionRunControlServiceIds;
   private readonly activeRuns: ActiveSessionMessageRunTracker<ChatStreamEventAdapter>;
   private readonly terminalCoordinator: RunTerminalCoordinatorPort;
   private readonly retryCoordinator: Pick<
@@ -44,7 +44,7 @@ export class SessionRunControlOperation {
   private readonly cancelPendingApprovalGroupsByRun: (runId: string) => void;
   private readonly appendEvent: (event: RuntimeEvent, projection?: ChatStreamEventAdapter) => void;
 
-  constructor(options: SessionRunControlOperationOptions) {
+  constructor(options: SessionRunControlServiceOptions) {
     this.clock = options.clock;
     this.ids = options.ids;
     this.activeRuns = options.activeRuns;

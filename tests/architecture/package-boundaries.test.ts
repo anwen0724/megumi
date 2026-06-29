@@ -297,7 +297,7 @@ describe('package dependency boundaries', () => {
       .map((file) => fs.readFileSync(file, 'utf8'))
       .join('\n');
 
-    expect(source).not.toContain("from '@megumi/coding-agent/product-runtime/tool-calls");
+    expect(source).not.toContain("from '@megumi/coding-agent/host-interface/tool-calls");
     expect(source).not.toContain("from '../obsolete-run/tool-calls");
     expect(source).not.toContain("from '../../obsolete-run/tool-calls");
     expect(source).not.toContain('run/loop');

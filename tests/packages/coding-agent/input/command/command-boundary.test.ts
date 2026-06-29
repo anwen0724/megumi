@@ -40,7 +40,7 @@ describe('coding-agent command input boundary', () => {
     const violations = walkSourceFiles(join(root, 'packages/coding-agent/input/command')).flatMap((file) => {
       const source = readFileSync(file, 'utf8');
       const forbidden = [
-        '@megumi/coding-agent/product-runtime',
+        '@megumi/coding-agent/host-interface',
         '@megumi/tools',
         '@megumi/db',
         '@megumi/desktop',

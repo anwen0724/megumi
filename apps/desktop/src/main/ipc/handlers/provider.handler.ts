@@ -8,14 +8,14 @@ import {
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ProviderSettingsPort } from '@megumi/coding-agent/settings';
+import type { HostSettingsController } from '@megumi/coding-agent/host-interface';
 import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
-// Provider IPC handlers code against the product ProviderSettingsPort directly.
-export type ProviderHandlersService = ProviderSettingsPort;
+// Provider IPC handlers code against host-interface settings provider operations.
+export type ProviderHandlersService = HostSettingsController['provider'];
 
 export interface RegisterProviderHandlersOptions {
   logger?: RuntimeLogger;
@@ -34,9 +34,7 @@ export function registerProviderHandlers(
       channel: IPC_CHANNELS.provider.list,
       requestSchema: ProviderListRequestSchema,
       logger: options.logger,
-      handle: async () => ({
-        providers: await service.listProviderStatuses(),
-      }),
+      handle: async () => service.list(),
       mapError: mapProviderIpcError,
     }),
   );
@@ -48,9 +46,7 @@ export function registerProviderHandlers(
       requestSchema: ProviderUpdateRequestSchema,
       logger: options.logger,
       handle: async (request) => {
-        const { providerId, ...input } = request.payload;
-        await service.updateProviderSettings(providerId, input);
-        return {};
+        return service.update(request.payload);
       },
       mapError: mapProviderIpcError,
     }),
@@ -63,8 +59,7 @@ export function registerProviderHandlers(
       requestSchema: ProviderApiKeyRequestSchema,
       logger: options.logger,
       handle: async (request) => {
-        await service.setProviderApiKey(request.payload.providerId, request.payload.apiKey);
-        return {};
+        return service.setApiKey(request.payload);
       },
       mapError: mapProviderIpcError,
     }),
@@ -77,8 +72,7 @@ export function registerProviderHandlers(
       requestSchema: ProviderDeleteApiKeyRequestSchema,
       logger: options.logger,
       handle: async (request) => {
-        await service.deleteProviderApiKey(request.payload.providerId);
-        return {};
+        return service.deleteApiKey(request.payload);
       },
       mapError: mapProviderIpcError,
     }),

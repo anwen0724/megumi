@@ -5,13 +5,9 @@ const registerWindowHandlers = vi.fn();
 const registerProviderHandlers = vi.fn();
 const registerSettingsHandlers = vi.fn();
 const registerSessionHandlers = vi.fn();
-const registerRunHandlers = vi.fn();
-const registerRunContextHandlers = vi.fn();
 const registerPlanHandlers = vi.fn();
 const registerToolHandlers = vi.fn();
-const registerRecoveryHandlers = vi.fn();
 const registerArtifactHandlers = vi.fn();
-const registerMemoryHandlers = vi.fn();
 const registerProjectHandlers = vi.fn();
 const registerWorkspaceFilesHandlers = vi.fn();
 
@@ -19,13 +15,9 @@ vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWin
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/settings.handler', () => ({ registerSettingsHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/session.handler', () => ({ registerSessionHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/run.handler', () => ({ registerRunHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/run-context.handler', () => ({ registerRunContextHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/plan.handler', () => ({ registerPlanHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/tool.handler', () => ({ registerToolHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/recovery.handler', () => ({ registerRecoveryHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/artifact.handler', () => ({ registerArtifactHandlers }));
-vi.mock('@megumi/desktop/main/ipc/handlers/memory.handler', () => ({ registerMemoryHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/project.handler', () => ({ registerProjectHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/workspace-files.handler', () => ({ registerWorkspaceFilesHandlers }));
 vi.mock('electron', () => ({
@@ -38,13 +30,9 @@ describe('registerAllHandlers', () => {
     registerProviderHandlers.mockReset();
     registerSettingsHandlers.mockReset();
     registerSessionHandlers.mockReset();
-    registerRunHandlers.mockReset();
-    registerRunContextHandlers.mockReset();
     registerPlanHandlers.mockReset();
     registerToolHandlers.mockReset();
-    registerRecoveryHandlers.mockReset();
     registerArtifactHandlers.mockReset();
-    registerMemoryHandlers.mockReset();
     registerProjectHandlers.mockReset();
     registerWorkspaceFilesHandlers.mockReset();
   });
@@ -58,13 +46,9 @@ describe('registerAllHandlers', () => {
     expect(registerProviderHandlers).not.toHaveBeenCalled();
     expect(registerSettingsHandlers).not.toHaveBeenCalled();
     expect(registerSessionHandlers).not.toHaveBeenCalled();
-    expect(registerRunHandlers).not.toHaveBeenCalled();
-    expect(registerRunContextHandlers).not.toHaveBeenCalled();
     expect(registerPlanHandlers).not.toHaveBeenCalled();
     expect(registerToolHandlers).not.toHaveBeenCalled();
-    expect(registerRecoveryHandlers).not.toHaveBeenCalled();
     expect(registerArtifactHandlers).not.toHaveBeenCalled();
-    expect(registerMemoryHandlers).not.toHaveBeenCalled();
     expect(registerWorkspaceFilesHandlers).not.toHaveBeenCalled();
   });
 
@@ -87,27 +71,29 @@ describe('registerAllHandlers', () => {
       cancelBranchDraft: vi.fn(),
     };
     const sessionHandlers = {
-      sessionService: flatSessionService,
-      productRuntime: flatSessionService,
-      sessionBranchService: flatSessionService,
-    };
-    const runHandlers = {
-      sessionService: {
-        listRunsBySession: vi.fn(),
-      },
-      productRuntime: {
-        listRuntimeEventsByRun: vi.fn(),
+      host: {
+        session: {
+          create: flatSessionService.createSession,
+          list: flatSessionService.listSessions,
+          listMessages: flatSessionService.listMessagesBySession,
+          listTimeline: flatSessionService.listTimelineMessagesBySession,
+          createDraft: flatSessionService.createBranchDraft,
+          cancelDraft: flatSessionService.cancelBranchDraft,
+        },
+        input: {
+          send: flatSessionService.sendSessionMessage,
+          cancel: flatSessionService.cancelSessionMessage,
+        },
       },
     };
     const providerService = {
-      getProviderSettings: vi.fn(),
-      listProviderStatuses: vi.fn(),
-      updateProviderSettings: vi.fn(),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
+      list: vi.fn(),
+      update: vi.fn(),
+      setApiKey: vi.fn(),
+      deleteApiKey: vi.fn(),
     };
 
-    registerAllHandlers({ logger, providerService, sessionHandlers, runHandlers });
+    registerAllHandlers({ logger, providerService, sessionHandlers: sessionHandlers as any });
 
     expect(registerProviderHandlers).toHaveBeenCalledWith(providerService, {
       logger,
@@ -117,32 +103,13 @@ describe('registerAllHandlers', () => {
       logger,
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
     });
-    expect(registerRunHandlers).toHaveBeenCalledWith(runHandlers, {
-      logger,
-      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
-    });
-  });
-
-  it('registers run context handlers when a context service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
-    const runContextService = {
-      getBaselineContext: vi.fn(),
-      listWorkspaceSourcesByRun: vi.fn(),
-    };
-
-    registerAllHandlers({ runContextService });
-
-    expect(registerRunContextHandlers).toHaveBeenCalledWith(runContextService, {
-      logger: undefined,
-      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
-    });
   });
 
   it('registers settings handlers when a settings service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const settingsService = {
-      getResolvedSettings: vi.fn(),
-      updateSettings: vi.fn(),
+      get: vi.fn(),
+      update: vi.fn(),
     };
 
     registerAllHandlers({ settingsService });
@@ -157,8 +124,8 @@ describe('registerAllHandlers', () => {
   it('registers plan handlers when a plan service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
     const planService = {
-      getPlanByRun: vi.fn(),
-      updatePlanStatus: vi.fn(),
+      getByRun: vi.fn(),
+      updateStatus: vi.fn(),
     };
 
     registerAllHandlers({ planService });
@@ -169,35 +136,15 @@ describe('registerAllHandlers', () => {
     });
   });
 
-  it('registers tool handlers when a tool service is provided', async () => {
+  it('registers permission handlers when a permissions service is provided', async () => {
     const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
-    const toolService = {
-      listDefinitions: vi.fn(),
-      getToolExecution: vi.fn(),
-      resolveApproval: vi.fn(),
+    const permissionsService = {
+      resolve: vi.fn(),
     };
 
-    registerAllHandlers({ toolService });
+    registerAllHandlers({ permissionsService });
 
-    expect(registerToolHandlers).toHaveBeenCalledWith(toolService, {
-      logger: undefined,
-      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
-    });
-  });
-
-  it('registers recovery handlers when a recovery service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
-    const recoveryService = {
-      listRecoverableRuns: vi.fn(),
-      resumeRun: vi.fn(),
-      cancelRun: vi.fn(),
-      retryRun: vi.fn(),
-      restoreWorkspaceChangeSet: vi.fn(),
-    };
-
-    registerAllHandlers({ recoveryService });
-
-    expect(registerRecoveryHandlers).toHaveBeenCalledWith(recoveryService, {
+    expect(registerToolHandlers).toHaveBeenCalledWith(permissionsService, {
       logger: undefined,
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
     });
@@ -220,36 +167,6 @@ describe('registerAllHandlers', () => {
     expect(registerArtifactHandlers).toHaveBeenCalledWith(artifactService, {
       logger: undefined,
       ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
-    });
-  });
-
-  it('registers memory handlers when a memory service is provided', async () => {
-    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
-    const memoryService = {
-      getSettings: vi.fn(),
-      updateSettings: vi.fn(),
-      listCandidates: vi.fn(),
-      acceptCandidate: vi.fn(),
-      rejectCandidate: vi.fn(),
-      archiveCandidate: vi.fn(),
-      listMemories: vi.fn(),
-      getMemory: vi.fn(),
-      updateMemory: vi.fn(),
-      archiveMemory: vi.fn(),
-      deleteMemory: vi.fn(),
-      disableMemory: vi.fn(),
-      enableMemory: vi.fn(),
-      listSourceRefs: vi.fn(),
-      listAccessLogs: vi.fn(),
-      recallPreview: vi.fn(),
-    };
-
-    registerAllHandlers({ memoryService });
-
-    expect(registerMemoryHandlers).toHaveBeenCalledWith({
-      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
-      memoryService,
-      logger: undefined,
     });
   });
 

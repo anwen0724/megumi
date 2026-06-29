@@ -6,60 +6,53 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
   const logsPath = `${homePath}/logs`;
-  const codingAgentRuntime = {
-    submitInput: vi.fn(),
-    sendSessionMessage: vi.fn(),
-    cancelSessionMessage: vi.fn(),
-    listRuntimeEventsByRun: vi.fn(),
-    sessionService: {
-      createSession: vi.fn(),
-      listSessions: vi.fn(),
-      listMessagesBySession: vi.fn(),
-      listTimelineMessagesBySession: vi.fn(),
-      listRunsBySession: vi.fn(),
+  const codingAgentHost = {
+    input: {
+      send: vi.fn(),
+      cancel: vi.fn(),
     },
-    sessionBranchService: {
-      createBranchDraft: vi.fn(),
-      cancelBranchDraft: vi.fn(),
-    },
-    planArtifactService: {
-      getPlanByRun: vi.fn(),
-      updatePlanStatus: vi.fn(),
-    },
-    runContextService: {
-      getBaselineContext: vi.fn(),
-      listWorkspaceSourcesByRun: vi.fn(),
-    },
-    providerSettingsService: {
-      listProviderStatuses: vi.fn(),
-      getProviderSettings: vi.fn(),
-      updateProviderSettings: vi.fn(),
-      setProviderApiKey: vi.fn(),
-      deleteProviderApiKey: vi.fn(),
-    },
-    toolService: {
-      listDefinitions: vi.fn(),
-      getToolExecution: vi.fn(),
-      resolveApproval: vi.fn(),
-    },
-    recoveryService: {
-      listRecoverableRuns: vi.fn(),
-      resumeRun: vi.fn(),
-      cancelRun: vi.fn(),
-      retryRun: vi.fn(),
-    },
-    artifactService: {
-      listArtifacts: vi.fn(),
-    },
-    memoryService: {
-      listMemories: vi.fn(),
-    },
-    projectService: {
+    workspace: {
       listProjects: vi.fn(),
       useExistingProject: vi.fn(),
       openProject: vi.fn(),
       removeProject: vi.fn(),
       listAuthorizedWorkspaceRoots: vi.fn(() => ['C:/all/work/study/megumi']),
+      restoreWorkspaceChangeSet: vi.fn(),
+    },
+    session: {
+      create: vi.fn(),
+      list: vi.fn(),
+      listMessages: vi.fn(),
+      listTimeline: vi.fn(),
+      listRuns: vi.fn(),
+      createDraft: vi.fn(),
+      cancelDraft: vi.fn(),
+    },
+    permissions: {
+      resolve: vi.fn(),
+    },
+    artifacts: {
+      listByRun: vi.fn(),
+      listBySession: vi.fn(),
+      get: vi.fn(),
+      getVersion: vi.fn(),
+      createVersion: vi.fn(),
+      updateStatus: vi.fn(),
+      reference: vi.fn(),
+      plan: {
+        getByRun: vi.fn(),
+        updateStatus: vi.fn(),
+      },
+    },
+    settings: {
+      get: vi.fn(),
+      update: vi.fn(),
+      provider: {
+        list: vi.fn(),
+        update: vi.fn(),
+        setApiKey: vi.fn(),
+        deleteApiKey: vi.fn(),
+      },
     },
     dispose: vi.fn(),
   };
@@ -177,8 +170,9 @@ const mocks = vi.hoisted(() => {
     })),
     createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
     migrateDatabase: vi.fn(),
-    codingAgentRuntime,
-    composeCodingAgentRuntime: vi.fn(() => codingAgentRuntime),
+    codingAgentRuntime: codingAgentHost,
+    codingAgentHost,
+    composeCodingAgentHostInterface: vi.fn(() => codingAgentHost),
     composeCodingAgentPersistence: vi.fn(() => {
       const db = { databaseId: 'desktop-persistence-database' };
       return {
@@ -448,7 +442,7 @@ vi.mock('@megumi/coding-agent/persistence', () => ({
 }));
 
 vi.mock('@megumi/coding-agent/composition', () => ({
-  composeCodingAgentRuntime: mocks.composeCodingAgentRuntime,
+  composeCodingAgentHostInterface: mocks.composeCodingAgentHostInterface,
   composeCodingAgentPersistence: mocks.composeCodingAgentPersistence,
 }));
 
@@ -499,6 +493,7 @@ describe('main runtime logger composition', () => {
     mocks.createAppSettingsService.mockClear();
     mocks.ToolService.mockClear();
     mocks.createDefaultToolService.mockClear();
+    mocks.composeCodingAgentHostInterface.mockClear();
     mocks.composeCodingAgentPersistence.mockClear();
     mocks.RecoveryRepository.mockClear();
     mocks.WorkspaceChangeRepository.mockClear();
@@ -548,7 +543,7 @@ describe('main runtime logger composition', () => {
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
     const settingsService = mocks.createAppSettingsService.mock.results[0]?.value;
     const workspaceFilesService = mocks.createWorkspaceFilesService.mock.results[0]?.value;
-    const projectService = mocks.codingAgentRuntime.projectService;
+    const projectService = mocks.codingAgentHost.workspace;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -561,7 +556,7 @@ describe('main runtime logger composition', () => {
     expect(mocks.createAppSettingsService).toHaveBeenCalledWith({
       settingsPath: `${mocks.homePath}/settings.json`,
     });
-    expect(mocks.composeCodingAgentRuntime).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.composeCodingAgentHostInterface).toHaveBeenCalledWith(expect.objectContaining({
       homePaths: {
         homePath: mocks.homePath,
         sqlitePath: `${mocks.homePath}/sqlite`,
@@ -581,7 +576,7 @@ describe('main runtime logger composition', () => {
         chooseDirectory: expect.any(Function),
       }),
     }));
-    const runtimeOptions = (mocks.composeCodingAgentRuntime.mock.calls as unknown as Array<[{
+    const runtimeOptions = (mocks.composeCodingAgentHostInterface.mock.calls as unknown as Array<[{
       memorySettingsProvider: { isMemoryEnabled(): boolean };
     }]>)[0]?.[0];
     expect(runtimeOptions.memorySettingsProvider.isMemoryEnabled()).toBe(false);
@@ -597,23 +592,12 @@ describe('main runtime logger composition', () => {
     expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      providerService: mocks.codingAgentRuntime.providerSettingsService,
-      settingsService,
-      sessionHandlers: {
-        sessionService: mocks.codingAgentRuntime.sessionService,
-        sessionBranchService: mocks.codingAgentRuntime.sessionBranchService,
-        productRuntime: mocks.codingAgentRuntime,
-      },
-      runHandlers: {
-        sessionService: mocks.codingAgentRuntime.sessionService,
-        productRuntime: mocks.codingAgentRuntime,
-      },
-      runContextService: mocks.codingAgentRuntime.runContextService,
-      planService: mocks.codingAgentRuntime.planArtifactService,
-      toolService: mocks.codingAgentRuntime.toolService,
-      recoveryService: mocks.codingAgentRuntime.recoveryService,
-      artifactService: mocks.codingAgentRuntime.artifactService,
-      memoryService: mocks.codingAgentRuntime.memoryService,
+      providerService: mocks.codingAgentHost.settings.provider,
+      settingsService: mocks.codingAgentHost.settings,
+      sessionHandlers: { host: mocks.codingAgentHost },
+      planService: mocks.codingAgentHost.artifacts.plan,
+      permissionsService: mocks.codingAgentHost.permissions,
+      artifactService: mocks.codingAgentHost.artifacts,
       projectService,
       workspaceFilesService,
     });

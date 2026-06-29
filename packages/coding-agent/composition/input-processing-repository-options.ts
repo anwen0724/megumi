@@ -1,4 +1,4 @@
-// Composes AgentLoopOperation owner repository options from persistence repositories.
+// Composes input processing service repository options from persistence repositories.
 import type { PostRunHooksRepositoryPort } from '../hooks';
 import type { RunRetryCoordinatorRepositoryPort, RunTerminalRepositoryPort } from '../state';
 import type {
@@ -18,7 +18,7 @@ import type { SessionContextRepository } from '../persistence/repos/session-cont
 import type { SessionMessageRepository } from '../persistence/repos/session-message.repo';
 import type { SessionRecordRepository } from '../persistence/repos/session-record.repo';
 
-export interface AgentLoopOperationRepositoryOptionsCompositionInput {
+export interface InputProcessingRepositoryOptionsCompositionInput {
   modelStepRepository: ModelStepRepository;
   runExecutionFactRepository: RunExecutionFactRepository;
   runRecordRepository: RunRecordRepository;
@@ -28,7 +28,7 @@ export interface AgentLoopOperationRepositoryOptionsCompositionInput {
   sessionRecordRepository: SessionRecordRepository;
 }
 
-export interface AgentLoopOperationRepositoryOptions {
+export interface InputProcessingRepositoryOptions {
   sessionRepository: AgentRunSessionRepositoryPort;
   messageRepository: AgentRunMessageRepositoryPort;
   runRecordRepository: AgentRunRunRecordRepositoryPort;
@@ -41,9 +41,9 @@ export interface AgentLoopOperationRepositoryOptions {
   runRetryRepository: RunRetryCoordinatorRepositoryPort;
 }
 
-export function createAgentLoopOperationRepositoryOptions(
-  input: AgentLoopOperationRepositoryOptionsCompositionInput,
-): AgentLoopOperationRepositoryOptions {
+export function createInputProcessingRepositoryOptions(
+  input: InputProcessingRepositoryOptionsCompositionInput,
+): InputProcessingRepositoryOptions {
   return {
     sessionRepository: input.sessionRecordRepository,
     messageRepository: input.sessionMessageRepository,
@@ -72,3 +72,4 @@ export function createAgentLoopOperationRepositoryOptions(
     },
   };
 }
+

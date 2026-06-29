@@ -1,5 +1,5 @@
 ﻿// @vitest-environment node
-// Verifies the composed product runtime exposes a project service that works
+// Verifies the composed host interface exposes a project service that works
 // without any UI shell injecting a directory picker (defaults to a no-op picker
 // that cancels), proving project lifecycle is product behavior.
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -12,7 +12,7 @@ import {
   resolveAppSettings,
   type AppSettingsRaw,
 } from '@megumi/shared/settings';
-import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
+import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 function appSettingsProvider() {
   let rawSettings: AppSettingsRaw = {};
@@ -27,7 +27,7 @@ function appSettingsProvider() {
 
 describe('composed runtime project service', () => {
   let home: string | undefined;
-  let runtime: CodingAgentProductRuntime | undefined;
+  let runtime: CodingAgentHostInterface | undefined;
 
   afterEach(async () => {
     runtime?.dispose();
@@ -53,8 +53,8 @@ describe('composed runtime project service', () => {
       permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
     });
 
-    expect(await runtime.projectService.useExistingProject()).toEqual({ cancelled: true });
-    expect(runtime.projectService.listProjects()).resolves.toEqual([]);
+    expect(await runtime.workspace.useExistingProject()).toEqual({ cancelled: true });
+    expect(runtime.workspace.listProjects()).resolves.toEqual([]);
   });
 
   it('upserts and lists a project when a directory picker is injected', async () => {
@@ -73,9 +73,9 @@ describe('composed runtime project service', () => {
       directoryPicker: { chooseDirectory: async () => ({ canceled: false, filePaths: [home!] }) },
     });
 
-    const result = await runtime.projectService.useExistingProject();
+    const result = await runtime.workspace.useExistingProject();
     expect(result.cancelled).toBe(false);
-    const listed = await runtime.projectService.listProjects();
+    const listed = await runtime.workspace.listProjects();
     expect(listed.length).toBe(1);
   });
 });

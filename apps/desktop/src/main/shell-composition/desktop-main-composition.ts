@@ -1,11 +1,11 @@
-// Composes the Electron UI shell and connects it to the Coding Agent product runtime.
+// Composes the Electron UI shell and connects it to the Coding Agent host interface.
 import { initializeElectronMegumiHomeSync } from '../services/workspace/megumi-home.service';
 import { createRuntimeJsonlLoggerForMegumiHome } from '../services/agent-run/runtime-logger.service';
 import { createPermissionSettingsService } from '../services/security/permission-settings.service';
 import { createAppSettingsService } from '../services/settings/app-settings.service';
 import { createWorkspaceFilesService } from '../services/workspace/workspace-files.service';
 import {
-  composeCodingAgentRuntime,
+  composeCodingAgentHostInterface,
   type CodingAgentHomePaths,
 } from '@megumi/coding-agent/composition';
 import fs from 'fs-extra';
@@ -29,10 +29,10 @@ export function composeDesktopMain() {
     settingsPath: megumiHomePaths.settingsPath,
   };
   // The broadcaster is built before the window exists; createWindow attaches the
-  // live window via setWindow. The product runtime persists timeline history and
+  // live window via setWindow. The host interface persists timeline history and
   // forwards chat stream events to this sink, which relays them to the renderer.
   const chatStreamBroadcaster = createChatStreamBroadcaster({ logger: runtimeLogger });
-  const codingAgentRuntime = composeCodingAgentRuntime({
+  const codingAgentHost = composeCodingAgentHostInterface({
     homePaths: codingAgentHomePaths,
     runtimeLogger,
     appSettingsProvider: appSettingsService,
@@ -46,32 +46,25 @@ export function composeDesktopMain() {
     directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
   });
 
-  const projectService = codingAgentRuntime.projectService;
   const workspaceFilesService = createWorkspaceFilesService({
     fileSystem: fs,
-    isWorkspaceRootAllowed: (root) => projectService.listAuthorizedWorkspaceRoots().includes(root),
+    isWorkspaceRootAllowed: (root) => codingAgentHost.workspace.listAuthorizedWorkspaceRoots().includes(root),
     openPath: (absolutePath) => electronShellHost.openPath(absolutePath),
   });
-
-  const sessionService = codingAgentRuntime.sessionService;
-  const sessionBranchService = codingAgentRuntime.sessionBranchService;
 
   return {
     megumiHomePaths,
     runtimeLogger,
     appSettingsService,
     chatStreamBroadcaster,
-    providerService: codingAgentRuntime.providerSettingsService,
-    sessionHandlers: { sessionService, sessionBranchService, productRuntime: codingAgentRuntime },
-    runHandlers: { sessionService, productRuntime: codingAgentRuntime },
-    runContextService: codingAgentRuntime.runContextService,
-    planService: codingAgentRuntime.planArtifactService,
-    toolService: codingAgentRuntime.toolService,
-    recoveryService: codingAgentRuntime.recoveryService,
-    artifactService: codingAgentRuntime.artifactService,
-    memoryService: codingAgentRuntime.memoryService,
-    projectService,
+    providerService: codingAgentHost.settings.provider,
+    settingsService: codingAgentHost.settings,
+    sessionHandlers: { host: codingAgentHost },
+    planService: codingAgentHost.artifacts.plan,
+    permissionsService: codingAgentHost.permissions,
+    artifactService: codingAgentHost.artifacts,
+    projectService: codingAgentHost.workspace,
     workspaceFilesService,
-    dispose: () => codingAgentRuntime.dispose(),
+    dispose: () => codingAgentHost.dispose(),
   };
 }

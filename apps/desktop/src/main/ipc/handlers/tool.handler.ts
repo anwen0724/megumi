@@ -4,26 +4,17 @@ import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
   ApprovalResolveData,
   ApprovalResolvePayload,
-  ToolExecutionGetData,
-  ToolExecutionGetPayload,
-  ToolDefinitionsListData,
-  ToolDefinitionsListPayload,
 } from '@megumi/shared/ipc';
 import {
   ApprovalResolveRequestSchema,
-  ToolExecutionGetRequestSchema,
-  ToolDefinitionsListRequestSchema,
 } from '@megumi/shared/ipc';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
-import type { ToolService } from '@megumi/coding-agent/tools';
+import type { HostPermissionController } from '@megumi/coding-agent/host-interface';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import { forwardRuntimeEvents } from '.././runtime-event-forwarder';
 
-export type ToolHandlersService = Pick<
-  ToolService,
-  'listDefinitions' | 'getToolExecution' | 'resolveApproval'
->;
+export type PermissionHandlersService = HostPermissionController;
 
 export interface RegisterToolHandlersOptions {
   logger?: RuntimeLogger;
@@ -31,40 +22,10 @@ export interface RegisterToolHandlersOptions {
 }
 
 export function registerToolHandlers(
-  service: ToolHandlersService,
+  service: PermissionHandlersService,
   options: RegisterToolHandlersOptions = {},
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
-
-  ipcMain.handle(
-    IPC_CHANNELS.tool.definitionsList,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.tool.definitionsList,
-      requestSchema: ToolDefinitionsListRequestSchema,
-      logger: options.logger,
-      handle: (
-        request: RuntimeIpcRequest<ToolDefinitionsListPayload, typeof IPC_CHANNELS.tool.definitionsList>,
-      ): ToolDefinitionsListData => ({
-        tools: service.listDefinitions(request.payload),
-      }),
-      mapError: mapToolIpcError,
-    }),
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.tool.executionGet,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.tool.executionGet,
-      requestSchema: ToolExecutionGetRequestSchema,
-      logger: options.logger,
-      handle: (
-        request: RuntimeIpcRequest<ToolExecutionGetPayload, typeof IPC_CHANNELS.tool.executionGet>,
-      ): ToolExecutionGetData => ({
-        toolExecution: service.getToolExecution(request.payload.toolExecutionId) as ToolExecutionGetData['toolExecution'],
-      }),
-      mapError: mapToolIpcError,
-    }),
-  );
 
   ipcMain.handle(
     IPC_CHANNELS.approval.resolve,
@@ -76,11 +37,11 @@ export function registerToolHandlers(
         request: RuntimeIpcRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
         event,
       ): Promise<ApprovalResolveData> => {
-        const response = service.resolveApproval(request.payload);
+        const response = service.resolve(request.payload);
         if (response.events) {
           void forwardRuntimeEvents(event.sender, response.events, { logger: options.logger });
         }
-        return { approval: response.approval };
+        return response.data;
       },
       mapError: mapToolIpcError,
     }),

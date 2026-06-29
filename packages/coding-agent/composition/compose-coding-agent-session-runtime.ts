@@ -1,11 +1,9 @@
-// Composes session-owned services with the product agent-loop operation.
+// Composes session-owned services with the product input runtime.
 import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
 import { RunContextService } from '../context/resources';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
-import type { RuntimeLogger } from '../product-runtime';
-import {
-  AgentLoopOperation,
-} from '../product-runtime';
+import { createInputService, InputProcessingService } from '../input/input-service';
+import type { RuntimeLogger } from '../host-interface/runtime-logger';
 import {
   SessionBranchService,
   SessionContextInputService,
@@ -13,7 +11,7 @@ import {
 } from '../session';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import { createAgentLoopOperationCompositionIds } from './agent-loop-operation-ids';
+import { createInputProcessingCompositionIds } from './input-processing-ids';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
@@ -32,14 +30,14 @@ import type { ToolRegistry } from '../tools/registry';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
-import { createAgentLoopOperationRepositoryOptions } from './agent-loop-operation-repository-options';
+import { createInputProcessingRepositoryOptions } from './input-processing-repository-options';
 import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
 } from '../workspace';
-import { createAgentLoopOperationToolRepositoryAdapter } from './agent-loop-operation-tool-repository-adapter';
+import { createInputProcessingToolRepositoryAdapter } from './input-processing-tool-repository-adapter';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -68,13 +66,13 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
   runContextRepository: RunContextRepository;
-  chatStreamEventSink?: ConstructorParameters<typeof AgentLoopOperation>[0]['chatStreamEventSink'];
-  workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentLoopOperation>[0]['workspaceChanges'];
+  chatStreamEventSink?: ConstructorParameters<typeof InputProcessingService>[0]['chatStreamEventSink'];
+  workspaceChangeFooterProjector?: ConstructorParameters<typeof InputProcessingService>[0]['workspaceChanges'];
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
-  const agentLoopOperationRepositoryOptions = createAgentLoopOperationRepositoryOptions(options);
-  const agentLoopOperationIds = createAgentLoopOperationCompositionIds();
+  const inputProcessingRepositoryOptions = createInputProcessingRepositoryOptions(options);
+  const inputProcessingIds = createInputProcessingCompositionIds();
   const runContextService = new RunContextService({
     contextRepository: options.runContextRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
@@ -128,25 +126,25 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
     : undefined;
   const postRunHooks = new PostRunHooksCoordinator({
-    repository: agentLoopOperationRepositoryOptions.postRunHooksRepository,
+    repository: inputProcessingRepositoryOptions.postRunHooksRepository,
     memoryCaptureService: options.memoryRuntime.captureService,
     megumiHomePath: options.homePaths.homePath,
     workspaceChanges,
     ...(workspaceChangeFooterProjector ? { workspaceChangeFooterProjector } : {}),
   });
   const runTerminalCoordinator = new RunTerminalCoordinator({
-    repository: agentLoopOperationRepositoryOptions.runTerminalRepository,
+    repository: inputProcessingRepositoryOptions.runTerminalRepository,
     toolRepository: options.toolRepository,
-    ids: agentLoopOperationIds,
+    ids: inputProcessingIds,
   });
   const runRetryCoordinator = new RunRetryCoordinator({
-    repository: agentLoopOperationRepositoryOptions.runRetryRepository,
+    repository: inputProcessingRepositoryOptions.runRetryRepository,
     activePathRepository: options.activePathRepository,
     sessionBranchService,
-    ids: agentLoopOperationIds,
+    ids: inputProcessingIds,
   });
-  const agentLoopOperation = new AgentLoopOperation({
-    ...agentLoopOperationRepositoryOptions,
+  const inputProcessingService = new InputProcessingService({
+    ...inputProcessingRepositoryOptions,
     postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
@@ -161,21 +159,26 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     modelCallProvider: options.modelCallProviderService,
     toolRuntimeFactory: options.toolRuntimeFactory,
     toolDefinitionProvider: options.toolRegistry,
-    toolRepository: createAgentLoopOperationToolRepositoryAdapter(options.toolRepository),
+    toolRepository: createInputProcessingToolRepositoryAdapter(options.toolRepository),
     workspaceChanges,
     chatStreamEventSink: options.chatStreamEventSink,
     memoryRecallService: options.memoryRuntime.recallService,
     memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
     memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
     megumiHomePath: options.homePaths.homePath,
-    ids: agentLoopOperationIds,
+    ids: inputProcessingIds,
+  });
+  const inputService = createInputService({
+    session: sessionService,
+    userInput: inputProcessingService,
   });
 
   return {
     runContextService,
     sessionService,
     sessionBranchService,
-    agentLoopOperation,
+    inputService,
+    inputProcessingService,
     planArtifactService,
   };
 }

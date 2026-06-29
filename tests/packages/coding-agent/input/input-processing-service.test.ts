@@ -21,8 +21,8 @@ import { createToolExecutionRouter } from '@megumi/coding-agent/tools/execution/
 import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/tool-execution-router';
 import { TimelineMessageRepository } from '@megumi/coding-agent/persistence/repos/timeline-message.repo';
 import {
-  AgentLoopOperation,
-} from '@megumi/coding-agent/product-runtime';
+  InputProcessingService,
+} from '@megumi/coding-agent/input/input-service';
 import {
   ModelInputSourceOverrideService,
   type ModelInputEffectiveCwdProvider,
@@ -92,9 +92,9 @@ import type {
 
 let db: Database.Database | null = null;
 
-type AgentLoopOperationTestFacade = AgentLoopOperation & SessionServicePort & SessionBranchServicePort;
-type AgentLoopOperationRepositoryOptions = Pick<
-  AgentLoopOperationOptions,
+type InputProcessingServiceTestFacade = InputProcessingService & SessionServicePort & SessionBranchServicePort;
+type InputProcessingServiceRepositoryOptions = Pick<
+  InputProcessingServiceOptions,
   | 'sessionRepository'
   | 'messageRepository'
   | 'runRecordRepository'
@@ -107,7 +107,7 @@ type AgentLoopOperationRepositoryOptions = Pick<
   runTerminalRepository: RunTerminalRepositoryPort;
   runRetryRepository: RunRetryCoordinatorRepositoryPort;
 };
-type AgentLoopOperationTestRepository =
+type InputProcessingServiceTestRepository =
   & AgentRunSessionRepositoryPort
   & AgentRunMessageRepositoryPort
   & AgentRunRunRecordRepositoryPort
@@ -121,18 +121,18 @@ type AgentLoopOperationTestRepository =
   & {
     saveSessionCompaction(entry: SessionCompactionEntry): void;
   };
-type AgentLoopOperationOptions = ConstructorParameters<typeof AgentLoopOperation>[0];
-type AgentLoopOperationTestOptions =
+type InputProcessingServiceOptions = ConstructorParameters<typeof InputProcessingService>[0];
+type InputProcessingServiceTestOptions =
   & Omit<
-    AgentLoopOperationOptions,
-    keyof AgentLoopOperationRepositoryOptions
+    InputProcessingServiceOptions,
+    keyof InputProcessingServiceRepositoryOptions
       | 'postRunHooks'
       | 'runTerminalCoordinator'
       | 'runRetryCoordinator'
   >
   & Partial<
-    AgentLoopOperationRepositoryOptions
-      & Pick<AgentLoopOperationOptions, 'postRunHooks' | 'runTerminalCoordinator' | 'runRetryCoordinator'>
+    InputProcessingServiceRepositoryOptions
+      & Pick<InputProcessingServiceOptions, 'postRunHooks' | 'runTerminalCoordinator' | 'runRetryCoordinator'>
   >
   & {
     terminalToolRepository?: RunTerminalToolRepositoryPort;
@@ -141,9 +141,9 @@ type AgentLoopOperationTestOptions =
     sessionInstructionSourceProvider?: ModelInputSessionInstructionSourceProvider;
     runEffectiveCwdProvider?: ModelInputEffectiveCwdProvider;
   }
-  & { repository: AgentLoopOperationTestRepository };
+  & { repository: InputProcessingServiceTestRepository };
 
-function agentLoopOperationRepositoryOptions(repository: AgentLoopOperationTestRepository): AgentLoopOperationRepositoryOptions {
+function InputProcessingServiceRepositoryOptions(repository: InputProcessingServiceTestRepository): InputProcessingServiceRepositoryOptions {
   return {
     sessionRepository: repository,
     messageRepository: repository,
@@ -158,7 +158,7 @@ function agentLoopOperationRepositoryOptions(repository: AgentLoopOperationTestR
   };
 }
 
-function createAgentLoopOperationTestRepository(database: Database.Database): AgentLoopOperationTestRepository {
+function createInputProcessingServiceTestRepository(database: Database.Database): InputProcessingServiceTestRepository {
   const modelStepRepository = new ModelStepRepository(database);
   const runExecutionFactRepository = new RunExecutionFactRepository(database);
   const runRecordRepository = new RunRecordRepository(database);
@@ -191,7 +191,7 @@ function createAgentLoopOperationTestRepository(database: Database.Database): Ag
   };
 }
 
-function createAgentLoopOperationToolRepositoryForTest(
+function createInputProcessingServiceToolRepositoryForTest(
   toolRepository: ToolRepository,
 ): AgentRunToolRepositoryPort {
   return {
@@ -199,8 +199,8 @@ function createAgentLoopOperationToolRepositoryForTest(
   };
 }
 
-function createAgentLoopOperationTestService(options: AgentLoopOperationTestOptions): AgentLoopOperationTestFacade {
-  const repository = options.repository as AgentLoopOperationTestRepository;
+function createInputProcessingServiceTestService(options: InputProcessingServiceTestOptions): InputProcessingServiceTestFacade {
+  const repository = options.repository as InputProcessingServiceTestRepository;
   const ids = {
     sessionId: options.ids?.sessionId ?? (() => `session:${crypto.randomUUID()}`),
     branchMarkerId: options.ids?.branchMarkerId ?? (() => `branch-marker:${crypto.randomUUID()}`),
@@ -209,7 +209,7 @@ function createAgentLoopOperationTestService(options: AgentLoopOperationTestOpti
     eventId: options.ids?.eventId ?? (() => `event:${crypto.randomUUID()}`),
     chatStreamEventId: options.ids?.chatStreamEventId ?? (() => `chat-stream-event:${crypto.randomUUID()}`),
   };
-  const repositoryOptions = agentLoopOperationRepositoryOptions(repository);
+  const repositoryOptions = InputProcessingServiceRepositoryOptions(repository);
   const sessionService = new SessionService({
     sessionRepository: repository,
     messageRepository: repository,
@@ -268,7 +268,7 @@ function createAgentLoopOperationTestService(options: AgentLoopOperationTestOpti
     modelInputSourceOverrideProvider: _modelInputSourceOverrideProvider,
     ...runOptions
   } = options;
-  const runService = new AgentLoopOperation({
+  const runService = new InputProcessingService({
     ...repositoryOptions,
     postRunHooks,
     runTerminalCoordinator,
@@ -296,7 +296,7 @@ function createAgentLoopOperationTestService(options: AgentLoopOperationTestOpti
 }
 
 function testModelInputSourceOverrideProvider(
-  options: AgentLoopOperationTestOptions,
+  options: InputProcessingServiceTestOptions,
 ): ModelInputSourceOverrideService | undefined {
   if (!options.globalInstructionDirectoryProvider
     && !options.sessionInstructionSourceProvider
@@ -355,8 +355,8 @@ function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile> = {}): Wo
 function createService() {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
-  return createAgentLoopOperationTestService({
+  const repository = createInputProcessingServiceTestRepository(db);
+  return createInputProcessingServiceTestService({
     repository,
     clock: { now: () => '2026-05-15T00:00:00.000Z' },
     ids: {
@@ -374,8 +374,8 @@ function createService() {
 function createServiceWithContextRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
-  return createAgentLoopOperationTestService({
+  const repository = createInputProcessingServiceTestRepository(db);
+  return createInputProcessingServiceTestService({
     repository,
     contextService: {
       createBaselineContext: (input) => {
@@ -435,8 +435,8 @@ function createServiceWithContextRecorder(records: unknown[]) {
 function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
-  return createAgentLoopOperationTestService({
+  const repository = createInputProcessingServiceTestRepository(db);
+  return createInputProcessingServiceTestService({
     repository,
     permissionSnapshotService: {
       createPermissionSnapshot: (input) => {
@@ -483,8 +483,8 @@ function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
 function createServiceWithFailingHostBoundary(records: unknown[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
-  return createAgentLoopOperationTestService({
+  const repository = createInputProcessingServiceTestRepository(db);
+  return createInputProcessingServiceTestService({
     repository,
     permissionSnapshotService: {
       createPermissionSnapshot: (input) => {
@@ -538,26 +538,26 @@ function createServiceWithModelStepStream(
   events: RuntimeEvent[] | ((request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[]),
   options?: {
   contextService?: RunBaselineContextPort;
-  permissionSnapshotService?: AgentLoopOperationOptions['permissionSnapshotService'];
-  toolRuntimeFactory?: AgentLoopOperationOptions['toolRuntimeFactory'];
-  toolDefinitionProvider?: AgentLoopOperationOptions['toolDefinitionProvider'];
-  toolRegistrySnapshotService?: AgentLoopOperationOptions['toolRegistrySnapshotService'];
-  providerCapabilitySummaryProvider?: AgentLoopOperationOptions['providerCapabilitySummaryProvider'];
-  timelineMessageRepository?: AgentLoopOperationOptions['timelineMessageRepository'];
-  agentInstructionSourceService?: AgentLoopOperationOptions['agentInstructionSourceService'];
-  sessionContextInputService?: AgentLoopOperationOptions['sessionContextInputService'];
-  sessionCompactionOrchestrator?: AgentLoopOperationOptions['sessionCompactionOrchestrator'];
-  modelCallInputBuildService?: AgentLoopOperationOptions['modelCallInputBuildService'];
-  memoryRecallService?: AgentLoopOperationOptions['memoryRecallService'];
+  permissionSnapshotService?: InputProcessingServiceOptions['permissionSnapshotService'];
+  toolRuntimeFactory?: InputProcessingServiceOptions['toolRuntimeFactory'];
+  toolDefinitionProvider?: InputProcessingServiceOptions['toolDefinitionProvider'];
+  toolRegistrySnapshotService?: InputProcessingServiceOptions['toolRegistrySnapshotService'];
+  providerCapabilitySummaryProvider?: InputProcessingServiceOptions['providerCapabilitySummaryProvider'];
+  timelineMessageRepository?: InputProcessingServiceOptions['timelineMessageRepository'];
+  agentInstructionSourceService?: InputProcessingServiceOptions['agentInstructionSourceService'];
+  sessionContextInputService?: InputProcessingServiceOptions['sessionContextInputService'];
+  sessionCompactionOrchestrator?: InputProcessingServiceOptions['sessionCompactionOrchestrator'];
+  modelCallInputBuildService?: InputProcessingServiceOptions['modelCallInputBuildService'];
+  memoryRecallService?: InputProcessingServiceOptions['memoryRecallService'];
   memoryCaptureService?: MemoryCapturePort;
-  memorySettingsProvider?: AgentLoopOperationOptions['memorySettingsProvider'];
-  memoryMarkdownSyncService?: AgentLoopOperationOptions['memoryMarkdownSyncService'];
+  memorySettingsProvider?: InputProcessingServiceOptions['memorySettingsProvider'];
+  memoryMarkdownSyncService?: InputProcessingServiceOptions['memoryMarkdownSyncService'];
   megumiHomePath?: string;
   globalInstructionDirectoryProvider?: ModelInputGlobalInstructionDirectoryProvider;
   sessionInstructionSourceProvider?: ModelInputSessionInstructionSourceProvider;
   runEffectiveCwdProvider?: ModelInputEffectiveCwdProvider;
   activePathRepository?: SessionActivePathRepository;
-  workspaceChanges?: AgentLoopOperationOptions['workspaceChanges'];
+  workspaceChanges?: InputProcessingServiceOptions['workspaceChanges'];
   createToolRepository?: (database: Database.Database) => ToolRepository;
   runId?: () => string;
   stepId?: () => string;
@@ -565,10 +565,10 @@ function createServiceWithModelStepStream(
 }) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
+  const repository = createInputProcessingServiceTestRepository(db);
   const toolRepository = options?.createToolRepository?.(db);
   let callIndex = 0;
-  const serviceOptions: AgentLoopOperationTestOptions = {
+  const serviceOptions: InputProcessingServiceTestOptions = {
     repository,
     ...(options?.contextService ? { contextService: options.contextService } : {}),
     ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
@@ -600,7 +600,7 @@ function createServiceWithModelStepStream(
     ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
     ...(toolRepository ? {
-      toolRepository: createAgentLoopOperationToolRepositoryForTest(toolRepository),
+      toolRepository: createInputProcessingServiceToolRepositoryForTest(toolRepository),
       terminalToolRepository: toolRepository,
     } : {}),
     modelCallProvider: {
@@ -643,7 +643,7 @@ function createServiceWithModelStepStream(
       })(),
     },
   };
-  return createAgentLoopOperationTestService(serviceOptions);
+  return createInputProcessingServiceTestService(serviceOptions);
 }
 
 function createServiceWithRealToolResolution(input: {
@@ -761,7 +761,7 @@ async function runRealToolResolutionNextModelInput(input: {
   userContent?: string;
 }) {
   const setup = createServiceWithRealToolResolution(input);
-  const result = await setup.service.sendSessionMessage({
+  const result = await setup.service.handle({
     requestId: `request-${input.toolCall.eventId}`,
     payload: {
       sessionId: 'session-1',
@@ -803,12 +803,12 @@ function expectToolResultModelInputKind(
 function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
+  const repository = createInputProcessingServiceTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   let messageIndex = 0;
   let sourceEntryIndex = 0;
   let branchMarkerIndex = 0;
-  const service = createAgentLoopOperationTestService({
+  const service = createInputProcessingServiceTestService({
     repository,
     activePathRepository: activePathRepo,
     modelCallProvider: {
@@ -979,12 +979,12 @@ function createServiceWithProviderStream(
 ) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
+  const repository = createInputProcessingServiceTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   let callIndex = 0;
   let messageIndex = 0;
   let sourceEntryIndex = 0;
-  const service = createAgentLoopOperationTestService({
+  const service = createInputProcessingServiceTestService({
     repository,
     activePathRepository: activePathRepo,
     modelCallProvider: {
@@ -1029,13 +1029,13 @@ function createServiceWithProviderStream(
 
 function createBranchServiceFixture(options: {
   chatEvents?: ChatStreamEvent[];
-  chatStreamEventSink?: AgentLoopOperationOptions['chatStreamEventSink'];
-  timelineMessageRepository?: AgentLoopOperationOptions['timelineMessageRepository'];
+  chatStreamEventSink?: InputProcessingServiceOptions['chatStreamEventSink'];
+  timelineMessageRepository?: InputProcessingServiceOptions['timelineMessageRepository'];
   useTimelineProjector?: boolean;
 } = {}) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
+  const repository = createInputProcessingServiceTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   const timelineRepository = options.useTimelineProjector
     ? new TimelineMessageRepository(db)
@@ -1047,7 +1047,7 @@ function createBranchServiceFixture(options: {
       })
     : undefined;
   let branchMarkerIndex = 0;
-  const service = createAgentLoopOperationTestService({
+  const service = createInputProcessingServiceTestService({
     repository,
     activePathRepository: activePathRepo,
     ...(timelineRepository ? { timelineMessageRepository: timelineRepository } : {}),
@@ -1089,12 +1089,12 @@ function createBranchServiceFixture(options: {
 function createManualRetryFixture() {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
+  const repository = createInputProcessingServiceTestRepository(db);
   const activePathRepo = new SessionActivePathRepository(db);
   let sourceEntryIndex = 0;
   let branchMarkerIndex = 0;
   let retryAttemptIndex = 0;
-  const service = createAgentLoopOperationTestService({
+  const service = createInputProcessingServiceTestService({
     repository,
     activePathRepository: activePathRepo,
     clock: { now: () => '2026-06-01T11:00:00.000Z' },
@@ -1193,7 +1193,7 @@ function createManualRetryFixture() {
 }
 
 function seedBranchHistory(
-  repository: AgentLoopOperationTestRepository,
+  repository: InputProcessingServiceTestRepository,
   activePathRepo: SessionActivePathRepository,
 ) {
   repository.saveSession({
@@ -1319,16 +1319,16 @@ function createServiceWithChatStreamSink(
   events: RuntimeEvent[] | ((request: ModelStepRuntimeRequest, callIndex: number) => RuntimeEvent[]),
   chatEvents: ChatStreamEvent[],
   options?: {
-    toolRuntimeFactory?: AgentLoopOperationOptions['toolRuntimeFactory'];
-    toolDefinitionProvider?: AgentLoopOperationOptions['toolDefinitionProvider'];
-    workspaceChanges?: AgentLoopOperationOptions['workspaceChanges'];
+    toolRuntimeFactory?: InputProcessingServiceOptions['toolRuntimeFactory'];
+    toolDefinitionProvider?: InputProcessingServiceOptions['toolDefinitionProvider'];
+    workspaceChanges?: InputProcessingServiceOptions['workspaceChanges'];
   },
 ) {
   db = new Database(':memory:');
   migrateDatabase(db);
-  const repository = createAgentLoopOperationTestRepository(db);
+  const repository = createInputProcessingServiceTestRepository(db);
   let callIndex = 0;
-  return createAgentLoopOperationTestService({
+  return createInputProcessingServiceTestService({
     repository,
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
@@ -1406,7 +1406,7 @@ function createServiceWithChatStreamSinkAndRepository(
   }
   return {
     service,
-    repository: createAgentLoopOperationTestRepository(db),
+    repository: createInputProcessingServiceTestRepository(db),
   };
 }
 
@@ -1789,7 +1789,7 @@ afterEach(() => {
   db = null;
 });
 
-describe('AgentLoopOperation', () => {
+describe('InputProcessingService', () => {
   it('creates durable sessions', () => {
     const service = createService();
 
@@ -1828,7 +1828,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-01T08:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -1896,7 +1896,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-01T10:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -2206,7 +2206,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-01T10:00:02.000Z',
     });
 
-    await service.sendSessionMessage({
+    await service.handle({
       requestId: 'request-send-rerun-draft',
       payload: {
         sessionId: 'session-1',
@@ -2266,7 +2266,7 @@ describe('AgentLoopOperation', () => {
       completedAt: '2026-06-01T09:59:01.000Z',
     });
 
-    await service.sendSessionMessage({
+    await service.handle({
       requestId: 'request-send-rerun-draft',
       payload: {
         sessionId: 'session-1',
@@ -2318,7 +2318,7 @@ describe('AgentLoopOperation', () => {
     const sourceEntryIds = activePathRepo.listSourceEntriesBySession('session-1')
       .map((entry) => entry.sourceEntryId);
 
-    await expect(service.sendSessionMessage({
+    await expect(service.handle({
       requestId: 'request-send-stale-rerun-draft',
       payload: {
         sessionId: 'session-1',
@@ -2525,7 +2525,7 @@ describe('AgentLoopOperation', () => {
     });
 
     const longRequestId = `ipc-${'a'.repeat(124)}`;
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: longRequestId,
       payload: {
         sessionId: 'session-1',
@@ -2719,7 +2719,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -2793,7 +2793,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -2857,7 +2857,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -2883,7 +2883,7 @@ describe('AgentLoopOperation', () => {
       streamed.push(event);
     }
 
-    const repository = createAgentLoopOperationTestRepository(db!);
+    const repository = createInputProcessingServiceTestRepository(db!);
     expect(requests).toEqual([]);
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
@@ -2921,7 +2921,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -2947,7 +2947,7 @@ describe('AgentLoopOperation', () => {
       streamed.push(event);
     }
 
-    const repository = createAgentLoopOperationTestRepository(db!);
+    const repository = createInputProcessingServiceTestRepository(db!);
     expect(requests).toEqual([]);
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',
@@ -3043,7 +3043,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -3167,7 +3167,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -3286,7 +3286,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const first = await service.sendSessionMessage({
+    const first = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -3310,7 +3310,7 @@ describe('AgentLoopOperation', () => {
       // drain first run including tool result model input
     }
 
-    const second = await service.sendSessionMessage({
+    const second = await service.handle({
       requestId: 'request-2',
       payload: {
         sessionId: 'session-1',
@@ -3367,7 +3367,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -3423,7 +3423,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-memory-disabled',
       payload: {
         sessionId: 'session-1',
@@ -3486,7 +3486,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-memory-missing-settings',
       payload: {
         sessionId: 'session-1',
@@ -3571,7 +3571,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-13T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -3636,7 +3636,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-13T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -3693,7 +3693,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-13T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -3730,7 +3730,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-13T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -3756,9 +3756,9 @@ describe('AgentLoopOperation', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
+    const repository = createInputProcessingServiceTestRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const service = createInputProcessingServiceTestService({
       repository,
       activePathRepository: activePathRepo,
       sessionCompactionOrchestrator: {
@@ -3879,7 +3879,7 @@ describe('AgentLoopOperation', () => {
       reason: 'source_appended',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -3914,9 +3914,9 @@ describe('AgentLoopOperation', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
+    const repository = createInputProcessingServiceTestRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const service = createInputProcessingServiceTestService({
       repository,
       activePathRepository: activePathRepo,
       sessionCompactionOrchestrator: {
@@ -4040,7 +4040,7 @@ describe('AgentLoopOperation', () => {
       reason: 'source_appended',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -4114,7 +4114,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -4205,7 +4205,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -4223,7 +4223,7 @@ describe('AgentLoopOperation', () => {
 
     const iterator = result.events[Symbol.asyncIterator]();
     expect((await iterator.next()).value.eventType).toBe('run.started');
-    expect(service.cancelSessionMessage({
+    expect(service.cancel({
       targetRequestId: 'request-1',
     })).toBe(true);
     resolveCompaction?.();
@@ -4296,7 +4296,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -4314,7 +4314,7 @@ describe('AgentLoopOperation', () => {
 
     const iterator = result.events[Symbol.asyncIterator]();
     expect((await iterator.next()).value.eventType).toBe('run.started');
-    expect(service.cancelSessionMessage({
+    expect(service.cancel({
       targetRequestId: 'request-1',
     })).toBe(true);
     resolveCompaction?.();
@@ -4389,7 +4389,7 @@ describe('AgentLoopOperation', () => {
     });
 
     const longRequestId = `ipc-${'b'.repeat(124)}`;
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: longRequestId,
       payload: {
         sessionId: 'session-1',
@@ -4451,7 +4451,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-14T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-provider-no-tools',
       payload: {
         sessionId: 'session-1',
@@ -4502,7 +4502,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-registry-snapshot',
       payload: {
         sessionId: 'session-1',
@@ -4569,7 +4569,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-14T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-registry-no-tools',
       payload: {
         sessionId: 'session-1',
@@ -4653,7 +4653,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-06-14T00:00:00.000Z',
     });
 
-    const first = await service.sendSessionMessage({
+    const first = await service.handle({
       requestId: 'request-registry-run-1',
       payload: {
         sessionId: 'session-1',
@@ -4671,7 +4671,7 @@ describe('AgentLoopOperation', () => {
     for await (const _event of first.events) {
       // Drain first run.
     }
-    const second = await service.sendSessionMessage({
+    const second = await service.handle({
       requestId: 'request-registry-run-2',
       payload: {
         sessionId: 'session-1',
@@ -4704,9 +4704,9 @@ describe('AgentLoopOperation', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
+    const repository = createInputProcessingServiceTestRepository(db);
     const activePathRepo = new SessionActivePathRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const service = createInputProcessingServiceTestService({
       repository,
       activePathRepository: activePathRepo,
       modelCallProvider: {
@@ -4781,7 +4781,7 @@ describe('AgentLoopOperation', () => {
       reason: 'source_appended',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -4844,8 +4844,8 @@ describe('AgentLoopOperation', () => {
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const repository = createInputProcessingServiceTestRepository(db);
+    const service = createInputProcessingServiceTestService({
       repository,
       modelCallProvider: {
         streamModelCall: async function* (request) {
@@ -4918,7 +4918,7 @@ describe('AgentLoopOperation', () => {
     });
 
     const toolResultsModelInputLongRequestId = `ipc-${'d'.repeat(124)}`;
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: toolResultsModelInputLongRequestId,
       payload: {
         sessionId: 'session-1',
@@ -5100,9 +5100,9 @@ describe('AgentLoopOperation', () => {
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
+    const repository = createInputProcessingServiceTestRepository(db);
     const toolRepository = new ToolRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const service = createInputProcessingServiceTestService({
       repository,
       modelCallProvider: {
         streamModelCall: async function* (request) {
@@ -5176,7 +5176,7 @@ describe('AgentLoopOperation', () => {
     });
 
     const modelRecordLongRequestId = `ipc-${'e'.repeat(124)}`;
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: modelRecordLongRequestId,
       payload: {
         sessionId: 'session-1',
@@ -5230,7 +5230,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -5279,8 +5279,8 @@ describe('AgentLoopOperation', () => {
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const repository = createInputProcessingServiceTestRepository(db);
+    const service = createInputProcessingServiceTestService({
       repository,
       modelCallProvider: {
         streamModelCall: async function* (request) {
@@ -5348,7 +5348,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -5414,7 +5414,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -5488,7 +5488,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-24T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -5589,7 +5589,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-24T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -5811,7 +5811,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-24T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -5831,7 +5831,7 @@ describe('AgentLoopOperation', () => {
       // Drain initial run until waiting for approval.
     }
 
-    const resumeEvents = service.resumeApproval({
+    const resumeEvents = service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       decidedAt: '2026-05-24T00:00:02.000Z',
@@ -5871,7 +5871,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-24T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -6026,7 +6026,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-24T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -6047,7 +6047,7 @@ describe('AgentLoopOperation', () => {
     }
     const beforeResumeCount = chatEvents.length;
 
-    const resumeEvents = service.resumeApproval({
+    const resumeEvents = service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       decidedAt: '2026-05-24T00:00:02.000Z',
@@ -6075,8 +6075,8 @@ describe('AgentLoopOperation', () => {
     const toolResult = createToolResult({ toolExecutionId: 'tool-execution-1' });
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const repository = createInputProcessingServiceTestRepository(db);
+    const service = createInputProcessingServiceTestService({
       repository,
       modelCallProvider: {
         streamModelCall: async function* (request) {
@@ -6197,7 +6197,7 @@ describe('AgentLoopOperation', () => {
     });
 
     const waitingApprovalLongRequestId = `ipc-${'f'.repeat(124)}`;
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: waitingApprovalLongRequestId,
       payload: {
         sessionId: 'session-1',
@@ -6240,7 +6240,7 @@ describe('AgentLoopOperation', () => {
     ]);
 
     const resumed = [];
-    const resumeEvents = service.resumeApproval({
+    const resumeEvents = service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       decidedAt: '2026-05-17T00:00:05.000Z',
@@ -6303,7 +6303,7 @@ describe('AgentLoopOperation', () => {
     expect(repository.getRun('run-1')).toMatchObject({
       status: 'completed',
     });
-    expect(service.resumeApproval({
+    expect(service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       decidedAt: '2026-05-17T00:00:06.000Z',
@@ -6395,7 +6395,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -6414,7 +6414,7 @@ describe('AgentLoopOperation', () => {
       // Drain until waiting for approval.
     }
 
-    const resumeEvents = service.resumeApproval({
+    const resumeEvents = service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'denied',
       decidedAt: '2026-05-17T00:00:05.000Z',
@@ -6512,7 +6512,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -6537,7 +6537,7 @@ describe('AgentLoopOperation', () => {
     expect(toolRepository.listPendingApprovalRequestsByRun('run-1')).toHaveLength(1);
     expect(toolRepository.listPendingToolExecutionsByRun('run-1')).toHaveLength(1);
 
-    expect(service.cancelSessionMessage({ targetRequestId: 'ipc-session-message-send-1' })).toBe(true);
+    expect(service.cancel({ targetRequestId: 'ipc-session-message-send-1' })).toBe(true);
 
     expect(toolRepository.getApprovalRequest('approval-request-1')).toMatchObject({
       status: 'cancelled',
@@ -6547,7 +6547,7 @@ describe('AgentLoopOperation', () => {
       status: 'cancelled',
       completedAt: '2026-05-17T00:00:00.000Z',
     });
-    expect(service.resumeApproval({
+    expect(service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       decidedAt: '2026-05-17T00:00:05.000Z',
@@ -6559,7 +6559,7 @@ describe('AgentLoopOperation', () => {
   it('cleans up active runs left from a previous runtime on startup', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
+    const repository = createInputProcessingServiceTestRepository(db);
     const toolRepository = new ToolRepository(db);
     repository.saveSession({
       sessionId: 'session-1',
@@ -6633,9 +6633,9 @@ describe('AgentLoopOperation', () => {
       startedAt: '2026-06-14T00:00:11.000Z',
       continuationEmitted: false,
     });
-    const service = createAgentLoopOperationTestService({
+    const service = createInputProcessingServiceTestService({
       repository,
-      toolRepository: createAgentLoopOperationToolRepositoryForTest(toolRepository),
+      toolRepository: createInputProcessingServiceToolRepositoryForTest(toolRepository),
       terminalToolRepository: toolRepository,
       clock: { now: () => '2026-06-14T00:01:00.000Z' },
       ids: {
@@ -6649,7 +6649,7 @@ describe('AgentLoopOperation', () => {
       },
     });
 
-    const result = service.cleanupInterruptedRunsOnStartup();
+    const result = service.cleanupInterruptedInputsOnStartup();
 
     expect(result.cleanedRunIds).toEqual(['run-waiting']);
     expect(repository.getRun('run-waiting')).toMatchObject({
@@ -6712,8 +6712,8 @@ describe('AgentLoopOperation', () => {
     ]);
     db = new Database(':memory:');
     migrateDatabase(db);
-    const repository = createAgentLoopOperationTestRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const repository = createInputProcessingServiceTestRepository(db);
+    const service = createInputProcessingServiceTestService({
       repository,
       modelCallProvider: {
         streamModelCall: async function* (request) {
@@ -6839,7 +6839,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -6861,7 +6861,7 @@ describe('AgentLoopOperation', () => {
     expect(repository.getRun('run-1')).toMatchObject({ status: 'waiting_for_approval' });
 
     const firstResume = [];
-    for await (const event of service.resumeApproval({
+    for await (const event of service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       decidedAt: '2026-05-17T00:00:05.000Z',
@@ -6879,7 +6879,7 @@ describe('AgentLoopOperation', () => {
     expect(repository.getRun('run-1')).toMatchObject({ status: 'waiting_for_approval' });
 
     const secondResume = [];
-    for await (const event of service.resumeApproval({
+    for await (const event of service.resumeToolApproval({
       approvalRequestId: 'approval-request-2',
       decision: 'approved',
       decidedAt: '2026-05-17T00:00:06.000Z',
@@ -6957,7 +6957,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -7051,7 +7051,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -7190,7 +7190,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -7406,7 +7406,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -7439,7 +7439,7 @@ describe('AgentLoopOperation', () => {
       }
     }
 
-    const resumeEvents = service.resumeApproval({
+    const resumeEvents = service.resumeToolApproval({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       decidedAt: '2026-05-17T00:00:05.000Z',
@@ -7532,7 +7532,7 @@ describe('AgentLoopOperation', () => {
       onRequest: (request) => requests.push(request),
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         providerId: 'deepseek',
@@ -7584,7 +7584,7 @@ describe('AgentLoopOperation', () => {
         text: expect.stringContaining('Project root: C:/all/work/study/megumi'),
       }),
     ]));
-    const source = fs.readFileSync(path.join(process.cwd(), 'packages/coding-agent/product-runtime/agent-loop-operation.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'packages/coding-agent/input/input-service.ts'), 'utf8');
     expect(source).not.toContain('runContext: context');
     expect(source).not.toContain('runContext:');
   });
@@ -7616,7 +7616,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -7679,7 +7679,7 @@ describe('AgentLoopOperation', () => {
       },
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -7775,7 +7775,7 @@ describe('AgentLoopOperation', () => {
       },
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -7841,9 +7841,9 @@ describe('AgentLoopOperation', () => {
     db = new Database(':memory:');
     migrateDatabase(db);
     const requests: ModelStepRuntimeRequest[] = [];
-    const sessionRepository = createAgentLoopOperationTestRepository(db);
+    const sessionRepository = createInputProcessingServiceTestRepository(db);
     const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const service = createInputProcessingServiceTestService({
       repository: sessionRepository,
       permissionSnapshotService: new PermissionSnapshotService({
         repository: permissionSnapshotRepository,
@@ -7878,7 +7878,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -7917,9 +7917,9 @@ describe('AgentLoopOperation', () => {
   it('persists input preprocessing metadata on session message permission snapshots with the real repository', async () => {
     db = new Database(':memory:');
     migrateDatabase(db);
-    const sessionRepository = createAgentLoopOperationTestRepository(db);
+    const sessionRepository = createInputProcessingServiceTestRepository(db);
     const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
-    const service = createAgentLoopOperationTestService({
+    const service = createInputProcessingServiceTestService({
       repository: sessionRepository,
       permissionSnapshotService: new PermissionSnapshotService({
         repository: permissionSnapshotRepository,
@@ -7954,7 +7954,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -8063,7 +8063,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -8114,7 +8114,7 @@ describe('AgentLoopOperation', () => {
       },
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'request-1',
       payload: {
         sessionId: 'session-1',
@@ -8180,7 +8180,7 @@ describe('AgentLoopOperation', () => {
       createdAt: '2026-05-17T00:00:00.000Z',
     });
 
-    const result = await service.sendSessionMessage({
+    const result = await service.handle({
       requestId: 'ipc-session-message-send-1',
       payload: {
         sessionId: 'session-1',
@@ -8224,3 +8224,5 @@ function seedProject(database: Database.Database): void {
     VALUES ('project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
   `).run();
 }
+
+

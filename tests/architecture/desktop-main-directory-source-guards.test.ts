@@ -54,7 +54,7 @@ describe('Desktop Main directory boundaries', () => {
     for (const forbidden of [
       '@megumi/db/repos',
       'createDatabase(',
-      'new AgentLoopOperation',
+      'new InputProcessingService',
       'createToolCallRunner',
       'new ProviderRuntimeService',
       'MemoryMarkdownSyncService',
@@ -67,13 +67,15 @@ describe('Desktop Main directory boundaries', () => {
   it('keeps desktop-main-composition as a compose-module coordinator', () => {
     const source = read('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
-    expect(source).toContain('composeCodingAgentRuntime');
-    expect(source).toContain('providerService: codingAgentRuntime.providerSettingsService');
-    expect(source).toContain('runContextService: codingAgentRuntime.runContextService');
-    expect(source).toContain('toolService: codingAgentRuntime.toolService');
+    expect(source).toContain('composeCodingAgentHostInterface');
+    expect(source).toContain('providerService: codingAgentHost.settings.provider');
+    expect(source).toContain('sessionHandlers: { host: codingAgentHost }');
+    expect(source).toContain('permissionsService: codingAgentHost.permissions');
+    expect(source).not.toContain('runContextService:');
+    expect(source).not.toContain('toolService:');
     for (const forbidden of [
       'createDatabase(',
-      'new AgentLoopOperation',
+      'new InputProcessingService',
       'createToolCallRunner',
       'new ProviderRuntimeService',
       'new WorkspaceRestoreService',
@@ -144,7 +146,7 @@ describe('Desktop Main directory boundaries', () => {
     expect(source).toContain('WorkspaceChangeRepository');
     expect(source).not.toContain("from 'electron'");
     expect(source).not.toContain('@megumi/coding-agent');
-    expect(source).not.toContain('@megumi/coding-agent/product-runtime');
+    expect(source).not.toContain('@megumi/coding-agent/host-interface');
     expect(source).not.toContain('src/main/services');
     expect(source).not.toContain('src/main/ipc');
     expect(source).not.toContain('src/renderer');
@@ -153,7 +155,8 @@ describe('Desktop Main directory boundaries', () => {
   it('uses coding-agent owner imports instead of the legacy run barrel for desktop state and context helpers', () => {
     const source = sourceUnder('apps/desktop/src/main');
 
-    expect(source).not.toContain('@megumi/coding-agent/product-runtime');
+    expect(source).toContain('@megumi/coding-agent/host-interface');
+    expect(source).not.toContain('@megumi/coding-agent/obsolete-run');
     expect(source).toContain("normalizeRuntimeError } from '@megumi/coding-agent/state'");
     expect(source).toContain('@megumi/coding-agent/context');
   });

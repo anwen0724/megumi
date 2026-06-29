@@ -1,4 +1,4 @@
-﻿// Verifies the product runtime persists committed timeline history by default
+﻿// Verifies the host interface persists committed timeline history by default
 // (without any caller-provided chat stream sink), and forwards events downstream
 // when a sink is supplied. This proves timeline-history commit is product behavior,
 // not desktop behavior.
@@ -17,7 +17,7 @@ import {
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
-import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
+import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 // Seeds a real project row in the same SQLite file the runtime will open, mirroring
 // the production invariant that a session's workspaceId is always an opened project's
@@ -65,7 +65,7 @@ function answeringModelStepProvider() {
         source: 'provider',
         visibility: 'user',
         persist: 'required',
-        payload: { content: 'Hello from the product runtime' },
+        payload: { content: 'Hello from the host interface' },
       } as RuntimeEvent;
     },
     completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
@@ -73,38 +73,28 @@ function answeringModelStepProvider() {
   };
 }
 
-async function sendOneMessage(runtime: CodingAgentProductRuntime, projectId: string, workspacePath: string) {
-  const session = runtime.sessionService.createSession({
-    title: 'Session',
+async function sendOneMessage(runtime: CodingAgentHostInterface, projectId: string, workspacePath: string) {
+  const result = await runtime.input.send({
+    requestId: 'request-1',
+    sessionTitle: 'Session',
     workspaceId: projectId,
     workspacePath,
+    providerId: 'deepseek',
+    modelId: 'deepseek-v4-flash',
+    text: 'Say hello',
+    clientMessageId: 'message-local-user',
+    permissionMode: 'default',
     createdAt: '2026-06-24T00:00:00.000Z',
-  });
-  const result = await runtime.sendSessionMessage({
-    requestId: 'request-1',
-    payload: {
-      sessionId: String(session.sessionId),
-      providerId: 'deepseek',
-      modelId: 'deepseek-v4-flash',
-      context: { permissionMode: 'default' },
-      messages: [{
-        id: 'message-local-user',
-        role: 'user',
-        content: 'Say hello',
-        createdAt: '2026-06-24T00:00:00.000Z',
-      }],
-      createdAt: '2026-06-24T00:00:00.000Z',
-    },
   });
   for await (const _event of result.events) {
     // Drain to terminal so the projector commits.
   }
-  return String(session.sessionId);
+  return String(result.session.sessionId);
 }
 
-describe('Coding Agent product runtime timeline history commit', () => {
+describe('Coding Agent host interface timeline history commit', () => {
   let temporaryHome: string | undefined;
-  let runtime: CodingAgentProductRuntime | undefined;
+  let runtime: CodingAgentHostInterface | undefined;
 
   afterEach(async () => {
     runtime?.dispose();
@@ -133,7 +123,7 @@ describe('Coding Agent product runtime timeline history commit', () => {
 
     const sessionId = await sendOneMessage(runtime, project.projectId, project.repoPath);
 
-    const committed = runtime.sessionService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
+    const committed = runtime.session.listTimeline({ projectId: project.projectId, sessionId });
     expect(committed.messages.length).toBeGreaterThan(0);
     expect(committed.messages.some((message) => message.role === 'assistant')).toBe(true);
   }, 30000);
@@ -159,7 +149,7 @@ describe('Coding Agent product runtime timeline history commit', () => {
     const sessionId = await sendOneMessage(runtime, project.projectId, project.repoPath);
 
     expect(forwarded.some((event) => event.eventType === 'turn.completed')).toBe(true);
-    const committed = runtime.sessionService.listTimelineMessagesBySession({ projectId: project.projectId, sessionId });
+    const committed = runtime.session.listTimeline({ projectId: project.projectId, sessionId });
     expect(committed.messages.length).toBeGreaterThan(0);
   }, 30000);
 });

@@ -1,5 +1,9 @@
-// @vitest-environment node
+// Verifies input-service owns user input handling from public entry to internal session message processing.
 import { describe, expect, it } from 'vitest';
+import {
+  createInputService,
+} from '@megumi/coding-agent/input';
+import { createUserInputHandler } from '@megumi/coding-agent/input/input-service';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   Run,
@@ -12,13 +16,130 @@ import type {
 import { SessionMessageService } from '@megumi/coding-agent/session';
 import { ActiveSessionMessageRunTracker } from '@megumi/coding-agent/state';
 import type { ChatStreamEventAdapter } from '@megumi/coding-agent/projections/chat-stream';
-import {
-  SubmitInputOperation,
-} from '@megumi/coding-agent/product-runtime';
 
-describe('SubmitInputOperation', () => {
-  it('coordinates submit input product operation and delegates execution to agent-loop', async () => {
-    const repository = new InMemorySubmitInputOperationRepository();
+describe('InputService', () => {
+  it('sends one user input through session and agent-loop owner ports', async () => {
+    const session: Session = {
+      sessionId: 'session-1',
+      title: 'Explain G2',
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/workspace/project',
+      status: 'active',
+      createdAt: '2026-06-29T13:00:00.000Z',
+      updatedAt: '2026-06-29T13:00:00.000Z',
+    };
+    const userMessage: SessionMessage = {
+      messageId: 'message-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      role: 'user',
+      content: 'Explain G2',
+      status: 'completed',
+      createdAt: '2026-06-29T13:00:00.000Z',
+    };
+    const sentPayloads: unknown[] = [];
+    const service = createInputService({
+      session: {
+        listSessions: () => [],
+        createSession(input) {
+          expect(input).toMatchObject({
+            title: 'Explain G2',
+            workspaceId: 'workspace-1',
+            workspacePath: 'C:/workspace/project',
+            createdAt: '2026-06-29T13:00:00.000Z',
+          });
+          return session;
+        },
+        listMessagesBySession(sessionId) {
+          expect(sessionId).toBe('session-1');
+          return [userMessage];
+        },
+      },
+      userInput: {
+        async handle(input) {
+          sentPayloads.push(input);
+          return {
+            data: { requestId: input.requestId },
+            events: collectable([runtimeEvent('run.completed')]),
+          };
+        },
+        cancel: () => false,
+      },
+      ids: {
+        requestId: () => 'input-request-1',
+        clientMessageId: () => 'client-message-1',
+      },
+    });
+
+    const result = await service.send({
+      workspaceId: 'workspace-1',
+      workspacePath: 'C:/workspace/project',
+      providerId: 'openai',
+      modelId: 'gpt-test',
+      text: 'Explain G2',
+      permissionMode: 'default',
+      createdAt: '2026-06-29T13:00:00.000Z',
+    });
+    const events = [];
+    for await (const event of result.events) {
+      events.push(event.eventType);
+    }
+
+    expect(result).toMatchObject({
+      session,
+      requestId: 'input-request-1',
+      userMessageId: 'message-1',
+      runId: 'run-1',
+    });
+    expect(events).toEqual(['run.completed']);
+    expect(sentPayloads).toEqual([{
+      requestId: 'input-request-1',
+      payload: {
+        sessionId: 'session-1',
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        message: {
+          id: 'client-message-1',
+          content: 'Explain G2',
+          createdAt: '2026-06-29T13:00:00.000Z',
+        },
+        context: {
+          workspaceId: 'workspace-1',
+          workspacePath: 'C:/workspace/project',
+          permissionMode: 'default',
+        },
+        createdAt: '2026-06-29T13:00:00.000Z',
+      },
+    }]);
+  });
+
+  it('cancels only the active input request through the agent-loop owner port', () => {
+    const cancelledRequests: string[] = [];
+    const service = createInputService({
+      session: {
+        listSessions: () => [],
+        createSession: () => {
+          throw new Error('not used');
+        },
+        listMessagesBySession: () => [],
+      },
+      userInput: {
+        handle: async () => {
+          throw new Error('not used');
+        },
+        cancel(input) {
+          cancelledRequests.push(input.targetRequestId);
+          return true;
+        },
+      },
+    });
+
+    expect(service.cancel({ targetRequestId: 'input-request-1' })).toBe(true);
+    expect(cancelledRequests).toEqual(['input-request-1']);
+  });
+
+  it('handles session message input and delegates reply generation to agent-loop', async () => {
+    const repository = new InMemoryUserInputRepository();
     const runs = new Map<string, Run>();
     const steps = new Map<string, RunStep>();
     const chatEvents: unknown[] = [];
@@ -29,7 +150,7 @@ describe('SubmitInputOperation', () => {
       activePathRepository: repository,
       ids: sequenceIds(),
     });
-    const operation = new SubmitInputOperation({
+    const handler = createUserInputHandler({
       clock: { now: () => '2026-06-29T11:00:00.000Z' },
       ids: {
         runId: () => 'run-1',
@@ -89,9 +210,10 @@ describe('SubmitInputOperation', () => {
         expect(input.permissionMode).toBe('default');
         return collectable([runtimeEvent('run.started')]);
       },
+      cancelActiveInput: () => false,
     });
 
-    const result = await operation.send({
+    const result = await handler.handle({
       requestId: 'request-1',
       payload: {
         providerId: 'openai',
@@ -135,7 +257,7 @@ describe('SubmitInputOperation', () => {
   });
 });
 
-class InMemorySubmitInputOperationRepository {
+class InMemoryUserInputRepository {
   readonly sessions = new Map<string, Session>();
   readonly messages = new Map<string, SessionMessage>();
   readonly sourceEntries: SessionSourceEntry[] = [];
@@ -206,7 +328,7 @@ function runtimeEvent(eventType: RuntimeEvent['eventType']): RuntimeEvent {
     runId: 'run-1',
     sessionId: 'session-1',
     sequence: 1,
-    createdAt: '2026-06-29T11:00:00.000Z',
+    createdAt: '2026-06-29T13:00:00.000Z',
     schemaVersion: 1,
     source: 'core',
     visibility: 'user',

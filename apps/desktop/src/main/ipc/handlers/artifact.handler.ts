@@ -1,7 +1,6 @@
-﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
-import type { JsonObject } from '@megumi/shared/primitives';
 import type {
   ArtifactGetData,
   ArtifactGetPayload,
@@ -26,15 +25,12 @@ import {
   ArtifactVersionCreateRequestSchema,
   ArtifactVersionGetRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ArtifactService } from '@megumi/coding-agent/artifacts';
+import type { HostArtifactController } from '@megumi/coding-agent/host-interface';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
-export type ArtifactHandlersService = Pick<
-  ArtifactService,
-  'listByRun' | 'listBySession' | 'get' | 'getVersion' | 'createVersion' | 'updateStatus' | 'reference'
->;
+export type ArtifactHandlersService = Omit<HostArtifactController, 'plan'>;
 
 export interface RegisterArtifactHandlersOptions {
   logger?: RuntimeLogger;
@@ -52,7 +48,7 @@ export function registerArtifactHandlers(
     requestSchema: ArtifactListByRunRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<ArtifactListByRunPayload, typeof IPC_CHANNELS.artifacts.listByRun>): ArtifactListData => ({
-      artifacts: service.listByRun(request.payload.runId),
+      artifacts: service.listByRun(request.payload.runId).artifacts,
     }),
     mapError: mapArtifactIpcError,
   }));
@@ -62,7 +58,7 @@ export function registerArtifactHandlers(
     requestSchema: ArtifactListBySessionRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<ArtifactListBySessionPayload, typeof IPC_CHANNELS.artifacts.listBySession>): ArtifactListData => ({
-      artifacts: service.listBySession(request.payload.sessionId),
+      artifacts: service.listBySession(request.payload.sessionId).artifacts,
     }),
     mapError: mapArtifactIpcError,
   }));
@@ -81,7 +77,7 @@ export function registerArtifactHandlers(
     requestSchema: ArtifactVersionGetRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<ArtifactVersionGetPayload, typeof IPC_CHANNELS.artifacts.versionGet>): ArtifactVersionGetData => ({
-      version: service.getVersion(request.payload.artifactVersionId),
+      version: service.getVersion(request.payload.artifactVersionId).version,
     }),
     mapError: mapArtifactIpcError,
   }));
@@ -92,12 +88,7 @@ export function registerArtifactHandlers(
     logger: options.logger,
     handle: async (
       request: RuntimeIpcRequest<ArtifactVersionCreatePayload, typeof IPC_CHANNELS.artifacts.versionCreate>,
-    ): Promise<ArtifactVersionCreateData> => ({
-      version: await service.createVersion({
-        ...request.payload,
-        metadata: toJsonObject(request.payload.metadata),
-      }),
-    }),
+    ): Promise<ArtifactVersionCreateData> => service.createVersion(request.payload),
     mapError: mapArtifactIpcError,
   }));
 
@@ -106,7 +97,7 @@ export function registerArtifactHandlers(
     requestSchema: ArtifactStatusUpdateRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<ArtifactStatusUpdatePayload, typeof IPC_CHANNELS.artifacts.statusUpdate>): ArtifactStatusUpdateData => ({
-      artifact: service.updateStatus(request.payload),
+      artifact: service.updateStatus(request.payload).artifact,
     }),
     mapError: mapArtifactIpcError,
   }));
@@ -116,10 +107,7 @@ export function registerArtifactHandlers(
     requestSchema: ArtifactReferenceRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<ArtifactReferencePayload, typeof IPC_CHANNELS.artifacts.reference>): ArtifactReferenceData => ({
-      sourceRef: service.reference({
-        ...request.payload,
-        metadata: toJsonObject(request.payload.metadata),
-      }),
+      sourceRef: service.reference(request.payload).sourceRef,
     }),
     mapError: mapArtifactIpcError,
   }));
@@ -137,10 +125,6 @@ export function registerArtifactHandlers(
 
 
 
-}
-
-function toJsonObject(value: Record<string, unknown> | undefined): JsonObject | undefined {
-  return value as JsonObject | undefined;
 }
 
 function mapArtifactIpcError(): RuntimeIpcError {
@@ -152,4 +136,3 @@ function mapArtifactIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-

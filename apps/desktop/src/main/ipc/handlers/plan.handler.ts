@@ -1,4 +1,3 @@
-﻿import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
@@ -12,15 +11,12 @@ import {
   PlanByRunGetRequestSchema,
   PlanStatusUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import type { PlanArtifactServicePort } from '@megumi/coding-agent/artifacts';
+import type { HostArtifactController } from '@megumi/coding-agent/host-interface';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
-export type PlanHandlersService = Pick<
-  PlanArtifactServicePort,
-  'getPlanByRun' | 'updatePlanStatus'
->;
+export type PlanHandlersService = HostArtifactController['plan'];
 
 export interface RegisterPlanHandlersOptions {
   logger?: RuntimeLogger;
@@ -41,9 +37,7 @@ export function registerPlanHandlers(
       logger: options.logger,
       handle: (
         request: RuntimeIpcRequest<PlanByRunGetPayload, typeof IPC_CHANNELS.plan.byRunGet>,
-      ): PlanByRunGetData => ({
-        plan: service.getPlanByRun(request.payload.runId) as ImplementationPlanArtifactRecord | undefined,
-      }),
+      ): PlanByRunGetData => service.getByRun(request.payload.runId),
       mapError: mapPlanIpcError,
     }),
   );
@@ -56,9 +50,7 @@ export function registerPlanHandlers(
       logger: options.logger,
       handle: (
         request: RuntimeIpcRequest<PlanStatusUpdatePayload, typeof IPC_CHANNELS.plan.statusUpdate>,
-      ): PlanStatusUpdateData => ({
-        plan: service.updatePlanStatus(request.payload),
-      }),
+      ): PlanStatusUpdateData => service.updateStatus(request.payload),
       mapError: mapPlanIpcError,
     }),
   );
@@ -77,5 +69,3 @@ function mapPlanIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-
-

@@ -61,7 +61,7 @@ describe('run modes and plan artifact source guards', () => {
   });
 
   it('keeps coding-agent run mode runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/coding-agent/product-runtime')
+    const offenders = filesUnder('packages/coding-agent/host-interface')
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process|node:http|node:https|node:net)/.test(source);

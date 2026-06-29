@@ -1,4 +1,4 @@
-﻿import type { z } from 'zod';
+import type { z } from 'zod';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
@@ -18,14 +18,14 @@ import {
   ProjectRemoveRequestSchema,
   ProjectUseExistingRequestSchema,
 } from '@megumi/shared/ipc';
-import type { ProjectService } from '@megumi/coding-agent/workspace';
+import type { HostWorkspaceController } from '@megumi/coding-agent/host-interface';
 import { ProjectPathValidationError } from '@megumi/coding-agent/workspace';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 
 export type ProjectHandlersService = Pick<
-  ProjectService,
+  HostWorkspaceController,
   'listProjects' | 'useExistingProject' | 'openProject' | 'removeProject'
 >;
 
@@ -123,4 +123,3 @@ function mapProjectIpcError(error: unknown): RuntimeIpcError {
     source: 'main',
   };
 }
-

@@ -21,7 +21,7 @@ import {
   resolveAppSettings,
   type AppSettingsRaw,
 } from '@megumi/shared/settings';
-import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
+import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 function appSettingsProvider() {
   let rawSettings: AppSettingsRaw = {};
@@ -67,7 +67,7 @@ function seedOrphanRun(home: string, runId: string, status: 'failed' | 'cancelle
   }
 }
 
-function composeRuntime(home: string): CodingAgentProductRuntime {
+function composeRuntime(home: string): CodingAgentHostInterface {
   return composeCodingAgentRuntime({
     homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
     runtimeLogger: { warn: () => undefined },
@@ -84,7 +84,7 @@ function composeRuntime(home: string): CodingAgentProductRuntime {
 
 describe('recovery startup backfills timeline for orphan terminal runs', () => {
   let home: string | undefined;
-  let runtime: CodingAgentProductRuntime | undefined;
+  let runtime: CodingAgentHostInterface | undefined;
 
   afterEach(async () => {
     runtime?.dispose();
@@ -102,7 +102,7 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
 
     // First compose triggers recovery startup backfill.
     runtime = composeRuntime(home);
-    const after = runtime.sessionService.listTimelineMessagesBySession({ projectId, sessionId });
+    const after = runtime.session.listTimeline({ projectId, sessionId });
     // Backfill mirrors a normal turn: the triggering user prompt, then the failure.
     expect(after.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
     const userMessage = after.messages[0];
@@ -113,7 +113,7 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
 
     // Second compose must NOT duplicate (idempotent via timeline_run_commits row).
     runtime = composeRuntime(home);
-    const again = runtime.sessionService.listTimelineMessagesBySession({ projectId, sessionId });
+    const again = runtime.session.listTimeline({ projectId, sessionId });
     expect(again.messages.length).toBe(2);
   }, 30000);
 
@@ -122,7 +122,7 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
     const { projectId, sessionId } = seedOrphanRun(home, 'run-cancelled-1', 'cancelled');
 
     runtime = composeRuntime(home);
-    const after = runtime.sessionService.listTimelineMessagesBySession({ projectId, sessionId });
+    const after = runtime.session.listTimeline({ projectId, sessionId });
     expect(after.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
   }, 30000);
 });

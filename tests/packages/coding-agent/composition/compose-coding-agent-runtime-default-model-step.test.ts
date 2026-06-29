@@ -1,4 +1,4 @@
-﻿// Verifies the product runtime builds a real model step provider by default,
+﻿// Verifies the host interface builds a real model step provider by default,
 // so it can call models standalone without a UI shell supplying one.
 // @vitest-environment node
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -11,11 +11,11 @@ import {
   resolveAppSettings,
   type AppSettingsRaw,
 } from '@megumi/shared/settings';
-import type { CodingAgentProductRuntime } from '@megumi/coding-agent/product-runtime';
+import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
-describe('Coding Agent product runtime default model step provider', () => {
+describe('Coding Agent host interface default model step provider', () => {
   let temporaryHome: string | undefined;
-  let runtime: CodingAgentProductRuntime | undefined;
+  let runtime: CodingAgentHostInterface | undefined;
 
   afterEach(async () => {
     runtime?.dispose();
@@ -55,7 +55,7 @@ describe('Coding Agent product runtime default model step provider', () => {
       },
     });
 
-    expect(runtime.sessionService).toBeDefined();
-    expect(typeof runtime.sendSessionMessage).toBe('function');
+    expect(runtime.session).toBeDefined();
+    expect(typeof runtime.input.send).toBe('function');
   });
 });

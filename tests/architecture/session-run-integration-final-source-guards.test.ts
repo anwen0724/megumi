@@ -130,7 +130,7 @@ describe('09 session run integration final source guards', () => {
   });
 
   it('routes session-run model input construction through ModelCallInputBuildService', () => {
-    const sessionRun = source('packages/coding-agent/product-runtime/agent-loop-operation.ts');
+    const sessionRun = source('packages/coding-agent/input/input-service.ts');
 
     expect(sessionRun).toContain('ModelCallInputBuildService');
     expect(sessionRun).toContain('modelCallInputBuildService');
@@ -147,7 +147,7 @@ describe('09 session run integration final source guards', () => {
   it('keeps formal context build source free of old preflight naming', () => {
     const scannedFiles = [
       'packages/coding-agent/context/compaction/session-compaction.ts',
-      'packages/coding-agent/product-runtime/agent-loop-operation.ts',
+      'packages/coding-agent/input/input-service.ts',
       'packages/coding-agent/context/compaction/session-compaction-orchestrator.ts',
     ];
     const offenders = scannedFiles.filter((path) => /\bpreflight\b/i.test(source(path)));

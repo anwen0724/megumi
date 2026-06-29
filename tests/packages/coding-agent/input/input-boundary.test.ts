@@ -32,6 +32,8 @@ describe('coding-agent input boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/input/parsed-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/normalizer.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/ids.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/input/input-submission-operation.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/input'))).toBe(false);
   });
 
@@ -39,7 +41,7 @@ describe('coding-agent input boundary', () => {
     const violations = walkSourceFiles(join(root, 'packages/coding-agent/input')).flatMap((file) => {
       const source = readFileSync(file, 'utf8');
       const forbidden = [
-        '@megumi/coding-agent/product-runtime',
+        '@megumi/coding-agent/host-interface',
         '@megumi/tools',
         '@megumi/db',
         '@megumi/desktop',
@@ -48,9 +50,6 @@ describe('coding-agent input boundary', () => {
         'ipcMain',
         'BrowserWindow',
         'better-sqlite3',
-        'ToolCall',
-        'PermissionDecision',
-        'SessionRepository',
       ].filter((pattern) => source.includes(pattern));
 
       return forbidden.map((pattern) => `${relativePath(file)} contains ${pattern}`);
