@@ -2,6 +2,7 @@
   "name": "megumi",
   "version": "0.1.0",
   "description": "AI-guided development workflow platform",
+  "author": "Megumi contributors",
   "main": ".vite/build/index.js",
   "scripts": {
     "start": "electron-forge start",
@@ -14,6 +15,9 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.0",
+    "@electron-forge/maker-deb": "^7.11.0",
+    "@electron-forge/maker-squirrel": "^7.11.0",
+    "@electron-forge/maker-zip": "^7.11.0",
     "@electron-forge/plugin-fuses": "^7.11.0",
     "@electron-forge/plugin-vite": "^7.11.0",
     "@electron/fuses": "^1.8.0",

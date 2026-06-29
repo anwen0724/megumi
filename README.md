@@ -22,7 +22,7 @@ Available today:
 - Session/run event timeline foundations
 - Foundations for approvals, artifacts, memory, and workspace context
 - Local `~/.megumi` runtime directory
-- Local secret storage through Electron safeStorage
+- Local settings and provider credentials stored in `~/.megumi/settings.json`
 - Warm and neutral desktop UI themes
 
 Planned:
@@ -37,6 +37,23 @@ Planned:
 ## Screenshots
 
 Screenshots coming soon.
+
+## Install Megumi
+
+Windows users can download the latest unsigned installer from GitHub Releases.
+
+1. Download `MegumiSetup.exe` from the latest release.
+2. Run the installer.
+3. Windows SmartScreen may show an "Unknown publisher" warning because the open-source build is unsigned.
+4. Start Megumi and complete the first-run setup wizard.
+
+Megumi creates its default home directory at:
+
+```text
+C:\Users\<you>\.megumi
+```
+
+Provider API keys entered during setup are intentionally written to `~/.megumi/settings.json` by the current settings design.
 
 ## Getting Started
 
