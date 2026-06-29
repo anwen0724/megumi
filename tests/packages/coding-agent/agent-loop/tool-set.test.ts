@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createToolSetSnapshotProvider,
   ToolSetService,
   type ToolSetRegistryProvider,
   type ToolSetSnapshotProvider,
@@ -8,6 +9,10 @@ import {
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ToolDefinition } from '@megumi/shared/tool';
+import type {
+  RunToolRegistrySnapshotBuildResult,
+  ToolRegistrySnapshotServicePort,
+} from '@megumi/coding-agent/tools/tool-registry-snapshot';
 
 describe('ToolSetService', () => {
   it('uses the run snapshot when project identity is available and normalizes snapshot event sequence', () => {
@@ -87,6 +92,100 @@ describe('ToolSetService', () => {
     expect(snapshotProvider.createRunSnapshot).toHaveBeenCalledWith(expect.objectContaining({
       providerCapabilitySummary: { supportsToolCall: false },
     }));
+  });
+
+  it('adapts a tool registry snapshot into model-visible ToolSet definitions and runtime events', () => {
+    let eventIndex = 0;
+    const snapshotResult: RunToolRegistrySnapshotBuildResult = {
+      snapshot: {
+        snapshotId: 'snapshot-1',
+        runId: 'run-1',
+        projectId: 'project-1',
+        permissionMode: 'default',
+        modelId: 'gpt-test',
+        createdAt,
+        registryVersion: 1,
+        sourceVersionHash: 'hash-1',
+        sourceEntries: [{
+          sourceId: 'built_in',
+          sourceKind: 'built_in',
+          namespace: 'megumi',
+          displayName: 'Built-in tools',
+          configured: true,
+          enabled: true,
+          availabilityStatus: 'available',
+        }],
+        entries: [{
+          snapshotEntryId: 'entry-1',
+          snapshotId: 'snapshot-1',
+          registrationId: 'registration-1',
+          canonicalToolId: 'built_in:megumi:read_file',
+          modelVisibleName: 'read_file',
+          sourceId: 'built_in',
+          namespace: 'megumi',
+          sourceToolName: 'read_file',
+          definition: toolDefinition('read_file'),
+          effectiveStatus: 'available',
+          exposedToModel: true,
+          executionMode: 'serial',
+          createdAt,
+        }],
+      },
+      modelVisibleToolDefinitions: [toolDefinition('read_file')],
+      diagnostics: {
+        sourceIds: ['built_in'],
+        createdSourceIds: ['built_in'],
+        modelSupportsToolCall: true,
+        modelVisibleToolNames: ['read_file'],
+        hiddenCount: 0,
+      },
+    };
+    const snapshotService: ToolRegistrySnapshotServicePort = {
+      createRunSnapshot: vi.fn(() => snapshotResult),
+    };
+    const provider = createToolSetSnapshotProvider({
+      snapshotService,
+      eventId: () => `event-${eventIndex += 1}`,
+    });
+
+    const result = provider.createRunSnapshot({
+      runId: 'run-1',
+      sessionId: 'session-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+      modelId: 'gpt-test',
+      createdAt,
+      providerCapabilitySummary: { supportsToolCall: true },
+    });
+
+    expect(snapshotService.createRunSnapshot).toHaveBeenCalledWith({
+      runId: 'run-1',
+      projectId: 'project-1',
+      permissionMode: 'default',
+      modelId: 'gpt-test',
+      createdAt,
+      providerCapabilitySummary: { supportsToolCall: true },
+    });
+    expect(result.modelVisibleToolDefinitions.map((definition) => definition.name)).toEqual(['read_file']);
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'tool.registry.sources.ensured',
+      'tool.registry.snapshot.created',
+      'tool.registry.entry.resolved',
+      'tool.registry.model_visible_tools.derived',
+    ]);
+    expect(result.events[2]?.payload).toMatchObject({
+      snapshotEntryId: 'entry-1',
+      modelVisibleName: 'read_file',
+      effectiveStatus: 'available',
+      exposedToModel: true,
+    });
+    expect(result.events[3]?.payload).toMatchObject({
+      snapshotId: 'snapshot-1',
+      modelId: 'gpt-test',
+      modelSupportsToolCall: true,
+      toolNames: ['read_file'],
+      hiddenCount: 0,
+    });
   });
 
   it('falls back to the live registry only when there is a workspace root without project snapshot identity', () => {

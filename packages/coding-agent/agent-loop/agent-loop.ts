@@ -14,6 +14,10 @@ import type { RuntimeContext, RuntimeError, RuntimeEvent, TypedRuntimeEvent } fr
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import {
   createRunFailedEvent,
+  createToolRegistryEntryResolvedEvent,
+  createToolRegistryModelVisibleToolsDerivedEvent,
+  createToolRegistrySnapshotCreatedEvent,
+  createToolRegistrySourcesEnsuredEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
@@ -37,6 +41,10 @@ import {
   modelCallInputBuildFailureToRuntimeError,
 } from '../events';
 import type { BuildSessionContextInputFromRepositoryInput } from '../session';
+import type {
+  RunToolRegistrySnapshotBuildInput,
+  ToolRegistrySnapshotServicePort,
+} from '../tools/tool-registry-snapshot';
 import { runModelCall, type ModelCallPort } from './model-call';
 import { createTerminalRuntimeError } from '../state';
 import type {
@@ -88,6 +96,106 @@ export interface ToolSetSnapshotProvider {
   }): {
     modelVisibleToolDefinitions: ToolDefinition[];
     events: RuntimeEvent[];
+  };
+}
+
+export function createToolSetSnapshotProvider(input: {
+  snapshotService: ToolRegistrySnapshotServicePort;
+  eventId: () => string;
+}): ToolSetSnapshotProvider {
+  return {
+    createRunSnapshot: (snapshotInput) => createToolSetSnapshot({
+      ...snapshotInput,
+      snapshotService: input.snapshotService,
+      eventId: input.eventId,
+    }),
+  };
+}
+
+function createToolSetSnapshot(input: RunToolRegistrySnapshotBuildInput & {
+  sessionId: string;
+  snapshotService: ToolRegistrySnapshotServicePort;
+  eventId: () => string;
+}): ReturnType<ToolSetSnapshotProvider['createRunSnapshot']> {
+  const registrySnapshotResult = input.snapshotService.createRunSnapshot({
+    runId: input.runId,
+    projectId: input.projectId,
+    permissionMode: input.permissionMode,
+    modelId: input.modelId,
+    createdAt: input.createdAt,
+    ...(input.providerCapabilitySummary ? { providerCapabilitySummary: input.providerCapabilitySummary } : {}),
+  });
+  const events = [
+    createToolRegistrySourcesEnsuredEvent({
+      eventId: input.eventId(),
+      runId: input.runId,
+      sessionId: input.sessionId,
+      sequence: 1,
+      createdAt: input.createdAt,
+      payload: {
+        sourceIds: registrySnapshotResult.diagnostics.sourceIds,
+        createdSourceIds: registrySnapshotResult.diagnostics.createdSourceIds,
+      },
+    }),
+    createToolRegistrySnapshotCreatedEvent({
+      eventId: input.eventId(),
+      runId: input.runId,
+      sessionId: input.sessionId,
+      sequence: 2,
+      createdAt: input.createdAt,
+      payload: {
+        snapshotId: registrySnapshotResult.snapshot.snapshotId,
+        projectId: registrySnapshotResult.snapshot.projectId,
+        permissionMode: registrySnapshotResult.snapshot.permissionMode,
+        modelId: registrySnapshotResult.snapshot.modelId,
+        registryVersion: registrySnapshotResult.snapshot.registryVersion,
+        sourceVersionHash: registrySnapshotResult.snapshot.sourceVersionHash,
+        sourceCount: registrySnapshotResult.snapshot.sourceEntries.length,
+        entryCount: registrySnapshotResult.snapshot.entries.length,
+        exposedCount: registrySnapshotResult.snapshot.entries.filter((entry) => entry.exposedToModel).length,
+      },
+    }),
+    ...registrySnapshotResult.snapshot.entries.map((entry, index) => createToolRegistryEntryResolvedEvent({
+      eventId: input.eventId(),
+      runId: input.runId,
+      sessionId: input.sessionId,
+      sequence: index + 3,
+      createdAt: input.createdAt,
+      payload: {
+        snapshotId: entry.snapshotId,
+        snapshotEntryId: entry.snapshotEntryId,
+        registrationId: entry.registrationId,
+        canonicalToolId: entry.canonicalToolId,
+        modelVisibleName: entry.modelVisibleName,
+        sourceId: entry.sourceId,
+        namespace: entry.namespace,
+        sourceToolName: entry.sourceToolName,
+        effectiveStatus: entry.effectiveStatus,
+        exposedToModel: entry.exposedToModel,
+        ...(entry.disabledReason ? { disabledReason: entry.disabledReason } : {}),
+        ...(entry.unavailableReason ? { unavailableReason: entry.unavailableReason } : {}),
+        ...(entry.conflictReason ? { conflictReason: entry.conflictReason } : {}),
+      },
+    })),
+    createToolRegistryModelVisibleToolsDerivedEvent({
+      eventId: input.eventId(),
+      runId: input.runId,
+      sessionId: input.sessionId,
+      sequence: registrySnapshotResult.snapshot.entries.length + 3,
+      createdAt: input.createdAt,
+      payload: {
+        snapshotId: registrySnapshotResult.snapshot.snapshotId,
+        modelId: registrySnapshotResult.snapshot.modelId,
+        modelSupportsToolCall: registrySnapshotResult.diagnostics.modelSupportsToolCall,
+        toolNames: registrySnapshotResult.diagnostics.modelVisibleToolNames,
+        hiddenCount: registrySnapshotResult.diagnostics.hiddenCount,
+      },
+    }),
+  ];
+
+  return {
+    modelVisibleToolDefinitions: registrySnapshotResult.modelVisibleToolDefinitions,
+    events,
   };
 }
 

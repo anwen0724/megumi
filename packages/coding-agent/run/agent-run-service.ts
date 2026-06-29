@@ -38,6 +38,7 @@ import {
 } from '@megumi/coding-agent/session';
 import {
   AgentLoop,
+  createToolSetSnapshotProvider,
   type AgentLoopOptions,
   streamApprovalResumeModelLoop,
   ToolSetService,
@@ -123,13 +124,7 @@ import type { PlanArtifactServicePort } from '../artifacts';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import {
-  createToolRegistryEntryResolvedEvent,
-  createToolRegistryModelVisibleToolsDerivedEvent,
-  createToolRegistrySnapshotCreatedEvent,
-  createToolRegistrySourcesEnsuredEvent,
-} from '@megumi/shared/runtime';
-import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { ToolResult } from '@megumi/shared/tool';
 import type { PermissionSnapshotService } from '../permissions';
 import type { PostRunHooksPort } from '../hooks';
 import type {
@@ -139,8 +134,6 @@ import type {
 import type { MemorySettingsPort } from '../settings';
 import type { WorkspaceChangeReadPort } from '../workspace';
 import type {
-  RunToolRegistrySnapshotBuildInput,
-  RunToolRegistrySnapshotBuildResult,
   ToolRegistrySnapshotServicePort,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 interface AgentRunServiceClock {
@@ -454,98 +447,16 @@ export class AgentRunService implements AgentRunPort {
   }
 
 
-  private createToolRegistrySnapshotForCodingAgentRun(input: RunToolRegistrySnapshotBuildInput & {
-    sessionId: string;
-    providerCapabilitySummary?: { supportsToolCall?: boolean };
-  }): {
-    modelVisibleToolDefinitions: ToolDefinition[];
-    events: RuntimeEvent[];
-  } {
-    if (!this.toolRegistrySnapshotService) {
-      return { modelVisibleToolDefinitions: [], events: [] };
-    }
-
-    const registrySnapshotResult = this.toolRegistrySnapshotService.createRunSnapshot(input);
-    const events = [
-      createToolRegistrySourcesEnsuredEvent({
-        eventId: this.ids.eventId(),
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sequence: 1,
-        createdAt: input.createdAt,
-        payload: {
-          sourceIds: registrySnapshotResult.diagnostics.sourceIds,
-          createdSourceIds: registrySnapshotResult.diagnostics.createdSourceIds,
-        },
-      }),
-      createToolRegistrySnapshotCreatedEvent({
-        eventId: this.ids.eventId(),
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sequence: 2,
-        createdAt: input.createdAt,
-        payload: {
-          snapshotId: registrySnapshotResult.snapshot.snapshotId,
-          projectId: registrySnapshotResult.snapshot.projectId,
-          permissionMode: registrySnapshotResult.snapshot.permissionMode,
-          modelId: registrySnapshotResult.snapshot.modelId,
-          registryVersion: registrySnapshotResult.snapshot.registryVersion,
-          sourceVersionHash: registrySnapshotResult.snapshot.sourceVersionHash,
-          sourceCount: registrySnapshotResult.snapshot.sourceEntries.length,
-          entryCount: registrySnapshotResult.snapshot.entries.length,
-          exposedCount: registrySnapshotResult.snapshot.entries.filter((entry) => entry.exposedToModel).length,
-        },
-      }),
-      ...registrySnapshotResult.snapshot.entries.map((entry, index) => createToolRegistryEntryResolvedEvent({
-        eventId: this.ids.eventId(),
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sequence: index + 3,
-        createdAt: input.createdAt,
-        payload: {
-          snapshotId: entry.snapshotId,
-          snapshotEntryId: entry.snapshotEntryId,
-          registrationId: entry.registrationId,
-          canonicalToolId: entry.canonicalToolId,
-          modelVisibleName: entry.modelVisibleName,
-          sourceId: entry.sourceId,
-          namespace: entry.namespace,
-          sourceToolName: entry.sourceToolName,
-          effectiveStatus: entry.effectiveStatus,
-          exposedToModel: entry.exposedToModel,
-          ...(entry.disabledReason ? { disabledReason: entry.disabledReason } : {}),
-          ...(entry.unavailableReason ? { unavailableReason: entry.unavailableReason } : {}),
-          ...(entry.conflictReason ? { conflictReason: entry.conflictReason } : {}),
-        },
-      })),
-      createToolRegistryModelVisibleToolsDerivedEvent({
-        eventId: this.ids.eventId(),
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sequence: registrySnapshotResult.snapshot.entries.length + 3,
-        createdAt: input.createdAt,
-        payload: {
-          snapshotId: registrySnapshotResult.snapshot.snapshotId,
-          modelId: registrySnapshotResult.snapshot.modelId,
-          modelSupportsToolCall: registrySnapshotResult.diagnostics.modelSupportsToolCall,
-          toolNames: registrySnapshotResult.diagnostics.modelVisibleToolNames,
-          hiddenCount: registrySnapshotResult.diagnostics.hiddenCount,
-        },
-      }),
-    ];
-
-    return { modelVisibleToolDefinitions: registrySnapshotResult.modelVisibleToolDefinitions, events };
-  }
-
   private createAgentLoopOptions(
     chatStreamAdapter?: ChatStreamEventAdapter,
   ): AgentLoopOptions {
     const svc = this;
     const toolSetService = new ToolSetService({
       ...(this.toolRegistrySnapshotService ? {
-        snapshotProvider: {
-          createRunSnapshot: (snapshotInput) => this.createToolRegistrySnapshotForCodingAgentRun({ ...snapshotInput }),
-        },
+        snapshotProvider: createToolSetSnapshotProvider({
+          snapshotService: this.toolRegistrySnapshotService,
+          eventId: this.ids.eventId,
+        }),
       } : {}),
       ...(this.toolDefinitionProvider ? { registryProvider: this.toolDefinitionProvider } : {}),
       ...(this.providerCapabilitySummaryProvider ? { capabilityProvider: this.providerCapabilitySummaryProvider } : {}),

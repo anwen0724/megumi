@@ -840,7 +840,10 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('prepareToolSet({');
     expect(agentRunServiceSource).not.toContain('prepareToolRunner({');
     expect(agentRunServiceSource).not.toContain('toolCallRunnerFactory.create');
+    expect(agentRunServiceSource).not.toContain('createToolRegistrySnapshotForCodingAgentRun');
+    expect(agentRunServiceSource).not.toContain('createToolRegistrySnapshotCreatedEvent');
     expect(agentLoopSource).toContain('export class ToolSetService');
+    expect(agentLoopSource).toContain('export function createToolSetSnapshotProvider');
     expect(agentLoopSource).toContain('export class AgentLoop');
     expect(agentLoopSource).toContain('prepareToolSet');
     expect(agentLoopSource).toContain('export async function prepareToolRunner');
