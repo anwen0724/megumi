@@ -581,6 +581,8 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).not.toContain('export interface SessionRunMemoryCaptureService');
     expect(runContractSource).not.toContain('export interface SessionRunMemorySettingsProvider');
     expect(runContractSource).not.toContain('export interface SessionRunMemoryMarkdownSyncService');
+    expect(runContractSource).not.toContain('export interface AgentRunServiceHomePaths');
+    expect(runContractSource).not.toContain('export interface ApprovalResumeGroup');
     expect(sessionServiceSource).not.toContain('export interface SessionMemorySettingsProvider');
     expect(sessionServiceSource).not.toContain('export interface SessionMemoryMarkdownSyncService');
     expect(runContractSource).toContain('postRunHooks: PostRunHooksPort;');
@@ -634,6 +636,7 @@ describe('package and file structure source guards', () => {
     expect(sessionRuntimeSource).toContain('new RunRetryCoordinator');
     expect(defaultAgentRunServiceSource).toContain("from '../hooks'");
     expect(defaultAgentRunServiceSource).toContain("from '../state'");
+    expect(defaultAgentRunServiceSource).toContain('export interface CreateDefaultAgentRunServiceHomePaths');
     expect(defaultAgentRunServiceSource).toContain('new PostRunHooksCoordinator');
     expect(defaultAgentRunServiceSource).toContain('new RunTerminalCoordinator');
     expect(defaultAgentRunServiceSource).toContain('new RunRetryCoordinator');

@@ -1,9 +1,6 @@
 // Composes the standalone AgentRunService with product persistence defaults.
 import { AgentRunService } from '../run/agent-run-service';
 import type {
-  AgentRunServiceHomePaths,
-} from '../run/run-contract';
-import type {
   AgentInstructionSourcePort,
   ModelInputGlobalInstructionDirectoryProvider,
   RunBaselineContextPort,
@@ -26,8 +23,13 @@ export interface CreateDefaultAgentRunServiceOptions {
   agentInstructionSourceService?: AgentInstructionSourcePort;
 }
 
+export interface CreateDefaultAgentRunServiceHomePaths {
+  homePath: string;
+  sqlitePath: string;
+}
+
 export function createDefaultAgentRunService(
-  homePaths: AgentRunServiceHomePaths,
+  homePaths: CreateDefaultAgentRunServiceHomePaths,
   options: CreateDefaultAgentRunServiceOptions = {},
 ): AgentRunService {
   const persistence = composeCodingAgentPersistence({ sqlitePath: homePaths.sqlitePath });

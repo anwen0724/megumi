@@ -2,14 +2,6 @@
 import type {
   SessionTimelineListData,
 } from '@megumi/shared/ipc';
-import type {
-  ModelInputContextBuildRequest,
-  ModelStepRuntimeRequest,
-} from '@megumi/shared/model';
-import type { PermissionMode } from '@megumi/shared/permission';
-import type { Run, RunStep } from '@megumi/shared/session';
-import type { ToolResult } from '@megumi/shared/tool';
-
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type {
   AgentRunExecutionFactRepositoryPort,
@@ -30,7 +22,6 @@ import type {
   AgentInstructionSourcePort,
   AgentLoopInitialModelInputSourceOverrideProvider,
   ModelCallInputBuildPort,
-  ModelInputMemoryRecallSource,
   RunBaselineContextPort,
   SessionCompactionOrchestratorRepository,
   SessionCompactionOrchestrationResult,
@@ -45,10 +36,8 @@ import type {
   SessionContextInputBuildPort,
 } from '../session';
 import type {
-  PendingToolApprovalResume,
   ToolRuntimeFactory,
 } from '../agent-loop/tool-call';
-import type { ToolCallRunnerService } from '../agent-loop/tool-call';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type {
   ToolSetCapabilityProvider,
@@ -84,11 +73,6 @@ export interface AgentRunServiceIds extends RunIdFactory {
   chatStreamId(input: { runId: string }): string;
   chatTextId(): string;
   chatThinkingId(): string;
-}
-
-export interface AgentRunServiceHomePaths {
-  homePath: string;
-  sqlitePath: string;
 }
 
 export interface AgentRunServiceOptions {
@@ -140,20 +124,4 @@ export interface AgentRunServiceOptions {
   };
   clock?: AgentRunServiceClock;
   ids?: Partial<AgentRunServiceIds>;
-}
-
-export interface ApprovalResumeGroup {
-  groupId: string;
-  request: ModelStepRuntimeRequest;
-  run: Run;
-  step: RunStep;
-  projectId?: string;
-  projectRoot?: string;
-  permissionMode?: PermissionMode;
-  userMessageId: string;
-  pendingByApprovalId: Map<string, PendingToolApprovalResume>;
-  resolvedResults: ToolResult[];
-  toolRuntime: ToolCallRunnerService;
-  memoryRecallSources?: ModelInputMemoryRecallSource[];
-  memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
 }
