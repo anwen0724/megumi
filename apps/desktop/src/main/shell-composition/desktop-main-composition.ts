@@ -2,7 +2,6 @@
 import { initializeElectronMegumiHomeSync } from '../services/workspace/megumi-home.service';
 import { createRuntimeJsonlLoggerForMegumiHome } from '../services/agent-run/runtime-logger.service';
 import { createPermissionSettingsService } from '../services/security/permission-settings.service';
-import { createAppSettingsService } from '../services/settings/app-settings.service';
 import { createWorkspaceFilesService } from '../services/workspace/workspace-files.service';
 import {
   composeCodingAgentHostInterface,
@@ -15,9 +14,6 @@ import { createChatStreamBroadcaster } from '../shell/chat-stream-broadcaster';
 
 export function composeDesktopMain() {
   const megumiHomePaths = initializeElectronMegumiHomeSync();
-  const appSettingsService = createAppSettingsService({
-    settingsPath: megumiHomePaths.settingsPath,
-  });
   const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
   const permissionSettingsService = createPermissionSettingsService({
     userSettingsPath: megumiHomePaths.settingsPath,
@@ -35,12 +31,6 @@ export function composeDesktopMain() {
   const codingAgentHost = composeCodingAgentHostInterface({
     homePaths: codingAgentHomePaths,
     runtimeLogger,
-    appSettingsProvider: appSettingsService,
-    memorySettingsProvider: {
-      isMemoryEnabled() {
-        return appSettingsService.getResolvedSettings().memory.enabled;
-      },
-    },
     permissionSettingsProvider: permissionSettingsService,
     chatStreamEventSink: chatStreamBroadcaster,
     directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
@@ -55,7 +45,6 @@ export function composeDesktopMain() {
   return {
     megumiHomePaths,
     runtimeLogger,
-    appSettingsService,
     chatStreamBroadcaster,
     providerService: codingAgentHost.settings.provider,
     settingsService: codingAgentHost.settings,

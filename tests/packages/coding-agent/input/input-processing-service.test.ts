@@ -2545,7 +2545,16 @@ describe('InputProcessingService', () => {
       streamed.push(event);
     }
 
-    expect(result.data).toEqual({ requestId: longRequestId });
+    expect(result.data).toEqual({
+      requestId: longRequestId,
+      session: expect.objectContaining({
+        sessionId: 'session-1',
+        title: 'Session',
+        status: 'active',
+      }),
+      userMessageId: 'message-1',
+      runId: 'run-1',
+    });
     expect(requests[0]?.inputContext.contextId.length).toBeLessThanOrEqual(128);
     expect(streamed.map((event) => event.eventType)).toEqual([
       'run.started',

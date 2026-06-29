@@ -9,7 +9,7 @@ import {
   ProviderUpdateRequestSchema,
 } from '@megumi/shared/ipc';
 import type { HostSettingsController } from '@megumi/coding-agent/host-interface';
-import { AppSettingsParseError } from '@megumi/desktop/main/services/settings/app-settings.service';
+import { LocalSettingsJsonParseError } from '@megumi/coding-agent/adapters/local';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
@@ -80,7 +80,7 @@ export function registerProviderHandlers(
 }
 
 function mapProviderIpcError(error: unknown): RuntimeIpcError {
-  if (error instanceof AppSettingsParseError) {
+  if (error instanceof LocalSettingsJsonParseError) {
     return {
       code: 'config_invalid',
       message: `Megumi settings are invalid. Fix ${error.settingsPath} and try again.`,

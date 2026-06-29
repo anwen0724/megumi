@@ -59,7 +59,8 @@ describe('Megumi Home source guards', () => {
     expect(providerHandler).not.toContain('createAppSettingsService');
     expect(providerHandler).not.toContain('initializeElectronMegumiHomeSync');
     expect(providerHandler).not.toContain('new ProviderSettingsService');
-    expect(desktopComposition).toContain('appSettingsProvider: appSettingsService');
+    expect(desktopComposition).not.toContain('appSettingsProvider: appSettingsService');
+    expect(productComposition).toContain('createLocalSettingsJsonStorage');
     expect(productComposition).toContain('new ProviderSettingsService');
     expect(productComposition).not.toContain('createElectronSecretStoreService');
   });

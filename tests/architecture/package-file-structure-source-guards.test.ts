@@ -183,7 +183,8 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/execution/tool-executors/read-file.executor.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/adapters/local/settings/settings-json-storage.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);
   });
 

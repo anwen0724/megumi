@@ -92,12 +92,12 @@ describe('registerProviderHandlers', () => {
 
   it('returns config_invalid for invalid Megumi Home settings', async () => {
     const { IPC_CHANNELS } = await import('@megumi/shared/ipc');
-    const { AppSettingsParseError } = await import('@megumi/desktop/main/services/settings/app-settings.service');
+    const { LocalSettingsJsonParseError } = await import('@megumi/coding-agent/adapters/local');
     const { registerProviderHandlers } = await import('@megumi/desktop/main/ipc/handlers/provider.handler');
     const settingsPath = 'C:/Users/anwen/.megumi/settings.json';
     const service = createProviderService({
       list: vi.fn().mockRejectedValue(
-        new AppSettingsParseError(
+        new LocalSettingsJsonParseError(
           "Megumi settings could not be read: Expected ',' after object property",
           settingsPath,
         ),
@@ -128,7 +128,7 @@ describe('registerProviderHandlers', () => {
     });
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain('Error invoking remote ' + 'method');
-    expect(serialized).not.toContain('AppSettingsParseError');
+    expect(serialized).not.toContain('LocalSettingsJsonParseError');
     expect(serialized).not.toContain("Expected ','");
   });
 

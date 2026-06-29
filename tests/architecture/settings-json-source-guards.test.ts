@@ -39,9 +39,11 @@ function offenders(files: string[], pattern: RegExp): string[] {
 describe('settings.json source guards', () => {
   it('keeps Megumi Home user configuration on settings.json instead of config.json', () => {
     const mainFiles = productionFilesUnder('apps', 'desktop', 'src', 'main');
+    const codingAgentLocalFiles = productionFilesUnder('packages', 'coding-agent', 'adapters', 'local');
 
     expect(offenders(mainFiles, /\bconfigPath\b|config\.json|config\.schema\.json|MegumiHomeConfigService|MegumiHomeConfigParseError/)).toEqual([]);
-    expect(offenders(mainFiles, /settingsPath|settings\.json|AppSettingsService/)).not.toEqual([]);
+    expect(offenders(codingAgentLocalFiles, /settingsPath|settings\.json|LocalSettingsJson/)).not.toEqual([]);
+    expect(offenders(mainFiles, /AppSettingsService/)).toEqual([]);
   });
 
   it('keeps provider credentials in settings.json and removes provider secret-store wiring', () => {

@@ -137,21 +137,6 @@ const mocks = vi.hoisted(() => {
     ) {
       this.options = options;
     }),
-    createAppSettingsService: vi.fn(() => ({
-      getResolvedSettings: vi.fn(() => ({
-        theme: 'midnight-blue',
-        memory: { enabled: false },
-        compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
-        chat: { defaultProvider: 'deepseek' },
-        permissions: {
-          defaultMode: 'ask',
-          trustedWorkspaceRoots: [],
-          toolOverrides: {},
-        },
-        providers: {},
-      })),
-      updateSettings: vi.fn(),
-    })),
     ToolService: vi.fn(function ToolService(
       this: { options?: unknown },
       options: unknown,
@@ -415,10 +400,6 @@ vi.mock('@megumi/coding-agent/settings', () => ({
   ProviderRuntimeService: mocks.ProviderRuntimeService,
 }));
 
-vi.mock('@megumi/desktop/main/services/settings/app-settings.service', () => ({
-  createAppSettingsService: mocks.createAppSettingsService,
-}));
-
 vi.mock('@megumi/coding-agent/tools/tool-service', () => ({
   ToolService: mocks.ToolService,
   createDefaultToolService: mocks.createDefaultToolService,
@@ -494,7 +475,6 @@ describe('main runtime logger composition', () => {
     mocks.createModelCallRunner.mockClear();
     mocks.ProviderSettingsService.mockClear();
     mocks.ProviderRuntimeService.mockClear();
-    mocks.createAppSettingsService.mockClear();
     mocks.ToolService.mockClear();
     mocks.createDefaultToolService.mockClear();
     mocks.composeCodingAgentHostInterface.mockClear();
@@ -546,7 +526,6 @@ describe('main runtime logger composition', () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
-    const settingsService = mocks.createAppSettingsService.mock.results[0]?.value;
     const workspaceFilesService = mocks.createWorkspaceFilesService.mock.results[0]?.value;
     const projectService = mocks.codingAgentHost.workspace;
     expect(processLogger).toEqual(expect.objectContaining({
@@ -558,9 +537,6 @@ describe('main runtime logger composition', () => {
     const lifecycleOptions = mocks.registerAppLifecycle.mock.calls[0]?.[0];
     lifecycleOptions.registerAllHandlers();
 
-    expect(mocks.createAppSettingsService).toHaveBeenCalledWith({
-      settingsPath: `${mocks.homePath}/settings.json`,
-    });
     expect(mocks.composeCodingAgentHostInterface).toHaveBeenCalledWith(expect.objectContaining({
       homePaths: {
         homePath: mocks.homePath,
@@ -568,10 +544,6 @@ describe('main runtime logger composition', () => {
         settingsPath: `${mocks.homePath}/settings.json`,
       },
       runtimeLogger: processLogger,
-      appSettingsProvider: settingsService,
-      memorySettingsProvider: expect.objectContaining({
-        isMemoryEnabled: expect.any(Function),
-      }),
       permissionSettingsProvider: expect.any(Object),
       chatStreamEventSink: expect.objectContaining({
         publish: expect.any(Function),
@@ -581,10 +553,6 @@ describe('main runtime logger composition', () => {
         chooseDirectory: expect.any(Function),
       }),
     }));
-    const runtimeOptions = (mocks.composeCodingAgentHostInterface.mock.calls as unknown as Array<[{
-      memorySettingsProvider: { isMemoryEnabled(): boolean };
-    }]>)[0]?.[0];
-    expect(runtimeOptions.memorySettingsProvider.isMemoryEnabled()).toBe(false);
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith(expect.objectContaining({
       fileSystem: expect.any(Object),
       isWorkspaceRootAllowed: expect.any(Function),

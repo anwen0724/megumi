@@ -42,6 +42,7 @@ import {
   type DirectoryPickerPort,
   type ProjectFileSystem,
 } from '../workspace';
+import { createLocalSettingsJsonStorage } from '../adapters/local/settings/settings-json-storage';
 import { createLocalProjectFileSystem } from '../adapters/local/workspace/project-file-system';
 
 export interface ComposeCodingAgentRuntimeOptions {
@@ -66,7 +67,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const persistence = composeCodingAgentPersistence({ sqlitePath: options.homePaths.sqlitePath });
   const toolRegistry = composeCodingAgentToolRegistry();
   const settingsService = new ProductSettingsService({
-    storage: options.settingsStorage ?? createVolatileProductSettingsStorage(),
+    storage: options.settingsStorage ?? createLocalSettingsJsonStorage({
+      settingsPath: options.homePaths.settingsPath,
+    }),
   });
   const effectiveSettingsProvider = options.appSettingsProvider ?? settingsService;
   const providerSettingsService = new ProviderSettingsService({

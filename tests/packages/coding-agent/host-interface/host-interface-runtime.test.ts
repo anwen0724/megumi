@@ -1,5 +1,5 @@
 ﻿// @vitest-environment node
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -132,5 +132,131 @@ describe('Coding Agent host interface runtime', () => {
     }]);
     expect(result.settings.setup.completed).toBe(true);
     expect(runtime.settings.get().settings.theme).toBe('sage-mist');
+  });
+
+  it('persists host settings to home settings.json by default without a UI shell provider', async () => {
+    temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-settings-file-'));
+    const settingsPath = path.join(temporaryHome, 'settings.json');
+
+    runtime = composeCodingAgentRuntime({
+      homePaths: {
+        homePath: temporaryHome,
+        sqlitePath: temporaryHome,
+        settingsPath,
+      },
+      runtimeLogger: {
+        warn: () => undefined,
+      },
+      modelCallProviderService: {
+        streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
+        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        cancelModelCall: () => false,
+      },
+      memorySettingsProvider: {
+        isMemoryEnabled: () => false,
+      },
+      permissionSettingsProvider: {
+        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
+      },
+    });
+
+    runtime.settings.update({
+      language: 'zh-CN',
+      theme: 'sage-mist',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T15:00:00.000Z',
+      },
+      chat: {
+        defaultProvider: 'deepseek',
+      },
+    });
+
+    expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
+      language: 'zh-CN',
+      theme: 'sage-mist',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T15:00:00.000Z',
+      },
+      chat: {
+        defaultProvider: 'deepseek',
+      },
+    });
+
+    runtime.dispose();
+    runtime = composeCodingAgentRuntime({
+      homePaths: {
+        homePath: temporaryHome,
+        sqlitePath: temporaryHome,
+        settingsPath,
+      },
+      runtimeLogger: {
+        warn: () => undefined,
+      },
+      modelCallProviderService: {
+        streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
+        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        cancelModelCall: () => false,
+      },
+      memorySettingsProvider: {
+        isMemoryEnabled: () => false,
+      },
+      permissionSettingsProvider: {
+        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
+      },
+    });
+
+    expect(runtime.settings.get().settings.setup.completed).toBe(true);
+    expect(runtime.settings.get().settings.theme).toBe('sage-mist');
+  });
+
+  it('persists provider settings to the same home settings.json by default', async () => {
+    temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-provider-file-'));
+    const settingsPath = path.join(temporaryHome, 'settings.json');
+
+    runtime = composeCodingAgentRuntime({
+      homePaths: {
+        homePath: temporaryHome,
+        sqlitePath: temporaryHome,
+        settingsPath,
+      },
+      runtimeLogger: {
+        warn: () => undefined,
+      },
+      modelCallProviderService: {
+        streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
+        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        cancelModelCall: () => false,
+      },
+      memorySettingsProvider: {
+        isMemoryEnabled: () => false,
+      },
+      permissionSettingsProvider: {
+        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
+      },
+    });
+
+    await runtime.settings.provider.update({
+      providerId: 'openai',
+      enabled: true,
+      baseUrl: 'https://api.openai.com/v1',
+      defaultModelId: 'gpt-5.5',
+    });
+    await runtime.settings.provider.setApiKey({
+      providerId: 'openai',
+      apiKey: 'sk-test-secret',
+    });
+
+    expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
+      providers: {
+        openai: {
+          enabled: true,
+          baseUrl: 'https://api.openai.com/v1',
+          defaultModel: 'gpt-5.5',
+          apiKey: 'sk-test-secret',
+        },
+      },
+    });
   });
 });

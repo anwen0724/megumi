@@ -6,4 +6,5 @@ export * from './memory/memory-markdown-sync.service';
 export * from './memory/memory-runtime-file-system';
 export * from './memory/memory-runtime-paths';
 export * from './run-context/workspace-source-provider';
+export * from './settings/settings-json-storage';
 export * from './workspace/project-file-system';

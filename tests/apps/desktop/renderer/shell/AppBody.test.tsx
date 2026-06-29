@@ -102,7 +102,33 @@ function installMegumiMock() {
         }),
         message: {
           list: vi.fn().mockResolvedValue({ ok: true, data: { messages: [] } }),
-          send: vi.fn().mockResolvedValue({ ok: true }),
+          send: vi.fn().mockImplementation(async (request) => {
+            const payload = request.payload;
+            const sessionId = payload.sessionId ?? 'session-created';
+            const createdAt = payload.createdAt ?? '2026-05-10T12:00:00.000Z';
+
+            return {
+              ok: true,
+              data: {
+                requestId: request.requestId,
+                session: {
+                  sessionId,
+                  workspaceId: payload.context.workspaceId,
+                  workspacePath: payload.context.workspacePath,
+                  title: payload.context.sessionTitle ?? payload.message.content,
+                  status: 'active',
+                  createdAt,
+                  updatedAt: createdAt,
+                },
+                userMessageId: payload.message.id,
+                runId: 'run-created',
+              },
+              meta: {
+                requestId: request.requestId,
+                channel: 'session:message:send',
+              },
+            };
+          }),
           cancel: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true }, meta: {} }),
         },
         timeline: {
@@ -657,6 +683,45 @@ describe('App shell layout contract', () => {
           updatedAt: '2026-05-10T00:20:00.000Z',
         },
       ],
+    });
+    vi.mocked(window.megumi.session.list).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        sessions: [
+          {
+            sessionId: 'session-1',
+            workspaceId: 'project-1',
+            workspacePath: 'C:/all/work/study/megumi',
+            title: 'Planning the UI',
+            status: 'active',
+            createdAt: '2026-05-10T00:00:00.000Z',
+            updatedAt: '2026-05-10T00:00:00.000Z',
+          },
+          {
+            sessionId: 'session-2',
+            workspaceId: 'project-1',
+            workspacePath: 'C:/all/work/study/megumi',
+            title: 'Review notes',
+            status: 'active',
+            createdAt: '2026-05-10T00:10:00.000Z',
+            updatedAt: '2026-05-10T00:10:00.000Z',
+          },
+          {
+            sessionId: 'session-3',
+            workspaceId: 'project-2',
+            workspacePath: 'C:/all/work/study/other',
+            title: 'Other project session',
+            status: 'active',
+            createdAt: '2026-05-10T00:20:00.000Z',
+            updatedAt: '2026-05-10T00:20:00.000Z',
+          },
+        ],
+      },
+      meta: {
+        requestId: 'ipc-session-list-project-switch-test',
+        channel: 'session:list',
+        handledAt: '2026-05-10T12:00:00.000Z',
+      },
     });
     const openProject = vi.spyOn(useProjectStore.getState(), 'openProject').mockResolvedValue(projectB);
 
