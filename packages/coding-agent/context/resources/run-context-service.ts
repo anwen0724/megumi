@@ -2,6 +2,8 @@
 import path from 'node:path';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelCapabilitySummary, RunContext, RunContextSource } from '@megumi/shared/run';
+import type { Session } from '@megumi/shared/session';
+import { DEFAULT_CONTEXT_BUDGET_POLICY } from '../model-input-context-builder';
 
 export interface RunContextServiceClock {
   now(): string;
@@ -41,6 +43,15 @@ export interface RunBaselineContextPort {
   createBaselineContext(input: CreateBaselineContextInput): RunContext;
 }
 
+export interface CreateBaselineContextForSessionInput {
+  contextService?: RunBaselineContextPort;
+  runId: string;
+  goal: string;
+  session?: Pick<Session, 'sessionId' | 'workspaceId' | 'workspacePath'>;
+  modelCapabilitySummary?: ModelCapabilitySummary;
+  contextBudgetPolicy?: ContextBudgetPolicy;
+}
+
 export interface ListWorkspaceSourcesInput {
   runId: string;
   workspaceId: string;
@@ -52,6 +63,29 @@ const defaultClock: RunContextServiceClock = {
 };
 
 const DEFAULT_DENIED_GLOBS = ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'];
+
+const DEFAULT_MODEL_CAPABILITY_SUMMARY: ModelCapabilitySummary = {
+  providerId: 'unknown',
+  modelId: 'unknown',
+  modelContextWindow: 8192,
+};
+
+export function createBaselineContextForSession(
+  input: CreateBaselineContextForSessionInput,
+): RunContext | undefined {
+  if (!input.contextService || !input.session?.workspacePath) {
+    return undefined;
+  }
+
+  return input.contextService.createBaselineContext({
+    runId: input.runId,
+    goal: input.goal,
+    workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
+    workspacePath: input.session.workspacePath,
+    modelCapabilitySummary: input.modelCapabilitySummary ?? DEFAULT_MODEL_CAPABILITY_SUMMARY,
+    contextBudgetPolicy: input.contextBudgetPolicy ?? DEFAULT_CONTEXT_BUDGET_POLICY,
+  });
+}
 
 // Product-facing run-context surface consumed by UI shells. Shells code against
 // this port, not the concrete RunContextService.

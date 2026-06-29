@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
+  createBaselineContextForSession,
   RunContextService,
   type RunContextRepositoryPort,
   type WorkspaceSourceProviderPort,
@@ -34,6 +35,49 @@ function createService(
 }
 
 describe('RunContextService', () => {
+  it('creates baseline context for a workspace-backed session through the context owner helper', () => {
+    const { service } = createService('C:/all/work/study/megumi');
+
+    const context = createBaselineContextForSession({
+      contextService: service,
+      runId: 'run-1',
+      goal: 'Read context',
+      session: {
+        sessionId: 'session-1',
+        workspaceId: 'workspace-1',
+        workspacePath: 'C:/all/work/study/megumi',
+      },
+    });
+
+    expect(context?.runId).toBe('run-1');
+    expect(context?.goal).toBe('Read context');
+    expect(context?.workspaceBoundary).toMatchObject({
+      workspaceId: 'workspace-1',
+      rootPath: 'C:/all/work/study/megumi',
+    });
+  });
+
+  it('skips baseline context for sessions without a workspace path', () => {
+    const { service } = createService('C:/all/work/study/megumi');
+
+    expect(createBaselineContextForSession({
+      contextService: service,
+      runId: 'run-1',
+      goal: 'Read context',
+      session: {
+        sessionId: 'session-1',
+      },
+    })).toBeUndefined();
+    expect(createBaselineContextForSession({
+      runId: 'run-1',
+      goal: 'Read context',
+      session: {
+        sessionId: 'session-1',
+        workspacePath: 'C:/all/work/study/megumi',
+      },
+    })).toBeUndefined();
+  });
+
   it('creates baseline context with safe workspace boundary', () => {
     const { service } = createService('C:/all/work/study/megumi');
 

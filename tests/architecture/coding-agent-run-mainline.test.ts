@@ -151,4 +151,15 @@ describe('coding agent run mainline guards', () => {
       expect(contextSource).not.toContain(movedImplementation);
     }
   });
+
+  it('keeps baseline run context session mapping in the context owner', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const runContextSource = read('packages/coding-agent/context/resources/run-context-service.ts');
+
+    expect(runContextSource).toContain('export function createBaselineContextForSession');
+    expect(serviceSource).toContain('createBaselineContextForSession({');
+    expect(serviceSource).not.toContain('private createInitialContextForRun');
+    expect(serviceSource).not.toContain('private createInitialContextForSessionMessage');
+    expect(serviceSource).not.toContain('const DEFAULT_MODEL_CAPABILITY_SUMMARY');
+  });
 });

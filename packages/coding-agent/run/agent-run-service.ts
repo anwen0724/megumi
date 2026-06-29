@@ -19,6 +19,7 @@ import {
 } from '../agent-loop/tool-call';
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
+  createBaselineContextForSession,
   ModelCallInputBuildService,
   ModelInputSourceOverrideService,
   SessionCompactionOrchestrator,
@@ -82,10 +83,6 @@ import type {
   AgentRunSessionRepositoryPort,
   AgentRunToolRepositoryPort,
 } from '../persistence';
-import type {
-  RunContext,
-  ModelCapabilitySummary,
-} from '@megumi/shared/run';
 import { isProviderId, type ProviderId } from '@megumi/shared/provider';
 import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
@@ -258,12 +255,6 @@ function createDefaultAgentRunServiceIds(
     ...overrides,
   };
 }
-
-const DEFAULT_MODEL_CAPABILITY_SUMMARY: ModelCapabilitySummary = {
-  providerId: 'unknown',
-  modelId: 'unknown',
-  modelContextWindow: 8192,
-};
 
 class EmptySessionActivePathRepository {
   getActivePath(sessionId: string): SessionActivePath {
@@ -568,9 +559,10 @@ export class AgentRunService implements AgentRunPort {
       });
     }
 
-    const initialContext = this.createInitialContextForRun({
+    const initialContext = createBaselineContextForSession({
+      contextService: this.contextService,
       runId,
-      payload,
+      goal: payload.goal,
       session,
     });
 
@@ -875,44 +867,6 @@ export class AgentRunService implements AgentRunPort {
   cleanupInterruptedRunsOnStartup(): { cleanedRunIds: string[] } {
     return this.runTerminalCoordinator.cleanupInterruptedRunsOnStartup({
       cleanupAt: this.clock.now(),
-    });
-  }
-
-  private createInitialContextForRun(input: {
-    runId: string;
-    payload: RunStartPayload;
-    session: Session | undefined;
-  }): RunContext | undefined {
-    if (!this.contextService || !input.session?.workspacePath) {
-      return undefined;
-    }
-
-    return this.contextService.createBaselineContext({
-      runId: input.runId,
-      goal: input.payload.goal,
-      workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
-      workspacePath: input.session.workspacePath,
-      modelCapabilitySummary: DEFAULT_MODEL_CAPABILITY_SUMMARY,
-      contextBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
-    });
-  }
-
-  private createInitialContextForSessionMessage(input: {
-    runId: string;
-    goal: string;
-    session: Session;
-  }): RunContext | undefined {
-    if (!this.contextService || !input.session.workspacePath) {
-      return undefined;
-    }
-
-    return this.contextService.createBaselineContext({
-      runId: input.runId,
-      goal: input.goal,
-      workspaceId: String(input.session.workspaceId ?? `workspace:${input.session.sessionId}`),
-      workspacePath: input.session.workspacePath,
-      modelCapabilitySummary: DEFAULT_MODEL_CAPABILITY_SUMMARY,
-      contextBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
     });
   }
 
