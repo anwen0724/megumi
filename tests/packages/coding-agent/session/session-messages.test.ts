@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SessionTurnPreparationService } from '@megumi/coding-agent/session';
+import { SessionMessageService } from '@megumi/coding-agent/session';
 import type {
   Session,
   SessionActiveLeaf,
@@ -8,17 +8,17 @@ import type {
   SessionSourceEntry,
 } from '@megumi/shared/session';
 
-describe('SessionTurnPreparationService', () => {
-  it('prepares user input turns and commits assistant replies through session-owned records', () => {
-    const repository = new InMemorySessionTurnRepository();
-    const service = new SessionTurnPreparationService({
+describe('SessionMessageService', () => {
+  it('prepares user messages and commits assistant replies through session-owned records', () => {
+    const repository = new InMemorySessionMessageRepository();
+    const service = new SessionMessageService({
       sessionRepository: repository,
       messageRepository: repository,
       activePathRepository: repository,
       ids: sequenceIds(),
     });
 
-    const prepared = service.prepareUserInputTurn({
+    const prepared = service.prepareUserMessage({
       workspaceId: 'workspace-1',
       workspacePath: 'C:/workspace/project',
       sessionTitle: 'Explain tests',
@@ -68,7 +68,7 @@ describe('SessionTurnPreparationService', () => {
   });
 });
 
-class InMemorySessionTurnRepository {
+class InMemorySessionMessageRepository {
   readonly sessions = new Map<string, Session>();
   readonly messages = new Map<string, SessionMessage>();
   readonly sourceEntries: SessionSourceEntry[] = [];

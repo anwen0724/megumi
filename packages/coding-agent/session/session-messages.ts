@@ -1,4 +1,4 @@
-// Prepares session-owned records and active-path sources for an agent turn.
+// Writes session-owned message records and active-path sources.
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type {
@@ -11,32 +11,32 @@ import {
   type SessionBranchActivePathRepository,
 } from './session-branch-service';
 
-export interface SessionTurnPreparationIds {
+export interface SessionMessageIds {
   sessionId(): string;
   messageId(): string;
   sourceEntryId(): string;
 }
 
-export interface SessionTurnSessionRepository {
+export interface SessionMessageSessionRepository {
   getSession(sessionId: string): Session | undefined;
   saveSession(session: Session): Session;
 }
 
-export interface SessionTurnMessageRepository {
+export interface SessionMessageMessageRepository {
   saveMessage(message: SessionMessage): SessionMessage;
 }
 
-export interface SessionTurnPreparationOptions {
-  sessionRepository: SessionTurnSessionRepository;
-  messageRepository: SessionTurnMessageRepository;
+export interface SessionMessageServiceOptions {
+  sessionRepository: SessionMessageSessionRepository;
+  messageRepository: SessionMessageMessageRepository;
   activePathRepository?: Pick<
     SessionBranchActivePathRepository,
     'appendSourceEntryAndSetActiveLeaf' | 'getActiveLeaf'
   >;
-  ids: SessionTurnPreparationIds;
+  ids: SessionMessageIds;
 }
 
-export interface PrepareUserInputTurnInput {
+export interface PrepareUserMessageInput {
   sessionId?: string;
   sessionTitle?: string;
   workspaceId?: string;
@@ -47,7 +47,7 @@ export interface PrepareUserInputTurnInput {
   createdAt: string;
 }
 
-export interface PrepareUserInputTurnResult {
+export interface PrepareUserMessageResult {
   session: Session;
   userMessage: SessionMessage;
   userMessageSourceEntry?: SessionSourceEntry;
@@ -67,23 +67,23 @@ export interface CommitAssistantReplyInput {
   completedAt: string;
 }
 
-export class SessionTurnPreparationService {
-  private readonly sessionRepository: SessionTurnSessionRepository;
-  private readonly messageRepository: SessionTurnMessageRepository;
+export class SessionMessageService {
+  private readonly sessionRepository: SessionMessageSessionRepository;
+  private readonly messageRepository: SessionMessageMessageRepository;
   private readonly activePathRepository?: Pick<
     SessionBranchActivePathRepository,
     'appendSourceEntryAndSetActiveLeaf' | 'getActiveLeaf'
   >;
-  private readonly ids: SessionTurnPreparationIds;
+  private readonly ids: SessionMessageIds;
 
-  constructor(options: SessionTurnPreparationOptions) {
+  constructor(options: SessionMessageServiceOptions) {
     this.sessionRepository = options.sessionRepository;
     this.messageRepository = options.messageRepository;
     this.activePathRepository = options.activePathRepository;
     this.ids = options.ids;
   }
 
-  prepareUserInputTurn(input: PrepareUserInputTurnInput): PrepareUserInputTurnResult {
+  prepareUserMessage(input: PrepareUserMessageInput): PrepareUserMessageResult {
     const session = this.resolveSession(input);
     const userMessage = this.messageRepository.saveMessage({
       messageId: this.ids.messageId(),
@@ -136,7 +136,7 @@ export class SessionTurnPreparationService {
     return assistantMessage;
   }
 
-  private resolveSession(input: PrepareUserInputTurnInput): Session {
+  private resolveSession(input: PrepareUserMessageInput): Session {
     if (input.sessionId) {
       const existing = this.sessionRepository.getSession(input.sessionId);
       if (existing) {

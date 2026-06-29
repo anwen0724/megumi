@@ -42,7 +42,7 @@ import {
 import {
   assertActiveBranchDraftMarker as assertSessionActiveBranchDraftMarker,
   SessionContextInputService,
-  SessionTurnPreparationService,
+  SessionMessageService,
   type SessionBranchServicePort,
   type SessionContextInputBuildPort,
 } from '@megumi/coding-agent/session';
@@ -279,7 +279,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly megumiHomePath?: string;
   private readonly modelInputSourceOverrideProvider: AgentLoopInitialModelInputSourceOverrideProvider;
   private readonly sessionContextInputService: SessionContextInputBuildPort;
-  private readonly sessionTurnPreparationService: SessionTurnPreparationService;
+  private readonly sessionMessageService: SessionMessageService;
   private readonly sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
@@ -335,7 +335,7 @@ export class AgentRunService implements AgentRunPort {
         sessionCompactionRepository: this.sessionContextRepository,
         activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
       });
-    this.sessionTurnPreparationService = new SessionTurnPreparationService({
+    this.sessionMessageService = new SessionMessageService({
       sessionRepository: this.sessionRepository,
       messageRepository: this.messageRepository,
       ids: this.ids,
@@ -572,7 +572,7 @@ export class AgentRunService implements AgentRunPort {
     const permissionSource = sessionMessageInput.permissionSource;
     const mode = permissionMode;
     const inputMetadata = sessionMessageInput.metadata;
-    const preparedTurn = this.sessionTurnPreparationService.prepareUserInputTurn({
+    const preparedMessage = this.sessionMessageService.prepareUserMessage({
       ...(input.payload.sessionId ? { sessionId: input.payload.sessionId } : {}),
       ...(input.payload.context?.sessionTitle ? { sessionTitle: input.payload.context.sessionTitle } : {}),
       ...(input.payload.context?.workspaceId ? { workspaceId: input.payload.context.workspaceId } : {}),
@@ -582,7 +582,7 @@ export class AgentRunService implements AgentRunPort {
       messageCreatedAt: currentUserMessage.createdAt,
       createdAt,
     });
-    const { session, userMessage } = preparedTurn;
+    const { session, userMessage } = preparedMessage;
     const parsedInput = parseSessionMessageRawInput({
       requestId: input.requestId,
       runId,
@@ -630,7 +630,7 @@ export class AgentRunService implements AgentRunPort {
         })
       : started.run;
     const step = started.step;
-    this.sessionTurnPreparationService.recordSessionRunSource({
+    this.sessionMessageService.recordSessionRunSource({
       sessionId: String(session.sessionId),
       runId: String(run.runId),
       createdAt,
@@ -1058,7 +1058,7 @@ export class AgentRunService implements AgentRunPort {
       return;
     }
 
-    this.sessionTurnPreparationService.commitAssistantReply({
+    this.sessionMessageService.commitAssistantReply({
       sessionId: input.request.sessionId,
       runId: input.request.runId,
       content: assistantContent,
