@@ -179,6 +179,15 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('const step = this.runExecutionFactRepository.saveStep({\n      stepId,\n      runId,');
   });
 
+  it('keeps initial model input memory recall adaptation in the context owner', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const contextSource = read('packages/coding-agent/context/initial-model-input-preparation.ts');
+
+    expect(contextSource).toContain('export function createAgentLoopInitialModelInputMemoryRecallService');
+    expect(serviceSource).toContain('createAgentLoopInitialModelInputMemoryRecallService({');
+    expect(serviceSource).not.toContain('private async recallMemoryForNewUserInput');
+  });
+
   it('keeps pending approval indexing in the agent-loop tool-call approval module', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const registrySource = read('packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts');

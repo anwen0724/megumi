@@ -10,6 +10,7 @@ import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from 
 import type { ToolDefinition } from '@megumi/shared/tool';
 
 import type { ParsedInput } from '../input/parsed-input';
+import type { MemoryRecallPort } from '../memory';
 import { createCodingAgentRunInputFacts } from '../input/facts';
 import type {
   BuildModelCallInputInput,
@@ -95,6 +96,43 @@ export interface AgentLoopInitialModelInputPreparationOptions {
   memoryRecallService?: AgentLoopInitialModelInputMemoryRecallService;
   modelCallInputBuildService: AgentLoopInitialModelInputBuildService;
   compactionOrchestrator?: AgentLoopInitialModelInputCompactionOrchestrator;
+}
+
+export function createAgentLoopInitialModelInputMemoryRecallService(input: {
+  memoryRecallService?: MemoryRecallPort;
+  megumiHomePath?: string;
+}): AgentLoopInitialModelInputMemoryRecallService | undefined {
+  if (!input.memoryRecallService || !input.megumiHomePath) {
+    return undefined;
+  }
+
+  return {
+    recallForNewUserInput: async (recallInput) => {
+      try {
+        const result = await input.memoryRecallService!.recallForNewUserInput({
+          homePath: input.megumiHomePath!,
+          ...(recallInput.projectId ? { projectId: recallInput.projectId } : {}),
+          ...(recallInput.projectRoot ? { projectRoot: recallInput.projectRoot } : {}),
+          ...(recallInput.effectiveCwd ? { effectiveCwd: recallInput.effectiveCwd } : {}),
+          sessionId: recallInput.sessionId,
+          runId: recallInput.runId,
+          modelStepId: recallInput.modelStepId,
+          queryText: recallInput.queryText,
+          ...(recallInput.providerId ? { providerId: recallInput.providerId } : {}),
+          ...(recallInput.modelId ? { modelId: recallInput.modelId } : {}),
+          ...(typeof recallInput.enabled === 'boolean' ? { enabled: recallInput.enabled } : {}),
+          createdAt: recallInput.createdAt,
+        });
+
+        return {
+          ...(result.memoryRecallSources.length > 0 ? { memoryRecallSources: result.memoryRecallSources } : {}),
+          ...(result.memoryRecallSeed ? { memoryRecallSeed: result.memoryRecallSeed } : {}),
+        };
+      } catch {
+        return {};
+      }
+    },
+  };
 }
 
 export interface PrepareAgentLoopInitialModelInputInput {

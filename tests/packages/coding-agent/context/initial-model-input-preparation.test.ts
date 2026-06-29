@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AgentLoopInitialModelInputPreparationService,
+  createAgentLoopInitialModelInputMemoryRecallService,
   type AgentLoopInitialModelInputMemoryRecallService,
   type BuildModelCallInputInput,
   type BuildModelCallInputResult,
@@ -10,6 +11,89 @@ import {
 import type { ModelInputContext } from '@megumi/shared/model';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ToolDefinition } from '@megumi/shared/tool';
+
+describe('createAgentLoopInitialModelInputMemoryRecallService', () => {
+  it('adapts memory recall runtime inputs for initial model input preparation', async () => {
+    const recallForNewUserInput = vi.fn(async () => ({
+      status: 'recalled',
+      memoryRecallSources: [{
+        sourceId: 'memory:1',
+        text: 'Prefer small slices.',
+        relevanceScore: 0.8,
+        createdAt,
+      }],
+      memoryRecallSeed: {
+        queryText: 'review this',
+        metadata: { selectedCount: 1 },
+      },
+    }));
+
+    const service = createAgentLoopInitialModelInputMemoryRecallService({
+      memoryRecallService: { recallForNewUserInput },
+      megumiHomePath: 'C:/megumi-home',
+    });
+
+    const result = await service?.recallForNewUserInput({
+      projectId: 'project-1',
+      projectRoot: 'C:/repo',
+      effectiveCwd: 'C:/repo/packages',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      modelStepId: 'step-1',
+      queryText: 'review this',
+      providerId: 'openai',
+      modelId: 'gpt-test',
+      enabled: true,
+      createdAt,
+    });
+
+    expect(recallForNewUserInput).toHaveBeenCalledWith(expect.objectContaining({
+      homePath: 'C:/megumi-home',
+      projectId: 'project-1',
+      projectRoot: 'C:/repo',
+      effectiveCwd: 'C:/repo/packages',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      modelStepId: 'step-1',
+      queryText: 'review this',
+      providerId: 'openai',
+      modelId: 'gpt-test',
+      enabled: true,
+      createdAt,
+    }));
+    expect(result).toMatchObject({
+      memoryRecallSources: [expect.objectContaining({ sourceId: 'memory:1' })],
+      memoryRecallSeed: {
+        queryText: 'review this',
+        metadata: { selectedCount: 1 },
+      },
+    });
+  });
+
+  it('omits the adapter when memory runtime or home path is missing and degrades recall errors', async () => {
+    expect(createAgentLoopInitialModelInputMemoryRecallService({})).toBeUndefined();
+    expect(createAgentLoopInitialModelInputMemoryRecallService({
+      memoryRecallService: { recallForNewUserInput: vi.fn() },
+    })).toBeUndefined();
+
+    const service = createAgentLoopInitialModelInputMemoryRecallService({
+      memoryRecallService: {
+        recallForNewUserInput: vi.fn(async () => {
+          throw new Error('memory unavailable');
+        }),
+      },
+      megumiHomePath: 'C:/megumi-home',
+    });
+
+    await expect(service?.recallForNewUserInput({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      modelStepId: 'step-1',
+      queryText: 'review this',
+      createdAt,
+    })).resolves.toEqual({});
+  });
+});
 
 describe('AgentLoopInitialModelInputPreparationService', () => {
   it('owns initial model input preparation across session context, memory recall, compaction probe, and initial input', async () => {

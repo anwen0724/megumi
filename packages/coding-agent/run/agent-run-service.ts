@@ -24,6 +24,7 @@ import {
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
   createBaselineContextForSession,
+  createAgentLoopInitialModelInputMemoryRecallService,
   ModelCallInputBuildService,
   ModelInputSourceOverrideService,
   SessionCompactionOrchestrator,
@@ -209,11 +210,6 @@ interface ApprovalResumeGroup {
   chatStreamAdapter?: ChatStreamEventAdapter;
 }
 
-interface MemoryRecallSnapshotForModelInput {
-  memoryRecallSources?: ModelInputMemoryRecallSource[];
-  memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-}
-
 const defaultClock: AgentRunServiceClock = {
   now: () => new Date().toISOString(),
 };
@@ -371,48 +367,6 @@ export class AgentRunService implements AgentRunPort {
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
   }
 
-  private async recallMemoryForNewUserInput(input: {
-    projectId?: string;
-    projectRoot?: string;
-    effectiveCwd?: string;
-    sessionId: string;
-    runId: string;
-    modelStepId: string;
-    queryText: string;
-    providerId?: string;
-    modelId?: string;
-    enabled?: boolean;
-    createdAt: string;
-  }): Promise<MemoryRecallSnapshotForModelInput> {
-    if (!this.memoryRecallService || !this.megumiHomePath) {
-      return {};
-    }
-
-    try {
-      const result = await this.memoryRecallService.recallForNewUserInput({
-        homePath: this.megumiHomePath,
-        ...(input.projectId ? { projectId: input.projectId } : {}),
-        ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
-        ...(input.effectiveCwd ? { effectiveCwd: input.effectiveCwd } : {}),
-        sessionId: input.sessionId,
-        runId: input.runId,
-        modelStepId: input.modelStepId,
-        queryText: input.queryText,
-        ...(input.providerId ? { providerId: input.providerId } : {}),
-        ...(input.modelId ? { modelId: input.modelId } : {}),
-        ...(typeof input.enabled === 'boolean' ? { enabled: input.enabled } : {}),
-        createdAt: input.createdAt,
-      });
-
-      return {
-        ...(result.memoryRecallSources.length > 0 ? { memoryRecallSources: result.memoryRecallSources } : {}),
-        ...(result.memoryRecallSeed ? { memoryRecallSeed: result.memoryRecallSeed } : {}),
-      };
-    } catch {
-      return {};
-    }
-  }
-
   private resolveMemoryEnabled(): boolean {
     if (!this.memorySettingsProvider) {
       return false;
@@ -438,6 +392,10 @@ export class AgentRunService implements AgentRunPort {
       } : {}),
       ...(this.toolDefinitionProvider ? { registryProvider: this.toolDefinitionProvider } : {}),
       ...(this.providerCapabilitySummaryProvider ? { capabilityProvider: this.providerCapabilitySummaryProvider } : {}),
+    });
+    const memoryRecallService = createAgentLoopInitialModelInputMemoryRecallService({
+      memoryRecallService: this.memoryRecallService,
+      megumiHomePath: this.megumiHomePath,
     });
 
     return {
@@ -494,11 +452,7 @@ export class AgentRunService implements AgentRunPort {
       toolSetService,
       sessionContextInputService: this.sessionContextInputService,
       sourceOverrideProvider: this.modelInputSourceOverrideProvider,
-      ...(this.memoryRecallService ? {
-        memoryRecallService: {
-          recallForNewUserInput: (recallInput) => this.recallMemoryForNewUserInput({ ...recallInput }),
-        },
-      } : {}),
+      ...(memoryRecallService ? { memoryRecallService } : {}),
       modelCallPort: {
         streamModelCall: ({ request }) => this.requireModelStepProvider().streamModelCall(request),
       },
