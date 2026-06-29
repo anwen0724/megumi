@@ -50,15 +50,12 @@ import {
 } from '../agent-loop';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import {
-  BUILT_IN_INPUT_COMMAND_REGISTRY,
-} from '@megumi/coding-agent/input/command';
 import type { AgentRunPort } from '../product-runtime';
 import {
-  parseRawInput,
-  normalizeSessionMessageInputPreprocessing,
   type ParsedInput,
-  type NormalizedSessionMessageInputPreprocessing,
+  parseSessionMessageRawInput,
+  prepareSessionMessageInput,
+  type SessionMessageInputMessage,
 } from '@megumi/coding-agent/input';
 import {
   createRunCompletedEvent,
@@ -632,23 +629,14 @@ export class AgentRunService implements AgentRunPort {
     const runId = this.ids.runId();
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
-    const currentUserMessage = currentUserChatMessage(input.payload);
-    if (!currentUserMessage) {
-      throw new Error('Session message send requires a user message.');
-    }
-    // Renderer preprocessing is treated as transport metadata here; this
-    // runtime normalization is the trust boundary before persistence and model input.
-    const normalizedInput: NormalizedSessionMessageInputPreprocessing = normalizeSessionMessageInputPreprocessing({
-      rawText: currentUserMessage.content,
-      requestedPermissionMode: input.payload.context?.permissionMode,
-      requestedPermissionSource: input.payload.context?.permissionSource,
-      preprocessing: input.payload.context?.preprocessing,
-      createdAt,
+    const sessionMessageInput = prepareSessionMessageInput({
+      payload: input.payload,
     });
-    const permissionMode = normalizedInput.permissionMode;
-    const permissionSource = normalizedInput.permissionSource;
+    const currentUserMessage = sessionMessageInput.currentUserMessage;
+    const permissionMode = sessionMessageInput.permissionMode;
+    const permissionSource = sessionMessageInput.permissionSource;
     const mode = permissionMode;
-    const inputMetadata = normalizedInput.metadata;
+    const inputMetadata = sessionMessageInput.metadata;
     const preparedTurn = this.sessionTurnPreparationService.prepareUserInputTurn({
       ...(input.payload.sessionId ? { sessionId: input.payload.sessionId } : {}),
       ...(input.payload.context?.sessionTitle ? { sessionTitle: input.payload.context.sessionTitle } : {}),
@@ -660,24 +648,15 @@ export class AgentRunService implements AgentRunPort {
       createdAt,
     });
     const { session, userMessage } = preparedTurn;
-    const rawInputId = `raw-input:${runId}:${userMessage.messageId}`;
-    const parsedInput = parseRawInput({
-      id: rawInputId,
-      source: {
-        kind: 'desktop',
-        surface: 'session-message',
-      },
-      text: currentUserMessage.content,
-      target: {
-        kind: 'session',
-        sessionId: String(session.sessionId),
-      },
-      metadata: {
-        requestId: input.requestId,
+    const parsedInput = parseSessionMessageRawInput({
+      requestId: input.requestId,
+      runId,
+      sessionId: String(session.sessionId),
+      message: {
+        ...currentUserMessage,
+        id: String(userMessage.messageId),
       },
       createdAt,
-    }, {
-      commandRegistry: BUILT_IN_INPUT_COMMAND_REGISTRY,
     });
     const started = startAgentLoopRun({
       runId,
@@ -778,7 +757,7 @@ export class AgentRunService implements AgentRunPort {
         userMessage,
         currentUserMessage,
         permissionMode,
-        inputPreprocessing: normalizedInput.inputPreprocessing,
+        inputPreprocessing: sessionMessageInput.inputPreprocessing,
         ...(permissionSnapshot ? { permissionSnapshot } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
         parsedInput,
@@ -887,7 +866,7 @@ export class AgentRunService implements AgentRunPort {
     run: Run;
     step: RunStep;
     userMessage: SessionMessage;
-    currentUserMessage: SessionMessageSendCurrentMessage;
+    currentUserMessage: SessionMessageInputMessage;
     permissionMode: PermissionMode;
     inputPreprocessing: InputPreprocessingResult;
     permissionSnapshot?: PermissionSnapshotRecord;
@@ -1629,36 +1608,6 @@ function defaultHostBoundary(
       summary: 'Session run run completed without tool execution.',
     }),
   };
-}
-
-type SessionMessageSendHistoryMessage = NonNullable<SessionMessageSendPayload['messages']>[number];
-type SessionMessageSendCurrentMessage = NonNullable<SessionMessageSendPayload['message']>;
-
-function currentUserChatMessage(payload: SessionMessageSendPayload): SessionMessageSendCurrentMessage | undefined {
-  if (payload.message) {
-    return payload.message;
-  }
-
-  const lastUserMessage = findLastUserChatMessage(payload.messages ?? []);
-  return lastUserMessage
-    ? {
-        id: lastUserMessage.id,
-        content: lastUserMessage.content,
-        createdAt: lastUserMessage.createdAt,
-      }
-    : undefined;
-}
-
-function findLastUserChatMessage(
-  messages: SessionMessageSendHistoryMessage[],
-): SessionMessageSendHistoryMessage | undefined {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role === 'user') {
-      return message;
-    }
-  }
-  return undefined;
 }
 
 function getAssistantCompletedContent(payload: RuntimeEvent['payload']): string {

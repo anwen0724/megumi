@@ -83,6 +83,19 @@ describe('coding agent run mainline guards', () => {
     }
   });
 
+  it('keeps session message input sensing in the input owner', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const inputSource = read('packages/coding-agent/input/session-message.ts');
+
+    expect(inputSource).toContain('export function prepareSessionMessageInput');
+    expect(inputSource).toContain('export function parseSessionMessageRawInput');
+    expect(inputSource).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(serviceSource).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(serviceSource).not.toContain('parseRawInput');
+    expect(serviceSource).not.toContain('function currentUserChatMessage');
+    expect(serviceSource).not.toContain('function findLastUserChatMessage');
+  });
+
   it('keeps the run product port in product-runtime instead of a run contract shell', () => {
     const productRunPort = read('packages/coding-agent/product-runtime/agent-run-port.ts');
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
