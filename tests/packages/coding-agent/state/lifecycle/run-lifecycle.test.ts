@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   attachRunPermissionSnapshot,
+  cancelAgentLoopModelStep,
+  completeAgentLoopModelStep,
   failAgentLoopBeforeModelStep,
+  failAgentLoopModelStep,
   runTurn,
   startAgentLoopRun,
 } from '@megumi/coding-agent/state';
@@ -48,6 +51,13 @@ const ids = {
     .mockReturnValueOnce('event-11'),
   messageId: () => 'message-1',
 };
+
+function createEventIds(eventIds: string[]) {
+  let index = 0;
+  return {
+    eventId: () => eventIds[index++] ?? `event-extra-${index}`,
+  };
+}
 
 describe('run runtime lifecycle events', () => {
   it('starts an agent loop run with its initial model step through the state owner', () => {
@@ -173,6 +183,140 @@ describe('run runtime lifecycle events', () => {
       requestId: 'request-1',
       context: { traceId: 'trace-1' },
     });
+  });
+
+  it('completes an agent loop model step through the state owner', () => {
+    const { sink } = createSink();
+
+    const result = completeAgentLoopModelStep({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      run: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        triggerMessageId: 'message-1',
+        mode: 'default',
+        goal: 'Answer',
+        status: 'running',
+        createdAt: '2026-05-15T00:00:00.000Z',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      step: {
+        stepId: 'step-1',
+        runId: 'run-1',
+        kind: 'model',
+        status: 'running',
+        title: 'Model response',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      startSequence: 8,
+      finishedAt: '2026-05-15T00:00:02.000Z',
+      ids: createEventIds(['event-9', 'event-10', 'event-11', 'event-12']),
+      lifecycle: sink,
+    });
+
+    expect(result.run.status).toBe('completed');
+    expect(result.step.status).toBe('succeeded');
+    expect(sink.saveStep).toHaveBeenCalledWith(result.step);
+    expect(sink.saveRun).toHaveBeenCalledWith(result.run);
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'step.status.changed',
+      'step.completed',
+      'run.status.changed',
+      'run.completed',
+    ]);
+    expect(result.events.map((event) => event.sequence)).toEqual([9, 10, 11, 12]);
+    expect(result.events[3]).toMatchObject({ requestId: 'request-1' });
+  });
+
+  it('fails an agent loop model step through the state owner', () => {
+    const { sink } = createSink();
+    const error = {
+      code: 'runtime_unknown',
+      message: 'Provider failed',
+      severity: 'error',
+      retryable: false,
+      source: 'provider',
+    } as const;
+
+    const result = failAgentLoopModelStep({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      run: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        triggerMessageId: 'message-1',
+        mode: 'default',
+        goal: 'Answer',
+        status: 'running',
+        createdAt: '2026-05-15T00:00:00.000Z',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      step: {
+        stepId: 'step-1',
+        runId: 'run-1',
+        kind: 'model',
+        status: 'running',
+        title: 'Model response',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      error,
+      startSequence: 12,
+      finishedAt: '2026-05-15T00:00:03.000Z',
+      ids: createEventIds(['event-13', 'event-14', 'event-15']),
+      lifecycle: sink,
+    });
+
+    expect(result.run.status).toBe('failed');
+    expect(result.step.status).toBe('failed');
+    expect(result.run.error).toBe(error);
+    expect(result.step.error).toBe(error);
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+    expect(result.events.map((event) => event.sequence)).toEqual([13, 14, 15]);
+  });
+
+  it('cancels an agent loop model step through the state owner', () => {
+    const { sink } = createSink();
+
+    const result = cancelAgentLoopModelStep({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      run: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        triggerMessageId: 'message-1',
+        mode: 'default',
+        goal: 'Answer',
+        status: 'running',
+        createdAt: '2026-05-15T00:00:00.000Z',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      step: {
+        stepId: 'step-1',
+        runId: 'run-1',
+        kind: 'model',
+        status: 'running',
+        title: 'Model response',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      startSequence: 15,
+      finishedAt: '2026-05-15T00:00:04.000Z',
+      ids: createEventIds(['event-16', 'event-17']),
+      lifecycle: sink,
+    });
+
+    expect(result.run.status).toBe('cancelled');
+    expect(result.step.status).toBe('cancelled');
+    expect(result.run.cancelledAt).toBe('2026-05-15T00:00:04.000Z');
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'step.status.changed',
+      'run.status.changed',
+    ]);
+    expect(result.events.map((event) => event.sequence)).toEqual([16, 17]);
   });
 
   it('creates run.created events with stable lifecycle payloads', () => {

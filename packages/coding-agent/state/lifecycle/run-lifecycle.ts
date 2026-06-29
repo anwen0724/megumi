@@ -7,7 +7,7 @@ import type {
 } from '@megumi/shared/session';
 import type { PermissionModeState } from '@megumi/shared/permission';
 import type { JsonObject } from '@megumi/shared/primitives';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
 import { normalizeRuntimeError } from '../run-error';
 import {
   createContextUpdateInputPreview,
@@ -43,8 +43,12 @@ import {
 } from '../recovery-observation-mapper';
 import {
   type AttachRunPermissionSnapshotInput,
+  type CancelAgentLoopModelStepResult,
+  type CompleteAgentLoopModelStepResult,
   type FailAgentLoopBeforeModelStepInput,
   type FailAgentLoopBeforeModelStepResult,
+  type FailAgentLoopModelStepInput,
+  type FinishAgentLoopModelStepInput,
   createDefaultRunIds,
   defaultRunClock,
   type RunIdFactory,
@@ -157,6 +161,174 @@ export function failAgentLoopBeforeModelStep(
   ].map(withRequest);
 
   return { run, step, events };
+}
+
+export function completeAgentLoopModelStep(
+  input: FinishAgentLoopModelStepInput,
+): CompleteAgentLoopModelStepResult {
+  let sequence = input.startSequence;
+  const run: Run = {
+    ...input.run,
+    status: 'completed',
+    completedAt: input.finishedAt,
+  };
+  const step: RunStep = {
+    ...input.step,
+    status: 'succeeded',
+    completedAt: input.finishedAt,
+  };
+  input.lifecycle.saveStep(step);
+  input.lifecycle.saveRun(run);
+
+  return {
+    run,
+    step,
+    events: withAgentLoopRequestMetadata(input, [
+      createStepStatusChangedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        stepId: String(step.stepId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        from: 'running',
+        to: 'succeeded',
+      }),
+      createStepCompletedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        step,
+      }),
+      createRunStatusChangedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        from: 'running',
+        to: 'completed',
+      }),
+      createRunCompletedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+      }),
+    ]),
+  };
+}
+
+export function failAgentLoopModelStep(
+  input: FailAgentLoopModelStepInput,
+): FailAgentLoopBeforeModelStepResult {
+  let sequence = input.startSequence;
+  const run: Run = {
+    ...input.run,
+    status: 'failed',
+    completedAt: input.finishedAt,
+    error: input.error,
+  };
+  const step: RunStep = {
+    ...input.step,
+    status: 'failed',
+    completedAt: input.finishedAt,
+    error: input.error,
+  };
+  input.lifecycle.saveStep(step);
+  input.lifecycle.saveRun(run);
+
+  return {
+    run,
+    step,
+    events: withAgentLoopRequestMetadata(input, [
+      createStepStatusChangedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        stepId: String(step.stepId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        from: 'running',
+        to: 'failed',
+      }),
+      createStepFailedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        step,
+        error: input.error,
+      }),
+      createRunStatusChangedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        from: 'running',
+        to: 'failed',
+      }),
+    ]),
+  };
+}
+
+export function cancelAgentLoopModelStep(
+  input: FinishAgentLoopModelStepInput,
+): CancelAgentLoopModelStepResult {
+  let sequence = input.startSequence;
+  const run: Run = {
+    ...input.run,
+    status: 'cancelled',
+    cancelledAt: input.finishedAt,
+  };
+  const step: RunStep = {
+    ...input.step,
+    status: 'cancelled',
+    completedAt: input.finishedAt,
+  };
+  input.lifecycle.saveStep(step);
+  input.lifecycle.saveRun(run);
+
+  return {
+    run,
+    step,
+    events: withAgentLoopRequestMetadata(input, [
+      createStepStatusChangedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        stepId: String(step.stepId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        from: 'running',
+        to: 'cancelled',
+      }),
+      createRunStatusChangedEvent({
+        eventId: input.ids.eventId(),
+        sessionId: input.sessionId,
+        runId: String(run.runId),
+        sequence: sequence += 1,
+        createdAt: input.finishedAt,
+        from: 'running',
+        to: 'cancelled',
+      }),
+    ]),
+  };
+}
+
+function withAgentLoopRequestMetadata(
+  input: { requestId: string; runtimeContext?: RuntimeContext },
+  events: RuntimeEvent[],
+): RuntimeEvent[] {
+  return events.map((event) => withSessionMessageRequestMetadata(event, {
+    requestId: input.requestId,
+    ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+  }));
 }
 
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {

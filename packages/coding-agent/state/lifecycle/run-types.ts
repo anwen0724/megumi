@@ -128,6 +128,34 @@ export interface FailAgentLoopBeforeModelStepResult {
   events: RuntimeEvent[];
 }
 
+export interface FinishAgentLoopModelStepInput {
+  requestId: string;
+  runtimeContext?: RuntimeContext;
+  sessionId: string;
+  run: Run;
+  step: RunStep;
+  startSequence: number;
+  finishedAt: string;
+  ids: Pick<RunIdFactory, 'eventId'>;
+  lifecycle: Pick<RunLifecycleSink, 'saveRun' | 'saveStep'>;
+}
+
+export interface CompleteAgentLoopModelStepResult {
+  run: Run;
+  step: RunStep;
+  events: RuntimeEvent[];
+}
+
+export interface FailAgentLoopModelStepInput extends FinishAgentLoopModelStepInput {
+  error: RuntimeError;
+}
+
+export interface CancelAgentLoopModelStepResult {
+  run: Run;
+  step: RunStep;
+  events: RuntimeEvent[];
+}
+
 export interface RunTurnResult {
   run: Run;
   step: RunStep;

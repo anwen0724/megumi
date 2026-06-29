@@ -4,7 +4,10 @@ import {
   assertRunStatusTransition,
   attachRunPermissionSnapshot,
   canResumeApprovalFromRunStatus,
+  cancelAgentLoopModelStep,
+  completeAgentLoopModelStep,
   failAgentLoopBeforeModelStep,
+  failAgentLoopModelStep,
   resumeRunAfterApproval,
   startAgentLoopRun,
   type RunRetryCoordinatorPort,
@@ -59,13 +62,8 @@ import {
   type SessionMessageInputMessage,
 } from '@megumi/coding-agent/input';
 import {
-  createRunCompletedEvent,
   createRunFailedEvent,
-  createRunStartedEvent,
   createRunStatusChangedEvent,
-  createStepCompletedEvent,
-  createStepFailedEvent,
-  createStepStatusChangedEvent,
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
   RuntimeEventLog,
@@ -1055,90 +1053,54 @@ export class AgentRunService implements AgentRunPort {
     const completedAt = this.clock.now();
     if (terminalEvent?.eventType === 'run.failed') {
       const error = getRunFailedError(terminalEvent.payload) ?? createFallbackRuntimeError('Run failed.');
-      const failedStep = this.runExecutionFactRepository.saveStep({
-        ...currentModelStep,
-        status: 'failed',
-        completedAt,
+      const failed = failAgentLoopModelStep({
+        requestId: input.request.requestId,
+        ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
+        sessionId: input.request.sessionId,
+        run: input.run,
+        step: currentModelStep,
         error,
+        startSequence: lastSequence,
+        finishedAt: completedAt,
+        ids: this.ids,
+        lifecycle: {
+          saveRun: (run) => {
+            this.runRecordRepository.saveRun(run);
+          },
+          saveStep: (step) => {
+            this.runExecutionFactRepository.saveStep(step);
+          },
+        },
       });
-      this.runRecordRepository.saveRun({
-        ...input.run,
-        status: 'failed',
-        completedAt,
-        error,
-      });
-      for (const event of [
-        createStepStatusChangedEvent({
-          eventId: this.ids.eventId(),
-          sessionId: input.request.sessionId,
-          runId: input.request.runId,
-          stepId: failedStep.stepId,
-          sequence: lastSequence += 1,
-          createdAt: completedAt,
-          from: 'running',
-          to: 'failed',
-        }),
-        createStepFailedEvent({
-          eventId: this.ids.eventId(),
-          sessionId: input.request.sessionId,
-          runId: input.request.runId,
-          sequence: lastSequence += 1,
-          createdAt: completedAt,
-          step: failedStep,
-          error,
-        }),
-        createRunStatusChangedEvent({
-          eventId: this.ids.eventId(),
-          sessionId: input.request.sessionId,
-          runId: input.request.runId,
-          sequence: lastSequence += 1,
-          createdAt: completedAt,
-          from: 'running',
-          to: 'failed',
-        }),
-      ]) {
-        const eventWithRequest = this.runtimeEventLog.withModelRequestMetadata(event, input.request);
-        this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
-        yield eventWithRequest;
+      for (const event of failed.events) {
+        this.appendRuntimeEvent(event, input.chatStreamAdapter);
+        yield event;
       }
       return;
     }
 
     if (terminalEvent?.eventType === 'run.cancelled') {
-      const cancelledStep = this.runExecutionFactRepository.saveStep({
-        ...currentModelStep,
-        status: 'cancelled',
-        completedAt,
+      const cancelled = cancelAgentLoopModelStep({
+        requestId: input.request.requestId,
+        ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
+        sessionId: input.request.sessionId,
+        run: input.run,
+        step: currentModelStep,
+        startSequence: lastSequence,
+        finishedAt: completedAt,
+        ids: this.ids,
+        lifecycle: {
+          saveRun: (run) => {
+            this.runRecordRepository.saveRun(run);
+          },
+          saveStep: (step) => {
+            this.runExecutionFactRepository.saveStep(step);
+          },
+        },
       });
-      this.runRecordRepository.saveRun({
-        ...input.run,
-        status: 'cancelled',
-        cancelledAt: completedAt,
-      });
-      for (const event of [
-        createStepStatusChangedEvent({
-          eventId: this.ids.eventId(),
-          sessionId: input.request.sessionId,
-          runId: input.request.runId,
-          stepId: cancelledStep.stepId,
-          sequence: lastSequence += 1,
-          createdAt: completedAt,
-          from: 'running',
-          to: 'cancelled',
-        }),
-        createRunStatusChangedEvent({
-          eventId: this.ids.eventId(),
-          sessionId: input.request.sessionId,
-          runId: input.request.runId,
-          sequence: lastSequence += 1,
-          createdAt: completedAt,
-          from: 'running',
-          to: 'cancelled',
-        }),
-      ]) {
-        const eventWithRequest = this.runtimeEventLog.withModelRequestMetadata(event, input.request);
-        this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
-        yield eventWithRequest;
+      for (const event of cancelled.events) {
+        this.appendRuntimeEvent(event, input.chatStreamAdapter);
+        yield event;
       }
       return;
     }
@@ -1154,56 +1116,28 @@ export class AgentRunService implements AgentRunPort {
       completedAt,
     });
 
-    const completedStep = this.runExecutionFactRepository.saveStep({
-      ...currentModelStep,
-      status: 'succeeded',
-      completedAt,
-    });
-    this.runRecordRepository.saveRun({
-      ...input.run,
-      status: 'completed',
-      completedAt,
+    const completed = completeAgentLoopModelStep({
+      requestId: input.request.requestId,
+      ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
+      sessionId: input.request.sessionId,
+      run: input.run,
+      step: currentModelStep,
+      startSequence: lastSequence,
+      finishedAt: completedAt,
+      ids: this.ids,
+      lifecycle: {
+        saveRun: (run) => {
+          this.runRecordRepository.saveRun(run);
+        },
+        saveStep: (step) => {
+          this.runExecutionFactRepository.saveStep(step);
+        },
+      },
     });
 
-    for (const event of [
-      createStepStatusChangedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.request.sessionId,
-        runId: input.request.runId,
-        stepId: completedStep.stepId,
-        sequence: lastSequence += 1,
-        createdAt: completedAt,
-        from: 'running',
-        to: 'succeeded',
-      }),
-      createStepCompletedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.request.sessionId,
-        runId: input.request.runId,
-        sequence: lastSequence += 1,
-        createdAt: completedAt,
-        step: completedStep,
-      }),
-      createRunStatusChangedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.request.sessionId,
-        runId: input.request.runId,
-        sequence: lastSequence += 1,
-        createdAt: completedAt,
-        from: 'running',
-        to: 'completed',
-      }),
-      createRunCompletedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.request.sessionId,
-        runId: input.request.runId,
-        sequence: lastSequence += 1,
-        createdAt: completedAt,
-      }),
-    ]) {
-      const eventWithRequest = this.runtimeEventLog.withModelRequestMetadata(event, input.request);
-      this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
-      if (eventWithRequest.eventType === 'run.completed') {
+    for (const event of completed.events) {
+      this.appendRuntimeEvent(event, input.chatStreamAdapter);
+      if (event.eventType === 'run.completed') {
         this.postRunHooks.scheduleRunCompletedMemoryCapture({
           runId: String(input.request.runId),
           sessionId: String(input.request.sessionId),
@@ -1220,7 +1154,7 @@ export class AgentRunService implements AgentRunPort {
           memoryEnabled: this.resolveMemoryEnabled(),
         });
       }
-      yield eventWithRequest;
+      yield event;
     }
   }
 
