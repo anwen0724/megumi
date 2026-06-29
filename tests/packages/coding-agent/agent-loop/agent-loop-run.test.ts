@@ -276,7 +276,7 @@ function createOptions(
       getRunStatus(_runId) { return undefined; },
     },
     failurePort: {
-      async *failBeforeModelStep(failureInput) {
+      async *failBeforeModelCall(failureInput) {
         order.push('failure');
         yield createRuntimeEvent({
           eventId: `event-failure-${Math.random()}`,

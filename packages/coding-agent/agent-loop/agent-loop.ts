@@ -351,7 +351,7 @@ export interface AgentLoopStatePort {
 }
 
 export interface AgentLoopFailurePort {
-  failBeforeModelStep(input: {
+  failBeforeModelCall(input: {
     requestId: string;
     runtimeContext?: RuntimeContext;
     sessionId: string;
@@ -533,7 +533,7 @@ export class AgentLoop {
         );
         runStartedAppended = true;
         yield runStarted;
-        yield* this.options.failurePort.failBeforeModelStep({
+        yield* this.options.failurePort.failBeforeModelCall({
           requestId: input.requestId,
           runtimeContext: input.runtimeContext,
           sessionId: String(input.session.sessionId),
@@ -578,7 +578,7 @@ export class AgentLoop {
       }
 
       if (compaction.status === 'failed') {
-        yield* this.options.failurePort.failBeforeModelStep({
+        yield* this.options.failurePort.failBeforeModelCall({
           requestId: input.requestId,
           runtimeContext: input.runtimeContext,
           sessionId: String(input.session.sessionId),
@@ -591,7 +591,7 @@ export class AgentLoop {
 
       const initialModelInput = await initialModelInputPreparation.buildInitialModelInput();
       if (initialModelInput.failure) {
-        yield* this.options.failurePort.failBeforeModelStep({
+        yield* this.options.failurePort.failBeforeModelCall({
           requestId: input.requestId,
           runtimeContext: input.runtimeContext,
           sessionId: String(input.session.sessionId),
@@ -623,7 +623,7 @@ export class AgentLoop {
           ...(this.options.toolCallRunnerFactory ? { factory: this.options.toolCallRunnerFactory } : {}),
         });
       } catch (error) {
-        yield* this.options.failurePort.failBeforeModelStep({
+        yield* this.options.failurePort.failBeforeModelCall({
           requestId: input.requestId,
           runtimeContext: input.runtimeContext,
           sessionId: String(input.session.sessionId),
@@ -696,7 +696,7 @@ export class AgentLoop {
         runStartedAppended = true;
         yield runStarted;
       }
-      yield* this.options.failurePort.failBeforeModelStep({
+      yield* this.options.failurePort.failBeforeModelCall({
         requestId: input.requestId,
         runtimeContext: input.runtimeContext,
         sessionId: String(input.session.sessionId),

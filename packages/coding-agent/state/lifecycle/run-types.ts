@@ -109,7 +109,7 @@ export interface AttachRunPermissionSnapshotInput {
   lifecycle: Pick<RunLifecycleSink, 'saveRun'>;
 }
 
-export interface FailAgentLoopBeforeModelStepInput {
+export interface FailAgentLoopBeforeModelCallInput {
   requestId: string;
   runtimeContext?: RuntimeContext;
   sessionId: string;
@@ -122,13 +122,13 @@ export interface FailAgentLoopBeforeModelStepInput {
   lifecycle: Pick<RunLifecycleSink, 'saveRun' | 'saveStep'>;
 }
 
-export interface FailAgentLoopBeforeModelStepResult {
+export interface FailAgentLoopBeforeModelCallResult {
   run: Run;
   step: RunStep;
   events: RuntimeEvent[];
 }
 
-export interface FinishAgentLoopModelStepInput {
+export interface FinishAgentLoopModelCallInput {
   requestId: string;
   runtimeContext?: RuntimeContext;
   sessionId: string;
@@ -140,17 +140,34 @@ export interface FinishAgentLoopModelStepInput {
   lifecycle: Pick<RunLifecycleSink, 'saveRun' | 'saveStep'>;
 }
 
-export interface CompleteAgentLoopModelStepResult {
+export interface WaitForAgentLoopApprovalInput {
+  run: Run;
+  step: RunStep;
+  lifecycle: Pick<RunLifecycleSink, 'saveRun' | 'saveStep'>;
+}
+
+export interface WaitForAgentLoopApprovalResult {
+  run: Run;
+  step: RunStep;
+}
+
+export interface SucceedAgentLoopModelCallInput {
+  step: RunStep | undefined;
+  completedAt: string;
+  lifecycle: Pick<RunLifecycleSink, 'saveStep'>;
+}
+
+export interface CompleteAgentLoopModelCallResult {
   run: Run;
   step: RunStep;
   events: RuntimeEvent[];
 }
 
-export interface FailAgentLoopModelStepInput extends FinishAgentLoopModelStepInput {
+export interface FailAgentLoopModelCallInput extends FinishAgentLoopModelCallInput {
   error: RuntimeError;
 }
 
-export interface CancelAgentLoopModelStepResult {
+export interface CancelAgentLoopModelCallResult {
   run: Run;
   step: RunStep;
   events: RuntimeEvent[];

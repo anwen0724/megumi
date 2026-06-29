@@ -1,4 +1,4 @@
-﻿// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
+// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -165,18 +165,22 @@ describe('coding agent run mainline guards', () => {
     const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');
 
     expect(stateLifecycleSource).toContain('export function startAgentLoopRun');
-    expect(stateLifecycleSource).toContain('export function failAgentLoopBeforeModelStep');
-    expect(stateLifecycleSource).toContain('export function completeAgentLoopModelStep');
-    expect(stateLifecycleSource).toContain('export function failAgentLoopModelStep');
-    expect(stateLifecycleSource).toContain('export function cancelAgentLoopModelStep');
+    expect(stateLifecycleSource).toContain('export function waitForAgentLoopApproval');
+    expect(stateLifecycleSource).toContain('export function failAgentLoopBeforeModelCall');
+    expect(stateLifecycleSource).toContain('export function completeAgentLoopModelCall');
+    expect(stateLifecycleSource).toContain('export function failAgentLoopModelCall');
+    expect(stateLifecycleSource).toContain('export function cancelAgentLoopModelCall');
     expect(serviceSource).toContain('startAgentLoopRun({');
-    expect(serviceSource).toContain('failAgentLoopBeforeModelStep({');
-    expect(serviceSource).toContain('completeAgentLoopModelStep({');
-    expect(serviceSource).toContain('failAgentLoopModelStep({');
-    expect(serviceSource).toContain('cancelAgentLoopModelStep({');
+    expect(serviceSource).toContain('waitForAgentLoopApproval({');
+    expect(serviceSource).toContain('failAgentLoopBeforeModelCall({');
+    expect(serviceSource).toContain('completeAgentLoopModelCall({');
+    expect(serviceSource).toContain('failAgentLoopModelCall({');
+    expect(serviceSource).toContain('cancelAgentLoopModelCall({');
     expect(serviceSource).not.toContain('private async *failRunBeforeModelStep');
+    expect(serviceSource).not.toContain('private async *failRunBeforeModelCall');
     expect(serviceSource).not.toContain('const initialRun = this.runRecordRepository.saveRun');
     expect(serviceSource).not.toContain('const step = this.runExecutionFactRepository.saveStep({\n      stepId,\n      runId,');
+    expect(serviceSource).not.toContain("assertRunStatusTransition(currentRun.status, 'waiting_for_approval')");
   });
 
   it('keeps initial model input memory recall adaptation in the context owner', () => {

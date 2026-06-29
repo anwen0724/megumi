@@ -1,4 +1,4 @@
-﻿// Owns run lifecycle mutations for action-style runs and agent loop startup.
+// Owns run lifecycle mutations for action-style runs and agent loop startup.
 import type {
   RunAction,
   RunObservation,
@@ -9,6 +9,7 @@ import type { PermissionModeState } from '@megumi/shared/permission';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
 import { normalizeRuntimeError } from '../run-error';
+import { assertRunStatusTransition } from '../run-state-policy';
 import {
   createContextUpdateInputPreview,
   toContextPatchAppliedPayload,
@@ -43,19 +44,22 @@ import {
 } from '../recovery-observation-mapper';
 import {
   type AttachRunPermissionSnapshotInput,
-  type CancelAgentLoopModelStepResult,
-  type CompleteAgentLoopModelStepResult,
-  type FailAgentLoopBeforeModelStepInput,
-  type FailAgentLoopBeforeModelStepResult,
-  type FailAgentLoopModelStepInput,
-  type FinishAgentLoopModelStepInput,
+  type CancelAgentLoopModelCallResult,
+  type CompleteAgentLoopModelCallResult,
+  type FailAgentLoopBeforeModelCallInput,
+  type FailAgentLoopBeforeModelCallResult,
+  type FailAgentLoopModelCallInput,
+  type FinishAgentLoopModelCallInput,
   createDefaultRunIds,
   defaultRunClock,
   type RunIdFactory,
   type StartAgentLoopRunInput,
   type StartAgentLoopRunResult,
+  type SucceedAgentLoopModelCallInput,
   type RunTurnInput,
   type RunTurnResult,
+  type WaitForAgentLoopApprovalInput,
+  type WaitForAgentLoopApprovalResult,
 } from './run-types';
 import {
   createPermissionModeRuntimeInstruction,
@@ -98,9 +102,9 @@ export function attachRunPermissionSnapshot(input: AttachRunPermissionSnapshotIn
   return run;
 }
 
-export function failAgentLoopBeforeModelStep(
-  input: FailAgentLoopBeforeModelStepInput,
-): FailAgentLoopBeforeModelStepResult {
+export function failAgentLoopBeforeModelCall(
+  input: FailAgentLoopBeforeModelCallInput,
+): FailAgentLoopBeforeModelCallResult {
   let sequence = input.startSequence;
   const run: Run = {
     ...input.run,
@@ -163,9 +167,40 @@ export function failAgentLoopBeforeModelStep(
   return { run, step, events };
 }
 
-export function completeAgentLoopModelStep(
-  input: FinishAgentLoopModelStepInput,
-): CompleteAgentLoopModelStepResult {
+export function waitForAgentLoopApproval(
+  input: WaitForAgentLoopApprovalInput,
+): WaitForAgentLoopApprovalResult {
+  assertRunStatusTransition(input.run.status, 'waiting_for_approval');
+  const run: Run = {
+    ...input.run,
+    status: 'waiting_for_approval',
+  };
+  const step: RunStep = {
+    ...input.step,
+    status: 'waiting_for_approval',
+  };
+  input.lifecycle.saveRun(run);
+  input.lifecycle.saveStep(step);
+  return { run, step };
+}
+
+export function succeedAgentLoopModelCall(input: SucceedAgentLoopModelCallInput): RunStep | undefined {
+  if (!input.step || input.step.status !== 'running') {
+    return input.step;
+  }
+
+  const step: RunStep = {
+    ...input.step,
+    status: 'succeeded',
+    completedAt: input.completedAt,
+  };
+  input.lifecycle.saveStep(step);
+  return step;
+}
+
+export function completeAgentLoopModelCall(
+  input: FinishAgentLoopModelCallInput,
+): CompleteAgentLoopModelCallResult {
   let sequence = input.startSequence;
   const run: Run = {
     ...input.run,
@@ -222,9 +257,9 @@ export function completeAgentLoopModelStep(
   };
 }
 
-export function failAgentLoopModelStep(
-  input: FailAgentLoopModelStepInput,
-): FailAgentLoopBeforeModelStepResult {
+export function failAgentLoopModelCall(
+  input: FailAgentLoopModelCallInput,
+): FailAgentLoopBeforeModelCallResult {
   let sequence = input.startSequence;
   const run: Run = {
     ...input.run,
@@ -277,9 +312,9 @@ export function failAgentLoopModelStep(
   };
 }
 
-export function cancelAgentLoopModelStep(
-  input: FinishAgentLoopModelStepInput,
-): CancelAgentLoopModelStepResult {
+export function cancelAgentLoopModelCall(
+  input: FinishAgentLoopModelCallInput,
+): CancelAgentLoopModelCallResult {
   let sequence = input.startSequence;
   const run: Run = {
     ...input.run,

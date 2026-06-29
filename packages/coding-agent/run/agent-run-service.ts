@@ -1,15 +1,16 @@
 // Orchestrates Coding Agent product session runs by coordinating input facts,
 // product persistence, permissions, context construction, tools, and model execution.
 import {
-  assertRunStatusTransition,
   attachRunPermissionSnapshot,
   canResumeApprovalFromRunStatus,
-  cancelAgentLoopModelStep,
-  completeAgentLoopModelStep,
-  failAgentLoopBeforeModelStep,
-  failAgentLoopModelStep,
+  cancelAgentLoopModelCall,
+  completeAgentLoopModelCall,
+  failAgentLoopBeforeModelCall,
+  failAgentLoopModelCall,
   resumeRunAfterApproval,
   startAgentLoopRun,
+  succeedAgentLoopModelCall,
+  waitForAgentLoopApproval,
   type RunRetryCoordinatorPort,
   type RunTerminalCoordinatorPort,
 } from '../state';
@@ -405,12 +406,12 @@ export class AgentRunService implements AgentRunPort {
         getRunStatus: (runId: string) => svc.runRecordRepository.getRun(runId)?.status,
       },
       failurePort: {
-        async *failBeforeModelStep(failureInput) {
+        async *failBeforeModelCall(failureInput) {
           const seq = Math.max(
             0,
             svc.runtimeEventLog.lastSequenceForRun(String(failureInput.run.runId)),
           );
-          const failed = failAgentLoopBeforeModelStep({
+          const failed = failAgentLoopBeforeModelCall({
             requestId: failureInput.requestId,
             runtimeContext: failureInput.runtimeContext,
             sessionId: failureInput.sessionId,
@@ -862,16 +863,20 @@ export class AgentRunService implements AgentRunPort {
         return registeredPendingGroup;
       }
 
-      const currentRun = this.runRecordRepository.getRun(input.request.runId) ?? input.run;
-      assertRunStatusTransition(currentRun.status, 'waiting_for_approval');
-      const waitingRun = this.runRecordRepository.saveRun({
-        ...currentRun,
-        status: 'waiting_for_approval',
+      const waiting = waitForAgentLoopApproval({
+        run: this.runRecordRepository.getRun(input.request.runId) ?? input.run,
+        step: currentModelStep,
+        lifecycle: {
+          saveRun: (run) => {
+            this.runRecordRepository.saveRun(run);
+          },
+          saveStep: (step) => {
+            this.runExecutionFactRepository.saveStep(step);
+          },
+        },
       });
-      const waitingStep = this.runExecutionFactRepository.saveStep({
-        ...currentModelStep,
-        status: 'waiting_for_approval',
-      });
+      const waitingRun = waiting.run;
+      const waitingStep = waiting.step;
       currentModelStep = waitingStep;
       const groupId = `${input.request.runId}:${input.request.stepId}:${this.ids.eventId()}`;
       const group: ApprovalResumeGroup = {
@@ -937,11 +942,19 @@ export class AgentRunService implements AgentRunPort {
               completedAt: eventWithRequest.createdAt,
             });
           }
-          const completedStep = this.markModelStepSucceeded(
-            modelStepsById,
-            eventWithRequest.stepId ?? currentModelStep.stepId,
-            eventWithRequest.createdAt,
-          );
+          const completedStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
+          const completedStep = succeedAgentLoopModelCall({
+            step: modelStepsById.get(completedStepId),
+            completedAt: eventWithRequest.createdAt,
+            lifecycle: {
+              saveStep: (step) => {
+                this.runExecutionFactRepository.saveStep(step);
+              },
+            },
+          });
+          if (completedStep) {
+            modelStepsById.set(completedStepId, completedStep);
+          }
           if (completedStep && completedStep.stepId === currentModelStep.stepId) {
             currentModelStep = completedStep;
           }
@@ -995,7 +1008,7 @@ export class AgentRunService implements AgentRunPort {
     const completedAt = this.clock.now();
     if (terminalEvent?.eventType === 'run.failed') {
       const error = getRunFailedError(terminalEvent.payload) ?? createFallbackRuntimeError('Run failed.');
-      const failed = failAgentLoopModelStep({
+      const failed = failAgentLoopModelCall({
         requestId: input.request.requestId,
         ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
         sessionId: input.request.sessionId,
@@ -1022,7 +1035,7 @@ export class AgentRunService implements AgentRunPort {
     }
 
     if (terminalEvent?.eventType === 'run.cancelled') {
-      const cancelled = cancelAgentLoopModelStep({
+      const cancelled = cancelAgentLoopModelCall({
         requestId: input.request.requestId,
         ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
         sessionId: input.request.sessionId,
@@ -1058,7 +1071,7 @@ export class AgentRunService implements AgentRunPort {
       completedAt,
     });
 
-    const completed = completeAgentLoopModelStep({
+    const completed = completeAgentLoopModelCall({
       requestId: input.request.requestId,
       ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
       sessionId: input.request.sessionId,
@@ -1244,7 +1257,7 @@ export class AgentRunService implements AgentRunPort {
     const resumedToolResults = resumed.toolResults;
     const resumedModelInput = resumed.modelInput;
     if (resumedModelInput.failure) {
-      const failed = failAgentLoopBeforeModelStep({
+      const failed = failAgentLoopBeforeModelCall({
         requestId: pending.request.requestId,
         sessionId: pending.request.sessionId,
         run: runningRun,
@@ -1374,25 +1387,6 @@ export class AgentRunService implements AgentRunPort {
     });
   }
 
-  private markModelStepSucceeded(
-    modelStepsById: Map<string, RunStep>,
-    stepId: string,
-    completedAt: string,
-  ): RunStep | undefined {
-    const step = modelStepsById.get(stepId);
-
-    if (!step || step.status !== 'running') {
-      return step;
-    }
-
-    const completedStep = this.runExecutionFactRepository.saveStep({
-      ...step,
-      status: 'succeeded',
-      completedAt,
-    });
-    modelStepsById.set(stepId, completedStep);
-    return completedStep;
-  }
 }
 
 function defaultHostBoundary(

@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   attachRunPermissionSnapshot,
-  cancelAgentLoopModelStep,
-  completeAgentLoopModelStep,
-  failAgentLoopBeforeModelStep,
-  failAgentLoopModelStep,
+  cancelAgentLoopModelCall,
+  completeAgentLoopModelCall,
+  failAgentLoopBeforeModelCall,
+  failAgentLoopModelCall,
   runTurn,
   startAgentLoopRun,
+  succeedAgentLoopModelCall,
+  waitForAgentLoopApproval,
 } from '@megumi/coding-agent/state';
 import { createRunCreatedEvent } from '@megumi/coding-agent/events';
 import type { RunLifecycleSink } from '@megumi/coding-agent/state';
@@ -60,7 +62,7 @@ function createEventIds(eventIds: string[]) {
 }
 
 describe('run runtime lifecycle events', () => {
-  it('starts an agent loop run with its initial model step through the state owner', () => {
+  it('starts an agent loop run with its initial model call through the state owner', () => {
     const { sink } = createSink();
 
     const result = startAgentLoopRun({
@@ -124,10 +126,10 @@ describe('run runtime lifecycle events', () => {
     expect(sink.saveRun).toHaveBeenCalledWith(updated);
   });
 
-  it('fails an agent loop run before the first model step through the state owner', () => {
+  it('fails an agent loop run before the first model call through the state owner', () => {
     const { sink } = createSink();
 
-    const result = failAgentLoopBeforeModelStep({
+    const result = failAgentLoopBeforeModelCall({
       requestId: 'request-1',
       sessionId: 'session-1',
       run: {
@@ -185,10 +187,117 @@ describe('run runtime lifecycle events', () => {
     });
   });
 
-  it('completes an agent loop model step through the state owner', () => {
+  it('marks an agent loop run and step waiting for approval through the state owner', () => {
+    const { sink } = createSink();
+    const run = {
+      runId: 'run-1',
+      sessionId: 'session-1',
+      triggerMessageId: 'message-1',
+      mode: 'default',
+      goal: 'Answer',
+      status: 'running',
+      createdAt: '2026-05-15T00:00:00.000Z',
+      startedAt: '2026-05-15T00:00:00.000Z',
+    } as const;
+    const step = {
+      stepId: 'step-1',
+      runId: 'run-1',
+      kind: 'model',
+      status: 'running',
+      title: 'Model response',
+      startedAt: '2026-05-15T00:00:00.000Z',
+    } as const;
+
+    const result = waitForAgentLoopApproval({
+      run,
+      step,
+      lifecycle: sink,
+    });
+
+    expect(result.run.status).toBe('waiting_for_approval');
+    expect(result.step.status).toBe('waiting_for_approval');
+    expect(sink.saveRun).toHaveBeenCalledWith(result.run);
+    expect(sink.saveStep).toHaveBeenCalledWith(result.step);
+  });
+
+  it('marks a running agent loop model call succeeded through the state owner', () => {
+    const { sink } = createSink();
+    const step = {
+      stepId: 'step-1',
+      runId: 'run-1',
+      kind: 'model',
+      status: 'running',
+      title: 'Model response',
+      startedAt: '2026-05-15T00:00:00.000Z',
+    } as const;
+
+    const result = succeedAgentLoopModelCall({
+      step,
+      completedAt: '2026-05-15T00:00:01.000Z',
+      lifecycle: sink,
+    });
+
+    expect(result).toEqual({
+      ...step,
+      status: 'succeeded',
+      completedAt: '2026-05-15T00:00:01.000Z',
+    });
+    expect(sink.saveStep).toHaveBeenCalledWith(result);
+  });
+
+  it('does not resave non-running agent loop model calls when marking succeeded', () => {
+    const { sink } = createSink();
+    const step = {
+      stepId: 'step-1',
+      runId: 'run-1',
+      kind: 'model',
+      status: 'waiting_for_approval',
+      title: 'Model response',
+      startedAt: '2026-05-15T00:00:00.000Z',
+    } as const;
+
+    expect(succeedAgentLoopModelCall({
+      step,
+      completedAt: '2026-05-15T00:00:01.000Z',
+      lifecycle: sink,
+    })).toBe(step);
+    expect(sink.saveStep).not.toHaveBeenCalled();
+  });
+
+  it('rejects waiting for approval from terminal runs through the state owner', () => {
     const { sink } = createSink();
 
-    const result = completeAgentLoopModelStep({
+    expect(() => waitForAgentLoopApproval({
+      run: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        triggerMessageId: 'message-1',
+        mode: 'default',
+        goal: 'Answer',
+        status: 'completed',
+        createdAt: '2026-05-15T00:00:00.000Z',
+        startedAt: '2026-05-15T00:00:00.000Z',
+        completedAt: '2026-05-15T00:00:01.000Z',
+      },
+      step: {
+        stepId: 'step-1',
+        runId: 'run-1',
+        kind: 'model',
+        status: 'succeeded',
+        title: 'Model response',
+        startedAt: '2026-05-15T00:00:00.000Z',
+        completedAt: '2026-05-15T00:00:01.000Z',
+      },
+      lifecycle: sink,
+    })).toThrow('Illegal run status transition');
+    expect(sink.saveRun).not.toHaveBeenCalled();
+    expect(sink.saveStep).not.toHaveBeenCalled();
+  });
+
+  it('completes an agent loop model call through the state owner', () => {
+    const { sink } = createSink();
+
+    const result = completeAgentLoopModelCall({
       requestId: 'request-1',
       sessionId: 'session-1',
       run: {
@@ -229,7 +338,7 @@ describe('run runtime lifecycle events', () => {
     expect(result.events[3]).toMatchObject({ requestId: 'request-1' });
   });
 
-  it('fails an agent loop model step through the state owner', () => {
+  it('fails an agent loop model call through the state owner', () => {
     const { sink } = createSink();
     const error = {
       code: 'runtime_unknown',
@@ -239,7 +348,7 @@ describe('run runtime lifecycle events', () => {
       source: 'provider',
     } as const;
 
-    const result = failAgentLoopModelStep({
+    const result = failAgentLoopModelCall({
       requestId: 'request-1',
       sessionId: 'session-1',
       run: {
@@ -279,10 +388,10 @@ describe('run runtime lifecycle events', () => {
     expect(result.events.map((event) => event.sequence)).toEqual([13, 14, 15]);
   });
 
-  it('cancels an agent loop model step through the state owner', () => {
+  it('cancels an agent loop model call through the state owner', () => {
     const { sink } = createSink();
 
-    const result = cancelAgentLoopModelStep({
+    const result = cancelAgentLoopModelCall({
       requestId: 'request-1',
       sessionId: 'session-1',
       run: {
@@ -406,7 +515,7 @@ describe('run runtime lifecycle events', () => {
     expect(sink.saveObservation).toHaveBeenCalledWith(expect.objectContaining({ kind: 'message_emitted' }));
   });
 
-  it('creates a model step as the default run step foundation', async () => {
+  it('creates a model call as the default run step foundation', async () => {
     const { sink } = createSink();
 
     const result = await runTurn({
