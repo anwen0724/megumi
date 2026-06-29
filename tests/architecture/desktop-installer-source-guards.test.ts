@@ -25,4 +25,14 @@ describe('desktop installer configuration', () => {
     expect(forgeConfig).not.toMatch(/certificateFile|certificatePassword|signWithParams|osxSign|osxNotarize/);
     expect(`${forgeConfig}\n${packageJson}`).not.toMatch(/autoUpdater|electron-updater|update\.electronjs\.org/);
   });
+
+  it('keeps native runtime dependencies available to the packaged main process', () => {
+    const forgeConfig = read('forge.config.ts');
+
+    expect(forgeConfig).toContain("'/node_modules/better-sqlite3'");
+    expect(forgeConfig).toContain("'/node_modules/bindings'");
+    expect(forgeConfig).toContain("'/node_modules/file-uri-to-path'");
+    expect(forgeConfig).toContain("unpack: '**/{.**,**}/**/*.node'");
+    expect(forgeConfig).toContain('ignore: shouldIgnorePackagedFile');
+  });
 });

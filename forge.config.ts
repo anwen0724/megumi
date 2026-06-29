@@ -3,9 +3,34 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+const nativeRuntimeModuleRoots = [
+  '/node_modules/better-sqlite3',
+  '/node_modules/bindings',
+  '/node_modules/file-uri-to-path',
+];
+
+function shouldIgnorePackagedFile(file: string): boolean {
+  if (!file) {
+    return false;
+  }
+
+  const normalizedFile = file.replace(/\\/g, '/');
+  const isViteOutput = normalizedFile.startsWith('/.vite');
+  const isPackageJson = normalizedFile === '/package.json';
+  const isRuntimeNodeModulesRoot = normalizedFile === '/node_modules';
+  const isNativeRuntimeDependency = nativeRuntimeModuleRoots.some(
+    (moduleRoot) => normalizedFile === moduleRoot || normalizedFile.startsWith(`${moduleRoot}/`),
+  );
+
+  return !(isViteOutput || isPackageJson || isRuntimeNodeModulesRoot || isNativeRuntimeDependency);
+}
+
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '**/{.**,**}/**/*.node',
+    },
+    ignore: shouldIgnorePackagedFile,
     name: 'Megumi',
     executableName: 'megumi',
     icon: 'apps/desktop/assets/app-icon',
