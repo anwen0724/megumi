@@ -72,6 +72,7 @@ import {
   RuntimeEventLog,
 } from '../events';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
+import { persistLegacyModelStepRecordFromEvent } from '../persistence';
 import type {
   AgentRunExecutionFactRepositoryPort,
   AgentRunMessageRepositoryPort,
@@ -907,7 +908,12 @@ export class AgentRunService implements AgentRunPort {
             currentModelStep = persistedStep;
           }
         }
-        this.persistModelStepRecordFromEvent(input.request, eventWithRequest, currentModelStep.stepId);
+        persistLegacyModelStepRecordFromEvent({
+          repository: this.modelStepRepository,
+          request: input.request,
+          event: eventWithRequest,
+          fallbackStepId: currentModelStep.stepId,
+        });
         this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
         if (eventWithRequest.eventType === 'assistant.output.delta' || eventWithRequest.eventType === 'model.output.delta') {
           assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
@@ -920,13 +926,16 @@ export class AgentRunService implements AgentRunPort {
           }
         }
         if (eventWithRequest.eventType === 'model.step.completed') {
-          const modelStepId = getModelStepId(eventWithRequest.payload);
-          if (modelStepId) {
-            this.persistModelStepRecordFromEvent(input.request, eventWithRequest, currentModelStep.stepId, {
+          persistLegacyModelStepRecordFromEvent({
+            repository: this.modelStepRepository,
+            request: input.request,
+            event: eventWithRequest,
+            fallbackStepId: currentModelStep.stepId,
+            overrides: {
               status: 'succeeded',
               completedAt: eventWithRequest.createdAt,
-            });
-          }
+            },
+          });
           const completedStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
           const completedStep = succeedAgentLoopModelCall({
             step: modelStepsById.get(completedStepId),
@@ -1329,49 +1338,6 @@ export class AgentRunService implements AgentRunPort {
     });
   }
 
-  private persistModelStepRecordFromEvent(
-    request: ModelStepRuntimeRequest,
-    event: RuntimeEvent,
-    fallbackStepId: string,
-    overrides: {
-      status?: RunStep['status'];
-      completedAt?: string;
-      error?: RuntimeError;
-    } = {},
-  ) {
-    if (
-      event.eventType !== 'model.step.started' &&
-      event.eventType !== 'model.step.completed' &&
-      event.eventType !== 'tool.call.created'
-    ) {
-      return;
-    }
-
-    const modelStepId = getModelStepId(event.payload) ?? request.modelStepId;
-    if (!modelStepId) {
-      return;
-    }
-
-    const existing = this.modelStepRepository.getModelStep(modelStepId);
-    this.modelStepRepository.saveModelStep({
-      modelStepId,
-      runId: request.runId,
-      stepId: event.stepId ?? request.stepId ?? existing?.stepId ?? fallbackStepId,
-      providerId: request.providerId,
-      modelId: request.modelId,
-      status: overrides.status ?? existing?.status ?? 'running',
-      startedAt: existing?.startedAt ?? event.createdAt,
-      ...(overrides.completedAt ?? existing?.completedAt ? {
-        completedAt: overrides.completedAt ?? existing?.completedAt,
-      } : {}),
-      ...(overrides.error ?? existing?.error ? { error: overrides.error ?? existing?.error } : {}),
-      metadata: {
-        ...(existing?.metadata ?? {}),
-        sourceEventType: event.eventType,
-      },
-    });
-  }
-
 }
 
 function defaultHostBoundary(
@@ -1422,14 +1388,6 @@ function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | und
   }
 
   return isRuntimeError(payload.error) ? payload.error : undefined;
-}
-
-function getModelStepId(payload: RuntimeEvent['payload']): string | undefined {
-  if (!isObjectRecord(payload)) {
-    return undefined;
-  }
-
-  return typeof payload.modelStepId === 'string' ? payload.modelStepId : undefined;
 }
 
 function createFallbackRuntimeError(message: string): RuntimeError {

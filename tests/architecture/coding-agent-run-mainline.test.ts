@@ -170,6 +170,16 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('private async *trackActiveSessionMessageRun');
   });
 
+  it('keeps legacy model step event persistence in the persistence owner', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const persistenceSource = read('packages/coding-agent/persistence/legacy-model-step-events.ts');
+
+    expect(persistenceSource).toContain('export function persistLegacyModelStepRecordFromEvent');
+    expect(serviceSource).toContain('persistLegacyModelStepRecordFromEvent({');
+    expect(serviceSource).not.toContain('private persistModelStepRecordFromEvent');
+    expect(serviceSource).not.toContain('function getModelStepId');
+  });
+
   it('keeps initial agent loop run startup in the state lifecycle owner', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');

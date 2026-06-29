@@ -2,6 +2,7 @@
 export * from './connection';
 export * from './schema';
 export * from './agent-run-repository-ports';
+export * from './legacy-model-step-events';
 export * from './repos/run-record.repo';
 export * from './repos/session-record.repo';
 export * from './repos/session-context.repo';
