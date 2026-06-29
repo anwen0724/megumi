@@ -8,12 +8,16 @@ const config: ForgeConfig = {
     asar: true,
     name: 'Megumi',
     executableName: 'megumi',
+    icon: 'apps/desktop/assets/app-icon',
   },
   rebuildConfig: {},
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
-      config: { name: 'Megumi' },
+      config: {
+        name: 'Megumi',
+        setupIcon: 'apps/desktop/assets/app-icon.ico',
+      },
     },
     {
       name: '@electron-forge/maker-zip',
