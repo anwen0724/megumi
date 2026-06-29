@@ -1,4 +1,4 @@
-﻿// Orchestrates Coding Agent product session runs by coordinating input facts,
+// Orchestrates Coding Agent product session runs by coordinating input facts,
 // product persistence, permissions, context construction, tools, and model execution.
 import {
   assertRunStatusTransition,
@@ -93,7 +93,6 @@ import {
   isPermissionMode,
   type PermissionMode,
   type PermissionModeSnapshot,
-  type PermissionModeSelectionSource,
 } from '@megumi/shared/permission';
 import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type { JsonObject } from '@megumi/shared/primitives';
@@ -119,7 +118,10 @@ import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ToolResult } from '@megumi/shared/tool';
-import type { PermissionSnapshotService } from '../permissions';
+import {
+  createRunPermissionSnapshot,
+  type RunPermissionSnapshotServicePort,
+} from '../permissions';
 import type { PostRunHooksPort } from '../hooks';
 import type {
   MemoryProjectMirrorSyncPort,
@@ -133,7 +135,6 @@ import type {
 interface AgentRunServiceClock {
   now(): string;
 }
-
 interface AgentRunServiceIds extends RunIdFactory {
   compactionId(): string;
   retryAttemptId(): string;
@@ -158,11 +159,7 @@ interface AgentRunServiceOptions {
   runTerminalCoordinator: RunTerminalCoordinatorPort;
   runRetryCoordinator: RunRetryCoordinatorPort;
   contextService?: RunBaselineContextPort;
-  permissionSnapshotService?: Pick<
-    PermissionSnapshotService,
-    | 'createPermissionSnapshot'
-    | 'linkAcceptedSourcePlan'
-  >;
+  permissionSnapshotService?: RunPermissionSnapshotServicePort;
   planArtifactService?: PlanArtifactServicePort;
   modelStepProvider?: ModelCallProvider;
   toolRuntimeFactory?: ToolRuntimeFactory;
@@ -250,7 +247,6 @@ function createDefaultAgentRunServiceIds(
     ...overrides,
   };
 }
-
 class EmptySessionActivePathRepository {
   getActivePath(sessionId: string): SessionActivePath {
     return {
@@ -271,11 +267,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly runtimeEventLog: RuntimeEventLog;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: RunBaselineContextPort;
-  private readonly permissionSnapshotService?: Pick<
-    PermissionSnapshotService,
-    | 'createPermissionSnapshot'
-    | 'linkAcceptedSourcePlan'
-  >;
+  private readonly permissionSnapshotService?: RunPermissionSnapshotServicePort;
   private readonly planArtifactService?: PlanArtifactServicePort;
   private readonly modelStepProvider?: ModelCallProvider;
   private readonly toolRuntimeFactory?: ToolRuntimeFactory;
@@ -538,21 +530,14 @@ export class AgentRunService implements AgentRunPort {
   async startRun(payload: RunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }> {
     const session = this.sessionRepository.getSession(payload.sessionId);
     const runId = this.ids.runId();
-    const permissionModeState = getRunStartPermissionModeState(payload);
-    const permissionSnapshot = this.permissionSnapshotService?.createPermissionSnapshot({
+    const permissionSnapshot = createRunPermissionSnapshot({
+      service: this.permissionSnapshotService,
       runId,
       permissionMode: payload.mode,
-      permissionModeState,
+      ...(payload.permissionModeState ? { permissionModeState: payload.permissionModeState } : {}),
+      ...(payload.sourcePlanId ? { sourcePlanId: payload.sourcePlanId } : {}),
       createdAt: payload.createdAt,
     });
-
-    if (payload.sourcePlanId && this.permissionSnapshotService) {
-      this.permissionSnapshotService.linkAcceptedSourcePlan({
-        runId,
-        sourcePlanId: payload.sourcePlanId,
-        linkedAt: payload.createdAt,
-      });
-    }
 
     const initialContext = createBaselineContextForSession({
       contextService: this.contextService,
@@ -567,8 +552,8 @@ export class AgentRunService implements AgentRunPort {
       permissionMode: payload.mode,
       ...(permissionSnapshot ? {
         permissionModeState: permissionSnapshot.permissionModeState,
-        permissionSnapshotRef: permissionSnapshot.permissionSnapshotId,
-      } : permissionModeState ? { permissionModeState } : {}),
+        permissionSnapshotRef: permissionSnapshot.permissionSnapshotRef,
+      } : payload.permissionModeState ? { permissionModeState: payload.permissionModeState } : {}),
       ...(payload.sourcePlanId ? { sourcePlanId: payload.sourcePlanId } : {}),
       goal: payload.goal,
       clock: this.clock,
@@ -675,17 +660,18 @@ export class AgentRunService implements AgentRunPort {
         },
       },
     });
-    const permissionSnapshot = this.permissionSnapshotService?.createPermissionSnapshot({
+    const permissionSnapshot = createRunPermissionSnapshot({
+      service: this.permissionSnapshotService,
       runId,
       permissionMode: mode,
-      permissionModeState: createPermissionModeState(permissionMode, permissionSource),
+      permissionSource,
       ...(inputMetadata ? { metadata: inputMetadata } : {}),
       createdAt,
     });
     const run = permissionSnapshot
       ? attachRunPermissionSnapshot({
           run: started.run,
-          permissionSnapshotRef: permissionSnapshot.permissionSnapshotId,
+          permissionSnapshotRef: permissionSnapshot.permissionSnapshotRef,
           lifecycle: {
             saveRun: (runRecord) => {
               this.runRecordRepository.saveRun(runRecord);
@@ -758,7 +744,7 @@ export class AgentRunService implements AgentRunPort {
         currentUserMessage,
         permissionMode,
         inputPreprocessing: sessionMessageInput.inputPreprocessing,
-        ...(permissionSnapshot ? { permissionSnapshot } : {}),
+        ...(permissionSnapshot ? { permissionSnapshot: permissionSnapshot.record } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
         parsedInput,
       })),
@@ -1336,14 +1322,6 @@ export class AgentRunService implements AgentRunPort {
     return this.activePathRepository;
   }
 
-  private requirePermissionSnapshotService(): NonNullable<AgentRunServiceOptions['permissionSnapshotService']> {
-    if (!this.permissionSnapshotService) {
-      throw new Error('Permission snapshot service is not configured.');
-    }
-
-    return this.permissionSnapshotService;
-  }
-
   private async *resumeToolApprovalRun(
     approvalResume: ApprovalResumeGroup,
     input: ResumeToolApprovalInput,
@@ -1683,19 +1661,5 @@ function toModelVisiblePermissionSnapshot(
       : 'default',
     source: input.permissionModeState.source ?? 'system',
     createdAt: input.createdAt ?? requestCreatedAt,
-  };
-}
-
-function getRunStartPermissionModeState(payload: RunStartPayload): PermissionModeState | undefined {
-  return payload.permissionModeState;
-}
-
-function createPermissionModeState(
-  permissionMode: PermissionMode,
-  source: PermissionModeSelectionSource,
-): PermissionModeState {
-  return {
-    permissionMode,
-    source,
   };
 }

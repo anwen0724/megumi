@@ -123,6 +123,20 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('updatePlanStatus(input: PlanStatusUpdatePayload)');
   });
 
+  it('keeps permission snapshot creation details in the permissions owner', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const permissionsSource = read('packages/coding-agent/permissions/run-permission-snapshot.ts');
+
+    expect(permissionsSource).toContain('export function createRunPermissionSnapshot');
+    expect(permissionsSource).toContain('createPermissionSnapshot(');
+    expect(permissionsSource).toContain('linkAcceptedSourcePlan(');
+    expect(serviceSource).toContain('createRunPermissionSnapshot({');
+    expect(serviceSource).not.toContain('createPermissionSnapshot({');
+    expect(serviceSource).not.toContain('linkAcceptedSourcePlan({');
+    expect(serviceSource).not.toContain('function createPermissionModeState');
+    expect(serviceSource).not.toContain('function getRunStartPermissionModeState');
+  });
+
   it('keeps manual retry and rerun lifecycle rules out of AgentRunService', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const retrySource = read('packages/coding-agent/state/run-retry-coordinator.ts');
