@@ -2,10 +2,8 @@
 // product persistence, permissions, context construction, tools, and model execution.
 import {
   ActiveSessionMessageRunTracker,
-  attachRunPermissionSnapshot,
   canResumeApprovalFromRunStatus,
   failAgentLoopBeforeModelCall,
-  startAgentLoopRun,
   type RunRetryCoordinatorPort,
   type RunTerminalCoordinatorPort,
 } from '../state';
@@ -51,10 +49,9 @@ import {
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import type { AgentRunPort } from '../product-runtime';
+import { SubmitInputOperation } from '../product-runtime';
 import {
   type ParsedInput,
-  parseSessionMessageRawInput,
-  prepareSessionMessageInput,
   type SessionMessageInputMessage,
 } from '@megumi/coding-agent/input';
 import {
@@ -94,7 +91,6 @@ import type {
   SessionMessageSendPayload,
 } from '@megumi/shared/ipc';
 import {
-  createSessionMessageChatStreamAdapter,
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
 } from '../projections/chat-stream';
@@ -252,12 +248,11 @@ export class AgentRunService implements AgentRunPort {
   private readonly modelInputSourceOverrideProvider: AgentLoopInitialModelInputSourceOverrideProvider;
   private readonly sessionContextInputService: SessionContextInputBuildPort;
   private readonly sessionMessageService: SessionMessageService;
+  private readonly submitInputOperation: SubmitInputOperation;
   private readonly sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
-  private readonly sessionBranchService?: SessionBranchServicePort;
   private readonly hostBoundary: RunHostBoundaryPort;
-  private readonly chatStreamEventSink?: ChatStreamEventSink;
   private readonly clock: AgentRunServiceClock;
   private readonly ids: AgentRunServiceIds;
   private readonly runTerminalCoordinator: RunTerminalCoordinatorPort;
@@ -317,13 +312,25 @@ export class AgentRunService implements AgentRunPort {
       ids: this.ids,
       ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
     });
+    this.submitInputOperation = new SubmitInputOperation({
+      clock: this.clock,
+      ids: this.ids,
+      sessionMessages: this.sessionMessageService,
+      activeRuns: this.activeSessionMessageRuns,
+      runRepository: this.runRecordRepository,
+      stepRepository: this.runExecutionFactRepository,
+      permissionSnapshotService: this.permissionSnapshotService,
+      sessionBranchService: options.sessionBranchService,
+      runRetryCoordinator: this.runRetryCoordinator,
+      chatStreamEventSink: options.chatStreamEventSink,
+      appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
+      runAgentLoop: (operationInput) => this.runSessionMessageAgentLoop(operationInput),
+    });
     this.modelCallInputBuildService = options.modelCallInputBuildService
       ?? new ModelCallInputBuildService({
         instructionSourceService: options.agentInstructionSourceService,
         defaultBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
       });
-    this.chatStreamEventSink = options.chatStreamEventSink;
-    this.sessionBranchService = options.sessionBranchService;
     this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
       ?? (options.modelCallProvider && options.sessionCompactionRepository
         ? new SessionCompactionOrchestrator({
@@ -506,156 +513,7 @@ export class AgentRunService implements AgentRunPort {
     payload: SessionMessageSendPayload;
     runtimeContext?: RuntimeContext;
   }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }> {
-    let branchDraftMarker: SessionBranchMarker | undefined;
-    if (input.payload.branchDraft) {
-      if (!input.payload.sessionId) {
-        throw new Error('Branch draft requires an existing session.');
-      }
-      branchDraftMarker = this.requireSessionBranchService().assertActiveBranchDraftMarker({
-        sessionId: input.payload.sessionId,
-        branchMarkerId: input.payload.branchDraft.branchMarkerId,
-      });
-    }
-
-    const runId = this.ids.runId();
-    const stepId = this.ids.stepId();
-    const createdAt = input.payload.createdAt;
-    const sessionMessageInput = prepareSessionMessageInput({
-      payload: input.payload,
-    });
-    const currentUserMessage = sessionMessageInput.currentUserMessage;
-    const permissionMode = sessionMessageInput.permissionMode;
-    const permissionSource = sessionMessageInput.permissionSource;
-    const mode = permissionMode;
-    const inputMetadata = sessionMessageInput.metadata;
-    const preparedMessage = this.sessionMessageService.prepareUserMessage({
-      ...(input.payload.sessionId ? { sessionId: input.payload.sessionId } : {}),
-      ...(input.payload.context?.sessionTitle ? { sessionTitle: input.payload.context.sessionTitle } : {}),
-      ...(input.payload.context?.workspaceId ? { workspaceId: input.payload.context.workspaceId } : {}),
-      ...(input.payload.context?.workspacePath ? { workspacePath: input.payload.context.workspacePath } : {}),
-      runId,
-      content: currentUserMessage.content,
-      messageCreatedAt: currentUserMessage.createdAt,
-      createdAt,
-    });
-    const { session, userMessage } = preparedMessage;
-    const parsedInput = parseSessionMessageRawInput({
-      requestId: input.requestId,
-      runId,
-      sessionId: String(session.sessionId),
-      message: {
-        ...currentUserMessage,
-        id: String(userMessage.messageId),
-      },
-      createdAt,
-    });
-    const started = startAgentLoopRun({
-      runId,
-      stepId,
-      sessionId: session.sessionId,
-      triggerMessageId: userMessage.messageId,
-      mode,
-      goal: userMessage.content,
-      createdAt,
-      lifecycle: {
-        saveRun: (runRecord) => {
-          this.runRecordRepository.saveRun(runRecord);
-        },
-        saveStep: (stepRecord) => {
-          this.runExecutionFactRepository.saveStep(stepRecord);
-        },
-      },
-    });
-    const permissionSnapshot = createRunPermissionSnapshot({
-      service: this.permissionSnapshotService,
-      runId,
-      permissionMode: mode,
-      permissionSource,
-      ...(inputMetadata ? { metadata: inputMetadata } : {}),
-      createdAt,
-    });
-    const run = permissionSnapshot
-      ? attachRunPermissionSnapshot({
-          run: started.run,
-          permissionSnapshotRef: permissionSnapshot.permissionSnapshotRef,
-          lifecycle: {
-            saveRun: (runRecord) => {
-              this.runRecordRepository.saveRun(runRecord);
-            },
-          },
-        })
-      : started.run;
-    const step = started.step;
-    this.sessionMessageService.recordSessionRunSource({
-      sessionId: String(session.sessionId),
-      runId: String(run.runId),
-      createdAt,
-    });
-    let manualRerunAuditEvent: RuntimeEvent | undefined;
-    if (input.payload.branchDraft?.intent === 'rerun') {
-      if (!branchDraftMarker) {
-        throw new Error('Branch draft marker was not found.');
-      }
-      manualRerunAuditEvent = this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft({
-        requestId: input.requestId,
-        sessionId: String(session.sessionId),
-        runId: String(run.runId),
-        branchMarkerId: input.payload.branchDraft.branchMarkerId,
-        marker: branchDraftMarker,
-        createdAt,
-        runtimeContext: input.runtimeContext,
-      });
-    }
-    const chatStreamAdapter = createSessionMessageChatStreamAdapter({
-      ...(this.chatStreamEventSink ? { sink: this.chatStreamEventSink } : {}),
-      projectId: String(session.workspaceId ?? session.sessionId),
-      sessionId: String(session.sessionId),
-      runId: String(runId),
-      userMessageId: String(userMessage.messageId),
-      clientMessageId: String(currentUserMessage.id),
-      userMessageText: userMessage.content,
-      createdAt,
-      now: () => this.clock.now(),
-      ids: {
-        eventId: this.ids.chatStreamEventId,
-        textId: this.ids.chatTextId,
-        thinkingId: this.ids.chatThinkingId,
-        streamId: this.ids.chatStreamId,
-      },
-    });
-    chatStreamAdapter?.startTurn?.();
-    if (manualRerunAuditEvent) {
-      this.appendRuntimeEvent(manualRerunAuditEvent, chatStreamAdapter);
-    }
-    this.activeSessionMessageRuns.register(input.requestId, {
-      runId,
-      sessionId: session.sessionId,
-      stepId,
-      ...(chatStreamAdapter ? { projection: chatStreamAdapter } : {}),
-    });
-
-    return {
-      data: { requestId: input.requestId },
-      events: this.activeSessionMessageRuns.track({
-        requestId: input.requestId,
-        events: this.runSessionMessageAgentLoop({
-          requestId: input.requestId,
-          payload: input.payload,
-          runtimeContext: input.runtimeContext,
-          session,
-          run,
-          step,
-          userMessage,
-          currentUserMessage,
-          permissionMode,
-          inputPreprocessing: sessionMessageInput.inputPreprocessing,
-          ...(permissionSnapshot ? { permissionSnapshot: permissionSnapshot.record } : {}),
-          ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
-          parsedInput,
-        }),
-        getRunStatus: (runIdToCheck) => this.runRecordRepository.getRun(runIdToCheck)?.status,
-      }),
-    };
+    return this.submitInputOperation.send(input);
   }
 
   createManualRetryFromRun(input: {
@@ -835,14 +693,6 @@ export class AgentRunService implements AgentRunPort {
     }
 
     return this.modelCallProvider;
-  }
-
-  private requireSessionBranchService(): SessionBranchServicePort {
-    if (!this.sessionBranchService) {
-      throw new Error('Session branch service is not configured.');
-    }
-
-    return this.sessionBranchService;
   }
 
   private async *resumeToolApprovalRun(

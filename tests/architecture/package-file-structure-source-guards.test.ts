@@ -806,6 +806,10 @@ describe('package and file structure source guards', () => {
 
   it('keeps AgentRunService internals on owner-named repository ports', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const submitInputOperationSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/product-runtime/submit-input-operation.ts'),
+      'utf8',
+    );
 
     expect(agentRunServiceSource).not.toContain('private readonly repository: AgentRunRepositoryPort');
     expect(agentRunServiceSource).not.toContain('this.repository = options.repository');
@@ -822,11 +826,32 @@ describe('package and file structure source guards', () => {
     expect(agentRunServiceSource).not.toContain('function sessionRunSourceRef');
     expect(agentRunServiceSource).not.toContain('assertActiveBranchDraftMarker as assertSessionActiveBranchDraftMarker');
     expect(agentRunServiceSource).not.toContain('activePathRepository: this.requireActivePathRepository()');
-    expect(agentRunServiceSource).toContain('this.requireSessionBranchService().assertActiveBranchDraftMarker');
-    expect(agentRunServiceSource).toContain('this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft');
+    expect(agentRunServiceSource).not.toContain('requireSessionBranchService');
+    expect(submitInputOperationSource).toContain('this.sessionBranchService.assertActiveBranchDraftMarker');
+    expect(submitInputOperationSource).toContain('this.runRetryCoordinator.recordManualRerunAttemptForBranchDraft');
     expect(agentRunServiceSource).not.toContain('repository: this.runTerminalRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runRetryRepository');
     expect(agentRunServiceSource).not.toContain('repository: this.runCompletionRepository');
+  });
+
+  it('keeps submit input product operation out of the transitional AgentRunService facade', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const submitInputOperationSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/product-runtime/submit-input-operation.ts'),
+      'utf8',
+    );
+
+    expect(agentRunServiceSource).toContain('this.submitInputOperation.send(input)');
+    expect(agentRunServiceSource).not.toContain('prepareSessionMessageInput({');
+    expect(agentRunServiceSource).not.toContain('parseSessionMessageRawInput({');
+    expect(agentRunServiceSource).not.toContain('this.sessionMessageService.prepareUserMessage({');
+    expect(agentRunServiceSource).not.toContain('createSessionMessageChatStreamAdapter({');
+    expect(agentRunServiceSource).not.toContain('this.activeSessionMessageRuns.register(input.requestId');
+    expect(submitInputOperationSource).toContain('export class SubmitInputOperation');
+    expect(submitInputOperationSource).toContain('prepareSessionMessageInput({');
+    expect(submitInputOperationSource).toContain('createRunPermissionSnapshot({');
+    expect(submitInputOperationSource).toContain('createSessionMessageChatStreamAdapter({');
+    expect(submitInputOperationSource).toContain('startAgentLoopRun({');
   });
 
   it('keeps runtime event sequence and request metadata normalization in the events owner', () => {

@@ -143,10 +143,12 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps session message chat stream adapter creation in projections', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const submitInputOperationSource = read('packages/coding-agent/product-runtime/submit-input-operation.ts');
     const chatStreamSource = read('packages/coding-agent/projections/chat-stream/chat-stream-event-adapter.ts');
 
     expect(chatStreamSource).toContain('export function createSessionMessageChatStreamAdapter');
-    expect(serviceSource).toContain('createSessionMessageChatStreamAdapter({');
+    expect(submitInputOperationSource).toContain('createSessionMessageChatStreamAdapter({');
+    expect(serviceSource).not.toContain('createSessionMessageChatStreamAdapter({');
     expect(serviceSource).not.toContain('createChatStreamEventAdapter({');
     expect(serviceSource).not.toContain("streamKind: 'main'");
   });
@@ -182,6 +184,7 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps initial agent loop run startup in the state lifecycle owner', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const submitInputOperationSource = read('packages/coding-agent/product-runtime/submit-input-operation.ts');
     const agentLoopSource = read('packages/coding-agent/agent-loop/agent-loop.ts');
     const approvalResumeGroupSource = read('packages/coding-agent/agent-loop/tool-call/approval/approval-resume-group.ts');
     const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');
@@ -192,7 +195,8 @@ describe('coding agent run mainline guards', () => {
     expect(stateLifecycleSource).toContain('export function completeAgentLoopModelCall');
     expect(stateLifecycleSource).toContain('export function failAgentLoopModelCall');
     expect(stateLifecycleSource).toContain('export function cancelAgentLoopModelCall');
-    expect(serviceSource).toContain('startAgentLoopRun({');
+    expect(submitInputOperationSource).toContain('startAgentLoopRun({');
+    expect(serviceSource).not.toContain('startAgentLoopRun({');
     expect(serviceSource).toContain('failAgentLoopBeforeModelCall({');
     expect(serviceSource).not.toContain('waitForAgentLoopApproval({');
     expect(serviceSource).not.toContain('completeAgentLoopModelCall({');
