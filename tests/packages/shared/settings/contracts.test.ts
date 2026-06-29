@@ -27,6 +27,48 @@ describe('app settings contracts', () => {
     });
   });
 
+  it('resolves language and first-run setup defaults', () => {
+    expect(resolveAppSettings({})).toMatchObject({
+      language: 'zh-CN',
+      setup: {
+        completed: false,
+      },
+    });
+
+    expect(resolveAppSettings({
+      language: 'en-US',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T12:00:00.000Z',
+      },
+    })).toMatchObject({
+      language: 'en-US',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T12:00:00.000Z',
+      },
+    });
+  });
+
+  it('merges setup completion without expanding sparse raw settings', () => {
+    expect(mergeRawAppSettings({
+      theme: 'midnight-blue',
+    }, {
+      language: 'en-US',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T12:00:00.000Z',
+      },
+    })).toEqual({
+      theme: 'midnight-blue',
+      language: 'en-US',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T12:00:00.000Z',
+      },
+    });
+  });
+
   it('resolves provider, chat, and permission overrides from sparse settings', () => {
     expect(resolveAppSettings({
       chat: {
@@ -130,6 +172,17 @@ describe('app settings contracts', () => {
     expect(Object.keys(jsonSchema.properties ?? {})).toEqual(AppSettingsRawSchema.keyof().options);
     expect(jsonSchema.properties?.theme).toEqual({
       enum: ['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue'],
+    });
+    expect(jsonSchema.properties?.language).toEqual({
+      enum: ['zh-CN', 'en-US'],
+    });
+    expect(jsonSchema.properties?.setup).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        completed: { type: 'boolean' },
+        completedAt: { type: 'string' },
+      },
     });
     expect(jsonSchema.properties?.providers).toMatchObject({
       type: 'object',

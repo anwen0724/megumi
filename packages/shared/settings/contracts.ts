@@ -18,6 +18,16 @@ export const AppThemeNameSchema = z.enum([
 ]);
 export type AppThemeName = z.infer<typeof AppThemeNameSchema>;
 
+export const AppLanguageSchema = z.enum(['zh-CN', 'en-US']);
+export type AppLanguage = z.infer<typeof AppLanguageSchema>;
+
+export const AppSetupSettingsRawSchema = z
+  .object({
+    completed: z.boolean().optional(),
+    completedAt: z.string().datetime().optional(),
+  })
+  .strict();
+
 export const AppMemorySettingsRawSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -58,7 +68,9 @@ export const AppProvidersSettingsRawSchema = z
 
 export const AppSettingsRawSchema = z
   .object({
+    language: AppLanguageSchema.optional(),
     theme: AppThemeNameSchema.optional(),
+    setup: AppSetupSettingsRawSchema.optional(),
     memory: AppMemorySettingsRawSchema.optional(),
     compaction: AppCompactionSettingsRawSchema.optional(),
     chat: AppChatSettingsRawSchema.optional(),
@@ -71,6 +83,13 @@ export type AppSettingsRaw = z.infer<typeof AppSettingsRawSchema>;
 export const AppMemorySettingsResolvedSchema = z
   .object({
     enabled: z.boolean(),
+  })
+  .strict();
+
+export const AppSetupSettingsResolvedSchema = z
+  .object({
+    completed: z.boolean(),
+    completedAt: z.string().datetime().optional(),
   })
   .strict();
 
@@ -108,7 +127,9 @@ export const AppProvidersSettingsResolvedSchema = z
 
 export const AppSettingsResolvedSchema = z
   .object({
+    language: AppLanguageSchema,
     theme: AppThemeNameSchema,
+    setup: AppSetupSettingsResolvedSchema,
     memory: AppMemorySettingsResolvedSchema,
     compaction: AppCompactionSettingsResolvedSchema,
     chat: AppChatSettingsResolvedSchema,
@@ -119,7 +140,11 @@ export const AppSettingsResolvedSchema = z
 export type AppSettingsResolved = z.infer<typeof AppSettingsResolvedSchema>;
 
 export const DEFAULT_APP_SETTINGS = AppSettingsResolvedSchema.parse({
+  language: 'zh-CN',
   theme: 'midnight-blue',
+  setup: {
+    completed: false,
+  },
   memory: {
     enabled: false,
   },
@@ -144,7 +169,14 @@ export function resolveAppSettings(raw: unknown): AppSettingsResolved {
   return AppSettingsResolvedSchema.parse({
     ...DEFAULT_APP_SETTINGS,
     ...definedObject({
+      language: parsed.language,
       theme: parsed.theme,
+      setup: parsed.setup
+        ? {
+            ...DEFAULT_APP_SETTINGS.setup,
+            ...definedObject(parsed.setup),
+          }
+        : undefined,
       memory: parsed.memory
         ? {
             ...DEFAULT_APP_SETTINGS.memory,
@@ -179,7 +211,14 @@ export function mergeRawAppSettings(current: AppSettingsRaw, patch: AppSettingsR
   return AppSettingsRawSchema.parse({
     ...currentParsed,
     ...definedObject({
+      language: patchParsed.language,
       theme: patchParsed.theme,
+      setup: patchParsed.setup
+        ? {
+            ...(currentParsed.setup ?? {}),
+            ...definedObject(patchParsed.setup),
+          }
+        : undefined,
       memory: patchParsed.memory
         ? {
             ...(currentParsed.memory ?? {}),
