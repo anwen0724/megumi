@@ -1,7 +1,11 @@
 // Controller for product settings operations exposed to UI shells.
-import type { AppSettingsRaw } from '@megumi/shared/settings';
+import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
 import type { SettingsData } from '@megumi/shared/ipc';
-import type { ProductSettingsPort } from '../../settings';
+
+export interface SettingsControllerProductSettingsPort {
+  getResolvedSettings(): AppSettingsResolved;
+  updateSettings(patch: AppSettingsRaw): AppSettingsResolved;
+}
 
 export interface SettingsController {
   get(): SettingsData;
@@ -9,7 +13,7 @@ export interface SettingsController {
 }
 
 export function createSettingsController(
-  settingsService: ProductSettingsPort,
+  settingsService: SettingsControllerProductSettingsPort,
 ): SettingsController {
   return {
     get: () => ({ settings: settingsService.getResolvedSettings() }),

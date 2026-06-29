@@ -51,36 +51,19 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
   completeSetup: async (input) => {
     set({ status: 'saving', error: null });
 
-    if (!input.skipProvider) {
-      const providerResult = await window.megumi.provider.update(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.provider.update, {
-          providerId: input.providerId,
-          enabled: true,
-          ...(input.baseUrl?.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
-          defaultModelId: input.defaultModelId,
-        }),
-      );
-
-      if (!providerResult.ok) {
-        set({ status: 'error', error: getRuntimeIpcErrorMessage(providerResult) });
-        return;
-      }
-
-      const apiKey = input.apiKey?.trim();
-      if (apiKey) {
-        const apiKeyResult = await window.megumi.provider.setApiKey(
-          createRendererRuntimeIpcRequest(IPC_CHANNELS.provider.setApiKey, {
-            providerId: input.providerId,
-            apiKey,
-          }),
-        );
-
-        if (!apiKeyResult.ok) {
-          set({ status: 'error', error: getRuntimeIpcErrorMessage(apiKeyResult) });
-          return;
-        }
-      }
-    }
+    const apiKey = input.apiKey?.trim();
+    const providerSettings = input.skipProvider
+      ? {}
+      : {
+          providers: {
+            [input.providerId]: {
+              enabled: true,
+              ...(input.baseUrl?.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
+              defaultModel: input.defaultModelId,
+              ...(apiKey ? { apiKey } : {}),
+            },
+          },
+        };
 
     const settingsResult = await window.megumi.settings.update(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
@@ -89,6 +72,7 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
         chat: {
           defaultProvider: input.providerId,
         },
+        ...providerSettings,
         setup: {
           completed: true,
           completedAt: input.completedAt ?? new Date().toISOString(),
@@ -101,9 +85,18 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
       return;
     }
 
+    if (settingsResult.data.settings.setup.completed !== true) {
+      set({
+        status: 'error',
+        setupCompleted: false,
+        error: 'Setup completion was not saved.',
+      });
+      return;
+    }
+
     set({
       status: 'ready',
-      setupCompleted: true,
+      setupCompleted: settingsResult.data.settings.setup.completed,
       error: null,
     });
   },

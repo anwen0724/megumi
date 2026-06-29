@@ -15,6 +15,7 @@ interface SessionState {
   newSessionDraftTargetProjectId: string | null;
   setSessions: (sessions: LocalRendererSession[]) => void;
   addSession: (session: LocalRendererSession) => void;
+  upsertSession: (session: LocalRendererSession) => void;
   createLocalSession: (input: CreateLocalSessionInput) => LocalRendererSession;
   setActiveSession: (id: string | null) => void;
   setActiveAgentType: (type: AgentType) => void;
@@ -32,6 +33,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   addSession: (session) => set((state) => ({
     sessions: [session, ...state.sessions],
   })),
+  upsertSession: (session) => set((state) => {
+    const existing = state.sessions.some((candidate) => candidate.id === session.id);
+    return {
+      sessions: existing
+        ? state.sessions.map((candidate) => candidate.id === session.id ? session : candidate)
+        : [session, ...state.sessions],
+    };
+  }),
   createLocalSession: (input) => {
     const session = createLocalSession({
       ...input,

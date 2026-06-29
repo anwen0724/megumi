@@ -80,11 +80,26 @@ function installMegumiMock() {
     chatStreamEventCallback = null;
   });
   const session = {
+    list: vi.fn().mockResolvedValue({
+      ok: true,
+      data: { sessions: [] },
+    }),
     message: {
       send: vi.fn().mockImplementation((request) => Promise.resolve({
         ok: true,
         data: {
           requestId: request.requestId,
+          session: {
+            sessionId: request.payload.sessionId ?? 'session-created-1',
+            title: request.payload.context?.sessionTitle ?? 'Created session',
+            workspaceId: request.payload.context?.workspaceId ?? 'project-1',
+            workspacePath: request.payload.context?.workspacePath,
+            createdAt: request.payload.createdAt,
+            updatedAt: request.payload.createdAt,
+            status: 'active',
+          },
+          userMessageId: request.payload.message.id,
+          runId: 'run-created-1',
         },
         meta: {
           requestId: request.requestId,
@@ -359,7 +374,7 @@ describe('useSessionTimeline', () => {
     expect(chatStreamEventCallback).toBeNull();
   });
 
-  it('starts backend chat with an ipc request envelope, creates a session, and applies stream events', async () => {
+  it('starts backend chat without a fake session id, adopts the returned session, and applies stream events', async () => {
     const { session } = installMegumiMock();
     useProjectStore.setState({
       currentProjectId: 'project-1',
@@ -410,8 +425,10 @@ describe('useSessionTimeline', () => {
         source: 'renderer',
       }),
     }));
+    expect(session.message.send.mock.calls[0][0].payload).not.toHaveProperty('sessionId');
     const requestId = session.message.send.mock.calls[0][0].requestId;
     const activeSessionId = useSessionStore.getState().activeSessionId;
+    expect(activeSessionId).toBe('session-created-1');
     expect(useChatStreamStore.getState()).toMatchObject({
       activeProjectId: 'project-1',
       activeSessionId,
@@ -611,13 +628,8 @@ describe('useSessionTimeline', () => {
       agentStatus: 'error',
       lastError: 'Provider API key is missing.',
     });
-    const activeSessionId = useSessionStore.getState().activeSessionId;
-    expect(useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', activeSessionId ?? '')].messages).toEqual([
-      expect.objectContaining({
-        role: 'user',
-        blocks: [expect.objectContaining({ kind: 'user_text', text: 'Use OpenAI' })],
-      }),
-    ]);
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(useChatStreamStore.getState().sessions).toEqual({});
   });
 
   it('does not commit completed runtime output through legacy flat assistant messages', async () => {
@@ -1321,7 +1333,20 @@ describe('useSessionTimeline', () => {
     const { session } = installMegumiMock();
     const sendDeferred = deferred<{
       ok: true;
-      data: { requestId: string };
+      data: {
+        requestId: string;
+        session: {
+          sessionId: string;
+          title: string;
+          workspaceId: string;
+          workspacePath: string;
+          createdAt: string;
+          updatedAt: string;
+          status: 'active';
+        };
+        userMessageId: string;
+        runId: string;
+      };
       meta: {
         requestId: string;
         channel: typeof IPC_CHANNELS.session.message.send;
@@ -1394,7 +1419,20 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       sendDeferred.resolve({
         ok: true,
-        data: { requestId: 'ipc-session-message-send-old' },
+        data: {
+          requestId: 'ipc-session-message-send-old',
+          session: {
+            sessionId: 'session-1',
+            title: 'First session',
+            workspaceId: 'project-1',
+            workspacePath: 'C:/all/work/study/megumi',
+            createdAt: '2026-05-24T00:00:00.000Z',
+            updatedAt: '2026-06-01T10:00:02.100Z',
+            status: 'active',
+          },
+          userMessageId: 'message-old-send',
+          runId: 'run-old-send',
+        },
         meta: {
           requestId: 'ipc-session-message-send-old',
           channel: IPC_CHANNELS.session.message.send,
@@ -1730,6 +1768,49 @@ describe('useSessionTimeline', () => {
         role: 'assistant',
       }),
     ]);
+  });
+
+  it('drops renderer-only local sessions when hydrating the persisted session list', async () => {
+    const { session } = installMegumiMock();
+    session.list.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        sessions: [{
+          sessionId: 'session-persisted',
+          title: 'Persisted session',
+          workspaceId: 'project-1',
+          workspacePath: 'C:/all/work/study/megumi',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:00.000Z',
+          status: 'active',
+        }],
+      },
+    });
+    useSessionStore.setState({
+      sessions: [{
+        id: 'session-local-only',
+        projectId: 'project-1',
+        agentType: 'free',
+        title: 'Local only',
+        createdAt: '2026-05-24T00:00:00.000Z',
+        updatedAt: '2026-05-24T00:00:00.000Z',
+      }],
+      activeSessionId: 'session-local-only',
+      activeAgentType: 'free',
+    });
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    await act(async () => {
+      await result.current.hydrateSessions();
+    });
+
+    expect(useSessionStore.getState().sessions).toEqual([
+      expect.objectContaining({
+        id: 'session-persisted',
+        projectId: 'project-1',
+      }),
+    ]);
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
   });
 
   it('hydrates pending approval events through the runtime dispatcher', async () => {

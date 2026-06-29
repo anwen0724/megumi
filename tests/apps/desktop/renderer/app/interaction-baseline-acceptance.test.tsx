@@ -83,17 +83,48 @@ function installMegumiMock() {
   chatStreamEventCallback = null;
   sequence = 1;
   chatStreamSequence = 1;
+  const persistedSessions: Array<{
+    sessionId: string;
+    title: string;
+    workspaceId?: string;
+    workspacePath?: string;
+    createdAt: string;
+    updatedAt: string;
+    status: 'active';
+  }> = [];
   const session = {
     message: {
-      send: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
-        ok: true,
-        data: { requestId: request.requestId },
-        meta: {
-          requestId: request.requestId,
-          channel: IPC_CHANNELS.session.message.send,
-          handledAt: '2026-05-10T12:00:00.100Z',
-        },
-      })),
+      send: vi.fn().mockImplementation((request: SessionMessageSendRequest) => {
+        const backendSession = {
+            sessionId: request.payload.sessionId ?? 'session-created-1',
+            title: request.payload.context?.sessionTitle ?? 'New session',
+            ...(request.payload.context?.workspaceId ? { workspaceId: request.payload.context.workspaceId } : {}),
+            ...(request.payload.context?.workspacePath ? { workspacePath: request.payload.context.workspacePath } : {}),
+            createdAt: request.payload.createdAt,
+            updatedAt: request.payload.createdAt,
+            status: 'active' as const,
+          };
+        const existingIndex = persistedSessions.findIndex((candidate) => candidate.sessionId === backendSession.sessionId);
+        if (existingIndex >= 0) {
+          persistedSessions[existingIndex] = backendSession;
+        } else {
+          persistedSessions.unshift(backendSession);
+        }
+        return Promise.resolve({
+          ok: true,
+          data: {
+            requestId: request.requestId,
+            session: backendSession,
+            userMessageId: request.payload.message?.id ?? 'message-1',
+            runId: `${request.requestId}-run`,
+          },
+          meta: {
+            requestId: request.requestId,
+            channel: IPC_CHANNELS.session.message.send,
+            handledAt: '2026-05-10T12:00:00.100Z',
+          },
+        });
+      }),
       cancel: vi.fn().mockResolvedValue({
         ok: true,
         data: { cancelled: true },
@@ -144,7 +175,7 @@ function installMegumiMock() {
       session: {
         list: vi.fn().mockResolvedValue({
           ok: true,
-          data: { sessions: [] },
+          data: { sessions: persistedSessions },
           meta: {
             requestId: 'ipc-session-list-1',
             channel: IPC_CHANNELS.session.list,

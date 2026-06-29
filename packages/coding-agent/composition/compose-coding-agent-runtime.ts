@@ -68,8 +68,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const settingsService = new ProductSettingsService({
     storage: options.settingsStorage ?? createVolatileProductSettingsStorage(),
   });
+  const effectiveSettingsProvider = options.appSettingsProvider ?? settingsService;
   const providerSettingsService = new ProviderSettingsService({
-    settings: options.appSettingsProvider ?? settingsService,
+    settings: effectiveSettingsProvider,
     env: process.env,
   });
   const modelCallProviderService = options.modelCallProviderService
@@ -81,7 +82,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     repository: persistence.memoryRepository,
     modelStepProvider: modelCallProviderService,
     memorySettingsProvider: options.memorySettingsProvider ?? {
-      isMemoryEnabled: () => settingsService.getMemorySettings().enabled,
+      isMemoryEnabled: () => effectiveSettingsProvider.getResolvedSettings().memory.enabled,
     },
     runtimeLogger: options.runtimeLogger,
     megumiHomePath: options.homePaths.homePath,
@@ -152,7 +153,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
   });
 
-  const settings = createSettingsController(settingsService);
+  const settings = createSettingsController(effectiveSettingsProvider);
   const artifacts = createArtifactController(artifactService);
 
   return createCodingAgentHostInterface({

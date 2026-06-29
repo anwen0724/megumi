@@ -202,7 +202,15 @@ describe('registerSessionHandlers', () => {
     const service = createSessionServiceMock({
       sendInput: vi.fn(async () => ({
         requestId: 'ipc-session-message-send-1',
-        session: { sessionId: 'session-1' },
+        session: {
+          sessionId: 'session-1',
+          title: 'Hello',
+          workspaceId: 'project-1',
+          workspacePath: 'C:/all/work/study/megumi',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+          status: 'active',
+        },
         userMessageId: 'message-1',
         runId: 'run-1',
         events: async function* () {
@@ -221,6 +229,14 @@ describe('registerSessionHandlers', () => {
       ok: true,
       data: {
         requestId: 'ipc-session-message-send-1',
+        session: {
+          sessionId: 'session-1',
+          title: 'Hello',
+          workspaceId: 'project-1',
+          workspacePath: 'C:/all/work/study/megumi',
+        },
+        userMessageId: 'message-1',
+        runId: 'run-1',
       },
       meta: {
         requestId: 'ipc-session-message-send-1',

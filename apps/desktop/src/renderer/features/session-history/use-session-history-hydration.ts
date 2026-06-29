@@ -56,11 +56,7 @@ export function useSessionHistoryHydration() {
     const persistedSessions = result.data.sessions.map(localSessionFromPersistedSession);
     const sessionState = useSessionStore.getState();
     const currentActiveSessionId = sessionState.activeSessionId;
-    const persistedIds = new Set(persistedSessions.map((session) => session.id));
-    const sessions = [
-      ...persistedSessions,
-      ...sessionState.sessions.filter((session) => !persistedIds.has(session.id)),
-    ];
+    const sessions = persistedSessions;
     sessionState.setSessions(sessions);
 
     if (currentActiveSessionId && !sessions.some((session) => session.id === currentActiveSessionId)) {

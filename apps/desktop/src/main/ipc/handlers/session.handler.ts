@@ -124,7 +124,12 @@ export function registerSessionHandlers(
           context,
         ));
         void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
-        return { requestId: result.requestId };
+        return {
+          requestId: result.requestId,
+          session: result.session,
+          userMessageId: result.userMessageId,
+          runId: result.runId,
+        };
       },
       mapError: mapSessionIpcError,
     }),

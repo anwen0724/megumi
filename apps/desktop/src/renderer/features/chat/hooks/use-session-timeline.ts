@@ -11,6 +11,7 @@ import { dispatchRuntimeEvent } from '../.././runtime-events/runtime-event-dispa
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';
+import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
 
 // Coordinates chat timeline submission, optimistic user messages, and runtime
 // event routing for the active session. It forwards typed context hints only.
@@ -34,30 +35,50 @@ function createId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function ensureActiveLocalSession(payload: ComposerSubmitPayload): string | null {
+interface SessionMessageTarget {
+  sessionId?: string;
+  projectId: string;
+  projectName?: string;
+  projectPath?: string;
+  sessionTitle: string;
+}
+
+function resolveSessionMessageTarget(payload: ComposerSubmitPayload): SessionMessageTarget | null {
   const sessionState = useSessionStore.getState();
+  const projectState = useProjectStore.getState();
 
   if (sessionState.activeSessionId) {
-    return sessionState.activeSessionId;
+    const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
+    if (!activeSession) {
+      return null;
+    }
+
+    const activeProject = projectState.projects.find((project) => project.id === activeSession.projectId);
+    return {
+      sessionId: activeSession.id,
+      projectId: activeSession.projectId,
+      projectName: activeProject?.name,
+      projectPath: activeProject?.repoPath,
+      sessionTitle: activeSession.title,
+    };
   }
 
-  const projectState = useProjectStore.getState();
   const targetProjectId = sessionState.newSessionDraftTargetProjectId ?? projectState.currentProjectId;
   if (!targetProjectId) {
     return null;
   }
 
-  if (projectState.currentProjectId !== targetProjectId) {
-    projectState.setCurrentProject(targetProjectId);
+  const targetProject = projectState.projects.find((project) => project.id === targetProjectId);
+  if (!targetProject) {
+    return null;
   }
 
-  const session = sessionState.createLocalSession({
-    projectId: targetProjectId,
-    title: createSessionTitleFromPrompt(payload.message),
-    agentType: sessionState.activeAgentType,
-  });
-
-  return session.id;
+  return {
+    projectId: targetProject.id,
+    projectName: targetProject.name,
+    projectPath: targetProject.repoPath,
+    sessionTitle: createSessionTitleFromPrompt(payload.message),
+  };
 }
 
 function renameEmptyManualSessionFromPrompt(payload: ComposerSubmitPayload, existingMessageCount: number) {
@@ -92,18 +113,12 @@ function createSessionMessageSendPayload(
   finalClientMessageId: string,
   messageCreatedAt: string,
   branchDraft: BranchDraftState | null,
+  target: SessionMessageTarget,
 ): SessionMessageSendPayload {
-  const sessionState = useSessionStore.getState();
-  const projectState = useProjectStore.getState();
   const providerId = getProviderIdForModel(payload.model);
-  const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
-  const projectId = activeSession?.projectId
-    ?? sessionState.newSessionDraftTargetProjectId
-    ?? projectState.currentProjectId;
-  const activeProject = projectState.projects.find((project) => project.id === projectId);
 
   const sendPayload: SessionMessageSendPayload = {
-    sessionId: sessionState.activeSessionId ?? undefined,
+    ...(target.sessionId ? { sessionId: target.sessionId } : {}),
     providerId,
     modelId: payload.model,
     message: {
@@ -112,10 +127,10 @@ function createSessionMessageSendPayload(
       createdAt: messageCreatedAt,
     },
     context: {
-      workspaceId: projectId ?? undefined,
-      workspaceLabel: activeProject?.name ?? undefined,
-      workspacePath: activeProject?.repoPath ?? undefined,
-      sessionTitle: activeSession?.title ?? undefined,
+      workspaceId: target.projectId,
+      ...(target.projectName ? { workspaceLabel: target.projectName } : {}),
+      ...(target.projectPath ? { workspacePath: target.projectPath } : {}),
+      sessionTitle: target.sessionTitle,
       permissionMode: payload.permissionMode,
       ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
       // Preprocessing is renderer-provided context metadata; Desktop Main is responsible for validating it before constructing model input.
@@ -157,6 +172,22 @@ function failSessionMessageSend(message: string, sessionId?: string | null) {
   const current = useChatUiStore.getState();
   current.setAgentStatus('error', sessionId);
   current.setLastError(message, sessionId);
+}
+
+function adoptBackendSession(session: Parameters<typeof localSessionFromPersistedSession>[0]): string {
+  const localSession = localSessionFromPersistedSession(session);
+  const sessionState = useSessionStore.getState();
+  const projectState = useProjectStore.getState();
+
+  sessionState.upsertSession({
+    ...localSession,
+    agentType: sessionState.activeAgentType,
+  });
+  if (projectState.currentProjectId !== localSession.projectId) {
+    projectState.setCurrentProject(localSession.projectId);
+  }
+  sessionState.setActiveSession(localSession.id);
+  return localSession.id;
 }
 
 function isSameBranchDraft(
@@ -260,39 +291,29 @@ export function useSessionTimeline() {
 
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload): Promise<boolean> => {
     lastPayloadRef.current = payload;
-    const runSessionId = ensureActiveLocalSession(payload);
-    runSessionIdRef.current = runSessionId;
+    const target = resolveSessionMessageTarget(payload);
+    runSessionIdRef.current = target?.sessionId ?? null;
 
-    if (!runSessionId) {
+    if (!target) {
       failSessionMessageSend('Select a project before sending a message.');
       return false;
     }
 
-    const sessionState = useSessionStore.getState();
     const projectState = useProjectStore.getState();
-    const activeSession = sessionState.sessions.find((session) => session.id === runSessionId);
-    const projectId = activeSession?.projectId ?? projectState.currentProjectId;
 
-    if (!projectId) {
-      failSessionMessageSend('Select a project before sending a message.', runSessionId);
-      return false;
+    if (target.sessionId) {
+      renameEmptyManualSessionFromPrompt(payload, activeCanonicalMessageCount(target.projectId, target.sessionId));
     }
 
-    renameEmptyManualSessionFromPrompt(payload, activeCanonicalMessageCount(projectId, runSessionId));
-
-    const branchDraftForSend = branchDraft?.sessionId === runSessionId &&
-      branchDraft.projectId === projectId &&
+    const branchDraftForSend = target.sessionId &&
+      branchDraft?.sessionId === target.sessionId &&
+      branchDraft.projectId === target.projectId &&
       branchDraft.projectId === projectState.currentProjectId
       ? branchDraft
       : null;
 
     const clientMessageId = createId('message-user');
     const createdAt = new Date().toISOString();
-    useChatStreamStore.getState().addPendingUserMessage(projectId, runSessionId, {
-      clientMessageId,
-      text: payload.message,
-      createdAt,
-    });
     const requestId = `ipc-session-message-${createId('request')}`;
     const request = createRendererRuntimeIpcRequest(
       IPC_CHANNELS.session.message.send,
@@ -301,6 +322,7 @@ export function useSessionTimeline() {
         clientMessageId,
         createdAt,
         branchDraftForSend,
+        target,
       ),
       { requestId },
     );
@@ -309,15 +331,27 @@ export function useSessionTimeline() {
     processedSequencesRef.current.clear();
 
     const state = useChatUiStore.getState();
-    state.setAgentStatus('sending', runSessionId);
-    state.setLastError(null, runSessionId);
+    state.setAgentStatus('sending', target.sessionId ?? null);
+    state.setLastError(null, target.sessionId ?? null);
 
     const result = await window.megumi.session.message.send(request);
 
     if (!result.ok) {
-      failSessionMessageSend(result.error.message, runSessionId);
+      failSessionMessageSend(result.error.message, target.sessionId ?? null);
       return false;
     }
+
+    const runSessionId = adoptBackendSession(result.data.session);
+    runSessionIdRef.current = runSessionId;
+    useChatStreamStore.getState().setActiveSession(target.projectId, runSessionId);
+    useChatUiStore.getState().setActiveSession(runSessionId);
+    useChatUiStore.getState().setAgentStatus('sending', runSessionId);
+    useChatUiStore.getState().setLastError(null, runSessionId);
+    useChatStreamStore.getState().addPendingUserMessage(target.projectId, runSessionId, {
+      clientMessageId,
+      text: payload.message,
+      createdAt,
+    });
 
     if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {
       updateBranchDraft(null);

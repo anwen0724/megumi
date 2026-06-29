@@ -59,7 +59,12 @@ describe('InputService', () => {
         async handle(input) {
           sentPayloads.push(input);
           return {
-            data: { requestId: input.requestId },
+            data: {
+              requestId: input.requestId,
+              session,
+              userMessageId: 'message-1',
+              runId: 'run-1',
+            },
             events: collectable([runtimeEvent('run.completed')]),
           };
         },
@@ -233,7 +238,16 @@ describe('InputService', () => {
     });
     const events = await collect(result.events);
 
-    expect(result.data).toEqual({ requestId: 'request-1' });
+    expect(result.data).toMatchObject({
+      requestId: 'request-1',
+      session: {
+        sessionId: 'session-1',
+        workspaceId: 'workspace-1',
+        workspacePath: 'C:/workspace/project',
+      },
+      userMessageId: 'message-1',
+      runId: 'run-1',
+    });
     expect(events.map((event) => event.eventType)).toEqual(['run.started']);
     expect(repository.messages.get('message-1')).toMatchObject({
       role: 'user',

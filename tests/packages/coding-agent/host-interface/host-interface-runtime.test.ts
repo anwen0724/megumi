@@ -79,4 +79,58 @@ describe('Coding Agent host interface runtime', () => {
       ]),
     });
   });
+
+  it('routes host settings updates through the caller-provided settings provider', async () => {
+    temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-settings-'));
+    let rawSettings: AppSettingsRaw = {};
+    const writes: AppSettingsRaw[] = [];
+
+    runtime = composeCodingAgentRuntime({
+      homePaths: {
+        homePath: temporaryHome,
+        sqlitePath: temporaryHome,
+        settingsPath: path.join(temporaryHome, 'settings.json'),
+      },
+      runtimeLogger: {
+        warn: () => undefined,
+      },
+      modelCallProviderService: {
+        streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
+        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        cancelModelCall: () => false,
+      },
+      appSettingsProvider: {
+        getResolvedSettings: () => resolveAppSettings(rawSettings),
+        updateSettings(patch) {
+          rawSettings = mergeRawAppSettings(rawSettings, patch);
+          writes.push(rawSettings);
+          return resolveAppSettings(rawSettings);
+        },
+      },
+      memorySettingsProvider: {
+        isMemoryEnabled: () => false,
+      },
+      permissionSettingsProvider: {
+        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
+      },
+    });
+
+    const result = runtime.settings.update({
+      theme: 'sage-mist',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T14:00:00.000Z',
+      },
+    });
+
+    expect(writes).toEqual([{
+      theme: 'sage-mist',
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T14:00:00.000Z',
+      },
+    }]);
+    expect(result.settings.setup.completed).toBe(true);
+    expect(runtime.settings.get().settings.theme).toBe('sage-mist');
+  });
 });

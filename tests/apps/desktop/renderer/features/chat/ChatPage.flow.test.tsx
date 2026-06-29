@@ -228,10 +228,42 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+function createSessionMessageSendSuccess(request: {
+  requestId: string;
+  payload: {
+    sessionId?: string;
+    createdAt: string;
+    message?: { id: string };
+    context?: {
+      sessionTitle?: string;
+      workspaceId?: string;
+      workspacePath?: string;
+    };
+  };
+}) {
+  return {
+    ok: true,
+    data: {
+      requestId: request.requestId,
+      session: {
+        sessionId: request.payload.sessionId ?? 'session-created-1',
+        title: request.payload.context?.sessionTitle ?? 'New session',
+        workspaceId: request.payload.context?.workspaceId ?? 'project-1',
+        workspacePath: request.payload.context?.workspacePath,
+        createdAt: request.payload.createdAt,
+        updatedAt: request.payload.createdAt,
+        status: 'active' as const,
+      },
+      userMessageId: request.payload.message?.id ?? 'message-1',
+      runId: `${request.requestId}-run`,
+    },
+  };
+}
+
 function installMegumiMock() {
   const session = {
     message: {
-      send: vi.fn().mockResolvedValue({ ok: true, requestId: 'request-1' }),
+      send: vi.fn().mockImplementation((request) => Promise.resolve(createSessionMessageSendSuccess(request))),
       cancel: vi.fn(),
     },
     branchDraft: {
@@ -1004,7 +1036,20 @@ describe('ChatPage flow', () => {
 
     retryDeferred.resolve({
       ok: true,
-      requestId: 'request-retry-run-failed',
+      data: {
+        requestId: 'request-retry-run-failed',
+        session: {
+          sessionId: 'session-1',
+          title: 'Active session',
+          workspaceId: 'project-1',
+          workspacePath: 'C:/all/work/study/megumi',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          updatedAt: '2026-05-24T00:00:01.000Z',
+          status: 'active',
+        },
+        userMessageId: 'message-retry-run-failed',
+        runId: 'run-retry-run-failed',
+      },
     });
     await waitFor(() => {
       expect(screen.queryByLabelText('Recoverable actions for Failed run')).not.toBeInTheDocument();

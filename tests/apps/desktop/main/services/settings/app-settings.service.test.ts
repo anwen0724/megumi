@@ -68,6 +68,34 @@ describe('AppSettingsService', () => {
     });
   });
 
+  it('creates settings.json when setup completion is written for the first time', () => {
+    const fileSystem = new MemorySettingsFileSystem();
+    const service = createAppSettingsService({
+      settingsPath,
+      fileSystem,
+    });
+
+    service.updateSettings({
+      language: 'zh-CN',
+      theme: 'sage-mist',
+      chat: { defaultProvider: 'deepseek' },
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T12:00:00.000Z',
+      },
+    });
+
+    expect(JSON.parse(fileSystem.files.get(settingsPath) ?? '{}')).toEqual({
+      language: 'zh-CN',
+      theme: 'sage-mist',
+      chat: { defaultProvider: 'deepseek' },
+      setup: {
+        completed: true,
+        completedAt: '2026-06-29T12:00:00.000Z',
+      },
+    });
+  });
+
   it('patches nested raw settings without expanding defaults into the file', () => {
     const fileSystem = new MemorySettingsFileSystem();
     fileSystem.files.set(settingsPath, JSON.stringify({

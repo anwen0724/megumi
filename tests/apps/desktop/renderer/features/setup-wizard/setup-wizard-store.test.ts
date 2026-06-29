@@ -56,7 +56,7 @@ describe('setup wizard store', () => {
     expect(useSetupWizardStore.getState().setupCompleted).toBe(false);
   });
 
-  it('completes setup and clears the transient API key from state', async () => {
+  it('completes setup with one settings update and clears the transient API key from state', async () => {
     settingsUpdate.mockResolvedValue({
       ok: true,
       data: {
@@ -72,9 +72,6 @@ describe('setup wizard store', () => {
         },
       },
     });
-    providerUpdate.mockResolvedValue({ ok: true, data: {} });
-    providerSetApiKey.mockResolvedValue({ ok: true, data: {} });
-
     await useSetupWizardStore.getState().completeSetup({
       language: 'en-US',
       theme: 'graphite-dark',
@@ -85,43 +82,83 @@ describe('setup wizard store', () => {
       completedAt: '2026-06-29T12:00:00.000Z',
     });
 
-    expect(providerUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      payload: {
-        providerId: 'openai',
-        enabled: true,
-        baseUrl: 'https://api.openai.com/v1',
-        defaultModelId: 'gpt-5.5',
-      },
-    }));
-    expect(providerSetApiKey).toHaveBeenCalledWith(expect.objectContaining({
-      payload: {
-        providerId: 'openai',
-        apiKey: 'sk-test-secret',
-      },
-    }));
+    expect(providerUpdate).not.toHaveBeenCalled();
+    expect(providerSetApiKey).not.toHaveBeenCalled();
     expect(settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         language: 'en-US',
         theme: 'graphite-dark',
         chat: { defaultProvider: 'openai' },
+        providers: {
+          openai: {
+            enabled: true,
+            baseUrl: 'https://api.openai.com/v1',
+            defaultModel: 'gpt-5.5',
+            apiKey: 'sk-test-secret',
+          },
+        },
         setup: {
           completed: true,
           completedAt: '2026-06-29T12:00:00.000Z',
         },
       },
     }));
+    expect(settingsUpdate).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('sk-test-secret');
     expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
   });
 
-  it('allows completing setup without provider credentials', async () => {
+  it('writes setup completion to settings when provider configuration is skipped', async () => {
+    settingsUpdate.mockResolvedValue({
+      ok: true,
+      data: {
+        settings: {
+          language: 'zh-CN',
+          theme: 'sage-mist',
+          setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
+          memory: { enabled: false },
+          compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+          chat: { defaultProvider: 'deepseek' },
+          providers: {},
+          permissions: {},
+        },
+      },
+    });
+
+    await useSetupWizardStore.getState().completeSetup({
+      language: 'zh-CN',
+      theme: 'sage-mist',
+      providerId: 'deepseek',
+      defaultModelId: '',
+      skipProvider: true,
+      completedAt: '2026-06-29T12:00:00.000Z',
+    });
+
+    expect(providerUpdate).not.toHaveBeenCalled();
+    expect(providerSetApiKey).not.toHaveBeenCalled();
+    expect(settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        language: 'zh-CN',
+        theme: 'sage-mist',
+        chat: { defaultProvider: 'deepseek' },
+        setup: {
+          completed: true,
+          completedAt: '2026-06-29T12:00:00.000Z',
+        },
+      },
+    }));
+    expect(settingsUpdate).toHaveBeenCalledTimes(1);
+    expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
+  });
+
+  it('does not leave the wizard when settings update does not confirm setup completion', async () => {
     settingsUpdate.mockResolvedValue({
       ok: true,
       data: {
         settings: {
           language: 'zh-CN',
           theme: 'midnight-blue',
-          setup: { completed: true },
+          setup: { completed: false },
           memory: { enabled: false },
           compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
           chat: { defaultProvider: 'deepseek' },
@@ -140,8 +177,10 @@ describe('setup wizard store', () => {
       completedAt: '2026-06-29T12:00:00.000Z',
     });
 
-    expect(providerUpdate).not.toHaveBeenCalled();
-    expect(providerSetApiKey).not.toHaveBeenCalled();
-    expect(settingsUpdate).toHaveBeenCalled();
+    expect(useSetupWizardStore.getState()).toMatchObject({
+      status: 'error',
+      setupCompleted: false,
+      error: 'Setup completion was not saved.',
+    });
   });
 });

@@ -72,7 +72,20 @@ function installMegumiMock() {
     message: {
       send: vi.fn().mockImplementation((request) => Promise.resolve({
         ok: true,
-        data: { requestId: request.requestId },
+        data: {
+          requestId: request.requestId,
+          session: {
+            sessionId: request.payload.sessionId ?? 'session-created-1',
+            title: request.payload.context?.sessionTitle ?? 'first line second line',
+            workspaceId: request.payload.context?.workspaceId,
+            workspacePath: request.payload.context?.workspacePath,
+            createdAt: '2026-05-10T12:00:00.000Z',
+            updatedAt: '2026-05-10T12:00:00.000Z',
+            status: 'active',
+          },
+          userMessageId: request.payload.message.id,
+          runId: 'run-created-1',
+        },
         meta: {
           requestId: request.requestId,
           channel: IPC_CHANNELS.session.message.send,
@@ -159,25 +172,38 @@ describe('auto session on first send', () => {
     vi.useRealTimers();
   });
 
-  it('creates and selects a local session from the first submitted message', () => {
+  it('creates and selects a backend session from the first submitted message', async () => {
     render(<ChatPage />);
 
     submitPrompt('  first line\nsecond line  ');
 
+    await vi.waitFor(() => {
+      expect(window.megumi.session.message.send).toHaveBeenCalledTimes(1);
+    });
+
+    const request = vi.mocked(window.megumi.session.message.send).mock.calls[0][0];
+    expect(request.payload).not.toHaveProperty('sessionId');
+    expect(request.payload.context).toMatchObject({
+      workspaceId: 'project-1',
+      workspaceLabel: 'Megumi',
+      workspacePath: 'C:/all/work/study/megumi',
+      sessionTitle: 'first line second line',
+    });
+
     const state = useSessionStore.getState();
     expect(state.sessions).toHaveLength(1);
-    expect(state.activeSessionId).toBe(state.sessions[0].id);
     expect(state.sessions[0]).toMatchObject({
+      id: 'session-created-1',
       projectId: 'project-1',
       title: 'first line second line',
-      agentType: 'free',
       createdAt: '2026-05-10T12:00:00.000Z',
       updatedAt: '2026-05-10T12:00:00.000Z',
     });
+    expect(state.activeSessionId).toBe('session-created-1');
     expectCanonicalUserMessage(state.sessions[0].id, 'first line\nsecond line');
   });
 
-  it('creates the first local session in the draft target project and then makes it current', () => {
+  it('creates the first backend session in the draft target project and then makes it current', async () => {
     useProjectStore.setState({
       projects: [project, otherProject],
       currentProjectId: project.id,
@@ -189,25 +215,29 @@ describe('auto session on first send', () => {
 
     submitPrompt('Send this to the draft target');
 
+    await vi.waitFor(() => {
+      expect(window.megumi.session.message.send).toHaveBeenCalledTimes(1);
+    });
+
+    const request = vi.mocked(window.megumi.session.message.send).mock.calls[0][0];
+    expect(request.payload).not.toHaveProperty('sessionId');
+    expect(request.payload.context).toMatchObject({
+      workspaceId: otherProject.id,
+      workspaceLabel: otherProject.name,
+      workspacePath: otherProject.repoPath,
+      sessionTitle: 'Send this to the draft t...',
+    });
+
     const state = useSessionStore.getState();
     expect(state.sessions).toHaveLength(1);
     expect(state.sessions[0]).toMatchObject({
-      projectId: otherProject.id,
-      title: 'Send this to the draft t...',
+      id: 'session-created-1',
+      projectId: 'project-2',
     });
-    expect(state.activeSessionId).toBe(state.sessions[0].id);
+    expect(state.activeSessionId).toBe('session-created-1');
     expect(state.newSessionDraftTargetProjectId).toBeNull();
     expect(useProjectStore.getState().currentProjectId).toBe(otherProject.id);
-    expectCanonicalUserMessageForProject(otherProject.id, state.sessions[0].id, 'Send this to the draft target');
-    expect(window.megumi.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({
-        context: expect.objectContaining({
-          workspaceId: otherProject.id,
-          workspaceLabel: otherProject.name,
-          workspacePath: otherProject.repoPath,
-        }),
-      }),
-    }));
+    expectCanonicalUserMessageForProject(otherProject.id, 'session-created-1', 'Send this to the draft target');
   });
 
   it('does not create or send a runtime session when no project is selected', () => {
@@ -228,7 +258,7 @@ describe('auto session on first send', () => {
     expect(useChatUiStore.getState().lastError).toBe('Select a project before sending a message.');
   });
 
-  it('does not create a duplicate session when one is already active', () => {
+  it('does not create a duplicate session when one is already active', async () => {
     const existingSession: LocalRendererSession = {
       id: 'session-existing',
       projectId: 'project-1',
@@ -248,13 +278,23 @@ describe('auto session on first send', () => {
 
     submitPrompt('Continue in the active session');
 
+    await vi.waitFor(() => {
+      expect(window.megumi.session.message.send).toHaveBeenCalledTimes(1);
+    });
+
     const state = useSessionStore.getState();
-    expect(state.sessions).toEqual([existingSession]);
+    expect(state.sessions).toHaveLength(1);
+    expect(state.sessions[0]).toMatchObject({
+      id: existingSession.id,
+      projectId: existingSession.projectId,
+      title: existingSession.title,
+      agentType: existingSession.agentType,
+    });
     expect(state.activeSessionId).toBe(existingSession.id);
     expectCanonicalUserMessage(existingSession.id, 'Continue in the active session');
   });
 
-  it('renames a manually-created empty New session from its first message', () => {
+  it('does not create a duplicate for an existing empty New session', async () => {
     useSessionStore.setState({
       sessions: [
         {
@@ -274,11 +314,19 @@ describe('auto session on first send', () => {
 
     submitPrompt('Rename this session from prompt');
 
-    expect(useSessionStore.getState().sessions[0].title).toBe('Rename this session from...');
+    await vi.waitFor(() => {
+      expect(window.megumi.session.message.send).toHaveBeenCalledTimes(1);
+    });
+
+    expect(useSessionStore.getState().sessions).toHaveLength(1);
+    expect(useSessionStore.getState().sessions[0]).toMatchObject({
+      id: 'session-new',
+      title: 'New session',
+    });
     expectCanonicalUserMessage('session-new', 'Rename this session from prompt');
   });
 
-  it('does not rename an existing titled session on send', () => {
+  it('does not rename an existing titled session on send', async () => {
     useSessionStore.setState({
       sessions: [
         {
@@ -297,6 +345,10 @@ describe('auto session on first send', () => {
     render(<ChatPage />);
 
     submitPrompt('This should not rename the session');
+
+    await vi.waitFor(() => {
+      expect(window.megumi.session.message.send).toHaveBeenCalledTimes(1);
+    });
 
     expect(useSessionStore.getState().sessions[0].title).toBe('Planning the UI');
     expectCanonicalUserMessage('session-existing', 'This should not rename the session');

@@ -472,7 +472,12 @@ async function submitUserInputToAgentLoop(
   });
 
   return {
-    data: { requestId: input.requestId },
+    data: {
+      requestId: input.requestId,
+      session,
+      userMessageId: String(userMessage.messageId),
+      runId: String(run.runId),
+    },
     events: options.activeRuns.track({
       requestId: input.requestId,
       events: options.runAgentLoop({

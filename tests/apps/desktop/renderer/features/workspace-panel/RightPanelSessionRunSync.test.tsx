@@ -44,7 +44,20 @@ function installMegumiMock() {
     message: {
       send: vi.fn().mockImplementation((request: SessionMessageSendRequest) => Promise.resolve({
         ok: true,
-        data: { requestId: request.requestId },
+        data: {
+          requestId: request.requestId,
+          session: {
+            sessionId: request.payload.sessionId ?? 'session-created-1',
+            title: request.payload.context?.sessionTitle ?? 'New session',
+            workspaceId: request.payload.context?.workspaceId ?? 'project-1',
+            workspacePath: request.payload.context?.workspacePath,
+            createdAt: request.payload.createdAt,
+            updatedAt: request.payload.createdAt,
+            status: 'active',
+          },
+          userMessageId: request.payload.message?.id ?? 'message-1',
+          runId: `${request.requestId}-run`,
+        },
         meta: {
           requestId: request.requestId,
           channel: IPC_CHANNELS.session.message.send,

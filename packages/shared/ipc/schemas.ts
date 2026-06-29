@@ -266,6 +266,9 @@ export const SessionMessageSendPayloadSchema = z
 export const SessionMessageSendDataSchema = z
   .object({
     requestId: RuntimeIpcRequestIdSchema,
+    session: SessionSchema,
+    userMessageId: z.string().min(1),
+    runId: z.string().min(1),
   })
   .strict();
 
