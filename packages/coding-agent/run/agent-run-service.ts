@@ -72,6 +72,7 @@ import {
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
   RuntimeEventLog,
+  RuntimeEventPublisher,
 } from '../events';
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import { persistLegacyModelStepRecordFromEvent } from '../persistence';
@@ -248,6 +249,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly sessionContextRepository: AgentRunSessionContextRepositoryPort;
   private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
   private readonly runtimeEventLog: RuntimeEventLog;
+  private readonly runtimeEventPublisher: RuntimeEventPublisher<ChatStreamEventAdapter>;
   private readonly activePathRepository?: SessionActivePathRepository;
   private readonly contextService?: RunBaselineContextPort;
   private readonly permissionSnapshotService?: RunPermissionSnapshotServicePort;
@@ -292,6 +294,10 @@ export class AgentRunService implements AgentRunPort {
     this.runtimeEventRepository = options.runtimeEventRepository;
     this.runtimeEventLog = new RuntimeEventLog(options.runtimeEventRepository);
     this.postRunHooks = options.postRunHooks;
+    this.runtimeEventPublisher = new RuntimeEventPublisher<ChatStreamEventAdapter>({
+      eventLog: this.runtimeEventLog,
+      terminalHooks: this.postRunHooks,
+    });
     this.runTerminalCoordinator = options.runTerminalCoordinator;
     this.runRetryCoordinator = options.runRetryCoordinator;
     this.activePathRepository = options.activePathRepository;
@@ -376,13 +382,10 @@ export class AgentRunService implements AgentRunPort {
       // === Required ports ===
       eventPort: {
         append(event, requestId, runtimeContext) {
-          return svc.runtimeEventLog.appendWithRuntimeRequest(event, {
+          return svc.runtimeEventPublisher.appendWithRuntimeRequest(event, {
             requestId,
             ...(runtimeContext ? { runtimeContext } : {}),
-          }, {
-            ...(chatStreamAdapter ? { streamSink: chatStreamAdapter } : {}),
-            onTerminalEvent: (terminalEvent) => svc.publishRunTerminalEventHooks(terminalEvent, chatStreamAdapter),
-          });
+          }, chatStreamAdapter ? { chatStreamAdapter } : {});
         },
       },
       statePort: {
@@ -512,7 +515,7 @@ export class AgentRunService implements AgentRunPort {
           this.runExecutionFactRepository.saveObservation(observation);
         },
         appendEvent: (event) => {
-          this.runtimeEventLog.append(event);
+          this.runtimeEventPublisher.append(event);
         },
       },
       hostBoundary: this.hostBoundary,
@@ -1078,18 +1081,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
-    this.runtimeEventLog.append(event, {
-      ...(chatStreamAdapter ? { streamSink: chatStreamAdapter } : {}),
-      onTerminalEvent: (terminalEvent) => this.publishRunTerminalEventHooks(terminalEvent, chatStreamAdapter),
-    });
-  }
-
-  private publishRunTerminalEventHooks(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
-    this.postRunHooks.publishWorkspaceChangeFooter({
-      runId: String(event.runId),
-      createdAt: event.createdAt,
-      chatStreamAdapter,
-    });
+    this.runtimeEventPublisher.append(event, chatStreamAdapter ? { chatStreamAdapter } : {});
   }
 
   private cancelPendingApprovalGroupsByRun(runId: string): void {

@@ -2,4 +2,5 @@
 export * from './runtime-event-factory';
 export * from './runtime-event-log';
 export * from './runtime-event-metadata';
+export * from './runtime-event-publisher';
 export * from './runtime-event-utils';

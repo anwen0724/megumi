@@ -39,6 +39,10 @@ export interface ScheduleRunCompletedMemoryCaptureInput {
 
 export interface PostRunHooksPort {
   scheduleRunCompletedMemoryCapture(input: ScheduleRunCompletedMemoryCaptureInput): void;
+  publishRunTerminalHooks(input: {
+    event: RuntimeEvent;
+    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
+  }): void;
   publishWorkspaceChangeFooter(input: {
     runId: string;
     createdAt: string;
@@ -104,6 +108,17 @@ export class PostRunHooksCoordinator {
     }
 
     input.chatStreamAdapter.publishWorkspaceChangeFooter?.(footer, input.createdAt);
+  }
+
+  publishRunTerminalHooks(input: {
+    event: RuntimeEvent;
+    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
+  }): void {
+    this.publishWorkspaceChangeFooter({
+      runId: String(input.event.runId),
+      createdAt: input.event.createdAt,
+      ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
+    });
   }
 
   private createMemoryCaptureActivitySummary(runId: string): { signals: MemoryCaptureSignal[]; summary?: string } {

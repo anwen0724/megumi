@@ -134,6 +134,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-factory.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-log.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-metadata.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-publisher.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-utils.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-state-policy.ts'))).toBe(true);
@@ -809,16 +810,22 @@ describe('package and file structure source guards', () => {
     const terminalCoordinatorSource = readFileSync(join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'), 'utf8');
     const retryCoordinatorSource = readFileSync(join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'), 'utf8');
     const eventLogSource = readFileSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-log.ts'), 'utf8');
+    const eventPublisherSource = readFileSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-publisher.ts'), 'utf8');
 
     expect(agentRunServiceSource).toContain('private readonly runtimeEventLog: RuntimeEventLog');
+    expect(agentRunServiceSource).toContain('private readonly runtimeEventPublisher: RuntimeEventPublisher<ChatStreamEventAdapter>');
     expect(agentRunServiceSource).not.toContain('withRequestMetadata(');
     expect(agentRunServiceSource).not.toContain('withSequenceAfter(');
     expect(agentRunServiceSource).not.toContain('withSessionMessageRequestMetadata(');
+    expect(agentRunServiceSource).not.toContain('onTerminalEvent:');
+    expect(agentRunServiceSource).not.toContain('private publishRunTerminalEventHooks');
     expect(agentRunServiceSource).not.toContain('function nextRuntimeSequence');
     expect(terminalCoordinatorSource).not.toContain('function nextRuntimeSequence');
     expect(retryCoordinatorSource).not.toContain('function nextRuntimeSequence');
     expect(eventLogSource).toContain('export class RuntimeEventLog');
     expect(eventLogSource).toContain('export class RuntimeEventSequenceCursor');
+    expect(eventPublisherSource).toContain('export class RuntimeEventPublisher');
+    expect(eventPublisherSource).toContain('publishRunTerminalHooks');
   });
 
   it('keeps memory recall cwd resolution in the context owner', () => {
