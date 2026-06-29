@@ -9,6 +9,7 @@ import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useChatStreamStore } from '@megumi/desktop/renderer/features/chat-stream';
+import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 
 const { minimize, toggleMaximize, close } = vi.hoisted(() => ({
   minimize: vi.fn(),
@@ -38,6 +39,24 @@ function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
+      settings: {
+        get: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            settings: {
+              language: 'zh-CN',
+              theme: 'midnight-blue',
+              setup: { completed: true },
+              memory: { enabled: false },
+              compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+              chat: { defaultProvider: 'deepseek' },
+              providers: {},
+              permissions: {},
+            },
+          },
+        }),
+        update: vi.fn().mockResolvedValue({ ok: true }),
+      },
       project: {
         list: vi.fn().mockResolvedValue({ ok: true, data: { projects: [DEFAULT_PROJECT_RECORD] } }),
         useExisting: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true } }),
@@ -132,6 +151,12 @@ describe('App shell layout contract', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-05-10T12:00:00.000Z'));
     installMegumiMock();
+    useSetupWizardStore.setState({
+      ...useSetupWizardStore.getInitialState(),
+      status: 'ready',
+      setupCompleted: true,
+      hydrate: vi.fn(async () => undefined),
+    }, true);
 
     useProjectStore.setState({
       projects: [
