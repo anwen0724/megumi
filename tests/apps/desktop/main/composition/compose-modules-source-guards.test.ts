@@ -22,7 +22,7 @@ describe('Desktop Main shell composition', () => {
     expect(desktopComposition).toContain('providerService: codingAgentRuntime.providerSettingsService');
     expect(desktopComposition).toContain('sessionHandlers: { sessionService, sessionBranchService, productRuntime: codingAgentRuntime }');
     expect(desktopComposition).toContain('runHandlers: { sessionService, productRuntime: codingAgentRuntime }');
-    expect(desktopComposition).not.toContain('const agentRunService = codingAgentRuntime.agentRunService');
+    expect(desktopComposition).not.toContain('const agentLoopOperation = codingAgentRuntime.agentLoopOperation');
     expect(desktopComposition).toContain('runContextService: codingAgentRuntime.runContextService');
     expect(desktopComposition).toContain('toolService: codingAgentRuntime.toolService');
     expect(desktopComposition).not.toContain('new SessionRunService');
@@ -46,7 +46,7 @@ describe('Desktop Main shell composition', () => {
     expect(persistenceComposition).toContain('new RunRecordRepository(database)');
     expect(persistenceComposition).toContain('new RuntimeEventRepository(database)');
     expect(persistenceComposition).not.toContain('new SessionRunRepository(database)');
-    expect(sessionComposition).toContain('new AgentRunService');
+    expect(sessionComposition).toContain('new AgentLoopOperation');
     expect(sessionComposition).toContain('new PermissionSnapshotService');
     expect(toolComposition).toContain('createToolCallRunner');
     expect(toolComposition).toContain('createToolExecutionRouter');

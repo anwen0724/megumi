@@ -36,14 +36,14 @@ describe('agent package boundary', () => {
   it('owns model/tool loop runtime under packages/coding-agent/agent-loop', () => {
     expect(existsSync(join(root, 'packages/agent'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/agent-loop.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/loop'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/loop'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-call/model-event-adapter.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-call/model-call-contract.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-runner.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/model-call/model-call-runner.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-call/provider-adapter.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/state/run-state-policy.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/lifecycle/run-state-policy.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/lifecycle/run-state-policy.ts'))).toBe(false);
   });
 
   it('does not keep Agent Runtime under packages/core', () => {
@@ -52,7 +52,7 @@ describe('agent package boundary', () => {
   });
 
   it('keeps coding-agent run runtime free of desktop and Electron dependencies', () => {
-    const source = sourceUnder('packages/coding-agent/run');
+    const source = sourceUnder('packages/coding-agent/obsolete-run');
 
     expect(source).not.toContain('@megumi/desktop');
     expect(source).not.toContain('apps/desktop');

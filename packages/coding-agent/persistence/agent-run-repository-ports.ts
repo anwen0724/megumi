@@ -1,4 +1,4 @@
-// Defines persistence ports consumed by the transitional AgentRunService implementation.
+// Defines persistence ports consumed by the product agent-loop operation implementation.
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   Run,

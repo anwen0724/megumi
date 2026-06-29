@@ -55,7 +55,7 @@ describe('session run foundation source guards', () => {
   });
 
   it('keeps coding-agent run runtime free of Host privileges and concrete persistence', () => {
-    const offenders = filesUnder('packages/coding-agent/run')
+    const offenders = filesUnder('packages/coding-agent/obsolete-run')
       .filter((file) => {
         const source = readProjectFile(file);
         return /from ['"](electron|better-sqlite3|@megumi\/db|@megumi\/desktop|fs|node:fs|child_process|node:child_process)/.test(source);
@@ -68,7 +68,7 @@ describe('session run foundation source guards', () => {
   it('keeps agent runtime implementation under coding-agent agent-loop', () => {
     expect(existsSync(join(ROOT, 'packages/agent'))).toBe(false);
     expect(existsSync(join(ROOT, 'packages/coding-agent/agent-loop/agent-loop.ts'))).toBe(true);
-    expect(existsSync(join(ROOT, 'packages/coding-agent/run/loop'))).toBe(false);
+    expect(existsSync(join(ROOT, 'packages/coding-agent/obsolete-run/loop'))).toBe(false);
     expect(existsSync(join(ROOT, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(ROOT, 'packages/core/run-runtime'))).toBe(false);
   });
@@ -111,7 +111,7 @@ describe('session run foundation source guards', () => {
   it('does not implement later Agent capabilities in lifecycle foundation files', () => {
     const lifecycleFiles = [
       ...filesUnder('packages/shared'),
-      ...filesUnder('packages/coding-agent/run'),
+      ...filesUnder('packages/coding-agent/obsolete-run'),
       ...filesUnder('packages/coding-agent/persistence'),
       ...filesUnder('apps/desktop/src/main'),
       ...filesUnder('apps/desktop/src/renderer'),

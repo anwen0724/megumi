@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -42,15 +42,16 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/context/parts/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/index.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/index.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/product-runtime/agent-loop-operation.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/context/run-input-facts.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/run/turn/run-turn.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/turn/run-turn.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/hooks/post-run-hooks.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/completion/run-completion-hooks.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/completion/run-completion-hooks.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/state/run-terminal-coordinator.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/lifecycle/run-terminal-coordinator.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/lifecycle/run-terminal-coordinator.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-call/model-call-stream.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/model-call/model-call-stream.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/model-call/model-call-stream.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/events/runtime-event-utils.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/product-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
@@ -58,14 +59,14 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/product-runtime/runtime-logger.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/tool-calls/tool-call-runner.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/tool-calls/tool-call-runner.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-registry-snapshot.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/registry/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/built-ins/index.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-policy.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-execution-decision.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/run/permissions/project-boundary-policy.ts'))).toBe(false);
+    expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/permissions/project-boundary-policy.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-recall-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-runtime-capture.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-management-service.ts'))).toBe(true);
@@ -79,16 +80,15 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/context/resources/run-context-service.ts'))).toBe(true);
   });
 
-  it('keeps run orchestration in coding-agent instead of desktop session service', () => {
-    const codingAgentRun = sourceUnder('packages/coding-agent/run');
+  it('keeps agent-loop operation orchestration in coding-agent product runtime instead of desktop session service', () => {
+    const productRuntime = sourceUnder('packages/coding-agent/product-runtime');
     const codingAgentLoop = sourceUnder('packages/coding-agent/agent-loop');
     const codingAgentState = sourceUnder('packages/coding-agent/state');
     const codingAgentContext = sourceUnder('packages/coding-agent/context');
     const codingAgentInput = sourceUnder('packages/coding-agent/input');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
-    expect(codingAgentRun).not.toContain('class RunTurn');
-    expect(codingAgentRun).not.toContain('class RunCompletionHooksCoordinator');
+    expect(productRuntime).toContain('class AgentLoopOperation');
     expect(codingAgentState).toContain('class RunTerminalCoordinator');
     expect(codingAgentLoop).toContain('class AgentLoop');
     expect(codingAgentLoop).toContain('runModelToolLoop');

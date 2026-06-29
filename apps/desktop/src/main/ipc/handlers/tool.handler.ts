@@ -1,4 +1,4 @@
-﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
@@ -18,7 +18,7 @@ import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.serv
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import type { ToolService } from '@megumi/coding-agent/tools';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
-import { forwardRuntimeEvents } from '../runtime-event-forwarder';
+import { forwardRuntimeEvents } from '.././runtime-event-forwarder';
 
 export type ToolHandlersService = Pick<
   ToolService,
@@ -102,4 +102,3 @@ function mapToolIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-

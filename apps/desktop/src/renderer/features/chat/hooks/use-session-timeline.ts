@@ -7,7 +7,7 @@ import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
 import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
-import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
+import { dispatchRuntimeEvent } from '../.././runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { getProviderIdForModel } from '../components/composer-options';

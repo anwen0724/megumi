@@ -1,8 +1,8 @@
-// Adapts tool persistence to AgentRunService's product-level tool-result model-input port.
+// Adapts tool persistence to AgentLoopOperation's product-level tool-result model-input port.
 import type { ToolRepository } from '../persistence/repos/tool.repo';
 import type { AgentRunToolRepositoryPort } from '../persistence';
 
-export function createAgentRunToolRepositoryAdapter(
+export function createAgentLoopOperationToolRepositoryAdapter(
   toolRepository: ToolRepository,
 ): AgentRunToolRepositoryPort {
   return {

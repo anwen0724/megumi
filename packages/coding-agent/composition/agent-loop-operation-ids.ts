@@ -1,7 +1,7 @@
-// Provides transitional id factories for wiring the current AgentRunService composition.
+// Provides transitional id factories for wiring the current AgentLoopOperation composition.
 import type { RunIdFactory } from '../state/lifecycle';
 
-export interface AgentRunCompositionIds extends RunIdFactory {
+export interface AgentLoopOperationCompositionIds extends RunIdFactory {
   compactionId(): string;
   retryAttemptId(): string;
   sessionId(): string;
@@ -13,9 +13,9 @@ export interface AgentRunCompositionIds extends RunIdFactory {
   chatThinkingId(): string;
 }
 
-export function createAgentRunCompositionIds(
-  overrides: Partial<AgentRunCompositionIds> = {},
-): AgentRunCompositionIds {
+export function createAgentLoopOperationCompositionIds(
+  overrides: Partial<AgentLoopOperationCompositionIds> = {},
+): AgentLoopOperationCompositionIds {
   return {
     sessionId: () => `session:${crypto.randomUUID()}`,
     runId: () => `run:${crypto.randomUUID()}`,

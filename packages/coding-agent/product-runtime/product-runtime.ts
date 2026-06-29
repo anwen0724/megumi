@@ -1,7 +1,7 @@
 // Defines the complete Coding Agent product runtime exposed to UI shells and non-desktop entries.
 // Every member is a product-owned port interface — this is the single shell-agnostic
 // contract that desktop, and future web/cli shells, code against.
-import type { AgentRunPort } from './agent-run-port';
+import type { AgentLoopOperationPort } from './agent-loop-operation-port';
 import type { RecoveryService } from '../state';
 import type { SessionBranchServicePort, SessionServicePort } from '../session';
 import type { ToolService } from '../tools/tool-service-port';
@@ -68,7 +68,7 @@ export interface CodingAgentProductRuntime {
 export interface CodingAgentProductRuntimeServices {
   sessionService: SessionServicePort;
   sessionBranchService: SessionBranchServicePort;
-  agentRunService: AgentRunPort;
+  agentLoopOperation: AgentLoopOperationPort;
   recoveryService: RecoveryService;
   toolService: ToolService;
   artifactService: ArtifactServicePort;
@@ -86,9 +86,9 @@ export function createCodingAgentProductRuntime(
 ): CodingAgentProductRuntime {
   return {
     submitInput: (input) => submitInput(services, input),
-    sendSessionMessage: (input) => services.agentRunService.sendSessionMessage(input),
-    cancelSessionMessage: (payload) => services.agentRunService.cancelSessionMessage(payload),
-    listRuntimeEventsByRun: (runId) => services.agentRunService.listRuntimeEventsByRun(runId),
+    sendSessionMessage: (input) => services.agentLoopOperation.sendSessionMessage(input),
+    cancelSessionMessage: (payload) => services.agentLoopOperation.cancelSessionMessage(payload),
+    listRuntimeEventsByRun: (runId) => services.agentLoopOperation.listRuntimeEventsByRun(runId),
     sessionService: services.sessionService,
     sessionBranchService: services.sessionBranchService,
     recoveryService: services.recoveryService,
@@ -115,7 +115,7 @@ async function submitInput(
   const context = input.permissionMode
     ? { permissionMode: input.permissionMode }
     : undefined;
-  const run = await runtime.agentRunService.sendSessionMessage({
+  const run = await runtime.agentLoopOperation.sendSessionMessage({
     requestId,
     payload: {
       sessionId: String(session.sessionId),

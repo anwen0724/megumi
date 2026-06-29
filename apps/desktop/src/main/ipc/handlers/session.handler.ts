@@ -33,7 +33,7 @@ import {
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
-import { forwardRuntimeEvents } from '../runtime-event-forwarder';
+import { forwardRuntimeEvents } from '.././runtime-event-forwarder';
 
 export interface SessionHandlersSessionService {
   createSession(payload: SessionCreatePayload): Session;

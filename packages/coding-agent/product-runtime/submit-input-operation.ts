@@ -133,6 +133,7 @@ export class SubmitInputOperation {
     const runId = this.ids.runId();
     const stepId = this.ids.stepId();
     const createdAt = input.payload.createdAt;
+    // Input runtime normalization is the trust boundary before persistence and agent-loop execution.
     const sessionMessageInput = prepareSessionMessageInput({
       payload: input.payload,
     });

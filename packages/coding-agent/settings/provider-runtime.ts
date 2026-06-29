@@ -1,6 +1,6 @@
 // Resolves provider runtime configuration from Main-owned settings and the env port only.
 // SQLite and other host persistence details are kept outside provider request execution.
-// The env port is required ¡ª the desktop composition supplies the host process environment.
+// The env port is required - the desktop composition supplies the host process environment.
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type {

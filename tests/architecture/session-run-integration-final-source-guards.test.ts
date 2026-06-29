@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -130,11 +130,13 @@ describe('09 session run integration final source guards', () => {
   });
 
   it('routes session-run model input construction through ModelCallInputBuildService', () => {
-    const sessionRun = source('packages/coding-agent/run/agent-run-service.ts');
+    const sessionRun = source('packages/coding-agent/product-runtime/agent-loop-operation.ts');
 
     expect(sessionRun).toContain('ModelCallInputBuildService');
     expect(sessionRun).toContain('modelCallInputBuildService');
-    expect(sessionRun).toContain('modelInputRuntimeSourceOverrides');
+    expect(sessionRun).toContain('sourceOverrideProvider: this.modelInputSourceOverrideProvider');
+    expect(source('packages/coding-agent/context/model-input-source-overrides.ts'))
+      .toContain('resolveModelInputSourceOverrides');
     expect(sessionRun).not.toContain('buildModelCallInputContextFromSources');
     expect(sessionRun).not.toContain('createModelCallInputContextId');
     expect(sessionRun).not.toContain('loadInstructionSourcesForModelStep');
@@ -145,7 +147,7 @@ describe('09 session run integration final source guards', () => {
   it('keeps formal context build source free of old preflight naming', () => {
     const scannedFiles = [
       'packages/coding-agent/context/compaction/session-compaction.ts',
-      'packages/coding-agent/run/agent-run-service.ts',
+      'packages/coding-agent/product-runtime/agent-loop-operation.ts',
       'packages/coding-agent/context/compaction/session-compaction-orchestrator.ts',
     ];
     const offenders = scannedFiles.filter((path) => /\bpreflight\b/i.test(source(path)));

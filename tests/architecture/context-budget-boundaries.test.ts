@@ -102,7 +102,7 @@ describe('context budget and model input chain boundaries', () => {
     ].join('\n');
 
     expect(source).not.toContain('apply' + 'ContextBudget');
-    expect(source).not.toContain('@megumi/coding-agent/run/context/' + 'context-budget');
+    expect(source).not.toContain('@megumi/coding-agent/product-runtime/context/' + 'context-budget');
     expect(source).not.toMatch(/from ['"]@megumi\/coding-agent\/context\/context-budget['"]/);
     expect(source).not.toMatch(/from ['"]@megumi\/coding-agent\/context\/context-budget\.js['"]/);
   });

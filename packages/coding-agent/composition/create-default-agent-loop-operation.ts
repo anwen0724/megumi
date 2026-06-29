@@ -1,5 +1,5 @@
-// Composes the standalone AgentRunService with product persistence defaults.
-import { AgentRunService } from '../run/agent-run-service';
+// Composes the standalone AgentLoopOperation with product persistence defaults.
+import { AgentLoopOperation } from '../product-runtime';
 import type {
   AgentInstructionSourcePort,
   ModelInputGlobalInstructionDirectoryProvider,
@@ -7,57 +7,57 @@ import type {
 } from '../context';
 import { ModelInputSourceOverrideService } from '../context';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import { createAgentRunCompositionIds } from './agent-run-ids';
+import { createAgentLoopOperationCompositionIds } from './agent-loop-operation-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
-import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
+import { createAgentLoopOperationRepositoryOptions } from './agent-loop-operation-repository-options';
 import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
-import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository-adapter';
+import { createAgentLoopOperationToolRepositoryAdapter } from './agent-loop-operation-tool-repository-adapter';
 
-export interface CreateDefaultAgentRunServiceOptions {
+export interface CreateDefaultAgentLoopOperationOptions {
   contextService?: RunBaselineContextPort;
   toolRuntimeFactory?: ToolRuntimeFactory;
   agentInstructionSourceService?: AgentInstructionSourcePort;
 }
 
-export interface CreateDefaultAgentRunServiceHomePaths {
+export interface CreateDefaultAgentLoopOperationHomePaths {
   homePath: string;
   sqlitePath: string;
 }
 
-export function createDefaultAgentRunService(
-  homePaths: CreateDefaultAgentRunServiceHomePaths,
-  options: CreateDefaultAgentRunServiceOptions = {},
-): AgentRunService {
+export function createDefaultAgentLoopOperation(
+  homePaths: CreateDefaultAgentLoopOperationHomePaths,
+  options: CreateDefaultAgentLoopOperationOptions = {},
+): AgentLoopOperation {
   const persistence = composeCodingAgentPersistence({ sqlitePath: homePaths.sqlitePath });
   const permissionSnapshotRepository = persistence.permissionSnapshotRepository;
   const activePathRepository = persistence.activePathRepository;
   const toolRepository = persistence.toolRepository;
-  const ids = createAgentRunCompositionIds();
-  const agentRunRepositoryOptions = createAgentRunRepositoryOptions(persistence);
+  const ids = createAgentLoopOperationCompositionIds();
+  const agentLoopOperationRepositoryOptions = createAgentLoopOperationRepositoryOptions(persistence);
 
-  const service = new AgentRunService({
-    ...agentRunRepositoryOptions,
+  const agentLoopOperation = new AgentLoopOperation({
+    ...agentLoopOperationRepositoryOptions,
     postRunHooks: new PostRunHooksCoordinator({
-      repository: agentRunRepositoryOptions.postRunHooksRepository,
+      repository: agentLoopOperationRepositoryOptions.postRunHooksRepository,
       megumiHomePath: homePaths.homePath,
     }),
     runTerminalCoordinator: new RunTerminalCoordinator({
-      repository: agentRunRepositoryOptions.runTerminalRepository,
+      repository: agentLoopOperationRepositoryOptions.runTerminalRepository,
       toolRepository,
       ids,
     }),
     runRetryCoordinator: new RunRetryCoordinator({
-      repository: agentRunRepositoryOptions.runRetryRepository,
+      repository: agentLoopOperationRepositoryOptions.runRetryRepository,
       activePathRepository,
       ids,
     }),
     sessionCompactionRepository: persistence.sessionContextRepository,
     activePathRepository,
-    toolRepository: createAgentRunToolRepositoryAdapter(toolRepository),
+    toolRepository: createAgentLoopOperationToolRepositoryAdapter(toolRepository),
     toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),
     permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
     planArtifactService: new PlanArtifactService({ repository: permissionSnapshotRepository }),
@@ -70,8 +70,8 @@ export function createDefaultAgentRunService(
     }),
     ids,
   });
-  service.cleanupInterruptedRunsOnStartup();
-  return service;
+  agentLoopOperation.cleanupInterruptedRunsOnStartup();
+  return agentLoopOperation;
 }
 
 function defaultGlobalInstructionDirectoryProvider(homePath: string): ModelInputGlobalInstructionDirectoryProvider {

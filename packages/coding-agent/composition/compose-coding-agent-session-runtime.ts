@@ -1,11 +1,11 @@
-﻿// Composes Coding Agent session/run product services and their product collaborators.
+// Composes session-owned services with the product agent-loop operation.
 import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
 import { RunContextService } from '../context/resources';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import type { RuntimeLogger } from '../product-runtime';
 import {
-  AgentRunService,
-} from '../run/agent-run-service';
+  AgentLoopOperation,
+} from '../product-runtime';
 import {
   SessionBranchService,
   SessionContextInputService,
@@ -13,7 +13,7 @@ import {
 } from '../session';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import { createAgentRunCompositionIds } from './agent-run-ids';
+import { createAgentLoopOperationCompositionIds } from './agent-loop-operation-ids';
 import type { RunContextRepository } from '../persistence/repos/run-context.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
@@ -32,14 +32,14 @@ import type { ToolRegistry } from '../tools/registry';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
-import { createAgentRunRepositoryOptions } from './agent-run-repository-options';
+import { createAgentLoopOperationRepositoryOptions } from './agent-loop-operation-repository-options';
 import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
 } from '../workspace';
-import { createAgentRunToolRepositoryAdapter } from './agent-run-tool-repository-adapter';
+import { createAgentLoopOperationToolRepositoryAdapter } from './agent-loop-operation-tool-repository-adapter';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -68,13 +68,13 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
   runContextRepository: RunContextRepository;
-  chatStreamEventSink?: ConstructorParameters<typeof AgentRunService>[0]['chatStreamEventSink'];
-  workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentRunService>[0]['workspaceChanges'];
+  chatStreamEventSink?: ConstructorParameters<typeof AgentLoopOperation>[0]['chatStreamEventSink'];
+  workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentLoopOperation>[0]['workspaceChanges'];
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
-  const agentRunRepositoryOptions = createAgentRunRepositoryOptions(options);
-  const agentRunIds = createAgentRunCompositionIds();
+  const agentLoopOperationRepositoryOptions = createAgentLoopOperationRepositoryOptions(options);
+  const agentLoopOperationIds = createAgentLoopOperationCompositionIds();
   const runContextService = new RunContextService({
     contextRepository: options.runContextRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
@@ -128,25 +128,25 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
     : undefined;
   const postRunHooks = new PostRunHooksCoordinator({
-    repository: agentRunRepositoryOptions.postRunHooksRepository,
+    repository: agentLoopOperationRepositoryOptions.postRunHooksRepository,
     memoryCaptureService: options.memoryRuntime.captureService,
     megumiHomePath: options.homePaths.homePath,
     workspaceChanges,
     ...(workspaceChangeFooterProjector ? { workspaceChangeFooterProjector } : {}),
   });
   const runTerminalCoordinator = new RunTerminalCoordinator({
-    repository: agentRunRepositoryOptions.runTerminalRepository,
+    repository: agentLoopOperationRepositoryOptions.runTerminalRepository,
     toolRepository: options.toolRepository,
-    ids: agentRunIds,
+    ids: agentLoopOperationIds,
   });
   const runRetryCoordinator = new RunRetryCoordinator({
-    repository: agentRunRepositoryOptions.runRetryRepository,
+    repository: agentLoopOperationRepositoryOptions.runRetryRepository,
     activePathRepository: options.activePathRepository,
     sessionBranchService,
-    ids: agentRunIds,
+    ids: agentLoopOperationIds,
   });
-  const agentRunService = new AgentRunService({
-    ...agentRunRepositoryOptions,
+  const agentLoopOperation = new AgentLoopOperation({
+    ...agentLoopOperationRepositoryOptions,
     postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
@@ -161,21 +161,21 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     modelCallProvider: options.modelCallProviderService,
     toolRuntimeFactory: options.toolRuntimeFactory,
     toolDefinitionProvider: options.toolRegistry,
-    toolRepository: createAgentRunToolRepositoryAdapter(options.toolRepository),
+    toolRepository: createAgentLoopOperationToolRepositoryAdapter(options.toolRepository),
     workspaceChanges,
     chatStreamEventSink: options.chatStreamEventSink,
     memoryRecallService: options.memoryRuntime.recallService,
     memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
     memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
     megumiHomePath: options.homePaths.homePath,
-    ids: agentRunIds,
+    ids: agentLoopOperationIds,
   });
 
   return {
     runContextService,
     sessionService,
     sessionBranchService,
-    agentRunService,
+    agentLoopOperation,
     planArtifactService,
   };
 }

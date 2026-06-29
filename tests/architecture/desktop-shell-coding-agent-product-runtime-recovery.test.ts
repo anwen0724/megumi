@@ -81,7 +81,7 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
     expect(actual.filter((name) => !allowedServiceDirectories.has(name))).toEqual([]);
 
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
-    expect(desktopServices).not.toContain('class AgentRunService');
+    expect(desktopServices).not.toContain('class AgentLoopOperation');
     expect(desktopServices).not.toContain('createToolOrchestratorService');
     expect(desktopServices).not.toContain('new SessionRunRepository');
     expect(desktopServices).not.toContain('migrateDatabase');
@@ -113,7 +113,7 @@ describe('desktop shell and coding-agent product runtime recovery', () => {
 
   it('keeps package-level tests proving Coding Agent can run without desktop imports', () => {
     expect(existsSync(join(root, 'tests/packages/coding-agent/product-runtime/product-runtime.test.ts'))).toBe(true);
-    expect(existsSync(join(root, 'tests/packages/coding-agent/run/agent-run-service.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/product-runtime/agent-loop-operation.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(false);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/run-record.repo.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-record.repo.test.ts'))).toBe(true);

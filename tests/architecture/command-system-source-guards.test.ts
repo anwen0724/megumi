@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -126,7 +126,7 @@ describe('Command system source guards', () => {
       .toContain('before session runs trust it');
     expect(source('packages/coding-agent/context/model-call-context.ts'))
       .toContain('never parses raw slash commands');
-    expect(source('packages/coding-agent/run/agent-run-service.ts'))
+    expect(source('packages/coding-agent/product-runtime/submit-input-operation.ts'))
       .toContain('runtime normalization is the trust boundary');
     expect(source('packages/shared/ipc/schemas.ts'))
       .toContain('runtime services own trusted normalization');
@@ -149,7 +149,7 @@ describe('Command system source guards', () => {
 
   it('keeps main runtime free of raw slash command parsing', () => {
     expect(offenders([
-      'packages/coding-agent/run/agent-run-service.ts',
+      'packages/coding-agent/product-runtime/agent-loop-operation.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
       'packages/coding-agent/settings/provider-runtime.ts',
     ], [
@@ -158,12 +158,12 @@ describe('Command system source guards', () => {
       /listCommandSuggestions/,
       /\/review\b/,
     ])).toEqual([]);
-    // session-run.service.ts may import BUILT_IN_INPUT_COMMAND_REGISTRY
-    // for the ParsedInput bridge that feeds command facts into CodingAgentRunOrchestrator.
-    const sessionRun = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
-    expect(sessionRun).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
-    expect(sessionRun).not.toContain('parseSlashCommand');
-    expect(sessionRun).not.toContain('dispatchCommandText');
+    const sessionMessageInput = readFileSync(join(repoRoot, 'packages/coding-agent/input/session-message.ts'), 'utf8');
+    const agentLoopOperation = readFileSync(join(repoRoot, 'packages/coding-agent/product-runtime/agent-loop-operation.ts'), 'utf8');
+    expect(sessionMessageInput).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(agentLoopOperation).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(agentLoopOperation).not.toContain('parseSlashCommand');
+    expect(agentLoopOperation).not.toContain('dispatchCommandText');
   });
 
   it('keeps context management free of raw slash command parsing', () => {

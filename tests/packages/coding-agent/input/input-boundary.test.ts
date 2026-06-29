@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -39,7 +39,7 @@ describe('coding-agent input boundary', () => {
     const violations = walkSourceFiles(join(root, 'packages/coding-agent/input')).flatMap((file) => {
       const source = readFileSync(file, 'utf8');
       const forbidden = [
-        '@megumi/coding-agent/run',
+        '@megumi/coding-agent/product-runtime',
         '@megumi/tools',
         '@megumi/db',
         '@megumi/desktop',

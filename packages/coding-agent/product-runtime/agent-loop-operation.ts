@@ -1,5 +1,4 @@
-// Orchestrates Coding Agent product session runs by coordinating input facts,
-// product persistence, permissions, context construction, tools, and model execution.
+// Coordinates session-scoped product operations that start and control agent-loop execution.
 import {
   ActiveSessionMessageRunTracker,
   canResumeApprovalFromRunStatus,
@@ -48,8 +47,9 @@ import {
 } from '../agent-loop';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import type { AgentRunPort } from '../product-runtime';
-import { SessionRunControlOperation, SubmitInputOperation } from '../product-runtime';
+import type { AgentLoopOperationPort } from './agent-loop-operation-port';
+import { SessionRunControlOperation } from './session-run-control-operation';
+import { SubmitInputOperation } from './submit-input-operation';
 import {
   type ParsedInput,
   type SessionMessageInputMessage,
@@ -116,10 +116,10 @@ import type { WorkspaceChangeReadPort } from '../workspace';
 import type {
   ToolRegistrySnapshotServicePort,
 } from '@megumi/coding-agent/tools/tool-registry-snapshot';
-interface AgentRunServiceClock {
+interface AgentLoopOperationClock {
   now(): string;
 }
-interface AgentRunServiceIds extends RunIdFactory {
+interface AgentLoopOperationIds extends RunIdFactory {
   compactionId(): string;
   retryAttemptId(): string;
   sessionId(): string;
@@ -131,7 +131,7 @@ interface AgentRunServiceIds extends RunIdFactory {
   chatThinkingId(): string;
 }
 
-interface AgentRunServiceOptions {
+interface AgentLoopOperationOptions {
   sessionRepository: AgentRunSessionRepositoryPort;
   messageRepository: AgentRunMessageRepositoryPort;
   runRecordRepository: AgentRunRunRecordRepositoryPort;
@@ -174,19 +174,19 @@ interface AgentRunServiceOptions {
       sessionId: string;
     }): SessionTimelineListData;
   };
-  clock?: AgentRunServiceClock;
-  ids?: Partial<AgentRunServiceIds>;
+  clock?: AgentLoopOperationClock;
+  ids?: Partial<AgentLoopOperationIds>;
 }
 
-type AgentRunApprovalResumeGroup = ApprovalResumeGroup<ChatStreamEventAdapter>;
+type AgentLoopApprovalResumeGroup = ApprovalResumeGroup<ChatStreamEventAdapter>;
 
-const defaultClock: AgentRunServiceClock = {
+const defaultClock: AgentLoopOperationClock = {
   now: () => new Date().toISOString(),
 };
 
-function createDefaultAgentRunServiceIds(
-  overrides: Partial<AgentRunServiceIds> = {},
-): AgentRunServiceIds {
+function createDefaultAgentLoopOperationIds(
+  overrides: Partial<AgentLoopOperationIds> = {},
+): AgentLoopOperationIds {
   return {
     sessionId: () => `session:${crypto.randomUUID()}`,
     runId: () => `run:${crypto.randomUUID()}`,
@@ -220,7 +220,7 @@ class EmptySessionActivePathRepository {
   }
 }
 
-export class AgentRunService implements AgentRunPort {
+export class AgentLoopOperation implements AgentLoopOperationPort {
   private readonly sessionRepository: AgentRunSessionRepositoryPort;
   private readonly messageRepository: AgentRunMessageRepositoryPort;
   private readonly runRecordRepository: AgentRunRunRecordRepositoryPort;
@@ -253,16 +253,16 @@ export class AgentRunService implements AgentRunPort {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
   private readonly hostBoundary: RunHostBoundaryPort;
-  private readonly clock: AgentRunServiceClock;
-  private readonly ids: AgentRunServiceIds;
+  private readonly clock: AgentLoopOperationClock;
+  private readonly ids: AgentLoopOperationIds;
   private readonly sessionRunControlOperation: SessionRunControlOperation;
   private readonly postRunHooks: PostRunHooksPort;
-  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<AgentRunApprovalResumeGroup>({
+  private readonly pendingApprovalRegistry = new PendingApprovalRegistry<AgentLoopApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
   });
   private readonly activeSessionMessageRuns = new ActiveSessionMessageRunTracker<ChatStreamEventAdapter>();
 
-  constructor(options: AgentRunServiceOptions) {
+  constructor(options: AgentLoopOperationOptions) {
     this.sessionRepository = options.sessionRepository;
     this.messageRepository = options.messageRepository;
     this.runRecordRepository = options.runRecordRepository;
@@ -292,7 +292,7 @@ export class AgentRunService implements AgentRunPort {
     this.megumiHomePath = options.megumiHomePath;
     this.modelInputSourceOverrideProvider = options.modelInputSourceOverrideProvider ?? new ModelInputSourceOverrideService();
     this.clock = options.clock ?? defaultClock;
-    this.ids = createDefaultAgentRunServiceIds(options.ids);
+    this.ids = createDefaultAgentLoopOperationIds(options.ids);
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
         sessionRepository: this.sessionRepository,
@@ -681,7 +681,7 @@ export class AgentRunService implements AgentRunPort {
   }
 
   private async *resumeToolApprovalRun(
-    approvalResume: AgentRunApprovalResumeGroup,
+    approvalResume: AgentLoopApprovalResumeGroup,
     input: ResumeToolApprovalInput,
   ): AsyncIterable<RuntimeEvent> {
     yield* resumeToolApprovalAgentLoop({
@@ -722,8 +722,8 @@ export class AgentRunService implements AgentRunPort {
 }
 
 function defaultHostBoundary(
-  clock: AgentRunServiceClock,
-  ids: AgentRunServiceIds,
+  clock: AgentLoopOperationClock,
+  ids: AgentLoopOperationIds,
 ): RunHostBoundaryPort {
   return {
     handleAction: (action) => ({

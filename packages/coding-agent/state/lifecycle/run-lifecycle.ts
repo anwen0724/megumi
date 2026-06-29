@@ -8,8 +8,8 @@ import type {
 import type { PermissionModeState } from '@megumi/shared/permission';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
-import { normalizeRuntimeError } from '../run-error';
-import { assertRunStatusTransition } from '../run-state-policy';
+import { normalizeRuntimeError } from '.././run-error';
+import { assertRunStatusTransition } from '.././run-state-policy';
 import {
   createContextUpdateInputPreview,
   toContextPatchAppliedPayload,

@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -42,7 +42,7 @@ describe('run context and model input boundaries', () => {
 
   it('keeps main as the RunContext to ModelStep input build adapter', () => {
     const contextManagement = read('packages/coding-agent/context/model-call-context.ts');
-    const agentRunService = read('packages/coding-agent/run/agent-run-service.ts');
+    const agentLoopOperation = read('packages/coding-agent/product-runtime/agent-loop-operation.ts');
     const agentLoop = read('packages/coding-agent/agent-loop/agent-loop.ts');
 
     expect(contextManagement).toContain('runtimeConstraints?: ModelStepRuntimeConstraintInput[]');
@@ -51,10 +51,10 @@ describe('run context and model input boundaries', () => {
     expect(contextManagement).not.toMatch(/\bmodeSnapshot\?:/);
     expect(contextManagement).not.toMatch(/\bmodeSnapshotRef\?:/);
     expect(contextManagement).not.toMatch(/workflow-command-contracts/);
-    expect(agentRunService).toContain('ModelCallInputBuildService');
-    expect(agentRunService).toContain('modelCallInputBuildService');
-    expect(agentRunService).toContain('new AgentLoop');
-    expect(agentRunService).not.toContain('RunTurn');
+    expect(agentLoopOperation).toContain('ModelCallInputBuildService');
+    expect(agentLoopOperation).toContain('modelCallInputBuildService');
+    expect(agentLoopOperation).toContain('new AgentLoop');
+    expect(agentLoopOperation).not.toContain('RunTurn');
     expect(agentLoop).toContain('class AgentLoop');
     expect(agentLoop).toMatch(/contextBudgetPolicy/);
   });

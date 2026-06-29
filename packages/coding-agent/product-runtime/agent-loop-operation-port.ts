@@ -1,4 +1,4 @@
-// Defines the run operations exposed through the Coding Agent product runtime.
+// Defines session-scoped agent-loop operations exposed through the product runtime.
 import type {
   RunStartPayload,
   SessionMessageCancelPayload,
@@ -9,7 +9,7 @@ import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run } from '@megumi/shared/session';
 import type { ResumeToolApprovalInput } from '../agent-loop/tool-call';
 
-export interface AgentRunPort {
+export interface AgentLoopOperationPort {
   startRun(payload: RunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }>;
   sendSessionMessage(input: {
     requestId: string;

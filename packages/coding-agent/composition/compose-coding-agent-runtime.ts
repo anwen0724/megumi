@@ -1,4 +1,4 @@
-﻿// Composes the complete Coding Agent product runtime without depending on any UI shell.
+// Composes the complete Coding Agent product runtime without depending on any UI shell.
 import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService } from '../artifacts';
 import { createCodingAgentProductRuntime, type CodingAgentProductRuntime } from '../product-runtime';
@@ -119,7 +119,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const toolService = composeCodingAgentToolService({
     toolRegistry,
     toolRepository: persistence.toolRepository,
-    resumeApproval: (request) => sessionRuntime.agentRunService.resumeApproval(request),
+    resumeApproval: (request) => sessionRuntime.agentLoopOperation.resumeApproval(request),
   });
   const artifactContentStore = new ArtifactContentStore({
     artifactRoot: `${options.homePaths.homePath}/artifacts`,
@@ -135,7 +135,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     runtimeEventRepository: persistence.runtimeEventRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
     timelineMessageRepository: persistence.timelineMessageRepository,
-    sessionRunService: sessionRuntime.agentRunService,
+    agentLoopOperation: sessionRuntime.agentLoopOperation,
     logger: options.runtimeLogger,
   });
   const projectService = createProjectService({
@@ -147,7 +147,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   return createCodingAgentProductRuntime({
     sessionService: sessionRuntime.sessionService,
     sessionBranchService: sessionRuntime.sessionBranchService,
-    agentRunService: sessionRuntime.agentRunService,
+    agentLoopOperation: sessionRuntime.agentLoopOperation,
     recoveryService,
     toolService,
     artifactService,

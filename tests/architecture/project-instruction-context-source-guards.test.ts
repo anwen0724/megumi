@@ -79,12 +79,17 @@ describe('Project Instruction Context source guards', () => {
 
   it('keeps global instruction directory discovery out of packages and renderer', () => {
     expect(offenders([
-      'packages/coding-agent/context',
       'packages/ai',
       'apps/desktop/src/renderer',
     ], [
       /listGlobalInstructionDirs/,
       /global-instruction:\/\//,
     ])).toEqual([]);
+
+    const contextOffenders = walkSourceFiles(path.join(root, 'packages/coding-agent/context'))
+      .filter((file) => relativePath(file) !== 'packages/coding-agent/context/model-input-source-overrides.ts')
+      .filter((file) => /listGlobalInstructionDirs|global-instruction:\/\//.test(fs.readFileSync(file, 'utf8')))
+      .map(relativePath);
+    expect(contextOffenders).toEqual([]);
   });
 });

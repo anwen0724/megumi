@@ -57,9 +57,9 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /MemoryRepository|@megumi\/db|better-sqlite3|memory-markdown-sync|memory-recall-runtime|memory-runtime-capture|recall-scoring|@megumi\/memory/)).toEqual([]);
   });
 
-  it('keeps AgentRunService orchestration behind the recall port instead of recall scoring', () => {
+  it('keeps AgentLoopOperation orchestration behind the recall port instead of recall scoring', () => {
     const files = [
-      join(root, 'packages', 'coding-agent', 'run', 'agent-run-service.ts'),
+      join(root, 'packages', 'coding-agent', 'product-runtime', 'agent-loop-operation.ts'),
     ];
     expect(offenders(files, /@megumi\/memory|MemoryRepository|@megumi\/db\/repos\/memory|memory-runtime-capture\.service|memory-recall-runtime\.service|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
   });

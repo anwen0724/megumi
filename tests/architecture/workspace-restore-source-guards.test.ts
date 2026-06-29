@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -37,7 +37,7 @@ const restoreBoundaryAllowlist = new Set([
   'apps/desktop/src/main/ipc/handlers/recovery.handler.ts',
   'apps/desktop/src/main/ipc/register-ipc-handlers.ts',
   'packages/coding-agent/state/recovery-service.ts',
-  'packages/coding-agent/run/agent-run-service.ts',
+  'packages/coding-agent/product-runtime/agent-loop-operation.ts',
   'packages/coding-agent/workspace/workspace-change-tracker.ts',
   'packages/coding-agent/workspace/workspace-restore.ts',
   'packages/shared/ipc/schemas.ts',

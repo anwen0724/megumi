@@ -1,7 +1,6 @@
 // Public exports for Megumi's platform-independent Coding Agent product core.
 export * from './input';
 export * from './session';
-export * from './run';
 export * from './agent-loop';
 export * from './events';
 export * from './state';

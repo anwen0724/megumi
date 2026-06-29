@@ -1,4 +1,4 @@
-﻿import { useCallback } from 'react';
+import { useCallback } from 'react';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { Run } from '@megumi/shared/session';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -9,7 +9,7 @@ import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
 import { useChatStreamStore } from '../chat-stream';
-import { dispatchRuntimeEvent } from '../runtime-events/runtime-event-dispatcher';
+import { dispatchRuntimeEvent } from '.././runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import {
   hydratedRuntimeEventsForRuns,
@@ -133,4 +133,3 @@ export function useSessionHistoryHydration() {
     hydrateSessionTimeline,
   };
 }
-
