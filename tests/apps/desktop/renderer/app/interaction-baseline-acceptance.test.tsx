@@ -13,6 +13,7 @@ import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/sto
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 import App from '@megumi/desktop/renderer/app/App';
+import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 import {
   chatStreamSessionKey,
   useChatStreamStore,
@@ -108,6 +109,24 @@ function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
+      settings: {
+        get: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            settings: {
+              language: 'zh-CN',
+              theme: 'midnight-blue',
+              setup: { completed: true },
+              memory: { enabled: false },
+              compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
+              chat: { defaultProvider: 'deepseek' },
+              providers: {},
+              permissions: {},
+            },
+          },
+        }),
+        update: vi.fn().mockResolvedValue({ ok: true }),
+      },
       provider: {
         list: vi.fn().mockResolvedValue({
           ok: true,
@@ -406,6 +425,12 @@ function resetStores() {
   useChatStreamStore.getState().reset();
   useWorkspaceFilesStore.getState().reset();
   useArtifactStore.getState().clearArtifacts();
+  useSetupWizardStore.setState({
+    ...useSetupWizardStore.getInitialState(),
+    status: 'ready',
+    setupCompleted: true,
+    hydrate: vi.fn(async () => undefined),
+  }, true);
 }
 
 function renderApp() {
