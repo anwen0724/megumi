@@ -539,6 +539,11 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'),
       'utf8',
     );
+    const modelInputSourceOverridesSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/context/model-input-source-overrides.ts'),
+      'utf8',
+    );
+    const contextIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/index.ts'), 'utf8');
     const sessionContextInputSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/session/session-context-input.ts'),
       'utf8',
@@ -569,6 +574,9 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).not.toContain('export interface SessionRunAgentInstructionSourceService');
     expect(runContractSource).not.toContain('export interface SessionRunSessionContextInputService');
     expect(runContractSource).not.toContain('export interface SessionRunModelCallInputBuildService');
+    expect(runContractSource).not.toContain('export interface SessionRunGlobalInstructionDirectoryProvider');
+    expect(runContractSource).not.toContain('export interface SessionRunSessionInstructionSourceProvider');
+    expect(runContractSource).not.toContain('export interface SessionRunEffectiveCwdProvider');
     expect(runContractSource).not.toContain('export interface SessionRunMemoryRecallService');
     expect(runContractSource).not.toContain('export interface SessionRunMemoryCaptureService');
     expect(runContractSource).not.toContain('export interface SessionRunMemorySettingsProvider');
@@ -585,6 +593,7 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).toContain('contextService?: RunBaselineContextPort;');
     expect(runContractSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
     expect(runContractSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
+    expect(runContractSource).toContain('modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;');
     expect(runContractSource).toContain('sessionContextInputService?: SessionContextInputBuildPort;');
     expect(runContractSource).toContain('memoryRecallService?: MemoryRecallPort;');
     expect(runContractSource).not.toContain('memoryCaptureService?:');
@@ -601,6 +610,11 @@ describe('package and file structure source guards', () => {
     expect(runContextServiceSource).toContain('export interface RunBaselineContextPort');
     expect(agentInstructionSourceSource).toContain('export interface AgentInstructionSourcePort');
     expect(modelCallInputBuilderSource).toContain('export interface ModelCallInputBuildPort');
+    expect(modelInputSourceOverridesSource).toContain('export class ModelInputSourceOverrideService');
+    expect(modelInputSourceOverridesSource).toContain('export interface ModelInputGlobalInstructionDirectoryProvider');
+    expect(modelInputSourceOverridesSource).toContain('export interface ModelInputSessionInstructionSourceProvider');
+    expect(modelInputSourceOverridesSource).toContain('export interface ModelInputEffectiveCwdProvider');
+    expect(contextIndexSource).toContain("export * from './model-input-source-overrides';");
     expect(sessionContextInputSource).toContain('export interface SessionContextInputBuildPort');
     expect(memoryRecallRuntimeSource).toContain('export interface MemoryRecallPort');
     expect(memoryCaptureRuntimeSource).toContain('export interface MemoryCapturePort');

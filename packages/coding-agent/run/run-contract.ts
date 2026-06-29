@@ -5,7 +5,6 @@ import type {
 import type {
   ModelInputContextBuildRequest,
   ModelStepRuntimeRequest,
-  SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
 import type { PermissionMode } from '@megumi/shared/permission';
 import type { Run, RunStep } from '@megumi/shared/session';
@@ -29,6 +28,7 @@ import type { PlanArtifactServicePort } from '../artifacts';
 import type {
   CompactIfNeededInput,
   AgentInstructionSourcePort,
+  AgentLoopInitialModelInputSourceOverrideProvider,
   ModelCallInputBuildPort,
   ModelInputMemoryRecallSource,
   RunBaselineContextPort,
@@ -86,23 +86,6 @@ export interface AgentRunServiceIds extends RunIdFactory {
   chatThinkingId(): string;
 }
 
-export interface SessionRunGlobalInstructionDirectoryProvider {
-  listGlobalInstructionDirs(input: { sessionId: string; runId: string; stepId: string }): string[];
-}
-
-export interface SessionRunSessionInstructionSourceProvider {
-  listSessionInstructionSources(input: {
-    sessionId: string;
-    runId: string;
-    stepId: string;
-    builtAt: string;
-  }): SessionInstructionSourceSnapshot[];
-}
-
-export interface SessionRunEffectiveCwdProvider {
-  getRunEffectiveCwd(input: { sessionId: string; runId: string; stepId: string }): string | undefined;
-}
-
 export interface AgentRunServiceHomePaths {
   homePath: string;
   sqlitePath: string;
@@ -138,9 +121,7 @@ export interface AgentRunServiceOptions {
   memorySettingsProvider?: MemorySettingsPort;
   memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   megumiHomePath?: string;
-  globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
-  sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
-  runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
+  modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;
   sessionContextInputService?: SessionContextInputBuildPort;
   sessionCompactionOrchestrator?: {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;

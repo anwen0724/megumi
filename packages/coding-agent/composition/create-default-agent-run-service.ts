@@ -5,8 +5,10 @@ import type {
 } from '../run/run-contract';
 import type {
   AgentInstructionSourcePort,
+  ModelInputGlobalInstructionDirectoryProvider,
   RunBaselineContextPort,
 } from '../context';
+import { ModelInputSourceOverrideService } from '../context';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createDefaultAgentRunServiceIds } from '../run/agent-run-service-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
@@ -61,11 +63,17 @@ export function createDefaultAgentRunService(
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options.agentInstructionSourceService ? { agentInstructionSourceService: options.agentInstructionSourceService } : {}),
     megumiHomePath: homePaths.homePath,
-    globalInstructionDirectoryProvider: {
-      listGlobalInstructionDirs: () => [homePaths.homePath],
-    },
+    modelInputSourceOverrideProvider: new ModelInputSourceOverrideService({
+      globalInstructionDirectoryProvider: defaultGlobalInstructionDirectoryProvider(homePaths.homePath),
+    }),
     ids,
   });
   service.cleanupInterruptedRunsOnStartup();
   return service;
+}
+
+function defaultGlobalInstructionDirectoryProvider(homePath: string): ModelInputGlobalInstructionDirectoryProvider {
+  return {
+    listGlobalInstructionDirs: () => [homePath],
+  };
 }

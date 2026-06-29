@@ -19,8 +19,9 @@ import {
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
   ModelCallInputBuildService,
+  ModelInputSourceOverrideService,
   SessionCompactionOrchestrator,
-  type BuildModelCallInputInput,
+  type AgentLoopInitialModelInputSourceOverrideProvider,
   type CompactIfNeededInput,
   type ModelCallInputBuildPort,
   type ModelInputMemoryRecallSource,
@@ -143,9 +144,6 @@ import type {
   AgentRunServiceClock,
   AgentRunServiceIds,
   AgentRunServiceOptions,
-  SessionRunEffectiveCwdProvider,
-  SessionRunGlobalInstructionDirectoryProvider,
-  SessionRunSessionInstructionSourceProvider,
 } from './run-contract';
 
 interface ApprovalResumeGroup {
@@ -217,9 +215,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly memorySettingsProvider?: MemorySettingsPort;
   private readonly memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   private readonly megumiHomePath?: string;
-  private readonly globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
-  private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
-  private readonly runEffectiveCwdProvider?: SessionRunEffectiveCwdProvider;
+  private readonly modelInputSourceOverrideProvider: AgentLoopInitialModelInputSourceOverrideProvider;
   private readonly sessionContextInputService: SessionContextInputBuildPort;
   private readonly sessionTurnPreparationService: SessionTurnPreparationService;
   private readonly sessionCompactionOrchestrator?: {
@@ -269,9 +265,7 @@ export class AgentRunService implements AgentRunPort {
     this.memorySettingsProvider = options.memorySettingsProvider;
     this.memoryMarkdownSyncService = options.memoryMarkdownSyncService;
     this.megumiHomePath = options.megumiHomePath;
-    this.globalInstructionDirectoryProvider = options.globalInstructionDirectoryProvider;
-    this.sessionInstructionSourceProvider = options.sessionInstructionSourceProvider;
-    this.runEffectiveCwdProvider = options.runEffectiveCwdProvider;
+    this.modelInputSourceOverrideProvider = options.modelInputSourceOverrideProvider ?? new ModelInputSourceOverrideService();
     this.clock = options.clock ?? defaultClock;
     this.ids = createDefaultAgentRunServiceIds(options.ids);
     this.sessionContextInputService = options.sessionContextInputService
@@ -312,25 +306,6 @@ export class AgentRunService implements AgentRunPort {
           })
         : undefined);
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
-  }
-
-  private modelInputRuntimeSourceOverrides(input: {
-    sessionId: string;
-    runId: string;
-    stepId: string;
-    builtAt: string;
-  }): Partial<Pick<
-    BuildModelCallInputInput,
-    'globalInstructionDirs' | 'sessionInstructionSources' | 'requestedCwd'
-  >> {
-    const globalInstructionDirs = this.globalInstructionDirectoryProvider?.listGlobalInstructionDirs(input) ?? [];
-    const sessionInstructionSources = this.sessionInstructionSourceProvider?.listSessionInstructionSources(input) ?? [];
-    const requestedCwd = this.runEffectiveCwdProvider?.getRunEffectiveCwd(input);
-    return {
-      ...(globalInstructionDirs.length > 0 ? { globalInstructionDirs } : {}),
-      ...(sessionInstructionSources.length > 0 ? { sessionInstructionSources } : {}),
-      ...(requestedCwd ? { requestedCwd } : {}),
-    };
   }
 
   private async recallMemoryForNewUserInput(input: {
@@ -525,9 +500,7 @@ export class AgentRunService implements AgentRunPort {
       ...(this.contextService ? { contextService: this.contextService } : {}),
       toolSetService,
       sessionContextInputService: this.sessionContextInputService,
-      sourceOverrideProvider: {
-        resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
-      },
+      sourceOverrideProvider: this.modelInputSourceOverrideProvider,
       ...(this.memoryRecallService ? {
         memoryRecallService: {
           recallForNewUserInput: (recallInput) => this.recallMemoryForNewUserInput({ ...recallInput }),
@@ -1548,9 +1521,7 @@ export class AgentRunService implements AgentRunPort {
       ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
       repository: this.runExecutionFactRepository,
       modelCallInputBuildService: this.modelCallInputBuildService,
-      sourceOverrideProvider: {
-        resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
-      },
+      sourceOverrideProvider: this.modelInputSourceOverrideProvider,
       ids: this.ids,
     });
     const resumedStep = resumed.step;
@@ -1590,9 +1561,7 @@ export class AgentRunService implements AgentRunPort {
         streamModelCall: ({ request }) => this.requireModelStepProvider().streamModelCall(request),
       },
       modelCallInputBuildService: this.modelCallInputBuildService,
-      sourceOverrideProvider: {
-        resolveModelInputSourceOverrides: (sourceInput) => this.modelInputRuntimeSourceOverrides(sourceInput),
-      },
+      sourceOverrideProvider: this.modelInputSourceOverrideProvider,
       ids: {
         nextEventId: this.ids.eventId,
         nextStepId: ({ runId }) => {

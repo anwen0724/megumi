@@ -4,6 +4,7 @@ export * from './model-input-context-builder';
 export * from './initial-model-input-preparation';
 export * from './model-call-context';
 export * from './model-call-input-builder';
+export * from './model-input-source-overrides';
 export * from './effective-cwd';
 export * from './context-observation-mapper';
 export * from './parts';

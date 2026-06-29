@@ -24,7 +24,13 @@ import {
   AgentRunService,
   type AgentRunServiceOptions,
 } from '@megumi/coding-agent/run';
-import type { RunBaselineContextPort } from '@megumi/coding-agent/context';
+import {
+  ModelInputSourceOverrideService,
+  type ModelInputEffectiveCwdProvider,
+  type ModelInputGlobalInstructionDirectoryProvider,
+  type ModelInputSessionInstructionSourceProvider,
+  type RunBaselineContextPort,
+} from '@megumi/coding-agent/context';
 import type { MemoryCapturePort } from '@megumi/coding-agent/memory';
 import type { WorkspaceChangeReadPort } from '@megumi/coding-agent/workspace';
 import type {
@@ -131,6 +137,9 @@ type AgentRunServiceTestOptions =
   & {
     terminalToolRepository?: RunTerminalToolRepositoryPort;
     memoryCaptureService?: MemoryCapturePort;
+    globalInstructionDirectoryProvider?: ModelInputGlobalInstructionDirectoryProvider;
+    sessionInstructionSourceProvider?: ModelInputSessionInstructionSourceProvider;
+    runEffectiveCwdProvider?: ModelInputEffectiveCwdProvider;
   }
   & { repository: AgentRunServiceTestRepository };
 
@@ -244,6 +253,8 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
     ...(sessionBranchService ? { sessionBranchService } : {}),
     ids,
   });
+  const modelInputSourceOverrideProvider = options.modelInputSourceOverrideProvider
+    ?? testModelInputSourceOverrideProvider(options);
   const {
     repository: _testRepository,
     terminalToolRepository: _terminalToolRepository,
@@ -251,6 +262,10 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
     postRunHooks: _postRunHooks,
     runTerminalCoordinator: _runTerminalCoordinator,
     runRetryCoordinator: _runRetryCoordinator,
+    globalInstructionDirectoryProvider: _globalInstructionDirectoryProvider,
+    sessionInstructionSourceProvider: _sessionInstructionSourceProvider,
+    runEffectiveCwdProvider: _runEffectiveCwdProvider,
+    modelInputSourceOverrideProvider: _modelInputSourceOverrideProvider,
     ...runOptions
   } = options;
   const runService = new AgentRunService({
@@ -259,6 +274,7 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
     runTerminalCoordinator,
     runRetryCoordinator,
     ...runOptions,
+    ...(modelInputSourceOverrideProvider ? { modelInputSourceOverrideProvider } : {}),
     ...(sessionBranchService ? { sessionBranchService } : {}),
   });
 
@@ -276,6 +292,28 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
       requireBranchService(sessionBranchService, 'createBranchDraft').createBranchDraft(input)),
     cancelBranchDraft: ((input: Parameters<SessionBranchServicePort['cancelBranchDraft']>[0]) =>
       requireBranchService(sessionBranchService, 'cancelBranchDraft').cancelBranchDraft(input)),
+  });
+}
+
+function testModelInputSourceOverrideProvider(
+  options: AgentRunServiceTestOptions,
+): ModelInputSourceOverrideService | undefined {
+  if (!options.globalInstructionDirectoryProvider
+    && !options.sessionInstructionSourceProvider
+    && !options.runEffectiveCwdProvider) {
+    return undefined;
+  }
+
+  return new ModelInputSourceOverrideService({
+    ...(options.globalInstructionDirectoryProvider ? {
+      globalInstructionDirectoryProvider: options.globalInstructionDirectoryProvider,
+    } : {}),
+    ...(options.sessionInstructionSourceProvider ? {
+      sessionInstructionSourceProvider: options.sessionInstructionSourceProvider,
+    } : {}),
+    ...(options.runEffectiveCwdProvider ? {
+      effectiveCwdProvider: options.runEffectiveCwdProvider,
+    } : {}),
   });
 }
 
@@ -515,9 +553,9 @@ function createServiceWithModelStepStream(
   memorySettingsProvider?: AgentRunServiceOptions['memorySettingsProvider'];
   memoryMarkdownSyncService?: AgentRunServiceOptions['memoryMarkdownSyncService'];
   megumiHomePath?: string;
-  globalInstructionDirectoryProvider?: AgentRunServiceOptions['globalInstructionDirectoryProvider'];
-  sessionInstructionSourceProvider?: AgentRunServiceOptions['sessionInstructionSourceProvider'];
-  runEffectiveCwdProvider?: AgentRunServiceOptions['runEffectiveCwdProvider'];
+  globalInstructionDirectoryProvider?: ModelInputGlobalInstructionDirectoryProvider;
+  sessionInstructionSourceProvider?: ModelInputSessionInstructionSourceProvider;
+  runEffectiveCwdProvider?: ModelInputEffectiveCwdProvider;
   activePathRepository?: SessionActivePathRepository;
   workspaceChanges?: AgentRunServiceOptions['workspaceChanges'];
   createToolRepository?: (database: Database.Database) => ToolRepository;
