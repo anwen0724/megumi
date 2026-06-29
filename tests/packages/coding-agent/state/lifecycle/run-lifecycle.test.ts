@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { attachRunPermissionSnapshot, runTurn, startAgentLoopRun } from '@megumi/coding-agent/state';
+import {
+  attachRunPermissionSnapshot,
+  failAgentLoopBeforeModelStep,
+  runTurn,
+  startAgentLoopRun,
+} from '@megumi/coding-agent/state';
 import { createRunCreatedEvent } from '@megumi/coding-agent/events';
 import type { RunLifecycleSink } from '@megumi/coding-agent/state';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -107,6 +112,67 @@ describe('run runtime lifecycle events', () => {
       permissionSnapshotRef: 'permission-snapshot-1',
     });
     expect(sink.saveRun).toHaveBeenCalledWith(updated);
+  });
+
+  it('fails an agent loop run before the first model step through the state owner', () => {
+    const { sink } = createSink();
+
+    const result = failAgentLoopBeforeModelStep({
+      requestId: 'request-1',
+      sessionId: 'session-1',
+      run: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        triggerMessageId: 'message-1',
+        mode: 'default',
+        goal: 'Answer',
+        status: 'running',
+        createdAt: '2026-05-15T00:00:00.000Z',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      step: {
+        stepId: 'step-1',
+        runId: 'run-1',
+        kind: 'model',
+        status: 'running',
+        title: 'Model response',
+        startedAt: '2026-05-15T00:00:00.000Z',
+      },
+      error: {
+        code: 'runtime_unknown',
+        message: 'Context failed',
+        severity: 'error',
+        retryable: false,
+        source: 'core',
+      },
+      startSequence: 4,
+      failedAt: '2026-05-15T00:00:01.000Z',
+      runtimeContext: {
+        source: 'core',
+        requestId: 'request-1',
+        operationName: 'session.message.send',
+        createdAt: '2026-05-15T00:00:01.000Z',
+        traceId: 'trace-1',
+      },
+      ids,
+      lifecycle: sink,
+    });
+
+    expect(result.run.status).toBe('failed');
+    expect(result.step.status).toBe('failed');
+    expect(sink.saveRun).toHaveBeenCalledWith(result.run);
+    expect(sink.saveStep).toHaveBeenCalledWith(result.step);
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'run.failed',
+      'step.status.changed',
+      'step.failed',
+      'run.status.changed',
+    ]);
+    expect(result.events.map((event) => event.sequence)).toEqual([5, 6, 7, 8]);
+    expect(result.events[0]).toMatchObject({
+      requestId: 'request-1',
+      context: { traceId: 'trace-1' },
+    });
   });
 
   it('creates run.created events with stable lifecycle payloads', () => {

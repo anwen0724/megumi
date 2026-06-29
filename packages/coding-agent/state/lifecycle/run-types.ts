@@ -11,7 +11,7 @@ import type {
 } from '@megumi/shared/run';
 import type { PermissionModeState } from '@megumi/shared/permission';
 import { createRuntimeDebugId } from '@megumi/shared/runtime';
-import type { RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 
 export interface RunClock {
   now(): string;
@@ -107,6 +107,25 @@ export interface AttachRunPermissionSnapshotInput {
   run: Run;
   permissionSnapshotRef: string;
   lifecycle: Pick<RunLifecycleSink, 'saveRun'>;
+}
+
+export interface FailAgentLoopBeforeModelStepInput {
+  requestId: string;
+  runtimeContext?: RuntimeContext;
+  sessionId: string;
+  run: Run;
+  step: RunStep;
+  error: RuntimeError;
+  startSequence: number;
+  failedAt: string;
+  ids: Pick<RunIdFactory, 'eventId'>;
+  lifecycle: Pick<RunLifecycleSink, 'saveRun' | 'saveStep'>;
+}
+
+export interface FailAgentLoopBeforeModelStepResult {
+  run: Run;
+  step: RunStep;
+  events: RuntimeEvent[];
 }
 
 export interface RunTurnResult {

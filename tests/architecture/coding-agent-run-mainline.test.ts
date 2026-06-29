@@ -165,7 +165,10 @@ describe('coding agent run mainline guards', () => {
     const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');
 
     expect(stateLifecycleSource).toContain('export function startAgentLoopRun');
+    expect(stateLifecycleSource).toContain('export function failAgentLoopBeforeModelStep');
     expect(serviceSource).toContain('startAgentLoopRun({');
+    expect(serviceSource).toContain('failAgentLoopBeforeModelStep({');
+    expect(serviceSource).not.toContain('private async *failRunBeforeModelStep');
     expect(serviceSource).not.toContain('const initialRun = this.runRecordRepository.saveRun');
     expect(serviceSource).not.toContain('const step = this.runExecutionFactRepository.saveStep({\n      stepId,\n      runId,');
   });

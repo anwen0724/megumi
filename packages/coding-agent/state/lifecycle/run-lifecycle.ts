@@ -34,6 +34,7 @@ import {
   createStepCreatedEvent,
   createStepFailedEvent,
   createStepStatusChangedEvent,
+  withSessionMessageRequestMetadata,
 } from '../../events';
 import {
   createCancelObservation,
@@ -42,6 +43,8 @@ import {
 } from '../recovery-observation-mapper';
 import {
   type AttachRunPermissionSnapshotInput,
+  type FailAgentLoopBeforeModelStepInput,
+  type FailAgentLoopBeforeModelStepResult,
   createDefaultRunIds,
   defaultRunClock,
   type RunIdFactory,
@@ -89,6 +92,71 @@ export function attachRunPermissionSnapshot(input: AttachRunPermissionSnapshotIn
 
   input.lifecycle.saveRun(run);
   return run;
+}
+
+export function failAgentLoopBeforeModelStep(
+  input: FailAgentLoopBeforeModelStepInput,
+): FailAgentLoopBeforeModelStepResult {
+  let sequence = input.startSequence;
+  const run: Run = {
+    ...input.run,
+    status: 'failed',
+    completedAt: input.failedAt,
+    error: input.error,
+  };
+  const step: RunStep = {
+    ...input.step,
+    status: 'failed',
+    completedAt: input.failedAt,
+    error: input.error,
+  };
+  input.lifecycle.saveRun(run);
+  input.lifecycle.saveStep(step);
+  const withRequest = (event: RuntimeEvent): RuntimeEvent => withSessionMessageRequestMetadata(event, {
+    requestId: input.requestId,
+    ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+  });
+
+  const events = [
+    createRunFailedEvent({
+      eventId: input.ids.eventId(),
+      sessionId: input.sessionId,
+      runId: String(run.runId),
+      sequence: sequence += 1,
+      createdAt: input.failedAt,
+      error: input.error,
+    }),
+    createStepStatusChangedEvent({
+      eventId: input.ids.eventId(),
+      sessionId: input.sessionId,
+      runId: String(run.runId),
+      stepId: String(step.stepId),
+      sequence: sequence += 1,
+      createdAt: input.failedAt,
+      from: 'running',
+      to: 'failed',
+    }),
+    createStepFailedEvent({
+      eventId: input.ids.eventId(),
+      sessionId: input.sessionId,
+      runId: String(run.runId),
+      sequence: sequence += 1,
+      createdAt: input.failedAt,
+      step,
+      error: input.error,
+    }),
+    createRunStatusChangedEvent({
+      eventId: input.ids.eventId(),
+      sessionId: input.sessionId,
+      runId: String(run.runId),
+      sequence: sequence += 1,
+      createdAt: input.failedAt,
+      from: 'running',
+      to: 'failed',
+    }),
+  ].map(withRequest);
+
+  return { run, step, events };
 }
 
 export async function runTurn(input: RunTurnInput): Promise<RunTurnResult> {

@@ -4,6 +4,7 @@ import {
   assertRunStatusTransition,
   attachRunPermissionSnapshot,
   canResumeApprovalFromRunStatus,
+  failAgentLoopBeforeModelStep,
   resumeRunAfterApproval,
   startAgentLoopRun,
   type RunRetryCoordinatorPort,
@@ -465,7 +466,7 @@ export class AgentRunService implements AgentRunPort {
             0,
             svc.runtimeEventLog.lastSequenceForRun(String(failureInput.run.runId)),
           );
-          yield* svc.failRunBeforeModelStep({
+          const failed = failAgentLoopBeforeModelStep({
             requestId: failureInput.requestId,
             runtimeContext: failureInput.runtimeContext,
             sessionId: failureInput.sessionId,
@@ -473,9 +474,21 @@ export class AgentRunService implements AgentRunPort {
             step: failureInput.step,
             error: failureInput.error,
             startSequence: seq,
-            createdAt: svc.clock.now(),
-            chatStreamAdapter,
+            failedAt: svc.clock.now(),
+            ids: svc.ids,
+            lifecycle: {
+              saveRun: (run) => {
+                svc.runRecordRepository.saveRun(run);
+              },
+              saveStep: (step) => {
+                svc.runExecutionFactRepository.saveStep(step);
+              },
+            },
           });
+          for (const event of failed.events) {
+            svc.appendRuntimeEvent(event, chatStreamAdapter);
+            yield event;
+          }
         },
       },
       // === Optional / passthrough ports ===
@@ -877,78 +890,6 @@ export class AgentRunService implements AgentRunPort {
       createdAt: input.payload.createdAt,
       memoryEnabled: this.resolveMemoryEnabled(),
     });
-  }
-
-  private async *failRunBeforeModelStep(input: {
-    requestId: string;
-    runtimeContext?: RuntimeContext;
-    sessionId: string;
-    run: Run;
-    step: RunStep;
-    error: RuntimeError;
-    startSequence: number;
-    createdAt: string;
-    chatStreamAdapter?: ChatStreamEventAdapter;
-  }): AsyncIterable<RuntimeEvent> {
-    let sequence = input.startSequence;
-    const failedRun = this.runRecordRepository.saveRun({
-      ...input.run,
-      status: 'failed',
-      completedAt: input.createdAt,
-      error: input.error,
-    });
-    const failedStep = this.runExecutionFactRepository.saveStep({
-      ...input.step,
-      status: 'failed',
-      completedAt: input.createdAt,
-      error: input.error,
-    });
-
-    for (const event of [
-      createRunFailedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.sessionId,
-        runId: String(failedRun.runId),
-        sequence: sequence += 1,
-        createdAt: input.createdAt,
-        error: input.error,
-      }),
-      createStepStatusChangedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.sessionId,
-        runId: String(failedRun.runId),
-        stepId: String(failedStep.stepId),
-        sequence: sequence += 1,
-        createdAt: input.createdAt,
-        from: 'running',
-        to: 'failed',
-      }),
-      createStepFailedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.sessionId,
-        runId: String(failedRun.runId),
-        sequence: sequence += 1,
-        createdAt: input.createdAt,
-        step: failedStep,
-        error: input.error,
-      }),
-      createRunStatusChangedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.sessionId,
-        runId: String(failedRun.runId),
-        sequence: sequence += 1,
-        createdAt: input.createdAt,
-        from: 'running',
-        to: 'failed',
-      }),
-    ]) {
-      const eventWithRequest = this.runtimeEventLog.withRuntimeRequestMetadata(event, {
-        requestId: input.requestId,
-        ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
-      });
-      this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
-      yield eventWithRequest;
-    }
   }
 
   private async *persistModelCallEvents(input: {
@@ -1427,16 +1368,28 @@ export class AgentRunService implements AgentRunPort {
     const resumedToolResults = resumed.toolResults;
     const resumedModelInput = resumed.modelInput;
     if (resumedModelInput.failure) {
-      yield* this.failRunBeforeModelStep({
+      const failed = failAgentLoopBeforeModelStep({
         requestId: pending.request.requestId,
         sessionId: pending.request.sessionId,
         run: runningRun,
         step: resumedStep,
         error: modelCallInputBuildFailureToRuntimeError(resumedModelInput.failure),
         startSequence: lastSequence,
-        createdAt: input.decidedAt,
-        chatStreamAdapter,
+        failedAt: input.decidedAt,
+        ids: this.ids,
+        lifecycle: {
+          saveRun: (run) => {
+            this.runRecordRepository.saveRun(run);
+          },
+          saveStep: (step) => {
+            this.runExecutionFactRepository.saveStep(step);
+          },
+        },
       });
+      for (const event of failed.events) {
+        this.appendRuntimeEvent(event, chatStreamAdapter);
+        yield event;
+      }
       return;
     }
     const toolResultsSubmittedEvent = approvalResume.toolRuntime.markToolResultsSubmittedToModelInput({
