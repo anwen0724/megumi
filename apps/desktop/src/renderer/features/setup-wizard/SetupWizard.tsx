@@ -70,7 +70,7 @@ export function SetupWizard() {
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-[var(--color-text)]">Set up Megumi</h1>
           <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
-            Configure the basics stored in your user Megumi Home before opening the workspace.
+            Configure the basics stored in your local user settings before opening the workspace.
           </p>
         </div>
 
@@ -192,7 +192,7 @@ export function SetupWizard() {
                 />
               )}
               <p className="text-xs leading-5 text-[var(--color-text-muted)]">
-                API keys entered here follow the current settings design and are written to the Megumi Home settings file.
+                API keys entered here follow the current settings design and are written to the local settings file.
               </p>
             </div>
           ) : null}
