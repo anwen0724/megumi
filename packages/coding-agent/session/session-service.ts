@@ -12,17 +12,11 @@ import type {
   SessionSourceEntry,
 } from '@megumi/shared/session';
 import type { TimelineMessage } from '@megumi/shared/timeline';
+import type { MemoryProjectMirrorSyncPort } from '../memory';
+import type { MemorySettingsPort } from '../settings';
 
 export interface SessionServiceIds {
   sessionId(): string;
-}
-
-export interface SessionMemorySettingsProvider {
-  isMemoryEnabled(): boolean;
-}
-
-export interface SessionMemoryMarkdownSyncService {
-  syncProjectMirrorOnProjectOpened(input: { homePath: string; projectId: string }): Promise<unknown>;
 }
 
 export interface SessionTimelineMessageRepository {
@@ -69,8 +63,8 @@ export interface SessionServiceOptions {
   ids: SessionServiceIds;
   activePathRepository?: SessionServiceActivePathRepository;
   timelineMessageRepository?: SessionTimelineMessageRepository;
-  memorySettingsProvider?: SessionMemorySettingsProvider;
-  memoryMarkdownSyncService?: SessionMemoryMarkdownSyncService;
+  memorySettingsProvider?: MemorySettingsPort;
+  memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   megumiHomePath?: string;
 }
 
@@ -81,8 +75,8 @@ export class SessionService implements SessionServicePort {
   private readonly ids: SessionServiceIds;
   private readonly activePathRepository?: SessionServiceActivePathRepository;
   private readonly timelineMessageRepository?: SessionTimelineMessageRepository;
-  private readonly memorySettingsProvider?: SessionMemorySettingsProvider;
-  private readonly memoryMarkdownSyncService?: SessionMemoryMarkdownSyncService;
+  private readonly memorySettingsProvider?: MemorySettingsPort;
+  private readonly memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   private readonly megumiHomePath?: string;
 
   constructor(options: SessionServiceOptions) {

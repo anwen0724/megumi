@@ -7,12 +7,9 @@ import type {
   ModelStepRuntimeRequest,
   SessionInstructionSourceSnapshot,
 } from '@megumi/shared/model';
-import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode } from '@megumi/shared/permission';
-import type { ProviderId } from '@megumi/shared/provider';
 import type { Run, RunStep } from '@megumi/shared/session';
 import type { ToolResult } from '@megumi/shared/tool';
-import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 
 import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type {
@@ -38,6 +35,11 @@ import type {
   SessionCompactionOrchestratorRepository,
   SessionCompactionOrchestrationResult,
 } from '../context';
+import type {
+  MemoryProjectMirrorSyncPort,
+  MemoryRecallPort,
+} from '../memory';
+import type { MemorySettingsPort } from '../settings';
 import type {
   SessionBranchServicePort,
   SessionContextInputBuildPort,
@@ -82,57 +84,6 @@ export interface AgentRunServiceIds extends RunIdFactory {
   chatStreamId(input: { runId: string }): string;
   chatTextId(): string;
   chatThinkingId(): string;
-}
-
-export interface SessionRunMemoryRecallInput {
-  enabled?: boolean;
-  homePath: string;
-  sessionId: string;
-  runId: string;
-  modelStepId?: string | null;
-  projectId?: string | null;
-  projectRoot?: string | null;
-  effectiveCwd?: string | null;
-  queryText: string;
-  providerId?: string | null;
-  modelId?: string | null;
-  maxResults?: number;
-  maxTokens?: number;
-  createdAt?: string;
-  toolSummaryMetadata?: JsonObject;
-}
-
-export interface SessionRunMemoryRecallService {
-  recallForNewUserInput(input: SessionRunMemoryRecallInput): Promise<{
-    memoryRecallSources: ModelInputMemoryRecallSource[];
-    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-  }>;
-}
-
-export interface SessionRunMemoryCaptureService {
-  evaluateRunCompletedCapture(input: {
-    homePath: string;
-    runId: string;
-    sessionId: string;
-    projectId?: string | null;
-    providerId?: ProviderId | null;
-    modelId?: string | null;
-    runStatus: 'completed';
-    userText: string;
-    assistantText?: string;
-    toolActivitySummary?: string;
-    signals?: MemoryCaptureSignal[];
-    memoryEnabled?: boolean;
-    hasProject?: boolean;
-  }): Promise<{ status: string; reason?: string; savedMemoryIds?: string[] }>;
-}
-
-export interface SessionRunMemorySettingsProvider {
-  isMemoryEnabled(): boolean;
-}
-
-export interface SessionRunMemoryMarkdownSyncService {
-  syncProjectMirrorOnProjectOpened(input: { homePath: string; projectId: string }): Promise<unknown>;
 }
 
 export interface SessionRunGlobalInstructionDirectoryProvider {
@@ -183,10 +134,9 @@ export interface AgentRunServiceOptions {
   toolRepository?: AgentRunToolRepositoryPort;
   agentInstructionSourceService?: AgentInstructionSourcePort;
   modelCallInputBuildService?: ModelCallInputBuildPort;
-  memoryRecallService?: SessionRunMemoryRecallService;
-  memoryCaptureService?: SessionRunMemoryCaptureService;
-  memorySettingsProvider?: SessionRunMemorySettingsProvider;
-  memoryMarkdownSyncService?: SessionRunMemoryMarkdownSyncService;
+  memoryRecallService?: MemoryRecallPort;
+  memorySettingsProvider?: MemorySettingsPort;
+  memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   megumiHomePath?: string;
   globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;

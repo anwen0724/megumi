@@ -20,6 +20,10 @@ export interface MemoryMarkdownExportPort {
   }): Promise<MemoryMarkdownSyncResult>;
 }
 
+export interface MemoryProjectMirrorSyncPort {
+  syncProjectMirrorOnProjectOpened(input: { homePath: string; projectId: string }): Promise<unknown>;
+}
+
 export interface MemoryDiagnosticWriterPort {
   write(input: {
     homePath: string;

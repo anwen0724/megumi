@@ -130,6 +130,11 @@ import type { ToolDefinition, ToolResult } from '@megumi/shared/tool';
 import type { PermissionSnapshotService } from '../permissions';
 import type { PostRunHooksPort } from '../hooks';
 import type {
+  MemoryProjectMirrorSyncPort,
+  MemoryRecallPort,
+} from '../memory';
+import type { MemorySettingsPort } from '../settings';
+import type {
   RunToolRegistrySnapshotBuildInput,
   RunToolRegistrySnapshotBuildResult,
   ToolRegistrySnapshotServicePort,
@@ -140,9 +145,6 @@ import type {
   AgentRunServiceOptions,
   SessionRunEffectiveCwdProvider,
   SessionRunGlobalInstructionDirectoryProvider,
-  SessionRunMemoryMarkdownSyncService,
-  SessionRunMemoryRecallService,
-  SessionRunMemorySettingsProvider,
   SessionRunSessionInstructionSourceProvider,
 } from './run-contract';
 
@@ -163,7 +165,7 @@ interface ApprovalResumeGroup {
   chatStreamAdapter?: ChatStreamEventAdapter;
 }
 
-interface SessionRunMemoryRecallSnapshot {
+interface MemoryRecallSnapshotForModelInput {
   memoryRecallSources?: ModelInputMemoryRecallSource[];
   memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
 }
@@ -211,9 +213,9 @@ export class AgentRunService implements AgentRunPort {
   private readonly providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
   private readonly toolRepository?: AgentRunToolRepositoryPort;
   private readonly modelCallInputBuildService: ModelCallInputBuildPort;
-  private readonly memoryRecallService?: SessionRunMemoryRecallService;
-  private readonly memorySettingsProvider?: SessionRunMemorySettingsProvider;
-  private readonly memoryMarkdownSyncService?: SessionRunMemoryMarkdownSyncService;
+  private readonly memoryRecallService?: MemoryRecallPort;
+  private readonly memorySettingsProvider?: MemorySettingsPort;
+  private readonly memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   private readonly megumiHomePath?: string;
   private readonly globalInstructionDirectoryProvider?: SessionRunGlobalInstructionDirectoryProvider;
   private readonly sessionInstructionSourceProvider?: SessionRunSessionInstructionSourceProvider;
@@ -343,7 +345,7 @@ export class AgentRunService implements AgentRunPort {
     modelId?: string;
     enabled?: boolean;
     createdAt: string;
-  }): Promise<SessionRunMemoryRecallSnapshot> {
+  }): Promise<MemoryRecallSnapshotForModelInput> {
     if (!this.memoryRecallService || !this.megumiHomePath) {
       return {};
     }

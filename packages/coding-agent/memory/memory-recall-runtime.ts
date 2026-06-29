@@ -79,6 +79,13 @@ export type MemoryRecallRuntimeResult =
       memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
     };
 
+export interface MemoryRecallPort {
+  recallForNewUserInput(input: RecallForNewUserInput): Promise<{
+    memoryRecallSources: ModelInputMemoryRecallSource[];
+    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
+  }>;
+}
+
 export interface MemoryRecallRuntimeServiceOptions {
   repository: MemoryRecallRuntimeRepository;
   markdownSync: MemoryRecallRuntimeSyncService;

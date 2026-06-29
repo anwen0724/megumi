@@ -20,6 +20,10 @@ export interface ProductSettingsServiceOptions {
   storage: ProductSettingsStoragePort;
 }
 
+export interface MemorySettingsPort {
+  isMemoryEnabled(): boolean;
+}
+
 export interface ProductSettingsPort {
   getRawSettings(): AppSettingsRaw;
   getResolvedSettings(): AppSettingsResolved;

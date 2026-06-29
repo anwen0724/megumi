@@ -11,15 +11,12 @@ import { MemoryMarkdownSyncService } from '../adapters/local/memory/memory-markd
 import { createNodeMemoryRuntimeFileSystem } from '../adapters/local/memory/memory-runtime-file-system';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { RuntimeLogger } from '../product-runtime';
-
-export interface MemorySettingsProvider {
-  isMemoryEnabled(): boolean;
-}
+import type { MemorySettingsPort } from '../settings';
 
 export interface ComposeCodingAgentMemoryOptions {
   repository: MemoryRepository;
   modelStepProvider: ModelCallProvider;
-  memorySettingsProvider: MemorySettingsProvider;
+  memorySettingsProvider: MemorySettingsPort;
   runtimeLogger: RuntimeLogger;
   megumiHomePath: string;
 }

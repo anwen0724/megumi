@@ -19,12 +19,12 @@ import {
 } from '@megumi/ai';
 import { createModelCallRunner, type ProviderRuntimeConfig } from '../agent-loop/model-call';
 import { TimelineHistoryCommitProjectorService } from '../projections/timeline';
-import type { MemorySettingsProvider } from './compose-coding-agent-memory';
 import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
 import {
   ProductSettingsService,
   ProviderRuntimeService,
   ProviderSettingsService,
+  type MemorySettingsPort,
   type ProductSettingsStoragePort,
   type ProviderSettingsProductSettingsPort,
 } from '../settings';
@@ -42,7 +42,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   // builds a real OpenAI-compatible model step provider so it runs standalone.
   modelStepProviderService?: ModelCallProvider;
   appSettingsProvider?: ProviderSettingsProductSettingsPort;
-  memorySettingsProvider?: MemorySettingsProvider;
+  memorySettingsProvider?: MemorySettingsPort;
   permissionSettingsProvider?: PermissionSettingsProvider;
   chatStreamEventSink?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['chatStreamEventSink'];
   workspaceChangeFooterProjector?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['workspaceChangeFooterProjector'];

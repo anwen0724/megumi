@@ -543,6 +543,20 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/session/session-context-input.ts'),
       'utf8',
     );
+    const memoryRecallRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/memory/memory-recall-runtime.ts'),
+      'utf8',
+    );
+    const memoryCaptureRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/memory/memory-runtime-capture.ts'),
+      'utf8',
+    );
+    const memoryRuntimePortsSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/memory/memory-runtime-ports.ts'),
+      'utf8',
+    );
+    const productSettingsSource = readFileSync(join(repoRoot, 'packages/coding-agent/settings/product-settings.ts'), 'utf8');
+    const sessionServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/session/session-service.ts'), 'utf8');
 
     expect(runContractSource).not.toContain('export interface AgentRunPostRunHooksPort');
     expect(runContractSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
@@ -555,6 +569,12 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).not.toContain('export interface SessionRunAgentInstructionSourceService');
     expect(runContractSource).not.toContain('export interface SessionRunSessionContextInputService');
     expect(runContractSource).not.toContain('export interface SessionRunModelCallInputBuildService');
+    expect(runContractSource).not.toContain('export interface SessionRunMemoryRecallService');
+    expect(runContractSource).not.toContain('export interface SessionRunMemoryCaptureService');
+    expect(runContractSource).not.toContain('export interface SessionRunMemorySettingsProvider');
+    expect(runContractSource).not.toContain('export interface SessionRunMemoryMarkdownSyncService');
+    expect(sessionServiceSource).not.toContain('export interface SessionMemorySettingsProvider');
+    expect(sessionServiceSource).not.toContain('export interface SessionMemoryMarkdownSyncService');
     expect(runContractSource).toContain('postRunHooks: PostRunHooksPort;');
     expect(runContractSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
     expect(runContractSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
@@ -566,6 +586,10 @@ describe('package and file structure source guards', () => {
     expect(runContractSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
     expect(runContractSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
     expect(runContractSource).toContain('sessionContextInputService?: SessionContextInputBuildPort;');
+    expect(runContractSource).toContain('memoryRecallService?: MemoryRecallPort;');
+    expect(runContractSource).not.toContain('memoryCaptureService?:');
+    expect(runContractSource).toContain('memorySettingsProvider?: MemorySettingsPort;');
+    expect(runContractSource).toContain('memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;');
     expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
     expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
     expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');
@@ -578,6 +602,10 @@ describe('package and file structure source guards', () => {
     expect(agentInstructionSourceSource).toContain('export interface AgentInstructionSourcePort');
     expect(modelCallInputBuilderSource).toContain('export interface ModelCallInputBuildPort');
     expect(sessionContextInputSource).toContain('export interface SessionContextInputBuildPort');
+    expect(memoryRecallRuntimeSource).toContain('export interface MemoryRecallPort');
+    expect(memoryCaptureRuntimeSource).toContain('export interface MemoryCapturePort');
+    expect(memoryRuntimePortsSource).toContain('export interface MemoryProjectMirrorSyncPort');
+    expect(productSettingsSource).toContain('export interface MemorySettingsPort');
     expect(agentRunServiceSource).not.toContain('new RunCompletionHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new PostRunHooksCoordinator');
     expect(agentRunServiceSource).not.toContain('new RunTerminalCoordinator');

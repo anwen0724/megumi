@@ -95,6 +95,14 @@ export type MemoryRuntimeCaptureResult =
   | { status: 'skipped'; reason: string }
   | { status: 'degraded'; reason: string; savedMemoryIds?: string[] };
 
+export interface MemoryCapturePort {
+  evaluateRunCompletedCapture(input: EvaluateRunCompletedMemoryCaptureInput): Promise<{
+    status: string;
+    reason?: string;
+    savedMemoryIds?: string[];
+  }>;
+}
+
 type AffectedScope = { scope: MemoryScope; projectId?: string | null };
 
 export class MemoryRuntimeCaptureService {

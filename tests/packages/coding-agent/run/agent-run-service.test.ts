@@ -25,6 +25,7 @@ import {
   type AgentRunServiceOptions,
 } from '@megumi/coding-agent/run';
 import type { RunBaselineContextPort } from '@megumi/coding-agent/context';
+import type { MemoryCapturePort } from '@megumi/coding-agent/memory';
 import type { WorkspaceChangeReadPort } from '@megumi/coding-agent/workspace';
 import type {
   AgentRunExecutionFactRepositoryPort,
@@ -129,6 +130,7 @@ type AgentRunServiceTestOptions =
   >
   & {
     terminalToolRepository?: RunTerminalToolRepositoryPort;
+    memoryCaptureService?: MemoryCapturePort;
   }
   & { repository: AgentRunServiceTestRepository };
 
@@ -242,12 +244,21 @@ function createAgentRunTestService(options: AgentRunServiceTestOptions): AgentRu
     ...(sessionBranchService ? { sessionBranchService } : {}),
     ids,
   });
+  const {
+    repository: _testRepository,
+    terminalToolRepository: _terminalToolRepository,
+    memoryCaptureService: _memoryCaptureService,
+    postRunHooks: _postRunHooks,
+    runTerminalCoordinator: _runTerminalCoordinator,
+    runRetryCoordinator: _runRetryCoordinator,
+    ...runOptions
+  } = options;
   const runService = new AgentRunService({
     ...repositoryOptions,
     postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
-    ...options,
+    ...runOptions,
     ...(sessionBranchService ? { sessionBranchService } : {}),
   });
 
@@ -500,7 +511,7 @@ function createServiceWithModelStepStream(
   sessionCompactionOrchestrator?: AgentRunServiceOptions['sessionCompactionOrchestrator'];
   modelCallInputBuildService?: AgentRunServiceOptions['modelCallInputBuildService'];
   memoryRecallService?: AgentRunServiceOptions['memoryRecallService'];
-  memoryCaptureService?: AgentRunServiceOptions['memoryCaptureService'];
+  memoryCaptureService?: MemoryCapturePort;
   memorySettingsProvider?: AgentRunServiceOptions['memorySettingsProvider'];
   memoryMarkdownSyncService?: AgentRunServiceOptions['memoryMarkdownSyncService'];
   megumiHomePath?: string;

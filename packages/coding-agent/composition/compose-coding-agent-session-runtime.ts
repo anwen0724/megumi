@@ -165,7 +165,6 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     workspaceChanges,
     chatStreamEventSink: options.chatStreamEventSink,
     memoryRecallService: options.memoryRuntime.recallService,
-    memoryCaptureService: options.memoryRuntime.captureService,
     memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
     memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
     megumiHomePath: options.homePaths.homePath,

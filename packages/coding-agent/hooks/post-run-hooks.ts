@@ -5,6 +5,7 @@ import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 import type { WorkspaceChangedFile } from '@megumi/shared/workspace';
+import type { MemoryCapturePort } from '../memory';
 import type { ChatStreamEventAdapter } from '../projections/chat-stream';
 import type { WorkspaceChangeFooterProjectorService } from '../workspace';
 
@@ -16,27 +17,9 @@ export interface PostRunHooksWorkspaceChangeReadPort {
   listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
 }
 
-export interface PostRunHooksMemoryCaptureService {
-  evaluateRunCompletedCapture(input: {
-    homePath: string;
-    runId: string;
-    sessionId: string;
-    projectId?: string | null;
-    providerId?: ProviderId | null;
-    modelId?: string | null;
-    runStatus: 'completed';
-    userText: string;
-    assistantText?: string;
-    toolActivitySummary?: string;
-    signals?: MemoryCaptureSignal[];
-    memoryEnabled?: boolean;
-    hasProject?: boolean;
-  }): Promise<{ status: string; reason?: string; savedMemoryIds?: string[] }>;
-}
-
 export interface PostRunHooksCoordinatorOptions {
   repository: PostRunHooksRepositoryPort;
-  memoryCaptureService?: PostRunHooksMemoryCaptureService;
+  memoryCaptureService?: MemoryCapturePort;
   megumiHomePath?: string;
   workspaceChanges?: PostRunHooksWorkspaceChangeReadPort;
   workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
@@ -65,7 +48,7 @@ export interface PostRunHooksPort {
 
 export class PostRunHooksCoordinator {
   private readonly repository: PostRunHooksRepositoryPort;
-  private readonly memoryCaptureService?: PostRunHooksMemoryCaptureService;
+  private readonly memoryCaptureService?: MemoryCapturePort;
   private readonly megumiHomePath?: string;
   private readonly workspaceChanges?: PostRunHooksWorkspaceChangeReadPort;
   private readonly workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
