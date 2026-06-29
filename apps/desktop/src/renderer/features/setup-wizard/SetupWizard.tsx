@@ -3,18 +3,19 @@ import { useState } from 'react';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { AppLanguage } from '@megumi/shared/settings';
 import { Button, TextField, cx } from '../../shared/ui';
-import { themeDefinitions, themeNames, type ThemeName } from '../../shared/theme';
+import { themeDefinitions, themeNames, useThemeStore, type ThemeName } from '../../shared/theme';
 import { useSetupWizardStore } from './setup-wizard-store';
 
 type Step = 'language' | 'theme' | 'provider' | 'api-key';
 
 const steps: Step[] = ['language', 'theme', 'provider', 'api-key'];
 
-const DEFAULT_PROVIDER_VALUES = {
-  deepseek: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-flash', label: 'DeepSeek' },
-  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.5', label: 'OpenAI' },
-  anthropic: { baseUrl: '', model: 'claude-sonnet-4-6', label: 'Anthropic' },
-} satisfies Record<ProviderId, { baseUrl: string; model: string; label: string }>;
+const providerOptions: Array<{ id: ProviderId; label: string }> = [
+  { id: 'deepseek', label: 'DeepSeek' },
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'custom', label: 'Third-party compatible' },
+];
 
 function nextStep(current: Step): Step {
   return steps[Math.min(steps.indexOf(current) + 1, steps.length - 1)];
@@ -28,28 +29,37 @@ export function SetupWizard() {
   const status = useSetupWizardStore((state) => state.status);
   const error = useSetupWizardStore((state) => state.error);
   const completeSetup = useSetupWizardStore((state) => state.completeSetup);
+  const applyTheme = useThemeStore((state) => state.setTheme);
   const [step, setStep] = useState<Step>('language');
   const [language, setLanguage] = useState<AppLanguage>('zh-CN');
   const [theme, setTheme] = useState<ThemeName>('midnight-blue');
-  const [providerId, setProviderId] = useState<ProviderId>('deepseek');
-  const [baseUrl, setBaseUrl] = useState(DEFAULT_PROVIDER_VALUES.deepseek.baseUrl);
-  const [defaultModelId, setDefaultModelId] = useState(DEFAULT_PROVIDER_VALUES.deepseek.model);
+  const [providerId, setProviderId] = useState<ProviderId | ''>('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [defaultModelId, setDefaultModelId] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [skipProvider, setSkipProvider] = useState(false);
 
   const saving = status === 'saving';
+  const selectedProviderId = skipProvider ? 'deepseek' : providerId;
+  const providerStepComplete = skipProvider || Boolean(providerId);
+  const finishDisabled = saving || (
+    !skipProvider && (!providerId || !defaultModelId.trim() || (providerId !== 'anthropic' && !baseUrl.trim()))
+  );
 
-  function handleProviderChange(nextProviderId: ProviderId) {
-    setProviderId(nextProviderId);
-    setBaseUrl(DEFAULT_PROVIDER_VALUES[nextProviderId].baseUrl);
-    setDefaultModelId(DEFAULT_PROVIDER_VALUES[nextProviderId].model);
+  function handleThemeChange(nextTheme: ThemeName) {
+    setTheme(nextTheme);
+    applyTheme(nextTheme);
   }
 
   async function handleFinish() {
+    if (!selectedProviderId) {
+      return;
+    }
+
     await completeSetup({
       language,
       theme,
-      providerId,
+      providerId: selectedProviderId,
       baseUrl,
       defaultModelId,
       apiKey,
@@ -127,7 +137,7 @@ export function SetupWizard() {
                       type="radio"
                       name="theme"
                       checked={theme === themeName}
-                      onChange={() => setTheme(themeName)}
+                      onChange={() => handleThemeChange(themeName)}
                     />
                     {themeDefinitions[themeName].label}
                   </label>
@@ -153,10 +163,11 @@ export function SetupWizard() {
                   className="mt-1 h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 text-sm text-[var(--color-text)]"
                   value={providerId}
                   disabled={skipProvider}
-                  onChange={(event) => handleProviderChange(event.target.value as ProviderId)}
+                  onChange={(event) => setProviderId(event.target.value as ProviderId)}
                 >
-                  {Object.entries(DEFAULT_PROVIDER_VALUES).map(([id, provider]) => (
-                    <option key={id} value={id}>{provider.label}</option>
+                  <option value="">Select provider</option>
+                  {providerOptions.map((provider) => (
+                    <option key={provider.id} value={provider.id}>{provider.label}</option>
                   ))}
                 </select>
               </label>
@@ -165,12 +176,14 @@ export function SetupWizard() {
                 value={baseUrl}
                 disabled={skipProvider}
                 onChange={(event) => setBaseUrl(event.target.value)}
+                placeholder="https://api.example.com/v1"
               />
               <TextField
                 label="Model ID"
                 value={defaultModelId}
                 disabled={skipProvider}
                 onChange={(event) => setDefaultModelId(event.target.value)}
+                placeholder="model-id"
               />
             </div>
           ) : null}
@@ -213,11 +226,15 @@ export function SetupWizard() {
             Back
           </Button>
           {step === 'api-key' ? (
-            <Button variant="primary" disabled={saving} onClick={() => void handleFinish()}>
+            <Button variant="primary" disabled={finishDisabled} onClick={() => void handleFinish()}>
               Finish setup
             </Button>
           ) : (
-            <Button variant="primary" disabled={saving} onClick={() => setStep(nextStep(step))}>
+            <Button
+              variant="primary"
+              disabled={saving || (step === 'provider' && !providerStepComplete)}
+              onClick={() => setStep(nextStep(step))}
+            >
               Next
             </Button>
           )}

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { IsoDateTime, ProviderSettingsId } from '../primitives/ids';
 import type { ModelId } from '../model/contracts';
 
-export const PROVIDER_IDS = ['deepseek', 'openai', 'anthropic'] as const;
+export const PROVIDER_IDS = ['deepseek', 'openai', 'anthropic', 'custom'] as const;
 export const ProviderIdSchema = z.enum(PROVIDER_IDS);
 
 export type ProviderId = (typeof PROVIDER_IDS)[number];
@@ -76,6 +76,16 @@ export const DEFAULT_PROVIDER_SETTINGS: Record<ProviderId, ProviderSettings> = {
     enabled: false,
     defaultModelId: 'claude-sonnet-4-6',
     apiKeyEnv: 'ANTHROPIC_API_KEY',
+    createdAt: DEFAULT_TIMESTAMP,
+    updatedAt: DEFAULT_TIMESTAMP,
+  },
+  custom: {
+    id: 'provider-settings:custom',
+    providerId: 'custom',
+    kind: 'openai-compatible',
+    displayName: 'Third-party compatible',
+    enabled: false,
+    defaultModelId: 'custom-model',
     createdAt: DEFAULT_TIMESTAMP,
     updatedAt: DEFAULT_TIMESTAMP,
   },

@@ -196,6 +196,10 @@ describe('app settings contracts', () => {
             apiKeyEnv: { type: ['string', 'null'], minLength: 1 },
           },
         },
+        custom: {
+          type: 'object',
+          additionalProperties: false,
+        },
       },
     });
     expect(jsonSchema.properties?.permissions).toMatchObject({

@@ -16,10 +16,11 @@ import {
 
 describe('provider contracts', () => {
   it('lists the supported phase 1 providers', () => {
-    expect(PROVIDER_IDS).toEqual(['deepseek', 'openai', 'anthropic']);
+    expect(PROVIDER_IDS).toEqual(['deepseek', 'openai', 'anthropic', 'custom']);
     expect(isProviderId('deepseek')).toBe(true);
     expect(isProviderId('openai')).toBe(true);
     expect(isProviderId('anthropic')).toBe(true);
+    expect(isProviderId('custom')).toBe(true);
     expect(isProviderId('ollama')).toBe(false);
   });
 
@@ -81,6 +82,7 @@ describe('model contracts', () => {
     expect(getDefaultModelId('deepseek')).toBe('deepseek-v4-flash');
     expect(getDefaultModelId('openai')).toBe('gpt-5.5');
     expect(getDefaultModelId('anthropic')).toBe('claude-sonnet-4-6');
+    expect(getDefaultModelId('custom')).toBe('custom-model');
   });
 });
 

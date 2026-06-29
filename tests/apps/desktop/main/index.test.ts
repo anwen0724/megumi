@@ -374,6 +374,7 @@ const mocks = vi.hoisted(() => {
     })),
     showOpenDialog: vi.fn(),
     getAllWindows: vi.fn(() => []),
+    quit: vi.fn(),
   };
 });
 
@@ -467,6 +468,9 @@ vi.mock('@megumi/coding-agent/memory', () => ({
 }));
 
 vi.mock('electron', () => ({
+  app: {
+    quit: mocks.quit,
+  },
   BrowserWindow: {
     getAllWindows: mocks.getAllWindows,
   },
@@ -510,6 +514,7 @@ describe('main runtime logger composition', () => {
     mocks.ProjectRepository.mockClear();
     mocks.showOpenDialog.mockClear();
     mocks.getAllWindows.mockClear();
+    mocks.quit.mockClear();
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 

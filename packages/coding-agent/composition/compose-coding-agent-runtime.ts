@@ -21,6 +21,7 @@ import {
   createAiClient,
   createAnthropicProviderAdapter,
   createDeepSeekProviderAdapter,
+  createOpenAICompatibleProviderAdapter,
   createOpenAIProviderAdapter,
   ProviderRegistry,
   type AiClient,
@@ -192,6 +193,12 @@ function createProviderAdapterForRuntimeConfig(config: ProviderRuntimeConfig) {
       });
     case 'deepseek':
       return createDeepSeekProviderAdapter({
+        baseUrl: requireBaseUrl(config),
+        fetch,
+      });
+    case 'custom':
+      return createOpenAICompatibleProviderAdapter({
+        providerId: 'custom',
         baseUrl: requireBaseUrl(config),
         fetch,
       });

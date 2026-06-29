@@ -84,6 +84,16 @@ describe('ProviderSettingsService', () => {
         apiKeyEnv: 'ANTHROPIC_API_KEY',
         apiKeyEnvCustomized: false,
       },
+      {
+        providerId: 'custom',
+        displayName: 'Third-party compatible',
+        enabled: false,
+        defaultModelId: 'custom-model',
+        hasApiKey: false,
+        credentialSource: 'missing',
+        envOverrideActive: false,
+        apiKeyEnvCustomized: false,
+      },
     ]);
   });
 

@@ -3,10 +3,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SetupWizard, useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
+import { useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 
 describe('SetupWizard', () => {
   beforeEach(() => {
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
+    useThemeStore.setState(useThemeStore.getInitialState(), true);
   });
 
   it('walks through setup and submits selected settings', async () => {
@@ -25,6 +27,8 @@ describe('SetupWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     await user.selectOptions(screen.getByLabelText('Provider'), 'openai');
+    expect(screen.getByLabelText('Base URL')).toHaveValue('');
+    expect(screen.getByLabelText('Model ID')).toHaveValue('');
     await user.clear(screen.getByLabelText('Base URL'));
     await user.type(screen.getByLabelText('Base URL'), 'https://api.openai.com/v1');
     await user.clear(screen.getByLabelText('Model ID'));
@@ -61,5 +65,37 @@ describe('SetupWizard', () => {
       providerId: 'deepseek',
       skipProvider: true,
     }));
+  });
+
+  it('previews theme changes immediately without persisting setup', async () => {
+    const user = userEvent.setup();
+    useSetupWizardStore.setState({ status: 'ready', setupCompleted: false });
+
+    render(<SetupWizard />);
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('radio', { name: 'Sage Mist' }));
+
+    expect(useThemeStore.getState().theme).toBe('sage-mist');
+  });
+
+  it('offers third-party provider setup without prefilled endpoint values', async () => {
+    const user = userEvent.setup();
+    useSetupWizardStore.setState({ status: 'ready', setupCompleted: false });
+
+    render(<SetupWizard />);
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByRole('option', { name: 'Third-party compatible' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Provider')).toHaveValue('');
+    expect(screen.getByLabelText('Base URL')).toHaveValue('');
+    expect(screen.getByLabelText('Model ID')).toHaveValue('');
+
+    await user.selectOptions(screen.getByLabelText('Provider'), 'custom');
+
+    expect(screen.getByLabelText('Base URL')).toHaveValue('');
+    expect(screen.getByLabelText('Model ID')).toHaveValue('');
   });
 });

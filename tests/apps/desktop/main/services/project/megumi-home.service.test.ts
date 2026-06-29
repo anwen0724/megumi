@@ -168,6 +168,12 @@ describe('Megumi Home foundation', () => {
         },
         providers: {
           properties: {
+            custom: {
+              properties: {
+                baseUrl: { type: 'string' },
+                defaultModel: { type: 'string' },
+              },
+            },
             deepseek: {
               properties: {
                 apiKey: { type: 'string' },

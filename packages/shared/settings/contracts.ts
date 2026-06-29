@@ -160,6 +160,7 @@ export const DEFAULT_APP_SETTINGS = AppSettingsResolvedSchema.parse({
     deepseek: providerDefault('deepseek'),
     openai: providerDefault('openai'),
     anthropic: providerDefault('anthropic'),
+    custom: providerDefault('custom'),
   },
   permissions: {},
 } satisfies AppSettingsResolved);

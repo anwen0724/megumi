@@ -177,7 +177,7 @@ export function createMegumiSettingsSchema(): Record<string, unknown> {
         type: 'object',
         additionalProperties: false,
         properties: {
-          defaultProvider: { enum: ['deepseek', 'openai', 'anthropic'] },
+          defaultProvider: { enum: ['deepseek', 'openai', 'anthropic', 'custom'] },
         },
       },
       providers: {
@@ -187,6 +187,7 @@ export function createMegumiSettingsSchema(): Record<string, unknown> {
           deepseek: providerSettingsSchema(),
           openai: providerSettingsSchema(),
           anthropic: providerSettingsSchema(),
+          custom: providerSettingsSchema(),
         },
       },
       permissions: {
