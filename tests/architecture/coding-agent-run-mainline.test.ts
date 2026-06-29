@@ -128,13 +128,17 @@ describe('coding agent run mainline guards', () => {
     const permissionsSource = read('packages/coding-agent/permissions/run-permission-snapshot.ts');
 
     expect(permissionsSource).toContain('export function createRunPermissionSnapshot');
+    expect(permissionsSource).toContain('export function toModelPermissionSnapshot');
     expect(permissionsSource).toContain('createPermissionSnapshot(');
     expect(permissionsSource).toContain('linkAcceptedSourcePlan(');
     expect(serviceSource).toContain('createRunPermissionSnapshot({');
+    expect(serviceSource).toContain('toModelPermissionSnapshot(');
     expect(serviceSource).not.toContain('createPermissionSnapshot({');
     expect(serviceSource).not.toContain('linkAcceptedSourcePlan({');
     expect(serviceSource).not.toContain('function createPermissionModeState');
     expect(serviceSource).not.toContain('function getRunStartPermissionModeState');
+    expect(serviceSource).not.toContain('function toModelVisiblePermissionSnapshot');
+    expect(serviceSource).not.toContain('isPermissionMode(');
   });
 
   it('keeps session message chat stream adapter creation in projections', () => {

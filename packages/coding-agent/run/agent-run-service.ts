@@ -90,9 +90,7 @@ import type {
   SessionSourceEntry,
 } from '@megumi/shared/session';
 import {
-  isPermissionMode,
   type PermissionMode,
-  type PermissionModeSnapshot,
 } from '@megumi/shared/permission';
 import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type { JsonObject } from '@megumi/shared/primitives';
@@ -120,6 +118,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ToolResult } from '@megumi/shared/tool';
 import {
   createRunPermissionSnapshot,
+  toModelPermissionSnapshot,
   type RunPermissionSnapshotServicePort,
 } from '../permissions';
 import type { PostRunHooksPort } from '../hooks';
@@ -871,7 +870,7 @@ export class AgentRunService implements AgentRunPort {
       inputPreprocessing: input.inputPreprocessing,
       ...(input.parsedInput ? { parsedInput: input.parsedInput } : {}),
       ...(input.permissionSnapshot ? {
-        permissionSnapshot: toModelVisiblePermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
+        permissionSnapshot: toModelPermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
         permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
       } : {}),
       ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
@@ -1646,17 +1645,4 @@ function isRuntimeError(value: unknown): value is RuntimeError {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function toModelVisiblePermissionSnapshot(
-  input: PermissionSnapshotRecord,
-  requestCreatedAt: string,
-): PermissionModeSnapshot {
-  return {
-    permissionMode: isPermissionMode(input.permissionModeState.permissionMode)
-      ? input.permissionModeState.permissionMode
-      : 'default',
-    source: input.permissionModeState.source ?? 'system',
-    createdAt: input.createdAt ?? requestCreatedAt,
-  };
 }

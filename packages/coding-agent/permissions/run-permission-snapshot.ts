@@ -1,12 +1,16 @@
 // Provides the permissions-owned entrypoint for run permission snapshots.
 import type {
   PermissionMode,
+  PermissionModeSnapshot,
   PermissionModeSelectionSource,
   PermissionModeState,
   PermissionSnapshotRecord,
   RunSourcePlanRelation,
 } from '@megumi/shared/permission';
-import { PermissionModeStateSchema } from '@megumi/shared/permission';
+import {
+  isPermissionMode,
+  PermissionModeStateSchema,
+} from '@megumi/shared/permission';
 
 export interface RunPermissionSnapshotServicePort {
   createPermissionSnapshot(input: {
@@ -68,5 +72,18 @@ export function createRunPermissionSnapshot(
     record,
     permissionSnapshotRef: record.permissionSnapshotId,
     permissionModeState: record.permissionModeState,
+  };
+}
+
+export function toModelPermissionSnapshot(
+  input: PermissionSnapshotRecord,
+  requestCreatedAt: string,
+): PermissionModeSnapshot {
+  return {
+    permissionMode: isPermissionMode(input.permissionModeState.permissionMode)
+      ? input.permissionModeState.permissionMode
+      : 'default',
+    source: input.permissionModeState.source ?? 'system',
+    createdAt: input.createdAt ?? requestCreatedAt,
   };
 }

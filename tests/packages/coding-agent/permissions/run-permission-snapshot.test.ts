@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRunPermissionSnapshot } from '@megumi/coding-agent/permissions';
+import {
+  createRunPermissionSnapshot,
+  toModelPermissionSnapshot,
+} from '@megumi/coding-agent/permissions';
 
 describe('createRunPermissionSnapshot', () => {
   it('creates a snapshot from explicit permission mode and source', () => {
@@ -107,5 +110,39 @@ describe('createRunPermissionSnapshot', () => {
       permissionMode: 'default',
       createdAt: '2026-06-29T01:00:00.000Z',
     })).toBeUndefined();
+  });
+
+  it('maps stored permission snapshots into model-visible permission state', () => {
+    expect(toModelPermissionSnapshot({
+      permissionSnapshotId: 'permission-snapshot:1',
+      runId: 'run-1',
+      permissionLabel: 'accept_edits',
+      permissionModeState: {
+        permissionMode: 'accept_edits',
+        source: 'intent_default',
+      },
+      createdAt: '2026-06-29T01:00:00.000Z',
+    }, '2026-06-29T01:00:01.000Z')).toEqual({
+      permissionMode: 'accept_edits',
+      source: 'intent_default',
+      createdAt: '2026-06-29T01:00:00.000Z',
+    });
+  });
+
+  it('falls back to default model permission state for non-canonical stored modes', () => {
+    expect(toModelPermissionSnapshot({
+      permissionSnapshotId: 'permission-snapshot:1',
+      runId: 'run-1',
+      permissionLabel: 'legacy',
+      permissionModeState: {
+        permissionMode: 'legacy',
+        source: undefined,
+      },
+      createdAt: undefined,
+    } as any, '2026-06-29T01:00:01.000Z')).toEqual({
+      permissionMode: 'default',
+      source: 'system',
+      createdAt: '2026-06-29T01:00:01.000Z',
+    });
   });
 });
