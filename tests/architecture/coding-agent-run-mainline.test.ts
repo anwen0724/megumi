@@ -182,6 +182,8 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps initial agent loop run startup in the state lifecycle owner', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const agentLoopSource = read('packages/coding-agent/agent-loop/agent-loop.ts');
+    const approvalResumeGroupSource = read('packages/coding-agent/agent-loop/tool-call/approval/approval-resume-group.ts');
     const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');
 
     expect(stateLifecycleSource).toContain('export function startAgentLoopRun');
@@ -191,11 +193,15 @@ describe('coding agent run mainline guards', () => {
     expect(stateLifecycleSource).toContain('export function failAgentLoopModelCall');
     expect(stateLifecycleSource).toContain('export function cancelAgentLoopModelCall');
     expect(serviceSource).toContain('startAgentLoopRun({');
-    expect(serviceSource).toContain('waitForAgentLoopApproval({');
     expect(serviceSource).toContain('failAgentLoopBeforeModelCall({');
-    expect(serviceSource).toContain('completeAgentLoopModelCall({');
-    expect(serviceSource).toContain('failAgentLoopModelCall({');
-    expect(serviceSource).toContain('cancelAgentLoopModelCall({');
+    expect(serviceSource).not.toContain('waitForAgentLoopApproval({');
+    expect(serviceSource).not.toContain('completeAgentLoopModelCall({');
+    expect(serviceSource).not.toContain('failAgentLoopModelCall({');
+    expect(serviceSource).not.toContain('cancelAgentLoopModelCall({');
+    expect(approvalResumeGroupSource).toContain('waitForAgentLoopApproval({');
+    expect(agentLoopSource).toContain('completeAgentLoopModelCall({');
+    expect(agentLoopSource).toContain('failAgentLoopModelCall({');
+    expect(agentLoopSource).toContain('cancelAgentLoopModelCall({');
     expect(serviceSource).not.toContain('private async *failRunBeforeModelStep');
     expect(serviceSource).not.toContain('private async *failRunBeforeModelCall');
     expect(serviceSource).not.toContain('const initialRun = this.runRecordRepository.saveRun');

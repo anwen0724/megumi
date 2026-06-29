@@ -773,6 +773,20 @@ describe('package and file structure source guards', () => {
     expect(agentLoopSource).toContain('export async function* streamCodingAgentModelToolLoop');
   });
 
+  it('keeps model-call event recording in the top-level agent-loop owner', () => {
+    const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
+    const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
+
+    expect(agentRunServiceSource).not.toContain('private async *persistModelCallEvents');
+    expect(agentRunServiceSource).not.toContain('assistantContent += getAssistantDeltaContent');
+    expect(agentRunServiceSource).not.toContain('this.sessionMessageService.commitAssistantReply({');
+    expect(agentRunServiceSource).not.toContain('this.postRunHooks.scheduleRunCompletedMemoryCapture({');
+    expect(agentRunServiceSource).toContain('createAgentLoopEventRecorder<');
+    expect(agentLoopSource).toContain('export function createAgentLoopEventRecorder');
+    expect(agentLoopSource).toContain('registerApprovalResumeGroup({');
+    expect(agentLoopSource).toContain('completeAgentLoopModelCall({');
+  });
+
   it('keeps approval resume run status restoration in top-level state owner', () => {
     const agentRunServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/run/agent-run-service.ts'), 'utf8');
     const approvalResumeStatePath = join(

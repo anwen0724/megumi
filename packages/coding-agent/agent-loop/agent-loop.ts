@@ -9,11 +9,11 @@ import type {
 } from '@megumi/shared/model';
 import type { ModelCapabilitySummary } from '@megumi/shared/run';
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
-import type { ProviderId } from '@megumi/shared/provider';
+import { isProviderId, type ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext, RuntimeError, RuntimeEvent, TypedRuntimeEvent } from '@megumi/shared/runtime';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import {
-  createRunFailedEvent,
+  createRunFailedEvent as createModelLoopRunFailedEvent,
   createToolRegistryEntryResolvedEvent,
   createToolRegistryModelVisibleToolsDerivedEvent,
   createToolRegistrySnapshotCreatedEvent,
@@ -36,7 +36,9 @@ import {
 } from '../context';
 import {
   coalesceTextDeltaRuntimeEvents,
+  createRunFailedEvent as createRuntimeRunFailedEvent,
   createRunStartedEvent,
+  createRunStatusChangedEvent,
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
 } from '../events';
@@ -47,20 +49,25 @@ import type {
 } from '../tools/tool-registry-snapshot';
 import { runModelCall, type ModelCallPort } from './model-call';
 import {
+  cancelAgentLoopModelCall,
+  completeAgentLoopModelCall,
   createTerminalRuntimeError,
+  failAgentLoopModelCall,
   failAgentLoopBeforeModelCall,
   resumeRunAfterApproval,
+  succeedAgentLoopModelCall,
 } from '../state';
 import type {
+  ApprovalResumeGroup,
   PendingToolApprovalResume,
+  PendingApprovalRegistry,
   ResumeToolApprovalInput,
   ToolApprovalResumePort,
   ToolCallRunnerService,
   ToolResultModelInputBuildInput,
   ToolCallRunner,
 } from './tool-call';
-import type { ApprovalResumeGroup } from './tool-call/approval/approval-resume-group';
-import type { PendingApprovalRegistry } from './tool-call/approval/pending-approval-registry';
+import { registerApprovalResumeGroup } from './tool-call';
 import {
   DEFAULT_MAX_MODEL_STEPS,
   DEFAULT_MAX_TOOL_ROUNDS,
@@ -715,6 +722,351 @@ export class AgentLoop {
   }
 }
 
+export interface AgentLoopEventRecorderOptions<TProjection = unknown> {
+  clock: AgentLoopClock;
+  ids: AgentLoopIds & {
+    stepId(): string;
+  };
+  events: {
+    lastSequenceForRun(runId: string): number;
+    normalizeWithModelRequest(
+      event: RuntimeEvent,
+      request: ModelStepRuntimeRequest,
+      input: { afterSequence: number },
+    ): RuntimeEvent;
+    withModelRequestMetadata(event: RuntimeEvent, request: ModelStepRuntimeRequest): RuntimeEvent;
+    append(event: RuntimeEvent, projection?: TProjection): RuntimeEvent;
+  };
+  runRepository: {
+    getRun(runId: string): Run | undefined;
+    saveRun(run: Run): Run;
+  };
+  stepRepository: {
+    listStepsByRun(runId: string): RunStep[];
+    saveStep(step: RunStep): RunStep;
+  };
+  legacyModelSteps: {
+    persistFromEvent(input: {
+      request: ModelStepRuntimeRequest;
+      event: RuntimeEvent;
+      fallbackStepId: string;
+      overrides?: {
+        status?: RunStep['status'];
+        completedAt?: string;
+        error?: RuntimeError;
+      };
+    }): void;
+  };
+  assistantReplies: {
+    commit(input: {
+      sessionId: string;
+      runId: string;
+      content: string;
+      completedAt: string;
+    }): void;
+  };
+  postRunHooks: {
+    scheduleRunCompletedMemoryCapture(input: {
+      runId: string;
+      sessionId: string;
+      projectId?: string;
+      providerId: ProviderId | null;
+      modelId: string;
+      userText: string;
+      assistantText: string;
+      hasProject: boolean;
+      memoryEnabled: boolean;
+    }): void;
+  };
+  memory: {
+    isEnabled(): boolean;
+  };
+  approvals: {
+    registry: PendingApprovalRegistry<ApprovalResumeGroup<TProjection>>;
+  };
+  projection?: TProjection;
+}
+
+export function createAgentLoopEventRecorder<TProjection>(
+  options: AgentLoopEventRecorderOptions<TProjection>,
+): AgentLoopEventRecorder {
+  return {
+    createModelStep: ({ runId }) => {
+      const step = options.stepRepository.saveStep({
+        stepId: options.ids.stepId(),
+        runId,
+        kind: 'model',
+        status: 'running',
+        title: 'Model response',
+        startedAt: options.clock.now(),
+      });
+      return step.stepId;
+    },
+    recordModelCallEvents: (input) => recordAgentLoopModelCallEvents({
+      ...input,
+      options,
+    }),
+  };
+}
+
+async function* recordAgentLoopModelCallEvents<TProjection>(
+  input: Parameters<AgentLoopEventRecorder['recordModelCallEvents']>[0] & {
+    options: AgentLoopEventRecorderOptions<TProjection>;
+  },
+): AsyncIterable<RuntimeEvent> {
+  const options = input.options;
+  const projection = options.projection;
+  const toolRuntime = input.toolRuntime;
+  let assistantContent = '';
+  let sawAssistantOutputCompleted = false;
+  let sawFinalModelStepCompleted = false;
+  let lastSequence = input.startSequence ?? 0;
+  let terminalEvent: RuntimeEvent | undefined;
+  let currentModelStep = input.step;
+  let registeredPendingGroup: ApprovalResumeGroup<TProjection> | undefined;
+  const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
+
+  const registerPendingGroup = (): ApprovalResumeGroup<TProjection> | undefined => {
+    const registered = registerApprovalResumeGroup({
+      registry: options.approvals.registry,
+      ...(registeredPendingGroup ? { registeredGroup: registeredPendingGroup } : {}),
+      request: input.request,
+      run: input.run,
+      step: currentModelStep,
+      pendingApprovalResumes: input.pendingApprovalResumes,
+      ...(toolRuntime ? { toolRuntime } : {}),
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+      ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
+      userMessageId: input.userMessageId,
+      ...(input.memoryRecallSources ? { memoryRecallSources: input.memoryRecallSources } : {}),
+      ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
+      ...(projection ? { projection } : {}),
+      ids: {
+        groupId: ({ request }) => `${request.runId}:${request.stepId}:${options.ids.eventId()}`,
+      },
+      lifecycle: {
+        getRun: (runId) => options.runRepository.getRun(runId),
+        saveRun: (run) => options.runRepository.saveRun(run),
+        saveStep: (step) => options.stepRepository.saveStep(step),
+      },
+    });
+    currentModelStep = registered.step;
+    registeredPendingGroup = registered.group;
+    return registeredPendingGroup;
+  };
+
+  try {
+    for await (const event of input.modelEvents) {
+      registerPendingGroup();
+      lastSequence = Math.max(lastSequence, options.events.lastSequenceForRun(input.request.runId));
+      const eventWithRequest = options.events.normalizeWithModelRequest(event, input.request, {
+        afterSequence: lastSequence,
+      });
+      lastSequence = eventWithRequest.sequence;
+      const eventStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
+      if (!modelStepsById.has(eventStepId)) {
+        const persistedStep = options.stepRepository.listStepsByRun(input.request.runId)
+          .find((step) => step.stepId === eventStepId);
+        if (persistedStep) {
+          modelStepsById.set(persistedStep.stepId, persistedStep);
+          currentModelStep = persistedStep;
+        }
+      }
+      options.legacyModelSteps.persistFromEvent({
+        request: input.request,
+        event: eventWithRequest,
+        fallbackStepId: currentModelStep.stepId,
+      });
+      const appended = options.events.append(eventWithRequest, projection);
+      if (eventWithRequest.eventType === 'assistant.output.delta' || eventWithRequest.eventType === 'model.output.delta') {
+        assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
+      }
+      if (eventWithRequest.eventType === 'assistant.output.completed') {
+        sawAssistantOutputCompleted = true;
+        const content = getAssistantCompletedContent(eventWithRequest.payload);
+        if (content) {
+          assistantContent = content;
+        }
+      }
+      if (eventWithRequest.eventType === 'model.step.completed') {
+        options.legacyModelSteps.persistFromEvent({
+          request: input.request,
+          event: eventWithRequest,
+          fallbackStepId: currentModelStep.stepId,
+          overrides: {
+            status: 'succeeded',
+            completedAt: eventWithRequest.createdAt,
+          },
+        });
+        const completedStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
+        const completedStep = succeedAgentLoopModelCall({
+          step: modelStepsById.get(completedStepId),
+          completedAt: eventWithRequest.createdAt,
+          lifecycle: {
+            saveStep: (step) => {
+              options.stepRepository.saveStep(step);
+            },
+          },
+        });
+        if (completedStep) {
+          modelStepsById.set(completedStepId, completedStep);
+        }
+        if (completedStep && completedStep.stepId === currentModelStep.stepId) {
+          currentModelStep = completedStep;
+        }
+        if (!isToolCallModelStepCompletion(eventWithRequest.payload)) {
+          sawFinalModelStepCompleted = true;
+        }
+      }
+      if (eventWithRequest.eventType === 'run.failed' || eventWithRequest.eventType === 'run.cancelled') {
+        terminalEvent = eventWithRequest;
+      }
+      yield appended;
+    }
+  } catch (error) {
+    if (options.runRepository.getRun(input.request.runId)?.status === 'cancelled') {
+      return;
+    }
+    lastSequence = Math.max(lastSequence, options.events.lastSequenceForRun(input.request.runId));
+    const failedEvent = options.events.withModelRequestMetadata({
+      ...createRuntimeRunFailedEvent({
+        eventId: options.ids.eventId(),
+        sessionId: input.request.sessionId,
+        runId: input.request.runId,
+        sequence: lastSequence += 1,
+        createdAt: options.clock.now(),
+        error: createRuntimeErrorFromUnknown(error, 'Session message run failed.'),
+      }),
+      stepId: currentModelStep.stepId,
+    }, input.request);
+    const appended = options.events.append(failedEvent, projection);
+    terminalEvent = failedEvent;
+    yield appended;
+  }
+
+  if (input.pendingApprovalResumes.length > 0 && toolRuntime) {
+    const waitingAt = options.clock.now();
+    registerPendingGroup();
+    const waitingEvent = options.events.withModelRequestMetadata(createRunStatusChangedEvent({
+      eventId: options.ids.eventId(),
+      sessionId: input.request.sessionId,
+      runId: input.request.runId,
+      sequence: lastSequence += 1,
+      createdAt: waitingAt,
+      from: 'running',
+      to: 'waiting_for_approval',
+    }), input.request);
+    yield options.events.append(waitingEvent, projection);
+    return;
+  }
+
+  const completedAt = options.clock.now();
+  if (terminalEvent?.eventType === 'run.failed') {
+    const error = getRunFailedError(terminalEvent.payload) ?? createFallbackRuntimeError('Run failed.');
+    const failed = failAgentLoopModelCall({
+      requestId: input.request.requestId,
+      ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
+      sessionId: input.request.sessionId,
+      run: input.run,
+      step: currentModelStep,
+      error,
+      startSequence: lastSequence,
+      finishedAt: completedAt,
+      ids: options.ids,
+      lifecycle: {
+        saveRun: (run) => {
+          options.runRepository.saveRun(run);
+        },
+        saveStep: (step) => {
+          options.stepRepository.saveStep(step);
+        },
+      },
+    });
+    for (const event of failed.events) {
+      yield options.events.append(event, projection);
+    }
+    return;
+  }
+
+  if (terminalEvent?.eventType === 'run.cancelled') {
+    const cancelled = cancelAgentLoopModelCall({
+      requestId: input.request.requestId,
+      ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
+      sessionId: input.request.sessionId,
+      run: input.run,
+      step: currentModelStep,
+      startSequence: lastSequence,
+      finishedAt: completedAt,
+      ids: options.ids,
+      lifecycle: {
+        saveRun: (run) => {
+          options.runRepository.saveRun(run);
+        },
+        saveStep: (step) => {
+          options.stepRepository.saveStep(step);
+        },
+      },
+    });
+    for (const event of cancelled.events) {
+      yield options.events.append(event, projection);
+    }
+    return;
+  }
+
+  if (!(sawAssistantOutputCompleted || sawFinalModelStepCompleted) || assistantContent.length === 0) {
+    return;
+  }
+
+  options.assistantReplies.commit({
+    sessionId: input.request.sessionId,
+    runId: input.request.runId,
+    content: assistantContent,
+    completedAt,
+  });
+
+  const completed = completeAgentLoopModelCall({
+    requestId: input.request.requestId,
+    ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
+    sessionId: input.request.sessionId,
+    run: input.run,
+    step: currentModelStep,
+    startSequence: lastSequence,
+    finishedAt: completedAt,
+    ids: options.ids,
+    lifecycle: {
+      saveRun: (run) => {
+        options.runRepository.saveRun(run);
+      },
+      saveStep: (step) => {
+        options.stepRepository.saveStep(step);
+      },
+    },
+  });
+
+  for (const event of completed.events) {
+    const appended = options.events.append(event, projection);
+    if (event.eventType === 'run.completed') {
+      options.postRunHooks.scheduleRunCompletedMemoryCapture({
+        runId: String(input.request.runId),
+        sessionId: String(input.request.sessionId),
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+        providerId: isProviderId(input.request.providerId) ? input.request.providerId : null,
+        modelId: String(input.request.modelId),
+        userText: input.request.inputContext.parts
+          .filter((part) => part.kind === 'current_turn' && part.role === 'user')
+          .map((part) => part.text)
+          .join('\n')
+          .trim(),
+        assistantText: assistantContent,
+        hasProject: Boolean(input.projectRoot),
+        memoryEnabled: options.memory.isEnabled(),
+      });
+    }
+    yield appended;
+  }
+}
+
 export interface CodingAgentModelToolLoopStreamIds {
   nextEventId(): string;
   nextStepId(input: { runId: string }): string;
@@ -1136,7 +1488,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
 
     toolRoundCount += 1;
     if (toolRoundCount > maxToolRounds) {
-      yield createRunFailedEvent({
+      yield createModelLoopRunFailedEvent({
         eventId: input.ids.nextEventId(),
         request: {
           requestId: request.requestId,
@@ -1269,7 +1621,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     }
 
     if (toolResults.length === 0) {
-      yield createRunFailedEvent({
+      yield createModelLoopRunFailedEvent({
         eventId: input.ids.nextEventId(),
         request: {
           requestId: request.requestId,
@@ -1327,7 +1679,7 @@ export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIter
     }
   }
 
-  yield createRunFailedEvent({
+  yield createModelLoopRunFailedEvent({
     eventId: input.ids.nextEventId(),
     request: {
       requestId: request.requestId,
@@ -1431,6 +1783,61 @@ async function createNextModelCallRequest(input: {
     inputContext: await input.buildNextModelInputContext(contextInput),
     createdAt: input.createdAt,
   };
+}
+
+function getAssistantCompletedContent(payload: RuntimeEvent['payload']): string {
+  if (!isObjectRecord(payload)) {
+    return '';
+  }
+
+  return typeof payload.content === 'string' ? payload.content : '';
+}
+
+function getAssistantDeltaContent(payload: RuntimeEvent['payload']): string {
+  if (!isObjectRecord(payload)) {
+    return '';
+  }
+
+  return typeof payload.delta === 'string' ? payload.delta : '';
+}
+
+function isToolCallModelStepCompletion(payload: RuntimeEvent['payload']): boolean {
+  if (!isObjectRecord(payload)) {
+    return false;
+  }
+
+  return payload.finishReason === 'tool_calls';
+}
+
+function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | undefined {
+  if (!isObjectRecord(payload)) {
+    return undefined;
+  }
+
+  return isRuntimeError(payload.error) ? payload.error : undefined;
+}
+
+function createFallbackRuntimeError(message: string): RuntimeError {
+  return {
+    code: 'runtime_unknown',
+    message,
+    severity: 'error',
+    retryable: false,
+    source: 'core',
+  };
+}
+
+function isRuntimeError(value: unknown): value is RuntimeError {
+  return isObjectRecord(value)
+    && typeof value.code === 'string'
+    && typeof value.message === 'string'
+    && typeof value.severity === 'string'
+    && typeof value.retryable === 'boolean'
+    && typeof value.source === 'string';
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function createToolCallFromEvent(event: TypedRuntimeEvent<'tool.call.created'>): ToolCall {

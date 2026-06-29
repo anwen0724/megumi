@@ -4,27 +4,18 @@ import {
   ActiveSessionMessageRunTracker,
   attachRunPermissionSnapshot,
   canResumeApprovalFromRunStatus,
-  cancelAgentLoopModelCall,
-  completeAgentLoopModelCall,
   failAgentLoopBeforeModelCall,
-  failAgentLoopModelCall,
   startAgentLoopRun,
-  succeedAgentLoopModelCall,
   type RunRetryCoordinatorPort,
   type RunTerminalCoordinatorPort,
 } from '../state';
 import { runTurn, type RunHostBoundaryPort, type RunIdFactory } from '../state/lifecycle';
 import {
+  type ApprovalResumeGroup,
   ensureToolCallRunnerService,
   PendingApprovalRegistry,
-  type PendingToolApprovalResume,
   type ResumeToolApprovalInput,
-  type ToolCallRunnerService,
 } from '../agent-loop/tool-call';
-import {
-  registerApprovalResumeGroup,
-  type ApprovalResumeGroup,
-} from '../agent-loop/tool-call/approval/approval-resume-group';
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
   createBaselineContextForSession,
@@ -49,6 +40,7 @@ import {
 } from '@megumi/coding-agent/session';
 import {
   AgentLoop,
+  createAgentLoopEventRecorder,
   createToolSetSnapshotProvider,
   resumeToolApprovalAgentLoop,
   type AgentLoopOptions,
@@ -66,9 +58,6 @@ import {
   type SessionMessageInputMessage,
 } from '@megumi/coding-agent/input';
 import {
-  createRunFailedEvent,
-  createRunStatusChangedEvent,
-  createRuntimeErrorFromUnknown,
   RuntimeEventLog,
   RuntimeEventPublisher,
 } from '../events';
@@ -84,8 +73,7 @@ import type {
   AgentRunSessionRepositoryPort,
   AgentRunToolRepositoryPort,
 } from '../persistence';
-import { isProviderId, type ProviderId } from '@megumi/shared/provider';
-import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
+import type { ProviderId } from '@megumi/shared/provider';
 import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
 import type {
   SessionActivePath,
@@ -110,14 +98,12 @@ import {
   type ChatStreamEventAdapter,
   type ChatStreamEventSink,
 } from '../projections/chat-stream';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   PermissionModeState,
   PermissionSnapshotRecord,
 } from '@megumi/shared/permission';
 import type { PlanArtifactServicePort } from '../artifacts';
 import type { RuntimeContext } from '@megumi/shared/runtime';
-import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createRunPermissionSnapshot,
@@ -444,23 +430,7 @@ export class AgentRunService implements AgentRunPort {
       } : {}),
       modelCallInputBuildService: this.modelCallInputBuildService,
       ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
-      eventRecorder: {
-        createModelStep: ({ runId }) => {
-          const step = svc.runExecutionFactRepository.saveStep({
-            stepId: svc.ids.stepId(),
-            runId,
-            kind: 'model',
-            status: 'running',
-            title: 'Model response',
-            startedAt: svc.clock.now(),
-          });
-          return step.stepId;
-        },
-        recordModelCallEvents: (recordInput) => svc.persistModelCallEvents({
-          ...recordInput,
-          ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
-        }),
-      },
+      eventRecorder: this.createModelCallEventRecorder(chatStreamAdapter),
     };
   }
 
@@ -766,6 +736,52 @@ export class AgentRunService implements AgentRunPort {
     return this.runtimeEventRepository.listRuntimeEventsByRun(runId);
   }
 
+  private createModelCallEventRecorder(chatStreamAdapter?: ChatStreamEventAdapter) {
+    return createAgentLoopEventRecorder<ChatStreamEventAdapter>({
+      clock: this.clock,
+      ids: {
+        eventId: this.ids.eventId,
+        stepId: this.ids.stepId,
+      },
+      events: {
+        lastSequenceForRun: (runId) => this.runtimeEventLog.lastSequenceForRun(runId),
+        normalizeWithModelRequest: (event, request, input) => this.runtimeEventLog.normalizeWithModelRequest(
+          event,
+          request,
+          input,
+        ),
+        withModelRequestMetadata: (event, request) => this.runtimeEventLog.withModelRequestMetadata(event, request),
+        append: (event, projection) => {
+          this.appendRuntimeEvent(event, projection);
+          return event;
+        },
+      },
+      runRepository: this.runRecordRepository,
+      stepRepository: this.runExecutionFactRepository,
+      legacyModelSteps: {
+        persistFromEvent: (input) => {
+          persistLegacyModelStepRecordFromEvent({
+            repository: this.modelStepRepository,
+            ...input,
+          });
+        },
+      },
+      assistantReplies: {
+        commit: (input) => {
+          this.sessionMessageService.commitAssistantReply(input);
+        },
+      },
+      postRunHooks: this.postRunHooks,
+      memory: {
+        isEnabled: () => resolveMemoryEnabled(this.memorySettingsProvider),
+      },
+      approvals: {
+        registry: this.pendingApprovalRegistry,
+      },
+      ...(chatStreamAdapter ? { projection: chatStreamAdapter } : {}),
+    });
+  }
+
   private async *runSessionMessageAgentLoop(input: {
     requestId: string;
     payload: SessionMessageSendPayload;
@@ -803,279 +819,6 @@ export class AgentRunService implements AgentRunPort {
       createdAt: input.payload.createdAt,
       memoryEnabled: resolveMemoryEnabled(this.memorySettingsProvider),
     });
-  }
-
-  private async *persistModelCallEvents(input: {
-    request: ModelStepRuntimeRequest;
-    modelEvents: AsyncIterable<RuntimeEvent>;
-    pendingApprovalResumes: PendingToolApprovalResume[];
-    run: Run;
-    step: RunStep;
-    userMessageId: string;
-    toolRuntime?: ToolCallRunnerService;
-    chatStreamAdapter?: ChatStreamEventAdapter;
-    projectId?: string;
-    projectRoot?: string;
-    permissionMode?: PermissionMode;
-    memoryRecallSources?: ModelInputMemoryRecallSource[];
-    memoryRecallSeed?: ModelInputContextBuildRequest['memoryRecallSeed'];
-    startSequence?: number;
-  }): AsyncIterable<RuntimeEvent> {
-    let assistantContent = '';
-    let sawAssistantOutputCompleted = false;
-    let sawFinalModelStepCompleted = false;
-    let lastSequence = input.startSequence ?? 0;
-    let terminalEvent: RuntimeEvent | undefined;
-    let currentModelStep = input.step;
-    let registeredPendingGroup: AgentRunApprovalResumeGroup | undefined;
-    const modelStepsById = new Map<string, RunStep>([[input.step.stepId, input.step]]);
-
-    const registerPendingApprovalGroup = (): AgentRunApprovalResumeGroup | undefined => {
-      const registered = registerApprovalResumeGroup({
-        registry: this.pendingApprovalRegistry,
-        ...(registeredPendingGroup ? { registeredGroup: registeredPendingGroup } : {}),
-        request: input.request,
-        run: input.run,
-        step: currentModelStep,
-        pendingApprovalResumes: input.pendingApprovalResumes,
-        ...(toolRuntime ? { toolRuntime } : {}),
-        ...(input.projectId ? { projectId: input.projectId } : {}),
-        ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
-        ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
-        userMessageId: input.userMessageId,
-        ...(input.memoryRecallSources ? { memoryRecallSources: input.memoryRecallSources } : {}),
-        ...(input.memoryRecallSeed ? { memoryRecallSeed: input.memoryRecallSeed } : {}),
-        ...(input.chatStreamAdapter ? { projection: input.chatStreamAdapter } : {}),
-        ids: {
-          groupId: ({ request }) => `${request.runId}:${request.stepId}:${this.ids.eventId()}`,
-        },
-        lifecycle: {
-          getRun: (runId) => this.runRecordRepository.getRun(runId),
-          saveRun: (run) => this.runRecordRepository.saveRun(run),
-          saveStep: (step) => this.runExecutionFactRepository.saveStep(step),
-        },
-      });
-      currentModelStep = registered.step;
-      registeredPendingGroup = registered.group;
-      return registeredPendingGroup;
-    };
-
-    const toolRuntime = input.toolRuntime;
-
-    try {
-      for await (const event of input.modelEvents) {
-        registerPendingApprovalGroup();
-        lastSequence = Math.max(lastSequence, this.runtimeEventLog.lastSequenceForRun(input.request.runId));
-        const eventWithRequest = this.runtimeEventLog.normalizeWithModelRequest(event, input.request, {
-          afterSequence: lastSequence,
-        });
-        lastSequence = eventWithRequest.sequence;
-        const eventStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
-        if (!modelStepsById.has(eventStepId)) {
-          const persistedStep = this.runExecutionFactRepository.listStepsByRun(input.request.runId)
-            .find((step) => step.stepId === eventStepId);
-          if (persistedStep) {
-            modelStepsById.set(persistedStep.stepId, persistedStep);
-            currentModelStep = persistedStep;
-          }
-        }
-        persistLegacyModelStepRecordFromEvent({
-          repository: this.modelStepRepository,
-          request: input.request,
-          event: eventWithRequest,
-          fallbackStepId: currentModelStep.stepId,
-        });
-        this.appendRuntimeEvent(eventWithRequest, input.chatStreamAdapter);
-        if (eventWithRequest.eventType === 'assistant.output.delta' || eventWithRequest.eventType === 'model.output.delta') {
-          assistantContent += getAssistantDeltaContent(eventWithRequest.payload);
-        }
-        if (eventWithRequest.eventType === 'assistant.output.completed') {
-          sawAssistantOutputCompleted = true;
-          const content = getAssistantCompletedContent(eventWithRequest.payload);
-          if (content) {
-            assistantContent = content;
-          }
-        }
-        if (eventWithRequest.eventType === 'model.step.completed') {
-          persistLegacyModelStepRecordFromEvent({
-            repository: this.modelStepRepository,
-            request: input.request,
-            event: eventWithRequest,
-            fallbackStepId: currentModelStep.stepId,
-            overrides: {
-              status: 'succeeded',
-              completedAt: eventWithRequest.createdAt,
-            },
-          });
-          const completedStepId = eventWithRequest.stepId ?? currentModelStep.stepId;
-          const completedStep = succeedAgentLoopModelCall({
-            step: modelStepsById.get(completedStepId),
-            completedAt: eventWithRequest.createdAt,
-            lifecycle: {
-              saveStep: (step) => {
-                this.runExecutionFactRepository.saveStep(step);
-              },
-            },
-          });
-          if (completedStep) {
-            modelStepsById.set(completedStepId, completedStep);
-          }
-          if (completedStep && completedStep.stepId === currentModelStep.stepId) {
-            currentModelStep = completedStep;
-          }
-          if (!isToolCallModelStepCompletion(eventWithRequest.payload)) {
-            sawFinalModelStepCompleted = true;
-          }
-        }
-        if (eventWithRequest.eventType === 'run.failed' || eventWithRequest.eventType === 'run.cancelled') {
-          terminalEvent = eventWithRequest;
-        }
-        yield eventWithRequest;
-      }
-    } catch (error) {
-      if (this.runRecordRepository.getRun(input.request.runId)?.status === 'cancelled') {
-        return;
-      }
-      lastSequence = Math.max(lastSequence, this.runtimeEventLog.lastSequenceForRun(input.request.runId));
-      const failedEvent = this.runtimeEventLog.withModelRequestMetadata({
-        ...createRunFailedEvent({
-          eventId: this.ids.eventId(),
-          sessionId: input.request.sessionId,
-          runId: input.request.runId,
-          sequence: lastSequence += 1,
-          createdAt: this.clock.now(),
-          error: createRuntimeErrorFromUnknown(error, 'Session message run failed.'),
-        }),
-        stepId: currentModelStep.stepId,
-      }, input.request);
-      this.appendRuntimeEvent(failedEvent, input.chatStreamAdapter);
-      terminalEvent = failedEvent;
-      yield failedEvent;
-    }
-
-    if (input.pendingApprovalResumes.length > 0 && toolRuntime) {
-      const waitingAt = this.clock.now();
-      registerPendingApprovalGroup();
-      const waitingEvent = this.runtimeEventLog.withModelRequestMetadata(createRunStatusChangedEvent({
-        eventId: this.ids.eventId(),
-        sessionId: input.request.sessionId,
-        runId: input.request.runId,
-        sequence: lastSequence += 1,
-        createdAt: waitingAt,
-        from: 'running',
-        to: 'waiting_for_approval',
-      }), input.request);
-      this.appendRuntimeEvent(waitingEvent, input.chatStreamAdapter);
-      yield waitingEvent;
-      return;
-    }
-
-    const completedAt = this.clock.now();
-    if (terminalEvent?.eventType === 'run.failed') {
-      const error = getRunFailedError(terminalEvent.payload) ?? createFallbackRuntimeError('Run failed.');
-      const failed = failAgentLoopModelCall({
-        requestId: input.request.requestId,
-        ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
-        sessionId: input.request.sessionId,
-        run: input.run,
-        step: currentModelStep,
-        error,
-        startSequence: lastSequence,
-        finishedAt: completedAt,
-        ids: this.ids,
-        lifecycle: {
-          saveRun: (run) => {
-            this.runRecordRepository.saveRun(run);
-          },
-          saveStep: (step) => {
-            this.runExecutionFactRepository.saveStep(step);
-          },
-        },
-      });
-      for (const event of failed.events) {
-        this.appendRuntimeEvent(event, input.chatStreamAdapter);
-        yield event;
-      }
-      return;
-    }
-
-    if (terminalEvent?.eventType === 'run.cancelled') {
-      const cancelled = cancelAgentLoopModelCall({
-        requestId: input.request.requestId,
-        ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
-        sessionId: input.request.sessionId,
-        run: input.run,
-        step: currentModelStep,
-        startSequence: lastSequence,
-        finishedAt: completedAt,
-        ids: this.ids,
-        lifecycle: {
-          saveRun: (run) => {
-            this.runRecordRepository.saveRun(run);
-          },
-          saveStep: (step) => {
-            this.runExecutionFactRepository.saveStep(step);
-          },
-        },
-      });
-      for (const event of cancelled.events) {
-        this.appendRuntimeEvent(event, input.chatStreamAdapter);
-        yield event;
-      }
-      return;
-    }
-
-    if (!(sawAssistantOutputCompleted || sawFinalModelStepCompleted) || assistantContent.length === 0) {
-      return;
-    }
-
-    this.sessionMessageService.commitAssistantReply({
-      sessionId: input.request.sessionId,
-      runId: input.request.runId,
-      content: assistantContent,
-      completedAt,
-    });
-
-    const completed = completeAgentLoopModelCall({
-      requestId: input.request.requestId,
-      ...(input.request.runtimeContext ? { runtimeContext: input.request.runtimeContext } : {}),
-      sessionId: input.request.sessionId,
-      run: input.run,
-      step: currentModelStep,
-      startSequence: lastSequence,
-      finishedAt: completedAt,
-      ids: this.ids,
-      lifecycle: {
-        saveRun: (run) => {
-          this.runRecordRepository.saveRun(run);
-        },
-        saveStep: (step) => {
-          this.runExecutionFactRepository.saveStep(step);
-        },
-      },
-    });
-
-    for (const event of completed.events) {
-      this.appendRuntimeEvent(event, input.chatStreamAdapter);
-      if (event.eventType === 'run.completed') {
-        this.postRunHooks.scheduleRunCompletedMemoryCapture({
-          runId: String(input.request.runId),
-          sessionId: String(input.request.sessionId),
-          ...(input.projectId ? { projectId: input.projectId } : {}),
-          providerId: isProviderId(input.request.providerId) ? input.request.providerId : null,
-          modelId: String(input.request.modelId),
-          userText: input.request.inputContext.parts
-            .filter((part) => part.kind === 'current_turn' && part.role === 'user')
-            .map((part) => part.text)
-            .join('\n')
-            .trim(),
-          assistantText: assistantContent,
-          hasProject: Boolean(input.projectRoot),
-          memoryEnabled: resolveMemoryEnabled(this.memorySettingsProvider),
-        });
-      }
-      yield event;
-    }
   }
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
@@ -1137,10 +880,7 @@ export class AgentRunService implements AgentRunPort {
         nextModelStepId: () => `model-step:${crypto.randomUUID()}`,
       },
       clock: this.clock,
-      recordModelCallEvents: (recordInput) => this.persistModelCallEvents({
-        ...recordInput,
-        ...(approvalResume.projection ? { chatStreamAdapter: approvalResume.projection } : {}),
-      }),
+      recordModelCallEvents: this.createModelCallEventRecorder(approvalResume.projection).recordModelCallEvents,
     });
   }
 
@@ -1162,59 +902,4 @@ function defaultHostBoundary(
       summary: 'Session run run completed without tool execution.',
     }),
   };
-}
-
-function getAssistantCompletedContent(payload: RuntimeEvent['payload']): string {
-  if (!isObjectRecord(payload)) {
-    return '';
-  }
-
-  return typeof payload.content === 'string' ? payload.content : '';
-}
-
-function getAssistantDeltaContent(payload: RuntimeEvent['payload']): string {
-  if (!isObjectRecord(payload)) {
-    return '';
-  }
-
-  return typeof payload.delta === 'string' ? payload.delta : '';
-}
-
-function isToolCallModelStepCompletion(payload: RuntimeEvent['payload']): boolean {
-  if (!isObjectRecord(payload)) {
-    return false;
-  }
-
-  return payload.finishReason === 'tool_calls';
-}
-
-function getRunFailedError(payload: RuntimeEvent['payload']): RuntimeError | undefined {
-  if (!isObjectRecord(payload)) {
-    return undefined;
-  }
-
-  return isRuntimeError(payload.error) ? payload.error : undefined;
-}
-
-function createFallbackRuntimeError(message: string): RuntimeError {
-  return {
-    code: 'runtime_unknown',
-    message,
-    severity: 'error',
-    retryable: false,
-    source: 'core',
-  };
-}
-
-function isRuntimeError(value: unknown): value is RuntimeError {
-  return isObjectRecord(value)
-    && typeof value.code === 'string'
-    && typeof value.message === 'string'
-    && typeof value.severity === 'string'
-    && typeof value.retryable === 'boolean'
-    && typeof value.source === 'string';
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
