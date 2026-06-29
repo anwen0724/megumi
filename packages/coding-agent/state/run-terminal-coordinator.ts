@@ -16,6 +16,7 @@ import {
   canCancelRunStatus,
   isTerminalRunStatus,
 } from './run-state-policy';
+import type { ActiveSessionMessageRunRef } from './active-session-message-runs';
 
 export interface RunTerminalCoordinatorIds {
   eventId(): string;
@@ -49,12 +50,6 @@ export interface RunTerminalCoordinatorOptions {
   repository: RunTerminalRepositoryPort;
   toolRepository?: RunTerminalToolRepositoryPort;
   ids: RunTerminalCoordinatorIds;
-}
-
-export interface ActiveSessionMessageRunRef {
-  sessionId: string;
-  runId: string;
-  stepId: string;
 }
 
 export interface CancelActiveSessionMessageRunInput {

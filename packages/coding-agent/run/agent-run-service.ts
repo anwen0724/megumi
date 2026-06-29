@@ -1,6 +1,7 @@
 // Orchestrates Coding Agent product session runs by coordinating input facts,
 // product persistence, permissions, context construction, tools, and model execution.
 import {
+  ActiveSessionMessageRunTracker,
   attachRunPermissionSnapshot,
   canResumeApprovalFromRunStatus,
   cancelAgentLoopModelCall,
@@ -292,12 +293,7 @@ export class AgentRunService implements AgentRunPort {
   private readonly pendingApprovalRegistry = new PendingApprovalRegistry<ApprovalResumeGroup>({
     getRunId: (group) => group.request.runId,
   });
-  private readonly activeSessionMessageRuns = new Map<string, {
-    runId: string;
-    sessionId: string;
-    stepId: string;
-    chatStreamAdapter?: ChatStreamEventAdapter;
-  }>();
+  private readonly activeSessionMessageRuns = new ActiveSessionMessageRunTracker<ChatStreamEventAdapter>();
 
   constructor(options: AgentRunServiceOptions) {
     this.sessionRepository = options.sessionRepository;
@@ -674,30 +670,34 @@ export class AgentRunService implements AgentRunPort {
     if (manualRerunAuditEvent) {
       this.appendRuntimeEvent(manualRerunAuditEvent, chatStreamAdapter);
     }
-    this.activeSessionMessageRuns.set(input.requestId, {
+    this.activeSessionMessageRuns.register(input.requestId, {
       runId,
       sessionId: session.sessionId,
       stepId,
-      ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
+      ...(chatStreamAdapter ? { projection: chatStreamAdapter } : {}),
     });
 
     return {
       data: { requestId: input.requestId },
-      events: this.trackActiveSessionMessageRun(input.requestId, this.runInitialSessionMessageModelStep({
+      events: this.activeSessionMessageRuns.track({
         requestId: input.requestId,
-        payload: input.payload,
-        runtimeContext: input.runtimeContext,
-        session,
-        run,
-        step,
-        userMessage,
-        currentUserMessage,
-        permissionMode,
-        inputPreprocessing: sessionMessageInput.inputPreprocessing,
-        ...(permissionSnapshot ? { permissionSnapshot: permissionSnapshot.record } : {}),
-        ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
-        parsedInput,
-      })),
+        events: this.runInitialSessionMessageModelStep({
+          requestId: input.requestId,
+          payload: input.payload,
+          runtimeContext: input.runtimeContext,
+          session,
+          run,
+          step,
+          userMessage,
+          currentUserMessage,
+          permissionMode,
+          inputPreprocessing: sessionMessageInput.inputPreprocessing,
+          ...(permissionSnapshot ? { permissionSnapshot: permissionSnapshot.record } : {}),
+          ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
+          parsedInput,
+        }),
+        getRunStatus: (runIdToCheck) => this.runRecordRepository.getRun(runIdToCheck)?.status,
+      }),
     };
   }
 
@@ -746,11 +746,11 @@ export class AgentRunService implements AgentRunPort {
       cancelledAt: this.clock.now(),
       providerCancelled,
       cancelPendingApprovalGroupsByRun: (runId) => this.cancelPendingApprovalGroupsByRun(runId),
-      appendEvent: (event) => this.appendRuntimeEvent(event, activeRun.chatStreamAdapter),
+      appendEvent: (event) => this.appendRuntimeEvent(event, activeRun.projection),
     });
 
     if (result.shouldForgetActiveRun) {
-      this.activeSessionMessageRuns.delete(payload.targetRequestId);
+      this.activeSessionMessageRuns.forget(payload.targetRequestId);
     }
     return result.handled ? true : providerCancelled;
   }
@@ -777,21 +777,6 @@ export class AgentRunService implements AgentRunPort {
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
     return this.runtimeEventRepository.listRuntimeEventsByRun(runId);
-  }
-
-  private async *trackActiveSessionMessageRun(
-    requestId: string,
-    events: AsyncIterable<RuntimeEvent>,
-  ): AsyncIterable<RuntimeEvent> {
-    try {
-      yield* events;
-    } finally {
-      const activeRun = this.activeSessionMessageRuns.get(requestId);
-      const persistedRun = activeRun ? this.runRecordRepository.getRun(activeRun.runId) : undefined;
-      if (persistedRun?.status !== 'waiting_for_approval') {
-        this.activeSessionMessageRuns.delete(requestId);
-      }
-    }
   }
 
   private async *runInitialSessionMessageModelStep(input: {

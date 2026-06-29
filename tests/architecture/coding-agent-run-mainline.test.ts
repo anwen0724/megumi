@@ -160,6 +160,16 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('retryAttemptSourceRef');
   });
 
+  it('keeps active session message run tracking in the state owner', () => {
+    const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
+    const stateSource = read('packages/coding-agent/state/active-session-message-runs.ts');
+
+    expect(stateSource).toContain('export class ActiveSessionMessageRunTracker');
+    expect(serviceSource).toContain('new ActiveSessionMessageRunTracker');
+    expect(serviceSource).not.toContain('new Map<string, {');
+    expect(serviceSource).not.toContain('private async *trackActiveSessionMessageRun');
+  });
+
   it('keeps initial agent loop run startup in the state lifecycle owner', () => {
     const serviceSource = read('packages/coding-agent/run/agent-run-service.ts');
     const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');
