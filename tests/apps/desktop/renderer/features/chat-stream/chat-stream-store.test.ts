@@ -391,6 +391,49 @@ describe('chat stream store', () => {
     ]);
   });
 
+  it('does not duplicate the user message when pending confirmation arrives after user.message.committed', () => {
+    const store = useChatStreamStore.getState();
+
+    store.dispatch(event({
+      eventType: 'turn.started',
+      seq: 1,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      userMessageId: 'message-user-1',
+      clientMessageId: 'client-message-1',
+    }));
+    store.dispatch(event({
+      eventType: 'user.message.committed',
+      seq: 2,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      messageId: 'message-user-1',
+      clientMessageId: 'client-message-1',
+      text: 'What is inside docs?',
+    }));
+    store.flushStream('project-1', 'session-1', 'stream-1');
+
+    store.addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'client-message-1',
+      text: 'What is inside docs?',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+    expect(messages.filter((message) => message.role === 'user')).toEqual([
+      expect.objectContaining({
+        messageId: 'message-user-1',
+        clientMessageId: 'client-message-1',
+        role: 'user',
+        blocks: [expect.objectContaining({ kind: 'user_text', text: 'What is inside docs?' })],
+      }),
+    ]);
+  });
+
   it('hydrates committed messages by project and session without overwriting in-flight live messages', () => {
     const store = useChatStreamStore.getState();
 

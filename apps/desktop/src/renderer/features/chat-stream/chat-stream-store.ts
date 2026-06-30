@@ -132,7 +132,8 @@ function upsertPendingUserMessage(
 ): TimelineMessage[] {
   const existing = current.find(
     (message): message is TimelineUserMessage =>
-      message.role === 'user' && message.messageId === input.clientMessageId,
+      message.role === 'user' &&
+      (message.messageId === input.clientMessageId || message.clientMessageId === input.clientMessageId),
   );
   const block = {
     blockId: `user-text:${input.clientMessageId}`,
